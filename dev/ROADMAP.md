@@ -245,7 +245,7 @@ Validate `portable-pty`, `@xterm/xterm`, required official addons, binary WebSoc
 Verification:
 
 - Run an interactive shell, full-screen terminal program, resize sequence, Unicode input, and reconnect experiment.
-- Record selected versions, licenses, limitations, and any justified custom layer in `PLAN.md`.
+- Record selected versions, licenses, limitations, and any justified custom layer in `dev/PLAN.md`.
 
 #### 2.9 Neovim dependency spike
 
@@ -257,7 +257,7 @@ Evaluate maintained Rust Neovim RPC clients and embeddable browser grid renderer
 Verification:
 
 - Attach to `nvim --embed`, render a changed line, send input, and resize.
-- Record the selected dependencies, licenses, unsupported UI events, and custom scope in `PLAN.md`.
+- Record the selected dependencies, licenses, unsupported UI events, and custom scope in `dev/PLAN.md`.
 
 #### 2.10 Theme contract and bundled palettes
 

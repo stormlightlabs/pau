@@ -13,7 +13,7 @@ The application is planned around:
 - Pi's RPC protocol for structured session control
 - Neovim's embedded RPC UI, with CodeMirror as a lightweight editor
 
-The repository is currently in the design stage. See [SPEC.md](SPEC.md), [PLAN.md](PLAN.md), and [ROADMAP.md](ROADMAP.md).
+The repository is currently in the design stage. See [SPEC.md](dev/SPEC.md), [PLAN.md](dev/PLAN.md), and [ROADMAP.md](dev/ROADMAP.md).
 
 ## Development environment
 

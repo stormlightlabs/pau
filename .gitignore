@@ -1,5 +1,8 @@
-# Local agent and development environments
-/AGENTS.md
+# Project agent configuration
+!AGENTS.md
+/.pi/*
+!/.pi/prompts/
+!/.pi/prompts/*.md
 .direnv/
 result
 result-*

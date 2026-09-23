@@ -35,8 +35,11 @@ The SvelteKit app must run in a normal browser during development, but Tauri is 
 
 ### Foundation
 
-- Create Cargo and pnpm workspaces with `apps/web`, `apps/desktop`, `packages/ui`, and the Rust crates.
+- Create the pnpm workspace with `apps/web`, `apps/desktop`, and `packages/ui`.
+- Create the Cargo workspace with `pau-core`, `pau-agent`, `pau-pi`, `pau-cli`, `pau-server`, and `pau-term` under their matching `crates/` directories.
 - Add the SvelteKit static build, shared UI package, embedded Axum API, Tauri 2 shell, and SQLite migrations.
+- Run dependency spikes for the PTY, xterm.js integration, Neovim RPC, and embeddable web grid renderer before building custom protocol or rendering code.
+- Add the shared semantic theme contract and ship Eldritch, Nord, Iceberg, Catppuccin Mocha, and Vitesse Dark across the app, CodeMirror, terminal, and optional Neovim highlights.
 - Add loopback authentication, health and version endpoints, structured logs, and CI checks.
 - Compose routes and integration tests in `apps/web`; keep components and component tests in `packages/ui`.
 
@@ -53,7 +56,8 @@ The SvelteKit app must run in a normal browser during development, but Tauri is 
 
 - Add the workspace file tree, safe read/write API, file search, and Git status.
 - Add CodeMirror editing and diff review.
-- Add persistent PTY terminals with resize and reconnect.
+- Add xterm.js terminals backed by Rust-owned PTYs, with tabs, main-surface and bottom-dock layouts, resize, bounded scrollback, reconnect, search, copy and paste, activity, and exit state.
+- Start shells in the workspace and support explicitly trusted `direnv exec` environments.
 - Add worktree creation and attachment without automating commits or pushes.
 
 ### Neovim UI

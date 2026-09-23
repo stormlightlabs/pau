@@ -1,6 +1,8 @@
-# Pi desktop orchestrator
+# Pau
 
-A local-first desktop and web application for running coding-agent sessions across projects. Pi is the primary agent. Claude Code, Codex, and Antigravity can be added through process adapters.
+Pau is a local-first desktop and web application for running coding-agent sessions across projects. Pi is the primary agent. Claude Code, Codex, and Antigravity can be added through process adapters.
+
+The name references [xkcd 1292, “Pi vs. Tau”](https://www.explainxkcd.com/wiki/index.php/1292:_Pi_vs._Tau).
 
 The application is planned around:
 

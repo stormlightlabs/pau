@@ -60,8 +60,10 @@ A skill, Pi extension or package, prompt template, MCP server configuration, or 
 - Browse workspace files with ignored and hidden files handled predictably.
 - Open and save text files in CodeMirror.
 - Show Git diffs and changed-file state.
-- Run persistent PTY terminals with resize, reconnect, and exit reporting.
+- Run multiple persistent PTY terminals with tabs, resize, bounded scrollback, reconnect, search, copy and paste, activity state, and exit reporting.
+- Start terminals in the workspace with the user's shell and support explicitly trusted direnv environments.
 - Start Neovim with `--embed`, attach as an external UI, and forward redraw, input, clipboard, and resize events.
+- Prefer maintained terminal, PTY, Neovim RPC, and rendering libraries over custom implementations.
 - Add LSP-backed CodeMirror features later; do not build a second language-server manager before the Neovim path works.
 
 ### Resources
@@ -94,6 +96,10 @@ A skill, Pi extension or package, prompt template, MCP server configuration, or 
 ## Persistence
 
 SQLite stores workspace registrations, UI preferences, process metadata, event sequence checkpoints, and resource indexes. Native Pi and third-party session files remain authoritative. The database may cache transcript projections for search, but deleting the cache must not delete agent history.
+
+## First-release themes
+
+Ship Eldritch, Nord, Iceberg, Catppuccin Mocha, and Vitesse Dark. A theme covers the application shell, semantic states, syntax highlighting, terminal ANSI colors, CodeMirror, and optional Neovim highlights. Applying an app theme to Neovim requires explicit opt-in and must not silently load or replace the user's Neovim configuration.
 
 ## Non-goals for the first release
 

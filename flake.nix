@@ -1,5 +1,5 @@
 {
-  description = "Pi desktop orchestrator development environment";
+  description = "Pau development environment";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
@@ -59,7 +59,7 @@
               ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin darwinPackages;
 
             shellHook = ''
-              echo "Pi orchestrator shell: Rust $(rustc --version | cut -d' ' -f2), Node $(node --version), pnpm $(pnpm --version)"
+              echo "Pau shell: Rust $(rustc --version | cut -d' ' -f2), Node $(node --version), pnpm $(pnpm --version)"
             '';
           };
         }

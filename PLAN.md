@@ -47,6 +47,16 @@ Start with a Cargo workspace and pnpm workspace. The crate directory and Cargo p
 
 Keep package boundaries similarly concrete: reusable UI and its component tests belong in `packages/ui`, while routing, transport wiring, and integration tests belong to the app that performs them.
 
+## Project conventions
+
+Pau is dual-licensed under MIT or Apache-2.0. Published JavaScript packages use the `@stormlightlabs/pau-*` namespace. The executable and configuration name is `pau`, and the Tauri bundle identifier is `org.stormlightlabs.pau`.
+
+Development follows current stable releases of Pi, Claude Code, Neovim, Node.js, Rust, and supported operating systems. Pin exact dependency versions in lockfiles and record versions exercised by a release. Add minimum-version guarantees only after compatibility evidence justifies them.
+
+Rust owns the wire types. Generate the checked TypeScript contract in `packages/protocol` from Rust and fail CI when regeneration changes committed output. Select the generator during the workspace scaffold rather than maintaining parallel handwritten types.
+
+Use `tokio-rusqlite` for the initial SQLite access layer. One opened connection has one background thread; cloned handles queue work onto that connection, so this is asynchronous serialization rather than a connection pool. Start with one connection, WAL mode, a busy timeout, and short transactions. Add read connections or a pool only if measurements show contention.
+
 ## Dependency policy
 
 Use maintained libraries for protocol, terminal, editor, and rendering work before writing equivalents. Prefer small libraries with stable wire or platform boundaries over adopting an IDE framework. Record the version, license, maintenance state, and the missing requirement that justifies any custom implementation.
@@ -106,7 +116,7 @@ A TypeScript sidecar remains an option only if a required feature exists in the 
 
 ## Claude bridge plugin
 
-The first deliverable is a Pi package that controls Claude Code through a structured bridge. It must work from Pi before the desktop application exists and expose the smallest useful lifecycle: detect Claude, start or resume a session, send work, stream events, interrupt work, and stop the child process. Claude's native session identifier and transcript remain authoritative.
+The first deliverable is a new Pi package, built from scratch, that controls Claude Code through a structured bridge. It must work from Pi before the desktop application exists and expose the smallest useful lifecycle: detect Claude, start or resume a session, send work, stream events, interrupt work, and stop the child process. Claude's native session identifier and transcript remain authoritative.
 
 Keep process control separate from Pi-facing commands and tools. The bridge writes versioned framed events, keeps diagnostics off the protocol stream, and reports capabilities explicitly. Capture protocol fixtures and use a fake Claude executable for default tests. Live Claude tests remain opt-in.
 
@@ -132,7 +142,7 @@ The terminal is a first-class workspace surface, not a shell-command text box. R
 
 A terminal session has a stable ID, workspace, shell command, dimensions, title, status, and attachment count. Opening a terminal uses the user's interactive shell in the workspace directory. The environment can inherit the backend process, use a login shell, or run through an explicitly enabled workspace environment such as `direnv exec`. The app must not source an `.envrc` itself or bypass direnv's trust decision.
 
-WebSocket binary frames carry input and output; typed control messages handle create, attach, resize, signal, detach, and close. Output tasks must apply bounded backpressure so a noisy command cannot exhaust server memory. The backend retains bounded scrollback for reattachment and marks a replay as partial if older bytes were discarded. PTYs survive route changes and browser disconnects until the user closes them, the process exits, or a configured idle policy applies.
+WebSocket binary frames carry input and output; typed control messages handle create, attach, resize, signal, detach, and close. Output tasks must apply bounded backpressure so a noisy command cannot exhaust server memory. The backend retains bounded scrollback for reattachment and marks a replay as partial if older bytes were discarded. PTYs survive route changes, frontend reloads, and browser disconnects. They stop when the user closes them, their process exits, or Pau explicitly quits; closing and reopening a view does not stop them.
 
 The UI supports multiple named terminal tabs, accurate resize, copy and paste, selection, search, links, bell and activity state, exit status, and keyboard-only operation. It uses xterm.js's canvas renderer first and treats WebGL as an optional measured optimization. OSC links and file paths are parsed conservatively and never execute commands on click.
 
@@ -149,6 +159,8 @@ The Neovim path is a real external UI:
 5. Clipboard and file-open requests cross explicit backend APIs.
 
 Implement or adopt the base line grid before enabling multigrid, floating windows, or GUI font shaping. Keep the renderer behind a frontend interface so a library or rendering strategy can change without changing the Rust protocol.
+
+A Neovim session starts clean by default. The user can instead load their `init.lua`; applying Pau's theme is an independent option. A maintained Kickstart configuration preset is a backlog item, not a first-release requirement.
 
 CodeMirror handles quick edits, read-only previews, and diffs. Neovim is the primary full editor. LSP support for CodeMirror is optional and should reuse a backend language-server supervisor rather than run servers in the browser.
 
@@ -175,7 +187,7 @@ The first release ships Eldritch, Nord, Iceberg, Catppuccin Mocha, and Vitesse D
 
 The wide layout has a persistent product rail, a contextual workspace or section rail, one main task surface, and an optional right inspector. The command bar stays globally available. The main surface switches among conversation, editor, Neovim, terminal, and resource views; the inspector holds review, plan, checks, permissions, or selected-resource detail. The terminal bottom dock is the only surface that may share the main column vertically.
 
-Use a legible UI sans for navigation and prose and a dedicated monospace face for code, paths, terminal content, changing counters, and agent output where alignment matters. Preserve the compact rhythm in the mockups while keeping interactive targets large enough through invisible padding and keyboard access.
+Use the variable Fontsource packages for all bundled website fonts. IBM Plex Sans is the documentation body face, Google Sans is used for headings and navigation, and Google Sans Code is used for code, commands, paths, and aligned technical data. Self-host the font files in the built site; do not fetch fonts from Google at runtime. Preserve the compact rhythm in the application mockups while keeping interactive targets large enough through invisible padding and keyboard access.
 
 Follow `dev/design/icons.md`: Tabler for general interface actions, Octicons for Git, Catppuccin for file types, and Simple Icons for named services. Load icons through UnoCSS's icon preset or an equivalent build-time Iconify integration. Every icon-only control needs an accessible name, and state must not rely on icon shape or color alone.
 
@@ -183,7 +195,7 @@ At narrower widths, collapse the contextual rail before the product rail, move t
 
 ## Website and documentation
 
-`apps/website` follows the SvelteKit documentation patterns used in Inkfinite, Dalil, Stormbuffer, and Mire. It is a separate static site because `apps/web` is an authenticated product surface rather than the public entry point.
+`apps/website` follows the SvelteKit documentation patterns used in Inkfinite, Dalil, Stormbuffer, and Mire. It is a separate static site because `apps/web` is an authenticated product surface rather than the public entry point. Its canonical URL is `https://pau.stormlightlabs.org`, and it deploys as a static site to Cloudflare Pages.
 
 Use mdsvex content under `apps/website/src/content/docs`, validated frontmatter, generated navigation and tables of contents, Shiki highlighting, and Pagefind search. Prerender documentation pages and expose useful machine-readable routes: raw Markdown for each page, `llms.txt`, `sitemap.xml`, `robots.txt`, and Open Graph images. Keep the content layer small enough to understand locally instead of adopting a general documentation framework.
 
@@ -201,13 +213,38 @@ The standalone web server ships after the desktop application. It serves the bui
 
 ## Testing
 
-- Rust unit tests cover framing, reducers, path authorization, process transitions, and adapter capability mapping.
-- Protocol fixture tests replay recorded stdout/stderr without launching paid agents.
-- Backend integration tests launch fake JSONL agents and verify start, prompt, interrupt, malformed frames, and reconnect behavior.
-- PTY integration tests cover input, output, resize, exit, noisy-process backpressure, detach, replay, and cleanup.
-- `packages/ui` contains component tests for its views, stores, event reduction, terminal lifecycle, theme contracts, and interaction states.
-- `apps/web` contains integration tests for route composition, API wiring, reconnect behavior, and browser-visible workflows.
-- `apps/website` tests content validation, internal links, raw Markdown routes, search, documentation navigation, and responsive reading layouts.
-- Playwright runs from `apps/web` against fake adapters and covers the browser flow consumed by both web and desktop builds.
-- `apps/desktop` keeps a small native smoke suite for startup, backend lifecycle, and asset loading instead of duplicating web integration tests.
-- Real-agent smoke tests are opt-in and never part of the default test command.
+Choose the smallest test that proves the behavior. Keep edge-heavy logic out of UI components, exercise process boundaries with fake executables, and reserve full browser tests for workflows that cross packages or transports.
+
+### Rust tests
+
+Rust unit tests live beside framing, path authorization, state transitions, reducers, migrations, event replay, redaction, and capability mapping. Use table-driven cases for known failures and property tests where arbitrary input matters, especially protocol framing, event sequences, and path handling. Use Tokio's paused clock for timeout, retry, and shutdown behavior instead of sleeping in tests.
+
+Integration tests launch fake Pi, Claude, terminal, and Neovim processes. They cover partial and oversized frames, invalid UTF-8 where the protocol permits bytes, early exits, ignored signals, cancellation races, output backpressure, replay gaps, symlink and traversal attempts, SQLite rollback and migration failure, and cleanup after dropped clients. Platform-specific PTY and filesystem tests run on Linux and macOS. Fuzz targets are appropriate for parsers exposed to agent or network input, but they remain a separate scheduled or manual job rather than slowing every pull request.
+
+### Storybook and component tests
+
+`packages/ui` owns Storybook as the visual workbench for product components and feature views. Stories use typed fixtures and cover useful states such as empty, loading, running, waiting, failed, disconnected, long content, narrow width, and each shipped theme. Storybook controls switch theme, viewport, reduced motion, and representative capability sets so design feedback does not require a live agent or Tauri.
+
+Use Storybook `play` functions for short interactions that make a story demonstrably usable. Run them through Storybook's Vitest integration and include accessibility checks. Keep dedicated Vitest tests for deeper state transitions and edge cases instead of turning every story into a large test.
+
+Use Vitest for plain TypeScript reducers, stores, validation, theme contracts, and content tooling. Use Playwright-backed Vitest browser mode with `vitest-browser-svelte` for Svelte components whose focus, events, layout, or lifecycle require a real browser. Query components by role, label, and visible text rather than Svelte internals. Add SSR and server tests for SvelteKit routes, endpoint helpers, metadata, and hydration-sensitive output.
+
+Build Storybook in CI. Keep a small set of reviewed Playwright screenshots for stable, high-value compositions such as the application shell, session states, editor/review layout, terminal dock, resource browser, and all-theme coverage. Do not snapshot every component or use screenshots as a substitute for behavior assertions.
+
+### Application integration tests
+
+`apps/web` owns Playwright workflows against the real Axum API with fake agent executables. These tests cover route composition, authentication, reconnect, concurrent sessions, files, terminal, Neovim, and resources from the user's point of view. The same web build is consumed by Tauri, so `apps/desktop` adds only native smoke coverage for startup, backend lifecycle, asset loading, and shutdown rather than duplicating browser behavior.
+
+`apps/website` tests frontmatter, internal links, raw Markdown routes, search, metadata, and responsive reading layouts. Playwright covers navigation, search, copy controls, theme behavior, and selected visual states.
+
+Generated TypeScript contracts and shared protocol fixtures run against both Rust and TypeScript consumers. Chromium is the fast default for browser component tests. Critical Playwright flows also run in WebKit because Tauri uses a system webview on Linux and macOS; standalone-server smoke coverage can add Firefox without multiplying every component test.
+
+Keep local feedback layered: focused unit and component tests during development, the complete fake-backed suite plus Storybook build on pull requests, and cross-platform PTY tests, fuzzing, and broader browser matrices on scheduled or release jobs. Collect coverage to find untested branches, but do not substitute a repository-wide percentage target for named edge cases and behavior assertions.
+
+Default checks use fake processes and local fixtures. Tests that invoke paid agents, require signing credentials, or depend on remote services are opt-in and never part of the default command.
+
+## Dogfooding
+
+Use Pau to build Pau as each surface becomes usable. The Claude bridge is the first dogfood surface: after its packaged live smoke test passes, use it for suitable Pau tasks while the desktop application is still being built. Then adopt Pau's agent sessions, workspace UI, terminal, editor, review tools, and standalone server in normal project work. The unit that first makes a surface usable includes a self-hosted smoke run when practical; later work should use that surface by default when it fits the task.
+
+Dogfooding supplements deterministic tests and does not replace them. Fix a discovered defect in the active unit when it violates that unit's behavior or verification. Otherwise track it separately so self-hosting does not expand unrelated work.

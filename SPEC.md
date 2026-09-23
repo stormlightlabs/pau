@@ -62,7 +62,7 @@ A skill, Pi extension or package, prompt template, MCP server configuration, or 
 - Show Git diffs and changed-file state.
 - Run multiple persistent PTY terminals with tabs, resize, bounded scrollback, reconnect, search, copy and paste, activity state, and exit reporting.
 - Start terminals in the workspace with the user's shell and support explicitly trusted direnv environments.
-- Start Neovim with `--embed`, attach as an external UI, and forward redraw, input, clipboard, and resize events.
+- Start Neovim clean by default, or explicitly load the user's `init.lua`, then attach with `--embed` as an external UI and forward redraw, input, clipboard, and resize events.
 - Prefer maintained terminal, PTY, Neovim RPC, and rendering libraries over custom implementations.
 - Add LSP-backed CodeMirror features later; do not build a second language-server manager before the Neovim path works.
 
@@ -95,7 +95,7 @@ A skill, Pi extension or package, prompt template, MCP server configuration, or 
 
 ## Persistence
 
-SQLite stores workspace registrations, UI preferences, process metadata, event sequence checkpoints, and resource indexes. Native Pi and third-party session files remain authoritative. The database may cache transcript projections for search, but deleting the cache must not delete agent history.
+SQLite stores workspace registrations, UI preferences, process metadata, event sequence checkpoints, and resource indexes. `tokio-rusqlite` provides the initial asynchronous access layer through one serialized connection; pooling requires measured contention. Native Pi and third-party session files remain authoritative. The database may cache transcript projections for search, but deleting the cache must not delete agent history.
 
 ## First-release themes
 
@@ -104,6 +104,7 @@ Ship Eldritch, Nord, Iceberg, Catppuccin Mocha, and Vitesse Dark. A theme covers
 ## Non-goals for the first release
 
 - Cloud sandboxes or hosted execution
+- Remote machine control before a separate transport and security design is complete
 - Multiplayer editing
 - Autonomous agent councils
 - A visual workflow language

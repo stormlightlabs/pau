@@ -39,3 +39,7 @@ The shell provides Rust, Node.js, pnpm, SQLite, Neovim, and the native Linux lib
 - Use the same backend and frontend in desktop and browser modes.
 - Treat local command execution as privileged access, especially in browser mode.
 - Ship useful vertical slices before adding dashboards, agent councils, or workflow builders.
+
+## License
+
+Pau is available under either the MIT License or the Apache License 2.0.

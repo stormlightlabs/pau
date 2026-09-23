@@ -1,4 +1,5 @@
-# Local development environments
+# Local agent and development environments
+/AGENTS.md
 .direnv/
 result
 result-*

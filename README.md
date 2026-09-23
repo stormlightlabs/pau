@@ -13,6 +13,22 @@ The application is planned around:
 
 The repository is currently in the design stage. See [SPEC.md](SPEC.md), [PLAN.md](PLAN.md), and [ROADMAP.md](ROADMAP.md).
 
+## Development environment
+
+The Nix flake supports x86-64 and ARM64 Linux plus Apple Silicon macOS. Enter it directly:
+
+```sh
+nix develop
+```
+
+For automatic activation with direnv:
+
+```sh
+direnv allow
+```
+
+The shell provides Rust, Node.js, pnpm, SQLite, Neovim, and the native Linux libraries required by Tauri. macOS builds still require Xcode Command Line Tools.
+
 ## Product principles
 
 - Keep agent processes visible and interruptible.

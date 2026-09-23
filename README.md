@@ -1,0 +1,23 @@
+# Pi desktop orchestrator
+
+A local-first desktop and web application for running coding-agent sessions across projects. Pi is the primary agent. Claude Code, Codex, and Antigravity can be added through process adapters.
+
+The application is planned around:
+
+- Tauri 2 for the desktop shell
+- SvelteKit for the interface
+- Axum for the local API, WebSocket event stream, and web server
+- Rust process and PTY supervision
+- Pi's RPC protocol for structured session control
+- Neovim's embedded RPC UI, with CodeMirror as a lightweight editor
+
+The repository is currently in the design stage. See [SPEC.md](SPEC.md), [PLAN.md](PLAN.md), and [ROADMAP.md](ROADMAP.md).
+
+## Product principles
+
+- Keep agent processes visible and interruptible.
+- Preserve each agent's native session format instead of inventing a second transcript format.
+- Put protocol-specific behavior behind small adapters.
+- Use the same backend and frontend in desktop and browser modes.
+- Treat local command execution as privileged access, especially in browser mode.
+- Ship useful vertical slices before adding dashboards, agent councils, or workflow builders.

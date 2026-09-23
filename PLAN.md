@@ -26,8 +26,9 @@ The Tauri binary and the server CLI both construct the same Rust application sta
 plugins/
   claude-bridge/       independently usable Pi package and bridge tests
 apps/
-  web/                 SvelteKit routes, API integration, and browser tests
+  web/                 SvelteKit product routes, API integration, and browser tests
   desktop/             Tauri shell, capabilities, packaging, and desktop smoke tests
+  website/             SvelteKit website and product documentation
 packages/
   ui/                  shared Svelte components, feature views, stores, and tests
   protocol/            generated or checked TypeScript wire types
@@ -40,7 +41,7 @@ crates/
   term/                pau-term: PTY sessions and embedded Neovim integration
 ```
 
-`plugins/claude-bridge` ships first and remains useful without the desktop application. It establishes the Claude process protocol that the later Rust adapter consumes. `apps/web` composes the screens exported by `packages/ui` into SvelteKit routes and connects them to the local Axum API. `apps/desktop` owns the native shell and uses the web app's static output rather than maintaining another copy of the routes. Shared UI code must not import Tauri APIs; desktop-only behavior enters through explicit interfaces supplied by the app.
+`plugins/claude-bridge` ships first and remains useful without the desktop application. It establishes the Claude process protocol that the later Rust adapter consumes. `apps/web` composes the product screens exported by `packages/ui` into SvelteKit routes and connects them to the local Axum API. `apps/desktop` owns the native shell and uses the web app's static output rather than maintaining another copy of the routes. `apps/website` is the public site and documentation application; it may reuse suitable primitives and tokens from `packages/ui`, but it does not import product stores or API integration. Shared UI code must not import Tauri APIs; desktop-only behavior enters through explicit interfaces supplied by the app.
 
 Start with a Cargo workspace and pnpm workspace. The crate directory and Cargo package names are fixed as shown above. `pau-core` contains no concrete agent, terminal, server, or CLI implementation. `pau-agent` defines the adapter boundary shared by `pau-pi` and later agents. `pau-term` owns both PTYs and Neovim because they share process, input, resize, and reconnect concerns. `pau-server` composes application services for HTTP and WebSocket clients, while `pau-cli` constructs the runnable process.
 
@@ -180,6 +181,18 @@ Follow `dev/design/icons.md`: Tabler for general interface actions, Octicons for
 
 At narrower widths, collapse the contextual rail before the product rail, move the inspector to an overlay or full view, and let editor, Neovim, and terminal surfaces use all available space. Do not shrink the three-column desktop composition until its text and controls no longer fit.
 
+## Website and documentation
+
+`apps/website` follows the SvelteKit documentation patterns used in Inkfinite, Dalil, Stormbuffer, and Mire. It is a separate static site because `apps/web` is an authenticated product surface rather than the public entry point.
+
+Use mdsvex content under `apps/website/src/content/docs`, validated frontmatter, generated navigation and tables of contents, Shiki highlighting, and Pagefind search. Prerender documentation pages and expose useful machine-readable routes: raw Markdown for each page, `llms.txt`, `sitemap.xml`, `robots.txt`, and Open Graph images. Keep the content layer small enough to understand locally instead of adopting a general documentation framework.
+
+Reuse presentational pieces from `packages/ui` when they fit the website, including icons, buttons, theme tokens, code treatment, and small controls. Keep the documentation shell, prose styles, search, navigation, SEO, and content loaders in `apps/website`; these serve a reading surface and should not pull agent state or dense application layout into the site.
+
+Documentation changes belong to the same unit of work as the behavior they describe. Document only working behavior. Each page should answer one task or concept, start with the useful fact or instruction, include commands that can be copied, and link to deeper detail instead of repeating it. The initial information architecture covers installation, quickstart, Claude bridge, desktop use, workspaces and sessions, terminal and Neovim, resources and MCP, server deployment, security, configuration reference, architecture, and contributing.
+
+The website build validates frontmatter, internal links, heading structure, code examples that can be checked without credentials, raw Markdown routes, and search indexing. Browser tests cover global navigation, documentation navigation, search, copy controls, theme behavior, and narrow layouts.
+
 ## Web and desktop security
 
 Desktop startup binds Axum to an ephemeral loopback port and supplies a random bearer token to the webview. During desktop development, the same UI may run in a normal browser against this local endpoint. This browser workflow is a development aid, not the standalone web-server deliverable. Tokens must not be written to normal logs.
@@ -194,6 +207,7 @@ The standalone web server ships after the desktop application. It serves the bui
 - PTY integration tests cover input, output, resize, exit, noisy-process backpressure, detach, replay, and cleanup.
 - `packages/ui` contains component tests for its views, stores, event reduction, terminal lifecycle, theme contracts, and interaction states.
 - `apps/web` contains integration tests for route composition, API wiring, reconnect behavior, and browser-visible workflows.
+- `apps/website` tests content validation, internal links, raw Markdown routes, search, documentation navigation, and responsive reading layouts.
 - Playwright runs from `apps/web` against fake adapters and covers the browser flow consumed by both web and desktop builds.
 - `apps/desktop` keeps a small native smoke suite for startup, backend lifecycle, and asset loading instead of duplicating web integration tests.
 - Real-agent smoke tests are opt-in and never part of the default test command.

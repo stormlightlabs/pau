@@ -30,6 +30,13 @@ export type {
   StartClaudeProcessOptions,
 } from "./lifecycle.js";
 
+export { ClaudePromptError } from "./streaming.js";
+export type {
+  ClaudePromptErrorCode,
+  ClaudePromptHandlers,
+  ClaudeTurnCompletion,
+} from "./streaming.js";
+
 export {
   BRIDGE_PROTOCOL_VERSION,
   FrameDecoder,

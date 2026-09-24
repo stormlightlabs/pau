@@ -33,6 +33,16 @@ Its `exit` promise and `exitInfo` property distinguish a requested shutdown from
 an unexpected exit and retain the exit code or signal. Exited processes are
 removed from the registry.
 
+Call `process.prompt(task, handlers)` to send one task. The `onEvent` handler
+receives ordered `text.delta`, `tool.started`, `tool.completed`, and
+`turn.completed` events while Claude runs. The returned promise settles when
+Claude emits its `result` record; that record determines whether the turn
+completed or failed. A process accepts one active prompt at a time.
+
+Use `onDiagnostic` to receive stderr as diagnostic frames. Plain stderr and
+structured diagnostics stay separate from prompt events and never enter the
+protocol stream.
+
 Call `process.stop()` for a staged shutdown. The bridge closes structured input,
 then sends `SIGINT`, `SIGTERM`, and `SIGKILL` if each preceding step times out.
 `registry.stopAll()` applies the same shutdown to every live process.
@@ -68,8 +78,10 @@ pnpm check
 ```
 
 The tests round-trip every frame type, replay malformed and unsupported fixture
-records, and run `test/fixtures/fake-claude.mjs` as a child process. The fake
-executable emits protocol data on stdout and JSONL diagnostics on stderr.
+records, and run `test/fixtures/fake-claude.mjs` as a child process. Prompt
+fixtures include partial records, streamed text, tool activity, diagnostics,
+and successful and failed completion states. The fake executable emits protocol
+data on stdout and diagnostics on stderr.
 
 ## License
 

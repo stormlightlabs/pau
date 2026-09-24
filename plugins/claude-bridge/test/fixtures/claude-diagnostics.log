@@ -1,0 +1,2 @@
+Claude fixture warning
+{"version":1,"type":"diagnostic","level":"info","message":"tool completed","context":{"tool":"Read"}}

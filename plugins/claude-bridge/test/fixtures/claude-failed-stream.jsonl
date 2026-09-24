@@ -1,0 +1,2 @@
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Could not finish."}]}}
+{"type":"result","subtype":"error_during_execution","is_error":true,"error":"fixture failure","session_id":"session-failed"}

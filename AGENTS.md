@@ -77,8 +77,9 @@ of restating the implementation.
 
 ## Keep agent configuration current
 
-Treat `AGENTS.md` and `.pi/prompts/` as maintained workflow configuration. When
-user feedback corrects a reusable part of the process, update the smallest
-owning rule or prompt in the same change. Replace stale guidance instead of
+Treat direct user corrections to project workflows as configuration changes.
+Update the smallest owning rule in `AGENTS.md` or `.pi/prompts/` in the same
+change, even when the active prompt otherwise prohibits edits. This exception
+applies only to workflow configuration. Replace stale guidance instead of
 adding a contradictory exception. Do not store one-off task notes, secrets,
 machine paths, or duplicated product and architecture decisions here.

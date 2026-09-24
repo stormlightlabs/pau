@@ -95,7 +95,7 @@ Verification:
 
 ### 1.4 Prompt and event streaming
 
-Status: planned
+Status: complete
 Blocked by: 1.3
 
 Send one task and translate Claude's structured output into bridge events

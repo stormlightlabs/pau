@@ -21,7 +21,3 @@ the concrete reason.
 
 Report what changed, checks run, anything not verified, and any separate
 follow-up discovered. Do not expand this unit to fix unrelated findings.
-
-Treat user corrections to this implementation workflow as configuration
-changes. Before finishing, update the smallest owning rule in `AGENTS.md` or
-this prompt. Replace stale guidance and do not preserve one-off task details.

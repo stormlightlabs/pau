@@ -3,6 +3,12 @@ import { randomUUID } from "node:crypto";
 import type { Readable, Writable } from "node:stream";
 
 import type { ClaudeDiscovery } from "./discovery.js";
+import {
+  ClaudePromptError,
+  runClaudePrompt,
+  type ClaudePromptHandlers,
+  type ClaudeTurnCompletion,
+} from "./streaming.js";
 
 /** Arguments that keep Claude on structured stdin and stdout. */
 export const CLAUDE_STRUCTURED_ARGS = Object.freeze([
@@ -11,6 +17,7 @@ export const CLAUDE_STRUCTURED_ARGS = Object.freeze([
   "stream-json",
   "--output-format",
   "stream-json",
+  "--include-partial-messages",
   "--verbose",
 ] as const);
 
@@ -105,6 +112,8 @@ export class ClaudeProcess {
   #exitInfo: ClaudeProcessExit | undefined;
   #shutdownStage: ClaudeShutdownStage | null = null;
   #stopPromise: Promise<ClaudeProcessExit> | undefined;
+  #promptActive = false;
+  #nextEventSequence = 0;
 
   /** @internal Processes are owned and created by a registry. */
   constructor(options: StartClaudeProcessOptions, onExit: () => void) {
@@ -181,6 +190,42 @@ export class ClaudeProcess {
   /** Wait until the operating system has started the child process. */
   async waitUntilStarted(): Promise<void> {
     await this.#started;
+  }
+
+  /**
+   * Send one task and resolve only when Claude emits its authoritative result.
+   * Text and tool records are delivered through the handlers as they arrive.
+   */
+  async prompt(
+    task: string,
+    handlers: ClaudePromptHandlers = {},
+  ): Promise<ClaudeTurnCompletion> {
+    if (this.#promptActive) {
+      throw new ClaudePromptError(
+        "prompt_in_progress",
+        "A Claude prompt is already in progress",
+      );
+    }
+    if (this.#state !== "running") {
+      throw new ClaudePromptError(
+        "process_exited",
+        "Claude is not running",
+      );
+    }
+
+    this.#promptActive = true;
+    try {
+      const result = await runClaudePrompt(
+        this,
+        task,
+        this.#nextEventSequence,
+        handlers,
+      );
+      this.#nextEventSequence = result.nextSequence;
+      return result.completion;
+    } finally {
+      this.#promptActive = false;
+    }
   }
 
   /**

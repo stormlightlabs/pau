@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { appendFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
 const VERSION = 1;
@@ -73,6 +73,80 @@ lines.on("line", (line) => {
     command = JSON.parse(line);
   } catch {
     writeDiagnostic("error", "received malformed command");
+    return;
+  }
+
+  if (mode === "stream") {
+    if (
+      command.type !== "user" ||
+      command.message?.role !== "user" ||
+      typeof command.message?.content !== "string"
+    ) {
+      process.stderr.write("received invalid stream-json prompt\n");
+      return;
+    }
+
+    if (process.env.FAKE_CLAUDE_STREAM_FIXTURE) {
+      const output = readFileSync(process.env.FAKE_CLAUDE_STREAM_FIXTURE, "utf8");
+      const midpoint = Math.floor(output.length / 2);
+      if (process.env.FAKE_CLAUDE_DIAGNOSTIC_FIXTURE) {
+        process.stderr.write(
+          readFileSync(process.env.FAKE_CLAUDE_DIAGNOSTIC_FIXTURE, "utf8"),
+        );
+      }
+      process.stdout.write(output.slice(0, midpoint));
+      setImmediate(() => process.stdout.write(output.slice(midpoint)));
+      return;
+    }
+
+    process.stderr.write("Claude fixture warning\n");
+    writeProtocol(
+      {
+        type: "stream_event",
+        event: {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: "fixture output" },
+        },
+      },
+      true,
+      () => {
+        writeProtocol({
+          type: "stream_event",
+          event: {
+            type: "content_block_start",
+            index: 1,
+            content_block: {
+              type: "tool_use",
+              id: "tool-1",
+              name: "Read",
+              input: { path: "README.md" },
+            },
+          },
+        });
+        writeProtocol({
+          type: "user",
+          message: {
+            role: "user",
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "tool-1",
+                content: "file contents",
+                is_error: false,
+              },
+            ],
+          },
+        });
+        writeProtocol({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          result: "Done",
+          session_id: "session-fixture",
+        });
+      },
+    );
     return;
   }
 

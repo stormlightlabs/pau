@@ -23,8 +23,3 @@ Use one line per finding, most severe first:
 
 Keep the report under 200 words. If nothing actionable remains, return
 `No findings.`
-
-Treat direct user corrections to this review workflow as configuration changes
-and the only exception to the no-edit rule. Before finishing, update the
-smallest owning rule in `AGENTS.md` or this prompt. Replace stale guidance and
-do not preserve one-off task details.

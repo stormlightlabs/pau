@@ -1,0 +1,35 @@
+@import '@fontsource-variable/ibm-plex-sans/wght.css';
+@import '@fontsource-variable/inter/wght.css';
+@import '@fontsource-variable/atkinson-hyperlegible-next/wght.css';
+
+@font-face {
+	font-family: 'Atkinson Hyperlegible Soft';
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url('../assets/fonts/atkinson-hyperlegible-soft/AtkinsonHyperlegibleSoft-Regular.woff2') format('woff2');
+}
+
+@font-face {
+	font-family: 'Atkinson Hyperlegible Soft';
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url('../assets/fonts/atkinson-hyperlegible-soft/AtkinsonHyperlegibleSoft-Medium.woff2') format('woff2');
+}
+
+@font-face {
+	font-family: 'Atkinson Hyperlegible Soft';
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url('../assets/fonts/atkinson-hyperlegible-soft/AtkinsonHyperlegibleSoft-SemiBold.woff2') format('woff2');
+}
+
+@font-face {
+	font-family: 'Atkinson Hyperlegible Soft';
+	font-style: normal;
+	font-weight: 700 900;
+	font-display: swap;
+	src: url('../assets/fonts/atkinson-hyperlegible-soft/AtkinsonHyperlegibleSoft-Bold.woff2') format('woff2');
+}

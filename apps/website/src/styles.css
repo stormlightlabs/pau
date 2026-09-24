@@ -1,7 +1,9 @@
 :root {
 	color: #d8dee9;
 	background: #242933;
-	font-family: system-ui, sans-serif;
+	font-family: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
+	font-optical-sizing: auto;
+	font-synthesis: none;
 	color-scheme: dark;
 }
 
@@ -36,6 +38,11 @@ main {
 	max-width: 48rem;
 	margin: 0 auto;
 	padding: 3rem 1rem;
+}
+
+code,
+pre {
+	font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', monospace;
 }
 
 pre {

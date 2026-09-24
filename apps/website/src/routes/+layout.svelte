@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { docs } from '$lib/content';
+	import '@fontsource-variable/ibm-plex-sans/wght.css';
 	import '../styles.css';
 
 	let { children } = $props();

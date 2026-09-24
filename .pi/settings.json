@@ -1,5 +1,1 @@
-{
-  "packages": [
-    "../packages/claude-bridge"
-  ]
-}
+{ "packages": ["../packages/claude-bridge"] }

@@ -87,7 +87,7 @@
 
 	.session header {
 		padding-bottom: 1.5rem;
-		border-bottom: 1px solid #353951;
+		border-bottom: 1px solid var(--pau-border);
 	}
 
 	h1,
@@ -104,14 +104,14 @@
 
 	h2,
 	header p {
-		color: #a9a8c0;
+		color: var(--pau-text-muted);
 		font-size: 0.75rem;
 		font-weight: 500;
 	}
 
 	.backend-version {
 		margin-top: 0.5rem;
-		color: #a9a8c0;
+		color: var(--pau-text-muted);
 		font-size: 0.75rem;
 	}
 
@@ -120,7 +120,7 @@
 		gap: 0.7rem;
 		margin-block: 1.5rem;
 		padding-left: 1rem;
-		border-left: 1px solid #353951;
+		border-left: 1px solid var(--pau-border);
 	}
 
 	.activity p {
@@ -131,7 +131,7 @@
 
 	.activity span,
 	.activity small {
-		color: #a9a8c0;
+		color: var(--pau-text-muted);
 	}
 
 	code {
@@ -169,16 +169,16 @@
 		width: 0.4rem;
 		height: 0.4rem;
 		margin-top: 0.35rem;
-		background: #8bd7ff;
+		background: var(--pau-info);
 		border-radius: 50%;
 	}
 
 	.inspection li span.complete {
-		background: #6bf0bd;
+		background: var(--pau-success);
 	}
 
 	.inspection li span.current {
-		background: #ffd479;
+		background: var(--pau-warning);
 	}
 
 	dl div {
@@ -192,6 +192,6 @@
 	}
 
 	dd {
-		color: #a9a8c0;
+		color: var(--pau-text-muted);
 	}
 </style>

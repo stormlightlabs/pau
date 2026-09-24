@@ -1,5 +1,6 @@
 import type { Preview } from '@storybook/svelte-vite';
 
+import { themeCssProperties } from '../src/theme';
 import './preview.css';
 
 const preview = {
@@ -9,6 +10,10 @@ const preview = {
 			root.dataset.workbenchTheme = String(context.globals.theme);
 			root.dataset.reducedMotion = String(context.globals.reducedMotion);
 			root.dataset.capabilityProfile = String(context.globals.capabilityProfile);
+			const themeProperties = Object.entries(themeCssProperties(context.globals.theme, context.globals.uiFont));
+			for (const [property, value] of themeProperties) {
+				root.style.setProperty(property, value);
+			}
 			return Story();
 		}
 	],
@@ -18,8 +23,23 @@ const preview = {
 			toolbar: {
 				title: 'Theme',
 				items: [
-					{ value: 'light', title: 'Light' },
-					{ value: 'dark', title: 'Dark' }
+					{ value: 'eldritch', title: 'Eldritch' },
+					{ value: 'nord', title: 'Nord' },
+					{ value: 'iceberg', title: 'Iceberg' },
+					{ value: 'catppuccin-mocha', title: 'Catppuccin Mocha' },
+					{ value: 'vitesse-dark', title: 'Vitesse Dark' }
+				]
+			}
+		},
+		uiFont: {
+			description: 'Application UI font',
+			toolbar: {
+				title: 'Font',
+				items: [
+					{ value: 'ibm-plex-sans', title: 'IBM Plex Sans' },
+					{ value: 'inter', title: 'Inter' },
+					{ value: 'atkinson-hyperlegible-next', title: 'Atkinson Hyperlegible Next' },
+					{ value: 'atkinson-hyperlegible-soft', title: 'Atkinson Hyperlegible Soft' }
 				]
 			}
 		},
@@ -45,7 +65,7 @@ const preview = {
 			}
 		}
 	},
-	initialGlobals: { theme: 'dark', reducedMotion: 'off', capabilityProfile: 'full' },
+	initialGlobals: { theme: 'eldritch', uiFont: 'inter', reducedMotion: 'off', capabilityProfile: 'full' },
 	parameters: {
 		a11y: { test: 'error' },
 		layout: 'centered',

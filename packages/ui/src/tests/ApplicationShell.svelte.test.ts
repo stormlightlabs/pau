@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import ApplicationShellDemo from '../stories/ApplicationShellDemo.svelte';
+import { THEMES, UI_FONTS, type ThemeName, type UiFontName } from '../theme';
 
 test('toggles contextual and inspector rails', async () => {
 	await render(ApplicationShellDemo);
@@ -16,6 +17,20 @@ test('toggles contextual and inspector rails', async () => {
 
 	await userEvent.click(navigationToggle);
 	await expect.element(navigationToggle).toHaveAttribute('aria-expanded', 'true');
+});
+
+test.each(Object.keys(THEMES) as ThemeName[])('renders the %s theme contract', async (theme) => {
+	await render(ApplicationShellDemo, { theme });
+
+	expect(document.querySelector<HTMLElement>('.app-shell')?.dataset.theme).toBe(theme);
+});
+
+test.each(Object.keys(UI_FONTS) as UiFontName[])('renders the %s UI font', async (uiFont) => {
+	await render(ApplicationShellDemo, { uiFont });
+
+	const shell = document.querySelector<HTMLElement>('.app-shell');
+	expect(shell?.dataset.uiFont).toBe(uiFont);
+	expect(shell?.style.getPropertyValue('--pau-font-ui')).toContain(UI_FONTS[uiFont].family);
 });
 
 test('keeps command and named rail controls in keyboard order', async () => {

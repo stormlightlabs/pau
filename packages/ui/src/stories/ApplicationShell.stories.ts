@@ -7,7 +7,14 @@ const meta = {
 	title: 'Shell/Application shell',
 	component: ApplicationShellDemo,
 	parameters: { layout: 'fullscreen' },
-	args: { disconnected: false, inspectorOpen: true, longContent: false }
+	argTypes: {
+		theme: { control: 'select', options: ['eldritch', 'nord', 'iceberg', 'catppuccin-mocha', 'vitesse-dark'] },
+		uiFont: {
+			control: 'select',
+			options: ['ibm-plex-sans', 'inter', 'atkinson-hyperlegible-next', 'atkinson-hyperlegible-soft']
+		}
+	},
+	args: { disconnected: false, inspectorOpen: true, longContent: false, theme: 'eldritch', uiFont: 'inter' }
 } satisfies Meta<typeof ApplicationShellDemo>;
 
 export default meta;
@@ -23,6 +30,16 @@ export const RailsAndInspector: Story = {
 		await expect(canvas.getByRole('button', { name: 'Show inspector' })).toHaveAttribute('aria-expanded', 'false');
 	}
 };
+
+export const Nord: Story = { args: { theme: 'nord' } };
+
+export const Iceberg: Story = { args: { theme: 'iceberg' } };
+
+export const CatppuccinMocha: Story = { args: { theme: 'catppuccin-mocha' } };
+
+export const VitesseDark: Story = { args: { theme: 'vitesse-dark' } };
+
+export const AtkinsonHyperlegibleSoft: Story = { args: { uiFont: 'atkinson-hyperlegible-soft' } };
 
 export const InspectorClosed: Story = { args: { inspectorOpen: false } };
 

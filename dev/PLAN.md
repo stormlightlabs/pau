@@ -378,13 +378,14 @@ Neovim, terminal, and resource views; the inspector holds review, plan, checks,
 permissions, or selected-resource detail. The terminal bottom dock is the only
 surface that may share the main column vertically.
 
-Use the variable Fontsource packages for all bundled website fonts. IBM Plex
-Sans is the documentation body face, Google Sans is used for headings and
-navigation, and Google Sans Code is used for code, commands, paths, and aligned
-technical data. Self-host the font files in the built site; do not fetch fonts
-from Google at runtime. Preserve the compact rhythm in the application mockups
-while keeping interactive targets large enough through invisible padding and
-keyboard access.
+Bundle the application UI fonts and let the operator choose between IBM Plex
+Sans Variable, Inter Variable, Atkinson Hyperlegible Next Variable, and
+Atkinson Hyperlegible Soft. Use Fontsource variable packages for the first
+three. Vendor Atkinson Hyperlegible Soft from its upstream repository with its
+license and attribution. The documentation site uses IBM Plex Sans Variable.
+Self-host every font file; do not fetch fonts at runtime. Preserve the compact
+rhythm in the application mockups while keeping interactive targets large
+enough through invisible padding and keyboard access.
 
 Follow `dev/design/icons.md`: Tabler for general interface actions, Octicons
 for Git, Catppuccin for file types, and Simple Icons for named services. Load

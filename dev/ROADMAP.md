@@ -216,22 +216,24 @@ Verification:
 
 #### 2.10 Theme contract and bundled palettes
 
-Status: planned
+Status: complete
 Blocked by: 2.2, 2.3
 
 Define semantic theme tokens and add Eldritch, Nord, Iceberg, Catppuccin Mocha,
 and Vitesse Dark from their upstream palettes. Include required licenses and
-attribution. Add variable Fontsource packages for IBM Plex Sans, Google Sans,
-and Google Sans Code to the website.
+attribution. Let the application UI use IBM Plex Sans Variable, Inter Variable,
+Atkinson Hyperlegible Next Variable, or Atkinson Hyperlegible Soft. Load the
+first three from Fontsource and vendor Atkinson Hyperlegible Soft from its
+upstream repository. Use IBM Plex Sans Variable on the website.
 
 Verification:
 
 - Validate every theme against the token schema.
 - Render the application shell in all five themes through Storybook and review
   the selected visual snapshots.
-- Confirm the website uses IBM Plex Sans for body text, Google Sans for headings
-  and navigation, and Google Sans Code for technical text.
-- Confirm the production website makes no remote font request.
+- Confirm the application shell can render with each bundled UI font.
+- Confirm the website uses IBM Plex Sans Variable.
+- Confirm production builds make no remote font request.
 - Check text, focus, status, and meaningful boundary contrast.
 
 ### Agent session loop

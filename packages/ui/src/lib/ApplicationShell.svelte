@@ -2,6 +2,8 @@
 	import type { Snippet } from 'svelte';
 
 	import type { IconKind } from '../icons';
+	import '../styles/fonts.css';
+	import { themeCssProperties, type ThemeName, type UiFontName } from '../theme';
 	import Icon from './Icon.svelte';
 
 	/** One destination in the product or contextual rail. */
@@ -21,6 +23,8 @@
 		contextItems: ShellNavItem[];
 		disconnected?: boolean;
 		inspectorOpen?: boolean;
+		theme?: ThemeName;
+		uiFont?: UiFontName;
 		children?: Snippet;
 		inspector?: Snippet;
 	};
@@ -32,16 +36,28 @@
 		contextItems,
 		disconnected = false,
 		inspectorOpen = true,
+		theme = 'eldritch',
+		uiFont = 'inter',
 		children,
 		inspector
 	}: Props = $props();
 
 	let contextOpen = $state(false);
 	let inspectorVisible = $derived(inspectorOpen);
+	let shellStyle = $derived(
+		Object.entries(themeCssProperties(theme, uiFont))
+			.map(([property, value]) => `${property}: ${value}`)
+			.join('; ')
+	);
 </script>
 
 <a class="app-shell__skip-link" href="#main-surface">Skip to main surface</a>
-<div class:app-shell--with-inspector={inspectorVisible && inspector} class="app-shell">
+<div
+	class:app-shell--with-inspector={inspectorVisible && inspector}
+	class="app-shell"
+	data-theme={theme}
+	data-ui-font={uiFont}
+	style={shellStyle}>
 	<header class="app-shell__command-bar">
 		<div class="app-shell__identity">
 			<span class="app-shell__mark" aria-hidden="true">π</span>
@@ -146,17 +162,17 @@
 	}
 
 	.app-shell {
-		--shell-bg: #171827;
-		--shell-surface: #1d1f31;
-		--shell-surface-raised: #25283d;
-		--shell-border: #353951;
-		--shell-text: #f0eff8;
-		--shell-muted: #a9a8c0;
-		--shell-faint: #a09fb7;
-		--shell-accent: #6bf0bd;
-		--shell-warning: #ffd479;
-		--shell-danger: #ff8e9e;
-		--shell-focus: #9be8ff;
+		--shell-bg: var(--pau-canvas);
+		--shell-surface: var(--pau-surface);
+		--shell-surface-raised: var(--pau-surface-raised);
+		--shell-border: var(--pau-border);
+		--shell-text: var(--pau-text);
+		--shell-muted: var(--pau-text-muted);
+		--shell-faint: var(--pau-text-muted);
+		--shell-accent: var(--pau-accent);
+		--shell-warning: var(--pau-warning);
+		--shell-danger: var(--pau-danger);
+		--shell-focus: var(--pau-focus);
 		display: grid;
 		grid-template-areas:
 			'command command command'
@@ -168,7 +184,7 @@
 		overflow: hidden;
 		color: var(--shell-text);
 		background: var(--shell-bg);
-		font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+		font-family: var(--pau-font-ui);
 		font-size: 0.8125rem;
 		line-height: 1.4;
 	}
@@ -186,8 +202,8 @@
 		left: 0.5rem;
 		z-index: 20;
 		padding: 0.6rem 0.8rem;
-		color: #151620;
-		background: #9be8ff;
+		color: var(--shell-bg);
+		background: var(--shell-focus);
 		transform: translateY(-150%);
 	}
 
@@ -223,7 +239,7 @@
 		place-items: center;
 		width: 1.5rem;
 		height: 1.5rem;
-		color: #12251e;
+		color: var(--shell-bg);
 		background: var(--shell-accent);
 		font-weight: 800;
 	}

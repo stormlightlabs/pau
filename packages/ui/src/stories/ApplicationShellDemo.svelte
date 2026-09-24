@@ -1,12 +1,21 @@
 <script lang="ts">
 	import { shellNavigationFixtures } from '../fixtures/applicationShell';
 	import ApplicationShell from '../lib/ApplicationShell.svelte';
+	import type { ThemeName, UiFontName } from '../theme';
 
 	let {
 		disconnected = false,
 		inspectorOpen = true,
-		longContent = false
-	}: { disconnected?: boolean; inspectorOpen?: boolean; longContent?: boolean } = $props();
+		longContent = false,
+		theme = 'eldritch',
+		uiFont = 'inter'
+	}: {
+		disconnected?: boolean;
+		inspectorOpen?: boolean;
+		longContent?: boolean;
+		theme?: ThemeName;
+		uiFont?: UiFontName;
+	} = $props();
 
 	const reviewNotes = Array.from({ length: 9 }, (_, index) => index + 1);
 </script>
@@ -17,7 +26,9 @@
 	productItems={shellNavigationFixtures.productItems}
 	contextItems={shellNavigationFixtures.contextItems}
 	{disconnected}
-	{inspectorOpen}>
+	{inspectorOpen}
+	{theme}
+	{uiFont}>
 	<section class="conversation" aria-labelledby="task-title">
 		<header>
 			<p>pi · task</p>
@@ -166,16 +177,16 @@
 		width: 0.4rem;
 		height: 0.4rem;
 		margin-top: 0.35rem;
-		background: #8bd7ff;
+		background: var(--pau-info, #8bd7ff);
 		border-radius: 50%;
 	}
 
 	.inspection li span.done {
-		background: #6bf0bd;
+		background: var(--pau-success, #6bf0bd);
 	}
 
 	.inspection li span.active {
-		background: #ffd479;
+		background: var(--pau-warning, #ffd479);
 	}
 
 	dl {

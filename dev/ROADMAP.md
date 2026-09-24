@@ -138,7 +138,7 @@ Verification:
 
 #### 2.5 Persistence foundation
 
-Status: planned
+Status: complete
 Blocked by: 2.1
 
 Add SQLite migrations and `pau-core` repositories for workspaces, application

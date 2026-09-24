@@ -1,0 +1,525 @@
+//! SQLite persistence for application-owned state.
+//!
+//! Native agent session files are intentionally outside this database and are
+//! never read, changed, or removed by these repositories.
+
+use std::{path::Path, time::Duration};
+
+use tokio_rusqlite::{Connection, OptionalExtension, params, rusqlite};
+
+const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
+const MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/0001_workspaces_and_settings.sql"),
+    include_str!("../migrations/0002_process_metadata.sql"),
+];
+
+/// Result returned by persistence operations.
+pub type Result<T> = tokio_rusqlite::Result<T>;
+
+/// One application database backed by one serialized SQLite connection.
+///
+/// Repository handles clone the asynchronous handle, but all work remains
+/// queued on the same `tokio-rusqlite` connection thread.
+#[derive(Clone)]
+pub struct Database {
+    connection: Connection,
+}
+
+impl Database {
+    /// Opens a database, configures the connection, and applies pending
+    /// migrations.
+    pub async fn open(path: impl AsRef<Path>) -> Result<Self> {
+        let connection = Connection::open(path).await?;
+        connection
+            .call(|connection| {
+                connection.pragma_update(None, "foreign_keys", true)?;
+                connection.pragma_update(None, "journal_mode", "WAL")?;
+                connection.busy_timeout(BUSY_TIMEOUT)?;
+                apply_migrations(connection)
+            })
+            .await?;
+
+        Ok(Self { connection })
+    }
+
+    /// Returns a repository for remembered workspaces.
+    pub fn workspaces(&self) -> WorkspaceRepository {
+        WorkspaceRepository::new(self.connection.clone())
+    }
+
+    /// Returns a repository for application settings.
+    pub fn settings(&self) -> ApplicationSettingsRepository {
+        ApplicationSettingsRepository::new(self.connection.clone())
+    }
+
+    /// Returns a repository for persisted process metadata.
+    pub fn processes(&self) -> ProcessMetadataRepository {
+        ProcessMetadataRepository::new(self.connection.clone())
+    }
+}
+
+fn apply_migrations(connection: &mut rusqlite::Connection) -> rusqlite::Result<()> {
+    let current_version: i64 =
+        connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    let current_version = usize::try_from(current_version)
+        .map_err(|_| rusqlite::Error::IntegralValueOutOfRange(0, current_version))?;
+
+    if current_version > MIGRATIONS.len() {
+        return Err(rusqlite::Error::InvalidQuery);
+    }
+
+    for (index, migration) in MIGRATIONS.iter().enumerate().skip(current_version) {
+        let transaction = connection.transaction()?;
+        transaction.execute_batch(migration)?;
+        transaction.pragma_update(None, "user_version", (index + 1) as i64)?;
+        transaction.commit()?;
+    }
+
+    Ok(())
+}
+
+/// A remembered local directory or Git worktree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Workspace {
+    /// Stable application identifier.
+    pub id: String,
+    /// Canonical workspace path encoded for storage.
+    pub path: String,
+    /// Optional display name chosen by the operator.
+    pub name: Option<String>,
+    /// RFC 3339 creation timestamp.
+    pub created_at: String,
+    /// RFC 3339 timestamp of the latest update.
+    pub updated_at: String,
+}
+
+/// Access to remembered workspaces.
+#[derive(Clone)]
+pub struct WorkspaceRepository {
+    connection: Connection,
+}
+
+impl WorkspaceRepository {
+    fn new(connection: Connection) -> Self {
+        Self { connection }
+    }
+
+    /// Inserts a workspace or replaces its mutable fields.
+    pub async fn upsert(&self, workspace: Workspace) -> Result<()> {
+        self.connection
+            .call(move |connection| {
+                connection.execute(
+                    "INSERT INTO workspaces (id, path, name, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5)
+                     ON CONFLICT(id) DO UPDATE SET
+                       path = excluded.path,
+                       name = excluded.name,
+                       updated_at = excluded.updated_at",
+                    params![
+                        workspace.id,
+                        workspace.path,
+                        workspace.name,
+                        workspace.created_at,
+                        workspace.updated_at
+                    ],
+                )?;
+                Ok(())
+            })
+            .await
+    }
+
+    /// Finds a workspace by its stable identifier.
+    pub async fn get(&self, id: &str) -> Result<Option<Workspace>> {
+        let id = id.to_owned();
+        self.connection
+            .call(move |connection| {
+                connection
+                    .query_row(
+                        "SELECT id, path, name, created_at, updated_at
+                         FROM workspaces WHERE id = ?1",
+                        [id],
+                        workspace_from_row,
+                    )
+                    .optional()
+            })
+            .await
+    }
+
+    /// Lists workspaces in stable path order.
+    pub async fn list(&self) -> Result<Vec<Workspace>> {
+        self.connection
+            .call(|connection| {
+                let mut statement = connection.prepare(
+                    "SELECT id, path, name, created_at, updated_at
+                     FROM workspaces ORDER BY path",
+                )?;
+                statement.query_map([], workspace_from_row)?.collect()
+            })
+            .await
+    }
+
+    /// Removes a workspace registration without touching its directory.
+    pub async fn remove(&self, id: &str) -> Result<bool> {
+        let id = id.to_owned();
+        self.connection
+            .call(move |connection| {
+                Ok(connection.execute("DELETE FROM workspaces WHERE id = ?1", [id])? > 0)
+            })
+            .await
+    }
+}
+
+fn workspace_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Workspace> {
+    Ok(Workspace {
+        id: row.get(0)?,
+        path: row.get(1)?,
+        name: row.get(2)?,
+        created_at: row.get(3)?,
+        updated_at: row.get(4)?,
+    })
+}
+
+/// One persisted application setting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplicationSetting {
+    /// Stable setting name.
+    pub key: String,
+    /// Serialized setting value.
+    pub value: String,
+    /// RFC 3339 timestamp of the latest update.
+    pub updated_at: String,
+}
+
+/// Access to application settings.
+#[derive(Clone)]
+pub struct ApplicationSettingsRepository {
+    connection: Connection,
+}
+
+impl ApplicationSettingsRepository {
+    fn new(connection: Connection) -> Self {
+        Self { connection }
+    }
+
+    /// Inserts or replaces a setting.
+    pub async fn set(&self, setting: ApplicationSetting) -> Result<()> {
+        self.connection
+            .call(move |connection| {
+                connection.execute(
+                    "INSERT INTO application_settings (key, value, updated_at)
+                     VALUES (?1, ?2, ?3)
+                     ON CONFLICT(key) DO UPDATE SET
+                       value = excluded.value,
+                       updated_at = excluded.updated_at",
+                    params![setting.key, setting.value, setting.updated_at],
+                )?;
+                Ok(())
+            })
+            .await
+    }
+
+    /// Finds a setting by key.
+    pub async fn get(&self, key: &str) -> Result<Option<ApplicationSetting>> {
+        let key = key.to_owned();
+        self.connection
+            .call(move |connection| {
+                connection
+                    .query_row(
+                        "SELECT key, value, updated_at
+                         FROM application_settings WHERE key = ?1",
+                        [key],
+                        |row| {
+                            Ok(ApplicationSetting {
+                                key: row.get(0)?,
+                                value: row.get(1)?,
+                                updated_at: row.get(2)?,
+                            })
+                        },
+                    )
+                    .optional()
+            })
+            .await
+    }
+
+    /// Removes a setting.
+    pub async fn remove(&self, key: &str) -> Result<bool> {
+        let key = key.to_owned();
+        self.connection
+            .call(move |connection| {
+                Ok(
+                    connection.execute("DELETE FROM application_settings WHERE key = ?1", [key])?
+                        > 0,
+                )
+            })
+            .await
+    }
+}
+
+/// Recovery metadata for an application-owned process.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessMetadata {
+    /// Stable process identifier.
+    pub id: String,
+    /// Associated workspace registration, when one exists.
+    pub workspace_id: Option<String>,
+    /// Adapter or subsystem that owns the process.
+    pub process_kind: String,
+    /// Identifier of the native agent session, when one exists.
+    pub native_session_id: Option<String>,
+    /// RFC 3339 process start timestamp.
+    pub started_at: String,
+    /// RFC 3339 process end timestamp, when the process has exited.
+    pub ended_at: Option<String>,
+    /// Process exit code, when the platform supplied one.
+    pub exit_code: Option<i32>,
+}
+
+/// Access to process recovery metadata.
+#[derive(Clone)]
+pub struct ProcessMetadataRepository {
+    connection: Connection,
+}
+
+impl ProcessMetadataRepository {
+    fn new(connection: Connection) -> Self {
+        Self { connection }
+    }
+
+    /// Inserts or replaces process metadata.
+    pub async fn upsert(&self, process: ProcessMetadata) -> Result<()> {
+        self.connection
+            .call(move |connection| {
+                connection.execute(
+                    "INSERT INTO process_metadata (
+                       id, workspace_id, process_kind, native_session_id,
+                       started_at, ended_at, exit_code
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                     ON CONFLICT(id) DO UPDATE SET
+                       workspace_id = excluded.workspace_id,
+                       process_kind = excluded.process_kind,
+                       native_session_id = excluded.native_session_id,
+                       started_at = excluded.started_at,
+                       ended_at = excluded.ended_at,
+                       exit_code = excluded.exit_code",
+                    params![
+                        process.id,
+                        process.workspace_id,
+                        process.process_kind,
+                        process.native_session_id,
+                        process.started_at,
+                        process.ended_at,
+                        process.exit_code
+                    ],
+                )?;
+                Ok(())
+            })
+            .await
+    }
+
+    /// Finds process metadata by its stable identifier.
+    pub async fn get(&self, id: &str) -> Result<Option<ProcessMetadata>> {
+        let id = id.to_owned();
+        self.connection
+            .call(move |connection| {
+                connection
+                    .query_row(
+                        "SELECT id, workspace_id, process_kind, native_session_id,
+                                started_at, ended_at, exit_code
+                         FROM process_metadata WHERE id = ?1",
+                        [id],
+                        process_from_row,
+                    )
+                    .optional()
+            })
+            .await
+    }
+
+    /// Lists process metadata in stable start order.
+    pub async fn list(&self) -> Result<Vec<ProcessMetadata>> {
+        self.connection
+            .call(|connection| {
+                let mut statement = connection.prepare(
+                    "SELECT id, workspace_id, process_kind, native_session_id,
+                            started_at, ended_at, exit_code
+                     FROM process_metadata ORDER BY started_at, id",
+                )?;
+                statement.query_map([], process_from_row)?.collect()
+            })
+            .await
+    }
+
+    /// Removes process metadata without touching native session files.
+    pub async fn remove(&self, id: &str) -> Result<bool> {
+        let id = id.to_owned();
+        self.connection
+            .call(move |connection| {
+                Ok(connection.execute("DELETE FROM process_metadata WHERE id = ?1", [id])? > 0)
+            })
+            .await
+    }
+}
+
+fn process_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProcessMetadata> {
+    Ok(ProcessMetadata {
+        id: row.get(0)?,
+        workspace_id: row.get(1)?,
+        process_kind: row.get(2)?,
+        native_session_id: row.get(3)?,
+        started_at: row.get(4)?,
+        ended_at: row.get(5)?,
+        exit_code: row.get(6)?,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::tempdir;
+
+    use super::*;
+
+    const CREATED_AT: &str = "2026-03-01T10:00:00Z";
+    const UPDATED_AT: &str = "2026-03-01T11:00:00Z";
+
+    fn workspace() -> Workspace {
+        Workspace {
+            id: "workspace-1".to_owned(),
+            path: "/work/pau".to_owned(),
+            name: Some("Pau".to_owned()),
+            created_at: CREATED_AT.to_owned(),
+            updated_at: UPDATED_AT.to_owned(),
+        }
+    }
+
+    #[tokio::test]
+    async fn applies_migrations_to_empty_and_existing_states() {
+        for starting_version in 0..=MIGRATIONS.len() {
+            let directory = tempdir().unwrap();
+            let path = directory.path().join("pau.sqlite3");
+
+            if starting_version > 0 {
+                let connection = rusqlite::Connection::open(&path).unwrap();
+                for (index, migration) in MIGRATIONS.iter().take(starting_version).enumerate() {
+                    connection.execute_batch(migration).unwrap();
+                    connection
+                        .pragma_update(None, "user_version", (index + 1) as i64)
+                        .unwrap();
+                }
+            }
+
+            let database = Database::open(&path).await.unwrap();
+            let version = database
+                .connection
+                .call(|connection| {
+                    connection.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
+                })
+                .await
+                .unwrap();
+            assert_eq!(version, MIGRATIONS.len() as i64);
+            assert!(database.workspaces().list().await.is_ok());
+            assert!(database.processes().list().await.is_ok());
+        }
+    }
+
+    #[tokio::test]
+    async fn configures_wal_foreign_keys_and_busy_timeout() {
+        let directory = tempdir().unwrap();
+        let database = Database::open(directory.path().join("pau.sqlite3"))
+            .await
+            .unwrap();
+
+        let configuration = database
+            .connection
+            .call(|connection| -> rusqlite::Result<_> {
+                let journal_mode: String =
+                    connection.pragma_query_value(None, "journal_mode", |row| row.get(0))?;
+                let foreign_keys: bool =
+                    connection.pragma_query_value(None, "foreign_keys", |row| row.get(0))?;
+                let busy_timeout: i64 =
+                    connection.pragma_query_value(None, "busy_timeout", |row| row.get(0))?;
+                Ok((journal_mode, foreign_keys, busy_timeout))
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(configuration, ("wal".to_owned(), true, 5_000));
+    }
+
+    #[tokio::test]
+    async fn round_trips_workspace_settings_and_process_metadata() {
+        let directory = tempdir().unwrap();
+        let database = Database::open(directory.path().join("pau.sqlite3"))
+            .await
+            .unwrap();
+
+        let workspace = workspace();
+        database
+            .workspaces()
+            .upsert(workspace.clone())
+            .await
+            .unwrap();
+        assert_eq!(
+            database.workspaces().get(&workspace.id).await.unwrap(),
+            Some(workspace)
+        );
+
+        let setting = ApplicationSetting {
+            key: "theme".to_owned(),
+            value: "nord".to_owned(),
+            updated_at: UPDATED_AT.to_owned(),
+        };
+        database.settings().set(setting.clone()).await.unwrap();
+        assert_eq!(
+            database.settings().get(&setting.key).await.unwrap(),
+            Some(setting)
+        );
+
+        let process = ProcessMetadata {
+            id: "process-1".to_owned(),
+            workspace_id: Some("workspace-1".to_owned()),
+            process_kind: "pi".to_owned(),
+            native_session_id: Some("native-session-1".to_owned()),
+            started_at: CREATED_AT.to_owned(),
+            ended_at: Some(UPDATED_AT.to_owned()),
+            exit_code: Some(0),
+        };
+        database.processes().upsert(process.clone()).await.unwrap();
+        assert_eq!(
+            database.processes().get(&process.id).await.unwrap(),
+            Some(process)
+        );
+    }
+
+    #[tokio::test]
+    async fn deleting_database_does_not_delete_native_session_files() {
+        let directory = tempdir().unwrap();
+        let native_session = directory.path().join("sessions/native-session.jsonl");
+        fs::create_dir_all(native_session.parent().unwrap()).unwrap();
+        fs::write(&native_session, "native agent history").unwrap();
+
+        let database_path = directory.path().join("pau.sqlite3");
+        let database = Database::open(&database_path).await.unwrap();
+        database
+            .processes()
+            .upsert(ProcessMetadata {
+                id: "process-1".to_owned(),
+                workspace_id: None,
+                process_kind: "pi".to_owned(),
+                native_session_id: Some(native_session.to_string_lossy().into_owned()),
+                started_at: CREATED_AT.to_owned(),
+                ended_at: None,
+                exit_code: None,
+            })
+            .await
+            .unwrap();
+        drop(database);
+
+        fs::remove_file(database_path).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(native_session).unwrap(),
+            "native agent history"
+        );
+    }
+}

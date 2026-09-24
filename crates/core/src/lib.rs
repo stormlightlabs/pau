@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+pub mod persistence;
+
 /// Response returned by the backend version endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct VersionResponse {

@@ -1,0 +1,4 @@
+{"version":2,"type":"event","sequence":0,"event":"future.event"}
+{"version":1,"type":"event"
+{"version":1,"type":"diagnostic","level":"error","message":"wrong stream"}
+{"version":1,"type":"event","sequence":2,"event":"turn.completed","payload":{"status":"completed"}}

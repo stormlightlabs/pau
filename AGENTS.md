@@ -48,7 +48,8 @@ before drafting, not only when polishing the result.
 
 Always audit changed prose against that skill before finishing. Remove AI
 writing tropes, stock transitions, repetition, inflated claims, and other
-formulaic language.
+formulaic language. Keep roadmap terms, unit boundaries, and implementation
+phases out of user-facing or published documentation.
 
 Wrap prose at about 80 columns. A few trailing characters are acceptable when a
 clean break would hurt readability. Do not wrap tables, long links, indivisible

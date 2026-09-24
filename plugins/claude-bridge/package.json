@@ -1,0 +1,40 @@
+{
+  "name": "@stormlightlabs/pau-claude-bridge",
+  "version": "0.1.0",
+  "description": "Structured Claude Code process bridge for Pi and Pau",
+  "type": "module",
+  "license": "MIT OR Apache-2.0",
+  "keywords": [
+    "pi-package"
+  ],
+  "files": [
+    "dist",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "pnpm run build",
+    "typecheck:test": "tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "check": "pnpm run build && pnpm run typecheck:test && pnpm run test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "typescript": "7.0.2",
+    "vitest": "5.0.1"
+  },
+  "dependencies": {
+    "valibot": "1.5.0"
+  }
+}

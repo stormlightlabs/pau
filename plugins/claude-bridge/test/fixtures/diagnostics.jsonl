@@ -1,0 +1,2 @@
+{"version":1,"type":"diagnostic","level":"info","message":"fake Claude started","context":{"pid":1234}}
+{"version":1,"type":"diagnostic","level":"warn","message":"fixture warning"}

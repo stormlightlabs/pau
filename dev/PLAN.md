@@ -93,9 +93,10 @@ connections or a pool only if measurements show contention.
 
 Use maintained libraries for protocol, terminal, editor, and rendering work
 before writing equivalents. Prefer small libraries with stable wire or platform
-boundaries over adopting an IDE framework. Record the version, license,
-maintenance state, and the missing requirement that justifies any custom
-implementation.
+boundaries over adopting an IDE framework. Use Valibot for TypeScript runtime
+schema validation unless an integration requires another validator. Record the
+version, license, maintenance state, and the missing requirement that justifies
+any custom implementation.
 
 The initial choices to validate are:
 

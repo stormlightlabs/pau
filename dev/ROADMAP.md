@@ -51,7 +51,7 @@ useful without Pau.
 
 ### 1.1 Bridge protocol and test harness
 
-Status: planned
+Status: complete
 Blocked by: none
 
 Create `@stormlightlabs/pau-claude-bridge` from scratch under the repository's

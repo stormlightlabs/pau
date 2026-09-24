@@ -1,0 +1,5 @@
+{"version":1,"type":"command","id":"cmd-1","command":"prompt","payload":{"text":"Inspect the current change."}}
+{"version":1,"type":"response","id":"cmd-1","ok":true,"result":{"accepted":true}}
+{"version":1,"type":"response","id":"cmd-2","ok":false,"error":{"code":"busy","message":"A turn is already running","recoverable":true}}
+{"version":1,"type":"event","sequence":0,"event":"session.started","payload":{"sessionId":"session-1"}}
+{"version":1,"type":"event","sequence":1,"event":"text.delta","payload":{"text":"Done"}}

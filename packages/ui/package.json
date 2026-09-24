@@ -7,17 +7,25 @@
 		".": "./src/index.ts"
 	},
 	"scripts": {
-		"build": "storybook build",
-		"check": "svelte-check --tsconfig ./tsconfig.json",
-		"dev": "storybook dev --port 6006",
-		"test": "vitest run"
+		"build": "pnpm icons:generate && storybook build",
+		"check": "pnpm icons:check && svelte-check --tsconfig ./tsconfig.json",
+		"dev": "pnpm icons:generate && storybook dev --port 6006",
+		"icons:check": "node scripts/generate-icons.mjs --check",
+		"icons:generate": "node scripts/generate-icons.mjs",
+		"test": "pnpm icons:check && vitest run"
 	},
 	"devDependencies": {
+		"@iconify-json/catppuccin": "1.2.17",
+		"@iconify-json/octicon": "1.2.36",
+		"@iconify-json/simple-icons": "1.2.97",
+		"@iconify-json/tabler": "1.2.35",
 		"@storybook/addon-a11y": "10.6.0",
 		"@storybook/addon-vitest": "10.6.0",
 		"@storybook/svelte-vite": "10.6.0",
 		"@sveltejs/vite-plugin-svelte": "6.2.4",
 		"@types/node": "24.13.6",
+		"@unocss/core": "66.9.2",
+		"@unocss/preset-icons": "66.9.2",
 		"@vitest/browser-playwright": "4.1.11",
 		"playwright": "1.63.0",
 		"storybook": "10.6.0",

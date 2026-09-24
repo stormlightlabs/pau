@@ -1,0 +1,620 @@
+<script lang="ts">
+	import type { Snippet } from 'svelte';
+
+	import type { IconKind } from '../icons';
+	import Icon from './Icon.svelte';
+
+	/** One destination in the product or contextual rail. */
+	export type ShellNavItem = {
+		id: string;
+		label: string;
+		icon?: IconKind;
+		status?: string;
+		attention?: boolean;
+		active?: boolean;
+	};
+
+	type Props = {
+		workspaceName: string;
+		contextLabel: string;
+		productItems: ShellNavItem[];
+		contextItems: ShellNavItem[];
+		disconnected?: boolean;
+		inspectorOpen?: boolean;
+		children?: Snippet;
+		inspector?: Snippet;
+	};
+
+	let {
+		workspaceName,
+		contextLabel,
+		productItems,
+		contextItems,
+		disconnected = false,
+		inspectorOpen = true,
+		children,
+		inspector
+	}: Props = $props();
+
+	let contextOpen = $state(false);
+	let inspectorVisible = $derived(inspectorOpen);
+</script>
+
+<a class="app-shell__skip-link" href="#main-surface">Skip to main surface</a>
+<div class:app-shell--with-inspector={inspectorVisible && inspector} class="app-shell">
+	<header class="app-shell__command-bar">
+		<div class="app-shell__identity">
+			<span class="app-shell__mark" aria-hidden="true">π</span>
+			<strong>Pau</strong>
+			<span>/</span>
+			<span>{workspaceName}</span>
+		</div>
+
+		<label class="app-shell__command-input">
+			<span class="app-shell__search-icon" aria-hidden="true"></span>
+			<span class="app-shell__sr-only">Search or run a command</span>
+			<input type="search" placeholder="Search or run a command" />
+			<kbd>⌘K</kbd>
+		</label>
+	</header>
+
+	<nav class="app-shell__product-rail" aria-label="Product">
+		<ul>
+			{#each productItems as item (item.id)}
+				<li>
+					<a href={`#${item.id}`} class:active={item.active} aria-label={item.label}>
+						<Icon name={item.icon ?? 'agents'} size={20} />
+						{#if item.attention}<span class="app-shell__attention" aria-label="Needs attention"></span>{/if}
+					</a>
+				</li>
+			{/each}
+		</ul>
+	</nav>
+
+	<aside class:open={contextOpen} class="app-shell__context-rail" aria-label={contextLabel}>
+		<div class="app-shell__rail-heading">
+			<span>{contextLabel}</span>
+			<button type="button" aria-label="Close navigation" onclick={() => (contextOpen = false)}>
+				<Icon name="close" size={18} />
+			</button>
+		</div>
+		<ul>
+			{#each contextItems as item (item.id)}
+				<li>
+					<a href={`#${item.id}`} class:active={item.active}>
+						<span class:attention={item.attention} class="app-shell__item-dot"></span>
+						<span>{item.label}</span>
+						{#if item.status}<small>{item.status}</small>{/if}
+					</a>
+				</li>
+			{/each}
+		</ul>
+	</aside>
+
+	<main id="main-surface" class="app-shell__main" tabindex="-1">
+		<div class="app-shell__surface-bar">
+			<button
+				type="button"
+				class="app-shell__icon-button app-shell__context-toggle"
+				aria-label="Open navigation"
+				aria-expanded={contextOpen}
+				onclick={() => (contextOpen = !contextOpen)}>
+				<Icon name="sidebar" size={18} />
+			</button>
+			{#if disconnected}
+				<p class="app-shell__connection" role="status"><span></span>Disconnected</p>
+			{:else}
+				<p class="app-shell__connection app-shell__connection--online"><span></span>Connected</p>
+			{/if}
+			{#if inspector}
+				<button
+					type="button"
+					class="app-shell__icon-button"
+					aria-label={inspectorVisible ? 'Hide inspector' : 'Show inspector'}
+					aria-expanded={inspectorVisible}
+					onclick={() => (inspectorVisible = !inspectorVisible)}>
+					<Icon name="panel" size={18} />
+				</button>
+			{/if}
+		</div>
+		<div class="app-shell__main-content">
+			{#if children}{@render children()}{/if}
+		</div>
+	</main>
+
+	{#if inspector && inspectorVisible}
+		<button
+			type="button"
+			class="app-shell__backdrop"
+			aria-label="Close inspector"
+			onclick={() => (inspectorVisible = false)}></button>
+		<aside class="app-shell__inspector" aria-label="Inspector">
+			<div class="app-shell__rail-heading">
+				<span>Inspector</span>
+				<button type="button" aria-label="Close inspector" onclick={() => (inspectorVisible = false)}>
+					<Icon name="close" size={18} />
+				</button>
+			</div>
+			<div class="app-shell__inspector-content">{@render inspector()}</div>
+		</aside>
+	{/if}
+</div>
+
+<style>
+	:global(*) {
+		box-sizing: border-box;
+	}
+
+	.app-shell {
+		--shell-bg: #171827;
+		--shell-surface: #1d1f31;
+		--shell-surface-raised: #25283d;
+		--shell-border: #353951;
+		--shell-text: #f0eff8;
+		--shell-muted: #a9a8c0;
+		--shell-faint: #a09fb7;
+		--shell-accent: #6bf0bd;
+		--shell-warning: #ffd479;
+		--shell-danger: #ff8e9e;
+		--shell-focus: #9be8ff;
+		display: grid;
+		grid-template-areas:
+			'command command command'
+			'product context main';
+		grid-template-columns: 3.5rem 18rem minmax(0, 1fr);
+		grid-template-rows: 2.75rem minmax(0, 1fr);
+		min-width: 20rem;
+		height: 100dvh;
+		overflow: hidden;
+		color: var(--shell-text);
+		background: var(--shell-bg);
+		font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+		font-size: 0.8125rem;
+		line-height: 1.4;
+	}
+
+	.app-shell--with-inspector {
+		grid-template-areas:
+			'command command command command'
+			'product context main inspector';
+		grid-template-columns: 3.5rem 18rem minmax(24rem, 1fr) 19rem;
+	}
+
+	.app-shell__skip-link {
+		position: fixed;
+		top: 0.5rem;
+		left: 0.5rem;
+		z-index: 20;
+		padding: 0.6rem 0.8rem;
+		color: #151620;
+		background: #9be8ff;
+		transform: translateY(-150%);
+	}
+
+	.app-shell__skip-link:focus {
+		transform: translateY(0);
+	}
+
+	.app-shell__command-bar {
+		grid-area: command;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding-inline: 0.75rem;
+		border-bottom: 1px solid var(--shell-border);
+		background: var(--shell-bg);
+	}
+
+	.app-shell__identity {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		min-width: 0;
+		color: var(--shell-muted);
+	}
+
+	.app-shell__identity strong {
+		color: var(--shell-text);
+	}
+
+	.app-shell__mark {
+		display: grid;
+		place-items: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		color: #12251e;
+		background: var(--shell-accent);
+		font-weight: 800;
+	}
+
+	.app-shell__command-input {
+		display: flex;
+		align-items: center;
+		width: min(23rem, 45vw);
+		height: 2rem;
+		padding-inline: 0.65rem;
+		border: 1px solid var(--shell-border);
+		background: var(--shell-surface);
+	}
+
+	.app-shell__search-icon {
+		width: 0.75rem;
+		height: 0.75rem;
+		margin-right: 0.55rem;
+		border: 1.5px solid var(--shell-muted);
+		border-radius: 50%;
+	}
+
+	.app-shell__search-icon::after {
+		display: block;
+		width: 0.35rem;
+		margin: 0.55rem 0 0 0.55rem;
+		border-top: 1.5px solid var(--shell-muted);
+		content: '';
+		transform: rotate(45deg);
+	}
+
+	.app-shell__command-input input {
+		min-width: 0;
+		flex: 1;
+		color: var(--shell-text);
+		background: transparent;
+		border: 0;
+		outline: 0;
+		font: inherit;
+	}
+
+	.app-shell__command-input input::placeholder {
+		color: var(--shell-muted);
+	}
+
+	.app-shell__command-input:focus-within {
+		border-color: var(--shell-focus);
+		box-shadow: 0 0 0 1px var(--shell-focus);
+	}
+
+	.app-shell__command-input kbd {
+		color: var(--shell-faint);
+		font: inherit;
+	}
+
+	.app-shell__product-rail {
+		grid-area: product;
+		display: flex;
+		flex-direction: column;
+		border-right: 1px solid var(--shell-border);
+		background: var(--shell-bg);
+	}
+
+	.app-shell__product-rail ul,
+	.app-shell__context-rail ul {
+		display: grid;
+		gap: 0.25rem;
+		margin: 0;
+		padding: 0.65rem 0;
+		list-style: none;
+	}
+
+	.app-shell__product-rail a {
+		position: relative;
+		display: grid;
+		place-items: center;
+		width: 2.75rem;
+		height: 2.75rem;
+		margin-inline: auto;
+		color: var(--shell-muted);
+		text-decoration: none;
+	}
+
+	.app-shell__product-rail a:hover,
+	.app-shell__product-rail a.active {
+		color: var(--shell-accent);
+		background: var(--shell-surface-raised);
+	}
+
+	.app-shell__attention {
+		position: absolute;
+		top: 0.45rem;
+		right: 0.45rem;
+		width: 0.4rem;
+		height: 0.4rem;
+		background: var(--shell-warning);
+		border-radius: 50%;
+	}
+
+	.app-shell__context-rail {
+		grid-area: context;
+		min-width: 0;
+		border-right: 1px solid var(--shell-border);
+		background: var(--shell-bg);
+	}
+
+	.app-shell__rail-heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		height: 3.25rem;
+		padding-inline: 1rem 0.5rem;
+		color: var(--shell-muted);
+		font-size: 0.7rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	.app-shell__rail-heading button {
+		display: none;
+	}
+
+	.app-shell__context-rail li {
+		padding-inline: 0.55rem;
+	}
+
+	.app-shell__context-rail a {
+		display: grid;
+		grid-template-columns: 0.5rem minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 0.65rem;
+		min-height: 2.75rem;
+		padding-inline: 0.65rem;
+		color: var(--shell-muted);
+		text-decoration: none;
+	}
+
+	.app-shell__context-rail a:hover,
+	.app-shell__context-rail a.active {
+		color: var(--shell-text);
+		background: var(--shell-surface-raised);
+	}
+
+	.app-shell__context-rail small {
+		color: var(--shell-muted);
+	}
+
+	.app-shell__item-dot {
+		width: 0.4rem;
+		height: 0.4rem;
+		background: var(--shell-accent);
+		border-radius: 50%;
+	}
+
+	.app-shell__item-dot.attention {
+		background: var(--shell-warning);
+	}
+
+	.app-shell__main {
+		grid-area: main;
+		min-width: 0;
+		overflow: auto;
+		background: var(--shell-surface);
+	}
+
+	.app-shell__surface-bar {
+		position: sticky;
+		top: 0;
+		z-index: 2;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		height: 3.25rem;
+		padding-inline: 0.75rem;
+		border-bottom: 1px solid var(--shell-border);
+		background: var(--shell-surface);
+	}
+
+	.app-shell__context-toggle {
+		display: none;
+	}
+
+	.app-shell__icon-button,
+	.app-shell__rail-heading button {
+		place-items: center;
+		width: 2.75rem;
+		height: 2.75rem;
+		margin-left: auto;
+		padding: 0;
+		color: var(--shell-muted);
+		background: transparent;
+		border: 0;
+		cursor: pointer;
+	}
+
+	.app-shell__icon-button:hover,
+	.app-shell__rail-heading button:hover {
+		color: var(--shell-text);
+		background: var(--shell-surface-raised);
+	}
+
+	.app-shell__connection {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		margin: 0;
+		color: var(--shell-danger);
+		font-size: 0.75rem;
+	}
+
+	.app-shell__connection span {
+		width: 0.45rem;
+		height: 0.45rem;
+		background: currentColor;
+		border-radius: 50%;
+	}
+
+	.app-shell__connection--online {
+		color: var(--shell-accent);
+	}
+
+	.app-shell__main-content {
+		min-height: calc(100% - 3.25rem);
+		padding: clamp(1rem, 3vw, 2.5rem);
+	}
+
+	.app-shell__inspector {
+		grid-area: inspector;
+		min-width: 0;
+		overflow: auto;
+		border-left: 1px solid var(--shell-border);
+		background: var(--shell-bg);
+	}
+
+	.app-shell__inspector-content {
+		padding: 0.5rem 1rem 1rem;
+	}
+
+	.app-shell__backdrop {
+		display: none;
+	}
+
+	.app-shell__sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	:global(.app-shell a:focus-visible),
+	:global(.app-shell button:focus-visible) {
+		outline: 2px solid var(--shell-focus);
+		outline-offset: -2px;
+	}
+
+	@media (max-width: 74rem) {
+		.app-shell,
+		.app-shell--with-inspector {
+			grid-template-areas:
+				'command command command'
+				'product context main';
+			grid-template-columns: 3.5rem 16rem minmax(0, 1fr);
+		}
+
+		.app-shell__inspector {
+			position: fixed;
+			top: 2.75rem;
+			right: 0;
+			bottom: 0;
+			z-index: 5;
+			width: min(22rem, calc(100vw - 3.5rem));
+			box-shadow: -1rem 0 2rem rgb(0 0 0 / 24%);
+		}
+
+		.app-shell__backdrop {
+			position: fixed;
+			inset: 2.75rem 0 0 0;
+			z-index: 4;
+			display: block;
+			width: auto;
+			height: auto;
+			padding: 0;
+			background: rgb(7 8 15 / 55%);
+			border: 0;
+		}
+
+		.app-shell__inspector .app-shell__rail-heading button {
+			display: grid;
+		}
+	}
+
+	@media (max-width: 48rem) {
+		.app-shell,
+		.app-shell--with-inspector {
+			grid-template-areas:
+				'command command'
+				'product main';
+			grid-template-columns: 3.5rem minmax(0, 1fr);
+		}
+
+		.app-shell__identity > span:last-child,
+		.app-shell__identity > span:nth-last-child(2),
+		.app-shell__command-input kbd {
+			display: none;
+		}
+
+		.app-shell__command-input {
+			width: min(20rem, calc(100vw - 8rem));
+		}
+
+		.app-shell__context-toggle {
+			display: grid;
+			margin-left: 0;
+		}
+
+		.app-shell__context-rail {
+			position: fixed;
+			top: 2.75rem;
+			bottom: 0;
+			left: 3.5rem;
+			z-index: 6;
+			width: min(18rem, calc(100vw - 3.5rem));
+			box-shadow: 1rem 0 2rem rgb(0 0 0 / 24%);
+			transform: translateX(-110%);
+			visibility: hidden;
+			transition:
+				transform 180ms ease,
+				visibility 180ms;
+		}
+
+		.app-shell__context-rail.open {
+			transform: translateX(0);
+			visibility: visible;
+		}
+
+		.app-shell__context-rail .app-shell__rail-heading button {
+			display: grid;
+		}
+	}
+
+	@media (max-width: 30rem) {
+		.app-shell,
+		.app-shell--with-inspector {
+			grid-template-areas:
+				'command'
+				'main'
+				'product';
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-rows: 2.75rem minmax(0, 1fr) 3.5rem;
+		}
+
+		.app-shell__product-rail {
+			border-top: 1px solid var(--shell-border);
+			border-right: 0;
+		}
+
+		.app-shell__product-rail ul {
+			display: flex;
+			justify-content: space-around;
+			padding: 0.35rem;
+		}
+
+		.app-shell__product-rail a {
+			margin: 0;
+		}
+
+		.app-shell__context-rail {
+			left: 0;
+			bottom: 3.5rem;
+			width: min(18rem, 88vw);
+		}
+
+		.app-shell__inspector {
+			left: 0;
+			bottom: 3.5rem;
+			width: 100%;
+		}
+
+		.app-shell__identity strong {
+			display: none;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.app-shell__context-rail {
+			transition: none;
+		}
+	}
+</style>

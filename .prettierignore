@@ -8,3 +8,4 @@ target
 pnpm-lock.yaml
 flake.lock
 packages/protocol/src/generated.ts
+packages/ui/src/styles/icons.css

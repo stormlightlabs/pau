@@ -16,6 +16,8 @@ architecture decision changes.
 Project prompts live in `.pi/prompts/`: `/implement <unit-id>`,
 `/review [focus]`, and `/adv-review [focus]`.
 
+`cargo clean` regularly to keep the disk clean
+
 ## Work units
 
 - Work on one ready roadmap unit at a time unless the user explicitly combines

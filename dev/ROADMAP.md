@@ -106,7 +106,7 @@ Verification:
 
 #### 2.3 Shared application shell
 
-Status: planned
+Status: complete
 Blocked by: 2.1, 2.2
 
 Implement the global command bar, product rail, contextual rail, main surface,

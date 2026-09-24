@@ -29,7 +29,9 @@
     "prepack": "pnpm run build",
     "typecheck:test": "tsc -p tsconfig.test.json",
     "test": "vitest run",
-    "check": "pnpm run build && pnpm run typecheck:test && pnpm run test"
+    "test:package": "pnpm run build && node test/packed-artifact.mjs",
+    "test:live": "pnpm run build && node test/live-smoke.mjs",
+    "check": "pnpm run build && pnpm run typecheck:test && pnpm run test && node test/packed-artifact.mjs"
   },
   "engines": {
     "node": ">=20"

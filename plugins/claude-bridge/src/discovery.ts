@@ -3,11 +3,27 @@ import { constants } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 
-/** The first Claude Code release line supported by the bridge. */
-export const MIN_SUPPORTED_CLAUDE_VERSION = "1.0.0" as const;
+/** The oldest Claude Code release verified with this bridge. */
+export const MIN_SUPPORTED_CLAUDE_VERSION = "2.1.259" as const;
 
-/** Claude Code major versions accepted by this bridge release. */
-export const MAX_SUPPORTED_CLAUDE_MAJOR = 2 as const;
+/** The newest Claude Code release verified with this bridge. */
+export const LATEST_VERIFIED_CLAUDE_VERSION = "2.1.281" as const;
+
+/** Flags that a newer Claude release must advertise before the bridge runs it. */
+export const REQUIRED_CLAUDE_FLAGS = Object.freeze([
+  "--print",
+  "--input-format",
+  "--output-format",
+  "--include-partial-messages",
+  "--resume",
+  "--permission-mode",
+  "--permission-prompts",
+  "--safe-mode",
+  "--tools",
+  "--allowedTools",
+  "--max-budget-usd",
+  "--verbose",
+] as const);
 
 /** Structured Claude features available to later bridge lifecycle operations. */
 export type ClaudeCapabilities = {
@@ -38,6 +54,8 @@ export type ClaudeDiscovery = {
   readonly executablePath: string;
   readonly version: ClaudeVersion;
   readonly capabilities: ClaudeCapabilities;
+  readonly compatibility: "verified" | "newer-unverified";
+  readonly warning?: string;
 };
 
 /** Overrides used while locating and inspecting Claude Code. */
@@ -97,17 +115,52 @@ export async function discoverClaude(
     options.versionTimeoutMs ?? DEFAULT_VERSION_TIMEOUT_MS,
   );
   const version = parseClaudeVersion(output, executablePath);
+  const minimum = parseVersionLiteral(MIN_SUPPORTED_CLAUDE_VERSION);
+  const latest = parseVersionLiteral(LATEST_VERIFIED_CLAUDE_VERSION);
 
-  if (version.major < 1 || version.major > MAX_SUPPORTED_CLAUDE_MAJOR) {
+  if (compareVersions(version, minimum) < 0) {
     throw new ClaudeDiscoveryError(
       "unsupported_version",
-      `Claude Code ${version.raw} is unsupported. Install a version from ` +
-        `${MIN_SUPPORTED_CLAUDE_VERSION} through ${MAX_SUPPORTED_CLAUDE_MAJOR}.x`,
+      `Claude Code ${version.raw} is unsupported. Install ` +
+        `${MIN_SUPPORTED_CLAUDE_VERSION} or newer`,
       { executablePath, version },
     );
   }
 
-  return { executablePath, version, capabilities: CLAUDE_CAPABILITIES };
+  if (compareVersions(version, latest) <= 0) {
+    return {
+      executablePath,
+      version,
+      capabilities: CLAUDE_CAPABILITIES,
+      compatibility: "verified",
+    };
+  }
+
+  const help = await readExecutableOutput(
+    executablePath,
+    ["--help"],
+    env,
+    options.versionTimeoutMs ?? DEFAULT_VERSION_TIMEOUT_MS,
+    "capability handshake",
+  );
+  const missingFlags = REQUIRED_CLAUDE_FLAGS.filter((flag) => !help.includes(flag));
+  if (missingFlags.length > 0) {
+    throw new ClaudeDiscoveryError(
+      "unsupported_version",
+      `Claude Code ${version.raw} is newer than the latest verified release and ` +
+        `does not advertise required capabilities: ${missingFlags.join(", ")}`,
+      { executablePath, version },
+    );
+  }
+
+  return {
+    executablePath,
+    version,
+    capabilities: CLAUDE_CAPABILITIES,
+    compatibility: "newer-unverified",
+    warning: `Claude Code ${version.raw} is newer than verified release ` +
+      `${LATEST_VERIFIED_CLAUDE_VERSION}; required capabilities are available`,
+  };
 }
 
 async function validateConfiguredPath(executablePath: string): Promise<string> {
@@ -182,8 +235,24 @@ function readVersion(
   env: NodeJS.ProcessEnv,
   timeoutMs: number,
 ): Promise<string> {
+  return readExecutableOutput(
+    executablePath,
+    ["--version"],
+    env,
+    timeoutMs,
+    "version check",
+  );
+}
+
+function readExecutableOutput(
+  executablePath: string,
+  args: readonly string[],
+  env: NodeJS.ProcessEnv,
+  timeoutMs: number,
+  operation: string,
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(executablePath, ["--version"], {
+    const child = spawn(executablePath, args, {
       env,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -212,7 +281,7 @@ function readVersion(
       reject(
         new ClaudeDiscoveryError(
           "version_failed",
-          `Could not run Claude Code version check: ${executablePath}`,
+          `Could not run Claude Code ${operation}: ${executablePath}`,
           { executablePath, cause },
         ),
       );
@@ -223,7 +292,7 @@ function readVersion(
         reject(
           new ClaudeDiscoveryError(
             "version_failed",
-            `Claude Code version check timed out after ${timeoutMs}ms: ${executablePath}`,
+            `Claude Code ${operation} timed out after ${timeoutMs}ms: ${executablePath}`,
             { executablePath },
           ),
         );
@@ -233,7 +302,7 @@ function readVersion(
         reject(
           new ClaudeDiscoveryError(
             "version_failed",
-            `Claude Code version output exceeded ${MAX_VERSION_OUTPUT_BYTES} ` +
+            `Claude Code ${operation} output exceeded ${MAX_VERSION_OUTPUT_BYTES} ` +
               `bytes: ${executablePath}`,
             { executablePath },
           ),
@@ -244,7 +313,7 @@ function readVersion(
         reject(
           new ClaudeDiscoveryError(
             "version_failed",
-            `Claude Code version check exited with ${code ?? signal}: ${executablePath}`,
+            `Claude Code ${operation} exited with ${code ?? signal}: ${executablePath}`,
             { executablePath },
           ),
         );
@@ -271,6 +340,17 @@ function parseClaudeVersion(output: string, executablePath: string): ClaudeVersi
     minor: Number(match[2]),
     patch: Number(match[3]),
   };
+}
+
+function parseVersionLiteral(value: string): ClaudeVersion {
+  const [major = 0, minor = 0, patch = 0] = value.split(".").map(Number);
+  return { raw: value, major, minor, patch };
+}
+
+function compareVersions(left: ClaudeVersion, right: ClaudeVersion): number {
+  return left.major - right.major ||
+    left.minor - right.minor ||
+    left.patch - right.patch;
 }
 
 function hasErrorCode(error: unknown, code: string): boolean {

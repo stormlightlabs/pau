@@ -175,6 +175,11 @@ export function createClaudePiExtension(
       return state.discovery;
     };
 
+    const warnIfUnverified = async (ctx: ExtensionContext): Promise<void> => {
+      const warning = (await getDiscovery()).warning;
+      if (warning) ctx.ui.notify(warning, "warning");
+    };
+
     const start = async (
       cwd: string,
       profile: ClaudeExecutionProfile,
@@ -265,6 +270,7 @@ export function createClaudePiExtension(
       description: "Find Claude Code and report bridge capabilities",
       handler: async (_args, ctx) => {
         const discovery = await getDiscovery();
+        if (discovery.warning) ctx.ui.notify(discovery.warning, "warning");
         ctx.ui.notify(
           `Claude Code ${discovery.version.raw} at ${discovery.executablePath}; ` +
             "streaming, interrupt, and native resume available",
@@ -277,6 +283,7 @@ export function createClaudePiExtension(
       description: "Start Claude Code: /claude-start [work|review|review-with-checks]",
       handler: async (args, ctx) => {
         const profile = parseProfile(args, "work");
+        await warnIfUnverified(ctx);
         await start(ctx.cwd, profile);
         ctx.ui.notify(`Claude started with the ${profile} profile`, "info");
       },
@@ -286,6 +293,7 @@ export function createClaudePiExtension(
       description: "Stop the current Claude process and start a new session",
       handler: async (args, ctx) => {
         const profile = parseProfile(args, "work");
+        await warnIfUnverified(ctx);
         await stop();
         state.rememberedSessionId = undefined;
         state.persistedSessionId = undefined;
@@ -307,6 +315,7 @@ export function createClaudePiExtension(
         if (!nativeSessionId) {
           throw new Error("No Claude session ID is recorded; pass one to /claude-resume");
         }
+        await warnIfUnverified(ctx);
         await stop();
         await start(ctx.cwd, profile, nativeSessionId);
         ctx.ui.notify(`Claude session ${nativeSessionId} is ready to resume`, "info");
@@ -324,7 +333,10 @@ export function createClaudePiExtension(
     ] as const) {
       pi.registerCommand(command[0], {
         description: `${command[1]}: /${command[0]} <task>`,
-        handler: async (args, ctx) => runCommandTask(args, command[2], ctx),
+        handler: async (args, ctx) => {
+          await warnIfUnverified(ctx);
+          await runCommandTask(args, command[2], ctx);
+        },
       });
     }
 
@@ -388,6 +400,7 @@ export function createClaudePiExtension(
           throw new Error("Claude delegation is disabled; the operator must enable it");
         }
         if (signal?.aborted) throw new Error("Claude delegation was aborted");
+        await warnIfUnverified(ctx);
 
         const profile = parameters.profile ?? "work";
         const events: EventFrame[] = [];

@@ -8,17 +8,47 @@ The package exports Claude Code discovery, process lifecycle control, and the
 protocol codec. Its fixtures and fake Claude executable support integration
 tests without launching a paid Claude session.
 
+## Install a packed artifact
+
+The package is not published to npm. Build a tarball from this checkout, inspect
+its contents, and install that exact artifact:
+
+```sh
+cd plugins/claude-bridge
+pnpm install --frozen-lockfile
+pnpm pack --pack-destination ./artifacts
+
+install_dir="$(mktemp -d)"
+tar -xzf ./artifacts/stormlightlabs-pau-claude-bridge-0.1.0.tgz \
+  -C "$install_dir" --strip-components=1
+npm install --omit=dev --legacy-peer-deps --ignore-scripts --prefix "$install_dir"
+pi install "$install_dir"
+```
+
+`pi list` shows the installed local path. Keep that directory in place while Pi
+uses it. Run `pi remove "$install_dir"` before deleting it. To install for one
+trusted project instead of the user account, run `pi install --local
+"$install_dir"` from that project.
+
+A Pi package runs with the same operating-system access as Pi. Inspect the
+artifact before installing it. Project-local packages load only after Pi grants
+project trust, but trust is not a sandbox.
+
 ## Claude discovery
 
 `discoverClaude()` accepts an optional `executablePath`. When that option is
 absent, it searches `PATH` for `claude`. A configured path takes precedence and
 must name an executable file.
 
-Discovery runs `claude --version`; it does not start a Claude session. This
-release supports Claude Code versions 1.x and 2.x. Discovery rejects missing or
-non-executable files, unrecognized version output, failed version commands, and
-unsupported versions with a `ClaudeDiscoveryError` and a machine-readable
-`code`.
+Discovery runs `claude --version`; it does not start a Claude session. The
+verified compatibility range is Claude Code 2.1.259 through 2.1.281. A newer
+release can run only when `claude --help` advertises every required structured
+input, output, resume, permission, tool, and budget flag. Discovery marks that
+release as unverified and returns a warning. There is no hard maximum version.
+
+Discovery rejects older releases, missing or non-executable files, unrecognized
+version output, failed version commands, and incomplete capability handshakes
+with a `ClaudeDiscoveryError` and a machine-readable `code`.
 
 ## Process lifecycle
 
@@ -101,10 +131,17 @@ The extension reads this configuration when Pi loads it:
 - `PAU_CLAUDE_MAX_BUDGET_USD` sets an optional dollar budget.
 - `PAU_CLAUDE_CHECK_COMMANDS` sets the semicolon-separated check allowlist.
 
-Claude keeps ownership of authentication, model selection, and effort. The
-extension reports Claude's turn count and cost when they are present in the
-result record. Model-facing results are limited to 8,000 characters; tool
-activity remains visible through Pi's tool updates.
+Claude keeps ownership of authentication, credentials, model selection, and
+effort. The bridge does not read, copy, or store Claude auth files or tokens.
+Authenticate the selected Claude executable before starting Pi.
+
+Every profile has a finite turn limit. Set `PAU_CLAUDE_MAX_BUDGET_USD` to pass a
+dollar budget to each Claude invocation. Claude checks the budget between API
+calls, so one call can exceed a low budget. Use a value that covers one call on
+your configured model. `/claude-status` reports the effective limits, and each
+completed turn reports cost and turn count when Claude supplies them.
+Model-facing results are limited to 8,000 characters; tool activity remains
+visible through Pi's tool updates.
 
 ## Wire format
 
@@ -136,12 +173,29 @@ pnpm install --frozen-lockfile
 pnpm check
 ```
 
+The default checks use only fixtures and fake processes. They pack the package,
+install the artifact in a clean temporary Pi agent directory, and run
+`/claude-discover` against the fake executable. They cannot start a paid Claude
+session.
+
 The tests round-trip every frame type, replay malformed and unsupported fixture
 records, and run `test/fixtures/fake-claude.mjs` as a child process. Prompt
 fixtures include partial records, streamed text, tool activity, diagnostics,
 successful, failed, and interrupted completion states; ignored interrupts;
 process crashes; follow-up prompts; and native session resume. The fake
 executable emits protocol data on stdout and diagnostics on stderr.
+
+The live smoke test sends one paid prompt through the installed Claude
+executable. It defaults to a US$1 budget and is never part of `pnpm check`:
+
+```sh
+PAU_CLAUDE_LIVE=1 pnpm test:live
+```
+
+Set `PAU_CLAUDE_MAX_BUDGET_USD` to choose a different positive limit. The test
+requires existing Claude authentication, writes no credentials, and confirms
+that the owned Claude child exits. Set `PAU_CLAUDE_SESSION_ID_FILE` when the
+native session ID must be recorded for a later explicit resume.
 
 ## License
 

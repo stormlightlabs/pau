@@ -16,7 +16,26 @@ let turnTimer;
 let interruptedOnce = false;
 
 if (process.argv.includes("--version")) {
-  process.stdout.write(`${process.env.FAKE_CLAUDE_VERSION ?? "2.1.3 (Claude Code)"}\n`);
+  process.stdout.write(`${process.env.FAKE_CLAUDE_VERSION ?? "2.1.281 (Claude Code)"}\n`);
+  process.exit(0);
+}
+if (process.argv.includes("--help")) {
+  process.stdout.write(
+    `${process.env.FAKE_CLAUDE_HELP ?? [
+      "--print",
+      "--input-format",
+      "--output-format",
+      "--include-partial-messages",
+      "--resume",
+      "--permission-mode",
+      "--permission-prompts",
+      "--safe-mode",
+      "--tools",
+      "--allowedTools",
+      "--max-budget-usd",
+      "--verbose",
+    ].join("\n")}\n`,
+  );
   process.exit(0);
 }
 if (process.env.FAKE_CLAUDE_PID_FILE) {

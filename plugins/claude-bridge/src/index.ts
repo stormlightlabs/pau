@@ -1,7 +1,8 @@
 export {
   CLAUDE_CAPABILITIES,
-  MAX_SUPPORTED_CLAUDE_MAJOR,
+  LATEST_VERIFIED_CLAUDE_VERSION,
   MIN_SUPPORTED_CLAUDE_VERSION,
+  REQUIRED_CLAUDE_FLAGS,
   ClaudeDiscoveryError,
   discoverClaude,
 } from "./discovery.js";

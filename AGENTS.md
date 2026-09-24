@@ -35,9 +35,14 @@ Project prompts live in `.pi/prompts/`: `/implement <unit-id>`,
 ## Dogfood Pau
 
 Follow the dogfooding policy in [PLAN.md](dev/PLAN.md). After roadmap unit 1.8
-is complete, use the Claude bridge for suitable Pau work. Use each later Pau
-surface once it is usable, and include the self-hosted smoke run required by
+is complete, keep the local Claude bridge installed for personal Pi use and in
+this project's Pi settings, then use it for suitable Pau work. Use each later
+Pau surface once it is usable, and include the self-hosted smoke run required by
 [ROADMAP.md](dev/ROADMAP.md).
+
+When the agent already runs inside Zellij, perform Zellij verification in a new
+tab of the current session. Do not create a nested Zellij session unless explicitly
+asked to do so.
 
 ## Writing
 

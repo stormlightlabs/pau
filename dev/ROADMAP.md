@@ -163,7 +163,7 @@ Verification:
 
 ### 1.8 Packaging and live smoke test
 
-Status: planned
+Status: complete
 Blocked by: 1.7
 
 Document local packed-artifact installation, configuration, compatibility,
@@ -211,12 +211,12 @@ Configure `org.stormlightlabs.pau` as the Tauri bundle identifier. Create the
 Cargo workspace with the required crate paths and names:
 
 ```text
-crates/core    pau-core
-crates/agent   pau-agent
-crates/pi      pau-pi
-crates/cli     pau-cli
-crates/server  pau-server
-crates/term    pau-term
+crates/core    pau-core (lib)
+crates/agent   pau-agent (lib)
+crates/pi      pau-pi (lib)
+crates/cli     pau-cli (bin)
+crates/server  pau-server (bin)
+crates/term    pau-term (lib)
 ```
 
 Verification:

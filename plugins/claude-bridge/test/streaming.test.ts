@@ -73,6 +73,7 @@ describe("Claude prompt streaming", () => {
     expect(completion).toEqual({
       status: "completed",
       result: "Done",
+      sessionId: "session-fixture",
     });
     expect(events.at(-1)?.payload).toEqual(completion);
     expect(diagnostics).toEqual([
@@ -124,6 +125,7 @@ describe("Claude prompt streaming", () => {
     expect(completion).toEqual({
       status: "failed",
       error: "fixture failure",
+      sessionId: "session-failed",
     });
     expect(events.map((event) => event.event)).toEqual([
       "text.delta",

@@ -12,6 +12,7 @@ export type ClaudeTurnCompletion = {
   readonly status: "completed" | "failed";
   readonly result?: string;
   readonly error?: string;
+  readonly sessionId?: string;
 };
 
 /** Streaming callbacks for one Claude prompt. */
@@ -38,6 +39,29 @@ export class ClaudePromptError extends Error {
   }
 }
 
+/** Machine-readable reasons that a native Claude session cannot be resumed. */
+export type ClaudeResumeErrorCode = "unknown_session" | "session_mismatch";
+
+/** A recoverable failure to attach a process to a native Claude session. */
+export class ClaudeResumeError extends Error {
+  readonly recoverable = true;
+
+  constructor(
+    readonly code: ClaudeResumeErrorCode,
+    readonly requestedSessionId: string,
+    readonly actualSessionId?: string,
+  ) {
+    super(
+      code === "unknown_session"
+        ? `Claude session was not found: ${requestedSessionId}`
+        : `Claude resumed session ${actualSessionId ?? "<missing>"} instead of ${
+            requestedSessionId
+          }`,
+    );
+    this.name = "ClaudeResumeError";
+  }
+}
+
 type PromptStreams = {
   readonly input: Writable;
   readonly output: Readable;
@@ -49,7 +73,9 @@ type MutablePromptState = {
   nextSequence: number;
   sawTextDelta: boolean;
   readonly startedToolIds: Set<string>;
+  readonly expectedSessionId?: string;
   completion?: ClaudeTurnCompletion;
+  resumeError?: ClaudeResumeError;
 };
 
 /**
@@ -61,6 +87,7 @@ export async function runClaudePrompt(
   task: string,
   firstSequence: number,
   handlers: ClaudePromptHandlers = {},
+  expectedSessionId?: string,
 ): Promise<{ completion: ClaudeTurnCompletion; nextSequence: number }> {
   if (task.trim() === "") {
     throw new ClaudePromptError("empty_prompt", "Claude prompt must not be empty");
@@ -72,6 +99,7 @@ export async function runClaudePrompt(
     nextSequence: firstSequence,
     sawTextDelta: false,
     startedToolIds: new Set(),
+    expectedSessionId,
   };
 
   let resolveCompletion!: (value: ClaudeTurnCompletion) => void;
@@ -83,7 +111,8 @@ export async function runClaudePrompt(
 
   const finishRecord = (record: unknown): void => {
     translateRecord(record, state, handlers);
-    if (state.completion) resolveCompletion(state.completion);
+    if (state.resumeError) rejectCompletion(state.resumeError);
+    else if (state.completion) resolveCompletion(state.completion);
   };
   const onOutput = (chunk: Buffer | string): void => {
     for (const record of outputLines.push(chunk)) finishRecord(record);
@@ -154,11 +183,33 @@ function translateRecord(
   }
 
   if (value.type === "result") {
+    const sessionId = typeof value.session_id === "string"
+      ? value.session_id
+      : undefined;
     const failed = value.is_error === true || value.subtype !== "success";
+    if (state.expectedSessionId) {
+      if (failed && sessionId === undefined) {
+        state.resumeError = new ClaudeResumeError(
+          "unknown_session",
+          state.expectedSessionId,
+        );
+        return;
+      }
+      if (sessionId !== state.expectedSessionId) {
+        state.resumeError = new ClaudeResumeError(
+          "session_mismatch",
+          state.expectedSessionId,
+          sessionId,
+        );
+        return;
+      }
+    }
+
     const completion: ClaudeTurnCompletion = {
       status: failed ? "failed" : "completed",
       ...(typeof value.result === "string" ? { result: value.result } : {}),
       ...(failed && typeof value.error === "string" ? { error: value.error } : {}),
+      ...(sessionId === undefined ? {} : { sessionId }),
     };
     state.completion = completion;
     emitEvent(state, handlers, "turn.completed", completion);

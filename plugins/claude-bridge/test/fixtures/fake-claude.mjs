@@ -5,6 +5,10 @@ import { createInterface } from "node:readline";
 
 const VERSION = 1;
 const mode = process.env.FAKE_CLAUDE_MODE ?? "protocol";
+const resumeIndex = process.argv.indexOf("--resume");
+const resumedSessionId = resumeIndex === -1
+  ? undefined
+  : process.argv[resumeIndex + 1];
 let sequence = 0;
 let keepAlive;
 
@@ -86,6 +90,27 @@ lines.on("line", (line) => {
       return;
     }
 
+    if (resumedSessionId && process.env.FAKE_CLAUDE_SESSION_FILE) {
+      let storedSessionId;
+      try {
+        storedSessionId = readFileSync(
+          process.env.FAKE_CLAUDE_SESSION_FILE,
+          "utf8",
+        );
+      } catch {
+        // A missing native session store is reported through the result record.
+      }
+      if (storedSessionId !== resumedSessionId) {
+        writeProtocol({
+          type: "result",
+          subtype: "error_during_execution",
+          is_error: true,
+          error: "Unknown session",
+        });
+        return;
+      }
+    }
+
     if (process.env.FAKE_CLAUDE_STREAM_FIXTURE) {
       const output = readFileSync(process.env.FAKE_CLAUDE_STREAM_FIXTURE, "utf8");
       const midpoint = Math.floor(output.length / 2);
@@ -97,6 +122,13 @@ lines.on("line", (line) => {
       process.stdout.write(output.slice(0, midpoint));
       setImmediate(() => process.stdout.write(output.slice(midpoint)));
       return;
+    }
+
+    const sessionId = process.env.FAKE_CLAUDE_RESUME_RESULT_ID
+      ?? resumedSessionId
+      ?? "session-fixture";
+    if (!resumedSessionId && process.env.FAKE_CLAUDE_SESSION_FILE) {
+      writeFileSync(process.env.FAKE_CLAUDE_SESSION_FILE, sessionId);
     }
 
     process.stderr.write("Claude fixture warning\n");
@@ -143,7 +175,7 @@ lines.on("line", (line) => {
           subtype: "success",
           is_error: false,
           result: "Done",
-          session_id: "session-fixture",
+          session_id: sessionId,
         });
       },
     );

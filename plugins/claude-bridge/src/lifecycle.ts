@@ -62,6 +62,11 @@ export type StartClaudeProcessOptions = {
   readonly id?: string;
 };
 
+/** Options for resuming one native Claude session. */
+export type ResumeClaudeProcessOptions = StartClaudeProcessOptions & {
+  readonly nativeSessionId: string;
+};
+
 /** Machine-readable process lifecycle failures. */
 export type ClaudeProcessErrorCode = "start_failed" | "kill_timeout";
 
@@ -114,18 +119,30 @@ export class ClaudeProcess {
   #stopPromise: Promise<ClaudeProcessExit> | undefined;
   #promptActive = false;
   #nextEventSequence = 0;
+  #nativeSessionId: string | undefined;
+  #resumedSessionPending: boolean;
 
   /** @internal Processes are owned and created by a registry. */
-  constructor(options: StartClaudeProcessOptions, onExit: () => void) {
+  constructor(
+    options: StartClaudeProcessOptions,
+    onExit: () => void,
+    resumedSessionId?: string,
+  ) {
     this.id = options.id ?? randomUUID();
     this.executablePath = options.discovery.executablePath;
     this.cwd = options.cwd;
+    this.#nativeSessionId = resumedSessionId;
+    this.#resumedSessionPending = resumedSessionId !== undefined;
     this.#timeouts = { ...DEFAULT_SHUTDOWN_TIMEOUTS, ...options.shutdownTimeouts };
     validateTimeouts(this.#timeouts);
 
+    const args = [...(options.args ?? CLAUDE_STRUCTURED_ARGS)];
+    if (resumedSessionId) {
+      args.push("--resume", resumedSessionId);
+    }
     this.#child = spawn(
       this.executablePath,
-      [...(options.args ?? CLAUDE_STRUCTURED_ARGS)],
+      args,
       {
         cwd: this.cwd,
         env: options.env ?? process.env,
@@ -187,6 +204,11 @@ export class ClaudeProcess {
     return this.#exitInfo;
   }
 
+  /** Claude's native session identifier, once Claude has reported it. */
+  get nativeSessionId(): string | undefined {
+    return this.#nativeSessionId;
+  }
+
   /** Wait until the operating system has started the child process. */
   async waitUntilStarted(): Promise<void> {
     await this.#started;
@@ -220,8 +242,11 @@ export class ClaudeProcess {
         task,
         this.#nextEventSequence,
         handlers,
+        this.#resumedSessionPending ? this.#nativeSessionId : undefined,
       );
       this.#nextEventSequence = result.nextSequence;
+      this.#nativeSessionId = result.completion.sessionId ?? this.#nativeSessionId;
+      this.#resumedSessionPending = false;
       return result.completion;
     } finally {
       this.#promptActive = false;
@@ -282,24 +307,18 @@ export class ClaudeProcessRegistry {
 
   /** Start Claude in the selected working directory and register it as live. */
   async start(options: StartClaudeProcessOptions): Promise<ClaudeProcess> {
-    const processId = options.id ?? randomUUID();
-    if (this.#processes.has(processId)) {
-      throw new Error(`A Claude process already uses ID: ${processId}`);
-    }
+    return this.#start(options);
+  }
 
-    const process = new ClaudeProcess(
-      { ...options, id: processId },
-      () => this.#processes.delete(processId),
-    );
-    this.#processes.set(processId, process);
-
-    try {
-      await process.waitUntilStarted();
-      return process;
-    } catch (error) {
-      this.#processes.delete(processId);
-      throw error;
-    }
+  /**
+   * Resume Claude using its native session store instead of a copied
+   * transcript.
+   */
+  async resume(options: ResumeClaudeProcessOptions): Promise<ClaudeProcess> {
+    return this.#start({
+      ...options,
+      resumedSessionId: options.nativeSessionId,
+    });
   }
 
   /** Return a live process by its stable bridge identifier. */
@@ -316,6 +335,30 @@ export class ClaudeProcessRegistry {
   async stopAll(): Promise<void> {
     while (this.#processes.size > 0) {
       await Promise.all([...this.#processes.values()].map((process) => process.stop()));
+    }
+  }
+
+  async #start(
+    options: StartClaudeProcessOptions & { readonly resumedSessionId?: string },
+  ): Promise<ClaudeProcess> {
+    const processId = options.id ?? randomUUID();
+    if (this.#processes.has(processId)) {
+      throw new Error(`A Claude process already uses ID: ${processId}`);
+    }
+
+    const process = new ClaudeProcess(
+      { ...options, id: processId },
+      () => this.#processes.delete(processId),
+      options.resumedSessionId,
+    );
+    this.#processes.set(processId, process);
+
+    try {
+      await process.waitUntilStarted();
+      return process;
+    } catch (error) {
+      this.#processes.delete(processId);
+      throw error;
     }
   }
 }

@@ -43,6 +43,13 @@ Use `onDiagnostic` to receive stderr as diagnostic frames. Plain stderr and
 structured diagnostics stay separate from prompt events and never enter the
 protocol stream.
 
+A completed turn exposes Claude's native identifier as `sessionId` and stores it
+on `process.nativeSessionId`. After stopping that process, call
+`registry.resume()` with the identifier to let Claude load its native session.
+The bridge does not copy or store the transcript. If Claude cannot find the
+identifier or reports a different one, the next prompt rejects with a
+recoverable `ClaudeResumeError`.
+
 Call `process.stop()` for a staged shutdown. The bridge closes structured input,
 then sends `SIGINT`, `SIGTERM`, and `SIGKILL` if each preceding step times out.
 `registry.stopAll()` applies the same shutdown to every live process.
@@ -80,8 +87,8 @@ pnpm check
 The tests round-trip every frame type, replay malformed and unsupported fixture
 records, and run `test/fixtures/fake-claude.mjs` as a child process. Prompt
 fixtures include partial records, streamed text, tool activity, diagnostics,
-and successful and failed completion states. The fake executable emits protocol
-data on stdout and diagnostics on stderr.
+successful and failed completion states, and native session resume. The fake
+executable emits protocol data on stdout and diagnostics on stderr.
 
 ## License
 

@@ -27,12 +27,14 @@ export type {
   ClaudeProcessState,
   ClaudeShutdownStage,
   ClaudeShutdownTimeouts,
+  ResumeClaudeProcessOptions,
   StartClaudeProcessOptions,
 } from "./lifecycle.js";
 
-export { ClaudePromptError } from "./streaming.js";
+export { ClaudePromptError, ClaudeResumeError } from "./streaming.js";
 export type {
   ClaudePromptErrorCode,
+  ClaudeResumeErrorCode,
   ClaudePromptHandlers,
   ClaudeTurnCompletion,
 } from "./streaming.js";

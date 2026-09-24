@@ -109,7 +109,7 @@ Verification:
 
 ### 1.5 Native session resume
 
-Status: planned
+Status: complete
 Blocked by: 1.4
 
 Expose Claude's native session identifier and resume an existing session without

@@ -1,6 +1,7 @@
 # Project agent configuration
 !AGENTS.md
 /.pi/*
+!/.pi/settings.json
 !/.pi/prompts/
 !/.pi/prompts/*.md
 .direnv/

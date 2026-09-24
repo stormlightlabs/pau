@@ -1,0 +1,10 @@
+[package]
+name = "pau-term"
+description = "Terminal and embedded Neovim support for Pau"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+path = "src/lib.rs"

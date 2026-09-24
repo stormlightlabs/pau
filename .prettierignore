@@ -1,0 +1,11 @@
+.direnv
+node_modules
+target
+**/build
+**/dist
+**/.svelte-kit
+**/pagefind
+pnpm-lock.yaml
+flake.lock
+packages/protocol/src/generated.ts
+plugins/claude-bridge

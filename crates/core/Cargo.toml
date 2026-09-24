@@ -1,0 +1,15 @@
+[package]
+name = "pau-core"
+description = "Domain types and application services for Pau"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+ts-rs.workspace = true
+
+[[bin]]
+name = "generate-protocol"
+path = "src/bin/generate_protocol.rs"

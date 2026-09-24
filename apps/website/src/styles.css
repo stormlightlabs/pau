@@ -1,0 +1,50 @@
+:root {
+	color: #d8dee9;
+	background: #242933;
+	font-family: system-ui, sans-serif;
+	color-scheme: dark;
+}
+
+body {
+	margin: 0;
+}
+
+header {
+	display: flex;
+	gap: 2rem;
+	align-items: center;
+	padding: 1rem max(1rem, calc((100% - 64rem) / 2));
+	border-bottom: 1px solid #4c566a;
+}
+
+nav {
+	display: flex;
+	gap: 1rem;
+}
+
+a {
+	color: #88c0d0;
+}
+
+.brand {
+	color: #eceff4;
+	font-weight: 700;
+	text-decoration: none;
+}
+
+main {
+	max-width: 48rem;
+	margin: 0 auto;
+	padding: 3rem 1rem;
+}
+
+pre {
+	overflow-x: auto;
+	padding: 1rem;
+}
+
+.raw-link {
+	margin-top: 3rem;
+	padding-top: 1rem;
+	border-top: 1px solid #4c566a;
+}

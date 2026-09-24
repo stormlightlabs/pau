@@ -31,13 +31,17 @@ Project prompts live in `.pi/prompts/`: `/implement <unit-id>`,
   not invoke paid agents or remote services from default tests.
 - Stop when the unit is complete. Record unrelated defects separately unless
   they block its verification.
+- Keep completed units in the active deliverable. When every unit in a
+  deliverable is complete, add a concise user-facing changelog entry, remove
+  satisfied references to the deliverable from blocker lists, and remove the
+  deliverable from the roadmap.
 
 ## Dogfood Pau
 
-Follow the dogfooding policy in [PLAN.md](dev/PLAN.md). After roadmap unit 1.8
-is complete, keep the local Claude bridge installed for personal Pi use and in
-this project's Pi settings, then use it for suitable Pau work. Use each later
-Pau surface once it is usable, and include the self-hosted smoke run required by
+Follow the dogfooding policy in [PLAN.md](dev/PLAN.md). Keep the released local
+Claude bridge installed for personal Pi use and in this project's Pi settings,
+then use it for suitable Pau work. Use each later Pau surface once it is usable,
+and include the self-hosted smoke run required by
 [ROADMAP.md](dev/ROADMAP.md).
 
 When the agent already runs inside Zellij, perform Zellij verification in a new

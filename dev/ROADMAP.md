@@ -1,6 +1,6 @@
 # Roadmap
 
-Work ships as three deliverables in this order. Each numbered unit should fit in
+Work is organized into ordered deliverables. Each numbered unit should fit in
 one issue and one pull request. Its verification belongs in the same pull
 request. Units are ordered unless a dependency is stated explicitly.
 
@@ -18,9 +18,9 @@ integration tests only when the behavior crosses an application boundary.
 
 When a unit first makes a Pau surface usable, its verification includes a
 self-hosted smoke run when practical. The Claude bridge is the first dogfood
-surface: after unit 1.8 passes its live smoke test, use it for suitable Pau
-work. Later units use working Pau surfaces during normal development without
-replacing deterministic tests or widening the active unit.
+surface: after its live smoke test passes, use it for suitable Pau work. Later
+units use working Pau surfaces during normal development without replacing
+deterministic tests or widening the active unit.
 
 ### Unit metadata
 
@@ -35,160 +35,16 @@ Each unit has an explicit status:
 Update the status when work starts, becomes blocked, resumes, or completes.
 Treat it as the source of truth instead of inspecting the implementation to
 infer completion. A deliverable is complete only when every unit in it has
-status `complete`.
+status `complete`. Keep completed units in the active deliverable. When the
+whole deliverable is complete, record it in `CHANGELOG.md`, remove satisfied
+references to it from blocker lists, and remove its roadmap section.
 
-Each unit also lists its direct blockers. A whole number refers to the completed
-status of that deliverable; for example, `Blocked by: 1` means every unit in
-deliverable 1 must be `complete`. A dotted identifier refers to one unit.
+Each unit also lists its direct blockers. A whole number refers to every unit in
+that deliverable; for example, `Blocked by: 2` means every unit in deliverable 2
+must be `complete`. A dotted identifier refers to one unit.
 Transitive blockers are implied and are not repeated. `Blocked by: none` means
 there is no dependency. A planned unit is ready when every listed blocker has
 status `complete`.
-
-## 1. Claude bridge plugin
-
-The first deliverable is an independently installable Pi package. It must remain
-useful without Pau.
-
-### 1.1 Bridge protocol and test harness
-
-Status: complete
-Blocked by: none
-
-Create `@stormlightlabs/pau-claude-bridge` from scratch under the repository's
-MIT OR Apache-2.0 license. Define versioned framing for commands, responses,
-events, and diagnostics. Add a fake Claude executable and representative
-protocol fixtures.
-
-Verification:
-
-- Round-trip every frame type.
-- Reject unsupported versions and malformed frames without losing framing for
-  the next valid message.
-- Confirm diagnostics never appear on the protocol stream.
-
-### 1.2 Claude discovery
-
-Status: complete
-Blocked by: 1.1
-
-Find the Claude Code executable, read its version, and report bridge
-capabilities. Keep discovery separate from starting a session.
-
-Verification:
-
-- Cover configured paths, `PATH` discovery, missing binaries, non-executable
-  files, and unsupported versions with fixture processes.
-
-### 1.3 Process lifecycle
-
-Status: complete
-Blocked by: 1.1, 1.2
-
-Start Claude in a selected working directory and stop it through a staged
-shutdown. Track process state and exit information.
-
-Verification:
-
-- Start the fake executable in a path containing spaces.
-- Confirm graceful shutdown, timeout escalation, unexpected exit reporting, and
-  removal from the live-process registry.
-
-### 1.4 Prompt and event streaming
-
-Status: complete
-Blocked by: 1.3
-
-Send one task and translate Claude's structured output into bridge events
-without parsing terminal presentation.
-
-Verification:
-
-- Replay fixtures containing text, tool activity, diagnostics, completion, and
-  partial frames.
-- Confirm event ordering and the authoritative completion state.
-
-### 1.5 Native session resume
-
-Status: complete
-Blocked by: 1.4
-
-Expose Claude's native session identifier and resume an existing session without
-copying its transcript into plugin-owned storage.
-
-Verification:
-
-- Start, capture the native identifier, stop, and resume against the fake
-  executable.
-- Confirm an unknown or mismatched identifier returns a recoverable error.
-
-### 1.6 Interrupt and failure recovery
-
-Status: complete
-Blocked by: 1.4
-
-Interrupt an active turn, distinguish interruption from process failure, and
-keep the session usable when Claude supports continuation. First spike the
-official TypeScript Agent SDK against the criteria in `dev/PLAN.md`; adopt it
-internally only if it preserves the existing bridge contract and executable
-selection policy.
-
-Verification:
-
-- Record the SDK spike result and transport decision in `dev/PLAN.md`.
-- Interrupt before output, during output, and during a simulated tool event.
-- Cover ignored interrupts, process crashes, and a successful prompt after
-  interruption.
-
-### 1.7 Pi package integration
-
-Status: complete
-Blocked by: 1.2, 1.3, 1.4, 1.5, 1.6
-
-Package the bridge as a Pi extension with explicit commands for discovery,
-start, new, resume, focused work, strict review, review with checks, status,
-interrupt, and stop. Add a model-callable delegation tool that is disabled until
-the operator enables it for the current Pi session. Keep terminal rendering out
-of the bridge layer and use the session, permission, and output behavior defined
-in `dev/PLAN.md`.
-
-Verification:
-
-- Load the package in an isolated Pi agent directory.
-- Exercise every command and both states of the delegation tool against the fake
-  Claude executable.
-- Cover native and safe configuration, each execution profile, permission
-  denial or forwarding, turn and budget limits, and explicit resume after a Pi
-  restart.
-- Confirm reload and `session_shutdown` leave no child process running.
-
-### 1.8 Packaging and live smoke test
-
-Status: complete
-Blocked by: 1.7
-
-Document local packed-artifact installation, configuration, compatibility,
-cost controls, authentication ownership, and trust implications. Defer npm
-publication. Add an opt-in live-Claude smoke test that is excluded from default
-checks.
-
-Verification:
-
-- Install the packed artifact into a clean temporary Pi agent directory and run
-  its fake-agent test.
-- Verify fixtures from Claude 2.1.259 and the latest release. Allow a newer
-  unverified release with a warning only when its required capability handshake
-  succeeds.
-- Run the opt-in live-Claude smoke test, then use the installed bridge for one
-  bounded Pau task.
-- Run Pi under tmux and Zellij, detach and reattach, interrupt an active turn,
-  send a successful follow-up, exit Pi, and confirm no Claude child remains.
-- Restart Pi and explicitly resume the recorded native Claude session.
-- Record any bridge failure found during dogfooding before marking the unit
-  complete.
-- Confirm the default test command cannot invoke a paid Claude session.
-
-Deliverable exit: Pi can start, control, resume, and observe Claude Code through
-the package without Pau.
 
 ## 2. Desktop app and development web UI
 
@@ -199,8 +55,8 @@ shipped application in this deliverable.
 
 #### 2.1 Workspace scaffold
 
-Status: planned
-Blocked by: 1
+Status: complete
+Blocked by: none
 
 Create the pnpm workspace with `apps/web`, `apps/desktop`, `apps/website`,
 `packages/ui`, and `packages/protocol`, using the `@stormlightlabs/pau-*`
@@ -482,14 +338,14 @@ Verification:
 #### 2.18 Rust Claude adapter
 
 Status: planned
-Blocked by: 1, 2.15, 2.16
+Blocked by: 2.15, 2.16
 
-Implement a `pau-agent` adapter that consumes the bridge contract and fixtures
-from deliverable 1. Do not add a second Claude process protocol.
+Implement a `pau-agent` adapter that consumes the Claude bridge package's
+contract and fixtures. Do not add a second Claude process protocol.
 
 Verification:
 
-- Run the deliverable 1 fixture suite through the Rust adapter.
+- Run the Claude bridge fixture suite through the Rust adapter.
 - Start one Pi and one fake Claude session concurrently through the same session
   UI.
 

@@ -16,8 +16,10 @@ The application is planned around:
 - Pi's RPC protocol for structured session control
 - Neovim's embedded RPC UI, with CodeMirror as a lightweight editor
 
-The repository is currently in the design stage. See [SPEC.md](dev/SPEC.md),
-[PLAN.md](dev/PLAN.md), and [ROADMAP.md](dev/ROADMAP.md).
+The repository contains the workspace scaffold for the web app, desktop shell,
+documentation site, shared packages, and Rust services. See
+[SPEC.md](dev/SPEC.md), [PLAN.md](dev/PLAN.md), and
+[ROADMAP.md](dev/ROADMAP.md).
 
 ## Development environment
 
@@ -37,6 +39,27 @@ direnv allow
 The shell provides Rust, Node.js, pnpm, SQLite, Neovim, and the native Linux
 libraries required by Tauri. macOS builds still require Xcode Command Line
 Tools.
+
+Install dependencies and run the workspace checks from the repository root:
+
+```sh
+pnpm install
+pnpm format:check
+pnpm check
+cargo check --workspace
+```
+
+Build the documentation site and Pagefind index:
+
+```sh
+pnpm build:website
+```
+
+When a Rust wire type changes, update the checked TypeScript contract:
+
+```sh
+pnpm generate:protocol
+```
 
 ## Product principles
 

@@ -1,0 +1,11 @@
+[package]
+name = "pau-cli"
+description = "Command-line interface for Pau"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "pau"
+path = "src/main.rs"

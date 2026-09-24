@@ -1,0 +1,26 @@
+---
+title: Getting started
+description: Build and check Pau from the repository.
+order: 1
+---
+
+# Getting started
+
+Pau currently provides the workspace and documentation scaffolds used by later
+application work.
+
+## Check the workspace
+
+Install dependencies, then run the JavaScript and Rust checks:
+
+```bash
+pnpm install
+pnpm check
+cargo check --workspace
+```
+
+Generate the TypeScript wire types after a Rust protocol type changes:
+
+```bash
+pnpm generate:protocol
+```

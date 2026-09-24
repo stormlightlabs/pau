@@ -1,0 +1,13 @@
+{
+	"name": "@stormlightlabs/pau-desktop",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"scripts": {
+		"check": "tsc --noEmit",
+		"build": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"typescript": "6.0.3"
+	}
+}

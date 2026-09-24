@@ -1,0 +1,11 @@
+[package]
+name = "pau-server"
+description = "HTTP and WebSocket server for Pau"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "pau-server"
+path = "src/main.rs"

@@ -55,6 +55,19 @@ Build the documentation site and Pagefind index:
 pnpm build:website
 ```
 
+Start the component workbench for shared UI development:
+
+```sh
+pnpm dev:ui
+```
+
+Run its browser tests or build the static workbench:
+
+```sh
+pnpm test:ui
+pnpm build:ui
+```
+
 When a Rust wire type changes, update the checked TypeScript contract:
 
 ```sh

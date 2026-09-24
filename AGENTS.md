@@ -27,6 +27,8 @@ Project prompts live in `.pi/prompts/`: `/implement <unit-id>`,
   `blocked` with a short status note when work cannot continue.
 - Keep implementation, tests, Storybook stories, and user documentation required
   by that unit in the same change.
+- In `packages/ui`, keep stories under `src/stories` and tests under
+  `src/tests`.
 - Run the unit's verification, starting with the narrowest relevant checks. Do
   not invoke paid agents or remote services from default tests.
 - Stop when the unit is complete. Record unrelated defects separately unless
@@ -77,6 +79,9 @@ sentence. Leave sentence fragments unpunctuated.
 
 Prefer TypeScript type aliases for data shapes and unions. Use interfaces only
 for method-only contracts or types that classes implement.
+
+Keep first-party JavaScript and TypeScript source under the root Prettier checks.
+Ignore generated output instead of whole packages.
 
 Use TSDoc for exported TypeScript symbols and rustdoc for public Rust symbols.
 Also document private symbols that carry important context, invariants, safety

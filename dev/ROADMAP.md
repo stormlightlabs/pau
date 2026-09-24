@@ -87,7 +87,7 @@ Verification:
 
 #### 2.2 Storybook and browser component workbench
 
-Status: planned
+Status: complete
 Blocked by: 2.1
 
 Set up Storybook in `packages/ui` with typed fixtures, theme and viewport

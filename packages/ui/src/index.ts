@@ -1,2 +1,2 @@
-/** Shared package marker until the component workbench is introduced. */
-export const uiPackage = '@stormlightlabs/pau-ui';
+export { default as CapabilityCard } from './lib/CapabilityCard.svelte';
+export { capabilityFixtures, type CapabilityFixture } from './fixtures/capabilities';

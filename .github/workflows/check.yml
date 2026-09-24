@@ -19,8 +19,15 @@ jobs:
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @stormlightlabs/pau-ui exec playwright install --with-deps chromium
       - run: pnpm format:check
       - run: pnpm check
+      - run: pnpm test:ui
+      - run: pnpm build:ui
+      - uses: actions/upload-artifact@v4
+        with:
+          name: storybook
+          path: packages/ui/storybook-static
       - run: pnpm build:website
       - run: pnpm check:generated
       - run: cargo check --workspace

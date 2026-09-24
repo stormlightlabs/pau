@@ -7,7 +7,15 @@ import globals from 'globals';
 import ts from 'typescript-eslint';
 
 export default defineConfig(
-	{ ignores: ['**/.svelte-kit/**', '**/build/**', '**/node_modules/**', 'packages/protocol/src/generated.ts'] },
+	{
+		ignores: [
+			'**/.svelte-kit/**',
+			'**/build/**',
+			'**/node_modules/**',
+			'**/storybook-static/**',
+			'packages/protocol/src/generated.ts'
+		]
+	},
 	js.configs.recommended,
 	ts.configs.recommended,
 	svelte.configs.recommended,
@@ -35,6 +43,7 @@ export default defineConfig(
 	},
 	{
 		files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
-		languageOptions: { parserOptions: { projectService: true, extraFileExtensions: ['.svelte'], parser: ts.parser } }
+		languageOptions: { parserOptions: { projectService: true, extraFileExtensions: ['.svelte'], parser: ts.parser } },
+		rules: { 'unicorn/no-top-level-assignment-in-function': 'off' }
 	}
 );

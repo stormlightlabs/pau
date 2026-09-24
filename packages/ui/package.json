@@ -7,10 +7,25 @@
 		".": "./src/index.ts"
 	},
 	"scripts": {
-		"build": "tsc --noEmit",
-		"check": "tsc --noEmit"
+		"build": "storybook build",
+		"check": "svelte-check --tsconfig ./tsconfig.json",
+		"dev": "storybook dev --port 6006",
+		"test": "vitest run"
 	},
 	"devDependencies": {
-		"typescript": "6.0.3"
+		"@storybook/addon-a11y": "10.6.0",
+		"@storybook/addon-vitest": "10.6.0",
+		"@storybook/svelte-vite": "10.6.0",
+		"@sveltejs/vite-plugin-svelte": "6.2.4",
+		"@types/node": "24.13.6",
+		"@vitest/browser-playwright": "4.1.11",
+		"playwright": "1.63.0",
+		"storybook": "10.6.0",
+		"svelte": "5.57.1",
+		"svelte-check": "4.7.6",
+		"typescript": "6.0.3",
+		"vite": "7.3.1",
+		"vitest": "4.1.11",
+		"vitest-browser-svelte": "3.1.0"
 	}
 }

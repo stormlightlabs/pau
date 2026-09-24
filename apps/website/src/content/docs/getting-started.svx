@@ -6,8 +6,8 @@ order: 1
 
 # Getting started
 
-Pau currently provides the workspace and documentation scaffolds used by later
-application work.
+Pau includes a browser-based component workbench for developing and reviewing
+shared interface components without starting the desktop app or a local agent.
 
 ## Check the workspace
 
@@ -24,3 +24,21 @@ Generate the TypeScript wire types after a Rust protocol type changes:
 ```bash
 pnpm generate:protocol
 ```
+
+## Review interface components
+
+Start Storybook with hot reload:
+
+```bash
+pnpm dev:ui
+```
+
+Use its toolbar to change the theme, viewport, motion preference, and available
+agent capabilities. Run the interaction, accessibility, and browser component
+tests before submitting interface changes:
+
+```bash
+pnpm test:ui
+```
+
+Build the static workbench with `pnpm build:ui`.

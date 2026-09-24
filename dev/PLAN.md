@@ -358,7 +358,9 @@ work.
 
 The references in `dev/design/` guide the whole application rather than isolated
 screens. This is an operating interface: dense, dark by default, flat, and
-divided by alignment and restrained borders rather than nested cards. Theme
+divided by alignment and restrained borders rather than nested cards. Keep
+corners square or use only subtle rounding. Use Svelte's motion, transition, and
+animation APIs for interface motion, and honor the reduced-motion setting. Theme
 support is structural, so palette values become semantic tokens rather than
 component-local values.
 

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Readable, Writable } from "node:stream";
 
 import {
@@ -9,7 +10,7 @@ import {
 
 /** Final state reported by Claude's authoritative result record. */
 export type ClaudeTurnCompletion = {
-  readonly status: "completed" | "failed";
+  readonly status: "completed" | "failed" | "interrupted";
   readonly result?: string;
   readonly error?: string;
   readonly sessionId?: string;
@@ -27,6 +28,24 @@ export type ClaudePromptErrorCode =
   | "prompt_in_progress"
   | "process_exited"
   | "write_failed";
+
+/** Machine-readable failures raised while interrupting an active turn. */
+export type ClaudeInterruptErrorCode =
+  | "no_active_turn"
+  | "interrupt_rejected"
+  | "interrupt_timeout"
+  | "write_failed";
+
+/** A failure to request or confirm interruption of an active turn. */
+export class ClaudeInterruptError extends Error {
+  readonly code: ClaudeInterruptErrorCode;
+
+  constructor(code: ClaudeInterruptErrorCode, message: string, cause?: unknown) {
+    super(message, { cause });
+    this.name = "ClaudeInterruptError";
+    this.code = code;
+  }
+}
 
 /** A failure to submit or finish one Claude prompt. */
 export class ClaudePromptError extends Error {
@@ -69,6 +88,104 @@ type PromptStreams = {
   readonly exit: Promise<unknown>;
 };
 
+/**
+ * Correlates one interrupt control request without treating its result as a
+ * process exit. The turn's result record remains the completion authority.
+ */
+export class ClaudeTurnInterrupt {
+  readonly #input: Writable;
+  readonly #timeoutMs: number;
+  readonly #requestId = randomUUID();
+  #completion: Promise<ClaudeTurnCompletion> | undefined;
+  #requestPromise: Promise<ClaudeTurnCompletion> | undefined;
+  #resolveResponse!: () => void;
+  #rejectResponse!: (error: unknown) => void;
+  readonly #response: Promise<void>;
+  #acknowledged = false;
+
+  constructor(input: Writable, timeoutMs: number) {
+    this.#input = input;
+    this.#timeoutMs = timeoutMs;
+    this.#response = new Promise((resolve, reject) => {
+      this.#resolveResponse = resolve;
+      this.#rejectResponse = reject;
+    });
+  }
+
+  /** Whether Claude accepted the interrupt before reporting the turn result. */
+  get acknowledged(): boolean {
+    return this.#acknowledged;
+  }
+
+  /** Attach the authoritative completion promise before interruption is exposed. */
+  attach(completion: Promise<ClaudeTurnCompletion>): void {
+    this.#completion = completion;
+  }
+
+  /** Send one correlated interrupt and wait for Claude to settle the turn. */
+  request(): Promise<ClaudeTurnCompletion> {
+    this.#requestPromise ??= this.#runRequest();
+    return this.#requestPromise;
+  }
+
+  /**
+   * Consume the control response while leaving normal records to the
+   * translator.
+   */
+  handleRecord(value: unknown): void {
+    if (
+      !isRecord(value) ||
+      value.type !== "control_response" ||
+      !isRecord(value.response) ||
+      value.response.request_id !== this.#requestId
+    ) {
+      return;
+    }
+
+    if (value.response.subtype === "success") {
+      this.#acknowledged = true;
+      this.#resolveResponse();
+      return;
+    }
+
+    const message = typeof value.response.error === "string"
+      ? value.response.error
+      : "Claude rejected the interrupt";
+    this.#rejectResponse(
+      new ClaudeInterruptError("interrupt_rejected", message),
+    );
+  }
+
+  async #runRequest(): Promise<ClaudeTurnCompletion> {
+    if (!this.#completion) {
+      throw new Error("Interrupt control was not attached to a prompt");
+    }
+
+    try {
+      await writeInput(this.#input, {
+        type: "control_request",
+        request_id: this.#requestId,
+        request: { subtype: "interrupt" },
+      });
+    } catch (error) {
+      throw new ClaudeInterruptError(
+        "write_failed",
+        "Could not send interrupt to Claude",
+        error,
+      );
+    }
+
+    return withTimeout(
+      Promise.all([this.#response, this.#completion]).then(([, result]) => result),
+      this.#timeoutMs,
+      () => new ClaudeInterruptError(
+        "interrupt_timeout",
+        `Claude did not confirm interruption within ${this.#timeoutMs}ms`,
+      ),
+    );
+  }
+}
+
 type MutablePromptState = {
   nextSequence: number;
   sawTextDelta: boolean;
@@ -88,6 +205,7 @@ export async function runClaudePrompt(
   firstSequence: number,
   handlers: ClaudePromptHandlers = {},
   expectedSessionId?: string,
+  interrupt?: ClaudeTurnInterrupt,
 ): Promise<{ completion: ClaudeTurnCompletion; nextSequence: number }> {
   if (task.trim() === "") {
     throw new ClaudePromptError("empty_prompt", "Claude prompt must not be empty");
@@ -110,7 +228,8 @@ export async function runClaudePrompt(
   });
 
   const finishRecord = (record: unknown): void => {
-    translateRecord(record, state, handlers);
+    interrupt?.handleRecord(record);
+    translateRecord(record, state, handlers, interrupt);
     if (state.resumeError) rejectCompletion(state.resumeError);
     else if (state.completion) resolveCompletion(state.completion);
   };
@@ -153,6 +272,7 @@ function translateRecord(
   value: unknown,
   state: MutablePromptState,
   handlers: ClaudePromptHandlers,
+  interrupt?: ClaudeTurnInterrupt,
 ): void {
   if (!isRecord(value) || typeof value.type !== "string") return;
 
@@ -206,7 +326,11 @@ function translateRecord(
     }
 
     const completion: ClaudeTurnCompletion = {
-      status: failed ? "failed" : "completed",
+      status: interrupt?.acknowledged
+        ? "interrupted"
+        : failed
+        ? "failed"
+        : "completed",
       ...(typeof value.result === "string" ? { result: value.result } : {}),
       ...(failed && typeof value.error === "string" ? { error: value.error } : {}),
       ...(sessionId === undefined ? {} : { sessionId }),
@@ -322,6 +446,22 @@ function writeInput(input: Writable, value: unknown): Promise<void> {
       }
     });
   });
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  createError: () => Error,
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(createError()), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 class TextLineDecoder {

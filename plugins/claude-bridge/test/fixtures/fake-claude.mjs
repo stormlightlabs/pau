@@ -11,6 +11,9 @@ const resumedSessionId = resumeIndex === -1
   : process.argv[resumeIndex + 1];
 let sequence = 0;
 let keepAlive;
+let activeTurn = false;
+let turnTimer;
+let interruptedOnce = false;
 
 if (process.argv.includes("--version")) {
   process.stdout.write(`${process.env.FAKE_CLAUDE_VERSION ?? "2.1.3 (Claude Code)"}\n`);
@@ -80,13 +83,87 @@ lines.on("line", (line) => {
     return;
   }
 
-  if (mode === "stream") {
+  if (mode === "interrupt" && command.type === "control_request") {
+    if (command.request?.subtype !== "interrupt" || !activeTurn) {
+      writeProtocol({
+        type: "control_response",
+        response: {
+          subtype: "error",
+          request_id: command.request_id,
+          error: "No active turn",
+        },
+      });
+      return;
+    }
+
+    const behavior = process.env.FAKE_CLAUDE_INTERRUPT_BEHAVIOR ?? "accept";
+    if (behavior === "ignore") return;
+    if (behavior === "crash") process.exit(24);
+
+    clearTimeout(turnTimer);
+    writeProtocol({
+      type: "control_response",
+      response: { subtype: "success", request_id: command.request_id },
+    });
+    activeTurn = false;
+    interruptedOnce = true;
+    writeProtocol({
+      type: "result",
+      subtype: "error_during_execution",
+      is_error: true,
+      errors: ["Interrupted by user"],
+      session_id: "session-interrupt",
+    });
+    return;
+  }
+
+  if (mode === "stream" || mode === "interrupt") {
     if (
       command.type !== "user" ||
       command.message?.role !== "user" ||
       typeof command.message?.content !== "string"
     ) {
       process.stderr.write("received invalid stream-json prompt\n");
+      return;
+    }
+
+    if (mode === "interrupt" && !interruptedOnce) {
+      activeTurn = true;
+      const stage = process.env.FAKE_CLAUDE_INTERRUPT_STAGE ?? "before-output";
+      if (stage === "during-output") {
+        writeProtocol({
+          type: "stream_event",
+          event: {
+            type: "content_block_delta",
+            index: 0,
+            delta: { type: "text_delta", text: "partial output" },
+          },
+        });
+      } else if (stage === "during-tool") {
+        writeProtocol({
+          type: "stream_event",
+          event: {
+            type: "content_block_start",
+            index: 0,
+            content_block: {
+              type: "tool_use",
+              id: "tool-interrupt",
+              name: "Read",
+              input: { path: "README.md" },
+            },
+          },
+        });
+      }
+      turnTimer = setTimeout(() => {
+        activeTurn = false;
+        writeProtocol({
+          type: "result",
+          subtype: "success",
+          is_error: false,
+          result: "Turn completed without interruption",
+          session_id: "session-interrupt",
+        });
+      }, 250);
       return;
     }
 

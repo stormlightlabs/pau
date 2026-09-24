@@ -202,6 +202,18 @@ older binary. Otherwise keep the direct stream-JSON transport and record the
 unsupported control boundary. The public bridge contract does not depend on
 that choice.
 
+The interrupt spike evaluated `@anthropic-ai/claude-agent-sdk` 0.3.281. Its
+`pathToClaudeCodeExecutable`, `resume`, streaming `Query`, `interrupt()`, and
+`canUseTool` APIs meet the individual control requirements. The SDK was not
+adopted because its `Query` owns and hides the process transport, stderr, and
+shutdown sequence. Replacing the current transport would change the exported
+`ClaudeProcess` stream and exit contract or create two process owners around
+its custom spawn hook. The npm package is also all-rights-reserved under
+Anthropic's legal terms and installs bundled CLI packages by default. The
+bridge therefore keeps its direct stream-JSON transport, always starts the
+executable returned by discovery, and sends Claude's correlated `interrupt`
+control request itself.
+
 The Pi package exposes explicit lifecycle and task commands. A model-callable
 delegation tool is available only after the operator enables it for the current
 Pi session. One Pi session owns one current Claude session. The package records

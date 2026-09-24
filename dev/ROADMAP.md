@@ -123,7 +123,7 @@ Verification:
 
 ### 1.6 Interrupt and failure recovery
 
-Status: planned
+Status: complete
 Blocked by: 1.4
 
 Interrupt an active turn, distinguish interruption from process failure, and

@@ -39,6 +39,14 @@ receives ordered `text.delta`, `tool.started`, `tool.completed`, and
 Claude emits its `result` record; that record determines whether the turn
 completed or failed. A process accepts one active prompt at a time.
 
+Call `process.interrupt()` to stop the active turn without stopping Claude. The
+promise resolves after Claude acknowledges the interrupt and emits the turn's
+authoritative result. Both the interrupt call and the active `prompt()` resolve
+with `status: "interrupted"`. The process remains available for another prompt.
+An ignored interrupt rejects with `code: "interrupt_timeout"`; a child-process
+exit rejects the prompt with `code: "process_exited"` instead of reporting an
+interruption.
+
 Use `onDiagnostic` to receive stderr as diagnostic frames. Plain stderr and
 structured diagnostics stay separate from prompt events and never enter the
 protocol stream.
@@ -87,7 +95,8 @@ pnpm check
 The tests round-trip every frame type, replay malformed and unsupported fixture
 records, and run `test/fixtures/fake-claude.mjs` as a child process. Prompt
 fixtures include partial records, streamed text, tool activity, diagnostics,
-successful and failed completion states, and native session resume. The fake
+successful, failed, and interrupted completion states; ignored interrupts;
+process crashes; follow-up prompts; and native session resume. The fake
 executable emits protocol data on stdout and diagnostics on stderr.
 
 ## License

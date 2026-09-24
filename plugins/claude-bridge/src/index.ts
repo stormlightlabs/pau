@@ -31,8 +31,13 @@ export type {
   StartClaudeProcessOptions,
 } from "./lifecycle.js";
 
-export { ClaudePromptError, ClaudeResumeError } from "./streaming.js";
+export {
+  ClaudeInterruptError,
+  ClaudePromptError,
+  ClaudeResumeError,
+} from "./streaming.js";
 export type {
+  ClaudeInterruptErrorCode,
   ClaudePromptErrorCode,
   ClaudeResumeErrorCode,
   ClaudePromptHandlers,

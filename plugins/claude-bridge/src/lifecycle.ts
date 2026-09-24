@@ -4,7 +4,9 @@ import type { Readable, Writable } from "node:stream";
 
 import type { ClaudeDiscovery } from "./discovery.js";
 import {
+  ClaudeInterruptError,
   ClaudePromptError,
+  ClaudeTurnInterrupt,
   runClaudePrompt,
   type ClaudePromptHandlers,
   type ClaudeTurnCompletion,
@@ -59,6 +61,8 @@ export type StartClaudeProcessOptions = {
   readonly args?: readonly string[];
   readonly env?: NodeJS.ProcessEnv;
   readonly shutdownTimeouts?: Partial<ClaudeShutdownTimeouts>;
+  /** Maximum time for Claude to acknowledge and settle an interrupted turn. */
+  readonly interruptTimeoutMs?: number;
   readonly id?: string;
 };
 
@@ -94,6 +98,7 @@ const DEFAULT_SHUTDOWN_TIMEOUTS: ClaudeShutdownTimeouts = Object.freeze({
   terminateMs: 2_000,
   killMs: 2_000,
 });
+const DEFAULT_INTERRUPT_TIMEOUT_MS = 2_000;
 
 /**
  * One Claude child process and its structured streams.
@@ -111,13 +116,14 @@ export class ClaudeProcess {
 
   readonly #child: ChildProcessWithoutNullStreams;
   readonly #timeouts: ClaudeShutdownTimeouts;
+  readonly #interruptTimeoutMs: number;
   readonly #started: Promise<void>;
   #resolveExit!: (exit: ClaudeProcessExit) => void;
   #state: ClaudeProcessState = "starting";
   #exitInfo: ClaudeProcessExit | undefined;
   #shutdownStage: ClaudeShutdownStage | null = null;
   #stopPromise: Promise<ClaudeProcessExit> | undefined;
-  #promptActive = false;
+  #activeInterrupt: ClaudeTurnInterrupt | undefined;
   #nextEventSequence = 0;
   #nativeSessionId: string | undefined;
   #resumedSessionPending: boolean;
@@ -134,7 +140,10 @@ export class ClaudeProcess {
     this.#nativeSessionId = resumedSessionId;
     this.#resumedSessionPending = resumedSessionId !== undefined;
     this.#timeouts = { ...DEFAULT_SHUTDOWN_TIMEOUTS, ...options.shutdownTimeouts };
+    this.#interruptTimeoutMs = options.interruptTimeoutMs ??
+      DEFAULT_INTERRUPT_TIMEOUT_MS;
     validateTimeouts(this.#timeouts);
+    validateInterruptTimeout(this.#interruptTimeoutMs);
 
     const args = [...(options.args ?? CLAUDE_STRUCTURED_ARGS)];
     if (resumedSessionId) {
@@ -222,7 +231,7 @@ export class ClaudeProcess {
     task: string,
     handlers: ClaudePromptHandlers = {},
   ): Promise<ClaudeTurnCompletion> {
-    if (this.#promptActive) {
+    if (this.#activeInterrupt) {
       throw new ClaudePromptError(
         "prompt_in_progress",
         "A Claude prompt is already in progress",
@@ -235,22 +244,50 @@ export class ClaudeProcess {
       );
     }
 
-    this.#promptActive = true;
+    const interrupt = new ClaudeTurnInterrupt(
+      this.input,
+      this.#interruptTimeoutMs,
+    );
+    this.#activeInterrupt = interrupt;
+    const prompt = runClaudePrompt(
+      this,
+      task,
+      this.#nextEventSequence,
+      handlers,
+      this.#resumedSessionPending ? this.#nativeSessionId : undefined,
+      interrupt,
+    );
+    const completion = prompt.then((result) => result.completion);
+    // Most turns are not interrupted, so this derived promise has no caller.
+    // Mark its rejection handled while preserving it for a later interrupt.
+    void completion.catch(() => {});
+    interrupt.attach(completion);
+
     try {
-      const result = await runClaudePrompt(
-        this,
-        task,
-        this.#nextEventSequence,
-        handlers,
-        this.#resumedSessionPending ? this.#nativeSessionId : undefined,
-      );
+      const result = await prompt;
       this.#nextEventSequence = result.nextSequence;
       this.#nativeSessionId = result.completion.sessionId ?? this.#nativeSessionId;
       this.#resumedSessionPending = false;
       return result.completion;
     } finally {
-      this.#promptActive = false;
+      this.#activeInterrupt = undefined;
     }
+  }
+
+  /**
+   * Interrupt the active turn without stopping its Claude process. The promise
+   * resolves after Claude acknowledges the request and reports the turn result.
+   */
+  interrupt(): Promise<ClaudeTurnCompletion> {
+    if (!this.#activeInterrupt) {
+      return Promise.reject(
+        new ClaudeInterruptError(
+          "no_active_turn",
+          "Claude has no active turn to interrupt",
+        ),
+      );
+    }
+    return this.#activeInterrupt.request();
   }
 
   /**
@@ -368,6 +405,12 @@ function validateTimeouts(timeouts: ClaudeShutdownTimeouts): void {
     if (!Number.isFinite(value) || value < 0) {
       throw new RangeError(`Shutdown timeout ${name} must be a non-negative number`);
     }
+  }
+}
+
+function validateInterruptTimeout(timeoutMs: number): void {
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
+    throw new RangeError("Interrupt timeout must be a non-negative number");
   }
 }
 

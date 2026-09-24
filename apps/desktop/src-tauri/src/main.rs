@@ -15,11 +15,17 @@ impl DesktopBackend {
 }
 
 fn main() {
+    tracing_subscriber::fmt().json().init();
+
     let application = tauri::Builder::default()
         .setup(|app| {
             let server =
                 tauri::async_runtime::block_on(pau_server::start((Ipv4Addr::LOCALHOST, 0).into()))?;
-            let frontend_url = format!("index.html?pau-api-port={}", server.local_addr().port());
+            let frontend_url = format!(
+                "index.html?pau-api-port={}&pau-api-token={}",
+                server.local_addr().port(),
+                server.token().expose()
+            );
 
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App(frontend_url.into()))
                 .title("Pau")

@@ -76,15 +76,18 @@ pnpm generate:protocol
 
 ## Run the local application
 
-For browser development, start the local API and web app in separate terminals:
+For browser development, generate a token with `openssl rand -hex 32`. Set
+`PAU_API_TOKEN` to that value in both terminals, then start the local API and
+web app:
 
 ```sh
-cargo run -p pau-server
-pnpm --filter @stormlightlabs/pau-web dev
+PAU_API_TOKEN="$TOKEN" cargo run -p pau-server
+PAU_API_TOKEN="$TOKEN" pnpm --filter @stormlightlabs/pau-web dev
 ```
 
-The development server forwards `/api` requests to the local API at
-`127.0.0.1:3001`.
+The development server authenticates and forwards `/api` requests to the local
+API at `127.0.0.1:3001`. The `/api/health`, `/api/version`, and `/api/events`
+endpoints reject requests without the launch token.
 
 To run the desktop app, use the Tauri development command:
 
@@ -92,8 +95,10 @@ To run the desktop app, use the Tauri development command:
 pnpm --filter @stormlightlabs/pau-desktop dev
 ```
 
-Tauri starts the API on an unused loopback port and stops it when the app exits.
-The desktop app loads the same SvelteKit static build used by the browser.
+Tauri generates a new API token, starts the API on an unused loopback port, and
+passes the token to its webview. It stops the API when the app exits. The
+desktop app loads the same SvelteKit static build used by the browser. API logs
+record authentication failures without recording supplied credentials.
 
 ## Product principles
 

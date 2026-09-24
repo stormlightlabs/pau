@@ -42,3 +42,23 @@ pnpm test:ui
 ```
 
 Build the static workbench with `pnpm build:ui`.
+
+## Run the local app
+
+The desktop app generates a new local API token each time it starts. Its webview
+uses that token for HTTP requests and WebSocket connections. Requests without
+the token cannot read the health or version endpoints or open the event stream.
+
+```bash
+pnpm --filter @stormlightlabs/pau-desktop dev
+```
+
+For browser development, generate a token with `openssl rand -hex 32`. Set the
+same value as `PAU_API_TOKEN` for the Rust server and Vite development server.
+Vite adds it to proxied API requests; do not put the token in source files or
+commit it.
+
+```bash
+PAU_API_TOKEN="$TOKEN" cargo run -p pau-server
+PAU_API_TOKEN="$TOKEN" pnpm --filter @stormlightlabs/pau-web dev
+```

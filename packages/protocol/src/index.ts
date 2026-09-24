@@ -1,1 +1,1 @@
-export type { ServerEvent, ServerEventKind, VersionResponse } from './generated.js';
+export type { HealthResponse, ServerEvent, ServerEventKind, VersionResponse } from './generated.js';

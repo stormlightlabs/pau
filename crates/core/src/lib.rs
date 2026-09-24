@@ -5,6 +5,13 @@ use ts_rs::TS;
 
 pub mod persistence;
 
+/// Response returned by the backend health endpoint.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct HealthResponse {
+    /// Whether the backend can accept requests.
+    pub healthy: bool,
+}
+
 /// Response returned by the backend version endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct VersionResponse {

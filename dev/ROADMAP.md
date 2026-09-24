@@ -155,7 +155,7 @@ Verification:
 
 #### 2.6 Local API authentication and diagnostics
 
-Status: planned
+Status: complete
 Blocked by: 2.4
 
 Add the per-launch desktop token, authenticated HTTP and WebSocket handshakes,

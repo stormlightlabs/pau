@@ -127,10 +127,14 @@ Status: planned
 Blocked by: 1.4
 
 Interrupt an active turn, distinguish interruption from process failure, and
-keep the session usable when Claude supports continuation.
+keep the session usable when Claude supports continuation. First spike the
+official TypeScript Agent SDK against the criteria in `dev/PLAN.md`; adopt it
+internally only if it preserves the existing bridge contract and executable
+selection policy.
 
 Verification:
 
+- Record the SDK spike result and transport decision in `dev/PLAN.md`.
 - Interrupt before output, during output, and during a simulated tool event.
 - Cover ignored interrupts, process crashes, and a successful prompt after
   interruption.
@@ -140,14 +144,21 @@ Verification:
 Status: planned
 Blocked by: 1.2, 1.3, 1.4, 1.5, 1.6
 
-Package the bridge as a Pi extension with focused commands or tools for
-discovery, start, resume, prompt, status, interrupt, and stop. Keep terminal
-rendering out of the bridge layer.
+Package the bridge as a Pi extension with explicit commands for discovery,
+start, new, resume, focused work, strict review, review with checks, status,
+interrupt, and stop. Add a model-callable delegation tool that is disabled until
+the operator enables it for the current Pi session. Keep terminal rendering out
+of the bridge layer and use the session, permission, and output behavior defined
+in `dev/PLAN.md`.
 
 Verification:
 
 - Load the package in an isolated Pi agent directory.
-- Exercise every command against the fake Claude executable.
+- Exercise every command and both states of the delegation tool against the fake
+  Claude executable.
+- Cover native and safe configuration, each execution profile, permission
+  denial or forwarding, turn and budget limits, and explicit resume after a Pi
+  restart.
 - Confirm reload and `session_shutdown` leave no child process running.
 
 ### 1.8 Packaging and live smoke test
@@ -155,18 +166,25 @@ Verification:
 Status: planned
 Blocked by: 1.7
 
-Document installation, configuration, supported Claude versions, and trust
-implications. Add an opt-in live-Claude smoke test that is excluded from default
+Document local packed-artifact installation, configuration, compatibility,
+cost controls, authentication ownership, and trust implications. Defer npm
+publication. Add an opt-in live-Claude smoke test that is excluded from default
 checks.
 
 Verification:
 
 - Install the packed artifact into a clean temporary Pi agent directory and run
   its fake-agent test.
+- Verify fixtures from Claude 2.1.259 and the latest release. Allow a newer
+  unverified release with a warning only when its required capability handshake
+  succeeds.
 - Run the opt-in live-Claude smoke test, then use the installed bridge for one
-  small, bounded Pau task.
-- Record any bridge failure found during that dogfood task before marking the
-  unit complete.
+  bounded Pau task.
+- Run Pi under tmux and Zellij, detach and reattach, interrupt an active turn,
+  send a successful follow-up, exit Pi, and confirm no Claude child remains.
+- Restart Pi and explicitly resume the recorded native Claude session.
+- Record any bridge failure found during dogfooding before marking the unit
+  complete.
 - Confirm the default test command cannot invoke a paid Claude session.
 
 Deliverable exit: Pi can start, control, resume, and observe Claude Code through

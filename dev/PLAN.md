@@ -194,6 +194,52 @@ The desktop adapter later consumes the same bridge contract instead of growing a
 second Claude integration. Protocol changes therefore start in the plugin
 fixtures and compatibility tests.
 
+Before implementing interrupt support, spike the official TypeScript Agent SDK
+against the existing bridge contract. Adopt it internally if it can use the
+discovered Claude executable, preserve native session IDs, support streaming,
+interrupts, and permission callbacks, and avoid silently selecting a bundled
+older binary. Otherwise keep the direct stream-JSON transport and record the
+unsupported control boundary. The public bridge contract does not depend on
+that choice.
+
+The Pi package exposes explicit lifecycle and task commands. A model-callable
+delegation tool is available only after the operator enables it for the current
+Pi session. One Pi session owns one current Claude session. The package records
+the native ID in Pi session metadata, but a new Pi process requires an explicit
+resume. Claude runs in Pi's working directory.
+
+The package provides these execution profiles:
+
+- `review` uses restricted, non-interactive permissions and cannot edit files or
+  run commands.
+- `review-with-checks` may run an explicit allowlist of inspection and check
+  commands, which can produce local artifacts.
+- `work` forwards permission requests through Pi when the selected transport
+  supports it. Otherwise it uses Claude's automatic permission mode and denies
+  requests that still need an operator response.
+
+Bypass-permissions mode is not part of the normal package interface. Trusted
+workspaces use the user's native Claude configuration by default; safe mode is
+available when hooks, plugins, MCP servers, memory, and project configuration
+must be disabled. The package never handles Claude credentials itself and runs
+only the user's unmodified, authenticated Claude executable.
+
+The package inherits Claude's configured model and effort, applies a finite turn
+limit, accepts an optional dollar budget, and reports the effective limits and
+reported cost. Pi may receive a bounded final result as context; detailed tool
+events remain operator-visible unless requested.
+
+Compatibility is feature-based rather than tied to a whole major version. The
+initial Claude floor is 2.1.259. Test the floor and latest release, inspect
+runtime capabilities, and degrade optional behavior when a capability is absent.
+A newer unverified version may run with a warning when the required handshake
+succeeds; there is no hard maximum version. Apply this minimum-capability,
+latest-release policy to later agent adapters as well.
+
+Pi runs inside tmux or Zellij; the bridge does not create or control panes.
+Detaching leaves Pi and its Claude child running. Exiting Pi stops the child,
+and a later Pi process can explicitly resume the native session.
+
 ## Other agent adapters
 
 Build each adapter from captured protocol fixtures and capability tests. Prefer

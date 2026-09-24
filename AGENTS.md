@@ -66,6 +66,9 @@ Write list items as independent items, not as one sentence split across lines.
 Do not end bullets with semicolons. Use periods when every item is a complete
 sentence. Leave sentence fragments unpunctuated.
 
+Prefer TypeScript type aliases for data shapes and unions. Use interfaces only
+for method-only contracts or types that classes implement.
+
 Use TSDoc for exported TypeScript symbols and rustdoc for public Rust symbols.
 Also document private symbols that carry important context, invariants, safety
 requirements, lifecycle rules, error behavior, or non-obvious design intent.

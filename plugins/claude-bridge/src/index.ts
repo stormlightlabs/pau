@@ -1,4 +1,20 @@
 export {
+  CLAUDE_CAPABILITIES,
+  MAX_SUPPORTED_CLAUDE_MAJOR,
+  MIN_SUPPORTED_CLAUDE_VERSION,
+  ClaudeDiscoveryError,
+  discoverClaude,
+} from "./discovery.js";
+
+export type {
+  ClaudeCapabilities,
+  ClaudeDiscovery,
+  ClaudeDiscoveryErrorCode,
+  ClaudeVersion,
+  DiscoverClaudeOptions,
+} from "./discovery.js";
+
+export {
   BRIDGE_PROTOCOL_VERSION,
   FrameDecoder,
   commandFrameSchema,

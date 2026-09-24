@@ -5,6 +5,11 @@ import { createInterface } from "node:readline";
 const VERSION = 1;
 let sequence = 0;
 
+if (process.argv.includes("--version")) {
+  process.stdout.write(`${process.env.FAKE_CLAUDE_VERSION ?? "2.1.3 (Claude Code)"}\n`);
+  process.exit(0);
+}
+
 function writeProtocol(frame, split = false, afterWrite) {
   const line = `${JSON.stringify(frame)}\n`;
   if (!split) {

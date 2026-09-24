@@ -4,8 +4,21 @@
 between the Claude bridge and its clients. The package is usable without the Pau
 desktop application.
 
-The package exports the protocol codec. Its fixtures and fake Claude executable
-support integration tests without launching Claude Code.
+The package exports Claude Code discovery and the protocol codec. Its fixtures
+and fake Claude executable support integration tests without launching a paid
+Claude session.
+
+## Claude discovery
+
+`discoverClaude()` accepts an optional `executablePath`. When that option is
+absent, it searches `PATH` for `claude`. A configured path takes precedence and
+must name an executable file.
+
+Discovery runs `claude --version`; it does not start a Claude session. This
+release supports Claude Code versions 1.x and 2.x. Discovery rejects missing or
+non-executable files, unrecognized version output, failed version commands, and
+unsupported versions with a `ClaudeDiscoveryError` and a machine-readable
+`code`.
 
 ## Wire format
 

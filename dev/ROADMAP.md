@@ -68,7 +68,7 @@ Verification:
 
 ### 1.2 Claude discovery
 
-Status: planned
+Status: complete
 Blocked by: 1.1
 
 Find the Claude Code executable, read its version, and report bridge

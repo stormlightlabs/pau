@@ -4,9 +4,9 @@
 between the Claude bridge and its clients. The package is usable without the Pau
 desktop application.
 
-The package exports Claude Code discovery and the protocol codec. Its fixtures
-and fake Claude executable support integration tests without launching a paid
-Claude session.
+The package exports Claude Code discovery, process lifecycle control, and the
+protocol codec. Its fixtures and fake Claude executable support integration
+tests without launching a paid Claude session.
 
 ## Claude discovery
 
@@ -19,6 +19,23 @@ release supports Claude Code versions 1.x and 2.x. Discovery rejects missing or
 non-executable files, unrecognized version output, failed version commands, and
 unsupported versions with a `ClaudeDiscoveryError` and a machine-readable
 `code`.
+
+## Process lifecycle
+
+Create a `ClaudeProcessRegistry`, then pass a discovery result and working
+directory to `registry.start()`. The registry starts Claude without a shell, so
+spaces in the executable path and working directory do not require quoting.
+Claude uses structured stream JSON on stdin and stdout. Stderr remains a
+separate diagnostic stream.
+
+A process reports `starting`, `running`, `stopping`, `stopped`, or `failed`.
+Its `exit` promise and `exitInfo` property distinguish a requested shutdown from
+an unexpected exit and retain the exit code or signal. Exited processes are
+removed from the registry.
+
+Call `process.stop()` for a staged shutdown. The bridge closes structured input,
+then sends `SIGINT`, `SIGTERM`, and `SIGKILL` if each preceding step times out.
+`registry.stopAll()` applies the same shutdown to every live process.
 
 ## Wire format
 

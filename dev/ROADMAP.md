@@ -81,7 +81,7 @@ Verification:
 
 ### 1.3 Process lifecycle
 
-Status: planned
+Status: complete
 Blocked by: 1.1, 1.2
 
 Start Claude in a selected working directory and stop it through a staged

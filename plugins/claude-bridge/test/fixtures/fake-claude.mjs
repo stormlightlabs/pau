@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 
+import { appendFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
 const VERSION = 1;
+const mode = process.env.FAKE_CLAUDE_MODE ?? "protocol";
 let sequence = 0;
+let keepAlive;
 
 if (process.argv.includes("--version")) {
   process.stdout.write(`${process.env.FAKE_CLAUDE_VERSION ?? "2.1.3 (Claude Code)"}\n`);
@@ -32,9 +35,38 @@ function writeDiagnostic(level, message) {
   );
 }
 
+function recordSignal(signal) {
+  if (process.env.FAKE_CLAUDE_SIGNAL_LOG) {
+    appendFileSync(process.env.FAKE_CLAUDE_SIGNAL_LOG, `${signal}\n`);
+  }
+}
+
 writeDiagnostic("info", "fake Claude started");
+if (process.env.FAKE_CLAUDE_CWD_FILE) {
+  writeFileSync(process.env.FAKE_CLAUDE_CWD_FILE, process.cwd());
+}
+
+if (mode === "unexpected-exit") {
+  setTimeout(() => process.exit(23), 20);
+}
+if (mode === "interrupt-exit") {
+  process.on("SIGINT", () => {
+    recordSignal("SIGINT");
+    process.exit(0);
+  });
+}
+if (mode === "ignore-shutdown") {
+  process.on("SIGINT", () => recordSignal("SIGINT"));
+  process.on("SIGTERM", () => recordSignal("SIGTERM"));
+}
 
 const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+lines.on("close", () => {
+  if (mode === "interrupt-exit" || mode === "ignore-shutdown") {
+    keepAlive = setInterval(() => {}, 1_000);
+  }
+});
+
 lines.on("line", (line) => {
   let command;
   try {

@@ -15,6 +15,22 @@ export type {
 } from "./discovery.js";
 
 export {
+  CLAUDE_STRUCTURED_ARGS,
+  ClaudeProcess,
+  ClaudeProcessError,
+  ClaudeProcessRegistry,
+} from "./lifecycle.js";
+
+export type {
+  ClaudeProcessErrorCode,
+  ClaudeProcessExit,
+  ClaudeProcessState,
+  ClaudeShutdownStage,
+  ClaudeShutdownTimeouts,
+  StartClaudeProcessOptions,
+} from "./lifecycle.js";
+
+export {
   BRIDGE_PROTOCOL_VERSION,
   FrameDecoder,
   commandFrameSchema,

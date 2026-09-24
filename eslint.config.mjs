@@ -13,6 +13,7 @@ export default defineConfig(
 			'**/build/**',
 			'**/node_modules/**',
 			'**/storybook-static/**',
+			'packages/claude-bridge/**',
 			'packages/protocol/src/generated.ts'
 		]
 	},

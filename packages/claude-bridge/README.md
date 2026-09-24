@@ -14,8 +14,8 @@ The package is not published to npm. Build a tarball from this checkout, inspect
 its contents, and install that exact artifact:
 
 ```sh
-cd plugins/claude-bridge
 pnpm install --frozen-lockfile
+cd packages/claude-bridge
 pnpm pack --pack-destination ./artifacts
 
 install_dir="$(mktemp -d)"

@@ -26,13 +26,12 @@ which keeps browser mode real rather than a later port.
 ## Repository layout
 
 ```text
-plugins/
-  claude-bridge/       independently usable Pi package and bridge tests
 apps/
   web/                 SvelteKit product routes, API integration, and browser tests
   desktop/             Tauri shell, capabilities, packaging, and desktop smoke tests
   website/             SvelteKit website and product documentation
 packages/
+  claude-bridge/       independently usable Pi package and bridge tests
   ui/                  shared Svelte components, feature views, stores, and tests
   protocol/            generated or checked TypeScript wire types
 crates/
@@ -44,7 +43,7 @@ crates/
   term/                pau-term: PTY sessions and embedded Neovim integration
 ```
 
-`plugins/claude-bridge` ships first and remains useful without the desktop
+`packages/claude-bridge` ships first and remains useful without the desktop
 application. It establishes the Claude process protocol that the later Rust
 adapter consumes. `apps/web` composes the product screens exported by
 `packages/ui` into SvelteKit routes and connects them to the local Axum API.

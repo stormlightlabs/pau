@@ -45,6 +45,18 @@ export type {
 } from "./streaming.js";
 
 export {
+  buildClaudeArguments,
+  createClaudePiExtension,
+} from "./pi-extension.js";
+export type {
+  ClaudeConfigurationMode,
+  ClaudeDelegationDetails,
+  ClaudeExecutionProfile,
+  ClaudePiExtensionOptions,
+  ClaudeSessionMetadata,
+} from "./pi-extension.js";
+
+export {
   BRIDGE_PROTOCOL_VERSION,
   FrameDecoder,
   commandFrameSchema,

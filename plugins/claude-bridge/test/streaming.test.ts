@@ -74,6 +74,8 @@ describe("Claude prompt streaming", () => {
       status: "completed",
       result: "Done",
       sessionId: "session-fixture",
+      turns: 3,
+      costUsd: 0.0123,
     });
     expect(events.at(-1)?.payload).toEqual(completion);
     expect(diagnostics).toEqual([

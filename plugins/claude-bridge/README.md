@@ -62,6 +62,50 @@ Call `process.stop()` for a staged shutdown. The bridge closes structured input,
 then sends `SIGINT`, `SIGTERM`, and `SIGKILL` if each preceding step times out.
 `registry.stopAll()` applies the same shutdown to every live process.
 
+## Pi extension
+
+The package registers these commands:
+
+- `/claude-discover` finds Claude without starting a session.
+- `/claude-start [profile]` starts a session. The default profile is `work`.
+- `/claude-new [profile]` stops Claude and starts a new native session.
+- `/claude-resume [id] [profile]` resumes a native session. The ID is optional
+  when the current Pi session has recorded one.
+- `/claude-work <task>` runs focused work.
+- `/claude-review <task>` runs a review without command or file-write tools.
+- `/claude-review-checks <task>` runs a review with allowlisted checks.
+- `/claude-status`, `/claude-interrupt`, and `/claude-stop` control the current
+  process.
+- `/claude-delegation enable|disable` controls the `claude_delegate` tool. The
+  tool starts disabled in every Pi session.
+
+One Pi session owns one current Claude process. Pi stores only Claude's native
+session ID. Reloading or exiting Pi stops the process; after a restart, use
+`/claude-resume` before continuing the native session.
+
+The `work` profile uses Claude's automatic edit permission mode. The direct
+stream transport cannot forward permission dialogs to Pi, so Claude denies any
+request that still needs operator input. The `review` profile disables command
+and write tools. `review-with-checks` enables only the commands listed in
+`PAU_CLAUDE_CHECK_COMMANDS`, separated by semicolons. Its default list covers
+common status, diff, and test commands. These controls are guardrails, not a
+sandbox.
+
+The extension reads this configuration when Pi loads it:
+
+- `PAU_CLAUDE_PATH` selects the executable.
+- `PAU_CLAUDE_CONFIG_MODE=native|safe` selects native Claude configuration or
+  disables settings, plugins, hooks, and configured MCP servers. Native mode is
+  the default.
+- `PAU_CLAUDE_MAX_TURNS` sets the finite turn limit. The default is `20`.
+- `PAU_CLAUDE_MAX_BUDGET_USD` sets an optional dollar budget.
+- `PAU_CLAUDE_CHECK_COMMANDS` sets the semicolon-separated check allowlist.
+
+Claude keeps ownership of authentication, model selection, and effort. The
+extension reports Claude's turn count and cost when they are present in the
+result record. Model-facing results are limited to 8,000 characters; tool
+activity remains visible through Pi's tool updates.
+
 ## Wire format
 
 Each stream uses newline-delimited JSON (JSONL). A frame occupies one line and

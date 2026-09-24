@@ -14,6 +14,10 @@ export type ClaudeTurnCompletion = {
   readonly result?: string;
   readonly error?: string;
   readonly sessionId?: string;
+  /** Turn count reported by Claude's authoritative result record. */
+  readonly turns?: number;
+  /** Dollar cost reported by Claude's authoritative result record. */
+  readonly costUsd?: number;
 };
 
 /** Streaming callbacks for one Claude prompt. */
@@ -334,6 +338,10 @@ function translateRecord(
       ...(typeof value.result === "string" ? { result: value.result } : {}),
       ...(failed && typeof value.error === "string" ? { error: value.error } : {}),
       ...(sessionId === undefined ? {} : { sessionId }),
+      ...(typeof value.num_turns === "number" ? { turns: value.num_turns } : {}),
+      ...(typeof value.total_cost_usd === "number"
+        ? { costUsd: value.total_cost_usd }
+        : {}),
     };
     state.completion = completion;
     emitEvent(state, handlers, "turn.completed", completion);

@@ -141,7 +141,7 @@ Verification:
 
 ### 1.7 Pi package integration
 
-Status: planned
+Status: complete
 Blocked by: 1.2, 1.3, 1.4, 1.5, 1.6
 
 Package the bridge as a Pi extension with explicit commands for discovery,

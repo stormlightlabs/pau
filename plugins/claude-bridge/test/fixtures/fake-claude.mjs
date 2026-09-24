@@ -19,6 +19,12 @@ if (process.argv.includes("--version")) {
   process.stdout.write(`${process.env.FAKE_CLAUDE_VERSION ?? "2.1.3 (Claude Code)"}\n`);
   process.exit(0);
 }
+if (process.env.FAKE_CLAUDE_PID_FILE) {
+  writeFileSync(process.env.FAKE_CLAUDE_PID_FILE, String(process.pid));
+}
+if (process.env.FAKE_CLAUDE_ARGS_FILE) {
+  writeFileSync(process.env.FAKE_CLAUDE_ARGS_FILE, JSON.stringify(process.argv.slice(2)));
+}
 
 function writeProtocol(frame, split = false, afterWrite) {
   const line = `${JSON.stringify(frame)}\n`;
@@ -117,13 +123,28 @@ lines.on("line", (line) => {
     return;
   }
 
-  if (mode === "stream" || mode === "interrupt") {
+  if (mode === "stream" || mode === "interrupt" || mode === "permission") {
     if (
       command.type !== "user" ||
       command.message?.role !== "user" ||
       typeof command.message?.content !== "string"
     ) {
       process.stderr.write("received invalid stream-json prompt\n");
+      return;
+    }
+
+    if (mode === "permission") {
+      const promptsIndex = process.argv.indexOf("--permission-prompts");
+      const denied = process.argv[promptsIndex + 1] === "none";
+      writeProtocol({
+        type: "result",
+        subtype: denied ? "error_during_execution" : "success",
+        is_error: denied,
+        ...(denied
+          ? { error: "Permission request denied without operator input" }
+          : { result: "Permission forwarded" }),
+        session_id: "session-permission",
+      });
       return;
     }
 
@@ -251,7 +272,7 @@ lines.on("line", (line) => {
           type: "result",
           subtype: "success",
           is_error: false,
-          result: "Done",
+          result: process.env.FAKE_CLAUDE_RESULT ?? "Done",
           session_id: sessionId,
         });
       },

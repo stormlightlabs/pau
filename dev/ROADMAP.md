@@ -123,7 +123,7 @@ Verification:
 
 #### 2.4 Tauri and local Axum connection
 
-Status: planned
+Status: complete
 Blocked by: 2.1
 
 Start `pau-server` inside the Tauri lifecycle, bind it to an ephemeral loopback

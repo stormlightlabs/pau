@@ -1,5 +1,22 @@
 <script lang="ts">
 	import { ApplicationShell, shellNavigationFixtures } from '@stormlightlabs/pau-ui';
+	import { onMount } from 'svelte';
+
+	import { getBackendVersion } from '$lib/api';
+
+	let connectionState = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
+	let backendVersion = $state<string>();
+
+	onMount(() => {
+		void getBackendVersion(location.search)
+			.then((response) => {
+				backendVersion = response.version;
+				connectionState = 'connected';
+			})
+			.catch(() => {
+				connectionState = 'disconnected';
+			});
+	});
 </script>
 
 <svelte:head><title>fix-diff-gutter · Pau</title></svelte:head>
@@ -8,11 +25,19 @@
 	workspaceName="fix-diff-gutter"
 	contextLabel="Workspaces"
 	productItems={shellNavigationFixtures.productItems}
-	contextItems={shellNavigationFixtures.contextItems}>
+	contextItems={shellNavigationFixtures.contextItems}
+	disconnected={connectionState !== 'connected'}>
 	<section class="session" aria-labelledby="session-title">
 		<header>
 			<p>pi · task</p>
 			<h1 id="session-title">Fix diff gutter markers under line wrapping</h1>
+			<p class="backend-version" aria-live="polite">
+				{connectionState === 'connecting'
+					? 'Connecting to local backend'
+					: connectionState === 'connected'
+						? `Pau backend ${backendVersion}`
+						: 'Local backend unavailable'}
+			</p>
 		</header>
 		<div class="activity" aria-label="Recent tool activity">
 			<p><span>read</span><code>src/diff/gutter.ts</code><small>212 lines</small></p>
@@ -82,6 +107,12 @@
 		color: #a9a8c0;
 		font-size: 0.75rem;
 		font-weight: 500;
+	}
+
+	.backend-version {
+		margin-top: 0.5rem;
+		color: #a9a8c0;
+		font-size: 0.75rem;
 	}
 
 	.activity {

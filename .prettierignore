@@ -1,6 +1,7 @@
 .direnv
 node_modules
 target
+apps/desktop/src-tauri/gen
 **/build
 **/dist
 **/.svelte-kit

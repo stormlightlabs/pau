@@ -3,6 +3,13 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+/// Response returned by the backend version endpoint.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct VersionResponse {
+    /// Running backend version.
+    pub version: String,
+}
+
 /// Stable kinds in the server event envelope.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]

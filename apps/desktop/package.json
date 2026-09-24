@@ -5,9 +5,11 @@
 	"type": "module",
 	"scripts": {
 		"check": "tsc --noEmit",
-		"build": "tsc --noEmit"
+		"build": "tauri build",
+		"dev": "tauri dev"
 	},
 	"devDependencies": {
+		"@tauri-apps/cli": "2.11.5",
 		"typescript": "6.0.3"
 	}
 }

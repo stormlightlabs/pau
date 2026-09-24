@@ -6,6 +6,12 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[dependencies]
+axum.workspace = true
+pau-core = { path = "../core" }
+tokio.workspace = true
+tower-http.workspace = true
+
 [[bin]]
 name = "pau-server"
 path = "src/main.rs"

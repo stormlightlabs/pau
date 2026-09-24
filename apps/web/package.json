@@ -6,9 +6,11 @@
 	"scripts": {
 		"build": "vite build",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"dev": "vite dev"
+		"dev": "vite dev",
+		"test": "vitest run"
 	},
 	"dependencies": {
+		"@stormlightlabs/pau-protocol": "workspace:*",
 		"@stormlightlabs/pau-ui": "workspace:*"
 	},
 	"devDependencies": {
@@ -17,6 +19,7 @@
 		"@sveltejs/vite-plugin-svelte": "6.2.4",
 		"svelte": "5.57.1",
 		"svelte-check": "4.7.6",
-		"vite": "7.3.1"
+		"vite": "7.3.1",
+		"vitest": "4.1.11"
 	}
 }

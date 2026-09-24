@@ -1,0 +1,14 @@
+[package]
+name = "pau-desktop"
+description = "Tauri desktop shell for Pau"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2.5.6", features = [] }
+
+[dependencies]
+pau-server = { path = "../../../crates/server" }
+tauri = { version = "2.11.5", features = [] }

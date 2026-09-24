@@ -74,6 +74,27 @@ When a Rust wire type changes, update the checked TypeScript contract:
 pnpm generate:protocol
 ```
 
+## Run the local application
+
+For browser development, start the local API and web app in separate terminals:
+
+```sh
+cargo run -p pau-server
+pnpm --filter @stormlightlabs/pau-web dev
+```
+
+The development server forwards `/api` requests to the local API at
+`127.0.0.1:3001`.
+
+To run the desktop app, use the Tauri development command:
+
+```sh
+pnpm --filter @stormlightlabs/pau-desktop dev
+```
+
+Tauri starts the API on an unused loopback port and stops it when the app exits.
+The desktop app loads the same SvelteKit static build used by the browser.
+
 ## Product principles
 
 - Keep agent processes visible and interruptible.

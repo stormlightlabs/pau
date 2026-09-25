@@ -1,0 +1,509 @@
+use pau_agent::{AgentEvent, AgentEventKind, AgentSessionStatus};
+use serde_json::{Map, Value};
+
+/// A message content block reconstructed from Pi's streaming events.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PiProjectedContent {
+    /// Visible assistant or user text.
+    Text(String),
+    /// Assistant reasoning text.
+    Thinking(String),
+    /// A tool call requested by the model.
+    ToolCall {
+        /// Pi's tool-call identifier.
+        id: String,
+        /// The registered tool name.
+        name: String,
+        /// Complete arguments when Pi has supplied them.
+        arguments: Value,
+        /// Serialized arguments received before the complete value.
+        streamed_arguments: String,
+    },
+    /// A content block not interpreted by this adapter version.
+    Unknown(Value),
+}
+
+/// A display projection of a native Pi message.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PiProjectedMessage {
+    /// Pi's message role.
+    pub role: String,
+    /// Content used for incremental display.
+    pub content: Vec<PiProjectedContent>,
+    /// The latest native message. Completed messages retain every unknown field.
+    pub native: Value,
+    /// Whether `native` came from the authoritative `message_end` event.
+    pub complete: bool,
+}
+
+/// The point reached in a message lifecycle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PiMessagePhase {
+    /// Pi emitted `message_start`.
+    Started,
+    /// Pi emitted the authoritative `message_end` value.
+    Completed,
+}
+
+/// The point reached in a tool-call lifecycle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PiToolCallPhase {
+    /// The model started streaming a tool call.
+    Started,
+    /// The model supplied the complete tool call.
+    Completed,
+    /// Pi started executing the tool.
+    Executing,
+}
+
+/// The point reached in a tool-result lifecycle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PiToolResultPhase {
+    /// A tool supplied its latest partial result.
+    Partial,
+    /// Tool execution finished.
+    Completed,
+}
+
+/// Pi run lifecycle data projected into Pau's session states.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PiLifecycleEvent {
+    /// A low-level agent run started.
+    AgentStarted,
+    /// A low-level run ended, but Pi may still have settlement work.
+    AgentEnded { will_retry: bool },
+    /// Pi finished retries, callbacks, compaction, and queued work.
+    AgentSettled,
+}
+
+/// Adapter-owned payload carried by a `pau-agent` event.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PiEventPayload {
+    /// A run lifecycle event and the resulting Pau status.
+    Lifecycle {
+        /// Native lifecycle meaning.
+        event: PiLifecycleEvent,
+        /// Session status after applying the event.
+        status: AgentSessionStatus,
+    },
+    /// A started or completed message.
+    Message {
+        /// Message lifecycle phase.
+        phase: PiMessagePhase,
+        /// Current message projection.
+        message: PiProjectedMessage,
+    },
+    /// A streamed text update.
+    TextDelta {
+        /// Message content-block index.
+        content_index: usize,
+        /// Delta text, or complete block text when `authoritative` is true.
+        text: String,
+        /// Whether the value replaces the streamed block.
+        authoritative: bool,
+    },
+    /// A streamed reasoning update.
+    ThinkingDelta {
+        /// Message content-block index.
+        content_index: usize,
+        /// Delta text, or complete block text when `authoritative` is true.
+        text: String,
+        /// Whether the value replaces the streamed block.
+        authoritative: bool,
+    },
+    /// A model tool call or the start of its execution.
+    ToolCall {
+        /// Tool-call lifecycle phase.
+        phase: PiToolCallPhase,
+        /// Pi's tool-call identifier.
+        id: String,
+        /// Registered tool name.
+        name: String,
+        /// Arguments supplied for execution.
+        arguments: Value,
+    },
+    /// Partial or completed tool output.
+    ToolResult {
+        /// Tool-result lifecycle phase.
+        phase: PiToolResultPhase,
+        /// Pi's tool-call identifier.
+        id: String,
+        /// Registered tool name.
+        name: String,
+        /// Native tool result.
+        result: Value,
+        /// Whether the completed tool reported an error.
+        is_error: bool,
+    },
+}
+
+/// Reduces native Pi session events into display state and `pau-agent` events.
+///
+/// Unknown event types and fields are ignored. Completed messages replace the
+/// active streamed projection so provider corrections become authoritative.
+#[derive(Debug)]
+pub struct PiEventReducer {
+    status: AgentSessionStatus,
+    messages: Vec<PiProjectedMessage>,
+    active_message: Option<usize>,
+}
+
+impl Default for PiEventReducer {
+    fn default() -> Self {
+        Self {
+            status: AgentSessionStatus::Idle,
+            messages: Vec::new(),
+            active_message: None,
+        }
+    }
+}
+
+impl PiEventReducer {
+    /// Returns the current Pau session status.
+    pub fn status(&self) -> AgentSessionStatus {
+        self.status
+    }
+
+    /// Returns messages projected so far, including an active partial message.
+    pub fn messages(&self) -> &[PiProjectedMessage] {
+        &self.messages
+    }
+
+    /// Applies one native Pi event and returns zero or one projected event.
+    pub fn reduce(&mut self, event: &Value) -> Option<AgentEvent<PiEventPayload>> {
+        let event_type = event.get("type")?.as_str()?;
+        match event_type {
+            "agent_start" => {
+                self.status = AgentSessionStatus::Running;
+                Some(lifecycle_event(PiLifecycleEvent::AgentStarted, self.status))
+            }
+            "agent_end" => Some(lifecycle_event(
+                PiLifecycleEvent::AgentEnded {
+                    will_retry: event
+                        .get("willRetry")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
+                },
+                self.status,
+            )),
+            "agent_settled" => {
+                self.status = AgentSessionStatus::Idle;
+                Some(lifecycle_event(PiLifecycleEvent::AgentSettled, self.status))
+            }
+            "message_start" => self.start_message(event.get("message")?),
+            "message_update" => self.update_message(event.get("assistantMessageEvent")?),
+            "message_end" => self.complete_message(event.get("message")?),
+            "tool_execution_start" => Some(tool_call_execution_event(event)?),
+            "tool_execution_update" => {
+                Some(tool_result_event(event, PiToolResultPhase::Partial, false)?)
+            }
+            "tool_execution_end" => Some(tool_result_event(
+                event,
+                PiToolResultPhase::Completed,
+                event
+                    .get("isError")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+            )?),
+            _ => None,
+        }
+    }
+
+    fn start_message(&mut self, message: &Value) -> Option<AgentEvent<PiEventPayload>> {
+        let projection = project_message(message, false)?;
+        self.messages.push(projection.clone());
+        self.active_message = Some(self.messages.len() - 1);
+        Some(AgentEvent::new(
+            AgentEventKind::Message,
+            PiEventPayload::Message {
+                phase: PiMessagePhase::Started,
+                message: projection,
+            },
+        ))
+    }
+
+    fn complete_message(&mut self, message: &Value) -> Option<AgentEvent<PiEventPayload>> {
+        let projection = project_message(message, true)?;
+        if let Some(index) = self.active_message.take() {
+            self.messages[index] = projection.clone();
+        } else {
+            self.messages.push(projection.clone());
+        }
+        Some(AgentEvent::new(
+            AgentEventKind::Message,
+            PiEventPayload::Message {
+                phase: PiMessagePhase::Completed,
+                message: projection,
+            },
+        ))
+    }
+
+    fn update_message(&mut self, update: &Value) -> Option<AgentEvent<PiEventPayload>> {
+        let update_type = update.get("type")?.as_str()?;
+        let content_index = update
+            .get("contentIndex")
+            .and_then(Value::as_u64)
+            .and_then(|index| usize::try_from(index).ok());
+
+        match update_type {
+            "text_start" => {
+                self.set_content(content_index?, PiProjectedContent::Text(String::new()));
+                None
+            }
+            "text_delta" => {
+                let index = content_index?;
+                let delta = update.get("delta")?.as_str()?;
+                self.append_text(index, delta, false);
+                Some(text_event(index, delta, false, false))
+            }
+            "text_end" => {
+                let index = content_index?;
+                let content = update.get("content")?.as_str()?;
+                self.set_content(index, PiProjectedContent::Text(content.to_owned()));
+                Some(text_event(index, content, true, false))
+            }
+            "thinking_start" => {
+                self.set_content(content_index?, PiProjectedContent::Thinking(String::new()));
+                None
+            }
+            "thinking_delta" => {
+                let index = content_index?;
+                let delta = update.get("delta")?.as_str()?;
+                self.append_text(index, delta, true);
+                Some(text_event(index, delta, false, true))
+            }
+            "thinking_end" => {
+                let index = content_index?;
+                let content = update.get("content")?.as_str()?;
+                self.set_content(index, PiProjectedContent::Thinking(content.to_owned()));
+                Some(text_event(index, content, true, true))
+            }
+            "toolcall_start" => {
+                let index = content_index?;
+                let id = update.get("id")?.as_str()?.to_owned();
+                let name = update.get("toolName")?.as_str()?.to_owned();
+                self.set_content(
+                    index,
+                    PiProjectedContent::ToolCall {
+                        id: id.clone(),
+                        name: name.clone(),
+                        arguments: Value::Object(Map::new()),
+                        streamed_arguments: String::new(),
+                    },
+                );
+                Some(tool_call_event(
+                    PiToolCallPhase::Started,
+                    id,
+                    name,
+                    Value::Object(Map::new()),
+                ))
+            }
+            "toolcall_delta" => {
+                let index = content_index?;
+                let delta = update.get("delta")?.as_str()?;
+                if let Some(PiProjectedContent::ToolCall {
+                    streamed_arguments, ..
+                }) = self.content_mut(index)
+                {
+                    streamed_arguments.push_str(delta);
+                }
+                None
+            }
+            "toolcall_end" => {
+                let index = content_index?;
+                let call = update.get("toolCall")?;
+                let id = call.get("id")?.as_str()?.to_owned();
+                let name = call.get("name")?.as_str()?.to_owned();
+                let arguments = call.get("arguments").cloned().unwrap_or(Value::Null);
+                self.set_content(
+                    index,
+                    PiProjectedContent::ToolCall {
+                        id: id.clone(),
+                        name: name.clone(),
+                        arguments: arguments.clone(),
+                        streamed_arguments: String::new(),
+                    },
+                );
+                Some(tool_call_event(
+                    PiToolCallPhase::Completed,
+                    id,
+                    name,
+                    arguments,
+                ))
+            }
+            _ => None,
+        }
+    }
+
+    fn set_content(&mut self, index: usize, content: PiProjectedContent) {
+        let Some(message) = self
+            .active_message
+            .and_then(|index| self.messages.get_mut(index))
+        else {
+            return;
+        };
+        while message.content.len() <= index {
+            message
+                .content
+                .push(PiProjectedContent::Unknown(Value::Null));
+        }
+        message.content[index] = content;
+    }
+
+    fn content_mut(&mut self, index: usize) -> Option<&mut PiProjectedContent> {
+        let message = self
+            .active_message
+            .and_then(|active| self.messages.get_mut(active))?;
+        message.content.get_mut(index)
+    }
+
+    fn append_text(&mut self, index: usize, delta: &str, thinking: bool) {
+        let expected = if thinking {
+            PiProjectedContent::Thinking(String::new())
+        } else {
+            PiProjectedContent::Text(String::new())
+        };
+        if self.content_mut(index).is_none() {
+            self.set_content(index, expected);
+        }
+        match self.content_mut(index) {
+            Some(PiProjectedContent::Text(text)) if !thinking => text.push_str(delta),
+            Some(PiProjectedContent::Thinking(text)) if thinking => text.push_str(delta),
+            _ => {}
+        }
+    }
+}
+
+fn lifecycle_event(
+    event: PiLifecycleEvent,
+    status: AgentSessionStatus,
+) -> AgentEvent<PiEventPayload> {
+    AgentEvent::new(
+        AgentEventKind::Lifecycle,
+        PiEventPayload::Lifecycle { event, status },
+    )
+}
+
+fn text_event(
+    content_index: usize,
+    text: &str,
+    authoritative: bool,
+    thinking: bool,
+) -> AgentEvent<PiEventPayload> {
+    let (kind, payload) = if thinking {
+        (
+            AgentEventKind::ThinkingDelta,
+            PiEventPayload::ThinkingDelta {
+                content_index,
+                text: text.to_owned(),
+                authoritative,
+            },
+        )
+    } else {
+        (
+            AgentEventKind::TextDelta,
+            PiEventPayload::TextDelta {
+                content_index,
+                text: text.to_owned(),
+                authoritative,
+            },
+        )
+    };
+    AgentEvent::new(kind, payload)
+}
+
+fn tool_call_event(
+    phase: PiToolCallPhase,
+    id: String,
+    name: String,
+    arguments: Value,
+) -> AgentEvent<PiEventPayload> {
+    AgentEvent::new(
+        AgentEventKind::ToolCall,
+        PiEventPayload::ToolCall {
+            phase,
+            id,
+            name,
+            arguments,
+        },
+    )
+}
+
+fn tool_call_execution_event(event: &Value) -> Option<AgentEvent<PiEventPayload>> {
+    Some(tool_call_event(
+        PiToolCallPhase::Executing,
+        event.get("toolCallId")?.as_str()?.to_owned(),
+        event.get("toolName")?.as_str()?.to_owned(),
+        event.get("args").cloned().unwrap_or(Value::Null),
+    ))
+}
+
+fn tool_result_event(
+    event: &Value,
+    phase: PiToolResultPhase,
+    is_error: bool,
+) -> Option<AgentEvent<PiEventPayload>> {
+    let result_field = match phase {
+        PiToolResultPhase::Partial => "partialResult",
+        PiToolResultPhase::Completed => "result",
+    };
+    Some(AgentEvent::new(
+        AgentEventKind::ToolResult,
+        PiEventPayload::ToolResult {
+            phase,
+            id: event.get("toolCallId")?.as_str()?.to_owned(),
+            name: event.get("toolName")?.as_str()?.to_owned(),
+            result: event.get(result_field).cloned().unwrap_or(Value::Null),
+            is_error,
+        },
+    ))
+}
+
+fn project_message(message: &Value, complete: bool) -> Option<PiProjectedMessage> {
+    let role = message.get("role")?.as_str()?.to_owned();
+    let content = match message.get("content") {
+        Some(Value::String(text)) => vec![PiProjectedContent::Text(text.clone())],
+        Some(Value::Array(blocks)) => blocks.iter().map(project_content).collect(),
+        _ => Vec::new(),
+    };
+    Some(PiProjectedMessage {
+        role,
+        content,
+        native: message.clone(),
+        complete,
+    })
+}
+
+fn project_content(content: &Value) -> PiProjectedContent {
+    match content.get("type").and_then(Value::as_str) {
+        Some("text") => PiProjectedContent::Text(
+            content
+                .get("text")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned(),
+        ),
+        Some("thinking") => PiProjectedContent::Thinking(
+            content
+                .get("thinking")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned(),
+        ),
+        Some("toolCall") => PiProjectedContent::ToolCall {
+            id: content
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned(),
+            name: content
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned(),
+            arguments: content.get("arguments").cloned().unwrap_or(Value::Null),
+            streamed_arguments: String::new(),
+        },
+        _ => PiProjectedContent::Unknown(content.clone()),
+    }
+}

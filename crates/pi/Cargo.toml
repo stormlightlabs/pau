@@ -10,6 +10,7 @@ repository.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+pau-agent = { path = "../agent" }
 libc.workspace = true
 semver.workspace = true
 serde_json.workspace = true

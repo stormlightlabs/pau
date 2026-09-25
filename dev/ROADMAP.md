@@ -82,7 +82,7 @@ Verification:
 
 #### 2.13 Pi event projection
 
-Status: planned
+Status: complete
 Blocked by: 2.12
 
 Project text deltas, thinking, tool calls, tool results, and lifecycle events

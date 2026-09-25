@@ -1,10 +1,15 @@
 //! Pi discovery, RPC transport, and process supervision.
 
 mod process;
+mod projection;
 
 pub use process::{
     PiDiagnostic, PiDiagnosticSource, PiProcess, PiProcessError, PiProcessExit, PiProcessOutput,
     PiShutdownTimeouts, StartPiProcessOptions,
+};
+pub use projection::{
+    PiEventPayload, PiEventReducer, PiLifecycleEvent, PiMessagePhase, PiProjectedContent,
+    PiProjectedMessage, PiToolCallPhase, PiToolResultPhase,
 };
 
 use semver::Version;

@@ -2454,6 +2454,7 @@ name = "pau-pi"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "pau-agent",
  "semver",
  "serde_json",
  "tempfile",

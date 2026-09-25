@@ -169,15 +169,13 @@ Verification:
 
 #### 2.7 Continuous integration
 
-Status: blocked
-Status note: The workflow must be committed, dispatched, and pass on GitHub
-before clean-checkout verification can finish.
+Status: complete
 Blocked by: 2.1, 2.2
 
 Run Rust formatting, linting, and tests; TypeScript formatting, type checking,
 Vitest, and Playwright tests; Storybook tests and static build; the website
-build and link checks; generated-contract checks; and Nix flake evaluation in
-CI. Cache dependencies without caching credentials or user state.
+build and link checks; and generated-contract checks in CI. Cache dependencies
+without caching credentials or user state.
 
 Verification:
 

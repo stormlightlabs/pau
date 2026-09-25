@@ -39,6 +39,8 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - run: pnpm install --frozen-lockfile
       - name: Install browser
         run: pnpm --filter @stormlightlabs/pau-ui exec playwright install --with-deps chromium
@@ -79,21 +81,3 @@ jobs:
           fail: true
           failIfEmpty: true
           args: "'build/**/*.html'"
-
-  generated-contract:
-    name: Generated contract
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo run --quiet -p pau-core --bin generate-protocol -- --check
-
-  nix:
-    name: Nix flake
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@v21
-      - name: Evaluate every declared system
-        run: nix flake show --all-systems

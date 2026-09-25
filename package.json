@@ -5,7 +5,7 @@
 	"scripts": {
 		"build": "pnpm --recursive build",
 		"build:website": "pnpm --filter @stormlightlabs/pau-website build",
-		"check": "pnpm check:types && pnpm lint",
+		"check": "pnpm check:types && pnpm check:generated && pnpm lint",
 		"check:types": "pnpm --recursive check",
 		"check:generated": "cargo run --quiet -p pau-core --bin generate-protocol -- --check",
 		"build:ui": "pnpm --filter @stormlightlabs/pau-ui build",

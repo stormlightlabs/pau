@@ -9,6 +9,13 @@ language before moving a design into the application. The fixtures are allowed
 to explore ideas that the product does not implement yet; the specification and
 technical plan remain the source of truth.
 
+The prototype is the executable companion to
+[`dev/design`](../../dev/design/README.md). The visual system lives in
+[`system.md`](../../dev/design/system.md), and
+[`surfaces.md`](../../dev/design/surfaces.md) maps each route to its purpose and
+responsive contract. Update a fixture and its owning design document together
+when a durable decision changes.
+
 ## Run it
 
 ```sh
@@ -47,7 +54,8 @@ Playwright reports are ignored by Git.
 1. Add a route under `src/routes/screens` or `src/routes/splash`.
 2. Add it to the menu in `src/lib/components/PrototypeShell.svelte`.
 3. Add it to the index route and `tests/screenshots.spec.ts`.
-4. Style it with UnoCSS utilities. Colors, type, and spacing values live in
+4. Add or update the route's brief in `dev/design/surfaces.md`.
+5. Style it with UnoCSS utilities. Colors, type, and spacing values live in
    `src/lib/design/tokens.css`; a pattern used on more than two screens becomes
    a shortcut in `uno.config.ts`.
 

@@ -82,6 +82,11 @@ sentence. Leave sentence fragments unpunctuated.
 Prefer TypeScript type aliases for data shapes and unions. Use interfaces only
 for method-only contracts or types that classes implement.
 
+Keep `dev/design` and `packages/prototype` synchronized. When a durable visual,
+interaction, or responsive decision changes, update the owning design document
+and prototype fixture together. Screenshot-only polish needs a document change
+only when it changes the recorded system or surface contract.
+
 Use kebab-case for TypeScript filenames, including `.svelte.ts` modules. Keep
 Svelte component filenames in PascalCase, and preserve that component name in
 associated files such as `SessionView.stories.ts` and

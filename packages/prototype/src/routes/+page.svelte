@@ -73,12 +73,12 @@
 <article class="prototype-page" data-prototype-ready>
 	<header class="prototype-page__header">
 		<div>
-			<div class="prototype-kicker">Design sandbox</div>
-			<h1>Make the work visible before we build it.</h1>
+			<div class="prototype-kicker">Interface studies</div>
+			<h1>Pau product surfaces</h1>
 		</div>
 		<p class="prototype-page__note">
-			Each route is a fixed, interactive fixture. Use them to compare hierarchy, density, responsive behavior, and copy
-			without connecting to the product packages or a live agent.
+			Open a fixed fixture to inspect hierarchy, density, responsive behavior, and product language without connecting
+			to a live agent. Durable decisions are recorded in <code>dev/design</code>.
 		</p>
 	</header>
 

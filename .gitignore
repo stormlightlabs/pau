@@ -1,9 +1,13 @@
 # Project agent configuration
 !AGENTS.md
+!CLAUDE.md
 /.pi/*
 !/.pi/settings.json
 !/.pi/prompts/
 !/.pi/prompts/*.md
+!/.pi/skills/
+/.claude/*
+!/.claude/skills
 .direnv/
 result
 result-*

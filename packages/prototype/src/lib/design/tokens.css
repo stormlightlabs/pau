@@ -20,7 +20,9 @@
 	--text-lg: 1rem;
 	--text-xl: 1.25rem;
 
-	/* Control and row heights. Interactive rows stay at least 2rem tall. */
+	/* Compact desktop controls grow to the coarse-pointer target in base.css. */
+	--target-compact: 2rem;
+	--target-touch: 2.75rem;
 	--row-sm: 1.75rem;
 	--row-md: 2rem;
 	--row-lg: 2.25rem;

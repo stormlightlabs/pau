@@ -1,19 +1,24 @@
 # Design references
 
-The images in this directory are sketches, not implementation commitments. Use
-them to discuss layout, density, hierarchy, and interaction patterns. Product
-behavior remains defined by [`SPEC.md`](../SPEC.md), and the current design
-direction remains defined by [`PLAN.md`](../PLAN.md#design-direction).
+This directory records Pau's durable interface decisions and early sketches.
+Product behavior remains defined by [`SPEC.md`](../SPEC.md), and architecture
+and implementation policy remain defined by [`PLAN.md`](../PLAN.md).
+
+- [`system.md`](system.md) defines the visual and interaction system.
+- [`surfaces.md`](surfaces.md) maps each product surface to its prototype route
+  and states its purpose, hierarchy, and responsive behavior.
+- [`icons.md`](icons.md) assigns icon families by role.
+- The PNG files are early sketches, not implementation commitments.
+
+`packages/prototype` is the executable companion to these documents. Update the
+owning brief and prototype fixture together when a durable design decision
+changes. A screenshot-only adjustment does not need a prose change unless it
+changes the recorded system or surface contract.
 
 ## Settled direction
 
-- Ship Eldritch, Nord, Iceberg, Catppuccin Mocha, and Vitesse Dark.
-- Prefer square corners. Use low-radius rounding only where it helps identify a
-  control or state.
-- Use Svelte's motion, transition, and animation APIs. Every motion treatment
-  must respect the reduced-motion setting.
-- Keep the interface dense and flat. Separate regions with alignment, spacing,
-  and restrained borders instead of nested cards.
+The settled direction now lives in [`system.md`](system.md). Keep this index
+focused on document ownership and sketch provenance.
 
 ## What the sketches explore
 

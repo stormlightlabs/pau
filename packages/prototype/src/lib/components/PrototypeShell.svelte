@@ -7,7 +7,7 @@
 
 	const groups = [
 		{
-			label: 'V1 screens',
+			label: 'Product surfaces',
 			items: [
 				{ href: '/screens/dashboard', label: 'Dashboard', icon: 'i-tabler-home' },
 				{ href: '/screens/session', label: 'Session', icon: 'i-tabler-messages' },
@@ -59,7 +59,7 @@
 		</div>
 
 		<p class="prototype-nav__footer">
-			Static fixtures only. Change the copy, states, and layout here before product implementation.
+			Fixtures test the decisions recorded in <code>dev/design</code> before they move into product code.
 		</p>
 	</aside>
 

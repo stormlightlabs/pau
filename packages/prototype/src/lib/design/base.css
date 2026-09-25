@@ -68,13 +68,38 @@ button:disabled {
 	opacity: 0.48;
 }
 
+@media (pointer: coarse) {
+	.icon-button,
+	.mock-app__history button,
+	.mock-app__tabs button,
+	.composer-tool {
+		min-width: var(--target-touch);
+		min-height: var(--target-touch);
+	}
+}
+
+@media (prefers-contrast: more) {
+	:root,
+	[data-theme] {
+		--color-line: var(--color-line-strong);
+		--color-text-muted: var(--color-text);
+	}
+}
+
 @media (prefers-reduced-motion: reduce) {
+	html:focus-within {
+		scroll-behavior: auto;
+	}
+
 	*,
 	*::before,
 	*::after {
-		scroll-behavior: auto !important;
-		transition-duration: 0.01ms !important;
 		animation-duration: 0.01ms !important;
 		animation-iteration-count: 1 !important;
+		animation-delay: 0ms !important;
+	}
+
+	.mock-product-rail .icon-button:hover {
+		transform: none;
 	}
 }

@@ -141,11 +141,33 @@ receives only new output. `pau-term` must provide session ownership, bounded
 scrollback and replay, backpressure, staged shutdown, and control validation.
 No custom terminal parser, emulator, or PTY layer is justified.
 
-Do a short dependency spike before implementing the Neovim renderer. Existing
-native GUIs are useful references but do not qualify if they cannot embed in
-both Tauri's webview and a browser. If no maintained embeddable renderer fits,
-build only the thin grid and input layer above an existing RPC client; do not
-implement msgpack-RPC or text shaping from scratch.
+Use `nvim-rs` 0.9.2 with its Tokio support for Neovim msgpack-RPC. The crate is
+LGPL-3.0-licensed, supports child-process transports and nested asynchronous
+requests, and remains maintained. Its API is unstable, so keep it inside
+`pau-term` and do not expose its types in Pau's protocol. `neovim-lib` 0.6.1 is
+also LGPL-3.0-licensed, but its repository has been inactive since 2019 and its
+synchronous API is a worse fit for the Tokio backend. The spike attached to
+Neovim 0.12.5 through `nvim --embed`, received line-grid redraws, sent input,
+and resized the external UI.
+
+No existing browser renderer meets Pau's requirements. `neovim-component`
+0.10.1 is MIT-licensed, but its last release was in 2017 and it depends on
+Polymer 2, Electron or Node process access, and the old Neovim UI protocol.
+Firenvim is maintained and renders Neovim in Chromium and Firefox, but it is a
+GPL-3.0 browser extension and Neovim plugin rather than an embeddable renderer.
+Its renderer depends on Firenvim's native-messaging transport and page takeover
+lifecycle.
+
+Pau will own a thin browser grid and input layer behind the renderer interface.
+The base layer handles `grid_resize`, `grid_clear`, `grid_line`, `grid_scroll`,
+`grid_cursor_goto`, highlight definitions, mode changes, and `flush`. It maps
+keyboard, mouse, focus, paste, clipboard, and measured container size to typed
+backend controls. Rust owns process and RPC lifecycle and translates raw redraw
+batches to compact WebSocket events. The browser uses platform text measurement
+and rendering; Pau will not implement msgpack-RPC or a text-shaping engine.
+Multigrid placement, floating windows, external messages, command lines, popup
+menus, tablines, and wildmenus remain unsupported until the later multigrid
+work.
 
 ## Backend contracts
 

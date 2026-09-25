@@ -13,8 +13,10 @@ path = "src/lib.rs"
 portable-pty.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
 axum.workspace = true
 futures-util.workspace = true
+nvim-rs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

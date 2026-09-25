@@ -51,199 +51,12 @@ status `complete`.
 The SvelteKit app runs in a normal browser during development. Tauri is the
 shipped application in this deliverable.
 
-### Foundation
-
-#### 2.1 Workspace scaffold
-
-Status: complete
-Blocked by: none
-
-Create the pnpm workspace with `apps/web`, `apps/desktop`, `apps/website`,
-`packages/ui`, and `packages/protocol`, using the `@stormlightlabs/pau-*`
-package namespace. Scaffold the website with the established SvelteKit
-documentation stack: mdsvex, validated content metadata, Shiki, Pagefind, raw
-Markdown routes, `llms.txt`, sitemap, Open Graph output, and static deployment.
-Configure `org.stormlightlabs.pau` as the Tauri bundle identifier. Create the
-Cargo workspace with the required crate paths and names:
-
-```text
-crates/core    pau-core (lib)
-crates/agent   pau-agent (lib)
-crates/pi      pau-pi (lib)
-crates/cli     pau-cli (bin)
-crates/server  pau-server (bin)
-crates/term    pau-term (lib)
-```
-
-Verification:
-
-- Run pnpm formatting and type checks from the repository root.
-- Build the website and confirm one fixture page appears in navigation, raw
-  Markdown, `llms.txt`, sitemap, and Pagefind output.
-- Generate the checked TypeScript protocol from Rust and confirm CI detects
-  stale generated output.
-- Run `cargo check --workspace` and confirm every package has the required name.
-- Evaluate the Nix development shell on every declared system.
-
-#### 2.2 Storybook and browser component workbench
-
-Status: complete
-Blocked by: 2.1
-
-Set up Storybook in `packages/ui` with typed fixtures, theme and viewport
-controls, reduced-motion and capability controls, accessibility checks, Vitest
-integration, and Playwright-backed browser component tests. Add a root `dev:ui`
-command for rapid design review.
-
-Verification:
-
-- Run Storybook locally with hot reload, build its static output in CI, and
-  retain the build as a review artifact.
-- Exercise one fixture component through a story `play` function and a dedicated
-  browser component test.
-- Confirm stories run without Tauri, Axum, or a live agent.
-- Confirm keyboard and accessibility failures make the test command fail.
-
-#### 2.3 Shared application shell
-
-Status: complete
-Blocked by: 2.1, 2.2
-
-Implement the global command bar, product rail, contextual rail, main surface,
-optional inspector, and narrow-layout behavior in `packages/ui`. Compose it
-from `apps/web` without Tauri imports.
-
-Verification:
-
-- Test rail and inspector states in the UI package.
-- Review Storybook stories for rail, inspector, long-content, disconnected, and
-  narrow-layout states.
-- Render the shell through `apps/web` at wide and narrow viewports.
-- Confirm keyboard focus order and named icon-only controls.
-
-#### 2.4 Tauri and local Axum connection
-
-Status: complete
-Blocked by: 2.1
-
-Start `pau-server` inside the Tauri lifecycle, bind it to an ephemeral loopback
-port, and load the SvelteKit static output. Let the development web app connect
-to the same API shape.
-
-Verification:
-
-- Launch the Tauri app and browser development app against the local backend.
-- Confirm both receive the same version response.
-- Confirm closing Tauri stops its backend.
-
-#### 2.5 Persistence foundation
-
-Status: complete
-Blocked by: 2.1
-
-Add SQLite migrations and `pau-core` repositories for workspaces, application
-settings, and process metadata using one `tokio-rusqlite` connection in WAL mode
-with a busy timeout. Do not store native agent transcripts or add a pool without
-measured contention.
-
-Verification:
-
-- Apply migrations to an empty database and upgrade from each checked-in
-  migration state.
-- Round-trip each repository type.
-- Delete the database and confirm native session files remain untouched.
-
-#### 2.6 Local API authentication and diagnostics
-
-Status: complete
-Blocked by: 2.4
-
-Add the per-launch desktop token, authenticated HTTP and WebSocket handshakes,
-health and version endpoints, and structured logs with secret redaction.
-
-Verification:
-
-- Reject missing and invalid tokens on HTTP and WebSocket connections.
-- Confirm the desktop client connects with its launch token.
-- Scan captured logs to ensure the token and configured secrets do not appear.
-
-#### 2.7 Continuous integration
-
-Status: complete
-Blocked by: 2.1, 2.2
-
-Run Rust formatting, linting, and tests; TypeScript formatting, type checking,
-Vitest, and Playwright tests; Storybook tests and static build; the website
-build and link checks; and generated-contract checks in CI. Cache dependencies
-without caching credentials or user state.
-
-Verification:
-
-- Run the workflow on a clean checkout.
-- Introduce one controlled failure in each toolchain while developing the
-  workflow and confirm the expected job fails.
-
-#### 2.8 Terminal dependency spike
-
-Status: blocked
-Status note: Linux verification passed, but no macOS runner is available for
-required PTY verification.
-Blocked by: 2.1
-
-Validate `portable-pty`, `@xterm/xterm`, required official addons, binary
-WebSocket transport, and Linux/macOS behavior with a minimal end-to-end
-prototype.
-
-Verification:
-
-- Run an interactive shell, full-screen terminal program, resize sequence,
-  Unicode input, and reconnect experiment.
-- Record selected versions, licenses, limitations, and any justified custom
-  layer in `dev/PLAN.md`.
-
-#### 2.9 Neovim dependency spike
-
-Status: planned
-Blocked by: 2.1
-
-Evaluate maintained Rust Neovim RPC clients and embeddable browser grid
-renderers. Prefer an existing renderer; otherwise define the smallest grid/input
-layer Pau must own.
-
-Verification:
-
-- Attach to `nvim --embed`, render a changed line, send input, and resize.
-- Record the selected dependencies, licenses, unsupported UI events, and custom
-  scope in `dev/PLAN.md`.
-
-#### 2.10 Theme contract and bundled palettes
-
-Status: complete
-Blocked by: 2.2, 2.3
-
-Define semantic theme tokens and add Eldritch, Nord, Iceberg, Catppuccin Mocha,
-and Vitesse Dark from their upstream palettes. Include required licenses and
-attribution. Let the application UI use IBM Plex Sans Variable, Inter Variable,
-Atkinson Hyperlegible Next Variable, or Atkinson Hyperlegible Soft. Load the
-first three from Fontsource and vendor Atkinson Hyperlegible Soft from its
-upstream repository. Use IBM Plex Sans Variable on the website.
-
-Verification:
-
-- Validate every theme against the token schema.
-- Render the application shell in all five themes through Storybook and review
-  the selected visual snapshots.
-- Confirm the application shell can render with each bundled UI font.
-- Confirm the website uses IBM Plex Sans Variable.
-- Confirm production builds make no remote font request.
-- Check text, focus, status, and meaningful boundary contrast.
-
 ### Agent session loop
 
 #### 2.11 Pi discovery and diagnostics
 
 Status: planned
-Blocked by: 2.4
+Blocked by: none
 
 Find Pi, report its version and configuration paths, and expose actionable
 installation errors without starting a session.
@@ -298,7 +111,7 @@ Verification:
 #### 2.15 Concurrent session registry
 
 Status: planned
-Blocked by: 2.5, 2.12, 2.14
+Blocked by: 2.12, 2.14
 
 Run multiple Pi sessions across one or more workspaces without blocking inactive
 views. Persist enough metadata to rediscover native sessions after restart.
@@ -312,7 +125,7 @@ Verification:
 #### 2.16 Session UI
 
 Status: planned
-Blocked by: 2.3, 2.10, 2.14, 2.15
+Blocked by: 2.14, 2.15
 
 Build the workspace/session rail, transcript, composer, tool activity, status,
 and attention-required states using `packages/ui` and compose the route in
@@ -327,7 +140,7 @@ Verification:
 #### 2.17 Snapshot and reconnect
 
 Status: planned
-Blocked by: 2.6, 2.15, 2.16
+Blocked by: 2.15, 2.16
 
 Send a state snapshot plus sequenced events so a frontend reload reconstructs
 active sessions without duplicating output.
@@ -358,7 +171,7 @@ Verification:
 #### 2.19 Workspace registry and file access
 
 Status: planned
-Blocked by: 2.4, 2.5, 2.6
+Blocked by: none
 
 Open and remember workspace roots. Add canonicalized, root-confined file
 listing, reading, writing, and search APIs.
@@ -371,7 +184,7 @@ Verification:
 #### 2.20 File tree and search UI
 
 Status: planned
-Blocked by: 2.3, 2.19
+Blocked by: 2.19
 
 Add the file tree, file-type icons, ignored/hidden-file controls, and file
 search to the workspace layout.
@@ -398,7 +211,7 @@ Verification:
 #### 2.22 CodeMirror editor
 
 Status: planned
-Blocked by: 2.10, 2.19, 2.20
+Blocked by: 2.19, 2.20
 
 Add text-file viewing and saving with CodeMirror 6, dirty state, external-change
 detection, and the active theme's syntax colors.
@@ -426,7 +239,7 @@ Verification:
 #### 2.24 PTY backend
 
 Status: planned
-Blocked by: 2.4, 2.6, 2.8
+Blocked by: none
 
 Implement terminal create, attach, input, output, resize, signal, detach, close,
 bounded scrollback, backpressure, and cleanup in `pau-term`.
@@ -442,7 +255,7 @@ Verification:
 #### 2.25 Terminal UI
 
 Status: planned
-Blocked by: 2.2, 2.3, 2.10, 2.24
+Blocked by: 2.24
 
 Integrate xterm.js with tabs, main-surface and bottom-dock layouts, fit, search,
 copy and paste, activity, exit state, conservative links, and the active ANSI
@@ -487,7 +300,7 @@ Verification:
 #### 2.28 Embedded Neovim lifecycle
 
 Status: planned
-Blocked by: 2.4, 2.6, 2.9
+Blocked by: none
 
 Start and supervise `nvim --embed` in `pau-term`, attach through the selected
 RPC library, and report version and exit state.
@@ -500,7 +313,7 @@ Verification:
 #### 2.29 Base Neovim grid
 
 Status: planned
-Blocked by: 2.2, 2.9, 2.28
+Blocked by: 2.28
 
 Handle line-grid redraws, highlights, cursor, mode, and resize using the
 selected renderer or the thin renderer approved by unit 2.9.
@@ -543,7 +356,7 @@ Verification:
 #### 2.32 Neovim reconnect and theming
 
 Status: planned
-Blocked by: 2.10, 2.29, 2.30
+Blocked by: 2.29, 2.30
 
 Reconnect a reloaded frontend without killing Neovim. Start clean by default and
 add separate controls for loading the user's `init.lua` and applying Pau's
@@ -563,7 +376,7 @@ Verification:
 #### 2.33 Resource discovery
 
 Status: planned
-Blocked by: 2.5, 2.11
+Blocked by: 2.11
 
 Index user and project Pi skills, extensions, prompts, themes, and packages from
 Pi's normal locations. Preserve scope, source, and discovery warnings.
@@ -576,7 +389,7 @@ Verification:
 #### 2.34 Resource browser
 
 Status: planned
-Blocked by: 2.3, 2.10, 2.33
+Blocked by: 2.33
 
 Build the Skills, Extensions, Prompts, Themes, and Packages views with source,
 scope, trust, validation, filtering, and selected-resource detail.
@@ -631,7 +444,7 @@ Verification:
 #### 2.38 Website deployment
 
 Status: planned
-Blocked by: 2.7, 2.10, 2.18, 2.25, 2.32, 2.37
+Blocked by: 2.18, 2.25, 2.32, 2.37
 
 Deploy `apps/website` to Cloudflare Pages at `https://pau.stormlightlabs.org`
 with preview deployments for pull requests.
@@ -645,7 +458,7 @@ Verification:
 #### 2.39 AppImage packaging
 
 Status: planned
-Blocked by: 2.7, 2.18, 2.23, 2.25, 2.32, 2.37
+Blocked by: 2.18, 2.23, 2.25, 2.32, 2.37
 
 Package the first Linux desktop release as an AppImage. Leave `.deb`, RPM,
 Intel macOS, signing, and notarization until release demand or available signing

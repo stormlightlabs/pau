@@ -8,5 +8,10 @@
 
 ### Desktop and web
 
-- Added the web and desktop projects, documentation site, shared packages, and
-  Rust crates.
+- Added the first desktop and browser interface with responsive navigation, a
+  command bar, and an inspector.
+- Added five themes and four bundled interface fonts.
+- Pau now remembers registered workspaces and settings between launches.
+- Protected local connections with a per-launch token and kept secrets out of
+  diagnostic logs.
+- Added the Pau documentation site.

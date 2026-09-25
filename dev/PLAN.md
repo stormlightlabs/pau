@@ -108,6 +108,39 @@ The initial choices to validate are:
   Neovim UI protocol, input, theming, and reconnect requirements
 - Iconify through UnoCSS or unplugin for the selected icon sets
 
+### Terminal dependency selection
+
+Use `portable-pty` 0.9.0 for PTY ownership. The crate is MIT-licensed and is
+maintained in the WezTerm repository. Its native Unix backend supports Linux
+and macOS through the same API. PTY reads, writes, child waits, and process
+control are blocking, so `pau-term` must keep them off Tokio worker threads.
+The spike exercised Linux. A macOS run is still required before this selection
+is final.
+
+Use `@xterm/xterm` 6.0.0 with these official MIT-licensed addons from the
+xterm.js repository:
+
+- `@xterm/addon-fit` 0.11.0
+- `@xterm/addon-search` 0.16.0
+- `@xterm/addon-serialize` 0.14.0
+- `@xterm/addon-unicode11` 0.9.0
+- `@xterm/addon-web-links` 0.12.0
+- `@xterm/addon-clipboard` 0.2.0
+
+The Unicode 11 addon uses xterm.js's proposed API and requires
+`allowProposedApi`. Fit requires a visible, measured container. Clipboard
+access depends on browser permissions and a secure context. Serialization
+captures emulator state but does not replace backend scrollback. Web links
+need Pau's own allowlist and click handler before they can navigate.
+
+Binary WebSocket frames carry PTY input and output without converting output
+to text. Browser text input is UTF-8 encoded, while xterm.js binary events keep
+their byte values. Text WebSocket frames carry typed controls such as resize.
+The spike keeps the PTY alive across browser reconnects, but a detached client
+receives only new output. `pau-term` must provide session ownership, bounded
+scrollback and replay, backpressure, staged shutdown, and control validation.
+No custom terminal parser, emulator, or PTY layer is justified.
+
 Do a short dependency spike before implementing the Neovim renderer. Existing
 native GUIs are useful references but do not qualify if they cannot embed in
 both Tauri's webview and a browser. If no maintained embeddable renderer fits,

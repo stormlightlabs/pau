@@ -185,7 +185,9 @@ Verification:
 
 #### 2.8 Terminal dependency spike
 
-Status: planned
+Status: blocked
+Status note: Linux verification passed, but no macOS runner is available for
+required PTY verification.
 Blocked by: 2.1
 
 Validate `portable-pty`, `@xterm/xterm`, required official addons, binary

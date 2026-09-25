@@ -25,6 +25,22 @@ Generate the TypeScript wire types after a Rust protocol type changes:
 pnpm generate:protocol
 ```
 
+## Install Pi
+
+Pau requires Pi 0.87.1 or newer. Install Pi globally if `pi --version` does not
+report a supported release:
+
+```bash
+npm install --global @earendil-works/pi-coding-agent
+pi --version
+```
+
+Pau finds `pi` on `PATH` unless you configure another executable. It reads user
+configuration from `PI_CODING_AGENT_DIR` or `~/.pi/agent`, project
+configuration from `<workspace>/.pi`, and session storage from
+`PI_CODING_AGENT_SESSION_DIR` or the user configuration directory. The version
+check does not start a Pi session.
+
 ## Review interface components
 
 Start Storybook with hot reload:

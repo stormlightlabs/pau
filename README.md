@@ -74,6 +74,22 @@ When a Rust wire type changes, update the checked TypeScript contract:
 pnpm generate:protocol
 ```
 
+## Pi installation
+
+Pau discovers Pi from a configured executable path or `PATH`. The current
+compatibility floor is Pi 0.87.1. Install it globally with npm if `pi --version`
+does not report a supported release:
+
+```sh
+npm install --global @earendil-works/pi-coding-agent
+pi --version
+```
+
+Discovery checks the version without starting a session. It reports Pi's user
+configuration under `PI_CODING_AGENT_DIR` or `~/.pi/agent`, project
+configuration under `<workspace>/.pi`, and session storage under
+`PI_CODING_AGENT_SESSION_DIR` or the user configuration directory.
+
 ## Run the local application
 
 For browser development, generate a token with `openssl rand -hex 32`. Set

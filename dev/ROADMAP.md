@@ -55,7 +55,7 @@ shipped application in this deliverable.
 
 #### 2.11 Pi discovery and diagnostics
 
-Status: planned
+Status: complete
 Blocked by: none
 
 Find Pi, report its version and configuration paths, and expose actionable

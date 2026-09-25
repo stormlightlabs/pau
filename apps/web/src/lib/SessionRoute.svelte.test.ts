@@ -5,7 +5,7 @@ import { render } from 'vitest-browser-svelte';
 
 import SessionRoute from './SessionRoute.svelte';
 
-test('controls and switches two concurrent fake sessions without crossing their state', async () => {
+test('controls concurrent fake Pi and Claude sessions without crossing their state', async () => {
 	await render(SessionRoute, { initialWorkspaces: sessionFixtures.concurrent, initialSessionId: 'diff-gutter' });
 	const prompt = page.getByRole('textbox', { name: 'Prompt' });
 
@@ -21,6 +21,12 @@ test('controls and switches two concurrent fake sessions without crossing their 
 	const secondSession = page.getByRole('button', { name: /Review session registry/ });
 	await userEvent.click(secondSession);
 	await expect.element(page.getByRole('alert')).toHaveTextContent('Attention required.');
+
+	await userEvent.click(page.getByRole('button', { name: /Review adapter fixtures/ }));
+	await expect.element(page.getByRole('heading', { name: 'Review adapter fixtures' })).toBeVisible();
+	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), 'Check the bridge events.');
+	await userEvent.keyboard('{Control>}{Enter}{/Control}');
+	await expect.element(page.getByText('Check the bridge events.')).toBeVisible();
 
 	await userEvent.click(page.getByRole('button', { name: /Fix diff gutter/ }));
 	await expect.element(page.getByRole('heading', { name: 'Fix diff gutter' })).toBeVisible();

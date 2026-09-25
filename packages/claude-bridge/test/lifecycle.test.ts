@@ -2,7 +2,7 @@ import { chmod, copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ClaudeProcessRegistry, discoverClaude, type ClaudeShutdownTimeouts } from '../src/index.js';
 
@@ -47,13 +47,20 @@ describe('Claude process lifecycle', () => {
 	it('escalates timed-out shutdown stages through SIGKILL', async () => {
 		const root = await makeTemporaryDirectory('pau-claude-lifecycle-');
 		const signalLog = join(root, 'signals.log');
+		const readyFile = join(root, 'ready');
 		const registry = makeRegistry();
 		const process = await registry.start({
 			discovery: await discoverClaude({ executablePath: fakeClaude }),
 			cwd: root,
-			env: { ...processEnv(), FAKE_CLAUDE_MODE: 'ignore-shutdown', FAKE_CLAUDE_SIGNAL_LOG: signalLog },
+			env: {
+				...processEnv(),
+				FAKE_CLAUDE_MODE: 'ignore-shutdown',
+				FAKE_CLAUDE_SIGNAL_LOG: signalLog,
+				FAKE_CLAUDE_READY_FILE: readyFile
+			},
 			shutdownTimeouts: shortTimeouts
 		});
+		await waitForReadyFile(readyFile);
 
 		const exit = await process.stop();
 
@@ -81,13 +88,15 @@ describe('Claude process lifecycle', () => {
 
 	it('escalates from structured-input shutdown to an interrupt', async () => {
 		const root = await makeTemporaryDirectory('pau-claude-lifecycle-');
+		const readyFile = join(root, 'ready');
 		const registry = makeRegistry();
 		const process = await registry.start({
 			discovery: await discoverClaude({ executablePath: fakeClaude }),
 			cwd: root,
-			env: { ...processEnv(), FAKE_CLAUDE_MODE: 'interrupt-exit' },
+			env: { ...processEnv(), FAKE_CLAUDE_MODE: 'interrupt-exit', FAKE_CLAUDE_READY_FILE: readyFile },
 			shutdownTimeouts: shortTimeouts
 		});
+		await waitForReadyFile(readyFile);
 
 		await expect(process.stop()).resolves.toMatchObject({ code: 0, expected: true, shutdownStage: 'interrupt' });
 		expect(registry.size).toBe(0);
@@ -104,6 +113,10 @@ async function makeTemporaryDirectory(prefix: string): Promise<string> {
 	const directory = await mkdtemp(join(tmpdir(), prefix));
 	temporaryDirectories.push(directory);
 	return directory;
+}
+
+async function waitForReadyFile(path: string): Promise<void> {
+	await vi.waitFor(async () => expect(await readFile(path, 'utf8')).toBe('ready'));
 }
 
 function processEnv(): NodeJS.ProcessEnv {

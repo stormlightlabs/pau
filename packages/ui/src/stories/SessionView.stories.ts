@@ -32,8 +32,9 @@ export const ConcurrentSessions: Story = {
 	args: { workspaces: sessionFixtures.concurrent, initialSessionId: 'diff-gutter' },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await userEvent.click(canvas.getByRole('button', { name: /Review session registry/ }));
-		await expect(canvas.getByRole('heading', { name: 'Review session registry' })).toBeInTheDocument();
+		await userEvent.click(canvas.getByRole('button', { name: /Review adapter fixtures/ }));
+		await expect(canvas.getByRole('heading', { name: 'Review adapter fixtures' })).toBeInTheDocument();
+		await expect(canvas.getByText('Claude · Sonnet')).toBeInTheDocument();
 	}
 };
 export const Narrow: Story = {

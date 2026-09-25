@@ -154,7 +154,7 @@ Verification:
 
 #### 2.18 Rust Claude adapter
 
-Status: planned
+Status: complete
 Blocked by: 2.15, 2.16
 
 Implement a `pau-agent` adapter that consumes the Claude bridge package's

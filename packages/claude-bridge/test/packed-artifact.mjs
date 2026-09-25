@@ -37,7 +37,8 @@ try {
 	};
 	run('pi', ['install', installedPackage], { env: environment });
 	await exerciseInstalledPackage(workspace, environment);
-	process.stdout.write('Packed artifact loaded and discovered fake Claude.\n');
+	await exerciseStdioBridge(installedPackage, workspace, environment);
+	process.stdout.write('Packed artifact loaded and ran fake Claude through the stdio bridge.\n');
 } finally {
 	await rm(temporaryRoot, { recursive: true, force: true });
 }
@@ -48,6 +49,58 @@ function run(command, args, options = {}) {
 		throw new Error(`${command} ${args.join(' ')} failed (${result.status}):\n${result.stderr}`);
 	}
 	return result;
+}
+
+function exerciseStdioBridge(installedPackage, cwd, env) {
+	return new Promise((resolve, reject) => {
+		const executable = join(installedPackage, 'dist/stdio-bridge.js');
+		const child = spawn(executable, ['--claude', fakeClaude, '--cwd', cwd], {
+			cwd,
+			env: { ...env, FAKE_CLAUDE_MODE: 'stream' },
+			stdio: ['pipe', 'pipe', 'pipe']
+		});
+		let stdout = '';
+		let stderr = '';
+		let completed = false;
+		const timer = setTimeout(() => finish(new Error(`Stdio bridge test timed out:\n${stderr}`)), 15_000);
+
+		const finish = (error) => {
+			clearTimeout(timer);
+			child.stdin.end();
+			if (error) reject(error);
+			else resolve();
+		};
+		child.stderr.on('data', (chunk) => {
+			stderr += chunk.toString('utf8');
+		});
+		child.stdout.on('data', (chunk) => {
+			stdout += chunk.toString('utf8');
+			const lines = stdout.split('\n');
+			stdout = lines.pop() ?? '';
+			for (const line of lines) {
+				const record = JSON.parse(line);
+				if (record.id === 'status' && record.ok) {
+					child.stdin.write(
+						`${JSON.stringify({ version: 1, type: 'command', id: 'prompt', command: 'prompt', payload: { text: 'Inspect the fixture' } })}\n`
+					);
+				}
+				if (record.type === 'event' && record.event === 'turn.completed') {
+					if (record.payload?.sessionId !== 'session-fixture') {
+						finish(new Error('Stdio bridge did not preserve the native Claude session ID'));
+						return;
+					}
+					completed = true;
+					finish();
+					return;
+				}
+			}
+		});
+		child.once('error', finish);
+		child.once('exit', (code) => {
+			if (!completed) finish(new Error(`Stdio bridge exited before completion (${code}):\n${stderr}`));
+		});
+		child.stdin.write('{"version":1,"type":"command","id":"status","command":"status"}\n');
+	});
 }
 
 function exerciseInstalledPackage(cwd, env) {

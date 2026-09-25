@@ -92,6 +92,21 @@ Call `process.stop()` for a staged shutdown. The bridge closes structured input,
 then sends `SIGINT`, `SIGTERM`, and `SIGKILL` if each preceding step times out.
 `registry.stopAll()` applies the same shutdown to every live process.
 
+## Stdio host
+
+The package installs `pau-claude-bridge` for clients such as Pau's Rust agent
+adapter. Start it with the discovered Claude executable and workspace:
+
+```sh
+pau-claude-bridge --claude /path/to/claude --cwd /path/to/workspace
+```
+
+Add `--resume <native-session-id>` to resume a Claude session. The host accepts
+`status`, `prompt`, `interrupt`, and `stop` command frames on stdin. It writes
+responses and agent events to stdout and diagnostics to stderr. The host owns
+Claude's stream-JSON process; clients use only the bridge wire format described
+below.
+
 ## Pi extension
 
 The package registers these commands:

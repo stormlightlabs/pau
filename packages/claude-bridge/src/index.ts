@@ -45,6 +45,9 @@ export type {
 	ClaudeSessionMetadata
 } from './pi-extension.js';
 
+export { runClaudeStdioBridge } from './stdio-bridge.js';
+export type { ClaudeStdioBridgeOptions } from './stdio-bridge.js';
+
 export {
 	BRIDGE_PROTOCOL_VERSION,
 	FrameDecoder,

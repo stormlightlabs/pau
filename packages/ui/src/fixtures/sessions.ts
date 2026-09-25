@@ -8,6 +8,14 @@ const fullCapabilities = {
 	stop: true
 } satisfies SessionCapabilities;
 
+const claudeCapabilities = {
+	prompt: true,
+	followUp: false,
+	steer: false,
+	interrupt: true,
+	stop: true
+} satisfies SessionCapabilities;
+
 const transcript: SessionViewModel['transcript'] = [
 	{
 		id: 'prompt-1',
@@ -85,6 +93,13 @@ export const sessionFixtures = {
 					id: 'registry-review',
 					title: 'Review session registry',
 					attention: 'Pi needs your decision before it continues.'
+				}),
+				session('idle', {
+					id: 'claude-review',
+					title: 'Review adapter fixtures',
+					agent: 'Claude',
+					capabilities: claudeCapabilities,
+					transcript: []
 				})
 			]
 		},

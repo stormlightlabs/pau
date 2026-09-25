@@ -98,6 +98,10 @@ lines.on('close', () => {
 	}
 });
 
+if (process.env.FAKE_CLAUDE_READY_FILE) {
+	writeFileSync(process.env.FAKE_CLAUDE_READY_FILE, 'ready');
+}
+
 lines.on('line', (line) => {
 	let command;
 	try {

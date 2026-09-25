@@ -19,6 +19,9 @@
 			"import": "./dist/index.js"
 		}
 	},
+	"bin": {
+		"pau-claude-bridge": "./dist/stdio-bridge.js"
+	},
 	"pi": {
 		"extensions": [
 			"./dist/pi-extension.js"

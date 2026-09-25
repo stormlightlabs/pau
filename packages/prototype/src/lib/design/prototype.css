@@ -153,24 +153,24 @@
 
 .mock-app {
 	display: grid;
-	grid-template-rows: 3rem 2.35rem minmax(0, 1fr);
-	min-height: min(760px, calc(100vh - 12rem));
+	grid-template-rows: 2.75rem 2.25rem minmax(0, 1fr);
+	min-height: min(820px, calc(100vh - 11rem));
 	background: var(--color-canvas);
 }
 
 .mock-app__topbar {
 	display: flex;
 	align-items: center;
-	gap: 1rem;
-	padding: 0 0.75rem;
+	gap: var(--space-3);
+	padding: 0 var(--space-2);
 	border-bottom: 1px solid var(--color-line);
 	background: var(--color-surface);
 }
 
 .mock-app__logo {
 	display: grid;
-	width: 1.75rem;
-	height: 1.75rem;
+	width: 1.5rem;
+	height: 1.5rem;
 	flex: 0 0 auto;
 	place-items: center;
 }
@@ -196,8 +196,8 @@
 }
 
 .mock-app__history button {
-	width: 2rem;
-	height: 2rem;
+	width: var(--row-sm);
+	height: var(--row-sm);
 }
 
 .mock-app__history button:hover,
@@ -212,9 +212,12 @@
 }
 
 .mock-app__crumbs {
+	display: flex;
 	min-width: 0;
+	align-items: center;
+	gap: 0.4rem;
 	color: var(--color-text-muted);
-	font-size: 0.8rem;
+	font-size: var(--text-xs);
 }
 
 .mock-app__crumbs strong {
@@ -236,9 +239,9 @@
 	flex: 0 0 auto;
 	gap: 0.45rem;
 	min-width: 2.25rem;
-	padding: 0 0.75rem;
+	padding: 0 var(--space-3);
 	border-bottom: 2px solid transparent;
-	font-size: 0.75rem;
+	font-size: var(--text-xs);
 }
 
 .mock-app__tabs button[aria-current='page'] {
@@ -249,8 +252,8 @@
 
 .mock-app__command {
 	display: flex;
-	width: min(20rem, 32vw);
-	min-height: 2rem;
+	width: min(18rem, 28vw);
+	min-height: var(--row-sm);
 	align-items: center;
 	gap: 0.5rem;
 	margin-left: auto;
@@ -263,20 +266,20 @@
 
 .mock-layout {
 	display: grid;
-	grid-template-columns: 3.5rem 15rem minmax(20rem, 1fr) 19rem;
+	grid-template-columns: var(--rail-product) var(--rail-context) minmax(20rem, 1fr) var(--rail-inspector);
 	min-height: 0;
 }
 
 .session-layout--no-context {
-	grid-template-columns: 3.5rem minmax(20rem, 1fr) 19rem;
+	grid-template-columns: var(--rail-product) minmax(20rem, 1fr) var(--rail-inspector);
 }
 
 .session-layout--no-inspector {
-	grid-template-columns: 3.5rem 15rem minmax(20rem, 1fr);
+	grid-template-columns: var(--rail-product) var(--rail-context) minmax(20rem, 1fr);
 }
 
 .session-layout--no-sidebars {
-	grid-template-columns: 3.5rem minmax(20rem, 1fr);
+	grid-template-columns: var(--rail-product) minmax(20rem, 1fr);
 }
 
 .session-layout--focused {
@@ -287,8 +290,8 @@
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 0.35rem;
-	padding: 0.65rem 0;
+	gap: 0.15rem;
+	padding: var(--space-2) 0;
 	border-right: 1px solid var(--color-line);
 	background: var(--color-surface);
 }
@@ -329,141 +332,11 @@
 	margin-top: auto;
 }
 
-.agent-composer {
-	overflow: hidden;
-}
-
-.agent-composer__context {
-	display: grid;
-	grid-template-columns: auto minmax(0, auto) minmax(0, 1fr) auto;
-	align-items: center;
-	gap: 0.45rem;
-	padding: 0.4rem 0.65rem;
-	border-bottom: 1px solid var(--color-line);
-	color: var(--color-text);
-	background: var(--color-canvas);
-	font-size: 0.7rem;
-}
-
-.agent-composer__context button,
-.agent-composer__tools button,
-.agent-composer__permission,
-.agent-composer__send {
-	display: inline-flex;
-	min-width: 2rem;
-	height: 2rem;
-	align-items: center;
-	justify-content: center;
-	gap: 0.35rem;
-	padding: 0 0.5rem;
-	border: 0;
-	color: var(--color-text-muted);
-	background: transparent;
-	cursor: pointer;
-}
-
-.agent-composer__context button:hover,
-.agent-composer__tools button:hover,
-.agent-composer__permission:hover {
-	color: var(--color-text);
-	background: var(--color-surface-selected);
-}
-
-.agent-composer__input {
-	display: block;
-	width: 100%;
-	min-height: 4.5rem;
-	resize: none;
-	padding: 0.75rem;
-	border: 0;
-	color: var(--color-text);
-	background: transparent;
-	font: inherit;
-	font-size: 0.875rem;
-	line-height: 1.5;
-	outline: 0;
-}
-
-.agent-composer__input::placeholder {
-	color: var(--color-text-muted);
-}
-
-.agent-composer:focus-within {
-	border-color: var(--color-accent);
-	box-shadow: inset 0 0 0 1px var(--color-accent);
-}
-
-.agent-composer__controls {
-	display: grid;
-	grid-template-columns: auto minmax(0, 1fr) auto auto;
-	grid-template-areas:
-		'tools delivery permission usage'
-		'model model thinking send';
-	align-items: center;
-	gap: 0.25rem;
-	padding: 0.35rem;
-	border-top: 1px solid var(--color-line);
-}
-
-.agent-composer__tools {
-	grid-area: tools;
-	display: flex;
-	align-items: center;
-}
-
-.agent-composer__delivery {
-	grid-area: delivery;
-}
-
-.agent-composer__model {
-	grid-area: model;
-}
-
-.agent-composer__thinking {
-	grid-area: thinking;
-}
-
-.agent-composer__controls select,
-.agent-composer__permission {
-	height: 2rem;
-	min-width: 0;
-	padding-inline: 0.45rem;
-	border: 0;
-	color: var(--color-text-muted);
-	background: var(--color-surface-raised);
-	font-size: 0.68rem;
-}
-
-.agent-composer__controls select:hover {
-	color: var(--color-text);
-}
-
-.agent-composer__permission {
-	grid-area: permission;
-}
-
-.agent-composer__usage {
-	grid-area: usage;
-	color: var(--color-text-muted);
-	font-family: var(--font-code);
-	font-size: 0.65rem;
-	white-space: nowrap;
-}
-
-.agent-composer__send {
-	grid-area: send;
-	color: var(--color-canvas);
-	background: var(--color-accent);
-}
-
-.agent-composer__send:hover {
-	opacity: 0.88;
-}
-
 .mock-context-rail,
 .mock-inspector {
 	min-width: 0;
-	padding: 1rem;
+	padding: var(--space-3);
+	overflow: auto;
 	background: var(--color-surface);
 }
 
@@ -490,14 +363,14 @@
 
 .inspector-section summary {
 	display: flex;
-	min-height: 2.5rem;
+	min-height: var(--row-md);
 	align-items: center;
 	justify-content: space-between;
-	gap: 0.75rem;
+	gap: var(--space-3);
 	color: var(--color-text-muted);
-	font-size: 0.68rem;
-	font-weight: 700;
-	letter-spacing: 0.1em;
+	font-size: var(--text-micro);
+	font-weight: 650;
+	letter-spacing: 0.08em;
 	text-transform: uppercase;
 	cursor: pointer;
 	list-style: none;
@@ -513,32 +386,34 @@
 }
 
 .mock-section-label {
-	margin: 0 0 0.75rem;
+	margin: 0 0 var(--space-2);
+	padding-inline: 0.15rem;
 	color: var(--color-text-muted);
-	font-size: 0.68rem;
-	font-weight: 700;
-	letter-spacing: 0.1em;
+	font-size: var(--text-micro);
+	font-weight: 650;
+	letter-spacing: 0.08em;
 	text-transform: uppercase;
 }
 
 .mock-list {
 	display: grid;
-	gap: 0.25rem;
+	gap: 1px;
 }
 
 .mock-list button,
 .mock-list a {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr) auto;
-	min-height: 2.65rem;
+	min-height: var(--row-lg);
 	align-items: center;
-	gap: 0.6rem;
+	gap: 0.55rem;
 	width: 100%;
-	padding: 0.4rem 0.55rem;
+	padding: 0.3rem 0.45rem;
 	border: 0;
+	border-left: 2px solid transparent;
 	color: var(--color-text-muted);
 	background: transparent;
-	font-size: 0.78rem;
+	font-size: var(--text-sm);
 	text-align: left;
 	text-decoration: none;
 	cursor: pointer;
@@ -551,6 +426,10 @@
 	background: var(--color-surface-selected);
 }
 
+.mock-list button[aria-pressed='true'] {
+	border-left-color: var(--color-accent);
+}
+
 .mock-code {
 	font-family: var(--font-code);
 	font-size: 0.76rem;
@@ -558,17 +437,17 @@
 
 .mock-tabs {
 	display: flex;
-	min-height: 2.7rem;
-	align-items: end;
-	gap: 0.25rem;
-	padding: 0 0.7rem;
+	min-height: var(--row-lg);
+	align-items: stretch;
+	gap: 1px;
+	padding: 0 var(--space-2);
 	border-bottom: 1px solid var(--color-line);
 	background: var(--color-surface);
 }
 
 .mock-tab {
-	min-height: 2.4rem;
-	padding: 0 0.8rem;
+	min-height: var(--row-lg);
+	padding: 0 var(--space-3);
 	border: 0;
 	border-bottom: 2px solid transparent;
 	color: var(--color-text-muted);
@@ -584,21 +463,6 @@
 
 .mock-tab[aria-selected='true'] {
 	border-bottom-color: var(--color-accent);
-}
-
-.dashboard-toolbar {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	align-items: center;
-	gap: 1.5rem;
-	min-height: 5.5rem;
-	padding: 1rem 1.25rem;
-}
-
-.dashboard-toolbar__actions {
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
 }
 
 .hub-grid {
@@ -743,7 +607,7 @@
 	}
 
 	.mock-app__crumbs,
-	.mock-app__command span,
+	.mock-app__command-label,
 	.mock-app__command kbd {
 		display: none;
 	}
@@ -756,40 +620,14 @@
 		gap: 0;
 	}
 
-	.dashboard-toolbar,
 	.orchestration-toolbar {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		padding-block: 0.75rem;
 	}
 
-	.dashboard-toolbar > div,
 	.orchestration-toolbar > div {
 		grid-column: 1 / -1;
-	}
-
-	.agent-composer__controls {
-		grid-template-columns: auto minmax(0, 1fr) auto;
-		grid-template-areas:
-			'tools delivery send'
-			'model thinking thinking';
-	}
-
-	.agent-composer__usage,
-	.agent-composer__permission {
-		display: none;
-	}
-
-	.dashboard-support {
-		grid-template-columns: 1fr;
-	}
-
-	.dashboard-work-row {
-		grid-template-columns: minmax(0, 1fr) 7rem;
-	}
-
-	.dashboard-work-row > :last-child {
-		display: none;
 	}
 
 	.orchestration-events > div {

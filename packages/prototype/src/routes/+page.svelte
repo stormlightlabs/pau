@@ -28,7 +28,17 @@
 		{
 			href: '/screens/editor',
 			title: 'Editor and review',
-			description: 'Pairs a dense file surface with focused diff review without turning the app into a general IDE.'
+			description: 'Pairs the CodeMirror surface with focused diff review without turning the app into a general IDE.'
+		},
+		{
+			href: '/screens/neovim',
+			title: 'Neovim surface',
+			description: 'Embeds Neovim as an external UI with its own mode line, command line, and start-up choices.'
+		},
+		{
+			href: '/screens/terminal',
+			title: 'Terminal',
+			description: 'Persistent PTY terminals with tabs, search, activity state, and exit reporting.'
 		},
 		{
 			href: '/screens/resources',

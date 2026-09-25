@@ -17,7 +17,7 @@
 </script>
 
 <PrototypePage
-	section="V1 screen · 07"
+	section="V1 screen · 09"
 	title="Settings"
 	note="Theme and editor choices show their scope directly. Loading the user’s Neovim configuration remains separate from applying Pau’s colors because the two actions carry different risks.">
 	<div

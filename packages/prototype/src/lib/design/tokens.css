@@ -3,6 +3,34 @@
 	color-scheme: dark;
 	--font-ui: 'IBM Plex Sans Variable', system-ui, sans-serif;
 	--font-code: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+
+	/* Spacing scale. */
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.5rem;
+	--space-6: 2rem;
+
+	/* Type scale. */
+	--text-micro: 0.6875rem;
+	--text-xs: 0.75rem;
+	--text-sm: 0.8125rem;
+	--text-md: 0.875rem;
+	--text-lg: 1rem;
+	--text-xl: 1.25rem;
+
+	/* Control and row heights. Interactive rows stay at least 2rem tall. */
+	--row-sm: 1.75rem;
+	--row-md: 2rem;
+	--row-lg: 2.25rem;
+	--bar-height: 1.875rem;
+
+	/* Layout rails. */
+	--rail-product: 3rem;
+	--rail-context: 15.5rem;
+	--rail-inspector: 19rem;
+
 	--color-canvas: #12151d;
 	--color-surface: #171b27;
 	--color-surface-raised: #202536;
@@ -19,6 +47,14 @@
 	--color-info: #43c7e8;
 	--shadow-overlay: 0 24px 64px rgb(0 0 0 / 0.35);
 	--radius-control: 3px;
+
+	/* Syntax colors. Each theme sets its own. */
+	--syn-keyword: #a48cf2;
+	--syn-entity: #04d1f9;
+	--syn-string: #37f499;
+	--syn-constant: #f1fc79;
+	--syn-comment: #6b7089;
+	--syn-type: #f16c75;
 }
 
 [data-theme='nord'] {
@@ -36,6 +72,12 @@
 	--color-warning: #ebcb8b;
 	--color-danger: #bf616a;
 	--color-info: #81a1c1;
+	--syn-keyword: #81a1c1;
+	--syn-entity: #88c0d0;
+	--syn-string: #a3be8c;
+	--syn-constant: #b48ead;
+	--syn-comment: #616e88;
+	--syn-type: #8fbcbb;
 }
 
 [data-theme='iceberg'] {
@@ -53,6 +95,12 @@
 	--color-warning: #e2a478;
 	--color-danger: #e27878;
 	--color-info: #89b8c2;
+	--syn-keyword: #a093c7;
+	--syn-entity: #84a0c6;
+	--syn-string: #b4be82;
+	--syn-constant: #e2a478;
+	--syn-comment: #6b7089;
+	--syn-type: #89b8c2;
 }
 
 [data-theme='catppuccin'] {
@@ -70,6 +118,12 @@
 	--color-warning: #f9e2af;
 	--color-danger: #f38ba8;
 	--color-info: #89dceb;
+	--syn-keyword: #cba6f7;
+	--syn-entity: #89b4fa;
+	--syn-string: #a6e3a1;
+	--syn-constant: #fab387;
+	--syn-comment: #6c7086;
+	--syn-type: #f9e2af;
 }
 
 [data-theme='vitesse'] {
@@ -87,4 +141,35 @@
 	--color-warning: #e6cc77;
 	--color-danger: #cb7676;
 	--color-info: #5da994;
+	--syn-keyword: #4d9375;
+	--syn-entity: #80a665;
+	--syn-string: #c98a7d;
+	--syn-constant: #4c9a91;
+	--syn-comment: #758575;
+	--syn-type: #5da994;
+}
+
+/* Declared on every themed element, not only on :root, so a screen rendered in
+   another theme derives these from that theme's palette. */
+:root,
+[data-theme] {
+	--diff-add-bg: color-mix(in oklab, var(--color-positive) 16%, var(--color-canvas));
+	--diff-del-bg: color-mix(in oklab, var(--color-danger) 16%, var(--color-canvas));
+	--diff-add-fg: var(--color-positive);
+	--diff-del-fg: var(--color-danger);
+	--editor-active-line: color-mix(in oklab, var(--color-text) 6%, var(--color-canvas));
+	--editor-selection: color-mix(in oklab, var(--color-accent) 24%, var(--color-canvas));
+	--editor-gutter: var(--color-text-muted);
+
+	/* Tinted bands. Uno cannot apply alpha to a var() color, so each wash is a token. */
+	--wash-warning: color-mix(in oklab, var(--color-warning) 8%, var(--color-canvas));
+	--wash-danger: color-mix(in oklab, var(--color-danger) 8%, var(--color-canvas));
+	--wash-accent: color-mix(in oklab, var(--color-accent) 8%, var(--color-canvas));
+
+	/* Terminal ANSI, mapped onto the palette. */
+	--ansi-red: var(--color-danger);
+	--ansi-green: var(--color-positive);
+	--ansi-yellow: var(--color-warning);
+	--ansi-blue: var(--color-info);
+	--ansi-dim: var(--color-text-muted);
 }

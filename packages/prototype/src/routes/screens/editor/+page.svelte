@@ -4,9 +4,127 @@
 	import ProductRail from '$lib/components/ProductRail.svelte';
 	import PrototypePage from '$lib/components/PrototypePage.svelte';
 
-	const files = ['src/session/SessionView.svelte', 'src/session/session-shell.css', 'src/session/state.ts'];
-	let activeFile = $state(files[0]);
+	const files = [
+		{ path: 'src/session/SessionView.svelte', state: 'M' },
+		{ path: 'src/session/session-shell.css', state: 'M' },
+		{ path: 'src/session/state.ts', state: '' }
+	];
+	let activeFile = $state(files[0].path);
 	const accepted = new SvelteSet<number>();
+
+	type CodeLine = {
+		n: number;
+		state?: 'active' | 'added';
+		diagnostic?: string;
+		tokens: { c: string; t: string; bad?: boolean }[];
+	};
+
+	const lineTone: Record<string, string> = {
+		active: 'bg-line-active',
+		added: 'bg-added-wash shadow-[inset_2px_0_0_var(--diff-add-fg)]'
+	};
+
+	/** One entry per rendered line. Tokens carry a syntax class, not a color. */
+	const lines: CodeLine[] = [
+		{
+			n: 1,
+			tokens: [
+				{ c: 'tok-keyword', t: '<script' },
+				{ c: 'tok-entity', t: ' lang' },
+				{ c: 'tok-punctuation', t: '=' },
+				{ c: 'tok-string', t: '"ts"' },
+				{ c: 'tok-keyword', t: '>' }
+			]
+		},
+		{
+			n: 2,
+			tokens: [
+				{ c: 'tok-keyword', t: '  import' },
+				{ c: '', t: ' ToolSummary ' },
+				{ c: 'tok-keyword', t: 'from' },
+				{ c: 'tok-string', t: " './ToolSummary.svelte'" },
+				{ c: 'tok-punctuation', t: ';' }
+			]
+		},
+		{ n: 3, tokens: [] },
+		{
+			n: 4,
+			tokens: [
+				{ c: 'tok-keyword', t: '  let' },
+				{ c: '', t: ' inspectorOpen ' },
+				{ c: 'tok-punctuation', t: '=' },
+				{ c: 'tok-entity', t: ' $state' },
+				{ c: 'tok-punctuation', t: '(' },
+				{ c: 'tok-constant', t: 'true' },
+				{ c: 'tok-punctuation', t: ');' }
+			]
+		},
+		{
+			n: 5,
+			tokens: [
+				{ c: 'tok-keyword', t: '  let' },
+				{ c: '', t: ' selectedTool ' },
+				{ c: 'tok-punctuation', t: '=' },
+				{ c: 'tok-entity', t: ' $state' },
+				{ c: 'tok-punctuation', t: '<' },
+				{ c: 'tok-type', t: 'ToolCall' },
+				{ c: 'tok-punctuation', t: '>();' }
+			]
+		},
+		{ n: 6, tokens: [] },
+		{
+			n: 7,
+			state: 'active',
+			tokens: [
+				{ c: 'tok-keyword', t: '  function' },
+				{ c: 'tok-entity', t: ' openTool' },
+				{ c: 'tok-punctuation', t: '(' },
+				{ c: '', t: 'tool' },
+				{ c: 'tok-punctuation', t: ': ' },
+				{ c: 'tok-type', t: 'ToolCall' },
+				{ c: 'tok-punctuation', t: ') {' }
+			]
+		},
+		{
+			n: 8,
+			tokens: [
+				{ c: '', t: '    selectedTool ' },
+				{ c: 'tok-punctuation', t: '=' },
+				{ c: '', t: ' tool' },
+				{ c: 'tok-punctuation', t: ';' }
+			]
+		},
+		{
+			n: 9,
+			state: 'added',
+			tokens: [
+				{ c: '', t: '    inspectorOpen ' },
+				{ c: 'tok-punctuation', t: '=' },
+				{ c: 'tok-constant', t: ' true' },
+				{ c: 'tok-punctuation', t: ';' }
+			]
+		},
+		{ n: 10, tokens: [{ c: 'tok-punctuation', t: '  }' }] },
+		{ n: 11, tokens: [] },
+		{ n: 12, tokens: [{ c: 'tok-comment', t: '  // Narrow widths move the inspector to an overlay.' }] },
+		{
+			n: 13,
+			state: 'added',
+			diagnostic: 'width',
+			tokens: [
+				{ c: 'tok-keyword', t: '  const' },
+				{ c: '', t: ' overlay ' },
+				{ c: 'tok-punctuation', t: '=' },
+				{ c: 'tok-entity', t: ' $derived' },
+				{ c: 'tok-punctuation', t: '(' },
+				{ c: '', t: 'width ', bad: true },
+				{ c: 'tok-punctuation', t: '<' },
+				{ c: 'tok-constant', t: ' 1100' },
+				{ c: 'tok-punctuation', t: ');' }
+			]
+		},
+		{ n: 14, tokens: [{ c: 'tok-keyword', t: '<\u{2F}script>' }] }
+	];
 
 	function toggleHunk(hunk: number) {
 		if (accepted.has(hunk)) accepted.delete(hunk);
@@ -17,115 +135,166 @@
 <PrototypePage
 	section="V1 screen · 05"
 	title="Editor and review"
-	note="Files, code, and review share one workspace. The review rail summarizes changed files and hunks; it does not crowd the editor with a second navigation system.">
-	<MockApp context="pau / editor">
+	note="CodeMirror handles the quick edit: gutter, diff markers, diagnostics, and a review rail that stays out of the code. Rendered in Catppuccin Mocha so syntax, diff, and selection colors come from the theme rather than the component.">
+	<MockApp context="pau / editor" branch="session-shell" theme="catppuccin">
 		<div class="mock-layout">
 			<ProductRail active="editor" />
 
-			<aside class="mock-context-rail" aria-label="Files">
-				<p class="mock-section-label">Files · pau</p>
-				<div class="mock-list mock-code">
-					{#each files as file (file)}
-						<button type="button" aria-pressed={activeFile === file} onclick={() => (activeFile = file)}>
+			<aside class="mock-context-rail p-0!" aria-label="Files">
+				<div class="section-head">
+					<span class="section-label">Files</span>
+					<span class="chip ml-auto">pau</span>
+				</div>
+				<div class="grid py-1">
+					<div class="flex min-h-7 items-center gap-1.5 pl-2 font-mono text-meta text-muted">
+						<span class="i-tabler-chevron-down" aria-hidden="true"></span><span
+							class="i-tabler-folder"
+							aria-hidden="true"></span
+						>src/session
+					</div>
+					{#each files as file (file.path)}
+						<button
+							class="row-button grid min-h-7.5 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 pl-6 pr-3 font-mono text-meta"
+							type="button"
+							aria-pressed={activeFile === file.path}
+							onclick={() => (activeFile = file.path)}>
 							<span
-								class={file.endsWith('.svelte')
+								class={file.path.endsWith('.svelte')
 									? 'i-catppuccin-svelte'
-									: file.endsWith('.css')
+									: file.path.endsWith('.css')
 										? 'i-catppuccin-css'
 										: 'i-catppuccin-typescript'}
 								aria-hidden="true"></span>
-							<span class="truncate">{file.split('/').at(-1)}</span>
-							<span class="text-warning">M</span>
+							<span class="truncate">{file.path.split('/').at(-1)}</span>
+							{#if file.state}<span class="text-warning">{file.state}</span>{/if}
 						</button>
 					{/each}
 				</div>
-				<p class="mock-section-label mt-7">Outline</p>
-				<div class="grid gap-2 pl-2 mock-code text-xs text-muted">
-					<span>SessionView</span><span>toolSummary</span><span>submitFollowUp</span>
+
+				<div class="section-head mt-3">
+					<span class="section-label">Outline</span>
+				</div>
+				<div class="grid py-1">
+					{#each [{ icon: 'i-tabler-square-letter-v', name: 'SessionView' }, { icon: 'i-tabler-square-letter-f', name: 'openTool' }, { icon: 'i-tabler-square-letter-f', name: 'submitFollowUp' }, { icon: 'i-tabler-square-letter-c', name: 'overlay' }] as symbol (symbol.name)}
+						<button
+							class="row-button grid min-h-7 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 pl-4 pr-3 font-mono text-micro"
+							type="button">
+							<span class={`${symbol.icon} text-accent`} aria-hidden="true"></span><span class="truncate"
+								>{symbol.name}</span>
+						</button>
+					{/each}
 				</div>
 			</aside>
 
 			<section class="mock-main flex min-h-0 flex-col" aria-label="Editor">
 				<div class="mock-tabs" role="tablist" aria-label="Open files">
-					{#each files.slice(0, 2) as file (file)}
+					{#each files.slice(0, 2) as file (file.path)}
 						<button
-							class="mock-tab mock-code"
+							class="mock-tab flex items-center gap-2 font-mono"
 							type="button"
 							role="tab"
-							aria-selected={activeFile === file}
-							onclick={() => (activeFile = file)}>{file.split('/').at(-1)}</button>
+							aria-selected={activeFile === file.path}
+							onclick={() => (activeFile = file.path)}>
+							<span class={file.path.endsWith('.css') ? 'i-catppuccin-css' : 'i-catppuccin-svelte'} aria-hidden="true"
+							></span>
+							{file.path.split('/').at(-1)}
+							{#if file.state}<span class="status-dot size-1.5! text-warning"></span>{/if}
+						</button>
 					{/each}
 				</div>
-				<div class="flex-1 overflow-auto p-4 mock-code text-[0.78rem] leading-6">
-					<div class="grid grid-cols-[2rem_1fr] text-muted">
-						<span>1</span><span
-							><b class="text-[#cba6f7]">&lt;script</b> <b class="text-[#89b4fa]">lang</b>=<i class="text-[#a6e3a1]"
-								>"ts"</i
-							>&gt;</span>
-					</div>
-					<div class="grid grid-cols-[2rem_1fr]">
-						<span class="text-muted">2</span><span class="pl-4"
-							><b class="text-[#cba6f7]">import</b> ToolSummary <b class="text-[#cba6f7]">from</b>
-							<i class="text-[#a6e3a1]">'./ToolSummary.svelte'</i>;</span>
-					</div>
-					<div class="grid grid-cols-[2rem_1fr] text-muted"><span>3</span><span></span></div>
-					<div class="grid grid-cols-[2rem_1fr]">
-						<span class="text-muted">4</span><span class="pl-4"
-							><b class="text-[#89b4fa]">let</b> inspectorOpen = <b class="text-[#cba6f7]">$state</b>(<b
-								class="text-[#fab387]">true</b
-							>);</span>
-					</div>
-					<div class="grid grid-cols-[2rem_1fr]">
-						<span class="text-muted">5</span><span class="pl-4"
-							><b class="text-[#89b4fa]">let</b> selectedTool =
-							<b class="text-[#cba6f7]">$state</b>&lt;ToolCall&gt;();</span>
-					</div>
-					<div class="grid grid-cols-[2rem_1fr] text-muted"><span>6</span><span></span></div>
-					<div class="-mx-4 grid grid-cols-[3rem_1fr] border-l-2 border-warning bg-surface-selected px-4">
-						<span class="text-muted">7</span><span
-							><b class="text-[#cba6f7]">function</b> <b class="text-[#89b4fa]">openTool</b>(tool: ToolCall) &#123;</span>
-					</div>
-					<div class="grid grid-cols-[2rem_1fr]">
-						<span class="text-muted">8</span><span class="pl-4">selectedTool = tool;</span>
-					</div>
-					<div class="grid grid-cols-[2rem_1fr]">
-						<span class="text-muted">9</span><span class="pl-4"
-							>inspectorOpen = <b class="text-[#fab387]">true</b>;</span>
-					</div>
-					<div class="grid grid-cols-[2rem_1fr]"><span class="text-muted">10</span><span>&#125;</span></div>
-					<div class="grid grid-cols-[2rem_1fr] text-muted"><span>11</span><span></span></div>
-					<div class="grid grid-cols-[2rem_1fr] text-muted">
-						<span>12</span><span><b class="text-[#cba6f7]">&lt;/script&gt;</b></span>
-					</div>
+
+				<div class="flex min-h-8 items-center gap-1 border-b border-line px-3 text-micro text-muted">
+					<span>src</span><span class="i-tabler-chevron-right" aria-hidden="true"></span>
+					<span>session</span><span class="i-tabler-chevron-right" aria-hidden="true"></span>
+					<span class="text-text">SessionView.svelte</span><span class="i-tabler-chevron-right" aria-hidden="true"
+					></span>
+					<span class="font-mono text-text">openTool</span>
+					<span class="chip-warning ml-auto"
+						><span class="i-tabler-alert-triangle" aria-hidden="true"></span>1 problem</span>
 				</div>
-				<footer
-					class="flex min-h-8 items-center justify-between border-t border-line bg-surface px-3 text-xs text-muted">
-					<span><span class="i-octicon-git-branch-16 mr-1"></span>session-shell</span><span
-						>Ln 7, Col 1 · UTF-8 · Svelte</span>
+
+				<div class="flex min-h-9 items-center gap-2 border-b border-line bg-surface pl-3 pr-2 text-micro text-muted">
+					<span class="i-tabler-search" aria-hidden="true"></span>
+					<input
+						class="h-6.5 min-w-0 flex-1 border border-line bg-canvas px-1.5 font-mono text-micro text-text outline-none focus:border-accent"
+						type="search"
+						value="inspectorOpen"
+						aria-label="Find in file" />
+					<span class="font-mono">2 of 3</span>
+					<button class="icon-button size-6!" type="button" aria-label="Previous match"
+						><span class="i-tabler-chevron-up" aria-hidden="true"></span></button>
+					<button class="icon-button size-6!" type="button" aria-label="Next match"
+						><span class="i-tabler-chevron-down" aria-hidden="true"></span></button>
+					<button class="icon-button size-6!" type="button" aria-label="Close find"
+						><span class="i-tabler-x" aria-hidden="true"></span></button>
+				</div>
+
+				<div class="code-surface">
+					{#each lines as line (line.n)}
+						<div class={`code-line ${line.state ? lineTone[line.state] : ''}`}>
+							<span class={`code-gutter ${line.state === 'active' ? 'text-text' : ''}`}>{line.n}</span>
+							<span class="code-text"
+								>{#each line.tokens as token, index (index)}<span
+										class={token.bad ? `${token.c} underline decoration-wavy decoration-danger` : token.c}
+										>{token.t}</span
+									>{/each}</span>
+						</div>
+						{#if line.diagnostic}
+							<div class="code-line">
+								<span class="code-gutter"></span>
+								<span class="code-text flex items-center gap-1.5 text-micro text-danger"
+									><span class="i-tabler-alert-circle" aria-hidden="true"></span>Cannot find name '{line.diagnostic}'.
+									ts(2304)</span>
+							</div>
+						{/if}
+					{/each}
+				</div>
+
+				<footer class="statusbar">
+					<span class="flex items-center gap-1.5"
+						><span class="i-octicon-git-branch-16" aria-hidden="true"></span>session-shell</span>
+					<span class="text-danger">1 problem</span>
+					<span class="ml-auto flex items-center gap-3">
+						<span>Ln 7, Col 1</span>
+						<span class="hidden xl:inline">Spaces: 2</span>
+						<span class="hidden xl:inline">UTF-8</span>
+						<span>Svelte</span>
+						<span class="hidden 2xl:inline">CodeMirror · LSP off</span>
+					</span>
 				</footer>
 			</section>
 
 			<aside class="mock-inspector p-0!" aria-label="Review">
-				<header class="flex min-h-13 items-center justify-between border-b border-line px-4">
-					<strong class="text-sm">Review</strong><span class="text-xs text-muted">{accepted.size} / 2 accepted</span>
-				</header>
-				<div class="p-3">
-					<div class="mb-4 grid gap-1 mock-code text-xs">
-						<div class="flex justify-between bg-surface-selected p-2">
-							<span>SessionView.svelte</span><span class="text-positive">+18</span>
-						</div>
-						<div class="flex justify-between p-2">
-							<span>session-shell.css</span><span class="text-warning">+9 −3</span>
-						</div>
-					</div>
+				<div class="section-head">
+					<span class="section-label">Review</span>
+					<span class="ml-auto text-micro text-muted">{accepted.size} of 2 accepted</span>
+				</div>
+
+				<div class="grid">
+					{#each [{ file: 'SessionView.svelte', stat: '+18', del: '' }, { file: 'session-shell.css', stat: '+9', del: '−3' }] as change, index (change.file)}
+						<button
+							class="row-button grid min-h-9 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-line pl-3 pr-3 font-mono text-meta"
+							type="button"
+							aria-pressed={index === 0}>
+							<span class="truncate">{change.file}</span>
+							<span class="diffstat"
+								><span class="text-added">{change.stat}</span>{#if change.del}<span class="text-removed"
+										>{change.del}</span
+									>{/if}</span>
+						</button>
+					{/each}
+				</div>
+
+				<div class="grid gap-2 p-3">
 					{#each [1, 2] as hunk (hunk)}
-						<section class="mb-3 border border-line" aria-label={`Diff hunk ${hunk}`}>
+						<section class="border border-line" aria-label={`Diff hunk ${hunk}`}>
 							<header
-								class="flex items-center justify-between bg-surface-raised px-2 py-1 mock-code text-xs text-muted">
+								class="flex min-h-7 items-center gap-2 bg-surface-raised pl-2 pr-1 font-mono text-micro text-muted">
 								<span>@@ −{hunk * 8},5 +{hunk * 8},7 @@</span>
 								<button
-									class="icon-button size-7!"
+									class="icon-button ml-auto size-6!"
 									type="button"
+									aria-pressed={accepted.has(hunk)}
 									aria-label={`${accepted.has(hunk) ? 'Undo acceptance of' : 'Accept'} hunk ${hunk}`}
 									onclick={() => toggleHunk(hunk)}>
 									<span
@@ -133,9 +302,9 @@
 										aria-hidden="true"></span>
 								</button>
 							</header>
-							<div class="bg-[#3a2734] px-2 py-1 mock-code text-xs">− overflow: hidden;</div>
-							<div class="bg-[#263a34] px-2 py-1 mock-code text-xs">+ min-width: 0;</div>
-							<div class="bg-[#263a34] px-2 py-1 mock-code text-xs">+ overflow: auto;</div>
+							<div class="bg-removed-wash px-2 py-0.5 font-mono text-micro text-text">− overflow: hidden;</div>
+							<div class="bg-added-wash px-2 py-0.5 font-mono text-micro text-text">+ min-width: 0;</div>
+							<div class="bg-added-wash px-2 py-0.5 font-mono text-micro text-text">+ overflow: auto;</div>
 						</section>
 					{/each}
 				</div>

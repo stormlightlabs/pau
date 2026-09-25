@@ -48,7 +48,7 @@
 </script>
 
 <PrototypePage
-	section="V1 screen · 06"
+	section="V1 screen · 08"
 	title="Resource browser"
 	note="The list answers what is installed and where it came from. The inspector answers what it can do, which agents may use it, and what Pau will change.">
 	<MockApp context="resources">

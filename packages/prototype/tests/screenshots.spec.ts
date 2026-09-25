@@ -9,6 +9,8 @@ const screens = [
 	{ name: 'orchestration', path: '/screens/orchestration' },
 	{ name: 'scratchpad', path: '/screens/scratchpad' },
 	{ name: 'editor', path: '/screens/editor' },
+	{ name: 'neovim', path: '/screens/neovim' },
+	{ name: 'terminal', path: '/screens/terminal' },
 	{ name: 'resources', path: '/screens/resources' },
 	{ name: 'settings', path: '/screens/settings' },
 	{ name: 'launch', path: '/splash/launch' },

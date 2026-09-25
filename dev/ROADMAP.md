@@ -110,7 +110,7 @@ Verification:
 
 #### 2.15 Concurrent session registry
 
-Status: planned
+Status: complete
 Blocked by: 2.12, 2.14
 
 Run multiple Pi sessions across one or more workspaces without blocking inactive

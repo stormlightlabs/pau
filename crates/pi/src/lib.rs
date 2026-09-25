@@ -2,6 +2,7 @@
 
 mod process;
 mod projection;
+mod registry;
 mod session;
 
 pub use process::{
@@ -12,7 +13,11 @@ pub use projection::{
     PiEventPayload, PiEventReducer, PiLifecycleEvent, PiMessagePhase, PiProjectedContent,
     PiProjectedMessage, PiToolCallPhase, PiToolResultPhase,
 };
-pub use session::{PI_RPC_CAPABILITIES, PiSession, PiSessionError};
+pub use registry::{
+    DiscoveredPiSession, PiSessionOutput, PiSessionRegistry, PiSessionRegistryError,
+    StartRegisteredPiSession,
+};
+pub use session::{PI_RPC_CAPABILITIES, PiNativeSession, PiSession, PiSessionError};
 
 use semver::Version;
 use std::env;

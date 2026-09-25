@@ -23,6 +23,8 @@ pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
 pub enum PiSessionError {
     /// The operation is unsupported, invalid in the current state, or rejected by Pi.
     Control(AgentControlError),
+    /// Pi returned an invalid response to a session-state request.
+    NativeSession(String),
     /// The RPC process failed while handling the operation.
     Process(PiProcessError),
 }
@@ -31,6 +33,7 @@ impl fmt::Display for PiSessionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Control(error) => error.fmt(formatter),
+            Self::NativeSession(message) => formatter.write_str(message),
             Self::Process(error) => error.fmt(formatter),
         }
     }
@@ -40,6 +43,7 @@ impl Error for PiSessionError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Control(error) => Some(error),
+            Self::NativeSession(_) => None,
             Self::Process(error) => Some(error),
         }
     }
@@ -49,6 +53,15 @@ impl From<PiProcessError> for PiSessionError {
     fn from(error: PiProcessError) -> Self {
         Self::Process(error)
     }
+}
+
+/// The native identity and file reported by a Pi RPC session.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PiNativeSession {
+    /// Pi's stable session identifier.
+    pub id: String,
+    /// Pi's authoritative JSONL session file.
+    pub file: String,
 }
 
 /// Owns the controls and observed lifecycle state for one Pi RPC process.
@@ -90,6 +103,34 @@ impl PiSession {
     /// Subscribes to the native process event, diagnostic, and exit stream.
     pub fn subscribe(&self) -> broadcast::Receiver<PiProcessOutput> {
         self.process.subscribe()
+    }
+
+    /// Reads the native session identity that Pi persists on disk.
+    pub async fn native_session(&self) -> Result<PiNativeSession, PiSessionError> {
+        let response = self.process.command(json!({"type": "get_state"})).await?;
+        if response.get("success").and_then(Value::as_bool) != Some(true) {
+            let message = response
+                .get("error")
+                .and_then(Value::as_str)
+                .unwrap_or("Pi rejected the session-state request");
+            return Err(PiSessionError::NativeSession(message.to_owned()));
+        }
+        let data = response.get("data");
+        let id = data
+            .and_then(|data| data.get("sessionId"))
+            .and_then(Value::as_str);
+        let file = data
+            .and_then(|data| data.get("sessionFile"))
+            .and_then(Value::as_str);
+        match (id, file) {
+            (Some(id), Some(file)) => Ok(PiNativeSession {
+                id: id.to_owned(),
+                file: file.to_owned(),
+            }),
+            _ => Err(PiSessionError::NativeSession(
+                "Pi did not report a persisted native session".to_owned(),
+            )),
+        }
     }
 
     /// Starts work, or queues it during a run when the caller chooses a queue.

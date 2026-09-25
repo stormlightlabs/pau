@@ -124,7 +124,7 @@ Verification:
 
 #### 2.16 Session UI
 
-Status: planned
+Status: complete
 Blocked by: 2.14, 2.15
 
 Build the workspace/session rail, transcript, composer, tool activity, status,

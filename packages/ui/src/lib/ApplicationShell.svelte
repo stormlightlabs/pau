@@ -26,6 +26,7 @@
 		theme?: ThemeName;
 		uiFont?: UiFontName;
 		children?: Snippet;
+		context?: Snippet;
 		inspector?: Snippet;
 	};
 
@@ -39,6 +40,7 @@
 		theme = 'eldritch',
 		uiFont = 'inter',
 		children,
+		context,
 		inspector
 	}: Props = $props();
 
@@ -94,17 +96,21 @@
 				<Icon name="close" size={18} />
 			</button>
 		</div>
-		<ul>
-			{#each contextItems as item (item.id)}
-				<li>
-					<a href={`#${item.id}`} class:active={item.active}>
-						<span class:attention={item.attention} class="app-shell__item-dot"></span>
-						<span>{item.label}</span>
-						{#if item.status}<small>{item.status}</small>{/if}
-					</a>
-				</li>
-			{/each}
-		</ul>
+		{#if context}
+			<div class="app-shell__context-content">{@render context()}</div>
+		{:else}
+			<ul>
+				{#each contextItems as item (item.id)}
+					<li>
+						<a href={`#${item.id}`} class:active={item.active}>
+							<span class:attention={item.attention} class="app-shell__item-dot"></span>
+							<span>{item.label}</span>
+							{#if item.status}<small>{item.status}</small>{/if}
+						</a>
+					</li>
+				{/each}
+			</ul>
+		{/if}
 	</aside>
 
 	<main id="main-surface" class="app-shell__main" tabindex="-1">
@@ -133,7 +139,8 @@
 				</button>
 			{/if}
 		</div>
-		<div class="app-shell__main-content">
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+		<div class="app-shell__main-content" role="region" aria-label="Main surface content" tabindex="0">
 			{#if children}{@render children()}{/if}
 		</div>
 	</main>
@@ -342,8 +349,13 @@
 	.app-shell__context-rail {
 		grid-area: context;
 		min-width: 0;
+		overflow-y: auto;
 		border-right: 1px solid var(--shell-border);
 		background: var(--shell-bg);
+	}
+
+	.app-shell__context-content {
+		min-width: 0;
 	}
 
 	.app-shell__rail-heading {
@@ -401,8 +413,10 @@
 
 	.app-shell__main {
 		grid-area: main;
+		display: grid;
+		grid-template-rows: auto minmax(0, 1fr);
 		min-width: 0;
-		overflow: auto;
+		overflow: hidden;
 		background: var(--shell-surface);
 	}
 
@@ -463,8 +477,9 @@
 	}
 
 	.app-shell__main-content {
-		min-height: calc(100% - 3.25rem);
+		min-height: 0;
 		padding: clamp(1rem, 3vw, 2.5rem);
+		overflow: auto;
 	}
 
 	.app-shell__inspector {
@@ -495,7 +510,9 @@
 	}
 
 	:global(.app-shell a:focus-visible),
-	:global(.app-shell button:focus-visible) {
+	:global(.app-shell button:focus-visible),
+	:global(.app-shell textarea:focus-visible),
+	:global(.app-shell select:focus-visible) {
 		outline: 2px solid var(--shell-focus);
 		outline-offset: -2px;
 	}

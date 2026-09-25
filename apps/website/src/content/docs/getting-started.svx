@@ -59,6 +59,11 @@ pnpm test:ui
 
 Build the static workbench with `pnpm build:ui`.
 
+Open **Sessions / Session view** to review empty, starting, running, waiting,
+failed, and stopped sessions. In a running session, press `Ctrl+Enter` or
+`Command+Enter` to send a prompt and `Escape` to interrupt. Focus a session in
+the workspace rail and use the up or down arrow key to switch sessions.
+
 ## Run the local app
 
 The desktop app generates a new local API token each time it starts. Its webview

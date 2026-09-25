@@ -6,6 +6,7 @@
 	"scripts": {
 		"build": "vite build && pagefind --site build",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:links": "lychee 'build/**/*.html'",
 		"dev": "vite dev"
 	},
 	"devDependencies": {

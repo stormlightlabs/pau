@@ -169,7 +169,9 @@ Verification:
 
 #### 2.7 Continuous integration
 
-Status: planned
+Status: blocked
+Status note: The workflow must be committed, dispatched, and pass on GitHub
+before clean-checkout verification can finish.
 Blocked by: 2.1, 2.2
 
 Run Rust formatting, linting, and tests; TypeScript formatting, type checking,

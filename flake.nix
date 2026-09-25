@@ -63,6 +63,7 @@
               cargo
               clippy
               file
+              lychee
               nodejs_24
               pkg-config
               pnpm

@@ -1,12 +1,34 @@
 name: Check
 
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  workspace:
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential curl file libayatana-appindicator3-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev librsvg2-dev patchelf wget
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Check formatting
+        run: cargo fmt --all --check
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Run tests
+        run: cargo test --workspace --all-targets
+
+  typescript:
+    name: TypeScript and browser tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,17 +39,61 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @stormlightlabs/pau-ui exec playwright install --with-deps chromium
-      - run: pnpm format:check
-      - run: pnpm check
-      - run: pnpm test:ui
-      - run: pnpm build:ui
+      - name: Install browser
+        run: pnpm --filter @stormlightlabs/pau-ui exec playwright install --with-deps chromium
+      - name: Check formatting
+        run: pnpm format:check
+      - name: Check types and lint
+        run: pnpm check
+      - name: Run Vitest, browser, and Storybook tests
+        run: pnpm --recursive --if-present test
+      - name: Build Storybook
+        run: pnpm build:ui
       - uses: actions/upload-artifact@v4
         with:
           name: storybook
           path: packages/ui/storybook-static
-      - run: pnpm build:website
-      - run: pnpm check:generated
-      - run: cargo check --workspace
+          if-no-files-found: error
+
+  website:
+    name: Website
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build website and search index
+        run: pnpm build:website
+      - name: Check internal links
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          workingDirectory: apps/website
+          lycheeVersion: v0.24.2
+          fail: true
+          failIfEmpty: true
+          args: "'build/**/*.html'"
+
+  generated-contract:
+    name: Generated contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo run --quiet -p pau-core --bin generate-protocol -- --check
+
+  nix:
+    name: Nix flake
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v21
+      - name: Evaluate every declared system
+        run: nix flake show --all-systems

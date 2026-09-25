@@ -39,3 +39,23 @@ kind: ServerEventKind,
  * Adapter-owned JSON payload.
  */
 payload: string, };
+
+export type ServerSnapshot = {
+/**
+ * Last event included in this snapshot.
+ */
+sequence: number,
+/**
+ * Latest state-bearing event for each workspace and session.
+ */
+events: Array<ServerEvent>, };
+
+export type ServerStreamMessage = { "type": "snapshot",
+/**
+ * State captured at a stable event-sequence boundary.
+ */
+snapshot: ServerSnapshot, } | { "type": "event",
+/**
+ * Sequenced state change.
+ */
+event: ServerEvent, };

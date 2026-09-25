@@ -2,7 +2,7 @@
 	import '@xterm/xterm/css/xterm.css';
 	import { onMount } from 'svelte';
 
-	import { mountTerminalPrototype, type TerminalPrototype } from './terminalPrototype';
+	import { mountTerminalPrototype, type TerminalPrototype } from './terminal-prototype';
 
 	let { endpoint }: { endpoint?: string } = $props();
 	let host: HTMLDivElement;

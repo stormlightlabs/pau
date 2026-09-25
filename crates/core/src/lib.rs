@@ -20,7 +20,7 @@ pub struct VersionResponse {
 }
 
 /// Stable kinds in the server event envelope.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(rename_all = "snake_case")]
 pub enum ServerEventKind {
@@ -48,4 +48,30 @@ pub struct ServerEvent {
     pub kind: ServerEventKind,
     /// Adapter-owned JSON payload.
     pub payload: String,
+}
+
+/// Current server state at one event-sequence boundary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ServerSnapshot {
+    /// Last event included in this snapshot.
+    pub sequence: u64,
+    /// Latest state-bearing event for each workspace and session.
+    pub events: Vec<ServerEvent>,
+}
+
+/// Messages sent over the authenticated server event stream.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[ts(tag = "type", rename_all = "snake_case")]
+pub enum ServerStreamMessage {
+    /// Full state used when no usable replay checkpoint exists.
+    Snapshot {
+        /// State captured at a stable event-sequence boundary.
+        snapshot: ServerSnapshot,
+    },
+    /// One event newer than the client's checkpoint or snapshot.
+    Event {
+        /// Sequenced state change.
+        event: ServerEvent,
+    },
 }

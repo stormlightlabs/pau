@@ -50,4 +50,8 @@ test('configures browser and desktop WebSocket handshakes', () => {
 		url: 'ws://127.0.0.1:43127/api/events',
 		protocols: ['pau', `pau.bearer.${TOKEN}`]
 	});
+	expect(resolveEventSocket('', 'http://localhost:5173', 42)).toEqual({
+		url: 'ws://localhost:5173/api/events?after=42',
+		protocols: ['pau']
+	});
 });

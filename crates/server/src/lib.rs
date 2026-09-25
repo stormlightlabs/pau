@@ -1,16 +1,32 @@
-use std::{fmt, io, net::SocketAddr};
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt, io,
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 
 use axum::{
     Json, Router,
-    extract::{Request, State, WebSocketUpgrade, ws::WebSocket},
+    extract::{
+        Query, Request, State, WebSocketUpgrade,
+        ws::{Message, WebSocket},
+    },
     http::{StatusCode, header},
     middleware::{self, Next},
     response::Response,
     routing::get,
 };
-use pau_core::{HealthResponse, VersionResponse};
+use pau_core::{
+    HealthResponse, ServerEvent, ServerEventKind, ServerSnapshot, ServerStreamMessage,
+    VersionResponse,
+};
+use serde::Deserialize;
 use subtle::ConstantTimeEq;
-use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
+use tokio::{
+    net::TcpListener,
+    sync::{broadcast, oneshot},
+    task::JoinHandle,
+};
 use tower_http::cors::CorsLayer;
 use tracing::instrument::WithSubscriber;
 
@@ -19,6 +35,8 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const TOKEN_BYTES: usize = 32;
 const MIN_CONFIGURED_TOKEN_BYTES: usize = 32;
+const DEFAULT_REPLAY_CAPACITY: usize = 1_024;
+const LIVE_EVENT_CAPACITY: usize = 256;
 
 /// Bearer token that grants access to one local server launch.
 ///
@@ -78,14 +96,154 @@ impl fmt::Display for ApiToken {
     }
 }
 
+#[derive(Clone)]
+struct ApiState {
+    events: EventHub,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+struct SnapshotKey {
+    workspace_id: Option<String>,
+    session_id: Option<String>,
+    kind: ServerEventKind,
+}
+
+#[derive(Debug)]
+struct EventHubState {
+    next_sequence: u64,
+    replay: VecDeque<ServerEvent>,
+    snapshot: HashMap<SnapshotKey, ServerEvent>,
+}
+
+/// Bounded event log and current-state projection shared by API connections.
+#[derive(Clone, Debug)]
+pub struct EventHub {
+    replay_capacity: usize,
+    state: Arc<Mutex<EventHubState>>,
+    live: broadcast::Sender<ServerEvent>,
+}
+
+impl Default for EventHub {
+    fn default() -> Self {
+        Self::new(DEFAULT_REPLAY_CAPACITY)
+    }
+}
+
+impl EventHub {
+    /// Creates an event hub retaining at most `replay_capacity` recent events.
+    pub fn new(replay_capacity: usize) -> Self {
+        assert!(
+            replay_capacity > 0,
+            "event replay capacity must be positive"
+        );
+        let (live, _) = broadcast::channel(LIVE_EVENT_CAPACITY);
+        Self {
+            replay_capacity,
+            state: Arc::new(Mutex::new(EventHubState {
+                next_sequence: 1,
+                replay: VecDeque::with_capacity(replay_capacity),
+                snapshot: HashMap::new(),
+            })),
+            live,
+        }
+    }
+
+    /// Records and broadcasts one state-bearing event.
+    pub fn publish(
+        &self,
+        timestamp: impl Into<String>,
+        workspace_id: Option<String>,
+        session_id: Option<String>,
+        kind: ServerEventKind,
+        payload: impl Into<String>,
+    ) -> ServerEvent {
+        let mut state = self.state.lock().expect("event hub lock poisoned");
+        let event = ServerEvent {
+            sequence: state.next_sequence,
+            timestamp: timestamp.into(),
+            workspace_id,
+            session_id,
+            kind,
+            payload: payload.into(),
+        };
+        state.next_sequence = state.next_sequence.saturating_add(1);
+        state.snapshot.insert(
+            SnapshotKey {
+                workspace_id: event.workspace_id.clone(),
+                session_id: event.session_id.clone(),
+                kind,
+            },
+            event.clone(),
+        );
+        state.replay.push_back(event.clone());
+        if state.replay.len() > self.replay_capacity {
+            state.replay.pop_front();
+        }
+        let _ = self.live.send(event.clone());
+        event
+    }
+
+    fn subscribe(&self, after: Option<u64>) -> EventSubscription {
+        // Subscribe before capturing the boundary. A publish racing with this
+        // method is then present in either the initial batch or the live queue.
+        let receiver = self.live.subscribe();
+        let state = self.state.lock().expect("event hub lock poisoned");
+        let boundary = state.next_sequence.saturating_sub(1);
+        let replay_available = after.is_some_and(|sequence| {
+            sequence <= boundary
+                && state
+                    .replay
+                    .front()
+                    .is_none_or(|oldest| sequence >= oldest.sequence.saturating_sub(1))
+        });
+
+        let initial = if replay_available {
+            state
+                .replay
+                .iter()
+                .filter(|event| event.sequence > after.expect("checked above"))
+                .cloned()
+                .map(|event| ServerStreamMessage::Event { event })
+                .collect()
+        } else {
+            let mut events: Vec<_> = state.snapshot.values().cloned().collect();
+            events.sort_by_key(|event| event.sequence);
+            vec![ServerStreamMessage::Snapshot {
+                snapshot: ServerSnapshot {
+                    sequence: boundary,
+                    events,
+                },
+            }]
+        };
+
+        EventSubscription {
+            boundary,
+            initial,
+            receiver,
+        }
+    }
+}
+
+struct EventSubscription {
+    boundary: u64,
+    initial: Vec<ServerStreamMessage>,
+    receiver: broadcast::Receiver<ServerEvent>,
+}
+
 /// Builds the authenticated API used by desktop and browser clients.
 pub fn router(token: ApiToken) -> Router {
+    router_with_events(token, EventHub::default())
+}
+
+/// Builds the API around an event hub supplied by the application owner.
+pub fn router_with_events(token: ApiToken, events: EventHub) -> Router {
     Router::new()
         .route("/api/health", get(health))
         .route("/api/version", get(version))
         .route("/api/events", get(websocket))
         .layer(middleware::from_fn_with_state(token, authenticate))
         .layer(CorsLayer::permissive())
+        .with_state(ApiState { events })
 }
 
 async fn authenticate(
@@ -140,12 +298,53 @@ async fn version() -> Json<VersionResponse> {
     })
 }
 
-async fn websocket(upgrade: WebSocketUpgrade) -> Response {
-    upgrade.protocols(["pau"]).on_upgrade(hold_websocket)
+#[derive(Deserialize)]
+struct EventQuery {
+    after: Option<u64>,
 }
 
-async fn hold_websocket(mut socket: WebSocket) {
-    while socket.recv().await.is_some() {}
+async fn websocket(
+    State(state): State<ApiState>,
+    Query(query): Query<EventQuery>,
+    upgrade: WebSocketUpgrade,
+) -> Response {
+    let subscription = state.events.subscribe(query.after);
+    upgrade
+        .protocols(["pau"])
+        .on_upgrade(move |socket| stream_events(socket, subscription))
+}
+
+async fn stream_events(mut socket: WebSocket, mut subscription: EventSubscription) {
+    for message in subscription.initial {
+        if send_stream_message(&mut socket, &message).await.is_err() {
+            return;
+        }
+    }
+
+    loop {
+        match subscription.receiver.recv().await {
+            Ok(event) if event.sequence > subscription.boundary => {
+                subscription.boundary = event.sequence;
+                if send_stream_message(&mut socket, &ServerStreamMessage::Event { event })
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+            }
+            Ok(_) => {}
+            Err(broadcast::error::RecvError::Lagged(_))
+            | Err(broadcast::error::RecvError::Closed) => return,
+        }
+    }
+}
+
+async fn send_stream_message(
+    socket: &mut WebSocket,
+    message: &ServerStreamMessage,
+) -> Result<(), axum::Error> {
+    let json = serde_json::to_string(message).expect("server stream messages are serializable");
+    socket.send(Message::Text(json.into())).await
 }
 
 /// A running local server and its graceful-shutdown signal.
@@ -153,6 +352,7 @@ async fn hold_websocket(mut socket: WebSocket) {
 pub struct ServerHandle {
     address: SocketAddr,
     token: ApiToken,
+    events: EventHub,
     shutdown: Option<oneshot::Sender<()>>,
     task: Option<JoinHandle<io::Result<()>>>,
 }
@@ -166,6 +366,11 @@ impl ServerHandle {
     /// Returns the bearer token generated for this server launch.
     pub fn token(&self) -> &ApiToken {
         &self.token
+    }
+
+    /// Returns the event hub used by this server.
+    pub fn events(&self) -> &EventHub {
+        &self.events
     }
 
     /// Starts graceful shutdown without waiting for the listener task.
@@ -215,10 +420,12 @@ pub async fn start_with_token(address: SocketAddr, token: ApiToken) -> io::Resul
     let address = listener.local_addr()?;
     let (shutdown, shutdown_receiver) = oneshot::channel();
     let server_token = token.clone();
+    let events = EventHub::default();
+    let server_events = events.clone();
     let dispatch = tracing::dispatcher::get_default(Clone::clone);
     let task = tokio::spawn(
         async move {
-            axum::serve(listener, router(server_token))
+            axum::serve(listener, router_with_events(server_token, server_events))
                 .with_graceful_shutdown(async move {
                     let _ = shutdown_receiver.await;
                 })
@@ -236,6 +443,7 @@ pub async fn start_with_token(address: SocketAddr, token: ApiToken) -> io::Resul
     Ok(ServerHandle {
         address,
         token,
+        events,
         shutdown: Some(shutdown),
         task: Some(task),
     })
@@ -313,6 +521,11 @@ mod tests {
                     break;
                 }
             }
+        }
+        if !read_to_end
+            && let Some(header_end) = bytes.windows(4).position(|window| window == b"\r\n\r\n")
+        {
+            bytes.truncate(header_end + 4);
         }
         String::from_utf8(bytes).unwrap()
     }
@@ -429,6 +642,74 @@ mod tests {
         assert!(!logs.contains(TEST_TOKEN));
         assert!(!logs.contains(configured_secret));
         assert_eq!(format!("{:?}", test_token()), "ApiToken([REDACTED])");
+    }
+
+    fn publish_session(events: &EventHub, payload: &str) -> ServerEvent {
+        events.publish(
+            "2026-04-01T12:00:00Z",
+            Some("workspace-1".to_owned()),
+            Some("session-1".to_owned()),
+            ServerEventKind::SessionChanged,
+            payload,
+        )
+    }
+
+    fn event_sequences(messages: &[ServerStreamMessage]) -> Vec<u64> {
+        messages
+            .iter()
+            .filter_map(|message| match message {
+                ServerStreamMessage::Event { event } => Some(event.sequence),
+                ServerStreamMessage::Snapshot { .. } => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn reconnects_from_the_last_applied_sequence() {
+        let events = EventHub::new(4);
+        publish_session(&events, r#"{"text":"one"}"#);
+        let first = events.subscribe(None);
+        assert!(matches!(
+            &first.initial[..],
+            [ServerStreamMessage::Snapshot { snapshot }] if snapshot.sequence == 1
+        ));
+        drop(first);
+
+        publish_session(&events, r#"{"text":"one two"}"#);
+        publish_session(&events, r#"{"text":"one two three"}"#);
+        let reconnected = events.subscribe(Some(1));
+
+        assert_eq!(event_sequences(&reconnected.initial), vec![2, 3]);
+    }
+
+    #[test]
+    fn sends_a_snapshot_when_the_replay_window_expired() {
+        let events = EventHub::new(2);
+        publish_session(&events, "first");
+        publish_session(&events, "second");
+        publish_session(&events, "third");
+
+        let subscription = events.subscribe(Some(0));
+        assert!(matches!(
+            &subscription.initial[..],
+            [ServerStreamMessage::Snapshot { snapshot }]
+                if snapshot.sequence == 3
+                    && snapshot.events.len() == 1
+                    && snapshot.events[0].payload == "third"
+        ));
+    }
+
+    #[tokio::test]
+    async fn preserves_events_published_at_the_snapshot_boundary() {
+        let events = EventHub::new(4);
+        publish_session(&events, "snapshot");
+        let mut subscription = events.subscribe(None);
+        let raced = publish_session(&events, "raced");
+
+        let received = subscription.receiver.recv().await.unwrap();
+        assert_eq!(subscription.boundary, 1);
+        assert_eq!(received, raced);
+        assert_eq!(received.sequence, 2);
     }
 
     #[tokio::test]

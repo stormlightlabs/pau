@@ -37,10 +37,15 @@ export async function getBackendVersion(search: string, fetcher: typeof fetch = 
 }
 
 /** Builds an authenticated browser WebSocket handshake for the event stream. */
-export function resolveEventSocket(search: string, browserOrigin: string): { url: string; protocols: string[] } {
+export function resolveEventSocket(
+	search: string,
+	browserOrigin: string,
+	after?: number
+): { url: string; protocols: string[] } {
 	const token = resolveApiToken(search);
 	const apiOrigin = resolveApiOrigin(search) || browserOrigin;
 	const url = new URL('/api/events', apiOrigin);
 	url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+	if (after !== undefined) url.searchParams.set('after', String(after));
 	return { url: url.href, protocols: token === undefined ? ['pau'] : ['pau', `pau.bearer.${token}`] };
 }

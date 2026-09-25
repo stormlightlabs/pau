@@ -13,6 +13,6 @@ export type {
 } from './lib/types/session';
 export { ICONS, type IconKind } from './icons';
 export { THEMES, UI_FONTS, themeCssProperties, type PauTheme, type ThemeName, type UiFontName } from './theme';
-export { shellNavigationFixtures } from './fixtures/applicationShell';
+export { shellNavigationFixtures } from './fixtures/application-shell';
 export { capabilityFixtures, type CapabilityFixture } from './fixtures/capabilities';
 export { sessionFixtures } from './fixtures/sessions';

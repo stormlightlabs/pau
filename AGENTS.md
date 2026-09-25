@@ -82,6 +82,11 @@ sentence. Leave sentence fragments unpunctuated.
 Prefer TypeScript type aliases for data shapes and unions. Use interfaces only
 for method-only contracts or types that classes implement.
 
+Use kebab-case for TypeScript filenames, including `.svelte.ts` modules. Keep
+Svelte component filenames in PascalCase, and preserve that component name in
+associated files such as `SessionView.stories.ts` and
+`SessionView.svelte.test.ts`.
+
 Keep first-party JavaScript and TypeScript source under the root Prettier checks.
 Ignore generated output instead of whole packages.
 

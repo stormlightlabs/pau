@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { mountTerminalPrototype } from '../stories/terminalPrototype';
+import { mountTerminalPrototype } from '../stories/terminal-prototype';
 
 class FakeSocket extends EventTarget {
 	binaryType: BinaryType = 'blob';

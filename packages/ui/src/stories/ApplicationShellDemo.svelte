@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { shellNavigationFixtures } from '../fixtures/applicationShell';
+	import { shellNavigationFixtures } from '../fixtures/application-shell';
 	import ApplicationShell from '../lib/ApplicationShell.svelte';
 	import type { ThemeName, UiFontName } from '../theme';
 

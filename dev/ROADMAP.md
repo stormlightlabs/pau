@@ -139,7 +139,7 @@ Verification:
 
 #### 2.17 Snapshot and reconnect
 
-Status: planned
+Status: complete
 Blocked by: 2.15, 2.16
 
 Send a state snapshot plus sequenced events so a frontend reload reconstructs

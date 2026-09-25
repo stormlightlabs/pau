@@ -69,6 +69,8 @@ the workspace rail and use the up or down arrow key to switch sessions.
 The desktop app generates a new local API token each time it starts. Its webview
 uses that token for HTTP requests and WebSocket connections. Requests without
 the token cannot read the health or version endpoints or open the event stream.
+If the webview reloads or the connection drops, Pau restores the latest session
+state and resumes events after the last event already shown.
 
 ```bash
 pnpm --filter @stormlightlabs/pau-desktop dev

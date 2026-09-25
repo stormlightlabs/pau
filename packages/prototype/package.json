@@ -1,0 +1,37 @@
+{
+	"name": "@stormlightlabs/pau-prototype",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"scripts": {
+		"build": "vite build",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"dev": "vite dev",
+		"preview": "vite preview",
+		"screenshots": "pnpm build && playwright test tests/screenshots.spec.ts --project=desktop",
+		"screenshots:all": "pnpm build && playwright test tests/screenshots.spec.ts",
+		"test:e2e": "pnpm build && playwright test"
+	},
+	"dependencies": {
+		"@fontsource-variable/atkinson-hyperlegible-next": "5.3.0",
+		"@fontsource-variable/ibm-plex-sans": "5.3.0",
+		"@fontsource-variable/inter": "5.3.0"
+	},
+	"devDependencies": {
+		"@iconify-json/catppuccin": "1.2.17",
+		"@iconify-json/octicon": "1.2.36",
+		"@iconify-json/simple-icons": "1.2.97",
+		"@iconify-json/tabler": "1.2.35",
+		"@sveltejs/adapter-static": "3.0.10",
+		"@sveltejs/kit": "2.70.3",
+		"@sveltejs/vite-plugin-svelte": "6.2.4",
+		"@types/node": "24.13.6",
+		"@unocss/preset-icons": "66.9.2",
+		"@playwright/test": "1.63.0",
+		"svelte": "5.57.1",
+		"svelte-check": "4.7.6",
+		"typescript": "6.0.3",
+		"unocss": "66.9.2",
+		"vite": "7.3.1"
+	}
+}

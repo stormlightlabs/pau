@@ -32,6 +32,7 @@ apps/
   website/             SvelteKit website and product documentation
 packages/
   claude-bridge/       independently usable Pi package and bridge tests
+  prototype/           static design sandbox, screen fixtures, and screenshots
   ui/                  shared Svelte components, feature views, stores, and tests
   protocol/            generated or checked TypeScript wire types
 crates/
@@ -64,7 +65,10 @@ Neovim because they share process, input, resize, and reconnect concerns.
 
 Keep package boundaries similarly concrete: reusable UI and its component tests
 belong in `packages/ui`, while routing, transport wiring, and integration tests
-belong to the app that performs them.
+belong to the app that performs them. `packages/prototype` is an independent
+static SvelteKit sandbox for screen-level design work. It owns copies of the
+design tokens, fonts, icons, fixed fixtures, and screenshot scripts it needs and
+does not import product applications or `packages/ui`.
 
 ## Project conventions
 

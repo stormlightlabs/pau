@@ -276,6 +276,32 @@
 	min-height: 0;
 }
 
+.dashboard-layout,
+.orchestration-layout {
+	display: grid;
+	min-height: 0;
+}
+
+.dashboard-inline-status {
+	display: none;
+}
+
+.dashboard-layout {
+	grid-template-columns: var(--rail-product) minmax(24rem, 1fr);
+}
+
+.dashboard-layout--activity {
+	grid-template-columns: var(--rail-product) minmax(24rem, 1fr) var(--rail-inspector);
+}
+
+.orchestration-layout {
+	grid-template-columns: var(--rail-product) var(--rail-context) minmax(24rem, 1fr);
+}
+
+.orchestration-layout--details {
+	grid-template-columns: var(--rail-product) var(--rail-context) minmax(24rem, 1fr) var(--rail-inspector);
+}
+
 .session-layout--no-context {
 	grid-template-columns: var(--rail-product) minmax(20rem, 1fr) var(--rail-inspector);
 }
@@ -521,6 +547,16 @@
 		grid-template-columns: 3.5rem 13rem minmax(20rem, 1fr);
 	}
 
+	.dashboard-layout,
+	.dashboard-layout--activity {
+		grid-template-columns: 3.5rem minmax(20rem, 1fr);
+	}
+
+	.orchestration-layout,
+	.orchestration-layout--details {
+		grid-template-columns: 3.5rem 13rem minmax(20rem, 1fr);
+	}
+
 	.session-layout--no-context,
 	.session-layout--no-sidebars {
 		grid-template-columns: 3.5rem minmax(20rem, 1fr);
@@ -530,8 +566,9 @@
 		grid-template-columns: minmax(0, 1fr);
 	}
 
-	.mock-inspector {
-		display: none;
+	.mock-inspector,
+	.optional-panel-toggle {
+		display: none !important;
 	}
 }
 
@@ -592,6 +629,10 @@
 	}
 
 	.mock-layout,
+	.dashboard-layout,
+	.dashboard-layout--activity,
+	.orchestration-layout,
+	.orchestration-layout--details,
 	.session-layout--no-context,
 	.session-layout--no-inspector,
 	.session-layout--no-sidebars {
@@ -603,7 +644,33 @@
 	}
 
 	.mock-context-rail {
+		display: none !important;
+	}
+
+	.dashboard-workspace-filter,
+	.dashboard-new-label,
+	.dashboard-status,
+	.dashboard-footer-detail {
 		display: none;
+	}
+
+	.dashboard-new-session {
+		width: var(--target-touch);
+		padding: 0;
+	}
+
+	.dashboard-list-head,
+	.dashboard-work-row {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
+	.dashboard-list-head > :last-child {
+		display: none;
+	}
+
+	.dashboard-inline-status {
+		display: inline-flex;
+		align-items: center;
 	}
 
 	.mock-app__command {

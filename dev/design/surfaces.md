@@ -35,18 +35,23 @@ horizontally available without reducing labels to icons.
 ## Dashboard
 
 The dashboard is a return point for cross-workspace attention. It is not a
-launch detour and must not become a generic metrics overview.
+launch detour, session manager, or generic metrics overview.
 
 Priority order:
 
 1. Work that needs an operator decision.
 2. Running and queued sessions.
-3. Changed files and checks that affect those sessions.
-4. Harness health and selected-work detail.
+3. A direct path into the selected session.
+4. Changed files and checks on request.
 
-The selected row and inspector describe the same task. At narrow widths, hide
-the workspace rail and inspector before reducing the active-work list. Preserve
-status text alongside color.
+Use one main list rather than permanent workspace and detail rails. Workspace
+and status filters belong in the list toolbar. Changed files and checks open in
+a toggleable activity panel. Do not repeat harness health when session state
+already reports whether each process is usable.
+
+At narrow widths, keep the attention item and work list. Hide the optional
+activity panel and move its content to a dedicated view when implemented.
+Preserve status text alongside color.
 
 ## Session
 
@@ -69,12 +74,42 @@ This surface supervises separate native sessions. It must not imply an
 autonomous agent team. The operator assigns work and decides when output moves
 between sessions.
 
-The run list leads. Filters narrow by harness. The inspector shows only controls
-and capabilities reported by the selected adapter. Unsupported controls remain
-absent or disabled with a reason.
+Use a session-manager layout rather than a control-room table:
 
-At narrow widths, preserve task, harness, and status first. Move profile and
-process metadata into row detail rather than squeezing the table.
+- A compact rail groups and filters sessions
+- The main surface follows one selected run
+- Current activity, changes, and checks stay in that run's context
+- Low-frequency process metadata and capabilities open in a details panel
+- Recent events stay collapsed until requested
+
+The details panel shows only controls and capabilities reported by the selected
+adapter. Unsupported controls remain absent or disabled with a reason.
+
+At narrow widths, the selected run owns the task area. Session navigation and
+process details move to separate views.
+
+### Reference patterns
+
+The redesign uses common patterns from current agent products without copying
+their visual treatment:
+
+- [VS Code Agents window](https://code.visualstudio.com/docs/agents/run/agents-window)
+  separates the session list, active conversation, and optional Files and
+  Changes panels. It keeps status and change statistics in the session list.
+- [Cursor](https://cursor.com/) presents background agents as a chronological
+  task list and gives the selected task one focused detail surface.
+- [Conductor](https://www.conductor.build/docs) scopes each task to a workspace,
+  branch, terminal, diff, checks, and review path instead of presenting a global
+  control matrix.
+- [GitHub Copilot agent sessions](https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/manage-and-track-agents)
+  open a session log and overview from a compact sessions panel. Steering and
+  stopping happen in the selected session.
+- [OpenAI Codex](https://openai.com/codex/) frames parallel work as separate
+  worktree-backed tasks across projects.
+
+The shared lesson is to make the session the unit of attention. Lists answer
+“what needs me?”; detail surfaces answer “what is this run doing?”; optional
+panels answer “what changed underneath?”
 
 ## Scratchpad
 

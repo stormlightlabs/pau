@@ -48,3 +48,21 @@ test('focused session screenshot', async ({ page }, testInfo) => {
 	await expect(page.getByRole('complementary', { name: 'Inspector' })).toBeHidden();
 	await page.screenshot({ path: await screenshotPath(testInfo, 'session-focused'), fullPage: true });
 });
+
+test('dashboard activity panel screenshot', async ({ page }, testInfo) => {
+	test.skip(testInfo.project.name !== 'desktop', 'The panel becomes a dedicated view at narrow widths.');
+	await page.goto('/screens/dashboard');
+	await prepareScreenshot(page);
+	await page.getByRole('button', { name: 'Activity' }).click();
+	await expect(page.getByRole('complementary', { name: 'Workspace activity' })).toBeVisible();
+	await page.screenshot({ path: await screenshotPath(testInfo, 'dashboard-activity'), fullPage: true });
+});
+
+test('orchestration details panel screenshot', async ({ page }, testInfo) => {
+	test.skip(testInfo.project.name !== 'desktop', 'The panel becomes a dedicated view at narrow widths.');
+	await page.goto('/screens/orchestration');
+	await prepareScreenshot(page);
+	await page.getByRole('button', { name: 'Toggle run details' }).click();
+	await expect(page.getByRole('complementary', { name: 'Run details' })).toBeVisible();
+	await page.screenshot({ path: await screenshotPath(testInfo, 'orchestration-details'), fullPage: true });
+});

@@ -68,7 +68,7 @@ Verification:
 
 #### 2.12 Pi RPC process and framing
 
-Status: planned
+Status: complete
 Blocked by: 2.11
 
 Implement supervised `pi --mode rpc` startup in `pau-pi`, command correlation,

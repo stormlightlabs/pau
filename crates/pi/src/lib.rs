@@ -1,4 +1,11 @@
-//! Pi discovery and compatibility diagnostics.
+//! Pi discovery, RPC transport, and process supervision.
+
+mod process;
+
+pub use process::{
+    PiDiagnostic, PiDiagnosticSource, PiProcess, PiProcessError, PiProcessExit, PiProcessOutput,
+    PiShutdownTimeouts, StartPiProcessOptions,
+};
 
 use semver::Version;
 use std::env;

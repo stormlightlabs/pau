@@ -96,7 +96,7 @@ Verification:
 
 #### 2.14 Pi session controls
 
-Status: planned
+Status: complete
 Blocked by: 2.12, 2.13
 
 Add prompt, follow-up, steer, interrupt, model selection, and stop operations

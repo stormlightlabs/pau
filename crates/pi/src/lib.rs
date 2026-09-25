@@ -2,6 +2,7 @@
 
 mod process;
 mod projection;
+mod session;
 
 pub use process::{
     PiDiagnostic, PiDiagnosticSource, PiProcess, PiProcessError, PiProcessExit, PiProcessOutput,
@@ -11,6 +12,7 @@ pub use projection::{
     PiEventPayload, PiEventReducer, PiLifecycleEvent, PiMessagePhase, PiProjectedContent,
     PiProjectedMessage, PiToolCallPhase, PiToolResultPhase,
 };
+pub use session::{PI_RPC_CAPABILITIES, PiSession, PiSessionError};
 
 use semver::Version;
 use std::env;

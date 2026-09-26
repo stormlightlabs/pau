@@ -72,7 +72,11 @@ content: string,
 /**
  * SHA-256 revision of the returned bytes.
  */
-revision: string, };
+revision: string,
+/**
+ * Whether the file's permissions allow the built-in editor to save it.
+ */
+writable: boolean, };
 
 export type FileSearchMatch = {
 /**

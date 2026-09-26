@@ -1,8 +1,15 @@
 <script lang="ts">
-	import { WorkspaceFiles, type WorkspaceFileSource } from '@stormlightlabs/pau-ui';
+	import { WorkspaceFiles, type FileEditorSource, type WorkspaceFileSource } from '@stormlightlabs/pau-ui';
 	import { onMount } from 'svelte';
 
-	import { getWorkspaceGitStatus, listWorkspaceFiles, listWorkspaces, searchWorkspaceFiles } from './api';
+	import {
+		getWorkspaceGitStatus,
+		listWorkspaceFiles,
+		listWorkspaces,
+		readWorkspaceFile,
+		searchWorkspaceFiles,
+		writeWorkspaceFile
+	} from './api';
 
 	let { workspaceId }: { workspaceId: string } = $props();
 
@@ -13,6 +20,10 @@
 		listDirectory: (path, options) => listWorkspaceFiles(location.search, workspaceId, path, options),
 		search: (query, options) => searchWorkspaceFiles(location.search, workspaceId, query, options),
 		gitStatus: () => getWorkspaceGitStatus(location.search, workspaceId)
+	};
+	const editorSource: FileEditorSource = {
+		read: (path) => readWorkspaceFile(location.search, workspaceId, path),
+		write: (path, content, revision) => writeWorkspaceFile(location.search, workspaceId, path, content, revision)
 	};
 
 	onMount(() => {
@@ -27,4 +38,4 @@
 	});
 </script>
 
-<WorkspaceFiles {workspaceId} {workspaceName} {source} {disconnected} />
+<WorkspaceFiles {workspaceId} {workspaceName} {source} {editorSource} {disconnected} />

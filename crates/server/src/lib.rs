@@ -346,9 +346,14 @@ impl IntoResponse for ApiError {
                     WorkspaceError::InvalidPath => (StatusCode::BAD_REQUEST, "invalid_path"),
                     WorkspaceError::Conflict => (StatusCode::CONFLICT, "file_changed"),
                     WorkspaceError::SensitivePath => (StatusCode::FORBIDDEN, "sensitive_path"),
+                    WorkspaceError::BinaryFile => (StatusCode::UNPROCESSABLE_ENTITY, "binary_file"),
+                    WorkspaceError::FileTooLarge => {
+                        (StatusCode::PAYLOAD_TOO_LARGE, "file_too_large")
+                    }
                     WorkspaceError::InvalidEncoding => {
                         (StatusCode::UNPROCESSABLE_ENTITY, "invalid_encoding")
                     }
+                    WorkspaceError::ReadOnly => (StatusCode::FORBIDDEN, "read_only"),
                     WorkspaceError::WrongFileType => {
                         (StatusCode::UNPROCESSABLE_ENTITY, "wrong_file_type")
                     }

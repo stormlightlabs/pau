@@ -95,7 +95,7 @@ Verification:
 
 #### 2.22 CodeMirror editor
 
-Status: planned
+Status: complete
 Blocked by: 2.19, 2.20
 
 Add Pau's primary built-in editing surface with CodeMirror 6: text-file viewing

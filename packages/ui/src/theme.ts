@@ -391,7 +391,7 @@ export const THEMES = {
 
 /** Converts a bundled theme and font choice into the CSS properties used by Pau components. */
 export function themeCssProperties(themeName: ThemeName, fontName: UiFontName): Record<string, string> {
-	const { colors } = THEMES[themeName];
+	const { colors, syntax } = THEMES[themeName];
 	return {
 		'--pau-canvas': colors.canvas,
 		'--pau-surface': colors.surface,
@@ -406,6 +406,14 @@ export function themeCssProperties(themeName: ThemeName, fontName: UiFontName): 
 		'--pau-danger': colors.danger,
 		'--pau-info': colors.info,
 		'--pau-selection': colors.selection,
+		'--pau-syntax-comment': syntax.comment,
+		'--pau-syntax-keyword': syntax.keyword,
+		'--pau-syntax-string': syntax.string,
+		'--pau-syntax-number': syntax.number,
+		'--pau-syntax-function': syntax.function,
+		'--pau-syntax-type': syntax.type,
+		'--pau-syntax-variable': syntax.variable,
+		'--pau-syntax-invalid': syntax.invalid,
 		'--pau-font-ui': `${UI_FONTS[fontName].family}, ui-sans-serif, system-ui, sans-serif`
 	};
 }

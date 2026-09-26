@@ -45,6 +45,15 @@ that benefits from staying beside sessions and review context. Do not reproduce
 a full development environment in the browser. Optional language services reuse
 a backend language-server supervisor instead of running servers in the browser.
 
+The built-in editor opens UTF-8 text files up to 2 MiB. Binary, oversized, and
+invalid-encoding files show a named state instead of a text buffer. Files whose
+permissions are read-only open without editing, and the save control is
+disabled. Saves include the revision returned by the last read and fail on a
+mismatch. While a file is open, the client checks its revision every two seconds
+and preserves unsaved text when it reports an external change. The operator
+then chooses whether to reload the disk version or keep the local version before
+saving.
+
 The operator can configure a preferred external editor. Known launch adapters
 open a workspace, file, line and column, or diff in Neovim, Vim, Helix, Visual
 Studio Code, and Zed. A command template covers other editors. Adapters expose

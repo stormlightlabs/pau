@@ -38,6 +38,15 @@ describe('bundled themes', () => {
 		}
 	});
 
+	test('maps every syntax role to editor CSS properties', () => {
+		for (const theme of Object.values(THEMES)) {
+			const properties = themeCssProperties(theme.name, 'inter');
+			for (const [role, color] of Object.entries(theme.syntax)) {
+				expect(properties[`--pau-syntax-${role}`]).toBe(color);
+			}
+		}
+	});
+
 	test('keeps text and meaningful state colors distinguishable on their surfaces', () => {
 		for (const theme of Object.values(THEMES)) {
 			for (const surface of ['surface', 'surfaceRaised'] as const) {

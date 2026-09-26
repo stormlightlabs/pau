@@ -19,6 +19,7 @@ use crate::persistence::{Workspace, WorkspaceRepository};
 const DEFAULT_SEARCH_LIMIT: usize = 200;
 const MAX_SEARCH_LIMIT: usize = 1_000;
 const MAX_SEARCH_FILE_BYTES: u64 = 2 * 1024 * 1024;
+const MAX_EDITOR_FILE_BYTES: u64 = 2 * 1024 * 1024;
 
 /// Failures returned by workspace and file operations.
 #[derive(Debug)]
@@ -31,8 +32,14 @@ pub enum WorkspaceError {
     Conflict,
     /// A general file endpoint cannot access a credential-bearing file.
     SensitivePath,
+    /// File content appears to be binary rather than text.
+    BinaryFile,
+    /// File content exceeds the built-in editor limit.
+    FileTooLarge,
     /// File content is not valid UTF-8.
     InvalidEncoding,
+    /// The file cannot be changed through the built-in editor.
+    ReadOnly,
     /// The requested operation expected another filesystem object type.
     WrongFileType,
     /// Persistence failed.
@@ -52,7 +59,10 @@ impl fmt::Display for WorkspaceError {
             Self::SensitivePath => {
                 formatter.write_str("general file access is denied for this path")
             }
+            Self::BinaryFile => formatter.write_str("file appears to contain binary data"),
+            Self::FileTooLarge => formatter.write_str("file exceeds the 2 MiB editor limit"),
             Self::InvalidEncoding => formatter.write_str("file is not valid UTF-8"),
+            Self::ReadOnly => formatter.write_str("file is read-only"),
             Self::WrongFileType => formatter.write_str("path has the wrong file type"),
             Self::Persistence(error) => write!(formatter, "workspace persistence failed: {error}"),
             Self::Io(error) => write!(formatter, "workspace file access failed: {error}"),
@@ -123,6 +133,8 @@ pub struct FileContent {
     pub content: String,
     /// SHA-256 revision of the returned bytes.
     pub revision: String,
+    /// Whether the file's permissions allow the built-in editor to save it.
+    pub writable: bool,
 }
 
 /// One matching line from workspace search.
@@ -295,14 +307,25 @@ impl WorkspaceService {
         if !path.is_file() {
             return Err(WorkspaceError::WrongFileType);
         }
+        let metadata = path.metadata()?;
+        if metadata.len() > MAX_EDITOR_FILE_BYTES {
+            return Err(WorkspaceError::FileTooLarge);
+        }
         let directory = Dir::open_ambient_dir(&root, ambient_authority())?;
         let bytes = directory.read(validate_relative(relative_path)?)?;
+        if bytes.len() as u64 > MAX_EDITOR_FILE_BYTES {
+            return Err(WorkspaceError::FileTooLarge);
+        }
+        if bytes.contains(&0) {
+            return Err(WorkspaceError::BinaryFile);
+        }
         let revision = revision(&bytes);
         let content = String::from_utf8(bytes).map_err(|_| WorkspaceError::InvalidEncoding)?;
         Ok(FileContent {
             path: relative_display(&root, &path)?,
             content,
             revision,
+            writable: !metadata.permissions().readonly(),
         })
     }
 
@@ -317,6 +340,12 @@ impl WorkspaceService {
         content: &str,
         expected_revision: Option<&str>,
     ) -> Result<FileContent, WorkspaceError> {
+        if content.len() as u64 > MAX_EDITOR_FILE_BYTES {
+            return Err(WorkspaceError::FileTooLarge);
+        }
+        if content.as_bytes().contains(&0) {
+            return Err(WorkspaceError::BinaryFile);
+        }
         let root = self.root(workspace_id).await?;
         reject_sensitive(relative_path)?;
         let path = confined_for_write(&root, relative_path)?;
@@ -325,6 +354,9 @@ impl WorkspaceService {
 
         match directory.read(relative) {
             Ok(current) => {
+                if path.metadata()?.permissions().readonly() {
+                    return Err(WorkspaceError::ReadOnly);
+                }
                 if expected_revision != Some(revision(&current).as_str()) {
                     return Err(WorkspaceError::Conflict);
                 }
@@ -344,6 +376,7 @@ impl WorkspaceService {
             content: String::from_utf8(bytes.clone())
                 .map_err(|_| WorkspaceError::InvalidEncoding)?,
             revision: revision(&bytes),
+            writable: !path.metadata()?.permissions().readonly(),
         })
     }
 
@@ -740,6 +773,64 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(all.len(), 4);
+    }
+
+    #[tokio::test]
+    async fn reports_files_the_editor_cannot_open_or_change() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+
+        fs::write(root.join("binary.dat"), b"text\0binary").unwrap();
+        assert!(matches!(
+            service.read(&workspace.id, "binary.dat").await,
+            Err(WorkspaceError::BinaryFile)
+        ));
+
+        fs::write(root.join("invalid.txt"), b"text\xff").unwrap();
+        assert!(matches!(
+            service.read(&workspace.id, "invalid.txt").await,
+            Err(WorkspaceError::InvalidEncoding)
+        ));
+
+        fs::write(
+            root.join("large.txt"),
+            vec![b'x'; MAX_EDITOR_FILE_BYTES as usize + 1],
+        )
+        .unwrap();
+        assert!(matches!(
+            service.read(&workspace.id, "large.txt").await,
+            Err(WorkspaceError::FileTooLarge)
+        ));
+        assert!(matches!(
+            service
+                .write(
+                    &workspace.id,
+                    "new-large.txt",
+                    &"x".repeat(MAX_EDITOR_FILE_BYTES as usize + 1),
+                    None,
+                )
+                .await,
+            Err(WorkspaceError::FileTooLarge)
+        ));
+
+        let read_only = root.join("read-only.txt");
+        fs::write(&read_only, "fixed").unwrap();
+        let mut permissions = read_only.metadata().unwrap().permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(&read_only, permissions).unwrap();
+        let content = service.read(&workspace.id, "read-only.txt").await.unwrap();
+        assert!(!content.writable);
+        assert!(matches!(
+            service
+                .write(
+                    &workspace.id,
+                    "read-only.txt",
+                    "changed",
+                    Some(&content.revision),
+                )
+                .await,
+            Err(WorkspaceError::ReadOnly)
+        ));
     }
 
     #[tokio::test]

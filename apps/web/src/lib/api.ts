@@ -1,4 +1,11 @@
-import type { FileEntry, FileSearchMatch, GitStatus, VersionResponse, Workspace } from '@stormlightlabs/pau-protocol';
+import type {
+	FileContent,
+	FileEntry,
+	FileSearchMatch,
+	GitStatus,
+	VersionResponse,
+	Workspace
+} from '@stormlightlabs/pau-protocol';
 
 const DESKTOP_PORT_PARAMETER = 'pau-api-port';
 const DESKTOP_TOKEN_PARAMETER = 'pau-api-token';
@@ -56,7 +63,11 @@ async function responseJson<T>(response: Response): Promise<T> {
 	);
 }
 
-function workspaceEndpoint(search: string, workspaceId: string, endpoint: 'files' | 'search' | 'git/status'): URL {
+function workspaceEndpoint(
+	search: string,
+	workspaceId: string,
+	endpoint: 'file' | 'files' | 'search' | 'git/status'
+): URL {
 	const origin = resolveApiOrigin(search) || 'https://pau.local';
 	return new URL(`/api/workspaces/${encodeURIComponent(workspaceId)}/${endpoint}`, origin);
 }
@@ -95,6 +106,37 @@ export async function listWorkspaceFiles(
 	if (options.includeIgnored) url.searchParams.set('include_ignored', 'true');
 	const response = await fetcher(requestUrl(url, search), { headers: authorization(resolveApiToken(search)) });
 	return responseJson<FileEntry[]>(response);
+}
+
+/** Reads one UTF-8 workspace file for the built-in editor. */
+export async function readWorkspaceFile(
+	search: string,
+	workspaceId: string,
+	path: string,
+	fetcher: typeof fetch = fetch
+): Promise<FileContent> {
+	const url = workspaceEndpoint(search, workspaceId, 'file');
+	url.searchParams.set('path', path);
+	const response = await fetcher(requestUrl(url, search), { headers: authorization(resolveApiToken(search)) });
+	return responseJson<FileContent>(response);
+}
+
+/** Writes one workspace file if its revision still matches the editor's copy. */
+export async function writeWorkspaceFile(
+	search: string,
+	workspaceId: string,
+	path: string,
+	content: string,
+	expectedRevision: string,
+	fetcher: typeof fetch = fetch
+): Promise<FileContent> {
+	const url = workspaceEndpoint(search, workspaceId, 'file');
+	const response = await fetcher(requestUrl(url, search), {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json', ...authorization(resolveApiToken(search)) },
+		body: JSON.stringify({ path, content, expected_revision: expectedRevision })
+	});
+	return responseJson<FileContent>(response);
 }
 
 /** Searches visible UTF-8 files in a registered workspace. */

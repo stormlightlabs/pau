@@ -13,7 +13,9 @@
 		WorkspaceTraversalOptions
 	} from './types/workspace-files';
 	import ApplicationShell, { type ShellNavItem } from './ApplicationShell.svelte';
+	import FileEditor from './FileEditor.svelte';
 	import Icon from './Icon.svelte';
+	import type { FileEditorSource } from './types/file-editor';
 
 	type DirectoryState = { entries: WorkspaceFileEntry[]; error?: string; loading: boolean };
 
@@ -24,10 +26,11 @@
 		workspaceName: string;
 		source: WorkspaceFileSource;
 		disconnected?: boolean;
+		editorSource?: FileEditorSource;
 		onOpenFile?: (path: string, line?: number) => void;
 	};
 
-	let { workspaceId, workspaceName, source, disconnected = false, onOpenFile }: Props = $props();
+	let { workspaceId, workspaceName, source, disconnected = false, editorSource, onOpenFile }: Props = $props();
 
 	const productItems: ShellNavItem[] = [
 		{ id: 'sessions', label: 'Sessions', icon: 'agents' },
@@ -40,6 +43,7 @@
 	let expanded = new SvelteSet<string>();
 	let activePath = $state('');
 	let selectedPath = $state<string>();
+	let selectedLine = $state<number>();
 	let includeHidden = $state(false);
 	let includeIgnored = $state(false);
 	let query = $state('');
@@ -136,13 +140,20 @@
 		if (directories[entry.path] === undefined) await loadDirectory(entry.path);
 	}
 
+	function openFile(path: string, line?: number): void {
+		selectedPath = path;
+		selectedLine = line;
+		submittedQuery = '';
+		if (line === undefined) onOpenFile?.(path);
+		else onOpenFile?.(path, line);
+	}
+
 	function selectEntry(entry: WorkspaceFileEntry): void {
 		activePath = entry.path;
 		if (entry.kind === 'directory') {
 			void toggleDirectory(entry);
 		} else {
-			selectedPath = entry.path;
-			onOpenFile?.(entry.path);
+			openFile(entry.path);
 		}
 	}
 
@@ -302,7 +313,7 @@
 						<ul aria-label="Changed files">
 							{#each gitStatus.files as file (file.path)}
 								<li>
-									<button type="button" title={file.path} onclick={() => onOpenFile?.(file.path)}>
+									<button type="button" title={file.path} onclick={() => openFile(file.path)}>
 										<Icon name={gitFileIcon(file)} size={14} />
 										<span>{file.path}</span>
 										<small>{gitFileLabel(file)}</small>
@@ -422,7 +433,7 @@
 						<button
 							type="button"
 							title={`${result.path}:${result.line}`}
-							onclick={() => onOpenFile?.(result.path, result.line)}>
+							onclick={() => openFile(result.path, result.line)}>
 							<span class="workspace-files__result-location">
 								<Icon name={fileIcon({ path: result.path, kind: 'file', size: null })} size={16} />
 								<strong>{result.path}</strong><small>:{result.line}</small>
@@ -432,11 +443,14 @@
 					</li>
 				{/each}
 			</ol>
+		{:else if selectedPath && editorSource}
+			{#key selectedPath}
+				<FileEditor path={selectedPath} source={editorSource} line={selectedLine} />
+			{/key}
 		{:else if selectedPath}
 			<div class="workspace-files__surface-state">
 				<Icon name="file" size={28} />
 				<p>{selectedPath}</p>
-				<small>File editing arrives in the next editor update.</small>
 			</div>
 		{:else}
 			<div class="workspace-files__surface-state">
@@ -500,8 +514,8 @@
 	.workspace-files__git ul {
 		display: grid;
 		max-height: 10rem;
-		margin: 0 -0.75rem -0.75rem;
-		padding: 0 0 0.35rem;
+		margin: 0 -0.75rem;
+		padding: 0;
 		overflow: auto;
 		list-style: none;
 	}
@@ -530,7 +544,7 @@
 	.workspace-files__search {
 		display: grid;
 		gap: 0.35rem;
-		padding: 0 0.75rem 0.75rem;
+		padding: 0.65rem 0.75rem 0.75rem;
 		border-bottom: 1px solid var(--shell-border);
 	}
 
@@ -573,9 +587,9 @@
 	}
 
 	.workspace-files__visibility {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.35rem 0.75rem;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+		gap: 0.25rem 0.75rem;
 		margin: 0;
 		padding: 0.65rem 0.75rem;
 		border: 0;
@@ -594,7 +608,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.35rem;
-		min-height: 1.75rem;
+		min-height: 1.5rem;
 		color: var(--shell-muted);
 		white-space: nowrap;
 	}

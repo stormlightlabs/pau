@@ -5,10 +5,12 @@ import {
 	getWorkspaceGitStatus,
 	listWorkspaceFiles,
 	PauApiError,
+	readWorkspaceFile,
 	resolveApiOrigin,
 	resolveApiToken,
 	resolveEventSocket,
-	searchWorkspaceFiles
+	searchWorkspaceFiles,
+	writeWorkspaceFile
 } from './api';
 
 const TOKEN = '0123456789abcdef0123456789abcdef';
@@ -72,6 +74,28 @@ test('lists and searches workspace files with traversal options', async () => {
 		'http://127.0.0.1:43127/api/workspaces/workspace%20%2F%20one/search?query=needle+%26+thread&limit=1000&include_ignored=true',
 		{ headers: { Authorization: `Bearer ${TOKEN}` } }
 	);
+});
+
+test('reads and writes workspace editor files with revision checks', async () => {
+	const opened = { path: 'src/example.ts', content: 'before', revision: 'one', writable: true };
+	const saved = { ...opened, content: 'after', revision: 'two' };
+	const fetcher = vi
+		.fn<typeof fetch>()
+		.mockResolvedValueOnce(Response.json(opened))
+		.mockResolvedValueOnce(Response.json(saved));
+
+	await expect(readWorkspaceFile('', 'workspace / one', 'src/example.ts', fetcher)).resolves.toEqual(opened);
+	await expect(writeWorkspaceFile('', 'workspace / one', 'src/example.ts', 'after', 'one', fetcher)).resolves.toEqual(
+		saved
+	);
+	expect(fetcher).toHaveBeenNthCalledWith(1, '/api/workspaces/workspace%20%2F%20one/file?path=src%2Fexample.ts', {
+		headers: undefined
+	});
+	expect(fetcher).toHaveBeenNthCalledWith(2, '/api/workspaces/workspace%20%2F%20one/file', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ path: 'src/example.ts', content: 'after', expected_revision: 'one' })
+	});
 });
 
 test('reads workspace Git status', async () => {

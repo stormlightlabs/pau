@@ -73,6 +73,7 @@
 	);
 	const selectedWork = $derived(work.find((item) => item.id === selectedId) ?? work[0]);
 
+	// TODO: use a switch..case here
 	function statusTone(value: WorkStatus) {
 		if (value === 'waiting') return 'text-warning';
 		if (value === 'running') return 'text-positive';

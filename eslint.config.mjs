@@ -27,6 +27,7 @@ export default defineConfig(
 		languageOptions: { globals: { ...globals.browser, ...globals.node } },
 		rules: {
 			'no-undef': 'off',
+			'unicorn/prefer-ternary': 'off',
 			'unicorn/catch-error-name': 'off',
 			'unicorn/consistent-boolean-name': 'off',
 			'unicorn/filename-case': 'off',

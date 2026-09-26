@@ -51,121 +51,6 @@ status `complete`.
 The SvelteKit app runs in a normal browser during development. Tauri is the
 shipped application in this deliverable.
 
-### Agent session loop
-
-#### 2.11 Pi discovery and diagnostics
-
-Status: complete
-Blocked by: none
-
-Find Pi, report its version and configuration paths, and expose actionable
-installation errors without starting a session.
-
-Verification:
-
-- Cover configured paths, `PATH` discovery, missing binaries, non-executable
-  files, and unsupported versions.
-
-#### 2.12 Pi RPC process and framing
-
-Status: complete
-Blocked by: 2.11
-
-Implement supervised `pi --mode rpc` startup in `pau-pi`, command correlation,
-JSONL framing, stderr diagnostics, and staged shutdown.
-
-Verification:
-
-- Test partial lines, multiple lines per read, malformed JSON, interleaved
-  responses and events, stderr output, and unexpected exits against a fake Pi
-  executable.
-
-#### 2.13 Pi event projection
-
-Status: complete
-Blocked by: 2.12
-
-Project text deltas, thinking, tool calls, tool results, and lifecycle events
-into `pau-agent` events. Replace streamed projections with authoritative
-completed messages.
-
-Verification:
-
-- Replay captured fixtures through the reducer.
-- Confirm `agent_end` does not mark a session idle before `agent_settled`.
-
-#### 2.14 Pi session controls
-
-Status: complete
-Blocked by: 2.12, 2.13
-
-Add prompt, follow-up, steer, interrupt, model selection, and stop operations
-with capability-aware errors.
-
-Verification:
-
-- Exercise every control against fake RPC fixtures.
-- Cover invalid state transitions, including prompting while running without a
-  queue choice.
-
-#### 2.15 Concurrent session registry
-
-Status: complete
-Blocked by: 2.12, 2.14
-
-Run multiple Pi sessions across one or more workspaces without blocking inactive
-views. Persist enough metadata to rediscover native sessions after restart.
-
-Verification:
-
-- Run two fake sessions concurrently and interleave their events.
-- Stop one session and confirm the other remains active.
-- Restart Pau and rediscover both native session records.
-
-#### 2.16 Session UI
-
-Status: complete
-Blocked by: 2.14, 2.15
-
-Build the workspace/session rail, transcript, composer, tool activity, status,
-and attention-required states using `packages/ui` and compose the route in
-`apps/web`.
-
-Verification:
-
-- Component-test empty, starting, running, waiting, failed, and stopped states.
-- Run the browser flow against two fake concurrent sessions.
-- Verify keyboard-only prompt, interrupt, and session switching.
-
-#### 2.17 Snapshot and reconnect
-
-Status: complete
-Blocked by: 2.15, 2.16
-
-Send a state snapshot plus sequenced events so a frontend reload reconstructs
-active sessions without duplicating output.
-
-Verification:
-
-- Disconnect during streamed text and reconnect from the last acknowledged
-  sequence.
-- Cover replay-window success, replay-window expiry, duplicate delivery, and
-  snapshot/event boundary races.
-
-#### 2.18 Rust Claude adapter
-
-Status: complete
-Blocked by: 2.15, 2.16
-
-Implement a `pau-agent` adapter that consumes the Claude bridge package's
-contract and fixtures. Do not add a second Claude process protocol.
-
-Verification:
-
-- Run the Claude bridge fixture suite through the Rust adapter.
-- Start one Pi and one fake Claude session concurrently through the same session
-  UI.
-
 ### Workspace tools
 
 #### 2.19 Workspace registry and file access
@@ -376,7 +261,7 @@ Verification:
 #### 2.33 Resource discovery
 
 Status: planned
-Blocked by: 2.11
+Blocked by: none
 
 Index user and project Pi skills, extensions, prompts, themes, and packages from
 Pi's normal locations. Preserve scope, source, and discovery warnings.
@@ -402,7 +287,7 @@ Verification:
 #### 2.35 Skill and prompt editing
 
 Status: planned
-Blocked by: 2.14, 2.33, 2.34
+Blocked by: 2.33, 2.34
 
 Create and edit skills and prompts through file-preserving operations, then ask
 Pi to reload resources.
@@ -415,7 +300,7 @@ Verification:
 #### 2.36 Package management
 
 Status: planned
-Blocked by: 2.14, 2.33, 2.34
+Blocked by: 2.33, 2.34
 
 Install, update, filter, enable, disable, and remove Pi packages through Pi's
 supported commands or APIs. Show source and scope before mutation.
@@ -429,7 +314,7 @@ Verification:
 #### 2.37 Extension UI requests
 
 Status: planned
-Blocked by: 2.12, 2.16
+Blocked by: none
 
 Surface supported Pi RPC extension dialogs and notifications without attempting
 to render terminal-only custom components.
@@ -444,7 +329,7 @@ Verification:
 #### 2.38 Website deployment
 
 Status: planned
-Blocked by: 2.18, 2.25, 2.32, 2.37
+Blocked by: 2.25, 2.32, 2.37
 
 Deploy `apps/website` to Cloudflare Pages at `https://pau.stormlightlabs.org`
 with preview deployments for pull requests.
@@ -458,7 +343,7 @@ Verification:
 #### 2.39 AppImage packaging
 
 Status: planned
-Blocked by: 2.18, 2.23, 2.25, 2.32, 2.37
+Blocked by: 2.23, 2.25, 2.32, 2.37
 
 Package the first Linux desktop release as an AppImage. Leave `.deb`, RPM,
 Intel macOS, signing, and notarization until release demand or available signing

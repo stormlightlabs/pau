@@ -71,6 +71,54 @@ Verification:
 - Confirm a terminal-only custom component reports the limitation and can be
   used by opening vanilla Pi in a Pau terminal.
 
+### MCP
+
+#### 2.47 MCP configuration discovery
+
+Status: planned
+Blocked by: none
+
+Discover Pi and Claude MCP configuration without treating their formats as one
+schema. Preserve unknown fields and identify source and scope. Keep existing
+native MCP configuration active. Store Pau-managed enablement as a workspace
+default with a per-session override. For Pi, recognize the explicitly installed
+`pi-mcp-adapter` package and its documented shared, user, project, package, and
+Pi-specific sources without silently installing, importing, enabling, or
+connecting it.
+
+Verification:
+
+- Round-trip representative Pi and Claude fixtures without changing unknown
+  fields or formatting unrelated entries.
+- Exercise `pi-mcp-adapter` precedence, disabled overrides, unknown fields, and
+  source provenance against the pinned release and one compatible update.
+- Confirm Pau-managed MCP is off before explicit enablement and show an
+  actionable unavailable state when Pi MCP is configured but the package is
+  absent or disabled.
+
+#### 2.48 MCP editing and diagnostics
+
+Status: planned
+Blocked by: 2.37, 2.47
+
+Add create, edit, remove, enable, disable, authenticate, and test operations
+through the Pi and Claude adapters. Report startup diagnostics and negotiated
+capabilities. Enable servers individually and connect lazily. Pi delegates MCP
+execution to the explicitly installed `pi-mcp-adapter` package. Native clients
+retain OAuth credentials, and MCP tool calls use the active adapter permission
+capability when available.
+
+Verification:
+
+- Run the pinned `pi-mcp-adapter` under Pi RPC and exercise stdio and HTTP
+  fixture servers, lazy startup, environment variables, approval, elicitation,
+  OAuth, startup timeout, protocol failure, status updates, and clean shutdown.
+- Confirm Pi's supported dialogs and notifications work through the extension UI
+  protocol and no test depends on parsing a terminal-only MCP panel.
+- Exercise the corresponding native configuration, authentication, test, status,
+  failure, and shutdown flows for Claude.
+- Confirm secrets remain redacted in UI events and logs.
+
 ### Workspace tools
 
 #### 2.19 Workspace registry and file access
@@ -215,6 +263,8 @@ Verification:
 - Run parity tests for read, write, edit, list, find, grep, shell execution,
   streaming output, abort, timeout, and tool-result truncation through the Pi
   worker.
+- Confirm supported stdio MCP servers inherit the selected sandbox and that
+  remote or unreviewed in-process MCP tools are disabled under that profile.
 - Confirm new work launches unsandboxed until the operator selects a sandbox
   profile, the UI names platform guarantees and disabled tools, and permission
   modes are never presented as containment.
@@ -334,7 +384,7 @@ Verification:
 #### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.23, 2.25, 2.37, 2.45
+Blocked by: 2.23, 2.25, 2.37, 2.45, 2.48
 
 Complete desktop equivalents for vanilla Pi input history, image input, queues,
 interrupt and retry controls, models, thinking levels, context and cost,
@@ -545,11 +595,12 @@ Verification:
   smoke test.
 
 Deliverable exit: the Tauri app can run concurrent Pi and Claude work, cover
-vanilla Pi's structured interactive workflows, inspect and edit a workspace,
-use a persistent terminal, and use embedded Neovim. It reports local resource
-use and can launch supported work inside an explicit local sandbox. The same UI
-works in a browser against the local development backend, all five themes cover
-the shipped surfaces, and the website and AppImage are publishable.
+vanilla Pi's structured interactive workflows, configure and use their MCP
+servers, inspect and edit a workspace, use a persistent terminal, and use
+embedded Neovim. It reports local resource use and can launch supported work
+inside an explicit local sandbox. The same UI works in a browser against the
+local development backend, all five themes cover the shipped surfaces, and the
+website and AppImage are publishable.
 
 ## 3. Web server
 
@@ -644,12 +695,16 @@ Status: planned
 Blocked by: 2
 
 Add Codex discovery, structured transport, native resume, capabilities,
-fixtures, and UI exposure through `pau-agent`.
+fixtures, and UI exposure through `pau-agent`. Map its native MCP configuration
+and lifecycle into the MCP adapter capabilities established in units 2.47 and
+2.48.
 
 Verification:
 
 - Run discovery, start, prompt, stream, interrupt, resume, failure, and cleanup
   against a fake Codex executable.
+- Round-trip Codex MCP configuration and exercise one fixture server through the
+  shared MCP UI without changing unknown native fields.
 - Keep live Codex tests opt-in.
 
 ### 3.8 Antigravity adapter
@@ -658,61 +713,19 @@ Status: planned
 Blocked by: 2
 
 Add Antigravity discovery, structured transport, native resume, capabilities,
-fixtures, and UI exposure through `pau-agent`.
+fixtures, and UI exposure through `pau-agent`. Map its native MCP configuration
+and lifecycle into the MCP adapter capabilities established in units 2.47 and
+2.48.
 
 Verification:
 
 - Run discovery, start, prompt, stream, interrupt, resume, failure, and cleanup
   against a fake Antigravity executable.
+- Round-trip Antigravity MCP configuration and exercise one fixture server
+  through the shared MCP UI without changing unknown native fields.
 - Keep live Antigravity tests opt-in.
 
-### 3.9 MCP configuration discovery
-
-Status: planned
-Blocked by: 2, 3.7, 3.8
-
-Discover each agent's MCP configuration without treating different formats as
-one schema. Preserve unknown fields and identify source and scope. Keep existing
-native MCP configuration active. Store Pau-managed enablement as a workspace
-default with a per-session override. For Pi, recognize the explicitly installed
-`pi-mcp-adapter` package and its documented shared, user, project, package, and
-Pi-specific sources without silently installing, importing, enabling, or
-connecting it.
-
-Verification:
-
-- Round-trip representative Pi, Claude, Codex, and Antigravity fixtures without
-  changing unknown fields or formatting unrelated entries.
-- Exercise `pi-mcp-adapter` precedence, disabled overrides, unknown fields, and
-  source provenance against the pinned release and one compatible update.
-- Confirm Pau-managed MCP is off before explicit enablement and show an
-  actionable unavailable state when Pi MCP is configured but the package is
-  absent or disabled.
-
-### 3.10 MCP editing and diagnostics
-
-Status: planned
-Blocked by: 3.9
-
-Add create, edit, remove, enable, disable, authenticate, and test operations
-through agent-specific adapters. Report startup diagnostics and negotiated
-capabilities. Enable servers individually and connect lazily. Use native agent
-clients; Pi delegates MCP execution to the explicitly installed
-`pi-mcp-adapter` package. Native clients retain OAuth credentials, and the
-active agent permission policy applies to MCP tools.
-
-Verification:
-
-- Run the pinned `pi-mcp-adapter` under Pi RPC and exercise stdio and HTTP
-  fixture servers, lazy startup, environment variables, approval, elicitation,
-  OAuth, startup timeout, protocol failure, status updates, and clean shutdown.
-- Confirm Pi's supported dialogs and notifications work through the extension UI
-  protocol and no test depends on parsing a terminal-only MCP panel.
-- Exercise the corresponding native flows for Claude, Codex, and Antigravity.
-- Confirm stdio servers inherit the selected local sandbox profile and secrets
-  remain redacted in UI events and logs.
-
-### 3.11 CodeMirror language services
+### 3.9 CodeMirror language services
 
 Status: planned
 Blocked by: 2

@@ -5,8 +5,9 @@ argument-hint: <unit-id>
 
 Implement roadmap unit `$1`.
 
-Read `AGENTS.md`, then the unit and its owning sections in `dev/ROADMAP.md`,
-`dev/SPEC.md`, and `dev/PLAN.md`. Stop if the ID is missing, the unit is not
+Read `AGENTS.md`, then the unit in `dev/ROADMAP.md`. Use the indexes in
+`dev/SPEC.md` and `dev/PLAN.md` to find and read the unit's owning documents
+under `dev/spec/` and `dev/plan/`. Stop if the ID is missing, the unit is not
 `planned` or `in progress`, or any blocker is not `complete`.
 
 Before editing, set a `planned` unit to `in progress`. Trace the affected code

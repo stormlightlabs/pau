@@ -17,9 +17,12 @@ pub use claude::{
 pub use controls::{AgentCapabilities, AgentControl, AgentControlError, PromptQueueChoice};
 pub use events::{AgentEvent, AgentEventKind, AgentSessionStatus};
 pub use mcp::{
-    DiscoverClaudeMcpOptions, DiscoveredMcpServer, McpAgent, McpConfigurationDiscovery,
-    McpConfigurationDocument, McpConfigurationKind, McpConfigurationScope, McpDiscoveryError,
-    McpServerSource, discover_claude_mcp, merge_mcp_layers,
+    ClaudeMcpOperation, ClaudeMcpOptions, DiscoverClaudeMcpOptions, DiscoveredMcpServer,
+    McpAdapterCapabilities, McpAgent, McpConfigurationDiscovery, McpConfigurationDocument,
+    McpConfigurationKind, McpConfigurationScope, McpDiagnostic, McpDiagnosticLevel,
+    McpDiscoveryError, McpEditError, McpNegotiatedCapabilities, McpOperationResult, McpServerEdit,
+    McpServerSource, claude_mcp_capabilities, discover_claude_mcp, edit_mcp_server,
+    merge_mcp_layers, redact_mcp_value, run_claude_mcp_operation, set_claude_server_enabled,
 };
 
 /// Identifies the agent subsystem in diagnostics.

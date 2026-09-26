@@ -4,11 +4,35 @@
 	let {
 		configuration,
 		onEnable,
-		onResolve
-	}: { configuration: McpConfigurationViewModel; onEnable?: () => void; onResolve?: () => void } = $props();
+		onResolve,
+		onCreate,
+		onEdit,
+		onRemove,
+		onToggle,
+		onAuthenticate,
+		onTest
+	}: {
+		configuration: McpConfigurationViewModel;
+		onEnable?: () => void;
+		onResolve?: () => void;
+		onCreate?: () => void;
+		onEdit?: (name: string) => void;
+		onRemove?: (name: string) => void;
+		onToggle?: (name: string, enabled: boolean) => void;
+		onAuthenticate?: (name: string) => void;
+		onTest?: (name: string) => void;
+	} = $props();
 
+	let selectedName = $state<string>();
 	let agentLabel = $derived(configuration.agent === 'pi' ? 'Pi' : 'Claude');
 	let unavailable = $derived(configuration.availability.state !== 'ready');
+	let selected = $derived(
+		configuration.servers.find((server) => server.name === selectedName) ?? configuration.servers[0]
+	);
+
+	function statusLabel(status: string) {
+		return status.replace('-', ' ');
+	}
 </script>
 
 <section class="mcp" aria-labelledby="mcp-title">
@@ -45,6 +69,67 @@
 				<button type="button" onclick={() => onEnable?.()}>Enable for this workspace</button>
 			{/if}
 		</div>
+
+		<div class="mcp__servers">
+			<div class="mcp__section-heading">
+				<h3>Servers</h3>
+				<button class="quiet" type="button" onclick={() => onCreate?.()}>Add server</button>
+			</div>
+			{#if configuration.servers.length === 0}
+				<p>No editable MCP servers found.</p>
+			{:else}
+				<div class="mcp__server-layout">
+					<ul aria-label="MCP servers">
+						{#each configuration.servers as server (server.name)}
+							<li>
+								<button
+									class="mcp__server-row"
+									class:selected={selected?.name === server.name}
+									type="button"
+									onclick={() => (selectedName = server.name)}>
+									<span><strong>{server.name}</strong><small>{server.scope} · {server.transport}</small></span>
+									<span class:failed={server.status === 'failed'}>{statusLabel(server.status)}</span>
+								</button>
+							</li>
+						{/each}
+					</ul>
+
+					{#if selected}
+						<div class="mcp__server-detail">
+							<div>
+								<strong>{selected.name}</strong>
+								<p>{selected.diagnostic ?? 'This lazy server has not connected yet.'}</p>
+							</div>
+							<div>
+								<h4>Configuration</h4>
+								<code title={selected.sourcePath}>{selected.sourcePath}</code>
+							</div>
+							<div>
+								<h4>Negotiated capabilities</h4>
+								<p>
+									{selected.negotiatedCapabilities.length > 0
+										? selected.negotiatedCapabilities.join(', ')
+										: 'Available after the first connection.'}
+								</p>
+							</div>
+							<div class="mcp__actions">
+								<button class="quiet" type="button" onclick={() => onEdit?.(selected.name)}>Edit</button>
+								<button class="quiet" type="button" onclick={() => onToggle?.(selected.name, !selected.enabled)}>
+									{selected.enabled ? 'Disable' : 'Enable'}
+								</button>
+								{#if selected.status === 'needs-auth'}
+									<button type="button" onclick={() => onAuthenticate?.(selected.name)}>Authenticate</button>
+								{/if}
+								<button type="button" disabled={!selected.enabled} onclick={() => onTest?.(selected.name)}>
+									Test connection
+								</button>
+								<button class="danger" type="button" onclick={() => onRemove?.(selected.name)}>Remove server</button>
+							</div>
+						</div>
+					{/if}
+				</div>
+			{/if}
+		</div>
 	{/if}
 
 	<div class="mcp__sources">
@@ -54,7 +139,7 @@
 		{:else}
 			<ul>
 				{#each configuration.sources as source (`${source.scope}:${source.path}`)}
-					<li>
+					<li class="mcp__source">
 						<code title={source.path}>{source.path}</code>
 						<span>{source.scope} · {source.serverCount}</span>
 					</li>
@@ -67,7 +152,7 @@
 <style>
 	.mcp {
 		display: grid;
-		width: min(46rem, calc(100vw - 2rem));
+		width: min(54rem, calc(100vw - 2rem));
 		color: var(--workbench-text);
 		background: var(--workbench-surface);
 		border: 1px solid var(--workbench-border);
@@ -76,6 +161,7 @@
 	.mcp__header,
 	.mcp__summary,
 	.mcp__unavailable,
+	.mcp__servers,
 	.mcp__sources {
 		padding: 1rem 1.125rem;
 	}
@@ -83,7 +169,8 @@
 	.mcp__header,
 	.mcp__unavailable,
 	.mcp__summary,
-	li {
+	.mcp__section-heading,
+	.mcp__source {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -92,12 +179,14 @@
 
 	.mcp__header,
 	.mcp__summary,
-	.mcp__unavailable {
+	.mcp__unavailable,
+	.mcp__servers {
 		border-bottom: 1px solid var(--workbench-border);
 	}
 
 	h2,
 	h3,
+	h4,
 	p {
 		margin: 0;
 	}
@@ -106,15 +195,16 @@
 		font-size: 1rem;
 	}
 
-	h3 {
-		margin-bottom: 0.75rem;
+	h3,
+	h4 {
 		font-size: 0.75rem;
 		font-weight: 650;
 		letter-spacing: 0.03em;
 	}
 
 	p,
-	li {
+	li,
+	small {
 		color: var(--workbench-muted);
 		font-size: 0.8125rem;
 		line-height: 1.5;
@@ -126,7 +216,8 @@
 		font-weight: 650;
 	}
 
-	.mcp__managed-state.off {
+	.mcp__managed-state.off,
+	.failed {
 		color: var(--workbench-unavailable-text);
 	}
 
@@ -134,10 +225,80 @@
 		background: color-mix(in srgb, var(--workbench-unavailable-surface) 55%, transparent);
 	}
 
-	.mcp__unavailable strong {
+	.mcp__unavailable strong,
+	.mcp__server-detail strong {
 		display: block;
 		margin-bottom: 0.25rem;
 		font-size: 0.875rem;
+	}
+
+	.mcp__section-heading {
+		margin-bottom: 0.75rem;
+	}
+
+	.mcp__server-layout {
+		display: grid;
+		grid-template-columns: minmax(12rem, 0.8fr) minmax(18rem, 1.2fr);
+		border: 1px solid var(--workbench-border);
+	}
+
+	ul {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.mcp__server-layout > ul {
+		border-right: 1px solid var(--workbench-border);
+	}
+
+	.mcp__server-layout li + li,
+	.mcp__source + .mcp__source {
+		border-top: 1px solid var(--workbench-border);
+	}
+
+	.mcp__server-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		width: 100%;
+		min-height: 3.25rem;
+		padding: 0.5rem 0.75rem;
+		color: var(--workbench-muted);
+		background: transparent;
+		border: 0;
+		border-left: 2px solid transparent;
+		text-align: left;
+	}
+
+	.mcp__server-row.selected {
+		color: var(--workbench-text);
+		background: var(--workbench-selected-surface, var(--workbench-canvas));
+		border-left-color: var(--workbench-focus);
+	}
+
+	.mcp__server-row strong,
+	.mcp__server-row small {
+		display: block;
+	}
+
+	.mcp__server-row > span:last-child {
+		font-size: 0.75rem;
+		text-transform: capitalize;
+	}
+
+	.mcp__server-detail {
+		display: grid;
+		align-content: start;
+		gap: 1rem;
+		min-width: 0;
+		padding: 0.875rem;
+	}
+
+	.mcp__actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
 	}
 
 	button {
@@ -154,7 +315,7 @@
 		cursor: pointer;
 	}
 
-	button:hover {
+	button:hover:not(:disabled) {
 		background: var(--workbench-button-hover);
 	}
 
@@ -163,22 +324,30 @@
 		outline-offset: 2px;
 	}
 
-	ul {
-		display: grid;
-		gap: 0;
-		margin: 0;
-		padding: 0;
-		list-style: none;
+	button:disabled {
+		cursor: not-allowed;
+		opacity: 0.5;
 	}
 
-	li {
+	button.quiet {
+		color: var(--workbench-text);
+		background: transparent;
+		border-color: var(--workbench-border);
+	}
+
+	button.danger {
+		color: var(--workbench-unavailable-text);
+		background: transparent;
+		border-color: var(--workbench-border);
+	}
+
+	.mcp__sources h3 {
+		margin-bottom: 0.75rem;
+	}
+
+	.mcp__source {
 		min-width: 0;
 		padding: 0.625rem 0;
-		border-top: 1px solid var(--workbench-border);
-	}
-
-	li:first-child {
-		border-top: 0;
 	}
 
 	code {
@@ -189,12 +358,12 @@
 		white-space: nowrap;
 	}
 
-	li span {
+	.mcp__source span {
 		flex: none;
 		text-transform: capitalize;
 	}
 
-	@media (max-width: 34rem) {
+	@media (max-width: 42rem) {
 		.mcp__header,
 		.mcp__summary,
 		.mcp__unavailable {
@@ -202,7 +371,17 @@
 			flex-direction: column;
 		}
 
-		button {
+		.mcp__server-layout {
+			grid-template-columns: 1fr;
+		}
+
+		.mcp__server-layout > ul {
+			border-right: 0;
+			border-bottom: 1px solid var(--workbench-border);
+		}
+
+		.mcp__summary button,
+		.mcp__unavailable button {
 			width: 100%;
 		}
 	}

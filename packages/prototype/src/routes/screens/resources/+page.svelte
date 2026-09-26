@@ -10,7 +10,9 @@
 			scope: 'User',
 			detail: '26 tools',
 			icon: 'i-simple-icons-github',
-			state: 'connected'
+			state: 'needs auth',
+			capabilities: 'Available after authentication',
+			diagnostic: 'Sign in before testing this server.'
 		},
 		{
 			id: 'playwright',
@@ -18,7 +20,9 @@
 			scope: 'Project',
 			detail: '21 tools',
 			icon: 'i-simple-icons-playwright',
-			state: 'connected'
+			state: 'connected',
+			capabilities: 'tools',
+			diagnostic: 'Connected with 21 tools.'
 		},
 		{
 			id: 'filesystem',
@@ -26,7 +30,9 @@
 			scope: 'Workspace',
 			detail: '11 tools',
 			icon: 'i-tabler-folders',
-			state: 'connected'
+			state: 'not connected',
+			capabilities: 'Available after the first connection',
+			diagnostic: 'This lazy server has not connected yet.'
 		},
 		{
 			id: 'postgres',
@@ -34,7 +40,9 @@
 			scope: 'Project',
 			detail: '8 tools',
 			icon: 'i-simple-icons-postgresql',
-			state: 'error'
+			state: 'error',
+			capabilities: 'Unavailable',
+			diagnostic: 'The server did not finish startup before the timeout.'
 		}
 	];
 	let tab = $state<'MCP servers' | 'Skills' | 'Prompts'>('MCP servers');
@@ -113,8 +121,12 @@
 									<span
 										><b class="block text-text">{resource.name}</b><small>{resource.scope} · {resource.detail}</small
 										></span>
-									<span class={resource.state === 'error' ? 'text-danger' : 'text-positive'}
-										><span class="status-dot mr-1"></span>{resource.state}</span>
+									<span
+										class={resource.state === 'error'
+											? 'text-danger'
+											: resource.state === 'connected'
+												? 'text-positive'
+												: 'text-warning'}><span class="status-dot mr-1"></span>{resource.state}</span>
 								</button>
 							{/each}
 						</div>
@@ -148,6 +160,9 @@
 				<div class="border border-line bg-canvas p-3 mock-code text-xs leading-5">
 					npx -y @modelcontextprotocol/server-{current.id}<br /><span class="text-muted">TOKEN = ••••••••</span>
 				</div>
+				<p class="mb-1 mt-4 text-xs text-muted">{current.diagnostic}</p>
+				<p class="mock-section-label mt-6">Negotiated capabilities</p>
+				<p class="m-0 text-xs leading-5 text-muted">{current.capabilities}</p>
 				<p class="mock-section-label mt-6">Agent access</p>
 				<div class="flex flex-wrap gap-2">
 					<button class="app-button border-accent!" type="button">Pi</button><button class="app-button" type="button"
@@ -159,10 +174,14 @@
 					This server starts a local process and receives selected workspace context. Review its source before enabling
 					it.
 				</p>
-				<div class="mt-auto flex items-center justify-between pt-6">
+				<div class="mt-auto flex flex-wrap items-center gap-2 pt-6">
+					<button class="app-button" type="button">Edit</button>
+					<button class="app-button" type="button">Disable</button>
+					{#if current.state === 'needs auth'}<button class="app-button-primary" type="button">Authenticate</button
+						>{/if}
 					<button class="app-button" type="button" onclick={() => (tested = true)}
 						><span class="i-tabler-player-play"></span>{tested ? 'Connection works' : 'Test connection'}</button>
-					<button class="border-0 bg-transparent text-xs text-danger" type="button">Remove</button>
+					<button class="border-0 bg-transparent text-xs text-danger" type="button">Remove server</button>
 				</div>
 			</aside>
 		</div>

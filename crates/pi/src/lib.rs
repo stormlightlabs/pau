@@ -14,7 +14,7 @@ pub use extension_ui::{
 pub use mcp::{
     DiscoverPiMcpOptions, LATEST_VERIFIED_PI_MCP_ADAPTER_VERSION, PINNED_PI_MCP_ADAPTER_VERSION,
     PiMcpAdapterAvailability, PiMcpAdapterCompatibility, PiMcpAdapterState, PiMcpDiscovery,
-    discover_pi_mcp,
+    PiMcpOperation, discover_pi_mcp, pi_mcp_capabilities, run_pi_mcp_operation,
 };
 pub use process::{
     PiDiagnostic, PiDiagnosticSource, PiProcess, PiProcessError, PiProcessExit, PiProcessOutput,

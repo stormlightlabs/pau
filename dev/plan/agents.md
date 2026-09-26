@@ -161,9 +161,23 @@ the flow but never reads or stores the token. Pi MCP configuration follows the
 adapter's documented shared and Pi-specific sources. Preserve unknown fields and
 source precedence rather than rewriting an effective merged document.
 
-Before building the Pi MCP UI, run the selected adapter under Pi RPC and verify
-approval, elicitation, OAuth, status, failure, and shutdown behavior. Supported
-notifications and dialogs use Pi's extension UI protocol. Do not parse its
-terminal-only panels. If Pau needs richer live status than RPC exposes, prefer
-an upstream structured RPC surface; add an optional, versioned Pau bridge only
-for a demonstrated gap.
+Pau edits native JSONC with syntax-aware, targeted changes so comments, unknown
+fields, and unrelated entries retain their original formatting. Pi enable and
+disable operations use the project-local Pi override, then reload Pi resources.
+Runtime test and authentication operations invoke `pi-mcp-adapter` commands
+through Pi RPC. Claude remove, test, status, and authentication operations
+invoke Claude Code's native MCP commands. Syntax-aware edits create or change
+Claude entries without putting server credentials in process arguments, and
+local disabled choices retain Claude's native file layout.
+
+The adapters report redacted startup diagnostics, runtime state, and negotiated
+server capabilities. Enabled servers keep their native lazy lifecycle. MCP tool
+calls retain the native client's approval path when the active agent adapter
+advertises pre-execution permission support. Pi and Claude remain the sole
+owners of OAuth credentials.
+
+Supported Pi notifications and dialogs use Pi's extension UI protocol. Pau does
+not parse the terminal-only `/mcp` panel. The pinned adapter's versioned status
+snapshot is available only on Pi's in-process extension event bus, while RPC
+currently exposes its status text and notifications. Prefer an upstream
+structured RPC status surface before adding an optional versioned bridge.

@@ -20,6 +20,8 @@ export type {
 	McpAgent,
 	McpClientAvailability,
 	McpConfigurationViewModel,
+	McpServer,
+	McpServerStatus,
 	McpSource,
 	McpSourceScope
 } from './lib/types/mcp';

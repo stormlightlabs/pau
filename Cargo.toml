@@ -24,7 +24,7 @@ dirs = "6.0.0"
 futures-util = "0.3.31"
 getrandom = "0.3.4"
 ignore = "0.4.25"
-jsonc-parser = { version = "0.33.2", features = ["serde"] }
+jsonc-parser = { version = "0.33.2", features = ["cst", "serde"] }
 libc = "0.2.183"
 nvim-rs = { version = "0.9.2", features = ["use_tokio"] }
 portable-pty = "0.9.0"

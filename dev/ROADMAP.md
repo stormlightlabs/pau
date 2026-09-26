@@ -98,7 +98,7 @@ Verification:
 
 #### 2.48 MCP editing and diagnostics
 
-Status: planned
+Status: complete
 Blocked by: 2.37, 2.47
 
 Add create, edit, remove, enable, disable, authenticate, and test operations
@@ -400,7 +400,10 @@ Verification:
   extensions, MCP tools when installed, queued messages, compaction, session
   branching, review, and the persistent terminal.
 
-Deliverable milestone: Pau is the primary dogfood interface for routine Pi and
+**Primary dogfood replacement point:** When 2.40 is complete, Pau replaces
+vanilla Pi with `pi-mcp-adapter` in a terminal for routine Pi work, including
+MCP. Vanilla Pi remains available in Pau's persistent terminal for terminal-only
+extension components. Pau is also the primary dogfood interface for routine
 Claude work. Embedded Neovim and release packaging remain later milestones.
 
 #### 2.26 Workspace shell environments

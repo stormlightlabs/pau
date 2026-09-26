@@ -6,9 +6,13 @@ use std::path::{Path, PathBuf};
 
 use jsonc_parser::parse_to_serde_value;
 use pau_agent::{
-    DiscoveredMcpServer, McpAgent, McpConfigurationDiscovery, McpConfigurationDocument,
-    McpConfigurationKind, McpConfigurationScope, McpDiscoveryError, McpServerSource,
+    DiscoveredMcpServer, McpAdapterCapabilities, McpAgent, McpConfigurationDiscovery,
+    McpConfigurationDocument, McpConfigurationKind, McpConfigurationScope, McpDiagnostic,
+    McpDiagnosticLevel, McpDiscoveryError, McpOperationResult, McpServerSource,
 };
+use serde_json::json;
+
+use crate::{PiProcess, PiProcessError};
 use semver::Version;
 use serde_json::Value;
 
@@ -16,6 +20,102 @@ use serde_json::Value;
 pub const PINNED_PI_MCP_ADAPTER_VERSION: &str = "2.37.0";
 /// Newer compatible release exercised by Pau.
 pub const LATEST_VERIFIED_PI_MCP_ADAPTER_VERSION: &str = "2.38.0";
+
+/// Finite MCP operation delegated to the installed adapter through Pi RPC.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PiMcpOperation {
+    /// Persist the highest-precedence enabled override and reload Pi resources.
+    Enable { name: String },
+    /// Persist the highest-precedence disabled override and reload Pi resources.
+    Disable { name: String },
+    /// Start the adapter-owned OAuth flow.
+    Authenticate { name: String },
+    /// Connect or reconnect one server and refresh its negotiated catalog.
+    Test { name: String },
+}
+
+/// Capabilities of the pinned adapter as used through Pi RPC.
+pub fn pi_mcp_capabilities(permission_passthrough: bool) -> McpAdapterCapabilities {
+    McpAdapterCapabilities {
+        create: true,
+        edit: true,
+        remove: true,
+        enable: true,
+        disable: true,
+        authenticate: true,
+        test: true,
+        lazy_connect: true,
+        permission_passthrough,
+    }
+}
+
+/// Runs a supported adapter command through Pi's extension-command path.
+///
+/// The adapter owns connections, OAuth storage, approval and elicitation. Pau
+/// consumes the resulting extension UI notifications and status updates; it
+/// does not parse the adapter's terminal-only panel.
+pub async fn run_pi_mcp_operation(
+    process: &PiProcess,
+    operation: PiMcpOperation,
+) -> Result<McpOperationResult, PiProcessError> {
+    let (command, success_message, failure_message, reload) = match operation {
+        PiMcpOperation::Enable { name } => (
+            format!("/mcp enable {name}"),
+            format!("Pi enabled MCP server {name:?}."),
+            format!("Pi could not enable MCP server {name:?}."),
+            true,
+        ),
+        PiMcpOperation::Disable { name } => (
+            format!("/mcp disable {name}"),
+            format!("Pi disabled MCP server {name:?}."),
+            format!("Pi could not disable MCP server {name:?}."),
+            true,
+        ),
+        PiMcpOperation::Authenticate { name } => (
+            format!("/mcp-auth {name}"),
+            format!("Pi completed the MCP authentication command for {name:?}."),
+            format!("Pi could not run MCP authentication for {name:?}."),
+            false,
+        ),
+        PiMcpOperation::Test { name } => (
+            format!("/mcp reconnect {name}"),
+            format!("Pi completed the MCP connection test for {name:?}."),
+            format!("Pi could not test MCP server {name:?}."),
+            false,
+        ),
+    };
+    let response = process
+        .command(json!({"type": "prompt", "message": command}))
+        .await?;
+    let mut success = response
+        .get("success")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if success && reload {
+        let reload_response = process
+            .command(json!({"type": "prompt", "message": "/reload"}))
+            .await?;
+        success = reload_response
+            .get("success")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+    }
+    Ok(McpOperationResult {
+        success,
+        diagnostic: McpDiagnostic {
+            level: if success {
+                McpDiagnosticLevel::Info
+            } else {
+                McpDiagnosticLevel::Error
+            },
+            message: if success {
+                success_message
+            } else {
+                failure_message
+            },
+        },
+    })
+}
 
 /// Paths needed to inspect Pi and adapter configuration.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -858,5 +958,104 @@ mod tests {
         assert_eq!(server.definition["newField"], 7);
         assert_eq!(server.sources[0].scope, McpConfigurationScope::Package);
         assert_eq!(discovery.configuration.documents[0].round_trip_text(), raw);
+    }
+
+    #[test]
+    fn reports_adapter_operations_and_permission_passthrough() {
+        let capabilities = pi_mcp_capabilities(true);
+        assert!(capabilities.create);
+        assert!(capabilities.authenticate);
+        assert!(capabilities.test);
+        assert!(capabilities.lazy_connect);
+        assert!(capabilities.permission_passthrough);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn delegates_runtime_operations_through_pi_rpc_and_supported_ui() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::time::Duration;
+
+        use crate::{PiProcessOutput, PiShutdownTimeouts, StartPiProcessOptions};
+
+        let directory = tempdir().unwrap();
+        let executable = directory.path().join("pi-fixture");
+        let commands = directory.path().join("commands");
+        fs::write(
+            &executable,
+            format!(
+                r#"#!/usr/bin/env python3
+import json, sys
+for line in sys.stdin:
+    command = json.loads(line)
+    message = command.get("message", "")
+    with open({commands:?}, "a") as log:
+        log.write(message + "\n")
+    if message.startswith("/mcp reconnect"):
+        print(json.dumps({{"type":"extension_ui_request","id":"status","method":"setStatus","statusKey":"mcp","statusText":"1 connected · 2 tools"}}), flush=True)
+        print(json.dumps({{"type":"extension_ui_request","id":"notice","method":"notify","message":"MCP: connected","notifyType":"info"}}), flush=True)
+    print(json.dumps({{"type":"response","id":command["id"],"command":command["type"],"success":True}}), flush=True)
+"#,
+                commands = commands.to_string_lossy()
+            ),
+        )
+        .unwrap();
+        let mut permissions = fs::metadata(&executable).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&executable, permissions).unwrap();
+        let process = PiProcess::start(StartPiProcessOptions {
+            executable_path: executable,
+            working_directory: directory.path().to_path_buf(),
+            arguments: Vec::new(),
+            shutdown_timeouts: PiShutdownTimeouts {
+                protocol: Duration::from_millis(100),
+                interrupt: Duration::from_millis(100),
+                terminate: Duration::from_millis(100),
+                kill: Duration::from_millis(100),
+            },
+        })
+        .unwrap();
+        let mut output = process.subscribe();
+
+        let result = run_pi_mcp_operation(
+            &process,
+            PiMcpOperation::Test {
+                name: "fixture".to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+        assert!(result.success);
+
+        let first = output.recv().await.unwrap();
+        let second = output.recv().await.unwrap();
+        assert!(
+            matches!(first, PiProcessOutput::Event(ref value) if value["method"] == "setStatus")
+        );
+        assert!(matches!(second, PiProcessOutput::Event(ref value) if value["method"] == "notify"));
+
+        for operation in [
+            PiMcpOperation::Enable {
+                name: "fixture".to_owned(),
+            },
+            PiMcpOperation::Disable {
+                name: "fixture".to_owned(),
+            },
+            PiMcpOperation::Authenticate {
+                name: "fixture".to_owned(),
+            },
+        ] {
+            assert!(
+                run_pi_mcp_operation(&process, operation)
+                    .await
+                    .unwrap()
+                    .success
+            );
+        }
+        assert_eq!(
+            fs::read_to_string(commands).unwrap(),
+            "/mcp reconnect fixture\n/mcp enable fixture\n/reload\n/mcp disable fixture\n/reload\n/mcp-auth fixture\n"
+        );
+        process.shutdown().await.unwrap();
     }
 }

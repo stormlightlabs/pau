@@ -50,6 +50,31 @@ followed by project scope and the current project's local entry in
 `~/.claude.json`. Claude's per-project `disabledMcpServers` choice remains in
 effect.
 
-Pau retains unknown fields and the original source text. Reading and displaying
-configuration therefore does not reformat comments, reorder keys, or rewrite
-unrelated entries.
+Pau retains unknown fields and the original source text. Creating, editing,
+enabling, disabling, or removing one server does not reformat comments, reorder
+keys, or rewrite unrelated entries.
+
+## Manage and test servers
+
+Open **Resources > MCP servers** and choose Pi or Claude. You can add a server,
+edit its native definition, enable or disable it, test its connection, or remove
+it. Pau shows the file and scope that will change before writing.
+
+Enabled servers connect only when a tool first needs them or when you choose
+**Test connection**. The selected server shows its latest startup result and the
+capabilities reported during the connection. Failed startup, timeout, and
+protocol errors stay attached to that server so another server can continue to
+work.
+
+For Pi, connection tests, OAuth, status updates, approval, and elicitation run
+inside the installed `pi-mcp-adapter` package. Pau displays the package's
+supported dialogs, notifications, and status text. Its terminal-only `/mcp`
+panel remains available by opening vanilla Pi in a Pau terminal; Pau does not
+parse that panel.
+
+For Claude, Pau uses Claude Code's native MCP commands and configuration. Choose
+**Authenticate** when a remote server needs OAuth. Pi and Claude keep their own
+OAuth credentials; Pau does not read, copy, or log them. Pau also removes
+credential fields from MCP diagnostics and UI events. MCP tool calls use the
+agent's active permission controls when that adapter can approve a call before
+it runs.

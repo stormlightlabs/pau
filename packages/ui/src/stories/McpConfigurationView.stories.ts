@@ -8,7 +8,17 @@ const meta = {
 	title: 'Resources/MCP configuration',
 	component: McpConfigurationView,
 	tags: ['autodocs'],
-	args: { configuration: mcpConfigurationFixtures.piConfiguredOff, onEnable: fn(), onResolve: fn() }
+	args: {
+		configuration: mcpConfigurationFixtures.piConfiguredOff,
+		onEnable: fn(),
+		onResolve: fn(),
+		onCreate: fn(),
+		onEdit: fn(),
+		onRemove: fn(),
+		onToggle: fn(),
+		onAuthenticate: fn(),
+		onTest: fn()
+	}
 } satisfies Meta<typeof McpConfigurationView>;
 
 export default meta;

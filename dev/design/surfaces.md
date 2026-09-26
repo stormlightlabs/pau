@@ -171,11 +171,15 @@ reachable without shrinking the character grid unnecessarily.
 
 The list answers what is installed, its scope, trust, validation, and source.
 The inspector answers what the selected resource can do, which agents can use
-it, and what file or command an update will change.
+it, and what file or command an update will change. For MCP servers, it also
+shows native connection state, startup diagnostics, and negotiated capabilities.
+Create, edit, enable, disable, authenticate, test, and remove actions stay with
+the selected server.
 
 Selection must not imply trust. Invalid and untrusted resources remain
-inspectable. At narrow widths, the selected resource opens as a detail view with
-a clear return to the filtered list.
+inspectable. Disabled and failed servers keep their details and a direct next
+action. At narrow widths, the selected resource opens as a detail view with a
+clear return to the filtered list.
 
 ## Settings
 

@@ -1,6 +1,8 @@
 <script lang="ts">
 	import ApplicationShell, { type ShellNavItem } from './ApplicationShell.svelte';
 	import ExtensionUi from './ExtensionUi.svelte';
+	import SessionResourceSummary from './SessionResourceSummary.svelte';
+	import type { ProcessResourceSnapshot } from './types/resource-monitoring';
 	import type {
 		ExtensionUiResponse,
 		ExtensionUiState,
@@ -17,6 +19,8 @@
 		onSelectSession?: (sessionId: string) => void;
 		onSend?: (sessionId: string, text: string, queue?: PromptQueue) => void | Promise<void>;
 		onInterrupt?: (sessionId: string) => void | Promise<void>;
+		onStop?: (sessionId: string) => void | Promise<void>;
+		resourceSnapshot?: ProcessResourceSnapshot;
 		onExtensionUiResponse?: (sessionId: string, response: ExtensionUiResponse) => void | Promise<void>;
 		onExtensionUiTimeout?: (sessionId: string, requestId: string) => void;
 		onOpenPiTerminal?: (sessionId: string) => void;
@@ -29,6 +33,8 @@
 		onSelectSession = () => {},
 		onSend = () => {},
 		onInterrupt = () => {},
+		onStop = () => {},
+		resourceSnapshot,
 		onExtensionUiResponse = () => {},
 		onExtensionUiTimeout = () => {},
 		onOpenPiTerminal
@@ -56,6 +62,7 @@
 			attention: sessions.some((session) => hasAttention(session))
 		},
 		{ id: 'files', label: 'Files', icon: 'files' },
+		{ id: 'processes', label: 'Processes', icon: 'processes' },
 		{ id: 'resources', label: 'Resources', icon: 'resources' },
 		{ id: 'settings', label: 'Settings', icon: 'settings' }
 	] satisfies ShellNavItem[]);
@@ -137,7 +144,7 @@
 	{productItems}
 	contextItems={[]}
 	{disconnected}
-	inspectorOpen={false}>
+	inspectorOpen={Boolean(resourceSnapshot)}>
 	{#snippet context()}
 		<nav class="session-rail" aria-label="Workspaces and sessions">
 			{#if sessions.length === 0}
@@ -173,6 +180,17 @@
 				{/each}
 			{/if}
 		</nav>
+	{/snippet}
+
+	{#snippet inspector()}
+		<SessionResourceSummary
+			snapshot={resourceSnapshot}
+			actions={{
+				interrupt: activeSession?.capabilities.interrupt ?? false,
+				stop: activeSession?.capabilities.stop ?? false
+			}}
+			onInterrupt={(sessionId) => onInterrupt(sessionId)}
+			onStop={(sessionId) => onStop(sessionId)} />
 	{/snippet}
 
 	{#if activeSession}

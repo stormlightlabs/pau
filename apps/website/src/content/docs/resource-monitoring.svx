@@ -1,0 +1,53 @@
+---
+title: Resource monitoring
+description: Read machine-resource use for Pau-owned process trees.
+order: 3
+---
+
+# Resource monitoring
+
+Pau samples each process tree that it starts, including agent sessions, terminals,
+external editors, and supported stdio MCP servers. Open a workspace's
+**Processes** view to compare the trees. Open a session inspector for a compact
+summary of that session.
+
+The views keep model context, token counts, and cost separate from machine
+resources.
+
+## Read the measurements
+
+Each active tree reports:
+
+- CPU use across the root process and its descendants
+- Current and peak resident memory
+- Current and peak process count
+- Elapsed time and accumulated CPU time
+- Disk bytes read and written when the operating system reports reliable totals
+
+Expand a process row to inspect its root process and descendants. Pau identifies
+a process by its PID and start time, so a reused PID does not inherit an earlier
+process's history.
+
+Disk I/O can show **Unavailable**. This means Pau cannot obtain a reliable
+per-process total on the current platform. It does not mean that the process
+performed no I/O.
+
+## History and completed work
+
+Pau samples active trees every two seconds and keeps about 30 minutes of raw
+samples in memory. Raw samples are not written to the event replay log or sent
+to a telemetry service.
+
+When a process ends, Pau stores a small summary with elapsed time, accumulated
+CPU time, peak memory, peak process count, and disk totals when available. The
+raw history is discarded.
+
+## Respond to sustained pressure
+
+A warning appears only after CPU or memory pressure continues across several
+samples. Pau keeps the work running. Use **Interrupt work** to stop the current
+agent turn while preserving the session, or **Stop session** to end the managed
+process. These actions appear only when the agent adapter supports them.
+
+Pau does not terminate, throttle, or restart work automatically in response to a
+resource warning.

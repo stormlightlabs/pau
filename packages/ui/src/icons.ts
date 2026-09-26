@@ -29,6 +29,7 @@ export const ICONS = {
 	gitMerge: 'i-octicon-git-merge-16',
 	github: 'i-simple-icons-github',
 	panel: 'i-tabler-layout-sidebar-right',
+	processes: 'i-tabler-activity-heartbeat',
 	resources: 'i-tabler-plug-connected',
 	settings: 'i-tabler-adjustments-horizontal',
 	sidebar: 'i-tabler-layout-sidebar'

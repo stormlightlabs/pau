@@ -93,7 +93,7 @@
 					<span class="size-2.5 rounded-full bg-site-accent"></span>Available
 				</h3>
 				<ul class="grid list-none gap-6 p-0">
-					{#each [{ icon: 'i-tabler-messages', title: 'Session orchestration', text: 'Run Pi and Claude Code concurrently, steer work, and recover after reconnecting.' }, { icon: 'i-tabler-folders', title: 'Workspace inspection', text: 'Browse files, search content, and inspect Git status beside agent work.' }, { icon: 'i-tabler-plug-connected', title: 'Native MCP management', text: 'Edit and test Pi and Claude servers without taking over their credentials.' }] as item}<li
+					{#each [{ icon: 'i-tabler-messages', title: 'Session orchestration', text: 'Run Pi and Claude Code concurrently, steer work, and recover after reconnecting.' }, { icon: 'i-tabler-folders', title: 'Workspace inspection', text: 'Browse files, search content, and inspect Git status beside agent work.' }, { icon: 'i-tabler-plug-connected', title: 'Native MCP management', text: 'Edit and test Pi and Claude servers without taking over their credentials.' }] as item (item.title)}<li
 							class="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-3 text-[0.88rem] leading-6 text-site-muted">
 							<span class={`${item.icon} mt-1 text-base text-site-accent`}></span><span class="grid gap-0.5"
 								><strong class="text-[0.95rem] text-site-ink">{item.title}</strong>{item.text}</span>
@@ -105,7 +105,7 @@
 					<span class="size-2.5 rounded-full bg-site-focus"></span>Planned
 				</h3>
 				<ul class="grid list-none gap-6 p-0">
-					{#each [{ icon: 'i-tabler-code', title: 'Editing and review', text: 'Edit files, navigate agent changes, and review diffs in the same workspace.' }, { icon: 'i-tabler-terminal-2', title: 'Terminal and external editors', text: 'Keep terminal editors alive and hand files to your preferred external editor.' }, { icon: 'i-tabler-shield-lock', title: 'Local execution controls', text: 'Inspect resource use and choose explicit sandbox and credential policies.' }] as item}<li
+					{#each [{ icon: 'i-tabler-code', title: 'Editing and review', text: 'Edit files, navigate agent changes, and review diffs in the same workspace.' }, { icon: 'i-tabler-terminal-2', title: 'Terminal and external editors', text: 'Keep terminal editors alive and hand files to your preferred external editor.' }, { icon: 'i-tabler-shield-lock', title: 'Local execution controls', text: 'Inspect resource use and choose explicit sandbox and credential policies.' }] as item (item.title)}<li
 							class="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-3 text-[0.88rem] leading-6 text-site-muted">
 							<span class={`${item.icon} mt-1 text-base text-site-accent`}></span><span class="grid gap-0.5"
 								><strong class="text-[0.95rem] text-site-ink">{item.title}</strong>{item.text}</span>

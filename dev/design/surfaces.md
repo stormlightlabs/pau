@@ -6,21 +6,22 @@ when purpose, hierarchy, responsive behavior, or a durable interaction changes.
 
 ## Surface index
 
-| Surface           | Prototype route          | Source                                          | Primary task                                       |
-| ----------------- | ------------------------ | ----------------------------------------------- | -------------------------------------------------- |
-| Prototype hub     | `/`                      | `src/routes/+page.svelte`                       | Choose a design fixture                            |
-| Dashboard         | `/screens/dashboard`     | `src/routes/screens/dashboard/+page.svelte`     | Find active work or a blocking decision            |
-| Session           | `/screens/session`       | `src/routes/screens/session/+page.svelte`       | Direct one agent session and inspect its work      |
-| Harness control   | `/screens/orchestration` | `src/routes/screens/orchestration/+page.svelte` | Supervise concurrent native sessions               |
-| Scratchpad        | `/screens/scratchpad`    | `src/routes/screens/scratchpad/+page.svelte`    | Capture notes and send selected context            |
-| Editor and review | `/screens/editor`        | `src/routes/screens/editor/+page.svelte`        | Edit a file and review changes                     |
-| Embedded editor study | `/screens/neovim`     | `src/routes/screens/neovim/+page.svelte`        | Record a deferred deep-integration direction       |
-| Terminal          | `/screens/terminal`      | `src/routes/screens/terminal/+page.svelte`      | Use persistent PTY sessions                        |
-| Resources         | `/screens/resources`     | `src/routes/screens/resources/+page.svelte`     | Inspect scope, trust, and capability               |
-| Settings          | `/screens/settings`      | `src/routes/screens/settings/+page.svelte`      | Change product and editor preferences              |
-| Website and docs  | `/docs`                  | `src/routes/docs/+page.svelte`                  | Evaluate Pau, learn a task, or check its status    |
-| Launch            | `/splash/launch`         | `src/routes/splash/launch/+page.svelte`         | Understand current startup work                    |
-| Reconnect         | `/splash/reconnect`      | `src/routes/splash/reconnect/+page.svelte`      | Recover UI connectivity without implying lost work |
+| Surface               | Prototype route          | Source                                          | Primary task                                       |
+| --------------------- | ------------------------ | ----------------------------------------------- | -------------------------------------------------- |
+| Prototype hub         | `/`                      | `src/routes/+page.svelte`                       | Choose a design fixture                            |
+| Dashboard             | `/screens/dashboard`     | `src/routes/screens/dashboard/+page.svelte`     | Find active work or a blocking decision            |
+| Session               | `/screens/session`       | `src/routes/screens/session/+page.svelte`       | Direct one agent session and inspect its work      |
+| Harness control       | `/screens/orchestration` | `src/routes/screens/orchestration/+page.svelte` | Supervise concurrent native sessions               |
+| Scratchpad            | `/screens/scratchpad`    | `src/routes/screens/scratchpad/+page.svelte`    | Capture notes and send selected context            |
+| Editor and review     | `/screens/editor`        | `src/routes/screens/editor/+page.svelte`        | Edit a file and review changes                     |
+| Embedded editor study | `/screens/neovim`        | `src/routes/screens/neovim/+page.svelte`        | Record a deferred deep-integration direction       |
+| Terminal              | `/screens/terminal`      | `src/routes/screens/terminal/+page.svelte`      | Use persistent PTY sessions                        |
+| Processes             | `/screens/processes`     | `src/routes/screens/processes/+page.svelte`     | Inspect workspace and session machine resource use |
+| Resources             | `/screens/resources`     | `src/routes/screens/resources/+page.svelte`     | Inspect scope, trust, and capability               |
+| Settings              | `/screens/settings`      | `src/routes/screens/settings/+page.svelte`      | Change product and editor preferences              |
+| Website and docs      | `/docs`                  | `src/routes/docs/+page.svelte`                  | Evaluate Pau, learn a task, or check its status    |
+| Launch                | `/splash/launch`         | `src/routes/splash/launch/+page.svelte`         | Understand current startup work                    |
+| Reconnect             | `/splash/reconnect`      | `src/routes/splash/reconnect/+page.svelte`      | Recover UI connectivity without implying lost work |
 
 Source paths in this table are relative to `packages/prototype`.
 
@@ -62,8 +63,9 @@ can close independently from controls in the top app bar. Focus mode removes
 all surrounding navigation while preserving the active session and composer.
 
 The terminal dock is the only secondary surface that splits the main column.
-The composer distinguishes queueing a follow-up from steering the current turn
-and keeps model, thinking, permission, and context choices visible. Configured
+The inspector shows a compact machine-resource summary with current and peak
+use. The composer distinguishes queueing a follow-up from steering the current
+turn and keeps model, thinking, permission, and context choices visible. Configured
 Pi extensions may add keyed status text and string widgets around the composer.
 Their selection, confirmation, input, and editor requests use a focused dialog.
 Notifications do not block the transcript.
@@ -171,6 +173,18 @@ bounded replay belong to Pau; emulation belongs to xterm.js.
 The terminal canvas leads and uses the active theme's ANSI palette. On narrow
 screens, use a full-surface terminal. Keep tab switching and session state
 reachable without shrinking the character grid unnecessarily.
+
+## Processes
+
+The workspace Processes view lists each Pau-owned process tree with current CPU,
+resident memory, process count, elapsed time, disk I/O when available, and peak
+values. Expanding a row shows its root and descendants. Sustained-pressure
+warnings stay with the affected session and offer interrupt and stop actions.
+Pau does not interrupt, stop, or throttle work automatically.
+
+At narrow widths, each process becomes a labelled metric block. Actions remain
+visible, and the process-tree breakdown opens below the selected row. Completed
+processes retain a small final summary instead of raw sample history.
 
 ## Resources
 

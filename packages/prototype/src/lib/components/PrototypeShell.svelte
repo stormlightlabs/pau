@@ -6,10 +6,12 @@
 	let { children } = $props();
 	let mainElement: HTMLElement;
 
-	$effect(() => {
-		page.url.pathname;
+	function resetMainScroll(pathname: string): void {
 		mainElement?.scrollTo({ top: 0 });
-	});
+		if (mainElement) mainElement.dataset.route = pathname;
+	}
+
+	$effect(() => resetMainScroll(page.url.pathname));
 
 	const groups = [
 		{
@@ -22,6 +24,7 @@
 				{ href: '/screens/editor', label: 'Editor & review', icon: 'i-tabler-code' },
 				{ href: '/screens/neovim', label: 'Embedded editor study', icon: 'i-simple-icons-neovim' },
 				{ href: '/screens/terminal', label: 'Terminal', icon: 'i-tabler-terminal-2' },
+				{ href: '/screens/processes', label: 'Processes', icon: 'i-tabler-activity-heartbeat' },
 				{ href: '/screens/resources', label: 'Resources', icon: 'i-tabler-plug-connected' },
 				{ href: '/screens/settings', label: 'Settings', icon: 'i-tabler-adjustments' }
 			]

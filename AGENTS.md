@@ -29,16 +29,19 @@ contention can cause false timeouts in process and interaction tests.
 - Trust roadmap statuses instead of re-auditing implementation to infer whether
   a blocker is done.
 - Before implementation, confirm each blocker is `complete` and set the unit to
-  `in progress`. Set it to `complete` only after its verification passes. Use
-  `blocked` with a short status note when work cannot continue.
+  `in progress`. Set it to `complete` after available verification passes. An
+  unavailable platform check may move to the backlog when portable coverage
+  passes and it is not an explicit release gate. Use `blocked` with a short
+  status note when implementation cannot continue.
 - Keep implementation, tests, Storybook stories, and user documentation required
   by that unit in the same change.
 - In `packages/ui`, keep stories under `src/stories` and tests under
   `src/tests`.
 - Run the unit's verification, starting with the narrowest relevant checks. Do
   not invoke paid agents or remote services from default tests.
-- Stop when the unit is complete. Record unrelated defects separately unless
-  they block its verification.
+- Fix findings from the unit's required verification as they appear, including
+  unrelated pre-existing findings. Keep unrelated defects found outside those
+  checks separate unless they block verification.
 - Keep completed units in the roadmap until every unit in their named subsection
   is complete. Then add a concise user-facing changelog entry, remove satisfied
   blocker references, and remove that subsection. Apply the same cleanup to an

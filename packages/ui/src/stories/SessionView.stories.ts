@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/svelte-vite';
 import { expect, userEvent, within } from 'storybook/test';
 
+import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
 import { sessionFixtures } from '../fixtures/sessions';
 import SessionViewDemo from './SessionViewDemo.svelte';
 
@@ -23,6 +24,22 @@ export const Running: Story = {
 		await userEvent.type(prompt, 'Keep the public API unchanged.');
 		await userEvent.click(canvas.getByRole('button', { name: /Send prompt/ }));
 		await expect(canvas.getByText(/session-running: steer/)).toBeInTheDocument();
+	}
+};
+export const ResourcePressure: Story = {
+	args: {
+		workspaces: sessionFixtures.running,
+		initialSessionId: 'session-running',
+		resourceSnapshot: {
+			...resourceMonitoringFixtures.active[2]!,
+			sessionId: 'session-running',
+			label: 'Run session registry tests'
+		}
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(canvas.getByRole('button', { name: 'Stop session' }));
+		await expect(canvas.getByText('session-running: stop')).toBeInTheDocument();
 	}
 };
 export const Waiting: Story = { args: { workspaces: sessionFixtures.waiting, initialSessionId: 'session-waiting' } };

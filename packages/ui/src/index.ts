@@ -7,6 +7,8 @@ export { default as FileEditor } from './lib/FileEditor.svelte';
 export type { EditorFileContent, FileEditorSource } from './lib/types/file-editor';
 export { default as Icon, type IconProps } from './lib/Icon.svelte';
 export { default as McpConfigurationView } from './lib/McpConfigurationView.svelte';
+export { default as ProcessesView } from './lib/ProcessesView.svelte';
+export { default as SessionResourceSummary } from './lib/SessionResourceSummary.svelte';
 export { default as SessionView } from './lib/SessionView.svelte';
 export { default as WorkspaceFiles } from './lib/WorkspaceFiles.svelte';
 export type {
@@ -30,6 +32,11 @@ export type {
 	McpSourceScope
 } from './lib/types/mcp';
 export type {
+	ProcessResourceActions,
+	ProcessResourceNode,
+	ProcessResourceSnapshot
+} from './lib/types/resource-monitoring';
+export type {
 	ExtensionDialog,
 	ExtensionNotification,
 	ExtensionStatus,
@@ -48,5 +55,6 @@ export { THEMES, UI_FONTS, themeCssProperties, type PauTheme, type ThemeName, ty
 export { shellNavigationFixtures } from './fixtures/application-shell';
 export { capabilityFixtures, type CapabilityFixture } from './fixtures/capabilities';
 export { mcpConfigurationFixtures } from './fixtures/mcp';
+export { resourceMonitoringFixtures } from './fixtures/resource-monitoring';
 export { sessionFixtures } from './fixtures/sessions';
 export { workspaceFileFixtures } from './fixtures/workspace-files';

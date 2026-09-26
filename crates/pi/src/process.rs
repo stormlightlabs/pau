@@ -218,6 +218,11 @@ impl PiProcess {
         })
     }
 
+    /// Returns the operating-system identifier used by resource monitoring.
+    pub fn process_id(&self) -> u32 {
+        self.process_id
+    }
+
     /// Subscribes to events, diagnostics, and process exit notifications.
     pub fn subscribe(&self) -> broadcast::Receiver<PiProcessOutput> {
         self.output.subscribe()

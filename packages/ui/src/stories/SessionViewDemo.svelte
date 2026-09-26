@@ -1,8 +1,14 @@
 <script lang="ts">
+	import type { ProcessResourceSnapshot } from '../lib/types/resource-monitoring';
 	import type { ExtensionUiResponse, PromptQueue, SessionWorkspace } from '../lib/types/session';
 	import SessionView from '../lib/SessionView.svelte';
 
-	let { workspaces, initialSessionId }: { workspaces: SessionWorkspace[]; initialSessionId?: string } = $props();
+	let {
+		workspaces,
+		initialSessionId,
+		resourceSnapshot
+	}: { workspaces: SessionWorkspace[]; initialSessionId?: string; resourceSnapshot?: ProcessResourceSnapshot } =
+		$props();
 
 	let activeSessionId = $state<string>();
 	let lastAction = $state('No action sent');
@@ -23,10 +29,14 @@
 <SessionView
 	{workspaces}
 	{activeSessionId}
+	{resourceSnapshot}
 	onSelectSession={(sessionId) => (activeSessionId = sessionId)}
 	onSend={send}
 	onInterrupt={(sessionId) => {
 		lastAction = `${sessionId}: interrupt`;
+	}}
+	onStop={(sessionId) => {
+		lastAction = `${sessionId}: stop`;
 	}}
 	onExtensionUiResponse={respondToExtension}
 	onExtensionUiTimeout={(sessionId, requestId) => {

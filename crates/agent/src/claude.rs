@@ -416,6 +416,11 @@ impl ClaudeBridgeProcess {
         })
     }
 
+    /// Returns the bridge host PID used as the root of Claude's process tree.
+    pub fn process_id(&self) -> u32 {
+        self.process_id
+    }
+
     /// Subscribes to package events, diagnostics, and process exit.
     pub fn subscribe(&self) -> broadcast::Receiver<ClaudeBridgeOutput> {
         self.output.subscribe()
@@ -670,6 +675,11 @@ impl ClaudeSession {
     /// Returns controls implemented by the bridge contract.
     pub fn capabilities(&self) -> AgentCapabilities {
         CLAUDE_BRIDGE_CAPABILITIES
+    }
+
+    /// Returns the root PID used to register this session with resource monitoring.
+    pub fn process_id(&self) -> u32 {
+        self.process.process_id()
     }
 
     /// Returns the latest state projected from controls and package events.

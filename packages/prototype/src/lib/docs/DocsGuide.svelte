@@ -1,5 +1,23 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+
 	let copied = $state<string>();
+
+	const agentSections = [
+		{ href: resolve('/docs#sessions'), label: 'Sessions' },
+		{ href: resolve('/docs#mcp'), label: 'MCP configuration' },
+		{ href: resolve('/docs#extensions'), label: 'Pi extensions' }
+	];
+	const projectSections = [
+		{ href: resolve('/docs#security'), label: 'Security' },
+		{ href: resolve('/docs#architecture'), label: 'Architecture' },
+		{ href: resolve('/docs#contributing'), label: 'Contributing' }
+	];
+	const pageSections = [
+		{ href: resolve('/docs#install'), label: 'Install the workspace' },
+		{ href: resolve('/docs#sessions'), label: 'Start Pau' },
+		{ href: resolve('/docs#workspace'), label: 'Open a workspace' }
+	];
 
 	async function copyCommand(command: string) {
 		await navigator.clipboard.writeText(command);
@@ -19,20 +37,20 @@
 		<p class="mb-2 mt-6 text-[0.68rem] font-700 tracking-[0.07em] uppercase text-site-muted">Start here</p>
 		<a
 			class="block border-l-2 border-site-accent bg-site-deep px-3 py-1.5 text-[0.82rem] text-site-ink no-underline"
-			href="#install"
+			href={resolve('/docs#install')}
 			aria-current="page">Getting started</a>
 		<a
 			class="block border-l-2 border-transparent px-3 py-1.5 text-[0.82rem] text-site-muted no-underline"
-			href="#workspace">Workspaces and files</a>
+			href={resolve('/docs#workspace')}>Workspaces and files</a>
 		<p class="mb-2 mt-6 text-[0.68rem] font-700 tracking-[0.07em] uppercase text-site-muted">Agents and resources</p>
-		{#each [['#sessions', 'Sessions'], ['#mcp', 'MCP configuration'], ['#extensions', 'Pi extensions']] as item}<a
+		{#each agentSections as item (item.href)}<a
 				class="block border-l-2 border-transparent px-3 py-1.5 text-[0.82rem] text-site-muted no-underline"
-				href={item[0]}>{item[1]}</a
+				href={item.href}>{item.label}</a
 			>{/each}
 		<p class="mb-2 mt-6 text-[0.68rem] font-700 tracking-[0.07em] uppercase text-site-muted">Project</p>
-		{#each [['#security', 'Security'], ['#architecture', 'Architecture'], ['#contributing', 'Contributing']] as item}<a
+		{#each projectSections as item (item.href)}<a
 				class="block border-l-2 border-transparent px-3 py-1.5 text-[0.82rem] text-site-muted no-underline"
-				href={item[0]}>{item[1]}</a
+				href={item.href}>{item.label}</a
 			>{/each}
 	</aside>
 
@@ -105,9 +123,9 @@
 
 	<aside class="sticky top-4 self-start max-xl:hidden" aria-label="On this page">
 		<p class="mb-2 mt-6 text-[0.68rem] font-700 tracking-[0.07em] uppercase text-site-muted">On this page</p>
-		{#each [['#install', 'Install the workspace'], ['#sessions', 'Start Pau'], ['#workspace', 'Open a workspace']] as item}<a
+		{#each pageSections as item (item.href)}<a
 				class="block border-l-2 border-transparent px-3 py-1.5 text-[0.82rem] text-site-muted no-underline"
-				href={item[0]}>{item[1]}</a
+				href={item.href}>{item.label}</a
 			>{/each}
 	</aside>
 </main>

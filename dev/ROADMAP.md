@@ -55,7 +55,7 @@ shipped application in this deliverable.
 
 #### 2.41 Resource monitoring
 
-Status: planned
+Status: complete
 Blocked by: none
 
 Sample Pau-owned process trees and show aggregate and per-session CPU, current
@@ -612,6 +612,11 @@ Verification:
 
 Deliverable exit: Pau runs as a local or explicitly secured remote web service
 without Tauri, with the same UI and backend behavior as the desktop application.
+
+## Verification backlog
+
+Run the resource-monitoring sampler smoke test on macOS when a runner is
+available.
 
 ## Research backlog
 

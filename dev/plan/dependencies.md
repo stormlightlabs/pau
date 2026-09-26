@@ -17,6 +17,16 @@ The initial choices to validate are:
   diff launch
 - Iconify through UnoCSS or unplugin for the selected icon sets
 
+## Resource monitoring dependency selection
+
+Use `sysinfo` 0.38.4 for process discovery and CPU, accumulated CPU time,
+resident memory, start time, parent PID, and disk counters. The crate is
+MIT-licensed, actively maintained, and supports Linux and macOS through one API.
+Pau keeps its own process identity, tree attribution, retention, warning, and
+summary logic because those rules belong to Pau's process owners. Treat
+per-process disk totals as unavailable on macOS until the platform backend can
+report them reliably.
+
 ## Terminal dependency selection
 
 Use `portable-pty` 0.9.0 for PTY ownership. The crate is MIT-licensed and is

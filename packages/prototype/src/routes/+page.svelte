@@ -41,6 +41,12 @@
 			description: 'Persistent PTY terminals with tabs, search, activity state, and exit reporting.'
 		},
 		{
+			href: '/screens/processes',
+			title: 'Workspace processes',
+			description:
+				'Shows current and peak machine use, process trees, pressure warnings, and explicit session controls.'
+		},
+		{
 			href: '/screens/resources',
 			title: 'Resource browser',
 			description: 'Explores trust, scope, connection state, and agent access for MCP servers and Pi resources.'
@@ -48,7 +54,8 @@
 		{
 			href: '/screens/settings',
 			title: 'Settings',
-			description: 'Makes theme, font, agent discovery, and preferred-editor choices visible without hiding their scope.'
+			description:
+				'Makes theme, font, agent discovery, and preferred-editor choices visible without hiding their scope.'
 		},
 		{
 			href: '/docs',

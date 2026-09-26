@@ -11,6 +11,7 @@ const screens = [
 	{ name: 'editor', path: '/screens/editor' },
 	{ name: 'neovim', path: '/screens/neovim' },
 	{ name: 'terminal', path: '/screens/terminal' },
+	{ name: 'processes', path: '/screens/processes' },
 	{ name: 'resources', path: '/screens/resources' },
 	{ name: 'settings', path: '/screens/settings' },
 	{ name: 'docs', path: '/docs' },

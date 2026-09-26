@@ -98,6 +98,11 @@ impl PiSession {
         self.capabilities
     }
 
+    /// Returns the root PID used to register this session with resource monitoring.
+    pub fn process_id(&self) -> u32 {
+        self.process.process_id()
+    }
+
     /// Returns the latest session status observed from accepted controls and Pi events.
     pub async fn status(&self) -> AgentSessionStatus {
         *self.status.lock().await

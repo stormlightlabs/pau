@@ -9,11 +9,14 @@ use serde::{Deserialize, Serialize};
 use tokio_rusqlite::{Connection, OptionalExtension, params, rusqlite};
 use ts_rs::TS;
 
+use crate::resource_monitor::ProcessResourceSummary;
+
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0001_workspaces_and_settings.sql"),
     include_str!("../migrations/0002_process_metadata.sql"),
     include_str!("../migrations/0003_mcp_enablement.sql"),
+    include_str!("../migrations/0004_process_resource_summaries.sql"),
 ];
 
 /// Result returned by persistence operations.
@@ -63,6 +66,11 @@ impl Database {
     /// Returns a repository for persisted process metadata.
     pub fn processes(&self) -> ProcessMetadataRepository {
         ProcessMetadataRepository::new(self.connection.clone())
+    }
+
+    /// Returns a repository for completed process resource summaries.
+    pub fn process_resource_summaries(&self) -> ProcessResourceSummaryRepository {
+        ProcessResourceSummaryRepository::new(self.connection.clone())
     }
 }
 
@@ -522,6 +530,86 @@ fn process_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProcessMetadata
     })
 }
 
+/// Persistence for small summaries retained after a process exits.
+#[derive(Clone)]
+pub struct ProcessResourceSummaryRepository {
+    connection: Connection,
+}
+
+impl ProcessResourceSummaryRepository {
+    fn new(connection: Connection) -> Self {
+        Self { connection }
+    }
+
+    /// Inserts or replaces the final resource summary for one process.
+    pub async fn upsert(&self, summary: ProcessResourceSummary) -> Result<()> {
+        self.connection
+            .call(move |connection| {
+                connection.execute(
+                    "INSERT INTO process_resource_summaries (
+                       process_id, ended_at_millis, elapsed_millis,
+                       peak_resident_memory_bytes, cpu_time_millis,
+                       peak_process_count, disk_read_bytes, disk_write_bytes
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                     ON CONFLICT(process_id) DO UPDATE SET
+                       ended_at_millis = excluded.ended_at_millis,
+                       elapsed_millis = excluded.elapsed_millis,
+                       peak_resident_memory_bytes = excluded.peak_resident_memory_bytes,
+                       cpu_time_millis = excluded.cpu_time_millis,
+                       peak_process_count = excluded.peak_process_count,
+                       disk_read_bytes = excluded.disk_read_bytes,
+                       disk_write_bytes = excluded.disk_write_bytes",
+                    params![
+                        summary.process_id,
+                        summary.ended_at_millis as i64,
+                        summary.elapsed_millis as i64,
+                        summary.peak_resident_memory_bytes as i64,
+                        summary.cpu_time_millis as i64,
+                        summary.peak_process_count,
+                        summary.disk_read_bytes.map(|value| value as i64),
+                        summary.disk_write_bytes.map(|value| value as i64),
+                    ],
+                )?;
+                Ok(())
+            })
+            .await
+    }
+
+    /// Finds a completed resource summary by its stable process identifier.
+    pub async fn get(&self, process_id: &str) -> Result<Option<ProcessResourceSummary>> {
+        let process_id = process_id.to_owned();
+        self.connection
+            .call(move |connection| {
+                connection
+                    .query_row(
+                        "SELECT process_id, ended_at_millis, elapsed_millis,
+                                peak_resident_memory_bytes, cpu_time_millis,
+                                peak_process_count, disk_read_bytes, disk_write_bytes
+                         FROM process_resource_summaries WHERE process_id = ?1",
+                        [process_id],
+                        |row| {
+                            Ok(ProcessResourceSummary {
+                                process_id: row.get(0)?,
+                                ended_at_millis: row.get::<_, i64>(1)? as u64,
+                                elapsed_millis: row.get::<_, i64>(2)? as u64,
+                                peak_resident_memory_bytes: row.get::<_, i64>(3)? as u64,
+                                cpu_time_millis: row.get::<_, i64>(4)? as u64,
+                                peak_process_count: row.get(5)?,
+                                disk_read_bytes: row
+                                    .get::<_, Option<i64>>(6)?
+                                    .map(|value| value as u64),
+                                disk_write_bytes: row
+                                    .get::<_, Option<i64>>(7)?
+                                    .map(|value| value as u64),
+                            })
+                        },
+                    )
+                    .optional()
+            })
+            .await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -686,6 +774,30 @@ mod tests {
         assert_eq!(
             database.processes().get(&process.id).await.unwrap(),
             Some(process)
+        );
+
+        let summary = ProcessResourceSummary {
+            process_id: "process-1".to_owned(),
+            ended_at_millis: 1_772_360_400_000,
+            elapsed_millis: 3_600_000,
+            peak_resident_memory_bytes: 512 * 1024 * 1024,
+            cpu_time_millis: 42_000,
+            peak_process_count: 4,
+            disk_read_bytes: Some(1_024),
+            disk_write_bytes: None,
+        };
+        database
+            .process_resource_summaries()
+            .upsert(summary.clone())
+            .await
+            .unwrap();
+        assert_eq!(
+            database
+                .process_resource_summaries()
+                .get("process-1")
+                .await
+                .unwrap(),
+            Some(summary)
         );
     }
 

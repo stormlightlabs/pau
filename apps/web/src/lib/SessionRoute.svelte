@@ -1,6 +1,7 @@
 <script lang="ts">
 	import {
 		SessionView,
+		resourceMonitoringFixtures,
 		type PromptQueue,
 		type SessionViewModel,
 		type SessionWorkspace,
@@ -60,6 +61,10 @@
 		updateSession(sessionId, (session) => ({ ...session, status: 'idle' }));
 	}
 
+	function stop(sessionId: string): void {
+		updateSession(sessionId, (session) => ({ ...session, status: 'stopped' }));
+	}
+
 	function clearExtensionDialog(sessionId: string): void {
 		updateSession(sessionId, (session) =>
 			session.extensionUi ? { ...session, extensionUi: { ...session.extensionUi, dialog: undefined } } : session
@@ -71,8 +76,10 @@
 	{workspaces}
 	{activeSessionId}
 	{disconnected}
+	resourceSnapshot={resourceMonitoringFixtures.active.find((snapshot) => snapshot.sessionId === activeSessionId)}
 	onSelectSession={selectSession}
 	onSend={send}
 	onInterrupt={interrupt}
+	onStop={stop}
 	onExtensionUiResponse={(sessionId) => clearExtensionDialog(sessionId)}
 	onExtensionUiTimeout={(sessionId) => clearExtensionDialog(sessionId)} />

@@ -164,6 +164,158 @@ binary: boolean,
  */
 too_large: boolean, };
 
+export type ProcessIdentity = {
+/**
+ * Operating-system process identifier.
+ */
+pid: number,
+/**
+ * Process start time in seconds since the Unix epoch.
+ */
+started_at_seconds: number, };
+
+export type ProcessResourceNode = {
+/**
+ * PID and start time used as the sampling identity.
+ */
+identity: ProcessIdentity,
+/**
+ * Parent PID reported by the operating system.
+ */
+parent_pid: number | null,
+/**
+ * Current CPU use as a percentage of one logical CPU.
+ */
+cpu_percent: number,
+/**
+ * Current resident memory in bytes.
+ */
+resident_memory_bytes: number,
+/**
+ * Total disk bytes read, when reliable.
+ */
+disk_read_bytes: number | null,
+/**
+ * Total disk bytes written, when reliable.
+ */
+disk_write_bytes: number | null, };
+
+export type ProcessResourceSnapshot = {
+/**
+ * Stable Pau process identifier.
+ */
+process_id: string,
+/**
+ * Workspace that owns the process.
+ */
+workspace_id: string,
+/**
+ * Session that owns the process, when applicable.
+ */
+session_id: string | null,
+/**
+ * Process kind shown in the UI.
+ */
+kind: string,
+/**
+ * Sample timestamp in milliseconds since the Unix epoch.
+ */
+sampled_at_millis: number,
+/**
+ * Time since the owner registered the root process.
+ */
+elapsed_millis: number,
+/**
+ * Current CPU use summed across the tree.
+ */
+cpu_percent: number,
+/**
+ * Accumulated CPU time summed across the tree.
+ */
+cpu_time_millis: number,
+/**
+ * Current resident memory summed across the tree.
+ */
+resident_memory_bytes: number,
+/**
+ * Highest aggregate resident memory observed for the tree.
+ */
+peak_resident_memory_bytes: number,
+/**
+ * Number of live processes in the tree.
+ */
+process_count: number,
+/**
+ * Highest process count observed for the tree.
+ */
+peak_process_count: number,
+/**
+ * Total disk bytes read across the tree, when reliable.
+ */
+disk_read_bytes: number | null,
+/**
+ * Total disk bytes written across the tree, when reliable.
+ */
+disk_write_bytes: number | null,
+/**
+ * Current per-process breakdown for the root and descendants.
+ */
+processes: Array<ProcessResourceNode>, };
+
+export type ResourcePressureKind = "cpu" | "memory";
+
+export type ResourcePressureWarning = {
+/**
+ * Stable Pau process identifier.
+ */
+process_id: string,
+/**
+ * Session that owns the process, when applicable.
+ */
+session_id: string | null,
+/**
+ * Counter that remained above its threshold.
+ */
+kind: ResourcePressureKind,
+/**
+ * Number of consecutive samples above the threshold.
+ */
+sustained_samples: number, };
+
+export type ProcessResourceSummary = {
+/**
+ * Stable Pau process identifier.
+ */
+process_id: string,
+/**
+ * Final sampling timestamp in milliseconds since the Unix epoch.
+ */
+ended_at_millis: number,
+/**
+ * Total elapsed time observed by Pau.
+ */
+elapsed_millis: number,
+/**
+ * Highest aggregate resident memory observed for the tree.
+ */
+peak_resident_memory_bytes: number,
+/**
+ * Final accumulated CPU time across the tree.
+ */
+cpu_time_millis: number,
+/**
+ * Highest process count observed for the tree.
+ */
+peak_process_count: number,
+/**
+ * Final disk bytes read across the tree, when reliable.
+ */
+disk_read_bytes: number | null,
+/**
+ * Final disk bytes written across the tree, when reliable.
+ */
+disk_write_bytes: number | null, };
+
 export type ServerEventKind = "workspace_changed" | "session_changed";
 
 export type ServerEvent = {

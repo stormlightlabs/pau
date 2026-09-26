@@ -206,7 +206,7 @@
 									><span class="i-tabler-plug-connected"></span> Test connection</button>
 							</div>
 							{#if mcpTested}<div class="mt-2.5 flex gap-1.5">
-									{#each ['Tools', 'Resources', 'Prompts'] as capability}<span
+									{#each ['Tools', 'Resources', 'Prompts'] as capability (capability)}<span
 											class="border border-site-code-line px-1.5 py-1 font-sitecode text-[0.54rem] text-[#7ad9a8]"
 											>{capability}</span
 										>{/each}

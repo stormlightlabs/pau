@@ -51,7 +51,8 @@ Playwright reports are ignored by Git.
 
 ## Add a screen
 
-1. Add a route under `src/routes/screens` or `src/routes/splash`.
+1. Add a route under `src/routes/screens`, `src/routes/docs`, or
+   `src/routes/splash`.
 2. Add it to the menu in `src/lib/components/PrototypeShell.svelte`.
 3. Add it to the index route and `tests/screenshots.spec.ts`.
 4. Add or update the route's brief in `dev/design/surfaces.md`.

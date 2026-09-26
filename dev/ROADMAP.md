@@ -566,10 +566,32 @@ Verification:
 
 ### Release surfaces
 
+#### 2.49 Website interface
+
+Status: planned
+Blocked by: none
+
+Apply the approved public-site direction from `packages/prototype` to
+`apps/website`. Build the landing page, documentation reading shell, generated
+navigation and table of contents, Pagefind search UI, capability reference, and
+light, dark, and system theme controls. Use fixed interactive examples for
+sessions, file selection and diffs, and MCP lifecycle states without connecting
+the public site to agent state. Keep available behavior distinct from planned
+work, and keep the prototype's view switcher out of the public navigation.
+
+Verification:
+
+- Build the website and validate frontmatter, internal links, heading structure,
+  raw Markdown routes, copyable commands, and Pagefind indexing.
+- Exercise global and documentation navigation, search, copy controls, theme
+  persistence, interactive examples, keyboard access, and reduced motion.
+- Review the landing page, documentation shell, and capability reference at
+  desktop and narrow widths in light and dark themes.
+
 #### 2.38 Website deployment
 
 Status: planned
-Blocked by: 2.25, 2.32, 2.37
+Blocked by: 2.25, 2.32, 2.49
 
 Deploy `apps/website` to Cloudflare Pages at `https://pau.stormlightlabs.org`
 with preview deployments for pull requests.

@@ -51,6 +51,11 @@
 			description: 'Makes theme, font, agent discovery, and Neovim choices visible without hiding their consequences.'
 		},
 		{
+			href: '/docs',
+			title: 'Documentation and product site',
+			description: 'Combines the public overview, reading shell, and capability reference with light and dark themes.'
+		},
+		{
 			href: '/splash/launch',
 			title: 'Launch sequence',
 			description: 'A short startup state that names the service being prepared and avoids pretending work is instant.'

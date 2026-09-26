@@ -2,10 +2,10 @@
 
 ## Purpose
 
-The app gives one operator a single place to run coding agents, inspect their
-work, edit files, and use a terminal. It targets developers who work across
-several repositories and want concurrent agents without hiding the underlying
-processes or files.
+Pau is a local IDE and session orchestrator for developers who use Pi and other
+coding agents. It brings concurrent sessions, files, review, editing, and
+terminal tools into one workspace without hiding the underlying processes or
+files.
 
 Pi is the reference implementation. Other agents are supported where their CLIs
 expose enough control to provide a reliable adapter.

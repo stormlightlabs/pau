@@ -55,6 +55,11 @@ The main surface must retain the largest useful width. The inspector holds
 selected detail, plans, checks, permissions, diffs, or resource configuration.
 It must not become a second navigation rail.
 
+The application shell fills the viewport and prevents document overscroll.
+Persistent rails and the main task surface scroll independently, so navigation
+and task context remain available with long content. Nested panes contain their
+scroll instead of chaining it into the shell.
+
 At narrower widths:
 
 1. Remove the inspector from the grid and open it as an overlay or full view.
@@ -138,9 +143,10 @@ path where practical.
 ## Motion
 
 Routine state changes should complete in about 100–250ms. Use motion to show
-selection, panel disclosure, layout continuity, progress, and feedback. Do not
-sequence the whole product into view or animate live status merely to imply
-activity.
+selection, panel disclosure, layout continuity, progress, and feedback. Task
+surface changes use a short fade and small directional offset to preserve place.
+Do not sequence the whole product into view or animate live status merely to
+imply activity.
 
 Reduced motion removes spatial movement and indefinite decoration while keeping
 immediate state and short color feedback. Svelte motion and transition APIs own

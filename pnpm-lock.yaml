@@ -265,6 +265,12 @@ importers:
       '@fontsource-variable/atkinson-hyperlegible-next':
         specifier: 5.3.0
         version: 5.3.0
+      '@fontsource-variable/google-sans':
+        specifier: 5.3.1
+        version: 5.3.1
+      '@fontsource-variable/google-sans-code':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource-variable/ibm-plex-sans':
         specifier: 5.3.0
         version: 5.3.0
@@ -275,6 +281,9 @@ importers:
       '@iconify-json/catppuccin':
         specifier: 1.2.17
         version: 1.2.17
+      '@iconify-json/logos':
+        specifier: 1.2.14
+        version: 1.2.14
       '@iconify-json/octicon':
         specifier: 1.2.36
         version: 1.2.36
@@ -938,6 +947,12 @@ packages:
   '@fontsource-variable/atkinson-hyperlegible-next@5.3.0':
     resolution: {integrity: sha512-UnLzNUy1RWoLDfydAatP4NaRm99X/WbQEph7q/PymJnCFIOOwKOx3pBmp5ys8trO0dM+CKGuJgeZP9fAR4mQpA==}
 
+  '@fontsource-variable/google-sans-code@5.3.0':
+    resolution: {integrity: sha512-etsB8s2nyLqWlBrASPpT9LvPtxNxrLjrys4RZzW0mQnt8qYoNL7m1SLzCqY5Pp1g/6LWoVOI/6jPqiwO2l5xgA==}
+
+  '@fontsource-variable/google-sans@5.3.1':
+    resolution: {integrity: sha512-FLB6ZktdAtYWj49W6TtmqThHb33XL5g8l6T+oKNcvmNUXou4PPdIkstt1Z/UyD6K+g/CYjiHF+j+eRMNZxYKZg==}
+
   '@fontsource-variable/ibm-plex-sans@5.3.0':
     resolution: {integrity: sha512-agG8tXFEo0hD9+J7npa4vbbWult52eMLVaQ6WQRlhs/iCAojrMAoejru85W9HTVXHfyUj96KM7gp/KGAS87XaQ==}
 
@@ -975,6 +990,9 @@ packages:
 
   '@iconify-json/catppuccin@1.2.17':
     resolution: {integrity: sha512-l1pFOADEUlw+j7V+yfFzBowdE4deeMuI4amqfKaN+7uTI9B0Ho24C86DitQk5zb62NkEM9poOyfuG7WS2bw6jg==}
+
+  '@iconify-json/logos@1.2.14':
+    resolution: {integrity: sha512-O36DicXkgAMT6NAsH7MTWlOql8NktHz9fBCItTjz6L/9gyRXw4vQj6qTeVgww5UZWiVugUV1MhVFA/g9HWIkBw==}
 
   '@iconify-json/octicon@1.2.36':
     resolution: {integrity: sha512-YHlJokjC+uBj1kSd7+YTRMNIN85TvAGr4ZJVOHCTzj0nyH64ImXRIZmh4P6Nbv0RGDd7hS7+UwEDGchFgGxxVw==}
@@ -4305,6 +4323,10 @@ snapshots:
 
   '@fontsource-variable/atkinson-hyperlegible-next@5.3.0': {}
 
+  '@fontsource-variable/google-sans-code@5.3.0': {}
+
+  '@fontsource-variable/google-sans@5.3.1': {}
+
   '@fontsource-variable/ibm-plex-sans@5.3.0': {}
 
   '@fontsource-variable/inter@5.3.0': {}
@@ -4337,6 +4359,10 @@ snapshots:
   '@humanwhocodes/retry@0.4.3': {}
 
   '@iconify-json/catppuccin@1.2.17':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify-json/logos@1.2.14':
     dependencies:
       '@iconify/types': 2.0.0
 

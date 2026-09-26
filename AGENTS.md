@@ -91,6 +91,9 @@ interaction, or responsive decision changes, update the owning design document
 and prototype fixture together. Screenshot-only polish needs a document change
 only when it changes the recorded system or surface contract.
 
+In `packages/prototype`, use UnoCSS utilities by default. Keep component CSS for
+keyframes, complex selectors, and styles that utilities cannot express clearly.
+
 Use kebab-case for TypeScript filenames, including `.svelte.ts` modules. Keep
 Svelte component filenames in PascalCase, and preserve that component name in
 associated files such as `SessionView.stories.ts` and

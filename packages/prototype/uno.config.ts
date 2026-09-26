@@ -15,7 +15,12 @@ export default defineConfig({
 		})
 	],
 	theme: {
-		fontFamily: { sans: 'var(--font-ui)', mono: 'var(--font-code)' },
+		fontFamily: {
+			sans: 'var(--font-ui)',
+			mono: 'var(--font-code)',
+			heading: 'var(--site-heading)',
+			sitecode: 'var(--site-code)'
+		},
 		fontSize: {
 			micro: ['var(--text-micro)', '1.3'],
 			meta: ['var(--text-xs)', '1.45'],
@@ -59,11 +64,31 @@ export default defineConfig({
 				yellow: 'var(--ansi-yellow)',
 				blue: 'var(--ansi-blue)',
 				dim: 'var(--ansi-dim)'
+			},
+			site: {
+				ink: 'var(--site-ink)',
+				muted: 'var(--site-muted)',
+				line: 'var(--site-line)',
+				paper: 'var(--site-paper)',
+				deep: 'var(--site-paper-deep)',
+				raised: 'var(--site-raised)',
+				accent: 'var(--site-accent)',
+				'accent-strong': 'var(--site-accent-strong)',
+				focus: 'var(--site-focus)',
+				highlight: 'var(--site-highlight)',
+				code: 'var(--site-code)',
+				'code-line': 'var(--site-code-line)',
+				'code-ink': 'var(--site-code-ink)'
 			}
 		}
 	},
 	shortcuts: {
 		'prototype-kicker': 'text-xs font-600 tracking-[0.12em] uppercase text-accent',
+		'site-eyebrow': 'm-0 mb-3.5 font-sitecode text-[0.72rem] font-650 tracking-[0.065em] uppercase text-site-accent',
+		'site-heading': 'font-heading font-600 tracking-[-0.035em]',
+		'site-button':
+			'inline-flex min-h-11.5 items-center justify-center gap-2 border border-site-line bg-transparent px-4 py-2 font-650 text-site-ink hover:border-site-accent',
+		'site-button-primary': 'site-button border-site-accent bg-site-accent text-site-paper',
 		'app-button':
 			'inline-flex min-h-8 items-center justify-center gap-2 border border-line bg-surface-raised px-3 text-body text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
 		'app-button-primary':

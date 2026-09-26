@@ -4,6 +4,12 @@
 	import PauMark from './PauMark.svelte';
 
 	let { children } = $props();
+	let mainElement: HTMLElement;
+
+	$effect(() => {
+		page.url.pathname;
+		mainElement?.scrollTo({ top: 0 });
+	});
 
 	const groups = [
 		{
@@ -20,6 +26,7 @@
 				{ href: '/screens/settings', label: 'Settings', icon: 'i-tabler-adjustments' }
 			]
 		},
+		{ label: 'Public site', items: [{ href: '/docs', label: 'Docs & marketing', icon: 'i-tabler-book-2' }] },
 		{
 			label: 'Splash states',
 			items: [
@@ -63,5 +70,9 @@
 		</p>
 	</aside>
 
-	<main class="prototype-main">{@render children()}</main>
+	<main class="prototype-main" bind:this={mainElement}>
+		{#key page.url.pathname}
+			<div class="prototype-main__view">{@render children()}</div>
+		{/key}
+	</main>
 </div>

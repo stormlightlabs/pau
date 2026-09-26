@@ -18,6 +18,7 @@ when purpose, hierarchy, responsive behavior, or a durable interaction changes.
 | Terminal          | `/screens/terminal`      | `src/routes/screens/terminal/+page.svelte`      | Use persistent PTY sessions                        |
 | Resources         | `/screens/resources`     | `src/routes/screens/resources/+page.svelte`     | Inspect scope, trust, and capability               |
 | Settings          | `/screens/settings`      | `src/routes/screens/settings/+page.svelte`      | Change product and editor preferences              |
+| Website and docs  | `/docs`                  | `src/routes/docs/+page.svelte`                  | Evaluate Pau, learn a task, or check its status    |
 | Launch            | `/splash/launch`         | `src/routes/splash/launch/+page.svelte`         | Understand current startup work                    |
 | Reconnect         | `/splash/reconnect`      | `src/routes/splash/reconnect/+page.svelte`      | Recover UI connectivity without implying lost work |
 
@@ -190,6 +191,32 @@ color application remain distinct choices.
 Loading the user's `init.lua` can execute configuration. Applying a Pau theme
 changes highlights only after opt-in. At narrow widths, section navigation
 collapses before controls lose their labels or descriptions.
+
+## Website and documentation
+
+The public site combines **Persuade** and **Read** modes without importing the
+desktop application's dense shell. A single prototype route switches among the
+landing page, a documentation reading view, and the capability reference. The
+switcher is part of the workbench fixture, not proposed public navigation.
+
+The landing page presents Pau as a local IDE and session orchestrator for
+developers using Pi and other coding agents. It explains that position through
+real objects: agent sessions, workspaces, files, Git state, and native tools.
+Interactive previews use the shape of each task: session switching and steering,
+file selection with a diff, and an MCP connection lifecycle. They do not pretend
+to connect to a live backend. Feature copy separates available behavior from planned first-release
+work.
+
+Documentation uses IBM Plex Sans for body copy, Google Sans for headings, and
+Google Sans Code for commands and small technical labels. Both color schemes
+use an Eldritch-derived palette: cool blue surfaces, bright green action, purple
+focus, and yellow or cyan highlights. The dark scheme uses the application
+palette directly; the light scheme keeps the same roles at reading contrast.
+Both schemes are available from an explicit theme control.
+
+At narrow widths, the hero, previews, feature status, and reference rows become
+single-column compositions. Documentation navigation moves out of the reading
+column rather than reducing the article measure.
 
 ## Launch
 

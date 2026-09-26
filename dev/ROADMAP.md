@@ -55,7 +55,7 @@ shipped application in this deliverable.
 
 #### 2.19 Workspace registry and file access
 
-Status: planned
+Status: complete
 Blocked by: none
 
 Open and remember workspace roots. Add canonicalized, root-confined file

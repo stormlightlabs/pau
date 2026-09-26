@@ -6,6 +6,7 @@ apps/desktop/src-tauri/gen
 **/dist
 **/.svelte-kit
 **/pagefind
+**/test-results
 pnpm-lock.yaml
 flake.lock
 packages/protocol/src/generated.ts

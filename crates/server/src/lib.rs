@@ -1,26 +1,31 @@
 use std::{
     collections::{HashMap, VecDeque},
-    fmt, io,
+    env, fmt, fs, io,
     net::SocketAddr,
+    path::PathBuf,
     sync::{Arc, Mutex},
 };
 
 use axum::{
     Json, Router,
     extract::{
-        Query, Request, State, WebSocketUpgrade,
+        Path as AxumPath, Query, Request, State, WebSocketUpgrade,
         ws::{Message, WebSocket},
     },
     http::{StatusCode, header},
     middleware::{self, Next},
-    response::Response,
+    response::{IntoResponse, Response},
     routing::get,
 };
 use pau_core::{
     HealthResponse, ServerEvent, ServerEventKind, ServerSnapshot, ServerStreamMessage,
     VersionResponse,
+    persistence::{Database, Workspace},
+    workspace::{
+        FileContent, FileEntry, FileSearchMatch, TraversalOptions, WorkspaceError, WorkspaceService,
+    },
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use subtle::ConstantTimeEq;
 use tokio::{
     net::TcpListener,
@@ -99,6 +104,7 @@ impl fmt::Display for ApiToken {
 #[derive(Clone)]
 struct ApiState {
     events: EventHub,
+    workspaces: Option<WorkspaceService>,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -237,13 +243,28 @@ pub fn router(token: ApiToken) -> Router {
 
 /// Builds the API around an event hub supplied by the application owner.
 pub fn router_with_events(token: ApiToken, events: EventHub) -> Router {
+    router_with_services(token, events, None)
+}
+
+fn router_with_services(
+    token: ApiToken,
+    events: EventHub,
+    workspaces: Option<WorkspaceService>,
+) -> Router {
     Router::new()
         .route("/api/health", get(health))
         .route("/api/version", get(version))
         .route("/api/events", get(websocket))
+        .route("/api/workspaces", get(list_workspaces).post(open_workspace))
+        .route("/api/workspaces/{workspace_id}/files", get(list_files))
+        .route(
+            "/api/workspaces/{workspace_id}/file",
+            get(read_file).put(write_file),
+        )
+        .route("/api/workspaces/{workspace_id}/search", get(search_files))
         .layer(middleware::from_fn_with_state(token, authenticate))
         .layer(CorsLayer::permissive())
-        .with_state(ApiState { events })
+        .with_state(ApiState { events, workspaces })
 }
 
 async fn authenticate(
@@ -296,6 +317,178 @@ async fn version() -> Json<VersionResponse> {
     Json(VersionResponse {
         version: VERSION.to_owned(),
     })
+}
+
+#[derive(Debug, Serialize)]
+struct ApiErrorBody {
+    code: &'static str,
+    message: String,
+}
+
+enum ApiError {
+    Workspace(Box<WorkspaceError>),
+    ServiceUnavailable,
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        let (status, code, message) = match self {
+            Self::ServiceUnavailable => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "workspace_service_unavailable",
+                "workspace service is unavailable".to_owned(),
+            ),
+            Self::Workspace(error) => {
+                let (status, code) = match error.as_ref() {
+                    WorkspaceError::NotFound => (StatusCode::NOT_FOUND, "not_found"),
+                    WorkspaceError::InvalidPath => (StatusCode::BAD_REQUEST, "invalid_path"),
+                    WorkspaceError::Conflict => (StatusCode::CONFLICT, "file_changed"),
+                    WorkspaceError::SensitivePath => (StatusCode::FORBIDDEN, "sensitive_path"),
+                    WorkspaceError::InvalidEncoding => {
+                        (StatusCode::UNPROCESSABLE_ENTITY, "invalid_encoding")
+                    }
+                    WorkspaceError::WrongFileType => {
+                        (StatusCode::UNPROCESSABLE_ENTITY, "wrong_file_type")
+                    }
+                    WorkspaceError::Io(error)
+                        if error.kind() == io::ErrorKind::PermissionDenied =>
+                    {
+                        (StatusCode::FORBIDDEN, "permission_denied")
+                    }
+                    WorkspaceError::Persistence(_) | WorkspaceError::Io(_) => {
+                        (StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
+                    }
+                };
+                (status, code, error.to_string())
+            }
+        };
+        (status, Json(ApiErrorBody { code, message })).into_response()
+    }
+}
+
+impl From<WorkspaceError> for ApiError {
+    fn from(error: WorkspaceError) -> Self {
+        Self::Workspace(Box::new(error))
+    }
+}
+
+fn workspace_service(state: &ApiState) -> Result<&WorkspaceService, ApiError> {
+    state
+        .workspaces
+        .as_ref()
+        .ok_or(ApiError::ServiceUnavailable)
+}
+
+#[derive(Deserialize)]
+struct OpenWorkspaceRequest {
+    path: String,
+    name: Option<String>,
+}
+
+async fn open_workspace(
+    State(state): State<ApiState>,
+    Json(request): Json<OpenWorkspaceRequest>,
+) -> Result<(StatusCode, Json<Workspace>), ApiError> {
+    let service = workspace_service(&state)?;
+    let workspace = service.open(request.path, request.name).await?;
+    state.events.publish(
+        workspace.updated_at.clone(),
+        Some(workspace.id.clone()),
+        None,
+        ServerEventKind::WorkspaceChanged,
+        serde_json::to_string(&workspace).expect("workspace is serializable"),
+    );
+    Ok((StatusCode::CREATED, Json(workspace)))
+}
+
+async fn list_workspaces(State(state): State<ApiState>) -> Result<Json<Vec<Workspace>>, ApiError> {
+    let service = workspace_service(&state)?;
+    service.registered().await.map(Json).map_err(ApiError::from)
+}
+
+#[derive(Default, Deserialize)]
+struct ListFilesQuery {
+    #[serde(default)]
+    path: String,
+    #[serde(flatten)]
+    traversal: TraversalOptions,
+}
+
+async fn list_files(
+    State(state): State<ApiState>,
+    AxumPath(workspace_id): AxumPath<String>,
+    Query(query): Query<ListFilesQuery>,
+) -> Result<Json<Vec<FileEntry>>, ApiError> {
+    let service = workspace_service(&state)?;
+    service
+        .list(&workspace_id, &query.path, query.traversal)
+        .await
+        .map(Json)
+        .map_err(ApiError::from)
+}
+
+#[derive(Deserialize)]
+struct FileQuery {
+    path: String,
+}
+
+async fn read_file(
+    State(state): State<ApiState>,
+    AxumPath(workspace_id): AxumPath<String>,
+    Query(query): Query<FileQuery>,
+) -> Result<Json<FileContent>, ApiError> {
+    let service = workspace_service(&state)?;
+    service
+        .read(&workspace_id, &query.path)
+        .await
+        .map(Json)
+        .map_err(ApiError::from)
+}
+
+#[derive(Deserialize)]
+struct WriteFileRequest {
+    path: String,
+    content: String,
+    expected_revision: Option<String>,
+}
+
+async fn write_file(
+    State(state): State<ApiState>,
+    AxumPath(workspace_id): AxumPath<String>,
+    Json(request): Json<WriteFileRequest>,
+) -> Result<Json<FileContent>, ApiError> {
+    let service = workspace_service(&state)?;
+    service
+        .write(
+            &workspace_id,
+            &request.path,
+            &request.content,
+            request.expected_revision.as_deref(),
+        )
+        .await
+        .map(Json)
+        .map_err(ApiError::from)
+}
+
+#[derive(Deserialize)]
+struct SearchFilesQuery {
+    query: String,
+    limit: Option<usize>,
+    #[serde(flatten)]
+    traversal: TraversalOptions,
+}
+
+async fn search_files(
+    State(state): State<ApiState>,
+    AxumPath(workspace_id): AxumPath<String>,
+    Query(query): Query<SearchFilesQuery>,
+) -> Result<Json<Vec<FileSearchMatch>>, ApiError> {
+    let service = workspace_service(&state)?;
+    service
+        .search(&workspace_id, &query.query, query.traversal, query.limit)
+        .await
+        .map(Json)
+        .map_err(ApiError::from)
 }
 
 #[derive(Deserialize)]
@@ -416,6 +609,18 @@ pub async fn start_with_token(address: SocketAddr, token: ApiToken) -> io::Resul
         ));
     }
 
+    let database = if cfg!(test) {
+        Database::open(":memory:").await
+    } else {
+        let path = database_path()?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        Database::open(path).await
+    }
+    .map_err(io::Error::other)?;
+    let workspaces = WorkspaceService::new(database.workspaces());
+
     let listener = TcpListener::bind(address).await?;
     let address = listener.local_addr()?;
     let (shutdown, shutdown_receiver) = oneshot::channel();
@@ -425,11 +630,14 @@ pub async fn start_with_token(address: SocketAddr, token: ApiToken) -> io::Resul
     let dispatch = tracing::dispatcher::get_default(Clone::clone);
     let task = tokio::spawn(
         async move {
-            axum::serve(listener, router_with_events(server_token, server_events))
-                .with_graceful_shutdown(async move {
-                    let _ = shutdown_receiver.await;
-                })
-                .await
+            axum::serve(
+                listener,
+                router_with_services(server_token, server_events, Some(workspaces)),
+            )
+            .with_graceful_shutdown(async move {
+                let _ = shutdown_receiver.await;
+            })
+            .await
         }
         .with_subscriber(dispatch),
     );
@@ -449,14 +657,31 @@ pub async fn start_with_token(address: SocketAddr, token: ApiToken) -> io::Resul
     })
 }
 
+fn database_path() -> io::Result<PathBuf> {
+    if let Some(path) = env::var_os("PAU_DATABASE_PATH") {
+        return Ok(PathBuf::from(path));
+    }
+    dirs::data_local_dir()
+        .map(|directory| directory.join("pau/pau.sqlite3"))
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "local data directory is unavailable",
+            )
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
+        fs,
         net::Ipv4Addr,
         sync::{Arc, Mutex},
         time::Duration,
     };
 
+    use axum::body::{Body, to_bytes};
+    use tempfile::tempdir;
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         net::TcpStream,
@@ -642,6 +867,83 @@ mod tests {
         assert!(!logs.contains(TEST_TOKEN));
         assert!(!logs.contains(configured_secret));
         assert_eq!(format!("{:?}", test_token()), "ApiToken([REDACTED])");
+    }
+
+    #[tokio::test]
+    async fn serves_workspace_and_file_apis() {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("café project");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("note.txt"), "find this line\n").unwrap();
+        let database = Database::open(":memory:").await.unwrap();
+        let app = router_with_services(
+            test_token(),
+            EventHub::default(),
+            Some(WorkspaceService::new(database.workspaces())),
+        );
+        let authorization = format!("Bearer {TEST_TOKEN}");
+        let open = Request::builder()
+            .method("POST")
+            .uri("/api/workspaces")
+            .header(header::AUTHORIZATION, &authorization)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                serde_json::json!({"path": root, "name": "Café"}).to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(open).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let workspace: Workspace =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+
+        let read = Request::builder()
+            .uri(format!(
+                "/api/workspaces/{}/file?path=note.txt",
+                workspace.id
+            ))
+            .header(header::AUTHORIZATION, &authorization)
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(read).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let file: FileContent =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        fs::write(root.join("note.txt"), "changed elsewhere\n").unwrap();
+
+        let write = Request::builder()
+            .method("PUT")
+            .uri(format!("/api/workspaces/{}/file", workspace.id))
+            .header(header::AUTHORIZATION, &authorization)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "path": "note.txt",
+                    "content": "replacement\n",
+                    "expected_revision": file.revision,
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(write).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+
+        let search = Request::builder()
+            .uri(format!(
+                "/api/workspaces/{}/search?query=changed",
+                workspace.id
+            ))
+            .header(header::AUTHORIZATION, authorization)
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(search).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let matches: Vec<FileSearchMatch> =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].path, "note.txt");
     }
 
     fn publish_session(events: &EventHub, payload: &str) -> ServerEvent {

@@ -102,8 +102,9 @@ PAU_API_TOKEN="$TOKEN" pnpm --filter @stormlightlabs/pau-web dev
 ```
 
 The development server authenticates and forwards `/api` requests to the local
-API at `127.0.0.1:3001`. The `/api/health`, `/api/version`, and `/api/events`
-endpoints reject requests without the launch token.
+API at `127.0.0.1:3001`. All endpoints reject requests without the launch
+token. Workspace registrations are stored in the local Pau data directory. Set
+`PAU_DATABASE_PATH` to use another SQLite file during development.
 
 To run the desktop app, use the Tauri development command:
 

@@ -5,7 +5,9 @@
 
 use std::{path::Path, time::Duration};
 
+use serde::{Deserialize, Serialize};
 use tokio_rusqlite::{Connection, OptionalExtension, params, rusqlite};
+use ts_rs::TS;
 
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 const MIGRATIONS: &[&str] = &[
@@ -79,7 +81,7 @@ fn apply_migrations(connection: &mut rusqlite::Connection) -> rusqlite::Result<(
 }
 
 /// A remembered local directory or Git worktree.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Workspace {
     /// Stable application identifier.
     pub id: String,
@@ -138,6 +140,23 @@ impl WorkspaceRepository {
                         "SELECT id, path, name, created_at, updated_at
                          FROM workspaces WHERE id = ?1",
                         [id],
+                        workspace_from_row,
+                    )
+                    .optional()
+            })
+            .await
+    }
+
+    /// Finds a workspace by its canonical path.
+    pub async fn get_by_path(&self, path: &str) -> Result<Option<Workspace>> {
+        let path = path.to_owned();
+        self.connection
+            .call(move |connection| {
+                connection
+                    .query_row(
+                        "SELECT id, path, name, created_at, updated_at
+                         FROM workspaces WHERE path = ?1",
+                        [path],
                         workspace_from_row,
                     )
                     .optional()

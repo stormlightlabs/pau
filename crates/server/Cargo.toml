@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 axum.workspace = true
+dirs.workspace = true
 getrandom.workspace = true
 pau-core = { path = "../core" }
 serde.workspace = true
@@ -19,6 +20,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+tempfile = "3.27.0"
 tower.workspace = true
 
 [[bin]]

@@ -12,6 +12,72 @@ export type VersionResponse = {
  */
 version: string, };
 
+export type Workspace = {
+/**
+ * Stable application identifier.
+ */
+id: string,
+/**
+ * Canonical workspace path encoded for storage.
+ */
+path: string,
+/**
+ * Optional display name chosen by the operator.
+ */
+name: string | null,
+/**
+ * RFC 3339 creation timestamp.
+ */
+created_at: string,
+/**
+ * RFC 3339 timestamp of the latest update.
+ */
+updated_at: string, };
+
+export type FileEntryKind = "file" | "directory" | "symlink";
+
+export type FileEntry = {
+/**
+ * Slash-separated path relative to the workspace root.
+ */
+path: string,
+/**
+ * Filesystem object kind.
+ */
+kind: FileEntryKind,
+/**
+ * File size in bytes. Directories and links do not report a size.
+ */
+size: number | null, };
+
+export type FileContent = {
+/**
+ * Slash-separated path relative to the workspace root.
+ */
+path: string,
+/**
+ * UTF-8 file content.
+ */
+content: string,
+/**
+ * SHA-256 revision of the returned bytes.
+ */
+revision: string, };
+
+export type FileSearchMatch = {
+/**
+ * Slash-separated path relative to the workspace root.
+ */
+path: string,
+/**
+ * One-based matching line number.
+ */
+line: number,
+/**
+ * Matching line with surrounding whitespace removed.
+ */
+preview: string, };
+
 export type ServerEventKind = "workspace_changed" | "session_changed";
 
 export type ServerEvent = {

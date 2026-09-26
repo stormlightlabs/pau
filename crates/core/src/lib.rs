@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub mod persistence;
+pub mod workspace;
 
 /// Response returned by the backend health endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

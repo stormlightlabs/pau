@@ -1,0 +1,48 @@
+---
+title: Workspaces and files
+description: Register local workspace roots and use the authenticated file API.
+order: 2
+---
+
+# Workspaces and files
+
+Pau remembers each directory or Git worktree that you open. It stores the
+canonical root path, so opening the same directory through a path that contains
+`.` or a symbolic link reuses its workspace registration.
+
+File requests accept paths relative to a registered root. Pau rejects absolute
+paths, `..` traversal, and symbolic links that resolve outside that root.
+General file endpoints also deny known credential and environment files.
+
+## Register a workspace
+
+Send a `POST` request to `/api/workspaces` with a JSON `path` and an optional
+`name`. List remembered roots with an authenticated request:
+
+```bash
+curl -H "Authorization: Bearer $PAU_API_TOKEN" \
+  http://127.0.0.1:3001/api/workspaces
+```
+
+## Read and write files
+
+Read a UTF-8 file with
+`GET /api/workspaces/{workspace_id}/file?path=src/main.rs`. The response
+includes a SHA-256 `revision`. Send that revision when replacing an existing
+file. The JSON request contains `path`, `content`, and `expected_revision`.
+Use `PUT /api/workspaces/{workspace_id}/file` for the request. Pau returns
+`409 Conflict` instead of overwriting the file if another process changed it
+after the read. Omit `expected_revision` only when creating a new file in an
+existing directory.
+
+## List and search files
+
+`GET /api/workspaces/{workspace_id}/files` lists one directory level. Add a
+relative `path` query parameter to list another directory. Hidden and ignored
+paths are excluded unless `include_hidden=true` or `include_ignored=true` is
+set.
+
+`GET /api/workspaces/{workspace_id}/search?query=needle` searches UTF-8 file
+content. Search follows the same hidden and ignored-file controls, skips known
+credential files and files larger than 2 MiB, and returns at most 200 matches
+by default. Set `limit` to request up to 1,000 matches.

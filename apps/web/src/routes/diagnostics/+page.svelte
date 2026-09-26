@@ -1,0 +1,124 @@
+<script lang="ts">
+	import type { DiagnosticBundle } from '@stormlightlabs/pau-protocol';
+	import { DiagnosticsView, diagnosticFixtures, type DiagnosticBundleView } from '@stormlightlabs/pau-ui';
+	import { onMount } from 'svelte';
+
+	import { exportDiagnostics, getDiagnostics, startPayloadTracing, updateDiagnosticSettings } from '$lib/api';
+
+	let bundle = $state<DiagnosticBundleView>(diagnosticFixtures.disabled);
+	let error = $state<string>();
+	let notice = $state<string>();
+
+	function viewModel(value: DiagnosticBundle): DiagnosticBundleView {
+		return {
+			frontendVersion: value.frontend_version,
+			backendVersion: value.backend_version,
+			dependencies: value.dependencies,
+			adapters: value.adapters.map((adapter) => ({
+				name: adapter.name,
+				version: adapter.version ?? undefined,
+				handshake: adapter.handshake,
+				capabilities: adapter.capabilities
+			})),
+			transports: value.transports.map((transport) => ({
+				name: transport.name,
+				state: transport.state,
+				reconnects: transport.reconnects,
+				lastSequence: transport.last_sequence ?? undefined,
+				replayGaps: transport.replay_gaps,
+				queueDepth: transport.queue_depth,
+				droppedUpdates: transport.dropped_updates
+			})),
+			settings: {
+				enabled: value.settings.enabled,
+				minLevel: value.settings.min_level,
+				payloadTracing: value.settings.payload_tracing,
+				payloadTracingExpiresAt: value.settings.payload_tracing_expires_at ?? undefined
+			},
+			records: value.records.map((record) => ({
+				timestamp: record.timestamp,
+				component: record.component,
+				level: record.level,
+				operation: record.operation,
+				processId: record.process_id ?? undefined,
+				sessionId: record.session_id ?? undefined,
+				metadata: record.metadata,
+				payloadTrace: record.payload_trace
+			})),
+			droppedRecords: value.dropped_records,
+			revision: value.revision
+		};
+	}
+
+	onMount(() => {
+		void getDiagnostics(location.search)
+			.then((value) => (bundle = viewModel(value)))
+			.catch((caught: unknown) => (error = caught instanceof Error ? caught.message : String(caught)));
+	});
+
+	async function changeSettings(enabled: boolean, level: typeof bundle.settings.minLevel): Promise<void> {
+		error = undefined;
+		try {
+			bundle = viewModel(await updateDiagnosticSettings(location.search, enabled, level));
+		} catch (caught) {
+			error = caught instanceof Error ? caught.message : String(caught);
+		}
+	}
+
+	async function tracePayloads(durationSeconds: number): Promise<void> {
+		error = undefined;
+		try {
+			bundle = viewModel(await startPayloadTracing(location.search, durationSeconds));
+		} catch (caught) {
+			error = caught instanceof Error ? caught.message : String(caught);
+		}
+	}
+
+	async function exportBundle(destination: string, revision: number): Promise<void> {
+		error = undefined;
+		notice = undefined;
+		try {
+			await exportDiagnostics(location.search, destination, revision);
+			notice = 'Diagnostic bundle exported.';
+		} catch (caught) {
+			error = caught instanceof Error ? caught.message : String(caught);
+		}
+	}
+</script>
+
+<svelte:head><title>Diagnostics · Pau</title></svelte:head>
+
+{#if error}<p class="diagnostics-route__message diagnostics-route__message--error" role="alert">{error}</p>{/if}
+{#if notice}<p class="diagnostics-route__message" role="status">{notice}</p>{/if}
+<div class="diagnostics-route">
+	<DiagnosticsView
+		{bundle}
+		onSettingsChange={(enabled, level) => void changeSettings(enabled, level)}
+		onStartPayloadTracing={(duration) => void tracePayloads(duration)}
+		onExport={(destination, revision) => void exportBundle(destination, revision)} />
+</div>
+
+<style>
+	.diagnostics-route {
+		min-height: 100dvh;
+		padding: clamp(1rem, 3vw, 2.5rem);
+		color: var(--pau-text, #e7e9f7);
+		background: var(--pau-surface, #1c1e2d);
+	}
+
+	.diagnostics-route__message {
+		position: fixed;
+		top: 0.75rem;
+		right: 0.75rem;
+		z-index: 5;
+		margin: 0;
+		padding: 0.65rem 0.8rem;
+		color: var(--pau-text, #e7e9f7);
+		background: var(--pau-surface-raised, #25283a);
+		border: 1px solid var(--pau-accent, #38ef9d);
+	}
+
+	.diagnostics-route__message--error {
+		border-color: var(--pau-danger, #ee7180);
+	}
+</style>

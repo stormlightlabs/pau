@@ -1,4 +1,6 @@
 import type {
+	DiagnosticBundle,
+	DiagnosticLevel,
 	FileContent,
 	FileEntry,
 	FileSearchMatch,
@@ -83,6 +85,58 @@ export async function getBackendVersion(search: string, fetcher: typeof fetch = 
 		headers: authorization(resolveApiToken(search))
 	});
 	return responseJson<VersionResponse>(response);
+}
+
+/** Reads the current redacted diagnostics preview. */
+export async function getDiagnostics(search: string, fetcher: typeof fetch = fetch): Promise<DiagnosticBundle> {
+	const response = await fetcher(`${resolveApiOrigin(search)}/api/diagnostics`, {
+		headers: authorization(resolveApiToken(search))
+	});
+	return responseJson<DiagnosticBundle>(response);
+}
+
+/** Changes observation-only release diagnostic settings. */
+export async function updateDiagnosticSettings(
+	search: string,
+	enabled: boolean,
+	minLevel: DiagnosticLevel,
+	fetcher: typeof fetch = fetch
+): Promise<DiagnosticBundle> {
+	const response = await fetcher(`${resolveApiOrigin(search)}/api/diagnostics/settings`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json', ...authorization(resolveApiToken(search)) },
+		body: JSON.stringify({ enabled, min_level: minLevel })
+	});
+	return responseJson<DiagnosticBundle>(response);
+}
+
+/** Enables temporary payload-shape tracing. */
+export async function startPayloadTracing(
+	search: string,
+	durationSeconds: number,
+	fetcher: typeof fetch = fetch
+): Promise<DiagnosticBundle> {
+	const response = await fetcher(`${resolveApiOrigin(search)}/api/diagnostics/payload-tracing`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', ...authorization(resolveApiToken(search)) },
+		body: JSON.stringify({ duration_seconds: durationSeconds })
+	});
+	return responseJson<DiagnosticBundle>(response);
+}
+
+/** Writes the diagnostic revision that the operator reviewed. */
+export async function exportDiagnostics(
+	search: string,
+	destination: string,
+	reviewedRevision: number,
+	fetcher: typeof fetch = fetch
+): Promise<{ written: boolean }> {
+	const response = await fetcher(`${resolveApiOrigin(search)}/api/diagnostics/export`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', ...authorization(resolveApiToken(search)) },
+		body: JSON.stringify({ destination, reviewed_revision: reviewedRevision })
+	});
+	return responseJson<{ written: boolean }>(response);
 }
 
 /** Lists workspace registrations available to the current backend. */

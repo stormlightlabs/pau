@@ -12,6 +12,150 @@ export type VersionResponse = {
  */
 version: string, };
 
+export type DiagnosticLevel = "debug" | "info" | "warn" | "error";
+
+export type DiagnosticSettings = {
+/**
+ * Whether collection and the diagnostics view are enabled.
+ */
+enabled: boolean,
+/**
+ * Lowest severity retained in the record ring.
+ */
+min_level: DiagnosticLevel,
+/**
+ * Whether temporary payload-shape tracing is active.
+ */
+payload_tracing: boolean,
+/**
+ * Unix timestamp at which payload tracing stops.
+ */
+payload_tracing_expires_at: number | null, };
+
+export type AdapterDiagnostic = {
+/**
+ * Adapter name shown to the operator.
+ */
+name: string,
+/**
+ * Adapter or package version when discovered.
+ */
+version: string | null,
+/**
+ * Result of the latest protocol handshake.
+ */
+handshake: string,
+/**
+ * Capability names reported by the adapter.
+ */
+capabilities: Array<string>, };
+
+export type TransportDiagnostic = {
+/**
+ * Transport name, such as `websocket` or `pi_rpc`.
+ */
+name: string,
+/**
+ * Current state.
+ */
+state: string,
+/**
+ * Number of reconnect attempts.
+ */
+reconnects: number,
+/**
+ * Latest observed event sequence.
+ */
+last_sequence: number | null,
+/**
+ * Number of replay gaps.
+ */
+replay_gaps: number,
+/**
+ * Current queue depth.
+ */
+queue_depth: number,
+/**
+ * Number of updates dropped before delivery.
+ */
+dropped_updates: number, };
+
+export type DiagnosticRecord = {
+/**
+ * RFC 3339 timestamp assigned by the producing subsystem.
+ */
+timestamp: string,
+/**
+ * Component that produced the record.
+ */
+component: string,
+/**
+ * Record severity.
+ */
+level: DiagnosticLevel,
+/**
+ * Stable operation name. It must not contain user content.
+ */
+operation: string,
+/**
+ * Stable process identifier, when applicable.
+ */
+process_id: string | null,
+/**
+ * Stable session identifier, when applicable.
+ */
+session_id: string | null,
+/**
+ * Safe metadata selected from an allowlist.
+ */
+metadata: { [key in string]: string },
+/**
+ * Whether this is a temporary protocol payload-shape trace.
+ */
+payload_trace: boolean, };
+
+export type DiagnosticBundle = {
+/**
+ * Schema version for support tooling.
+ */
+schema_version: number,
+/**
+ * Frontend build version.
+ */
+frontend_version: string,
+/**
+ * Backend build version.
+ */
+backend_version: string,
+/**
+ * Relevant dependency versions.
+ */
+dependencies: { [key in string]: string },
+/**
+ * Adapter versions, handshakes, and capabilities.
+ */
+adapters: Array<AdapterDiagnostic>,
+/**
+ * Transport and replay state.
+ */
+transports: Array<TransportDiagnostic>,
+/**
+ * Current release-safe settings.
+ */
+settings: DiagnosticSettings,
+/**
+ * Recent sanitized records.
+ */
+records: Array<DiagnosticRecord>,
+/**
+ * Records discarded because the ring reached its limit.
+ */
+dropped_records: number,
+/**
+ * Revision that must match when this preview is exported.
+ */
+revision: number, };
+
 export type Workspace = {
 /**
  * Stable application identifier.

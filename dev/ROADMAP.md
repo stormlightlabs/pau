@@ -75,7 +75,7 @@ Verification:
 
 #### 2.50 Diagnostics mode
 
-Status: planned
+Status: complete
 Blocked by: 2.41
 
 Add release-build diagnostics behind an explicit settings control and CLI flag.

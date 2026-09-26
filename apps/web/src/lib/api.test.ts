@@ -1,7 +1,9 @@
 import { describe, expect, test, vi } from 'vitest';
 
 import {
+	exportDiagnostics,
 	getBackendVersion,
+	getDiagnostics,
 	getWorkspaceGitDiff,
 	getWorkspaceGitStatus,
 	listWorkspaceFiles,
@@ -11,6 +13,8 @@ import {
 	resolveApiToken,
 	resolveEventSocket,
 	searchWorkspaceFiles,
+	startPayloadTracing,
+	updateDiagnosticSettings,
 	writeWorkspaceFile
 } from './api';
 
@@ -50,6 +54,48 @@ test('authenticates desktop HTTP requests with the launch token', async () => {
 	expect(fetcher).toHaveBeenNthCalledWith(1, '/api/version', { headers: undefined });
 	expect(fetcher).toHaveBeenNthCalledWith(2, 'http://127.0.0.1:43127/api/version', {
 		headers: { Authorization: `Bearer ${TOKEN}` }
+	});
+});
+
+test('controls and exports release diagnostics through authenticated requests', async () => {
+	const bundle = {
+		schema_version: 1,
+		frontend_version: '0.1.0',
+		backend_version: '0.1.0',
+		dependencies: {},
+		adapters: [],
+		transports: [],
+		settings: { enabled: true, min_level: 'warn', payload_tracing: false, payload_tracing_expires_at: null },
+		records: [],
+		dropped_records: 0,
+		revision: 7
+	};
+	const fetcher = vi
+		.fn<typeof fetch>()
+		.mockResolvedValueOnce(Response.json(bundle))
+		.mockResolvedValueOnce(Response.json(bundle))
+		.mockResolvedValueOnce(Response.json(bundle))
+		.mockResolvedValueOnce(Response.json({ written: true }));
+
+	await expect(getDiagnostics(DESKTOP_SEARCH, fetcher)).resolves.toEqual(bundle);
+	await updateDiagnosticSettings(DESKTOP_SEARCH, true, 'warn', fetcher);
+	await startPayloadTracing(DESKTOP_SEARCH, 300, fetcher);
+	await exportDiagnostics(DESKTOP_SEARCH, '/tmp/pau diagnostics.json', 7, fetcher);
+
+	expect(fetcher).toHaveBeenNthCalledWith(2, 'http://127.0.0.1:43127/api/diagnostics/settings', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+		body: JSON.stringify({ enabled: true, min_level: 'warn' })
+	});
+	expect(fetcher).toHaveBeenNthCalledWith(3, 'http://127.0.0.1:43127/api/diagnostics/payload-tracing', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+		body: JSON.stringify({ duration_seconds: 300 })
+	});
+	expect(fetcher).toHaveBeenNthCalledWith(4, 'http://127.0.0.1:43127/api/diagnostics/export', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+		body: JSON.stringify({ destination: '/tmp/pau diagnostics.json', reviewed_revision: 7 })
 	});
 });
 

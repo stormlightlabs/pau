@@ -1,4 +1,10 @@
 export type {
+	AdapterDiagnostic,
+	DiagnosticBundle,
+	DiagnosticLevel,
+	DiagnosticRecord,
+	DiagnosticSettings,
+	TransportDiagnostic,
 	FileContent,
 	FileEntry,
 	FileEntryKind,

@@ -17,6 +17,7 @@ when purpose, hierarchy, responsive behavior, or a durable interaction changes.
 | Embedded editor study | `/screens/neovim`        | `src/routes/screens/neovim/+page.svelte`        | Record a deferred deep-integration direction       |
 | Terminal              | `/screens/terminal`      | `src/routes/screens/terminal/+page.svelte`      | Use persistent PTY sessions                        |
 | Processes             | `/screens/processes`     | `src/routes/screens/processes/+page.svelte`     | Inspect workspace and session machine resource use |
+| Diagnostics           | `/screens/diagnostics`   | `src/routes/screens/diagnostics/+page.svelte`   | Inspect and export redacted support data           |
 | Resources             | `/screens/resources`     | `src/routes/screens/resources/+page.svelte`     | Inspect scope, trust, and capability               |
 | Settings              | `/screens/settings`      | `src/routes/screens/settings/+page.svelte`      | Change product and editor preferences              |
 | Website and docs      | `/docs`                  | `src/routes/docs/+page.svelte`                  | Evaluate Pau, learn a task, or check its status    |
@@ -185,6 +186,19 @@ Pau does not interrupt, stop, or throttle work automatically.
 At narrow widths, each process becomes a labelled metric block. Actions remain
 visible, and the process-tree breakdown opens below the selected row. Completed
 processes retain a small final summary instead of raw sample history.
+
+## Diagnostics
+
+Diagnostics is an explicit observation mode for troubleshooting release builds.
+The view leads with its enabled state, then shows versions, adapter handshakes,
+transport and replay state, queue pressure, process and session correlation, and
+recent redacted records. Payload tracing is temporary and separate from routine
+collection. Export requires the operator to review the current bundle revision
+and destination before Pau writes it.
+
+At narrow widths, version cells wrap and transport rows become labelled metric
+blocks. Records stack without truncating the operation or correlation fields.
+Fault injection belongs to a separate development-only surface, not this view.
 
 ## Resources
 

@@ -2,6 +2,7 @@ export { default as ApplicationShell } from './lib/ApplicationShell.svelte';
 export type { ShellNavItem } from './lib/ApplicationShell.svelte';
 export { default as CapabilityCard } from './lib/CapabilityCard.svelte';
 export { default as ExtensionUi } from './lib/ExtensionUi.svelte';
+export { default as DiagnosticsView } from './lib/DiagnosticsView.svelte';
 export { default as DiffReview } from './lib/DiffReview.svelte';
 export { default as FileEditor } from './lib/FileEditor.svelte';
 export type { EditorFileContent, FileEditorSource } from './lib/types/file-editor';
@@ -11,6 +12,14 @@ export { default as ProcessesView } from './lib/ProcessesView.svelte';
 export { default as SessionResourceSummary } from './lib/SessionResourceSummary.svelte';
 export { default as SessionView } from './lib/SessionView.svelte';
 export { default as WorkspaceFiles } from './lib/WorkspaceFiles.svelte';
+export type {
+	AdapterDiagnostic,
+	DiagnosticBundleView,
+	DiagnosticLevel,
+	DiagnosticRecord,
+	DiagnosticSettings,
+	TransportDiagnostic
+} from './lib/types/diagnostics';
 export type {
 	WorkspaceFileEntry,
 	WorkspaceFileKind,
@@ -54,6 +63,7 @@ export { ICONS, type IconKind } from './icons';
 export { THEMES, UI_FONTS, themeCssProperties, type PauTheme, type ThemeName, type UiFontName } from './theme';
 export { shellNavigationFixtures } from './fixtures/application-shell';
 export { capabilityFixtures, type CapabilityFixture } from './fixtures/capabilities';
+export { diagnosticFixtures } from './fixtures/diagnostics';
 export { mcpConfigurationFixtures } from './fixtures/mcp';
 export { resourceMonitoringFixtures } from './fixtures/resource-monitoring';
 export { sessionFixtures } from './fixtures/sessions';

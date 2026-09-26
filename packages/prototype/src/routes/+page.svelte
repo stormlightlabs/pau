@@ -47,6 +47,11 @@
 				'Shows current and peak machine use, process trees, pressure warnings, and explicit session controls.'
 		},
 		{
+			href: '/screens/diagnostics',
+			title: 'Release diagnostics',
+			description: 'Reviews versions, capability handshakes, transport state, redacted records, and bundle export.'
+		},
+		{
 			href: '/screens/resources',
 			title: 'Resource browser',
 			description: 'Explores trust, scope, connection state, and agent access for MCP servers and Pi resources.'

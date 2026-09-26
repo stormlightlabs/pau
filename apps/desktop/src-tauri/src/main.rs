@@ -1,6 +1,6 @@
 use std::{net::Ipv4Addr, sync::Mutex};
 
-use pau_server::ServerHandle;
+use pau_server::{ServerHandle, ServerOptions};
 use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
 
 /// Owns the backend for exactly as long as the desktop application runs.
@@ -16,11 +16,14 @@ impl DesktopBackend {
 
 fn main() {
     tracing_subscriber::fmt().json().init();
+    let diagnostics = std::env::args().any(|argument| argument == "--diagnostics");
 
     let application = tauri::Builder::default()
-        .setup(|app| {
-            let server =
-                tauri::async_runtime::block_on(pau_server::start((Ipv4Addr::LOCALHOST, 0).into()))?;
+        .setup(move |app| {
+            let server = tauri::async_runtime::block_on(pau_server::start_with_options(
+                (Ipv4Addr::LOCALHOST, 0).into(),
+                ServerOptions { diagnostics },
+            ))?;
             let frontend_url = format!(
                 "index.html?pau-api-port={}&pau-api-token={}",
                 server.local_addr().port(),

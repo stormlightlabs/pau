@@ -11,6 +11,7 @@
 			| 'neovim'
 			| 'terminal'
 			| 'processes'
+			| 'diagnostics'
 			| 'resources'
 			| 'settings';
 	} = $props();
@@ -23,6 +24,7 @@
 		{ name: 'editor', label: 'Editor', icon: 'i-tabler-code' },
 		{ name: 'terminal', label: 'Terminal', icon: 'i-tabler-terminal-2' },
 		{ name: 'processes', label: 'Processes', icon: 'i-tabler-activity-heartbeat' },
+		{ name: 'diagnostics', label: 'Diagnostics', icon: 'i-tabler-stethoscope' },
 		{ name: 'resources', label: 'Resources', icon: 'i-tabler-plug-connected' }
 	] as const;
 </script>

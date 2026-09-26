@@ -1,0 +1,57 @@
+---
+title: Diagnostics
+description: Collect and export redacted troubleshooting data from a release build.
+order: 4
+---
+
+# Diagnostics
+
+Pau ships release diagnostics, but keeps them off until you enable them. Open
+**Diagnostics** and select **Enable diagnostics**, or start the desktop app with:
+
+```sh
+pau --diagnostics
+```
+
+Diagnostics observes the running application. Enabling it does not change
+process supervision, authentication, permissions, sandboxing, retry timing,
+timeouts, or process limits.
+
+## Inspect the current state
+
+The Diagnostics view shows:
+
+- Frontend, backend, adapter, and relevant dependency versions
+- Adapter capability handshakes
+- Transport state, reconnects, event sequences, and replay gaps
+- Process starts and exits with process and session correlation
+- Queue depth, slow consumers, and dropped updates
+- Recent redacted metadata records
+
+Records stay in a bounded in-memory buffer. Older records are discarded when
+the buffer is full. Change the minimum log level when a support request needs
+more or less detail.
+
+## Trace payload shapes temporarily
+
+Select **Trace for 5 minutes** only while reproducing a transport problem. The
+trace records payload shapes and safe protocol metadata. It remains subject to
+the same redaction rules as routine diagnostics and stops automatically.
+
+Pau does not retain credentials, environment values, prompts, file contents,
+tool arguments, transcript content, paths outside the workspace, or sensitive
+URL parts. If a subsystem cannot prove that a field is safe, Pau omits it.
+
+## Export a bundle
+
+1. Enter the bundle destination.
+2. Select **Review bundle**.
+3. Check the listed contents and exclusions.
+4. Select **Export reviewed bundle**.
+
+Pau rejects the export if diagnostic data changes after the review. Review the
+new revision, then export it. Pau writes no diagnostic bundle until you request
+one.
+
+Fault injection and forced failures are development-only controls. They are not
+part of release diagnostics.

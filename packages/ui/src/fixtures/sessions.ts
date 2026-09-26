@@ -53,6 +53,18 @@ const session = (status: SessionViewModel['status'], overrides: Partial<SessionV
 	...overrides
 });
 
+const extensionUi = {
+	notifications: [{ id: 'notification-fixture', message: 'The extension is ready.', level: 'info' as const }],
+	statuses: [{ key: 'fixture', text: 'Waiting for your response' }],
+	widgets: [
+		{
+			key: 'fixture',
+			lines: ['Configured extension', 'Only string widgets are shown in Pau.'],
+			placement: 'above-editor' as const
+		}
+	]
+};
+
 /** Session fixtures shared by stories and deterministic browser tests. */
 export const sessionFixtures = {
 	empty: [] as SessionWorkspace[],
@@ -83,6 +95,46 @@ export const sessionFixtures = {
 		}
 	],
 	stopped: [{ id: 'pau', name: 'Pau', sessions: [session('stopped', { title: 'Write release notes' })] }],
+	extensionConfirm: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [
+				session('waiting', {
+					id: 'extension-confirm',
+					title: 'Extension confirmation',
+					attention: 'A configured extension needs your response.',
+					extensionUi: {
+						...extensionUi,
+						dialog: {
+							id: 'confirm-fixture',
+							kind: 'confirm',
+							title: 'Allow workspace update?',
+							message: 'The extension wants to update its workspace index.'
+						}
+					}
+				})
+			]
+		}
+	],
+	extensionUnsupported: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [
+				session('waiting', {
+					id: 'extension-custom',
+					title: 'Terminal-only extension',
+					extensionUi: {
+						notifications: [],
+						statuses: [],
+						widgets: [],
+						dialog: { id: 'custom-fixture', kind: 'unsupported', method: 'custom' }
+					}
+				})
+			]
+		}
+	],
 	concurrent: [
 		{
 			id: 'pau',

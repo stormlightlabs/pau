@@ -39,10 +39,10 @@ contention can cause false timeouts in process and interaction tests.
   not invoke paid agents or remote services from default tests.
 - Stop when the unit is complete. Record unrelated defects separately unless
   they block its verification.
-- Keep completed units in the active deliverable. When every unit in a
-  deliverable is complete, add a concise user-facing changelog entry, remove
-  satisfied references to the deliverable from blocker lists, and remove the
-  deliverable from the roadmap.
+- Keep completed units in the roadmap until every unit in their named subsection
+  is complete. Then add a concise user-facing changelog entry, remove satisfied
+  blocker references, and remove that subsection. Apply the same cleanup to an
+  entire deliverable when its remaining units are complete.
 
 ## Dogfood Pau
 

@@ -64,6 +64,19 @@ failed, and stopped sessions. In a running session, press `Ctrl+Enter` or
 `Command+Enter` to send a prompt and `Escape` to interrupt. Focus a session in
 the workspace rail and use the up or down arrow key to switch sessions.
 
+## Use configured Pi extensions
+
+Pau keeps the extensions that Pi loads from your user and project configuration.
+It shows extension selection, confirmation, text input, and multi-line editor
+requests in the session view. Extension notifications, keyed status text, and
+string widgets appear near the prompt composer. A timed request closes when Pi's
+timeout expires.
+
+Pi custom components can depend on terminal rendering and input, so Pau does not
+attempt to reproduce them. When an extension requests a terminal-only custom
+component, open vanilla Pi in a Pau terminal and use the component there. Pau
+does not add a helper extension to ordinary Pi sessions.
+
 ## Run the local app
 
 The desktop app generates a new local API token each time it starts. Its webview

@@ -1,4 +1,7 @@
-use crate::{PiProcess, PiProcessError, PiProcessExit, PiProcessOutput, StartPiProcessOptions};
+use crate::{
+    PiExtensionUiResponse, PiProcess, PiProcessError, PiProcessExit, PiProcessOutput,
+    StartPiProcessOptions,
+};
 use pau_agent::{
     AgentCapabilities, AgentControl, AgentControlError, AgentSessionStatus, PromptQueueChoice,
 };
@@ -225,6 +228,18 @@ impl PiSession {
             )
             .await?;
         Ok(response.get("data").cloned().unwrap_or(Value::Null))
+    }
+
+    /// Responds to a blocking request from a configured Pi extension.
+    ///
+    /// Pi correlates this record with the extension request directly. It does not
+    /// send a normal command response.
+    pub async fn respond_to_extension_ui(
+        &self,
+        response: PiExtensionUiResponse,
+    ) -> Result<(), PiSessionError> {
+        self.process.send_record(response.into_record()).await?;
+        Ok(())
     }
 
     /// Stops the Pi process through staged shutdown.

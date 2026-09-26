@@ -62,7 +62,14 @@ preserving the active session and composer.
 
 The terminal dock is the only secondary surface that splits the main column.
 The composer distinguishes queueing a follow-up from steering the current turn
-and keeps model, thinking, permission, and context choices visible.
+and keeps model, thinking, permission, and context choices visible. Configured
+Pi extensions may add keyed status text and string widgets around the composer.
+Their selection, confirmation, input, and editor requests use a focused dialog.
+Notifications do not block the transcript.
+
+Terminal-only custom extension components show an explicit limitation instead
+of an empty or broken control. The message directs the operator to vanilla Pi
+in a Pau terminal.
 
 At narrow widths, the transcript gets the full task area. Session navigation and
 inspection move out of the grid. Composer controls may wrap, but sending and the

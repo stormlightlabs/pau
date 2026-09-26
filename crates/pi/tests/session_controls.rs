@@ -4,8 +4,8 @@ use pau_agent::{
     AgentCapabilities, AgentControl, AgentControlError, AgentSessionStatus, PromptQueueChoice,
 };
 use pau_pi::{
-    PI_RPC_CAPABILITIES, PiProcess, PiSession, PiSessionError, PiShutdownTimeouts,
-    StartPiProcessOptions,
+    PI_RPC_CAPABILITIES, PiExtensionUiResponse, PiProcess, PiSession, PiSessionError,
+    PiShutdownTimeouts, StartPiProcessOptions,
 };
 use serde_json::Value;
 use std::fs;
@@ -74,6 +74,33 @@ async fn exercises_every_session_control_against_fake_rpc() {
 }
 
 #[tokio::test]
+async fn sends_extension_ui_responses_without_command_ids() {
+    let fixture = FakePi::new(CONTROL_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+
+    session
+        .respond_to_extension_ui(PiExtensionUiResponse::Value {
+            id: "extension-request".to_owned(),
+            value: "Allow".to_owned(),
+        })
+        .await
+        .unwrap();
+    session
+        .respond_to_extension_ui(PiExtensionUiResponse::Cancelled {
+            id: "cancelled-request".to_owned(),
+        })
+        .await
+        .unwrap();
+    session.stop().await.unwrap();
+
+    let commands = fixture.commands();
+    assert_eq!(commands[0]["type"], "extension_ui_response");
+    assert_eq!(commands[0]["id"], "extension-request");
+    assert_eq!(commands[0]["value"], "Allow");
+    assert_eq!(commands[1]["cancelled"], true);
+}
+
+#[tokio::test]
 async fn returns_capability_and_native_rejection_errors() {
     let fixture = FakePi::new(CONTROL_FIXTURE);
     let process = PiProcess::start(fixture.options()).unwrap();
@@ -137,6 +164,7 @@ while IFS= read -r command; do
         *'"type":"set_model"'*)
             printf '{"id":"%s","type":"response","command":"set_model","success":true,"data":{"provider":"fixture","id":"model-one"}}\n' "$id"
             ;;
+        *'"type":"extension_ui_response"'*) ;;
         *) exit 65 ;;
     esac
 done

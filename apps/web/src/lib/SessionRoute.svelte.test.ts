@@ -5,6 +5,17 @@ import { render } from 'vitest-browser-svelte';
 
 import SessionRoute from './SessionRoute.svelte';
 
+test('resolves a fixture extension dialog in its owning session', async () => {
+	await render(SessionRoute, {
+		initialWorkspaces: sessionFixtures.extensionConfirm,
+		initialSessionId: 'extension-confirm'
+	});
+
+	await expect.element(page.getByRole('dialog', { name: 'Allow workspace update?' })).toBeVisible();
+	await userEvent.click(page.getByRole('button', { name: 'Yes' }));
+	await expect.element(page.getByRole('dialog')).not.toBeInTheDocument();
+});
+
 test('controls concurrent fake Pi and Claude sessions without crossing their state', async () => {
 	await render(SessionRoute, { initialWorkspaces: sessionFixtures.concurrent, initialSessionId: 'diff-gutter' });
 	const prompt = page.getByRole('textbox', { name: 'Prompt' });

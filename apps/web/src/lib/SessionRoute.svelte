@@ -59,6 +59,12 @@
 	function interrupt(sessionId: string): void {
 		updateSession(sessionId, (session) => ({ ...session, status: 'idle' }));
 	}
+
+	function clearExtensionDialog(sessionId: string): void {
+		updateSession(sessionId, (session) =>
+			session.extensionUi ? { ...session, extensionUi: { ...session.extensionUi, dialog: undefined } } : session
+		);
+	}
 </script>
 
 <SessionView
@@ -67,4 +73,6 @@
 	{disconnected}
 	onSelectSession={selectSession}
 	onSend={send}
-	onInterrupt={interrupt} />
+	onInterrupt={interrupt}
+	onExtensionUiResponse={(sessionId) => clearExtensionDialog(sessionId)}
+	onExtensionUiTimeout={(sessionId) => clearExtensionDialog(sessionId)} />

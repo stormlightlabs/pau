@@ -1,6 +1,14 @@
 <script lang="ts">
 	import ApplicationShell, { type ShellNavItem } from './ApplicationShell.svelte';
-	import type { PromptQueue, SessionViewModel, SessionWorkspace, TranscriptTool } from './types/session';
+	import ExtensionUi from './ExtensionUi.svelte';
+	import type {
+		ExtensionUiResponse,
+		ExtensionUiState,
+		PromptQueue,
+		SessionViewModel,
+		SessionWorkspace,
+		TranscriptTool
+	} from './types/session';
 
 	type Props = {
 		workspaces: SessionWorkspace[];
@@ -9,6 +17,9 @@
 		onSelectSession?: (sessionId: string) => void;
 		onSend?: (sessionId: string, text: string, queue?: PromptQueue) => void | Promise<void>;
 		onInterrupt?: (sessionId: string) => void | Promise<void>;
+		onExtensionUiResponse?: (sessionId: string, response: ExtensionUiResponse) => void | Promise<void>;
+		onExtensionUiTimeout?: (sessionId: string, requestId: string) => void;
+		onOpenPiTerminal?: (sessionId: string) => void;
 	};
 
 	let {
@@ -17,8 +28,13 @@
 		disconnected = false,
 		onSelectSession = () => {},
 		onSend = () => {},
-		onInterrupt = () => {}
+		onInterrupt = () => {},
+		onExtensionUiResponse = () => {},
+		onExtensionUiTimeout = () => {},
+		onOpenPiTerminal
 	}: Props = $props();
+
+	const emptyExtensionUi: ExtensionUiState = { notifications: [], statuses: [], widgets: [] };
 
 	let draft = $state('');
 	let queue = $state<PromptQueue>('steer');
@@ -217,56 +233,64 @@
 				{/if}
 			</div>
 
-			<form
-				class="session-composer"
-				aria-label="Prompt composer"
-				onsubmit={(event) => {
-					event.preventDefault();
-					void submitPrompt();
-				}}>
-				{#if activeSession.status === 'running' && (activeSession.capabilities.steer || activeSession.capabilities.followUp)}
-					<label class="session-composer__queue">
-						<span>Send as</span>
-						<select bind:value={queue}>
-							{#if activeSession.capabilities.steer}<option value="steer">Steer now</option>{/if}
-							{#if activeSession.capabilities.followUp}<option value="follow-up">Follow up</option>{/if}
-						</select>
-					</label>
-				{/if}
-				<label class="session-composer__field">
-					<span class="session-view__sr-only">Prompt</span>
-					<textarea
-						bind:this={composer}
-						bind:value={draft}
-						onkeydown={handleComposerKeydown}
-						placeholder={activeSession.status === 'running'
-							? 'Add direction or queue a follow-up'
-							: 'Message the agent'}
-						disabled={!activeSession.capabilities.prompt ||
-							['starting', 'stopping', 'stopped', 'failed'].includes(activeSession.status)}></textarea>
-				</label>
-				<div class="session-composer__actions">
-					{#if activeSession.status === 'running' && activeSession.capabilities.interrupt}
-						<button type="button" class="session-composer__interrupt" onclick={() => void interrupt()}>
-							Interrupt <kbd>Esc</kbd>
-						</button>
-					{/if}
-					<button
-						type="submit"
-						disabled={!draft.trim() ||
-							sending ||
-							!activeSession.capabilities.prompt ||
-							['starting', 'stopping', 'stopped', 'failed'].includes(activeSession.status)}>
-						{sending
-							? 'Sending…'
-							: queue === 'follow-up' && activeSession.status === 'running'
-								? 'Queue prompt'
-								: 'Send prompt'}
-						<kbd>⌘↵</kbd>
-					</button>
-				</div>
-				{#if error}<p class="session-composer__error" role="alert">{error}</p>{/if}
-			</form>
+			<div class="session-view__composer-stack">
+				<ExtensionUi
+					state={activeSession.extensionUi ?? emptyExtensionUi}
+					onRespond={(response) => onExtensionUiResponse(activeSession.id, response)}
+					onTimeout={(requestId) => onExtensionUiTimeout(activeSession.id, requestId)}
+					onOpenTerminal={onOpenPiTerminal ? () => onOpenPiTerminal(activeSession.id) : undefined}>
+					<form
+						class="session-composer"
+						aria-label="Prompt composer"
+						onsubmit={(event) => {
+							event.preventDefault();
+							void submitPrompt();
+						}}>
+						{#if activeSession.status === 'running' && (activeSession.capabilities.steer || activeSession.capabilities.followUp)}
+							<label class="session-composer__queue">
+								<span>Send as</span>
+								<select bind:value={queue}>
+									{#if activeSession.capabilities.steer}<option value="steer">Steer now</option>{/if}
+									{#if activeSession.capabilities.followUp}<option value="follow-up">Follow up</option>{/if}
+								</select>
+							</label>
+						{/if}
+						<label class="session-composer__field">
+							<span class="session-view__sr-only">Prompt</span>
+							<textarea
+								bind:this={composer}
+								bind:value={draft}
+								onkeydown={handleComposerKeydown}
+								placeholder={activeSession.status === 'running'
+									? 'Add direction or queue a follow-up'
+									: 'Message the agent'}
+								disabled={!activeSession.capabilities.prompt ||
+									['starting', 'stopping', 'stopped', 'failed'].includes(activeSession.status)}></textarea>
+						</label>
+						<div class="session-composer__actions">
+							{#if activeSession.status === 'running' && activeSession.capabilities.interrupt}
+								<button type="button" class="session-composer__interrupt" onclick={() => void interrupt()}>
+									Interrupt <kbd>Esc</kbd>
+								</button>
+							{/if}
+							<button
+								type="submit"
+								disabled={!draft.trim() ||
+									sending ||
+									!activeSession.capabilities.prompt ||
+									['starting', 'stopping', 'stopped', 'failed'].includes(activeSession.status)}>
+								{sending
+									? 'Sending…'
+									: queue === 'follow-up' && activeSession.status === 'running'
+										? 'Queue prompt'
+										: 'Send prompt'}
+								<kbd>⌘↵</kbd>
+							</button>
+						</div>
+						{#if error}<p class="session-composer__error" role="alert">{error}</p>{/if}
+					</form>
+				</ExtensionUi>
+			</div>
 		</section>
 	{:else}
 		<section class="session-view session-view--empty" aria-labelledby="empty-title">
@@ -553,10 +577,15 @@
 		font-size: 0.6875rem;
 	}
 
-	.session-composer {
+	.session-view__composer-stack {
 		position: sticky;
 		grid-area: composer;
 		bottom: 0;
+		display: grid;
+		gap: 0.4rem;
+	}
+
+	.session-composer {
 		display: grid;
 		grid-template-areas:
 			'queue queue'

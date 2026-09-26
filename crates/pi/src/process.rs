@@ -96,7 +96,7 @@ pub enum PiProcessOutput {
 pub enum PiProcessError {
     /// The child process could not be started with piped RPC streams.
     Start(std::io::Error),
-    /// A command must be a JSON object with a string `type` field.
+    /// An outgoing record must be a JSON object with a string `type` field.
     InvalidCommand,
     /// The command could not be written to Pi.
     Write(std::io::Error),
@@ -113,7 +113,7 @@ impl fmt::Display for PiProcessError {
         match self {
             Self::Start(error) => write!(formatter, "could not start Pi RPC process: {error}"),
             Self::InvalidCommand => {
-                formatter.write_str("Pi RPC commands must be JSON objects with a string `type`")
+                formatter.write_str("Pi RPC records must be JSON objects with a string `type`")
             }
             Self::Write(error) => write!(formatter, "could not write Pi RPC command: {error}"),
             Self::Exited(exit) => write!(formatter, "Pi exited before responding: {exit:?}"),
@@ -273,6 +273,31 @@ impl PiProcess {
                 Err(PiProcessError::Exited(exit))
             }
         }
+    }
+
+    /// Writes an extension UI response without creating a command correlation entry.
+    pub(crate) async fn send_record(&self, record: Value) -> Result<(), PiProcessError> {
+        let record = match record {
+            Value::Object(record) if record.get("type").and_then(Value::as_str).is_some() => record,
+            _ => return Err(PiProcessError::InvalidCommand),
+        };
+        if let Some(exit) = self.exit.borrow().clone() {
+            return Err(PiProcessError::Exited(exit));
+        }
+
+        let encoded = encode_record(record);
+        let mut stdin = self.stdin.lock().await;
+        let stdin = stdin.as_mut().ok_or_else(|| {
+            PiProcessError::Write(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                "Pi stdin is closed",
+            ))
+        })?;
+        stdin
+            .write_all(&encoded)
+            .await
+            .map_err(PiProcessError::Write)?;
+        stdin.flush().await.map_err(PiProcessError::Write)
     }
 
     /// Closes protocol input, then escalates through interrupt, terminate, and kill.

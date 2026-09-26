@@ -14,6 +14,8 @@
   activity, and clear status and attention states.
 - Pi sessions now support follow-ups, steering, interruption, model selection,
   and recovery after a reload or connection loss.
+- Pi sessions now show extension dialogs, notifications, status text, and string
+  widgets. Terminal-only components direct the operator to vanilla Pi.
 - Pau now finds local Pi installations and reports setup problems before a
   session starts.
 - Added five themes and four bundled interface fonts.

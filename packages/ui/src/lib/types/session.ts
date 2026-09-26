@@ -32,6 +32,35 @@ export type TranscriptTool = {
 /** One projected transcript entry. Completed messages replace streamed text before display. */
 export type TranscriptEntry = TranscriptMessage | TranscriptThinking | TranscriptTool;
 
+/** Blocking interaction requested by a configured Pi extension. */
+export type ExtensionDialog =
+	| { id: string; kind: 'select'; title: string; options: string[]; timeoutMs?: number }
+	| { id: string; kind: 'confirm'; title: string; message: string; timeoutMs?: number }
+	| { id: string; kind: 'input'; title: string; placeholder?: string; timeoutMs?: number }
+	| { id: string; kind: 'editor'; title: string; prefill?: string }
+	| { id: string; kind: 'unsupported'; method: string };
+
+/** Non-blocking message from a configured Pi extension. */
+export type ExtensionNotification = { id: string; message: string; level: 'info' | 'warning' | 'error' };
+
+/** One keyed status line from a configured Pi extension. */
+export type ExtensionStatus = { key: string; text: string };
+
+/** String-only widget from a configured Pi extension. */
+export type ExtensionWidget = { key: string; lines: string[]; placement: 'above-editor' | 'below-editor' };
+
+/** Extension-owned UI state projected from Pi RPC requests. */
+export type ExtensionUiState = {
+	dialog?: ExtensionDialog;
+	notifications: ExtensionNotification[];
+	statuses: ExtensionStatus[];
+	widgets: ExtensionWidget[];
+};
+
+/** Response sent to the configured extension through Pi RPC. */
+export type ExtensionUiResponse =
+	{ id: string; value: string } | { id: string; confirmed: boolean } | { id: string; cancelled: true };
+
 /** Session data consumed by the shared session surface. */
 export type SessionViewModel = {
 	id: string;
@@ -44,6 +73,7 @@ export type SessionViewModel = {
 	error?: string;
 	capabilities: SessionCapabilities;
 	transcript: TranscriptEntry[];
+	extensionUi?: ExtensionUiState;
 };
 
 /** Workspace and its sessions as shown in the contextual rail. */

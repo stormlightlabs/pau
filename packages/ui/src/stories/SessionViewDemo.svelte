@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { PromptQueue, SessionWorkspace } from '../lib/types/session';
+	import type { ExtensionUiResponse, PromptQueue, SessionWorkspace } from '../lib/types/session';
 	import SessionView from '../lib/SessionView.svelte';
 
 	let { workspaces, initialSessionId }: { workspaces: SessionWorkspace[]; initialSessionId?: string } = $props();
@@ -14,6 +14,10 @@
 	function send(sessionId: string, text: string, queue?: PromptQueue): void {
 		lastAction = `${sessionId}: ${queue ?? 'prompt'}: ${text}`;
 	}
+
+	function respondToExtension(sessionId: string, response: ExtensionUiResponse): void {
+		lastAction = `${sessionId}: extension response: ${JSON.stringify(response)}`;
+	}
 </script>
 
 <SessionView
@@ -23,6 +27,13 @@
 	onSend={send}
 	onInterrupt={(sessionId) => {
 		lastAction = `${sessionId}: interrupt`;
+	}}
+	onExtensionUiResponse={respondToExtension}
+	onExtensionUiTimeout={(sessionId, requestId) => {
+		lastAction = `${sessionId}: extension timeout: ${requestId}`;
+	}}
+	onOpenPiTerminal={(sessionId) => {
+		lastAction = `${sessionId}: open Pi terminal`;
 	}} />
 
 <p class="action" aria-live="polite">{lastAction}</p>

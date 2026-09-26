@@ -1,6 +1,7 @@
 export { default as ApplicationShell } from './lib/ApplicationShell.svelte';
 export type { ShellNavItem } from './lib/ApplicationShell.svelte';
 export { default as CapabilityCard } from './lib/CapabilityCard.svelte';
+export { default as ExtensionUi } from './lib/ExtensionUi.svelte';
 export { default as Icon, type IconProps } from './lib/Icon.svelte';
 export { default as SessionView } from './lib/SessionView.svelte';
 export { default as WorkspaceFiles } from './lib/WorkspaceFiles.svelte';
@@ -15,6 +16,12 @@ export type {
 	WorkspaceTraversalOptions
 } from './lib/types/workspace-files';
 export type {
+	ExtensionDialog,
+	ExtensionNotification,
+	ExtensionStatus,
+	ExtensionUiResponse,
+	ExtensionUiState,
+	ExtensionWidget,
 	PromptQueue,
 	SessionCapabilities,
 	SessionStatus,

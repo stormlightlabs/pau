@@ -28,6 +28,22 @@ export const Running: Story = {
 export const Waiting: Story = { args: { workspaces: sessionFixtures.waiting, initialSessionId: 'session-waiting' } };
 export const Failed: Story = { args: { workspaces: sessionFixtures.failed, initialSessionId: 'session-failed' } };
 export const Stopped: Story = { args: { workspaces: sessionFixtures.stopped, initialSessionId: 'session-stopped' } };
+export const ExtensionConfirmation: Story = {
+	args: { workspaces: sessionFixtures.extensionConfirm, initialSessionId: 'extension-confirm' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement.ownerDocument.body);
+		await expect(canvas.getByRole('dialog', { name: 'Allow workspace update?' })).toBeVisible();
+		await userEvent.click(canvas.getByRole('button', { name: 'Yes' }));
+		await expect(canvas.getByText(/"confirmed":true/)).toBeInTheDocument();
+	}
+};
+export const TerminalOnlyExtension: Story = {
+	args: { workspaces: sessionFixtures.extensionUnsupported, initialSessionId: 'extension-custom' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement.ownerDocument.body);
+		await expect(canvas.getByText(/Pau cannot render/)).toBeVisible();
+	}
+};
 export const ConcurrentSessions: Story = {
 	args: { workspaces: sessionFixtures.concurrent, initialSessionId: 'diff-gutter' },
 	play: async ({ canvasElement }) => {

@@ -48,6 +48,7 @@
 	let model = $state('Sonnet 4.5');
 	let thinking = $state('Think: high');
 	let contextAttached = $state(true);
+	let extensionDialogOpen = $state(false);
 
 	const session = $derived(sessions.find((item) => item.id === selected) ?? sessions[0]);
 
@@ -67,7 +68,7 @@
 	note="The center stays devoted to the current task. Either sidebar can close independently, the terminal dock splits the main column when you open it, and focus mode removes all navigation while preserving the session and composer.">
 	<MockApp context="workspaces / pau" branch={session.branch}>
 		<div
-			class="mock-layout session-layout"
+			class="mock-layout session-layout relative"
 			class:session-layout--no-context={!contextRailOpen && !focused}
 			class:session-layout--no-inspector={!inspectorOpen && !focused}
 			class:session-layout--no-sidebars={!contextRailOpen && !inspectorOpen && !focused}
@@ -131,6 +132,13 @@
 						<span>running {session.elapsed}</span>
 					</span>
 					<div class="pane-actions">
+						<button
+							class="icon-button"
+							type="button"
+							aria-label="Show extension request"
+							onclick={() => (extensionDialogOpen = true)}>
+							<span class="i-tabler-plug" aria-hidden="true"></span>
+						</button>
 						<button class="icon-button" type="button" aria-label="Interrupt agent">
 							<span class="i-tabler-player-stop" aria-hidden="true"></span>
 						</button>
@@ -355,6 +363,24 @@
 					</div>
 				</form>
 			</section>
+
+			{#if extensionDialogOpen}
+				<div class="absolute inset-0 z-30 grid place-items-center bg-canvas/80 p-4">
+					<div
+						class="w-full max-w-md border border-focus bg-surface p-4 shadow-2xl"
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="extension-dialog-title">
+						<h2 id="extension-dialog-title" class="m-0 text-body font-600 text-text">Allow workspace update?</h2>
+						<p class="mt-2 text-prose text-muted">The configured extension wants to update its workspace index.</p>
+						<div class="mt-4 flex justify-end gap-2">
+							<button class="app-button" type="button" onclick={() => (extensionDialogOpen = false)}>No</button>
+							<button class="app-button-primary" type="button" onclick={() => (extensionDialogOpen = false)}
+								>Yes</button>
+						</div>
+					</div>
+				</div>
+			{/if}
 
 			{#if inspectorOpen && !focused}
 				<aside class="mock-inspector p-0!" aria-label="Inspector">

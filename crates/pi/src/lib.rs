@@ -1,10 +1,15 @@
 //! Pi discovery, RPC transport, and process supervision.
 
+mod extension_ui;
 mod process;
 mod projection;
 mod registry;
 mod session;
 
+pub use extension_ui::{
+    PiExtensionNotificationLevel, PiExtensionUiParseError, PiExtensionUiRequest,
+    PiExtensionUiResponse, PiExtensionWidgetPlacement,
+};
 pub use process::{
     PiDiagnostic, PiDiagnosticSource, PiProcess, PiProcessError, PiProcessExit, PiProcessOutput,
     PiShutdownTimeouts, StartPiProcessOptions,

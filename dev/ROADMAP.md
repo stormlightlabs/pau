@@ -55,7 +55,7 @@ shipped application in this deliverable.
 
 #### 2.37 Extension UI requests
 
-Status: planned
+Status: complete
 Blocked by: none
 
 Surface supported Pi RPC extension dialogs, notifications, status text, and
@@ -84,7 +84,7 @@ native MCP configuration active. Store Pau-managed enablement as a workspace
 default with a per-session override. For Pi, recognize the explicitly installed
 `pi-mcp-adapter` package and its documented shared, user, project, package, and
 Pi-specific sources without silently installing, importing, enabling, or
-connecting it.
+connecting itUpdate prompts to follow indexed project documentation.
 
 Verification:
 

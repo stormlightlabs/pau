@@ -51,6 +51,26 @@ status `complete`.
 The SvelteKit app runs in a normal browser during development. Tauri is the
 shipped application in this deliverable.
 
+### Pi compatibility
+
+#### 2.37 Extension UI requests
+
+Status: planned
+Blocked by: none
+
+Surface supported Pi RPC extension dialogs, notifications, status text, and
+string widgets without attempting to render terminal-only custom components.
+Keep the operator's configured extensions and do not inject a Pau helper
+extension.
+
+Verification:
+
+- Cover confirmation, selection, input, editor, notification, status, widget,
+  cancellation, timeout, and unsupported custom UI requests with a fixture
+  extension.
+- Confirm a terminal-only custom component reports the limitation and can be
+  used by opening vanilla Pi in a Pau terminal.
+
 ### Workspace tools
 
 #### 2.19 Workspace registry and file access
@@ -121,10 +141,165 @@ Verification:
   binary-file notices.
 - Verify file and hunk navigation with keyboard and pointer.
 
-#### 2.24 PTY backend
+### Process observability and containment
+
+#### 2.41 Resource monitoring
 
 Status: planned
 Blocked by: none
+
+Sample Pau-owned process trees and show aggregate and per-session CPU, current
+and peak resident memory, process count, elapsed time, and disk I/O where the
+platform reports it reliably. Keep bounded raw history in memory and persist a
+small summary when a process ends. Keep token, context, and cost usage separate.
+
+Verification:
+
+- Use a deterministic sampler fixture to cover PID reuse, descendants, process
+  exit, missing counters, bounded retention, throttled updates, and summary
+  persistence.
+- Exercise sustained-pressure warnings and explicit interrupt and stop actions
+  without automatically terminating work.
+- Run focused process-tree and metric smoke tests on Linux and macOS.
+
+#### 2.42 Local sandbox dependency and policy spike
+
+Status: planned
+Blocked by: none
+
+Evaluate maintained Linux and macOS containment mechanisms using the workspace
+sandboxes in Claude Code and Codex as reference behavior. Exercise pinned
+`@anthropic-ai/sandbox-runtime` 0.0.77 and its Bubblewrap, network namespace, and
+seccomp boundary on Linux and Seatbelt boundary on macOS. Prove the separate Pi
+tool-host design while the RPC agent and its model credentials remain outside
+the sandbox. Do not treat permission hooks, in-process path checks, or
+whole-agent wrapping with exposed credentials as a sandbox.
+
+Verification:
+
+- Run fixture processes that attempt allowed and denied file, network, local
+  socket, environment, credential, protected-configuration, and subprocess
+  operations on Linux and macOS.
+- Verify workspace-write and read-only profiles, network-off defaults, explicit
+  grants, no silent unsandboxed fallback, and separate opt-in profiles for
+  operator terminals and Neovim.
+- Exercise the runtime's dependency checks, Ubuntu user-namespace restriction,
+  symlink handling, resolved-address guards, descendant inheritance, violation
+  attribution, cleanup, and fail-closed startup behavior.
+- Prototype all Pi built-in file, search, and command tools through a sandboxed
+  worker. Confirm Pi provider traffic and model credentials stay in the RPC
+  host, and identify extension and MCP tools that must be disabled.
+- Record the selected dependencies, licenses, maintenance state, guarantees,
+  known gaps, and the requirement that justifies any custom code in `PLAN.md`.
+
+#### 2.43 Managed process sandbox
+
+Status: planned
+Blocked by: 2.42
+
+Add explicit sandboxed and unsandboxed profiles at each proven adapter or tool
+execution boundary. Default to unsandboxed launch. Store a workspace default
+with a per-session override and show effective access before sandboxed work.
+Implement the Pi extension and tool-host protocol for every enabled built-in
+file, search, and command tool. Apply the profile to tool descendants and
+supported stdio MCP servers. Disable unreviewed in-process and remote tools while
+the profile is active. Terminals and Neovim require a separate explicit sandbox
+selection.
+
+Verification:
+
+- Cover profile validation, canonicalized roots, read-only and writable mounts,
+  network policy, minimal environment construction, resource limits, descendant
+  inheritance, worker cancellation and crash, startup failure, and cleanup.
+- Run parity tests for read, write, edit, list, find, grep, shell execution,
+  streaming output, abort, timeout, and tool-result truncation through the Pi
+  worker.
+- Confirm new work launches unsandboxed until the operator selects a sandbox
+  profile, the UI names platform guarantees and disabled tools, and permission
+  modes are never presented as containment.
+- Complete a self-hosted Pi and Claude task inside the supported local sandbox.
+
+#### 2.46 Sandboxed credential brokerage
+
+Status: planned
+Blocked by: 2.42, 2.43
+
+Add opt-in credential references for sandboxed tools. Resolve named host
+environment variables in the trusted supervisor, pass real values only to the
+dedicated broker process, place per-session sentinels in the tool host, and
+substitute them through the TLS-terminating egress proxy only for an explicit
+destination set. Persist references, never values. Keep model and MCP OAuth
+credentials in their native hosts and stores. Deny credential files in the
+initial cross-platform profile and reject unsupported protocols, trust
+arrangements, or structured-value mismatches instead of exposing raw values.
+
+Verification:
+
+- Cover missing and malformed sources, fail-closed structured extraction,
+  per-session sentinel uniqueness, destination scoping, wildcard and port
+  handling, TLS verification, DNS and resolved-address checks, header and
+  request-body substitution, and teardown.
+- Confirm the real value is absent from the worker environment, filesystem,
+  arguments, tool output, UI events, violation records, diagnostics, and logs.
+- Confirm plaintext HTTP, certificate-pinned and mTLS destinations, SOCKS-only
+  protocols, excluded TLS domains, unknown credential shapes, and proxy failure
+  deny injection without an unsandboxed retry.
+- Exercise common bearer-token and structured environment values on Linux and
+  macOS. Test AWS SigV4 only if it remains in the selected dependency's reviewed
+  surface; otherwise label it unsupported.
+- Demonstrate that a permitted destination may exercise or reflect a brokered
+  credential, and show that limitation in the effective-profile UI and user
+  documentation.
+
+### Permissions
+
+#### 2.44 Permission policy and Pi enforcement spike
+
+Status: planned
+Blocked by: 2.37
+
+Validate the cross-agent permission model against native adapter callbacks and
+the selected `@gotgenes/pi-permission-system` release. Map Pau's no-prompts,
+confirm-writes-and-commands, and confirm-mutating-or-network profiles without
+forking the package. Verify workspace reads, protected sensitive paths,
+outside-workspace reads, session-only approvals, and concurrent request
+behavior.
+
+Verification:
+
+- Prove allow and deny happen before a fixture tool, shell command, file write,
+  sensitive read, network action, and MCP call executes.
+- Confirm unsupported adapters cannot present cosmetic permission controls.
+- Run the pinned Pi package under RPC and verify its non-TUI `select` and `input`
+  fallback, fail-closed behavior, configuration scope, review events, and
+  compatibility with the selected Pi versions.
+- Recheck and record its source, license, maintenance state, protocol boundary,
+  and known gaps in `PLAN.md`.
+
+#### 2.45 Permission profiles and requests
+
+Status: planned
+Blocked by: 2.43, 2.44
+
+Implement the selected permission profiles through adapter-native callbacks and
+the reviewed Pi package. Show the requesting session, operation, affected paths
+or destination, selected sandbox, and approval lifetime. Keep permission rules
+separate from sandbox profiles and redact audit records.
+
+Verification:
+
+- Cover deny, allow once, allow for session, bounded reconnect, timeout,
+  cancellation, concurrent per-session queues, stale responses, session
+  replacement, and adapter failure.
+- Confirm an approval cannot exceed sandbox access and direct terminal input
+  does not create agent permission prompts.
+- Complete self-hosted Pi, Claude, and MCP fixture flows with permissions off and
+  with each shipped permission profile enabled.
+
+#### 2.24 PTY backend
+
+Status: planned
+Blocked by: 2.41, 2.43
 
 Implement terminal create, attach, input, output, resize, signal, detach, close,
 bounded scrollback, backpressure, and cleanup in `pau-term`.
@@ -152,6 +327,30 @@ Verification:
   scenarios in Playwright.
 - Verify terminal tabs survive route changes and reconnect to their PTYs after a
   frontend reload.
+- Confirm sandboxed terminal profiles inherit their recorded filesystem,
+  network, environment, and process limits.
+
+#### 2.40 Pi TUI parity and primary dogfood gate
+
+Status: planned
+Blocked by: 2.23, 2.25, 2.37, 2.45
+
+Complete desktop equivalents for vanilla Pi input history, image input, queues,
+interrupt and retry controls, models, thinking levels, context and cost,
+compaction, session navigation, command discovery, shell context, transcript
+search and copy, and export. Use vanilla Pi in the persistent terminal only for
+terminal-specific extension components.
+
+Verification:
+
+- Audit the current Pi TUI actions and RPC commands against the implemented Pau
+  controls, recording unsupported native capabilities with an explanation.
+- Complete normal project work through Pau using configured skills, prompts,
+  extensions, MCP tools when installed, queued messages, compaction, session
+  branching, review, and the persistent terminal.
+
+Deliverable milestone: Pau is the primary dogfood interface for routine Pi and
+Claude work. Embedded Neovim and release packaging remain later milestones.
 
 #### 2.26 Workspace shell environments
 
@@ -185,7 +384,7 @@ Verification:
 #### 2.28 Embedded Neovim lifecycle
 
 Status: planned
-Blocked by: none
+Blocked by: 2.41, 2.43
 
 Start and supervise `nvim --embed` in `pau-term`, attach through the selected
 RPC library, and report version and exit state.
@@ -311,19 +510,6 @@ Verification:
 - Cover trust denial, command failure, partial installation, and rollback or
   recovery guidance.
 
-#### 2.37 Extension UI requests
-
-Status: planned
-Blocked by: none
-
-Surface supported Pi RPC extension dialogs and notifications without attempting
-to render terminal-only custom components.
-
-Verification:
-
-- Cover confirmation, selection, input, notification, cancellation, timeout, and
-  unsupported custom UI requests with a fixture extension.
-
 ### Release surfaces
 
 #### 2.38 Website deployment
@@ -343,7 +529,7 @@ Verification:
 #### 2.39 AppImage packaging
 
 Status: planned
-Blocked by: 2.23, 2.25, 2.32, 2.37
+Blocked by: 2.23, 2.25, 2.32, 2.37, 2.40, 2.41, 2.43, 2.45
 
 Package the first Linux desktop release as an AppImage. Leave `.deb`, RPM,
 Intel macOS, signing, and notarization until release demand or available signing
@@ -357,10 +543,12 @@ Verification:
 - Complete the local backend, bundled frontend, terminal, and Neovim startup
   smoke test.
 
-Deliverable exit: the Tauri app can run concurrent Pi and Claude work, inspect
-and edit a workspace, use a persistent terminal, and use embedded Neovim. The
-same UI works in a browser against the local development backend, all five
-themes cover the shipped surfaces, and the website and AppImage are publishable.
+Deliverable exit: the Tauri app can run concurrent Pi and Claude work, cover
+vanilla Pi's structured interactive workflows, inspect and edit a workspace,
+use a persistent terminal, and use embedded Neovim. It reports local resource
+use and can launch supported work inside an explicit local sandbox. The same UI
+works in a browser against the local development backend, all five themes cover
+the shipped surfaces, and the website and AppImage are publishable.
 
 ## 3. Web server
 
@@ -483,26 +671,45 @@ Status: planned
 Blocked by: 2, 3.7, 3.8
 
 Discover each agent's MCP configuration without treating different formats as
-one schema. Preserve unknown fields and identify source and scope.
+one schema. Preserve unknown fields and identify source and scope. Keep existing
+native MCP configuration active. Store Pau-managed enablement as a workspace
+default with a per-session override. For Pi, recognize the explicitly installed
+`pi-mcp-adapter` package and its documented shared, user, project, package, and
+Pi-specific sources without silently installing, importing, enabling, or
+connecting it.
 
 Verification:
 
 - Round-trip representative Pi, Claude, Codex, and Antigravity fixtures without
   changing unknown fields or formatting unrelated entries.
+- Exercise `pi-mcp-adapter` precedence, disabled overrides, unknown fields, and
+  source provenance against the pinned release and one compatible update.
+- Confirm Pau-managed MCP is off before explicit enablement and show an
+  actionable unavailable state when Pi MCP is configured but the package is
+  absent or disabled.
 
 ### 3.10 MCP editing and diagnostics
 
 Status: planned
 Blocked by: 3.9
 
-Add create, edit, remove, enable, disable, and test operations through
-agent-specific adapters. Report startup stderr and negotiated capabilities.
+Add create, edit, remove, enable, disable, authenticate, and test operations
+through agent-specific adapters. Report startup diagnostics and negotiated
+capabilities. Enable servers individually and connect lazily. Use native agent
+clients; Pi delegates MCP execution to the explicitly installed
+`pi-mcp-adapter` package. Native clients retain OAuth credentials, and the
+active agent permission policy applies to MCP tools.
 
 Verification:
 
-- Exercise stdio and HTTP fixture servers, environment variables, startup
-  timeout, protocol failure, stderr output, and clean shutdown.
-- Confirm secrets remain redacted in UI events and logs.
+- Run the pinned `pi-mcp-adapter` under Pi RPC and exercise stdio and HTTP
+  fixture servers, lazy startup, environment variables, approval, elicitation,
+  OAuth, startup timeout, protocol failure, status updates, and clean shutdown.
+- Confirm Pi's supported dialogs and notifications work through the extension UI
+  protocol and no test depends on parsing a terminal-only MCP panel.
+- Exercise the corresponding native flows for Claude, Codex, and Antigravity.
+- Confirm stdio servers inherit the selected local sandbox profile and secrets
+  remain redacted in UI events and logs.
 
 ### 3.11 CodeMirror language services
 

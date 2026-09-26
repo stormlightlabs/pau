@@ -67,6 +67,14 @@ shows the file or command it will change before applying an update.
 
 - Pi uses structured RPC mode and retains Pi's session, branching, compaction,
   tools, and extension behavior.
+- Reproduce vanilla Pi's interactive workflows with desktop controls for input,
+  queues, interruption, models, thinking levels, context use, compaction,
+  retries, session navigation, commands, transcript search, and export.
+- Load the operator's normal Pi resources and extensions. Do not inject a Pau
+  helper extension into ordinary sessions.
+- Support extension dialogs, notifications, status text, and string widgets
+  exposed through Pi RPC. Explain when an arbitrary terminal-only extension
+  component requires vanilla Pi in a terminal.
 - Claude Code, Codex, and Antigravity run through separate adapters. Each
   adapter prefers a documented structured protocol and falls back to a PTY only
   for terminal interaction.
@@ -98,10 +106,58 @@ shows the file or command it will change before applying an update.
 - Install, remove, enable, disable, and update Pi packages through Pi's own
   package commands or supported APIs.
 - Edit resource files without silently rewriting unrelated settings.
-- Manage MCP configuration per agent because configuration and capabilities
-  differ by agent.
+- Keep Pau-managed MCP off by default. Do not install packages, import
+  configuration, connect servers, or expose MCP tools until the operator enables
+  MCP. Preserve MCP that the operator already configured natively.
+- Store a workspace MCP default with a per-session override. Enable servers
+  individually and connect them lazily.
+- Manage enabled MCP configuration per agent because configuration, lifecycle,
+  and capabilities differ by agent. Use each agent's native MCP client when it
+  has one. Pi MCP support requires an explicitly installed and trusted Pi
+  package; Pau must not inject it into an ordinary session.
+- Keep MCP OAuth credentials in the native client or adapter credential store.
+  Apply the active agent permission policy to MCP tools. Never reuse model or MCP
+  credentials as sandboxed command credentials.
 - Treat extensions, packages, skills with scripts, and MCP servers as executable
   or instruction-bearing code. Show source and scope before trust is granted.
+
+### Resource use
+
+- Show current and peak resource use for Pau and each managed process tree,
+  including Pi, Claude, terminals, Neovim, and stdio MCP servers.
+- Report CPU, resident memory, process count, elapsed time, and disk I/O where
+  the operating system exposes it reliably.
+- Keep a short local history and a final session summary. Do not retain raw
+  samples indefinitely or send telemetry to a remote service.
+- Warn about sustained resource pressure and offer interrupt or stop controls.
+  Do not throttle or terminate work automatically by default.
+- Keep model context, token, and cost usage separate from machine resource use.
+
+### Permission controls
+
+- Keep permission prompting off by default. Offer profiles for no prompts,
+  confirming writes and commands, and confirming mutating or open-network
+  operations.
+- Show permission controls only when the adapter can allow or deny an operation
+  before it executes. Never present observation after execution as approval.
+- Allow workspace reads except for protected sensitive paths. Ask before reads
+  outside the workspace and deny high-confidence credential and authentication
+  paths by default. Only a user-scoped rule may relax a default sensitive-path
+  restriction; project configuration may only narrow access.
+- Offer deny, allow once, and allow for this session. Do not persist an approval
+  across sessions in the first release.
+- Keep permission policy separate from sandbox policy. Approval permits an
+  attempt but never expands filesystem, network, environment, credential, or
+  process access granted by the sandbox.
+- Queue concurrent requests per session while keeping other sessions usable.
+  Correlate decisions by request and session, reject stale responses, cancel
+  requests with their operation, and fail closed on timeout or disconnect.
+- Identify the requesting session, tool, command or affected paths, and requested
+  access.
+- Treat direct terminal input as an operator action rather than an agent tool
+  request. It does not trigger an agent permission prompt.
+- Record redacted permission decisions without storing credentials or sensitive
+  arguments.
 
 ### Desktop and web
 
@@ -123,19 +179,39 @@ shows the file or command it will change before applying an update.
 - Use an unguessable per-launch token for the local desktop API.
 - Require authentication for WebSocket upgrades as well as HTTP requests.
 - Keep destructive process, worktree, package, and file operations explicit.
-- Label permission controls as guardrails unless the process runs inside an
-  actual sandbox.
+- Keep sandboxing off by default. Store a workspace default with a per-session
+  override and show the effective filesystem, network, credential, and process
+  policy before launch.
+- When enabled, start with workspace-write access, a dedicated writable temporary
+  directory, protected agent and repository configuration, blocked sensitive
+  credentials, and network access off. Require explicit paths and destinations
+  for broader access and never fall back to unsandboxed execution silently.
+- Keep the agent host and its model credentials outside the command sandbox. Run
+  supported model-initiated file, search, and command tools in a separate
+  sandboxed tool host whose descendants inherit the same restrictions. Disable
+  tools without a proven execution boundary while a sandbox profile is active.
+- Apply containment to supported model-initiated tools and their descendants,
+  including stdio MCP servers. Operator terminals and Neovim remain unsandboxed
+  by default and require a separate explicit sandbox selection.
+- Include opt-in credential brokerage for sandboxed tools. Give a tool a
+  per-session placeholder instead of the credential and replace it only on
+  encrypted requests to explicitly configured destinations. Never broker model
+  provider credentials, inject credentials over plaintext, or expose real values
+  in process arguments, UI events, diagnostics, or logs. Deny the credential
+  when the source, destination, proxy, or substitution cannot be verified.
+- Label unsandboxed permission controls as guardrails rather than sandboxing.
 - Record process exit status and adapter errors without mixing diagnostic output
   into protocol streams.
 
 ## Persistence
 
-SQLite stores workspace registrations, UI preferences, process metadata, event
-sequence checkpoints, and resource indexes. `tokio-rusqlite` provides the
-initial asynchronous access layer through one serialized connection; pooling
-requires measured contention. Native Pi and third-party session files remain
-authoritative. The database may cache transcript projections for search, but
-deleting the cache must not delete agent history.
+SQLite stores workspace registrations, UI preferences, process metadata,
+completed-process resource summaries, event sequence checkpoints, and resource
+indexes. Raw resource samples remain in bounded memory. `tokio-rusqlite`
+provides the initial asynchronous access layer through one serialized
+connection; pooling requires measured contention. Native Pi and third-party
+session files remain authoritative. The database may cache transcript
+projections for search, but deleting the cache must not delete agent history.
 
 ## First-release themes
 

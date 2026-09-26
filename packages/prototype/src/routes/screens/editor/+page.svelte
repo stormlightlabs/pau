@@ -10,6 +10,8 @@
 		{ path: 'src/session/state.ts', state: '' }
 	];
 	let activeFile = $state(files[0].path);
+	let showHidden = $state(false);
+	let showIgnored = $state(false);
 	const accepted = new SvelteSet<number>();
 
 	type CodeLine = {
@@ -145,6 +147,26 @@
 					<span class="section-label">Files</span>
 					<span class="chip ml-auto">pau</span>
 				</div>
+				<form class="grid gap-1.5 border-b border-line px-2 pb-2" role="search">
+					<label class="section-label" for="prototype-file-search">Search files</label>
+					<div class="flex h-7 items-center gap-1.5 border border-line bg-canvas px-2 text-muted">
+						<span class="i-tabler-search" aria-hidden="true"></span>
+						<input
+							id="prototype-file-search"
+							class="min-w-0 flex-1 bg-transparent font-mono text-micro text-text outline-none"
+							type="search"
+							placeholder="Text in files" />
+					</div>
+				</form>
+				<fieldset class="flex flex-wrap gap-x-3 border-0 border-b border-line px-2 py-1.5 text-micro text-muted">
+					<legend class="sr-only">File visibility</legend>
+					<label class="flex min-h-7 items-center gap-1.5">
+						<input type="checkbox" bind:checked={showHidden} /> Hidden
+					</label>
+					<label class="flex min-h-7 items-center gap-1.5">
+						<input type="checkbox" bind:checked={showIgnored} /> Ignored
+					</label>
+				</fieldset>
 				<div class="grid py-1">
 					<div class="flex min-h-7 items-center gap-1.5 pl-2 font-mono text-meta text-muted">
 						<span class="i-tabler-chevron-down" aria-hidden="true"></span><span

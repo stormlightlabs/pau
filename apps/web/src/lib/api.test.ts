@@ -1,6 +1,14 @@
 import { describe, expect, test, vi } from 'vitest';
 
-import { getBackendVersion, resolveApiOrigin, resolveApiToken, resolveEventSocket } from './api';
+import {
+	getBackendVersion,
+	listWorkspaceFiles,
+	PauApiError,
+	resolveApiOrigin,
+	resolveApiToken,
+	resolveEventSocket,
+	searchWorkspaceFiles
+} from './api';
 
 const TOKEN = '0123456789abcdef0123456789abcdef';
 const DESKTOP_SEARCH = `?pau-api-port=43127&pau-api-token=${TOKEN}`;
@@ -39,6 +47,50 @@ test('authenticates desktop HTTP requests with the launch token', async () => {
 	expect(fetcher).toHaveBeenNthCalledWith(2, 'http://127.0.0.1:43127/api/version', {
 		headers: { Authorization: `Bearer ${TOKEN}` }
 	});
+});
+
+test('lists and searches workspace files with traversal options', async () => {
+	const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json([]));
+
+	await listWorkspaceFiles('', 'workspace / one', 'src/lib', { includeHidden: true, includeIgnored: false }, fetcher);
+	await searchWorkspaceFiles(
+		DESKTOP_SEARCH,
+		'workspace / one',
+		'needle & thread',
+		{ includeHidden: false, includeIgnored: true },
+		fetcher
+	);
+
+	expect(fetcher).toHaveBeenNthCalledWith(
+		1,
+		'/api/workspaces/workspace%20%2F%20one/files?path=src%2Flib&include_hidden=true',
+		{ headers: undefined }
+	);
+	expect(fetcher).toHaveBeenNthCalledWith(
+		2,
+		'http://127.0.0.1:43127/api/workspaces/workspace%20%2F%20one/search?query=needle+%26+thread&limit=1000&include_ignored=true',
+		{ headers: { Authorization: `Bearer ${TOKEN}` } }
+	);
+});
+
+test('preserves workspace API error codes for user-facing states', async () => {
+	const fetcher = vi
+		.fn<typeof fetch>()
+		.mockImplementation(async () =>
+			Response.json({ code: 'permission_denied', message: 'workspace file access failed' }, { status: 403 })
+		);
+
+	let error: unknown;
+	try {
+		await listWorkspaceFiles('', 'workspace', '', { includeHidden: false, includeIgnored: false }, fetcher);
+	} catch (caught) {
+		error = caught;
+	}
+
+	expect(error).toBeInstanceOf(PauApiError);
+	expect(error).toEqual(
+		expect.objectContaining({ code: 'permission_denied', message: 'workspace file access failed', status: 403 })
+	);
 });
 
 test('configures browser and desktop WebSocket handshakes', () => {

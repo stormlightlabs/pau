@@ -35,7 +35,20 @@ Use `PUT /api/workspaces/{workspace_id}/file` for the request. Pau returns
 after the read. Omit `expected_revision` only when creating a new file in an
 existing directory.
 
-## List and search files
+## Browse and search in Pau
+
+Open `/workspaces/{workspace_id}/editor` to browse a workspace. Expand folders
+with the pointer or the right arrow key. The left arrow key closes an open
+folder or returns to its parent. Up, down, Home, and End move through the visible
+tree.
+
+Hidden files and ignored files are excluded by default. Use **Show hidden
+files** and **Show ignored files** when you need them. These choices apply to
+the tree and content search. Search results show the file, line number, and
+matching line. Long paths remain available as a tooltip when the rail truncates
+them.
+
+## List and search with the API
 
 `GET /api/workspaces/{workspace_id}/files` lists one directory level. Add a
 relative `path` query parameter to list another directory. Hidden and ignored

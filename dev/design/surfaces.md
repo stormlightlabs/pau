@@ -128,7 +128,10 @@ keeps a useful measure.
 
 CodeMirror handles quick edits and file previews. The file tree supplies
 workspace context; the review inspector supplies changed files and hunks. The
-code surface remains wider than either rail.
+file rail provides content search and explicit controls for hidden and ignored
+files. Tree rows use arrow-key navigation and preserve full paths through
+accessible labels when visible names must truncate. The code surface remains
+wider than either rail.
 
 Diff color combines background, foreground, and markers. Diagnostics, dirty
 state, external changes, read-only files, binary files, and oversized files need

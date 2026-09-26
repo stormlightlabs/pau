@@ -1,8 +1,13 @@
 export type {
+	FileContent,
+	FileEntry,
+	FileEntryKind,
+	FileSearchMatch,
 	HealthResponse,
 	ServerEvent,
 	ServerEventKind,
 	ServerSnapshot,
 	ServerStreamMessage,
-	VersionResponse
+	VersionResponse,
+	Workspace
 } from './generated.js';

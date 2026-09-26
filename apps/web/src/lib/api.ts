@@ -1,4 +1,4 @@
-import type { VersionResponse } from '@stormlightlabs/pau-protocol';
+import type { FileEntry, FileSearchMatch, VersionResponse, Workspace } from '@stormlightlabs/pau-protocol';
 
 const DESKTOP_PORT_PARAMETER = 'pau-api-port';
 const DESKTOP_TOKEN_PARAMETER = 'pau-api-token';
@@ -27,13 +27,91 @@ function authorization(token: string | undefined): HeadersInit | undefined {
 	return token === undefined ? undefined : { Authorization: `Bearer ${token}` };
 }
 
+type ApiErrorBody = { code?: string; message?: string };
+
+/** An HTTP API failure with the backend's stable error code when available. */
+export class PauApiError extends Error {
+	constructor(
+		message: string,
+		readonly status: number,
+		readonly code?: string
+	) {
+		super(message);
+		this.name = 'PauApiError';
+	}
+}
+
+async function responseJson<T>(response: Response): Promise<T> {
+	if (response.ok) return (await response.json()) as T;
+	let body: ApiErrorBody = {};
+	try {
+		body = (await response.json()) as ApiErrorBody;
+	} catch {
+		// The HTTP status remains useful when a proxy returns a non-JSON response.
+	}
+	throw new PauApiError(
+		body.message ?? `The Pau backend returned HTTP ${response.status}.`,
+		response.status,
+		body.code
+	);
+}
+
+function workspaceEndpoint(search: string, workspaceId: string, endpoint: 'files' | 'search'): URL {
+	const origin = resolveApiOrigin(search) || 'https://pau.local';
+	return new URL(`/api/workspaces/${encodeURIComponent(workspaceId)}/${endpoint}`, origin);
+}
+
+function requestUrl(url: URL, search: string): string {
+	return resolveApiOrigin(search) ? url.href : `${url.pathname}${url.search}`;
+}
+
 /** Reads the running backend version through the shared HTTP API. */
 export async function getBackendVersion(search: string, fetcher: typeof fetch = fetch): Promise<VersionResponse> {
 	const response = await fetcher(`${resolveApiOrigin(search)}/api/version`, {
 		headers: authorization(resolveApiToken(search))
 	});
-	if (!response.ok) throw new Error(`The Pau backend returned HTTP ${response.status}.`);
-	return (await response.json()) as VersionResponse;
+	return responseJson<VersionResponse>(response);
+}
+
+/** Lists workspace registrations available to the current backend. */
+export async function listWorkspaces(search: string, fetcher: typeof fetch = fetch): Promise<Workspace[]> {
+	const response = await fetcher(`${resolveApiOrigin(search)}/api/workspaces`, {
+		headers: authorization(resolveApiToken(search))
+	});
+	return responseJson<Workspace[]>(response);
+}
+
+/** Lists one directory in a registered workspace. */
+export async function listWorkspaceFiles(
+	search: string,
+	workspaceId: string,
+	path: string,
+	options: { includeHidden: boolean; includeIgnored: boolean },
+	fetcher: typeof fetch = fetch
+): Promise<FileEntry[]> {
+	const url = workspaceEndpoint(search, workspaceId, 'files');
+	if (path) url.searchParams.set('path', path);
+	if (options.includeHidden) url.searchParams.set('include_hidden', 'true');
+	if (options.includeIgnored) url.searchParams.set('include_ignored', 'true');
+	const response = await fetcher(requestUrl(url, search), { headers: authorization(resolveApiToken(search)) });
+	return responseJson<FileEntry[]>(response);
+}
+
+/** Searches visible UTF-8 files in a registered workspace. */
+export async function searchWorkspaceFiles(
+	search: string,
+	workspaceId: string,
+	query: string,
+	options: { includeHidden: boolean; includeIgnored: boolean },
+	fetcher: typeof fetch = fetch
+): Promise<FileSearchMatch[]> {
+	const url = workspaceEndpoint(search, workspaceId, 'search');
+	url.searchParams.set('query', query);
+	url.searchParams.set('limit', '1000');
+	if (options.includeHidden) url.searchParams.set('include_hidden', 'true');
+	if (options.includeIgnored) url.searchParams.set('include_ignored', 'true');
+	const response = await fetcher(requestUrl(url, search), { headers: authorization(resolveApiToken(search)) });
+	return responseJson<FileSearchMatch[]>(response);
 }
 
 /** Builds an authenticated browser WebSocket handshake for the event stream. */

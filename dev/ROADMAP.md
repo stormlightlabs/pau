@@ -68,7 +68,7 @@ Verification:
 
 #### 2.20 File tree and search UI
 
-Status: planned
+Status: complete
 Blocked by: 2.19
 
 Add the file tree, file-type icons, ignored/hidden-file controls, and file

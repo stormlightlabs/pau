@@ -410,8 +410,10 @@ async fn list_workspaces(State(state): State<ApiState>) -> Result<Json<Vec<Works
 struct ListFilesQuery {
     #[serde(default)]
     path: String,
-    #[serde(flatten)]
-    traversal: TraversalOptions,
+    #[serde(default)]
+    include_hidden: bool,
+    #[serde(default)]
+    include_ignored: bool,
 }
 
 async fn list_files(
@@ -420,8 +422,12 @@ async fn list_files(
     Query(query): Query<ListFilesQuery>,
 ) -> Result<Json<Vec<FileEntry>>, ApiError> {
     let service = workspace_service(&state)?;
+    let traversal = TraversalOptions {
+        include_hidden: query.include_hidden,
+        include_ignored: query.include_ignored,
+    };
     service
-        .list(&workspace_id, &query.path, query.traversal)
+        .list(&workspace_id, &query.path, traversal)
         .await
         .map(Json)
         .map_err(ApiError::from)
@@ -474,8 +480,10 @@ async fn write_file(
 struct SearchFilesQuery {
     query: String,
     limit: Option<usize>,
-    #[serde(flatten)]
-    traversal: TraversalOptions,
+    #[serde(default)]
+    include_hidden: bool,
+    #[serde(default)]
+    include_ignored: bool,
 }
 
 async fn search_files(
@@ -484,8 +492,12 @@ async fn search_files(
     Query(query): Query<SearchFilesQuery>,
 ) -> Result<Json<Vec<FileSearchMatch>>, ApiError> {
     let service = workspace_service(&state)?;
+    let traversal = TraversalOptions {
+        include_hidden: query.include_hidden,
+        include_ignored: query.include_ignored,
+    };
     service
-        .search(&workspace_id, &query.query, query.traversal, query.limit)
+        .search(&workspace_id, &query.query, traversal, query.limit)
         .await
         .map(Json)
         .map_err(ApiError::from)
@@ -875,6 +887,7 @@ mod tests {
         let root = directory.path().join("café project");
         fs::create_dir(&root).unwrap();
         fs::write(root.join("note.txt"), "find this line\n").unwrap();
+        fs::write(root.join(".hidden.txt"), "hidden marker\n").unwrap();
         let database = Database::open(":memory:").await.unwrap();
         let app = router_with_services(
             test_token(),
@@ -896,6 +909,21 @@ mod tests {
         let workspace: Workspace =
             serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
+
+        let list = Request::builder()
+            .uri(format!(
+                "/api/workspaces/{}/files?include_hidden=true",
+                workspace.id
+            ))
+            .header(header::AUTHORIZATION, &authorization)
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(list).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let entries: Vec<FileEntry> =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert!(entries.iter().any(|entry| entry.path == ".hidden.txt"));
 
         let read = Request::builder()
             .uri(format!(
@@ -934,16 +962,32 @@ mod tests {
                 "/api/workspaces/{}/search?query=changed",
                 workspace.id
             ))
-            .header(header::AUTHORIZATION, authorization)
+            .header(header::AUTHORIZATION, &authorization)
             .body(Body::empty())
             .unwrap();
-        let response = app.oneshot(search).await.unwrap();
+        let response = app.clone().oneshot(search).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let matches: Vec<FileSearchMatch> =
             serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].path, "note.txt");
+
+        let hidden_search = Request::builder()
+            .uri(format!(
+                "/api/workspaces/{}/search?query=hidden&limit=1000&include_hidden=true",
+                workspace.id
+            ))
+            .header(header::AUTHORIZATION, authorization)
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(hidden_search).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let matches: Vec<FileSearchMatch> =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].path, ".hidden.txt");
     }
 
     fn publish_session(events: &EventHub, payload: &str) -> ServerEvent {

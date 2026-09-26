@@ -1,9 +1,9 @@
 # Pau agent guide
 
-Read these files before changing the project:
+Read these indexes and every document they link before changing the project:
 
-- [SPEC.md](dev/SPEC.md) defines product behavior and scope.
-- [PLAN.md](dev/PLAN.md) defines architecture, package ownership, design,
+- [SPEC.md](dev/SPEC.md) indexes product behavior and scope.
+- [PLAN.md](dev/PLAN.md) indexes architecture, package ownership, design,
   documentation, and testing policy.
 - [ROADMAP.md](dev/ROADMAP.md) defines deliverables, work units, blockers, and
   verification.
@@ -46,7 +46,7 @@ contention can cause false timeouts in process and interaction tests.
 
 ## Dogfood Pau
 
-Follow the dogfooding policy in [PLAN.md](dev/PLAN.md). Keep the released local
+Follow the [dogfooding policy](dev/plan/dogfooding.md). Keep the released local
 Claude bridge installed for personal Pi use and in this project's Pi settings,
 then use it for suitable Pau work. Use each later Pau surface once it is usable,
 and include the self-hosted smoke run required by

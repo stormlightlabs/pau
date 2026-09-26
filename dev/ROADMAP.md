@@ -76,7 +76,8 @@ Verification:
 #### 2.19 Workspace registry and file access
 
 Status: complete
-Blocked by: none
+Blocked by: nonDocument process controls and Pi compat
+e
 
 Open and remember workspace roots. Add canonicalized, root-confined file
 listing, reading, writing, and search APIs.
@@ -190,7 +191,8 @@ Verification:
   worker. Confirm Pi provider traffic and model credentials stay in the RPC
   host, and identify extension and MCP tools that must be disabled.
 - Record the selected dependencies, licenses, maintenance state, guarantees,
-  known gaps, and the requirement that justifies any custom code in `PLAN.md`.
+  known gaps, and the requirement that justifies any custom code in
+  `plan/backend.md`.
 
 #### 2.43 Managed process sandbox
 
@@ -274,7 +276,7 @@ Verification:
   fallback, fail-closed behavior, configuration scope, review events, and
   compatibility with the selected Pi versions.
 - Recheck and record its source, license, maintenance state, protocol boundary,
-  and known gaps in `PLAN.md`.
+  and known gaps in `plan/backend.md`.
 
 #### 2.45 Permission profiles and requests
 

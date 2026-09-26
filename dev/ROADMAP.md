@@ -76,8 +76,7 @@ Verification:
 #### 2.19 Workspace registry and file access
 
 Status: complete
-Blocked by: nonDocument process controls and Pi compat
-e
+Blocked by: none
 
 Open and remember workspace roots. Add canonicalized, root-confined file
 listing, reading, writing, and search APIs.

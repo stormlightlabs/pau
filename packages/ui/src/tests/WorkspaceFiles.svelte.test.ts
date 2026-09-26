@@ -11,6 +11,17 @@ function source(overrides: Partial<WorkspaceFileSource> = {}): WorkspaceFileSour
 		listDirectory: async (path) => structuredClone(workspaceFileFixtures.tree[path] ?? []),
 		search: async () => structuredClone(workspaceFileFixtures.searchResults),
 		gitStatus: async () => structuredClone(workspaceFileFixtures.gitStatus),
+		gitDiff: async (path) =>
+			structuredClone(
+				workspaceFileFixtures.diffs[path] ?? {
+					path,
+					previous_path: null,
+					old_content: 'before\n',
+					new_content: 'after\n',
+					binary: false,
+					too_large: false
+				}
+			),
 		...overrides
 	};
 }
@@ -57,8 +68,7 @@ test('shows loading, empty, and permission-error states', async () => {
 });
 
 test('shows branch and changed-file states with text labels', async () => {
-	const onOpenFile = vi.fn();
-	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source(), onOpenFile });
+	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source() });
 	await openNavigation();
 
 	await expect.element(page.getByText('feature/git-status')).toBeInTheDocument();
@@ -70,7 +80,27 @@ test('shows branch and changed-file states with text labels', async () => {
 	await expect.element(changes.getByText('Deleted')).toBeInTheDocument();
 	await expect.element(changes.getByText('Conflicted')).toBeInTheDocument();
 	await userEvent.click(changes.getByRole('button').first());
-	expect(onOpenFile).toHaveBeenCalledWith('packages/ui/src/lib/WorkspaceFiles.svelte');
+	await expect
+		.element(page.getByRole('region', { name: 'Diff for packages/ui/src/lib/WorkspaceFiles.svelte' }))
+		.toBeInTheDocument();
+});
+
+test('navigates changed files with pointer and keyboard', async () => {
+	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source() });
+	await userEvent.click(page.getByRole('button', { name: 'Show inspector' }));
+	const files = page.getByRole('list', { name: 'Files to review' });
+	const first = files.getByRole('button').first();
+	await userEvent.click(first);
+	await expect
+		.element(page.getByRole('region', { name: 'Diff for packages/ui/src/lib/WorkspaceFiles.svelte' }))
+		.toBeInTheDocument();
+
+	await userEvent.keyboard('{ArrowDown}');
+	await expect
+		.element(page.getByRole('region', { name: 'Diff for apps/web/src/lib/old-route.ts' }))
+		.toBeInTheDocument();
+	await userEvent.click(page.getByRole('button', { name: 'Next changed file' }));
+	await expect.element(page.getByRole('region', { name: 'Diff for notes.txt' })).toBeInTheDocument();
 });
 
 test('shows detached HEAD and non-repository states', async () => {

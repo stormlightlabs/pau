@@ -6,6 +6,7 @@
 	import type {
 		WorkspaceFileEntry,
 		WorkspaceFileSource,
+		WorkspaceGitDiff,
 		WorkspaceGitFileState,
 		WorkspaceGitFileStatus,
 		WorkspaceGitStatus,
@@ -13,6 +14,7 @@
 		WorkspaceTraversalOptions
 	} from './types/workspace-files';
 	import ApplicationShell, { type ShellNavItem } from './ApplicationShell.svelte';
+	import DiffReview from './DiffReview.svelte';
 	import FileEditor from './FileEditor.svelte';
 	import Icon from './Icon.svelte';
 	import type { FileEditorSource } from './types/file-editor';
@@ -54,6 +56,12 @@
 	let gitStatus = $state<WorkspaceGitStatus>();
 	let gitLoading = $state(true);
 	let gitError = $state('');
+	let selectedDiffPath = $state<string>();
+	let selectedDiff = $state<WorkspaceGitDiff>();
+	let diffLoading = $state(false);
+	let diffError = $state('');
+	let reviewedHunks = $state<Record<string, number[]>>({});
+	let diffRequestVersion = 0;
 	let requestVersion = 0;
 	let tree = $state<HTMLElement>();
 
@@ -141,11 +149,58 @@
 	}
 
 	function openFile(path: string, line?: number): void {
+		selectedDiffPath = undefined;
+		selectedDiff = undefined;
 		selectedPath = path;
 		selectedLine = line;
 		submittedQuery = '';
 		if (line === undefined) onOpenFile?.(path);
 		else onOpenFile?.(path, line);
+	}
+
+	async function openDiff(path: string): Promise<void> {
+		const version = ++diffRequestVersion;
+		selectedDiffPath = path;
+		selectedPath = undefined;
+		selectedDiff = undefined;
+		diffLoading = true;
+		diffError = '';
+		try {
+			const loaded = await source.gitDiff(path);
+			if (version === diffRequestVersion) selectedDiff = loaded;
+		} catch {
+			if (version === diffRequestVersion) diffError = 'Pau could not load this diff.';
+		} finally {
+			if (version === diffRequestVersion) diffLoading = false;
+		}
+	}
+
+	function moveChangedFile(offset: number): void {
+		const files = gitStatus?.files ?? [];
+		if (files.length === 0) return;
+		const current = Math.max(
+			0,
+			files.findIndex((file) => file.path === selectedDiffPath)
+		);
+		const file = files[(current + offset + files.length) % files.length];
+		if (file) void openDiff(file.path);
+	}
+
+	function handleChangedFileKeydown(event: KeyboardEvent, index: number): void {
+		if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+		event.preventDefault();
+		const files = gitStatus?.files ?? [];
+		const next = event.key === 'ArrowDown' ? Math.min(index + 1, files.length - 1) : Math.max(index - 1, 0);
+		const button = event.currentTarget as HTMLButtonElement;
+		const buttons = button.parentElement?.parentElement?.querySelectorAll<HTMLButtonElement>('button');
+		buttons?.[next]?.focus();
+		const file = files[next];
+		if (file) void openDiff(file.path);
+	}
+
+	function reviewLabel(file: WorkspaceGitFileStatus): string {
+		const count = reviewedHunks[file.path]?.length ?? 0;
+		return count > 0 ? `${count} reviewed` : gitFileLabel(file);
 	}
 
 	function selectEntry(entry: WorkspaceFileEntry): void {
@@ -313,7 +368,7 @@
 						<ul aria-label="Changed files">
 							{#each gitStatus.files as file (file.path)}
 								<li>
-									<button type="button" title={file.path} onclick={() => openFile(file.path)}>
+									<button type="button" title={file.path} onclick={() => void openDiff(file.path)}>
 										<Icon name={gitFileIcon(file)} size={14} />
 										<span>{file.path}</span>
 										<small>{gitFileLabel(file)}</small>
@@ -409,6 +464,47 @@
 		</section>
 	{/snippet}
 
+	{#snippet inspector()}
+		<section class="workspace-files__review" aria-label="Review changes">
+			<header>
+				<div>
+					<strong>Review changes</strong>
+					<small>{gitStatus?.files.length ?? 0} changed {gitStatus?.files.length === 1 ? 'file' : 'files'}</small>
+				</div>
+				<div>
+					<button type="button" aria-label="Previous changed file" onclick={() => moveChangedFile(-1)}>↑</button>
+					<button type="button" aria-label="Next changed file" onclick={() => moveChangedFile(1)}>↓</button>
+				</div>
+			</header>
+			{#if gitLoading}
+				<p role="status">Reading changed files…</p>
+			{:else if gitError}
+				<p class="workspace-files__review-error" role="alert">{gitError}</p>
+			{:else if !gitStatus?.repository}
+				<p>Diff review needs a Git repository.</p>
+			{:else if gitStatus.files.length === 0}
+				<p>Working tree clean.</p>
+			{:else}
+				<ul aria-label="Files to review">
+					{#each gitStatus.files as file, index (file.path)}
+						<li>
+							<button
+								type="button"
+								aria-pressed={selectedDiffPath === file.path}
+								title={file.path}
+								onkeydown={(event) => handleChangedFileKeydown(event, index)}
+								onclick={() => void openDiff(file.path)}>
+								<Icon name={gitFileIcon(file)} size={14} />
+								<span>{file.path}</span>
+								<small>{reviewLabel(file)}</small>
+							</button>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</section>
+	{/snippet}
+
 	<section class="workspace-files__surface" aria-labelledby="workspace-files-title">
 		<header>
 			<div>
@@ -443,6 +539,17 @@
 					</li>
 				{/each}
 			</ol>
+		{:else if diffLoading}
+			<p class="workspace-files__surface-state" role="status">Loading diff for {selectedDiffPath}…</p>
+		{:else if diffError}
+			<p class="workspace-files__surface-state workspace-files__surface-state--error" role="alert">{diffError}</p>
+		{:else if selectedDiff}
+			{#key selectedDiff.path}
+				<DiffReview
+					diff={selectedDiff}
+					reviewedHunks={reviewedHunks[selectedDiff.path] ?? []}
+					onReviewedHunksChange={(hunks) => (reviewedHunks[selectedDiff!.path] = hunks)} />
+			{/key}
 		{:else if selectedPath && editorSource}
 			{#key selectedPath}
 				<FileEditor path={selectedPath} source={editorSource} line={selectedLine} />
@@ -539,6 +646,83 @@
 	.workspace-files__git li button:hover,
 	.workspace-files__git li button:focus-visible {
 		background: var(--shell-surface-raised);
+	}
+
+	.workspace-files__review {
+		display: grid;
+		gap: 0.5rem;
+		font-size: 0.75rem;
+	}
+
+	.workspace-files__review header,
+	.workspace-files__review header > div {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.4rem;
+	}
+
+	.workspace-files__review header > div:first-child {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.workspace-files__review header small,
+	.workspace-files__review > p,
+	.workspace-files__review li small {
+		color: var(--shell-muted);
+	}
+
+	.workspace-files__review header button {
+		width: 1.75rem;
+		height: 1.75rem;
+		color: var(--shell-text);
+		background: var(--shell-surface-raised);
+		border: 1px solid var(--shell-border);
+		cursor: pointer;
+	}
+
+	.workspace-files__review ul {
+		display: grid;
+		margin: 0 -1rem;
+		padding: 0;
+		list-style: none;
+	}
+
+	.workspace-files__review li button {
+		display: grid;
+		grid-template-columns: 0.875rem minmax(0, 1fr);
+		gap: 0.15rem 0.4rem;
+		width: 100%;
+		min-height: 2.5rem;
+		padding: 0.35rem 1rem;
+		color: var(--shell-text);
+		background: transparent;
+		border: 0;
+		border-left: 2px solid transparent;
+		text-align: start;
+		cursor: pointer;
+	}
+
+	.workspace-files__review li button[aria-pressed='true'] {
+		border-left-color: var(--shell-accent);
+		background: var(--shell-surface-raised);
+	}
+
+	.workspace-files__review li span,
+	.workspace-files__review li small {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.workspace-files__review li small {
+		grid-column: 2;
+		font-size: 0.6875rem;
+	}
+
+	.workspace-files__review-error {
+		color: var(--shell-danger) !important;
 	}
 
 	.workspace-files__search {

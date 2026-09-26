@@ -54,11 +54,11 @@ No custom terminal parser, emulator, or PTY layer is justified.
 
 Use CodeMirror 6 for Pau's built-in file, quick-edit, and diff surfaces. The
 initial editor uses `codemirror` 6.0.2 with `@codemirror/state` 6.7.6,
-`@codemirror/language` 6.12.4, `@codemirror/language-data` 6.5.2, and
-`@lezer/highlight` 1.2.4. The language catalog matches filenames and loads its
-native and legacy language packages on demand. Keep language services behind an
-optional backend supervisor rather than adding a browser language-server
-runtime.
+`@codemirror/language` 6.12.4, `@codemirror/language-data` 6.5.2,
+`@codemirror/merge` 6.12.2, and `@lezer/highlight` 1.2.4. The language catalog
+matches filenames and loads its native and legacy language packages on demand.
+Keep language services behind an optional backend supervisor rather than adding
+a browser language-server runtime.
 
 External editor launch uses each editor's documented command-line interface and
 Rust process APIs. It does not require an editor plugin or a shared editor

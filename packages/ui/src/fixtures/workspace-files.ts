@@ -1,10 +1,16 @@
-import type { WorkspaceFileEntry, WorkspaceGitStatus, WorkspaceSearchMatch } from '../lib/types/workspace-files';
+import type {
+	WorkspaceFileEntry,
+	WorkspaceGitDiff,
+	WorkspaceGitStatus,
+	WorkspaceSearchMatch
+} from '../lib/types/workspace-files';
 
 /** Representative directory data for file-tree stories and component tests. */
 export const workspaceFileFixtures: {
 	tree: Record<string, WorkspaceFileEntry[]>;
 	searchResults: WorkspaceSearchMatch[];
 	gitStatus: WorkspaceGitStatus;
+	diffs: Record<string, WorkspaceGitDiff>;
 } = {
 	tree: {
 		'': [
@@ -54,6 +60,26 @@ export const workspaceFileFixtures: {
 			{ path: 'removed-file.ts', previous_path: null, staged: null, worktree: 'deleted', conflicted: false },
 			{ path: 'dev/PLAN.md', previous_path: null, staged: null, worktree: null, conflicted: true }
 		]
+	},
+	diffs: {
+		'packages/ui/src/lib/WorkspaceFiles.svelte': {
+			path: 'packages/ui/src/lib/WorkspaceFiles.svelte',
+			previous_path: null,
+			old_content:
+				"const label = 'Files';\nconst path = selected.path;\n\nfunction open() {\n\treturn path;\n}\n\nconst longLine = 'This unchanged line is intentionally long enough to exercise horizontal scrolling before line wrapping is enabled in the diff toolbar.';\n",
+			new_content:
+				"const label = 'Workspace files';\nconst path = selected.path;\nconst review = true;\n\nfunction open() {\n\treturn review ? path : '';\n}\n\nconst longLine = 'This changed line is intentionally long enough to exercise horizontal scrolling before line wrapping is enabled in the diff toolbar and remains readable afterward.';\n",
+			binary: false,
+			too_large: false
+		},
+		'assets/screenshot.png': {
+			path: 'assets/screenshot.png',
+			previous_path: null,
+			old_content: null,
+			new_content: null,
+			binary: true,
+			too_large: false
+		}
 	},
 	searchResults: [
 		{

@@ -51,78 +51,6 @@ status `complete`.
 The SvelteKit app runs in a normal browser during development. Tauri is the
 shipped application in this deliverable.
 
-### Workspace tools
-
-#### 2.19 Workspace registry and file access
-
-Status: complete
-Blocked by: none
-
-Open and remember workspace roots. Add canonicalized, root-confined file
-listing, reading, writing, and search APIs.
-
-Verification:
-
-- Cover symlink escapes, `..` traversal, paths with non-ASCII characters,
-  ignored files, hidden files, and files changed between read and write.
-
-#### 2.20 File tree and search UI
-
-Status: complete
-Blocked by: 2.19
-
-Add the file tree, file-type icons, ignored/hidden-file controls, and file
-search to the workspace layout.
-
-Verification:
-
-- Component-test loading, empty, permission-error, deep-tree, and large-result
-  states.
-- Verify keyboard navigation and long-path overflow at narrow and wide widths.
-
-#### 2.21 Git status
-
-Status: complete
-Blocked by: 2.19, 2.20
-
-Read repository and worktree status without mutating Git. Show branch and
-changed-file state using Octicons and text labels.
-
-Verification:
-
-- Cover untracked, modified, staged, deleted, renamed, conflicted,
-  detached-HEAD, and non-repository workspaces.
-
-#### 2.22 CodeMirror editor
-
-Status: complete
-Blocked by: 2.19, 2.20
-
-Add Pau's primary built-in editing surface with CodeMirror 6: text-file viewing
-and saving, dirty state, external-change detection, and the active theme's
-syntax colors. Keep the surface focused on quick edits and review rather than a
-full development environment.
-
-Verification:
-
-- Open, edit, save, revert, and detect an external modification.
-- Cover read-only, binary, oversized, and invalid-encoding files with explicit
-  states.
-
-#### 2.23 Diff review
-
-Status: planned
-Blocked by: 2.21, 2.22
-
-Add file and hunk diff views with changed-file navigation and review state.
-Leave commit and push automation out of this unit.
-
-Verification:
-
-- Render additions, deletions, replacements, long lines, wrapped lines, and
-  binary-file notices.
-- Verify file and hunk navigation with keyboard and pointer.
-
 ### Process observability and containment
 
 #### 2.41 Resource monitoring
@@ -348,7 +276,7 @@ Verification:
 #### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.23, 2.25, 2.45, 2.50, 2.51
+Blocked by: 2.25, 2.45, 2.50, 2.51
 
 Complete desktop equivalents for vanilla Pi input history, image input, queues,
 interrupt and retry controls, models, thinking levels, context and cost,
@@ -389,7 +317,7 @@ Verification:
 #### 2.27 Worktree creation and attachment
 
 Status: planned
-Blocked by: 2.19, 2.21
+Blocked by: none
 
 Create or attach Git worktrees and register them as workspaces. Do not commit,
 push, or delete branches automatically.
@@ -404,7 +332,7 @@ Verification:
 #### 2.51 External editor launch
 
 Status: planned
-Blocked by: 2.22, 2.25, 2.41
+Blocked by: 2.25, 2.41
 
 Configure a preferred editor and expose its supported workspace, file, line and
 column, and diff launch capabilities through known adapters for Neovim, Vim,
@@ -523,7 +451,7 @@ Verification:
 #### 2.39 AppImage packaging
 
 Status: planned
-Blocked by: 2.23, 2.25, 2.40, 2.41, 2.43, 2.45, 2.51
+Blocked by: 2.25, 2.40, 2.41, 2.43, 2.45, 2.51
 
 Package the first Linux desktop release as an AppImage. Leave `.deb`, RPM,
 Intel macOS, signing, and notarization until release demand or available signing

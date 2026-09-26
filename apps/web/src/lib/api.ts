@@ -2,6 +2,7 @@ import type {
 	FileContent,
 	FileEntry,
 	FileSearchMatch,
+	GitDiff,
 	GitStatus,
 	VersionResponse,
 	Workspace
@@ -66,7 +67,7 @@ async function responseJson<T>(response: Response): Promise<T> {
 function workspaceEndpoint(
 	search: string,
 	workspaceId: string,
-	endpoint: 'file' | 'files' | 'search' | 'git/status'
+	endpoint: 'file' | 'files' | 'search' | 'git/diff' | 'git/status'
 ): URL {
 	const origin = resolveApiOrigin(search) || 'https://pau.local';
 	return new URL(`/api/workspaces/${encodeURIComponent(workspaceId)}/${endpoint}`, origin);
@@ -165,6 +166,19 @@ export async function getWorkspaceGitStatus(
 	const url = workspaceEndpoint(search, workspaceId, 'git/status');
 	const response = await fetcher(requestUrl(url, search), { headers: authorization(resolveApiToken(search)) });
 	return responseJson<GitStatus>(response);
+}
+
+/** Reads one changed file against Git `HEAD`. */
+export async function getWorkspaceGitDiff(
+	search: string,
+	workspaceId: string,
+	path: string,
+	fetcher: typeof fetch = fetch
+): Promise<GitDiff> {
+	const url = workspaceEndpoint(search, workspaceId, 'git/diff');
+	url.searchParams.set('path', path);
+	const response = await fetcher(requestUrl(url, search), { headers: authorization(resolveApiToken(search)) });
+	return responseJson<GitDiff>(response);
 }
 
 /** Builds an authenticated browser WebSocket handshake for the event stream. */

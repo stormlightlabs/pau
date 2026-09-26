@@ -21,6 +21,16 @@ export type WorkspaceGitStatus = {
 	files: WorkspaceGitFileStatus[];
 };
 
+/** Text content for one changed file against Git `HEAD`. */
+export type WorkspaceGitDiff = {
+	path: string;
+	previous_path: string | null;
+	old_content: string | null;
+	new_content: string | null;
+	binary: boolean;
+	too_large: boolean;
+};
+
 /** One file-system object returned by the workspace file API. */
 export type WorkspaceFileEntry = { path: string; kind: WorkspaceFileKind; size: number | null };
 
@@ -35,4 +45,5 @@ export type WorkspaceFileSource = {
 	listDirectory: (path: string, options: WorkspaceTraversalOptions) => Promise<WorkspaceFileEntry[]>;
 	search: (query: string, options: WorkspaceTraversalOptions) => Promise<WorkspaceSearchMatch[]>;
 	gitStatus: () => Promise<WorkspaceGitStatus>;
+	gitDiff: (path: string) => Promise<WorkspaceGitDiff>;
 };

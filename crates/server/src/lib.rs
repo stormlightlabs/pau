@@ -22,8 +22,8 @@ use pau_core::{
     VersionResponse,
     persistence::{Database, Workspace},
     workspace::{
-        FileContent, FileEntry, FileSearchMatch, GitStatus, TraversalOptions, WorkspaceError,
-        WorkspaceService,
+        FileContent, FileEntry, FileSearchMatch, GitDiff, GitStatus, TraversalOptions,
+        WorkspaceError, WorkspaceService,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -264,6 +264,7 @@ fn router_with_services(
         )
         .route("/api/workspaces/{workspace_id}/search", get(search_files))
         .route("/api/workspaces/{workspace_id}/git/status", get(git_status))
+        .route("/api/workspaces/{workspace_id}/git/diff", get(git_diff))
         .layer(middleware::from_fn_with_state(token, authenticate))
         .layer(CorsLayer::permissive())
         .with_state(ApiState { events, workspaces })
@@ -519,6 +520,19 @@ async fn git_status(
     let service = workspace_service(&state)?;
     service
         .git_status(&workspace_id)
+        .await
+        .map(Json)
+        .map_err(ApiError::from)
+}
+
+async fn git_diff(
+    State(state): State<ApiState>,
+    AxumPath(workspace_id): AxumPath<String>,
+    Query(query): Query<FileQuery>,
+) -> Result<Json<GitDiff>, ApiError> {
+    let service = workspace_service(&state)?;
+    service
+        .git_diff(&workspace_id, &query.path)
         .await
         .map(Json)
         .map_err(ApiError::from)
@@ -1005,6 +1019,40 @@ mod tests {
             serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
         assert!(!status.repository);
+
+        let git = |arguments: &[&str]| {
+            let output = std::process::Command::new("git")
+                .current_dir(&root)
+                .args(arguments)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        };
+        git(&["init", "--quiet"]);
+        git(&["config", "user.name", "Pau Tests"]);
+        git(&["config", "user.email", "pau@example.invalid"]);
+        git(&["add", "note.txt"]);
+        git(&["commit", "--quiet", "-m", "fixture"]);
+        fs::write(root.join("note.txt"), "diff content\n").unwrap();
+        let diff = Request::builder()
+            .uri(format!(
+                "/api/workspaces/{}/git/diff?path=note.txt",
+                workspace.id
+            ))
+            .header(header::AUTHORIZATION, &authorization)
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(diff).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let diff: GitDiff =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(diff.old_content.as_deref(), Some("changed elsewhere\n"));
+        assert_eq!(diff.new_content.as_deref(), Some("diff content\n"));
 
         let hidden_search = Request::builder()
             .uri(format!(

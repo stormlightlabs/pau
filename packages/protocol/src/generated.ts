@@ -138,6 +138,32 @@ detached: boolean,
  */
 files: Array<GitFileStatus>, };
 
+export type GitDiff = {
+/**
+ * Current slash-separated path relative to the workspace root.
+ */
+path: string,
+/**
+ * Path in `HEAD` when the file was renamed or copied.
+ */
+previous_path: string | null,
+/**
+ * Content from `HEAD`, absent when the diff cannot be rendered as text.
+ */
+old_content: string | null,
+/**
+ * Current worktree content, absent when the diff cannot be rendered as text.
+ */
+new_content: string | null,
+/**
+ * Whether either side contains binary or invalid UTF-8 data.
+ */
+binary: boolean,
+/**
+ * Whether either side exceeds the built-in diff limit.
+ */
+too_large: boolean, };
+
 export type ServerEventKind = "workspace_changed" | "session_changed";
 
 export type ServerEvent = {

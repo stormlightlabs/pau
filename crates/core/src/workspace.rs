@@ -20,6 +20,7 @@ const DEFAULT_SEARCH_LIMIT: usize = 200;
 const MAX_SEARCH_LIMIT: usize = 1_000;
 const MAX_SEARCH_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_EDITOR_FILE_BYTES: u64 = 2 * 1024 * 1024;
+const MAX_DIFF_FILE_BYTES: usize = 2 * 1024 * 1024;
 
 /// Failures returned by workspace and file operations.
 #[derive(Debug)]
@@ -197,6 +198,23 @@ pub struct GitStatus {
     pub detached: bool,
     /// Changed paths reported by Git.
     pub files: Vec<GitFileStatus>,
+}
+
+/// Text content used to render one changed file against `HEAD`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct GitDiff {
+    /// Current slash-separated path relative to the workspace root.
+    pub path: String,
+    /// Path in `HEAD` when the file was renamed or copied.
+    pub previous_path: Option<String>,
+    /// Content from `HEAD`, absent when the diff cannot be rendered as text.
+    pub old_content: Option<String>,
+    /// Current worktree content, absent when the diff cannot be rendered as text.
+    pub new_content: Option<String>,
+    /// Whether either side contains binary or invalid UTF-8 data.
+    pub binary: bool,
+    /// Whether either side exceeds the built-in diff limit.
+    pub too_large: bool,
 }
 
 /// Root-confined file access backed by remembered workspace registrations.
@@ -417,6 +435,58 @@ impl WorkspaceService {
         Err(WorkspaceError::Git(message))
     }
 
+    /// Reads one changed file against `HEAD` without changing repository state.
+    pub async fn git_diff(
+        &self,
+        workspace_id: &str,
+        relative_path: &str,
+    ) -> Result<GitDiff, WorkspaceError> {
+        reject_sensitive(relative_path)?;
+        let root = self.root(workspace_id).await?;
+        let status = self.git_status(workspace_id).await?;
+        let file = status
+            .files
+            .iter()
+            .find(|file| file.path == relative_path)
+            .ok_or(WorkspaceError::NotFound)?;
+        if let Some(previous_path) = file.previous_path.as_deref() {
+            reject_sensitive(previous_path)?;
+        }
+
+        let is_added = matches!(file.staged, Some(GitFileState::Added))
+            || matches!(file.worktree, Some(GitFileState::Untracked));
+        let old_path = file.previous_path.as_deref().unwrap_or(relative_path);
+        let old_bytes = if is_added {
+            Vec::new()
+        } else {
+            git_head_file(&root, old_path).await?
+        };
+        let new_bytes = worktree_file(&root, relative_path)?;
+        let too_large =
+            old_bytes.len() > MAX_DIFF_FILE_BYTES || new_bytes.len() > MAX_DIFF_FILE_BYTES;
+        let binary = old_bytes.contains(&0)
+            || new_bytes.contains(&0)
+            || std::str::from_utf8(&old_bytes).is_err()
+            || std::str::from_utf8(&new_bytes).is_err();
+        let (old_content, new_content) = if binary || too_large {
+            (None, None)
+        } else {
+            (
+                Some(String::from_utf8(old_bytes).expect("UTF-8 checked above")),
+                Some(String::from_utf8(new_bytes).expect("UTF-8 checked above")),
+            )
+        };
+
+        Ok(GitDiff {
+            path: file.path.clone(),
+            previous_path: file.previous_path.clone(),
+            old_content,
+            new_content,
+            binary,
+            too_large,
+        })
+    }
+
     /// Searches UTF-8 file content under one workspace root.
     pub async fn search(
         &self,
@@ -482,6 +552,35 @@ impl WorkspaceService {
         }
         Ok(root)
     }
+}
+
+async fn git_head_file(root: &Path, relative_path: &str) -> Result<Vec<u8>, WorkspaceError> {
+    let object = format!("HEAD:{relative_path}");
+    let output = Command::new("git")
+        .current_dir(root)
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .args(["--no-optional-locks", "show", "--no-textconv", &object])
+        .output()
+        .await
+        .map_err(|error| WorkspaceError::Git(error.to_string()))?;
+    if output.status.success() {
+        Ok(output.stdout)
+    } else {
+        Err(WorkspaceError::Git(
+            String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+        ))
+    }
+}
+
+fn worktree_file(root: &Path, relative_path: &str) -> Result<Vec<u8>, WorkspaceError> {
+    let relative = validate_relative(relative_path)?;
+    let path = root.join(relative);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    confined_existing(root, relative_path)?;
+    let directory = Dir::open_ambient_dir(root, ambient_authority())?;
+    directory.read(relative).map_err(WorkspaceError::from)
 }
 
 fn walker(path: &Path, options: TraversalOptions, max_depth: Option<usize>) -> ignore::Walk {
@@ -909,6 +1008,64 @@ mod tests {
         assert!(status.detached);
         assert!(status.branch.is_none());
         assert!(status.head.is_some());
+    }
+
+    #[tokio::test]
+    async fn reads_text_and_binary_diffs_for_changed_files() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+        let git = |arguments: &[&str]| {
+            let output = std::process::Command::new("git")
+                .current_dir(&root)
+                .args(arguments)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        };
+        git(&["init", "--quiet"]);
+        git(&["config", "user.name", "Pau Tests"]);
+        git(&["config", "user.email", "pau@example.invalid"]);
+        fs::write(root.join("changed.txt"), "before\nreplace me\n").unwrap();
+        fs::write(root.join("deleted.txt"), "deleted\n").unwrap();
+        fs::write(root.join("binary.dat"), b"before\0data").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "--quiet", "-m", "fixture"]);
+
+        fs::write(root.join("changed.txt"), "before\nreplacement\nadded\n").unwrap();
+        fs::remove_file(root.join("deleted.txt")).unwrap();
+        fs::write(root.join("binary.dat"), b"after\0data").unwrap();
+        fs::write(root.join("new.txt"), "new\n").unwrap();
+
+        let changed = service
+            .git_diff(&workspace.id, "changed.txt")
+            .await
+            .unwrap();
+        assert_eq!(changed.old_content.as_deref(), Some("before\nreplace me\n"));
+        assert_eq!(
+            changed.new_content.as_deref(),
+            Some("before\nreplacement\nadded\n")
+        );
+        assert!(!changed.binary);
+
+        let added = service.git_diff(&workspace.id, "new.txt").await.unwrap();
+        assert_eq!(added.old_content.as_deref(), Some(""));
+        assert_eq!(added.new_content.as_deref(), Some("new\n"));
+
+        let deleted = service
+            .git_diff(&workspace.id, "deleted.txt")
+            .await
+            .unwrap();
+        assert_eq!(deleted.old_content.as_deref(), Some("deleted\n"));
+        assert_eq!(deleted.new_content.as_deref(), Some(""));
+
+        let binary = service.git_diff(&workspace.id, "binary.dat").await.unwrap();
+        assert!(binary.binary);
+        assert!(binary.old_content.is_none());
+        assert!(binary.new_content.is_none());
     }
 
     #[tokio::test]

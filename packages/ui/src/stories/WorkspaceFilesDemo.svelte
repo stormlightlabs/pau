@@ -30,7 +30,18 @@
 				return { repository: false, branch: null, head: null, detached: false, files: [] };
 			}
 			return status;
-		}
+		},
+		gitDiff: async (path) =>
+			structuredClone(
+				workspaceFileFixtures.diffs[path] ?? {
+					path,
+					previous_path: null,
+					old_content: 'before\n',
+					new_content: 'after\n',
+					binary: false,
+					too_large: false
+				}
+			)
 	}));
 </script>
 

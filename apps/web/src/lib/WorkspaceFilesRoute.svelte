@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 
 	import {
+		getWorkspaceGitDiff,
 		getWorkspaceGitStatus,
 		listWorkspaceFiles,
 		listWorkspaces,
@@ -19,7 +20,8 @@
 	const source: WorkspaceFileSource = {
 		listDirectory: (path, options) => listWorkspaceFiles(location.search, workspaceId, path, options),
 		search: (query, options) => searchWorkspaceFiles(location.search, workspaceId, query, options),
-		gitStatus: () => getWorkspaceGitStatus(location.search, workspaceId)
+		gitStatus: () => getWorkspaceGitStatus(location.search, workspaceId),
+		gitDiff: (path) => getWorkspaceGitDiff(location.search, workspaceId, path)
 	};
 	const editorSource: FileEditorSource = {
 		read: (path) => readWorkspaceFile(location.search, workspaceId, path),

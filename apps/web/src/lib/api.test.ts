@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 
 import {
 	getBackendVersion,
+	getWorkspaceGitDiff,
 	getWorkspaceGitStatus,
 	listWorkspaceFiles,
 	PauApiError,
@@ -98,12 +99,26 @@ test('reads and writes workspace editor files with revision checks', async () =>
 	});
 });
 
-test('reads workspace Git status', async () => {
+test('reads workspace Git status and changed-file content', async () => {
 	const status = { repository: true, branch: 'main', head: 'abc', detached: false, files: [] };
 	const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json(status));
 
 	await expect(getWorkspaceGitStatus('', 'workspace / one', fetcher)).resolves.toEqual(status);
 	expect(fetcher).toHaveBeenCalledWith('/api/workspaces/workspace%20%2F%20one/git/status', { headers: undefined });
+
+	const diff = {
+		path: 'src/example.ts',
+		previous_path: null,
+		old_content: 'before',
+		new_content: 'after',
+		binary: false,
+		too_large: false
+	};
+	fetcher.mockImplementationOnce(async () => Response.json(diff));
+	await expect(getWorkspaceGitDiff('', 'workspace / one', 'src/example.ts', fetcher)).resolves.toEqual(diff);
+	expect(fetcher).toHaveBeenLastCalledWith('/api/workspaces/workspace%20%2F%20one/git/diff?path=src%2Fexample.ts', {
+		headers: undefined
+	});
 });
 
 test('preserves workspace API error codes for user-facing states', async () => {

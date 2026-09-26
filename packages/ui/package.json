@@ -39,6 +39,7 @@
 	"dependencies": {
 		"@codemirror/language": "6.12.4",
 		"@codemirror/language-data": "6.5.2",
+		"@codemirror/merge": "6.12.2",
 		"@codemirror/state": "6.7.6",
 		"@fontsource-variable/atkinson-hyperlegible-next": "5.3.0",
 		"@fontsource-variable/ibm-plex-sans": "5.3.0",

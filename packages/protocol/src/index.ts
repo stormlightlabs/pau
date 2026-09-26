@@ -3,6 +3,7 @@ export type {
 	FileEntry,
 	FileEntryKind,
 	FileSearchMatch,
+	GitDiff,
 	GitFileState,
 	GitFileStatus,
 	GitStatus,

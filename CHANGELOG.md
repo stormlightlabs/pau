@@ -22,6 +22,10 @@
 - Pau now finds local Pi installations and reports setup problems before a
   session starts.
 - Added five themes and four bundled interface fonts.
+- Added workspace file browsing and search, including hidden and ignored file
+  controls and changed-file Git status.
+- Added CodeMirror editing with safe saves, external-change detection, explicit
+  unsupported-file states, and file and hunk diff review.
 - Pau now remembers registered workspaces and settings between launches.
 - Protected local connections with a per-launch token and kept secrets out of
   diagnostic logs.

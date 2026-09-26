@@ -53,12 +53,24 @@ modified, deleted, renamed, untracked, or conflicted path. A detached HEAD shows
 the abbreviated commit instead of a branch. Pau labels directories outside a
 Git worktree as **Not a Git repository**.
 
+Open a changed path to compare the worktree file with `HEAD`. The file view
+shows every change. The hunk view limits the editor to one change with nearby
+context. Use the previous and next controls or `Alt+Up` and `Alt+Down` to move
+between hunks, and mark each hunk when you finish reviewing it. **Wrap lines**
+keeps long lines within the review surface. Binary files show a notice instead
+of decoded content.
+
 ## Read Git status with the API
 
 `GET /api/workspaces/{workspace_id}/git/status` returns the branch, HEAD commit,
 detached state, and changed files. Each file reports its staged and unstaged
 state separately. Pau runs Git with optional locks disabled and does not update
 the index.
+
+`GET /api/workspaces/{workspace_id}/git/diff?path=src/main.rs` returns the
+`HEAD` and worktree text used by the diff view. New and deleted files use an
+empty side. Binary files and files larger than 2 MiB omit text content and set
+the corresponding response flag.
 
 ## List and search with the API
 

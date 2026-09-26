@@ -10,6 +10,7 @@ function source(overrides: Partial<WorkspaceFileSource> = {}): WorkspaceFileSour
 	return {
 		listDirectory: async (path) => structuredClone(workspaceFileFixtures.tree[path] ?? []),
 		search: async () => structuredClone(workspaceFileFixtures.searchResults),
+		gitStatus: async () => structuredClone(workspaceFileFixtures.gitStatus),
 		...overrides
 	};
 }
@@ -55,6 +56,42 @@ test('shows loading, empty, and permission-error states', async () => {
 		.toHaveTextContent('Pau cannot read this folder. Check its file permissions and try again.');
 });
 
+test('shows branch and changed-file states with text labels', async () => {
+	const onOpenFile = vi.fn();
+	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source(), onOpenFile });
+	await openNavigation();
+
+	await expect.element(page.getByText('feature/git-status')).toBeInTheDocument();
+	const changes = page.getByRole('list', { name: 'Changed files' });
+	await expect.element(changes.getByText('Modified')).toBeInTheDocument();
+	await expect.element(changes.getByText('Staged renamed')).toBeInTheDocument();
+	await expect.element(changes.getByText('Untracked')).toBeInTheDocument();
+	await expect.element(changes.getByText('Staged added')).toBeInTheDocument();
+	await expect.element(changes.getByText('Deleted')).toBeInTheDocument();
+	await expect.element(changes.getByText('Conflicted')).toBeInTheDocument();
+	await userEvent.click(changes.getByRole('button').first());
+	expect(onOpenFile).toHaveBeenCalledWith('packages/ui/src/lib/WorkspaceFiles.svelte');
+});
+
+test('shows detached HEAD and non-repository states', async () => {
+	const detached = structuredClone(workspaceFileFixtures.gitStatus);
+	detached.branch = null;
+	detached.detached = true;
+	const view = await render(WorkspaceFiles, {
+		workspaceId: 'pau',
+		workspaceName: 'pau',
+		source: source({ gitStatus: async () => detached })
+	});
+	await openNavigation();
+	await expect.element(page.getByText('Detached at 1234567')).toBeInTheDocument();
+	view.unmount();
+
+	await renderFiles(
+		source({ gitStatus: async () => ({ repository: false, branch: null, head: null, detached: false, files: [] }) })
+	);
+	await expect.element(page.getByText('Not a Git repository')).toBeInTheDocument();
+});
+
 test('expands a deep tree and follows tree keyboard navigation', async () => {
 	await renderFiles();
 	const tree = page.getByRole('tree', { name: 'pau files' });
@@ -84,7 +121,7 @@ test('expands a deep tree and follows tree keyboard navigation', async () => {
 test('reloads listings and searches with hidden and ignored-file controls', async () => {
 	const listDirectory = vi.fn<WorkspaceFileSource['listDirectory']>(async () => []);
 	const search = vi.fn<WorkspaceFileSource['search']>(async () => []);
-	await renderFiles({ listDirectory, search });
+	await renderFiles(source({ listDirectory, search }));
 
 	await userEvent.click(page.getByRole('checkbox', { name: 'Show hidden files' }));
 	await expect.poll(() => listDirectory.mock.calls.at(-1)?.[1]).toEqual({ includeHidden: true, includeIgnored: false });

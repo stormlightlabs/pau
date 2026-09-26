@@ -1,5 +1,26 @@
 export type WorkspaceFileKind = 'file' | 'directory' | 'symlink';
 
+export type WorkspaceGitFileState =
+	'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'type_changed' | 'untracked';
+
+/** Git state for one changed workspace path. */
+export type WorkspaceGitFileStatus = {
+	path: string;
+	previous_path: string | null;
+	staged: WorkspaceGitFileState | null;
+	worktree: WorkspaceGitFileState | null;
+	conflicted: boolean;
+};
+
+/** Branch and changed-file state for a workspace. */
+export type WorkspaceGitStatus = {
+	repository: boolean;
+	branch: string | null;
+	head: string | null;
+	detached: boolean;
+	files: WorkspaceGitFileStatus[];
+};
+
 /** One file-system object returned by the workspace file API. */
 export type WorkspaceFileEntry = { path: string; kind: WorkspaceFileKind; size: number | null };
 
@@ -13,4 +34,5 @@ export type WorkspaceTraversalOptions = { includeHidden: boolean; includeIgnored
 export type WorkspaceFileSource = {
 	listDirectory: (path: string, options: WorkspaceTraversalOptions) => Promise<WorkspaceFileEntry[]>;
 	search: (query: string, options: WorkspaceTraversalOptions) => Promise<WorkspaceSearchMatch[]>;
+	gitStatus: () => Promise<WorkspaceGitStatus>;
 };

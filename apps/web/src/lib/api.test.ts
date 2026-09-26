@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 
 import {
 	getBackendVersion,
+	getWorkspaceGitStatus,
 	listWorkspaceFiles,
 	PauApiError,
 	resolveApiOrigin,
@@ -71,6 +72,14 @@ test('lists and searches workspace files with traversal options', async () => {
 		'http://127.0.0.1:43127/api/workspaces/workspace%20%2F%20one/search?query=needle+%26+thread&limit=1000&include_ignored=true',
 		{ headers: { Authorization: `Bearer ${TOKEN}` } }
 	);
+});
+
+test('reads workspace Git status', async () => {
+	const status = { repository: true, branch: 'main', head: 'abc', detached: false, files: [] };
+	const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json(status));
+
+	await expect(getWorkspaceGitStatus('', 'workspace / one', fetcher)).resolves.toEqual(status);
+	expect(fetcher).toHaveBeenCalledWith('/api/workspaces/workspace%20%2F%20one/git/status', { headers: undefined });
 });
 
 test('preserves workspace API error codes for user-facing states', async () => {

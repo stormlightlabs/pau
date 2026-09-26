@@ -8,6 +8,9 @@ export type {
 	WorkspaceFileEntry,
 	WorkspaceFileKind,
 	WorkspaceFileSource,
+	WorkspaceGitFileState,
+	WorkspaceGitFileStatus,
+	WorkspaceGitStatus,
 	WorkspaceSearchMatch,
 	WorkspaceTraversalOptions
 } from './lib/types/workspace-files';

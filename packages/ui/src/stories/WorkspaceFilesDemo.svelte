@@ -3,7 +3,7 @@
 	import { workspaceFileFixtures } from '../fixtures/workspace-files';
 	import WorkspaceFiles from '../lib/WorkspaceFiles.svelte';
 
-	type State = 'default' | 'empty' | 'loading' | 'permission-error' | 'large-results';
+	type State = 'default' | 'detached' | 'empty' | 'loading' | 'non-repository' | 'permission-error' | 'large-results';
 
 	let { state = 'default' }: { state?: State } = $props();
 
@@ -22,7 +22,15 @@
 			if (state === 'empty') return [];
 			return structuredClone(workspaceFileFixtures.tree[path] ?? []);
 		},
-		search: async () => structuredClone(state === 'large-results' ? largeResults : workspaceFileFixtures.searchResults)
+		search: async () => structuredClone(state === 'large-results' ? largeResults : workspaceFileFixtures.searchResults),
+		gitStatus: async () => {
+			const status = structuredClone(workspaceFileFixtures.gitStatus);
+			if (state === 'detached') return { ...status, branch: null, detached: true };
+			if (state === 'non-repository') {
+				return { repository: false, branch: null, head: null, detached: false, files: [] };
+			}
+			return status;
+		}
 	}));
 </script>
 

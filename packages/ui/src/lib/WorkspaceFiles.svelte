@@ -6,6 +6,9 @@
 	import type {
 		WorkspaceFileEntry,
 		WorkspaceFileSource,
+		WorkspaceGitFileState,
+		WorkspaceGitFileStatus,
+		WorkspaceGitStatus,
 		WorkspaceSearchMatch,
 		WorkspaceTraversalOptions
 	} from './types/workspace-files';
@@ -44,6 +47,9 @@
 	let searchResults = $state<WorkspaceSearchMatch[]>([]);
 	let searchLoading = $state(false);
 	let searchError = $state('');
+	let gitStatus = $state<WorkspaceGitStatus>();
+	let gitLoading = $state(true);
+	let gitError = $state('');
 	let requestVersion = 0;
 	let tree = $state<HTMLElement>();
 
@@ -64,6 +70,7 @@
 
 	onMount(() => {
 		void reloadTree();
+		void loadGitStatus();
 	});
 
 	function errorCode(error: unknown): string | undefined {
@@ -77,6 +84,18 @@
 			return 'Pau cannot read this folder. Check its file permissions and try again.';
 		}
 		return error instanceof Error ? error.message : 'Pau could not load this folder.';
+	}
+
+	async function loadGitStatus(): Promise<void> {
+		gitLoading = true;
+		gitError = '';
+		try {
+			gitStatus = await source.gitStatus();
+		} catch {
+			gitError = 'Pau could not read Git status.';
+		} finally {
+			gitLoading = false;
+		}
 	}
 
 	async function loadDirectory(path: string, version = requestVersion): Promise<void> {
@@ -217,6 +236,42 @@
 	function basename(path: string): string {
 		return path.split('/').at(-1) ?? path;
 	}
+
+	function gitStateLabel(state: WorkspaceGitFileState): string {
+		return state === 'type_changed' ? 'Type changed' : `${state.charAt(0).toUpperCase()}${state.slice(1)}`;
+	}
+
+	function gitFileLabel(file: WorkspaceGitFileStatus): string {
+		if (file.conflicted) return 'Conflicted';
+		const labels = [];
+		if (file.staged) labels.push(`Staged ${gitStateLabel(file.staged).toLowerCase()}`);
+		if (file.worktree) labels.push(gitStateLabel(file.worktree));
+		return labels.join(' · ');
+	}
+
+	function gitFileIcon(file: WorkspaceGitFileStatus): IconKind {
+		if (file.conflicted) return 'gitMerge';
+		switch (file.worktree ?? file.staged) {
+			case 'added':
+			case 'untracked': {
+				return 'diffAdded';
+			}
+			case 'deleted': {
+				return 'diffRemoved';
+			}
+			case 'renamed': {
+				return 'diffRenamed';
+			}
+			default: {
+				return 'diffModified';
+			}
+		}
+	}
+
+	function gitHeadLabel(status: WorkspaceGitStatus): string {
+		if (status.detached) return `Detached at ${status.head?.slice(0, 7) ?? 'unknown'}`;
+		return status.branch ?? 'Unborn branch';
+	}
 </script>
 
 <ApplicationShell
@@ -228,6 +283,37 @@
 	inspectorOpen={false}>
 	{#snippet context()}
 		<section class="workspace-files__browser" aria-label="Workspace files">
+			<section class="workspace-files__git" aria-label="Git status" aria-live="polite">
+				{#if gitLoading}
+					<p>Reading Git status…</p>
+				{:else if gitError}
+					<p class="workspace-files__git-error">{gitError}</p>
+				{:else if gitStatus && !gitStatus.repository}
+					<p><Icon name="gitBranch" size={14} /> Not a Git repository</p>
+				{:else if gitStatus}
+					<div class="workspace-files__git-branch" title={gitHeadLabel(gitStatus)}>
+						<Icon name={gitStatus.detached ? 'gitCommit' : 'gitBranch'} size={14} />
+						<strong>{gitHeadLabel(gitStatus)}</strong>
+						<small>{gitStatus.files.length}</small>
+					</div>
+					{#if gitStatus.files.length === 0}
+						<p>Working tree clean</p>
+					{:else}
+						<ul aria-label="Changed files">
+							{#each gitStatus.files as file (file.path)}
+								<li>
+									<button type="button" title={file.path} onclick={() => onOpenFile?.(file.path)}>
+										<Icon name={gitFileIcon(file)} size={14} />
+										<span>{file.path}</span>
+										<small>{gitFileLabel(file)}</small>
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				{/if}
+			</section>
+
 			<form
 				class="workspace-files__search"
 				role="search"
@@ -366,6 +452,79 @@
 	.workspace-files__browser {
 		min-width: 0;
 		font-size: 0.75rem;
+	}
+
+	.workspace-files__git {
+		display: grid;
+		gap: 0.35rem;
+		padding: 0 0.75rem 0.75rem;
+		border-bottom: 1px solid var(--shell-border);
+	}
+
+	.workspace-files__git p {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		margin: 0;
+		color: var(--shell-muted);
+	}
+
+	.workspace-files__git-error {
+		color: var(--shell-danger) !important;
+	}
+
+	.workspace-files__git-branch {
+		display: grid;
+		grid-template-columns: 0.875rem minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 0.4rem;
+		min-height: 1.75rem;
+	}
+
+	.workspace-files__git-branch strong,
+	.workspace-files__git li span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-family: ui-monospace, 'Cascadia Code', monospace;
+		font-weight: 500;
+	}
+
+	.workspace-files__git-branch small,
+	.workspace-files__git li small {
+		color: var(--shell-muted);
+		font-size: 0.6875rem;
+		white-space: nowrap;
+	}
+
+	.workspace-files__git ul {
+		display: grid;
+		max-height: 10rem;
+		margin: 0 -0.75rem -0.75rem;
+		padding: 0 0 0.35rem;
+		overflow: auto;
+		list-style: none;
+	}
+
+	.workspace-files__git li button {
+		display: grid;
+		grid-template-columns: 0.875rem minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 0.4rem;
+		width: 100%;
+		min-height: 1.75rem;
+		padding: 0.25rem 0.75rem;
+		color: var(--shell-text);
+		background: transparent;
+		border: 0;
+		text-align: start;
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.workspace-files__git li button:hover,
+	.workspace-files__git li button:focus-visible {
+		background: var(--shell-surface-raised);
 	}
 
 	.workspace-files__search {

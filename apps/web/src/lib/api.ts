@@ -1,4 +1,4 @@
-import type { FileEntry, FileSearchMatch, VersionResponse, Workspace } from '@stormlightlabs/pau-protocol';
+import type { FileEntry, FileSearchMatch, GitStatus, VersionResponse, Workspace } from '@stormlightlabs/pau-protocol';
 
 const DESKTOP_PORT_PARAMETER = 'pau-api-port';
 const DESKTOP_TOKEN_PARAMETER = 'pau-api-token';
@@ -56,7 +56,7 @@ async function responseJson<T>(response: Response): Promise<T> {
 	);
 }
 
-function workspaceEndpoint(search: string, workspaceId: string, endpoint: 'files' | 'search'): URL {
+function workspaceEndpoint(search: string, workspaceId: string, endpoint: 'files' | 'search' | 'git/status'): URL {
 	const origin = resolveApiOrigin(search) || 'https://pau.local';
 	return new URL(`/api/workspaces/${encodeURIComponent(workspaceId)}/${endpoint}`, origin);
 }
@@ -112,6 +112,17 @@ export async function searchWorkspaceFiles(
 	if (options.includeIgnored) url.searchParams.set('include_ignored', 'true');
 	const response = await fetcher(requestUrl(url, search), { headers: authorization(resolveApiToken(search)) });
 	return responseJson<FileSearchMatch[]>(response);
+}
+
+/** Reads branch and changed-file state for a registered workspace. */
+export async function getWorkspaceGitStatus(
+	search: string,
+	workspaceId: string,
+	fetcher: typeof fetch = fetch
+): Promise<GitStatus> {
+	const url = workspaceEndpoint(search, workspaceId, 'git/status');
+	const response = await fetcher(requestUrl(url, search), { headers: authorization(resolveApiToken(search)) });
+	return responseJson<GitStatus>(response);
 }
 
 /** Builds an authenticated browser WebSocket handshake for the event stream. */

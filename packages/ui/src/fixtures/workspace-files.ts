@@ -1,9 +1,10 @@
-import type { WorkspaceFileEntry, WorkspaceSearchMatch } from '../lib/types/workspace-files';
+import type { WorkspaceFileEntry, WorkspaceGitStatus, WorkspaceSearchMatch } from '../lib/types/workspace-files';
 
 /** Representative directory data for file-tree stories and component tests. */
 export const workspaceFileFixtures: {
 	tree: Record<string, WorkspaceFileEntry[]>;
 	searchResults: WorkspaceSearchMatch[];
+	gitStatus: WorkspaceGitStatus;
 } = {
 	tree: {
 		'': [
@@ -26,6 +27,32 @@ export const workspaceFileFixtures: {
 				kind: 'file',
 				size: 12_880
 			}
+		]
+	},
+	gitStatus: {
+		repository: true,
+		branch: 'feature/git-status',
+		head: '1234567890abcdef',
+		detached: false,
+		files: [
+			{
+				path: 'packages/ui/src/lib/WorkspaceFiles.svelte',
+				previous_path: null,
+				staged: null,
+				worktree: 'modified',
+				conflicted: false
+			},
+			{
+				path: 'apps/web/src/lib/old-route.ts',
+				previous_path: 'apps/web/src/lib/route.ts',
+				staged: 'renamed',
+				worktree: null,
+				conflicted: false
+			},
+			{ path: 'notes.txt', previous_path: null, staged: null, worktree: 'untracked', conflicted: false },
+			{ path: 'new-file.ts', previous_path: null, staged: 'added', worktree: null, conflicted: false },
+			{ path: 'removed-file.ts', previous_path: null, staged: null, worktree: 'deleted', conflicted: false },
+			{ path: 'dev/PLAN.md', previous_path: null, staged: null, worktree: null, conflicted: true }
 		]
 	},
 	searchResults: [

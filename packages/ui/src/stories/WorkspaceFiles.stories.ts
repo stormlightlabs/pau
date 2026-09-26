@@ -31,6 +31,10 @@ export const SearchResults: Story = {
 	}
 };
 
+export const DetachedHead: Story = { args: { state: 'detached' } };
+
+export const NonRepository: Story = { args: { state: 'non-repository' } };
+
 export const Loading: Story = { args: { state: 'loading' } };
 
 export const Empty: Story = { args: { state: 'empty' } };

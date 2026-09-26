@@ -16,7 +16,11 @@ architecture decision changes.
 Project prompts live in `.pi/prompts/`: `/implement <unit-id>`,
 `/review [focus]`, and `/adv-review [focus]`.
 
-`cargo clean` regularly to keep the disk clean
+`cargo clean` regularly to keep the disk clean.
+
+Run heavyweight verification serially. Do not run `pnpm check`, browser tests,
+Storybook or website builds, and Cargo builds at the same time. Resource
+contention can cause false timeouts in process and interaction tests.
 
 ## Work units
 

@@ -2,7 +2,7 @@
 	import { WorkspaceFiles, type WorkspaceFileSource } from '@stormlightlabs/pau-ui';
 	import { onMount } from 'svelte';
 
-	import { listWorkspaceFiles, listWorkspaces, searchWorkspaceFiles } from './api';
+	import { getWorkspaceGitStatus, listWorkspaceFiles, listWorkspaces, searchWorkspaceFiles } from './api';
 
 	let { workspaceId }: { workspaceId: string } = $props();
 
@@ -11,7 +11,8 @@
 	let disconnected = $state(false);
 	const source: WorkspaceFileSource = {
 		listDirectory: (path, options) => listWorkspaceFiles(location.search, workspaceId, path, options),
-		search: (query, options) => searchWorkspaceFiles(location.search, workspaceId, query, options)
+		search: (query, options) => searchWorkspaceFiles(location.search, workspaceId, query, options),
+		gitStatus: () => getWorkspaceGitStatus(location.search, workspaceId)
 	};
 
 	onMount(() => {

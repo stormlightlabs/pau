@@ -10,6 +10,7 @@ use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
+use tokio::process::Command;
 use ts_rs::TS;
 use uuid::Uuid;
 
@@ -38,6 +39,8 @@ pub enum WorkspaceError {
     Persistence(tokio_rusqlite::Error),
     /// Filesystem access failed.
     Io(io::Error),
+    /// Git could not read repository state.
+    Git(String),
 }
 
 impl fmt::Display for WorkspaceError {
@@ -53,6 +56,7 @@ impl fmt::Display for WorkspaceError {
             Self::WrongFileType => formatter.write_str("path has the wrong file type"),
             Self::Persistence(error) => write!(formatter, "workspace persistence failed: {error}"),
             Self::Io(error) => write!(formatter, "workspace file access failed: {error}"),
+            Self::Git(message) => write!(formatter, "Git status failed: {message}"),
         }
     }
 }
@@ -130,6 +134,57 @@ pub struct FileSearchMatch {
     pub line: u64,
     /// Matching line with surrounding whitespace removed.
     pub preview: String,
+}
+
+/// A change reported for one side of the Git index/worktree pair.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum GitFileState {
+    /// File content changed.
+    Modified,
+    /// File was added.
+    Added,
+    /// File was deleted.
+    Deleted,
+    /// File moved from another path.
+    Renamed,
+    /// File was copied from another path.
+    Copied,
+    /// File type changed.
+    TypeChanged,
+    /// File is not tracked.
+    Untracked,
+}
+
+/// Git state for one changed path.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct GitFileStatus {
+    /// Slash-separated path relative to the workspace root.
+    pub path: String,
+    /// Previous path for a rename or copy.
+    pub previous_path: Option<String>,
+    /// Change staged in the index, when present.
+    pub staged: Option<GitFileState>,
+    /// Unstaged worktree change, when present.
+    pub worktree: Option<GitFileState>,
+    /// Whether Git reports an unresolved merge conflict.
+    pub conflicted: bool,
+}
+
+/// Read-only Git state for a workspace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct GitStatus {
+    /// Whether the workspace is inside a Git worktree.
+    pub repository: bool,
+    /// Current branch name, absent for detached HEAD and new repositories.
+    pub branch: Option<String>,
+    /// Current commit identifier, when HEAD resolves to a commit.
+    pub head: Option<String>,
+    /// Whether HEAD points directly to a commit.
+    pub detached: bool,
+    /// Changed paths reported by Git.
+    pub files: Vec<GitFileStatus>,
 }
 
 /// Root-confined file access backed by remembered workspace registrations.
@@ -292,6 +347,43 @@ impl WorkspaceService {
         })
     }
 
+    /// Reads branch and changed-file state without updating the Git index.
+    pub async fn git_status(&self, workspace_id: &str) -> Result<GitStatus, WorkspaceError> {
+        let root = self.root(workspace_id).await?;
+        let output = Command::new("git")
+            .current_dir(root)
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .args([
+                "--no-optional-locks",
+                "status",
+                "--porcelain=v2",
+                "--branch",
+                "-z",
+                "--untracked-files=all",
+                "--",
+                ".",
+            ])
+            .output()
+            .await
+            .map_err(|error| WorkspaceError::Git(error.to_string()))?;
+
+        if output.status.success() {
+            return parse_git_status(&output.stdout);
+        }
+
+        let message = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        if message.contains("not a git repository") {
+            return Ok(GitStatus {
+                repository: false,
+                branch: None,
+                head: None,
+                detached: false,
+                files: Vec::new(),
+            });
+        }
+        Err(WorkspaceError::Git(message))
+    }
+
     /// Searches UTF-8 file content under one workspace root.
     pub async fn search(
         &self,
@@ -424,6 +516,103 @@ fn relative_display(root: &Path, path: &Path) -> Result<String, WorkspaceError> 
         .map(|component| component.as_os_str().to_string_lossy())
         .collect::<Vec<_>>()
         .join("/"))
+}
+
+fn parse_git_status(output: &[u8]) -> Result<GitStatus, WorkspaceError> {
+    let mut status = GitStatus {
+        repository: true,
+        branch: None,
+        head: None,
+        detached: false,
+        files: Vec::new(),
+    };
+    let mut records = output.split(|byte| *byte == 0);
+
+    while let Some(record) = records.next() {
+        if record.is_empty() {
+            continue;
+        }
+        let record = String::from_utf8_lossy(record);
+        if let Some(head) = record.strip_prefix("# branch.head ") {
+            if head == "(detached)" {
+                status.detached = true;
+            } else if head != "(unknown)" {
+                status.branch = Some(head.to_owned());
+            }
+            continue;
+        }
+        if let Some(head) = record.strip_prefix("# branch.oid ") {
+            if head != "(initial)" {
+                status.head = Some(head.to_owned());
+            }
+            continue;
+        }
+
+        let (path, xy, previous_path, conflicted) = match record.as_bytes()[0] {
+            b'1' => {
+                let fields = record.splitn(9, ' ').collect::<Vec<_>>();
+                if fields.len() != 9 {
+                    return Err(WorkspaceError::Git(
+                        "invalid ordinary status record".to_owned(),
+                    ));
+                }
+                (fields[8].to_owned(), fields[1], None, false)
+            }
+            b'2' => {
+                let fields = record.splitn(10, ' ').collect::<Vec<_>>();
+                if fields.len() != 10 {
+                    return Err(WorkspaceError::Git(
+                        "invalid rename status record".to_owned(),
+                    ));
+                }
+                let previous = records.next().ok_or_else(|| {
+                    WorkspaceError::Git("rename status omitted its previous path".to_owned())
+                })?;
+                (
+                    fields[9].to_owned(),
+                    fields[1],
+                    Some(String::from_utf8_lossy(previous).into_owned()),
+                    false,
+                )
+            }
+            b'u' => {
+                let fields = record.splitn(11, ' ').collect::<Vec<_>>();
+                if fields.len() != 11 {
+                    return Err(WorkspaceError::Git(
+                        "invalid conflict status record".to_owned(),
+                    ));
+                }
+                (fields[10].to_owned(), fields[1], None, true)
+            }
+            b'?' => (record[2..].to_owned(), "??", None, false),
+            _ => continue,
+        };
+        let mut states = xy.chars();
+        let staged = git_file_state(states.next(), false);
+        let worktree = git_file_state(states.next(), true);
+        status.files.push(GitFileStatus {
+            path,
+            previous_path,
+            staged,
+            worktree,
+            conflicted,
+        });
+    }
+
+    Ok(status)
+}
+
+fn git_file_state(code: Option<char>, worktree: bool) -> Option<GitFileState> {
+    match code? {
+        'M' => Some(GitFileState::Modified),
+        'A' => Some(GitFileState::Added),
+        'D' => Some(GitFileState::Deleted),
+        'R' => Some(GitFileState::Renamed),
+        'C' => Some(GitFileState::Copied),
+        'T' => Some(GitFileState::TypeChanged),
+        '?' if worktree => Some(GitFileState::Untracked),
+        _ => None,
+    }
 }
 
 fn revision(bytes: &[u8]) -> String {
@@ -568,6 +757,67 @@ mod tests {
             Err(WorkspaceError::Conflict)
         ));
         assert_eq!(fs::read_to_string(path).unwrap(), "external");
+    }
+
+    #[test]
+    fn parses_branch_and_every_required_changed_file_state() {
+        let output = concat!(
+            "# branch.oid abcdef1234567890\0",
+            "# branch.head feature/status\0",
+            "1 .M N... 100644 100644 100644 a b modified.txt\0",
+            "1 M. N... 100644 100644 100644 a b staged.txt\0",
+            "1 .D N... 100644 100644 000000 a b deleted.txt\0",
+            "2 R. N... 100644 100644 100644 a b R100 renamed.txt\0old name.txt\0",
+            "u UU N... 100644 100644 100644 100644 a b c conflicted.txt\0",
+            "? untracked file.txt\0"
+        );
+        let status = parse_git_status(output.as_bytes()).unwrap();
+
+        assert_eq!(status.branch.as_deref(), Some("feature/status"));
+        assert_eq!(status.files.len(), 6);
+        assert_eq!(status.files[0].worktree, Some(GitFileState::Modified));
+        assert_eq!(status.files[1].staged, Some(GitFileState::Modified));
+        assert_eq!(status.files[2].worktree, Some(GitFileState::Deleted));
+        assert_eq!(status.files[3].staged, Some(GitFileState::Renamed));
+        assert_eq!(
+            status.files[3].previous_path.as_deref(),
+            Some("old name.txt")
+        );
+        assert!(status.files[4].conflicted);
+        assert_eq!(status.files[5].worktree, Some(GitFileState::Untracked));
+    }
+
+    #[tokio::test]
+    async fn reports_detached_head_and_non_repository_workspaces() {
+        let (directory, service, workspace) = fixture().await;
+        assert!(!service.git_status(&workspace.id).await.unwrap().repository);
+
+        let root = directory.path().join("project");
+        let git = |arguments: &[&str]| {
+            let output = std::process::Command::new("git")
+                .current_dir(&root)
+                .args(arguments)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        };
+        git(&["init", "--quiet"]);
+        git(&["config", "user.name", "Pau Tests"]);
+        git(&["config", "user.email", "pau@example.invalid"]);
+        fs::write(root.join("tracked.txt"), "tracked").unwrap();
+        git(&["add", "tracked.txt"]);
+        git(&["commit", "--quiet", "-m", "fixture"]);
+        git(&["checkout", "--quiet", "--detach"]);
+
+        let status = service.git_status(&workspace.id).await.unwrap();
+        assert!(status.repository);
+        assert!(status.detached);
+        assert!(status.branch.is_none());
+        assert!(status.head.is_some());
     }
 
     #[tokio::test]

@@ -22,7 +22,8 @@ use pau_core::{
     VersionResponse,
     persistence::{Database, Workspace},
     workspace::{
-        FileContent, FileEntry, FileSearchMatch, TraversalOptions, WorkspaceError, WorkspaceService,
+        FileContent, FileEntry, FileSearchMatch, GitStatus, TraversalOptions, WorkspaceError,
+        WorkspaceService,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -262,6 +263,7 @@ fn router_with_services(
             get(read_file).put(write_file),
         )
         .route("/api/workspaces/{workspace_id}/search", get(search_files))
+        .route("/api/workspaces/{workspace_id}/git/status", get(git_status))
         .layer(middleware::from_fn_with_state(token, authenticate))
         .layer(CorsLayer::permissive())
         .with_state(ApiState { events, workspaces })
@@ -355,7 +357,9 @@ impl IntoResponse for ApiError {
                     {
                         (StatusCode::FORBIDDEN, "permission_denied")
                     }
-                    WorkspaceError::Persistence(_) | WorkspaceError::Io(_) => {
+                    WorkspaceError::Persistence(_)
+                    | WorkspaceError::Io(_)
+                    | WorkspaceError::Git(_) => {
                         (StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
                     }
                 };
@@ -498,6 +502,18 @@ async fn search_files(
     };
     service
         .search(&workspace_id, &query.query, traversal, query.limit)
+        .await
+        .map(Json)
+        .map_err(ApiError::from)
+}
+
+async fn git_status(
+    State(state): State<ApiState>,
+    AxumPath(workspace_id): AxumPath<String>,
+) -> Result<Json<GitStatus>, ApiError> {
+    let service = workspace_service(&state)?;
+    service
+        .git_status(&workspace_id)
         .await
         .map(Json)
         .map_err(ApiError::from)
@@ -972,6 +988,18 @@ mod tests {
                 .unwrap();
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].path, "note.txt");
+
+        let git_status = Request::builder()
+            .uri(format!("/api/workspaces/{}/git/status", workspace.id))
+            .header(header::AUTHORIZATION, &authorization)
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(git_status).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let status: GitStatus =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert!(!status.repository);
 
         let hidden_search = Request::builder()
             .uri(format!(

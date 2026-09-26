@@ -12,13 +12,13 @@ ignore.workspace = true
 serde.workspace = true
 sha2.workspace = true
 time.workspace = true
+tokio.workspace = true
 tokio-rusqlite.workspace = true
 ts-rs.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
 tempfile = "3.27.0"
-tokio.workspace = true
 
 [[bin]]
 name = "generate-protocol"

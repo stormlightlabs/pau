@@ -82,7 +82,7 @@ Verification:
 
 #### 2.21 Git status
 
-Status: planned
+Status: complete
 Blocked by: 2.19, 2.20
 
 Read repository and worktree status without mutating Git. Show branch and

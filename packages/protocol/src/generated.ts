@@ -78,6 +78,52 @@ line: number,
  */
 preview: string, };
 
+export type GitFileState = "modified" | "added" | "deleted" | "renamed" | "copied" | "type_changed" | "untracked";
+
+export type GitFileStatus = {
+/**
+ * Slash-separated path relative to the workspace root.
+ */
+path: string,
+/**
+ * Previous path for a rename or copy.
+ */
+previous_path: string | null,
+/**
+ * Change staged in the index, when present.
+ */
+staged: GitFileState | null,
+/**
+ * Unstaged worktree change, when present.
+ */
+worktree: GitFileState | null,
+/**
+ * Whether Git reports an unresolved merge conflict.
+ */
+conflicted: boolean, };
+
+export type GitStatus = {
+/**
+ * Whether the workspace is inside a Git worktree.
+ */
+repository: boolean,
+/**
+ * Current branch name, absent for detached HEAD and new repositories.
+ */
+branch: string | null,
+/**
+ * Current commit identifier, when HEAD resolves to a commit.
+ */
+head: string | null,
+/**
+ * Whether HEAD points directly to a commit.
+ */
+detached: boolean,
+/**
+ * Changed paths reported by Git.
+ */
+files: Array<GitFileStatus>, };
+
 export type ServerEventKind = "workspace_changed" | "session_changed";
 
 export type ServerEvent = {

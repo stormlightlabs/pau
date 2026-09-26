@@ -232,10 +232,10 @@
 					></span>
 					<span class="font-mono text-text">openTool</span>
 					<button class="app-button ml-auto min-h-6! px-2! text-micro!" type="button" aria-label="Open in Neovim">
-						<span class="i-tabler-external-link" aria-hidden="true"></span><span class="hidden xl:inline">Open in Neovim</span>
+						<span class="i-tabler-external-link" aria-hidden="true"></span><span class="hidden xl:inline"
+							>Open in Neovim</span>
 					</button>
-					<span class="chip-warning"
-						><span class="i-tabler-alert-triangle" aria-hidden="true"></span>1 problem</span>
+					<span class="chip-warning"><span class="i-tabler-alert-triangle" aria-hidden="true"></span>1 problem</span>
 				</div>
 
 				<div class="flex min-h-9 items-center gap-2 border-b border-line bg-surface pl-3 pr-2 text-micro text-muted">

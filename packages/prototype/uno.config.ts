@@ -28,9 +28,7 @@ export default defineConfig({
 			prose: ['var(--text-md)', '1.65'],
 			code: ['0.78rem', '1.7']
 		},
-		borderWidth: {
-			DEFAULT: 'var(--border-thin)'
-		},
+		borderWidth: { DEFAULT: 'var(--border-thin)' },
 		colors: {
 			canvas: 'var(--color-canvas)',
 			surface: 'var(--color-surface)',

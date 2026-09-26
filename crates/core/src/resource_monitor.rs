@@ -76,13 +76,11 @@ impl ProcessSampler for SystemProcessSampler {
         self.system
             .processes()
             .iter()
-            .filter_map(|(pid, process)| {
-                let pid = u32::try_from(pid.as_u32()).ok()?;
-                let parent_pid = process
-                    .parent()
-                    .and_then(|parent| u32::try_from(parent.as_u32()).ok());
+            .map(|(pid, process)| {
+                let pid = pid.as_u32();
+                let parent_pid = process.parent().map(|parent| parent.as_u32());
                 let disk = process.disk_usage();
-                Some(ObservedProcess {
+                ObservedProcess {
                     identity: ProcessIdentity {
                         pid,
                         started_at_seconds: process.start_time(),
@@ -93,7 +91,7 @@ impl ProcessSampler for SystemProcessSampler {
                     resident_memory_bytes: process.memory(),
                     disk_read_bytes: cfg!(target_os = "linux").then_some(disk.total_read_bytes),
                     disk_write_bytes: cfg!(target_os = "linux").then_some(disk.total_written_bytes),
-                })
+                }
             })
             .collect()
     }

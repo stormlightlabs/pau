@@ -12,7 +12,6 @@
 		"dev:ui": "pnpm --filter @stormlightlabs/pau-ui dev",
 		"test:ui": "pnpm --filter @stormlightlabs/pau-ui test",
 		"format": "prettier --write .",
-		"format:check": "prettier --check .",
 		"generate:protocol": "cargo run --quiet -p pau-core --bin generate-protocol",
 		"lint": "eslint apps packages --max-warnings=0"
 	},

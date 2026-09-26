@@ -39,9 +39,10 @@ contention can cause false timeouts in process and interaction tests.
   `src/tests`.
 - Run the unit's verification, starting with the narrowest relevant checks. Do
   not invoke paid agents or remote services from default tests.
-- Fix findings from the unit's required verification as they appear, including
-  unrelated pre-existing findings. Keep unrelated defects found outside those
-  checks separate unless they block verification.
+- Fix every finding from the unit's required verification, including unrelated
+  pre-existing findings. Do not defer or report those findings as separate
+  follow-up work. Keep defects found outside required checks separate unless
+  they block verification.
 - Keep completed units in the roadmap until every unit in their named subsection
   is complete. Then add a concise user-facing changelog entry, remove satisfied
   blocker references, and remove that subsection. Apply the same cleanup to an
@@ -102,8 +103,9 @@ Svelte component filenames in PascalCase, and preserve that component name in
 associated files such as `SessionView.stories.ts` and
 `SessionView.svelte.test.ts`.
 
-Keep first-party JavaScript and TypeScript source under the root Prettier checks.
-Ignore generated output instead of whole packages.
+Format the whole repository with `pnpm format` instead of running Prettier in
+check-only mode or formatting selected files. Keep unrelated formatting changes
+in the diff. Ignore generated output instead of whole packages.
 
 Use TSDoc for exported TypeScript symbols and rustdoc for public Rust symbols.
 Also document private symbols that carry important context, invariants, safety

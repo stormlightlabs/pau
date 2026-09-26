@@ -60,13 +60,17 @@ assertions.
 
 ## Application integration tests
 
-`apps/web` owns Playwright workflows against the real Axum API with fake agent
-executables. These tests cover route composition, authentication, reconnect,
-concurrent sessions, files, terminal, external editor launch, and resources from
-the user's point of view. The same web build is consumed by Tauri, so
-`apps/desktop` adds only native smoke coverage for startup, backend lifecycle,
-asset loading, and
-shutdown rather than duplicating browser behavior.
+`apps/desktop` owns the first Playwright workflows against the real loopback
+Axum API with fake agent executables. These tests cover local route composition,
+reconnect, concurrent sessions, files, terminal, external editor launch,
+resources, and desktop capability boundaries from the operator's point of view.
+Tauri smoke coverage adds startup, native capability wiring, backend lifecycle,
+asset loading, and shutdown.
+
+`apps/web` later owns remote-browser workflows against the packaged standalone
+server. Reuse shared feature assertions where useful, but test remote
+authentication, connection recovery, origin policy, and unavailable native
+capabilities in the web app itself.
 
 `apps/website` tests frontmatter, internal links, raw Markdown routes, search,
 metadata, and responsive reading layouts. Playwright covers navigation, search,

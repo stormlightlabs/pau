@@ -18,6 +18,9 @@ test('resolves a fixture extension dialog in its owning session', async () => {
 
 test('controls concurrent fake Pi and Claude sessions without crossing their state', async () => {
 	await render(SessionRoute, { initialWorkspaces: sessionFixtures.concurrent, initialSessionId: 'diff-gutter' });
+	await userEvent.click(
+		page.getByRole('complementary', { name: 'Inspector' }).getByRole('button', { name: 'Close inspector' })
+	);
 	const prompt = page.getByRole('textbox', { name: 'Prompt' });
 
 	await userEvent.click(prompt);

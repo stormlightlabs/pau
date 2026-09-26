@@ -139,11 +139,20 @@
 
 ## Desktop and web
 
-- The Tauri app starts the same Axum application used by server mode.
-- A CLI command starts browser mode and prints its URL.
-- The interface uses HTTP for request/response operations and a WebSocket for
-  live events.
+- The Tauri app owns the local desktop product, starts its Axum backend, and
+  exposes native capabilities through explicit desktop interfaces.
+- The desktop frontend can run in a normal browser during development without
+  becoming the remote web product.
+- The later web app connects to a standalone Pau server. It has its own routes,
+  remote authentication, connection states, and capability gating.
+- Both applications use HTTP for request/response operations and a WebSocket for
+  live events where their backend capabilities overlap.
 - Reconnecting clients receive a snapshot followed by events newer than a
   supplied sequence number.
-- Server mode binds to loopback by default. Non-loopback binding requires
-  explicit authentication configuration and a warning.
+- Server mode binds to loopback by default and supports access through a private
+  tunnel or tailnet without disabling authentication.
+- Direct non-loopback binding requires explicit authentication configuration and
+  a warning.
+- The web app names the host that owns the workspace and processes. It does not
+  present desktop-only dialogs, windows, updates, or local editor integration as
+  remote capabilities.

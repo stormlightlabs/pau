@@ -3,32 +3,42 @@
 ## Architecture
 
 ```text
-┌──────────────── SvelteKit SPA ─────────────────┐
-│ sessions · resources · files · editor · terminal│
-└─────────────────── HTTP / WS ──────────────────┘
-                          │
-┌──────────────────── Axum core ──────────────────┐
-│ auth · state snapshots · event log · file API   │
-│ workspace registry · SQLite · process registry  │
-├─────────────────────────────────────────────────┤
-│ Pi RPC │ CLI adapters │ PTY │ editor launch     │
-└───────┬────────┬─────────────┬──────────────────┘
+┌──────────── Desktop app ────────────┐  ┌──────── Remote web app ────────┐
+│ SvelteKit routes · native services  │  │ SvelteKit routes · remote auth │
+└────────────── HTTP / WS ────────────┘  └────────── HTTP / WS ───────────┘
+                    │                                  │
+                    └──────────────┬───────────────────┘
+                                   │
+┌──────────────────────────── Axum core ──────────────────────────────┐
+│ auth · state snapshots · event log · file API · process registry   │
+├─────────────────────────────────────────────────────────────────────┤
+│ Pi RPC │ CLI adapters │ PTY │ editor launch                        │
+└───────┬────────┬─────────────┬──────────────────────────────────────┘
         │        │             │
        pi    claude/codex/     vim/nvim/hx/code/zed
               antigravity
 ```
 
-The Tauri binary and the server CLI both construct the same Rust application
-state and Axum router. Tauri is a shell and lifecycle owner, not a second
-backend API. The frontend must not depend on Tauri `invoke` for core behavior,
-which keeps browser mode real rather than a later port.
+The desktop app owns the primary local product composition. Its Tauri process
+constructs the Rust application state and Axum router, serves the desktop
+frontend, owns native lifecycle, and supplies desktop-only capabilities through
+narrow interfaces. The desktop frontend may run in a normal browser during
+development, but that development path remains part of `apps/desktop`.
+
+The later web app is a separate browser composition for a standalone Pau server.
+It reuses protocol types and suitable UI features without assuming that every
+native desktop capability is remotely available. Both application owners use
+the same Axum service contracts where their capabilities overlap. Core behavior
+still uses HTTP and WebSocket rather than Tauri `invoke`; native window, dialog,
+notification, update, and operating-system integration may use explicit Tauri
+interfaces.
 
 ## Repository layout
 
 ```text
 apps/
-  web/                 SvelteKit product routes, API integration, and browser tests
-  desktop/             Tauri shell, capabilities, packaging, and desktop smoke tests
+  desktop/             local SvelteKit product, Tauri shell, native capabilities, and desktop tests
+  web/                 remote SvelteKit product, authentication, API integration, and browser tests
   website/             SvelteKit website and product documentation
 packages/
   claude-bridge/       independently usable Pi package and bridge tests
@@ -46,14 +56,18 @@ crates/
 
 `packages/claude-bridge` ships first and remains useful without the desktop
 application. It establishes the Claude process protocol that the later Rust
-adapter consumes. `apps/web` composes the product screens exported by
-`packages/ui` into SvelteKit routes and connects them to the local Axum API.
-`apps/desktop` owns the native shell and uses the web app's static output rather
-than maintaining another copy of the routes. `apps/website` is the public site
-and documentation application; it may reuse suitable primitives and tokens from
-`packages/ui`, but it does not import product stores or API integration. Shared
-UI code must not import Tauri APIs; desktop-only behavior enters through
-explicit interfaces supplied by the app.
+adapter consumes. `apps/desktop` composes the local product screens exported by
+`packages/ui`, connects them to its loopback Axum API, and owns native lifecycle
+and capability interfaces. `apps/web` later composes the remote browser product
+against the standalone server. It may reuse feature views, but it owns remote
+authentication, connection recovery, and capability gating rather than importing
+the desktop route tree.
+
+`apps/website` is the public site and documentation application; it may reuse
+suitable primitives and tokens from `packages/ui`, but it does not import
+product stores or API integration. Shared UI code must not import Tauri APIs.
+Desktop-only behavior enters through interfaces supplied by `apps/desktop`, and
+remote-only behavior remains in `apps/web`.
 
 Start with a Cargo workspace and pnpm workspace. The crate directory and Cargo
 package names are fixed as shown above. `pau-core` contains no concrete agent,

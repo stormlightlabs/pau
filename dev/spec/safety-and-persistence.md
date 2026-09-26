@@ -8,6 +8,8 @@
   general file endpoints.
 - Use an unguessable per-launch token for the local desktop API.
 - Require authentication for WebSocket upgrades as well as HTTP requests.
+- Keep authentication and origin checks active through SSH tunnels, Tailscale,
+  reverse proxies, and other operator-provided network paths.
 - Keep destructive process, worktree, package, and file operations explicit.
 - Keep sandboxing off by default. Store a workspace default with a per-session
   override and show the effective filesystem, network, credential, and process

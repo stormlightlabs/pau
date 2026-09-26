@@ -46,10 +46,35 @@ Transitive blockers are implied and are not repeated. `Blocked by: none` means
 there is no dependency. A planned unit is ready when every listed blocker has
 status `complete`.
 
-## 2. Desktop app and development web UI
+## 2. Desktop app and development browser UI
 
-The SvelteKit app runs in a normal browser during development. Tauri is the
-shipped application in this deliverable.
+`apps/desktop` owns the local SvelteKit product and may run in a normal browser
+during development. Tauri is the shipped application in this deliverable.
+`apps/web` is reserved for the later standalone and remote server product.
+
+### Application ownership
+
+#### 2.52 Desktop product composition
+
+Status: planned
+Blocked by: none
+
+Move the current local product routes, API integration, event stream, and browser
+tests from `apps/web` into the SvelteKit frontend owned by `apps/desktop`. Keep
+shared feature views in `packages/ui`. Give desktop-native capabilities explicit
+interfaces and keep `apps/web` as a separate remote application scaffold rather
+than a build input for Tauri.
+
+Verification:
+
+- Run the desktop frontend in its development browser mode against the loopback
+  Axum backend.
+- Build and launch Tauri from the desktop-owned static assets.
+- Cover backend startup, authentication, reconnect, route composition, native
+  capability availability, and shutdown without importing routes from
+  `apps/web`.
+- Confirm `apps/web` cannot expose desktop-only capabilities through shared UI
+  fixtures or route imports.
 
 ### Process observability and containment
 
@@ -100,6 +125,26 @@ Verification:
   process limits.
 - Capture and inspect one diagnostic bundle during a self-hosted desktop run
   before the primary dogfood gate.
+
+#### 2.29 Durable process ownership and recovery
+
+Status: planned
+Blocked by: 2.24, 2.52
+
+Keep agent sessions and terminals alive across desktop frontend reloads, route
+changes, and development-browser disconnects. Add orderly Tauri shutdown and
+recover persisted process metadata after an unclean application restart. Report
+which native sessions can resume instead of implying that every process can be
+reattached.
+
+Verification:
+
+- Reload and disconnect every desktop frontend while agent and terminal
+  processes are active, then reconnect.
+- Send termination signals during active work and confirm bounded cleanup.
+- Restart after a forced kill and report which native sessions can resume.
+- Confirm process recovery does not weaken authentication, sandboxing,
+  permissions, or resource limits.
 
 #### 2.42 Local sandbox dependency and policy spike
 
@@ -218,10 +263,29 @@ Verification:
 - Recheck and record its source, license, maintenance state, protocol boundary,
   and known gaps in `plan/backend.md`.
 
+#### 2.54 Local mutation audit
+
+Status: planned
+Blocked by: 2.43, 2.52
+
+Record bounded, redacted audit events for desktop process, file, worktree,
+package, permission, sandbox, and editor-launch mutations. Keep audit records
+separate from diagnostic logs and never retain command secrets, file contents,
+tool arguments, credentials, or environment values.
+
+Verification:
+
+- Cover successful, denied, failed, cancelled, and concurrent mutations with
+  workspace, session, actor, operation, and result correlation.
+- Confirm seeded sensitive values are absent from storage, API responses, UI
+  events, and exports.
+- Confirm observation does not change authorization, execution order, retries,
+  or process ownership.
+
 #### 2.45 Permission profiles and requests
 
 Status: planned
-Blocked by: 2.43, 2.44
+Blocked by: 2.43, 2.44, 2.54
 
 Implement the selected permission profiles through adapter-native callbacks and
 the reviewed Pi package. Show the requesting session, operation, affected paths
@@ -257,7 +321,7 @@ Verification:
 #### 2.25 Terminal UI
 
 Status: planned
-Blocked by: 2.24
+Blocked by: 2.24, 2.29, 2.52
 
 Integrate xterm.js with tabs, main-surface and bottom-dock layouts, fit, search,
 copy and paste, activity, exit state, conservative links, and the active ANSI
@@ -329,6 +393,23 @@ Verification:
 
 ### Editors
 
+#### 2.28 CodeMirror language services
+
+Status: planned
+Blocked by: 2.52
+
+Add an optional backend language-server supervisor and a narrow CodeMirror
+completion and diagnostics client. Reuse desktop workspace process and
+environment handling.
+
+Verification:
+
+- Start one fixture language server, publish diagnostics, request completion,
+  restart after failure, and stop it when the workspace closes.
+- Confirm external-editor language-server processes remain independent.
+- Confirm the remote web app does not claim a desktop language service unless
+  its server advertises the capability.
+
 #### 2.51 External editor launch
 
 Status: planned
@@ -355,6 +436,44 @@ Verification:
 - Complete one self-hosted handoff from CodeMirror to the configured editor and
   back through a detected file change.
 
+### Agent adapters
+
+#### 2.47 Codex adapter
+
+Status: planned
+Blocked by: 2.52
+
+Add Codex discovery, structured transport, native resume, capabilities,
+fixtures, and desktop exposure through `pau-agent`. Map its native MCP
+configuration and lifecycle into the existing MCP adapter capabilities and
+shared MCP UI.
+
+Verification:
+
+- Run discovery, start, prompt, stream, interrupt, resume, failure, and cleanup
+  against a fake Codex executable.
+- Round-trip Codex MCP configuration and exercise one fixture server through the
+  shared MCP UI without changing unknown native fields.
+- Keep live Codex tests opt-in.
+
+#### 2.48 Antigravity adapter
+
+Status: planned
+Blocked by: 2.52
+
+Add Antigravity discovery, structured transport, native resume, capabilities,
+fixtures, and desktop exposure through `pau-agent`. Map its native MCP
+configuration and lifecycle into the existing MCP adapter capabilities and
+shared MCP UI.
+
+Verification:
+
+- Run discovery, start, prompt, stream, interrupt, resume, failure, and cleanup
+  against a fake Antigravity executable.
+- Round-trip Antigravity MCP configuration and exercise one fixture server
+  through the shared MCP UI without changing unknown native fields.
+- Keep live Antigravity tests opt-in.
+
 ### Pi resources
 
 #### 2.33 Resource discovery
@@ -373,7 +492,7 @@ Verification:
 #### 2.34 Resource browser
 
 Status: planned
-Blocked by: 2.33
+Blocked by: 2.33, 2.52
 
 Build the Skills, Extensions, Prompts, Themes, and Packages views with source,
 scope, trust, validation, filtering, and selected-resource detail.
@@ -465,46 +584,53 @@ Verification:
 - Complete the local backend, bundled frontend, CodeMirror, terminal, and
   preferred-editor launch smoke test.
 
-Deliverable exit: the Tauri app can run concurrent Pi and Claude work, cover
-vanilla Pi's structured interactive workflows, configure and use their MCP
-servers, inspect and edit a workspace in CodeMirror, use a persistent terminal,
-and hand work to a preferred external editor. It reports local resource use and
-can launch supported work inside an explicit local sandbox. The same UI works in
-a browser against the local development backend, all five themes cover the
-shipped surfaces, and the
-website and AppImage are publishable.
+Deliverable exit: the desktop-owned Tauri app can run concurrent Pi, Claude,
+Codex, and Antigravity work at each adapter's supported capability level. It
+covers vanilla Pi's structured interactive workflows, configures and uses agent
+MCP servers, inspects and edits a workspace in CodeMirror, provides optional
+language services, uses a persistent terminal, and hands work to a preferred
+external editor. It reports local resource use, records redacted mutation audit
+events, recovers supported native work after frontend or application failure,
+and can launch supported work inside an explicit local sandbox. The desktop
+frontend also works in its browser development mode, all five themes cover the
+shipped surfaces, and the website and AppImage are publishable.
 
 ## 3. Web server
 
-The third deliverable turns the same local backend and frontend into a
-standalone process without creating a second application stack.
+The third deliverable exposes the shared backend through a separately composed
+web application for local or remote browser use. It reuses protocol and feature
+packages without importing the desktop route tree or native capability layer.
 
 ### 3.1 Standalone serve command
 
 Status: planned
 Blocked by: 2
 
-Add a `pau serve` command that serves the built UI and API without Tauri, binds
-to loopback by default, and prints a tokenized URL once.
+Add a `pau serve` command that serves `apps/web` and the API without Tauri,
+binds to loopback by default, and prints a tokenized URL once. Support use on the
+server host or through an operator-provided SSH tunnel or private tailnet.
 
 Verification:
 
 - Start from a packaged binary with no frontend development server.
 - Load the UI, connect its WebSocket, and reject a request without the token.
 
-### 3.2 Server process ownership
+### 3.2 Standalone server process lifecycle
 
 Status: planned
 Blocked by: 3.1
 
-Keep agents and terminals alive across browser disconnects. Add orderly shutdown
-and recovery of persisted process metadata after an unclean restart.
+Apply the desktop process-ownership and recovery contracts to the standalone
+server lifecycle. Keep agents and terminals alive when every remote browser
+disconnects, and stop or recover them according to explicit server shutdown and
+restart behavior.
 
 Verification:
 
 - Disconnect all browsers while each process type is active and reconnect.
-- Send termination signals during active work and confirm bounded cleanup.
-- Restart after a forced kill and report which native sessions can be resumed.
+- Send server termination signals during active work and confirm bounded cleanup.
+- Restart the standalone server after a forced kill and report which native
+  sessions can resume.
 
 ### 3.3 Server-mode browser suite
 
@@ -526,7 +652,8 @@ Blocked by: 3.1
 
 Require an explicit flag and durable authentication configuration before binding
 to a non-loopback address. Enforce origin checks and secure cookie or
-bearer-token handling.
+bearer-token handling. Keep these checks active on private tailnets and document
+the difference between loopback port forwarding and direct tailnet binding.
 
 Verification:
 
@@ -539,79 +666,36 @@ Verification:
 Status: planned
 Blocked by: 3.4
 
-Add session expiry, credential rotation, rate limits for authentication
-attempts, and audit events for process and file mutations.
+Add remote session expiry, credential rotation, and rate limits for
+authentication attempts. Extend the shared mutation audit with remote identity,
+authentication, and session-lifecycle events.
 
 Verification:
 
 - Test idle and absolute expiry, key rotation with existing sessions, rate-limit
   recovery, and redaction of command secrets from audit output.
 
-### 3.6 Reverse-proxy deployment guide
+### 3.6 Remote access and reverse-proxy deployment guide
 
 Status: planned
 Blocked by: 3.4, 3.5
 
-Document TLS termination, WebSocket forwarding, trusted proxy settings, data
-directories, backups, and the server account's command-execution privileges.
+Document loopback SSH port forwarding, Tailscale access, TLS termination,
+WebSocket forwarding, trusted proxy settings, data directories, backups, and the
+server account's command-execution privileges. Explain when Tailscale uses a
+direct non-loopback listener and when a local forward preserves loopback
+binding. Do not present Mosh as an HTTP tunnel.
 
 Verification:
 
-- Run the documented configuration against one supported reverse proxy and
-  complete an authenticated WebSocket session.
+- Complete authenticated WebSocket sessions through an SSH port forward, a
+  private tailnet path, and one supported reverse proxy.
+- Confirm authentication and origin checks remain active on every path.
 - Check every documented command from a clean environment.
 
-### 3.7 Codex adapter
-
-Status: planned
-Blocked by: 2
-
-Add Codex discovery, structured transport, native resume, capabilities,
-fixtures, and UI exposure through `pau-agent`. Map its native MCP configuration
-and lifecycle into the existing MCP adapter capabilities and shared MCP UI.
-
-Verification:
-
-- Run discovery, start, prompt, stream, interrupt, resume, failure, and cleanup
-  against a fake Codex executable.
-- Round-trip Codex MCP configuration and exercise one fixture server through the
-  shared MCP UI without changing unknown native fields.
-- Keep live Codex tests opt-in.
-
-### 3.8 Antigravity adapter
-
-Status: planned
-Blocked by: 2
-
-Add Antigravity discovery, structured transport, native resume, capabilities,
-fixtures, and UI exposure through `pau-agent`. Map its native MCP configuration
-and lifecycle into the existing MCP adapter capabilities and shared MCP UI.
-
-Verification:
-
-- Run discovery, start, prompt, stream, interrupt, resume, failure, and cleanup
-  against a fake Antigravity executable.
-- Round-trip Antigravity MCP configuration and exercise one fixture server
-  through the shared MCP UI without changing unknown native fields.
-- Keep live Antigravity tests opt-in.
-
-### 3.9 CodeMirror language services
-
-Status: planned
-Blocked by: 2
-
-Add an optional backend language-server supervisor and a narrow CodeMirror
-completion and diagnostics client. Reuse workspace process and environment
-handling.
-
-Verification:
-
-- Start one fixture language server, publish diagnostics, request completion,
-  restart after failure, and stop it when the workspace closes.
-- Confirm external-editor language-server processes remain independent.
-
 Deliverable exit: Pau runs as a local or explicitly secured remote web service
-without Tauri, with the same UI and backend behavior as the desktop application.
+without Tauri. The web app covers server-backed workflows, reports unavailable
+native capabilities honestly, and does not depend on the desktop route tree.
 
 ## Verification backlog
 
@@ -620,11 +704,12 @@ available.
 
 ## Research backlog
 
-Remote machine control is distinct from hosted execution. Research SSH and
-Mosh—the mobile shell the earlier note likely referred to—plus authentication,
-workspace discovery, process ownership, port forwarding, and reconnect semantics
-before assigning it to a deliverable. Do not assume the local Axum API is safe
-to expose as a remote-control transport.
+Automatic remote-machine setup remains separate from the web server. Research
+SSH and Mosh integration, remote workspace discovery, server installation,
+process ownership, port-forward management, and reconnect semantics before Pau
+tries to discover or control a host. The documented web server may run on an
+operator-configured remote host through the authenticated paths in 3.6; Pau does
+not automate that host or treat Mosh as browser transport.
 
 Deep browser embedding for Neovim or another editor, a Kickstart-based Neovim
 profile, `.deb` and RPM packages, Intel macOS, signing and notarization

@@ -2,13 +2,21 @@
 
 ## Frontend
 
-Use SvelteKit in static SPA mode. `packages/ui` owns reusable components and
-feature-level views, with no knowledge of SvelteKit routing or Tauri. `apps/web`
-composes those views into routes, wires the API client and event stream, and
-produces the static assets consumed by both Axum and Tauri.
+Use SvelteKit in static SPA mode for both product applications. `packages/ui`
+owns reusable components and feature-level views, with no knowledge of SvelteKit
+routing, Tauri, or remote authentication. `apps/desktop` owns the local route
+tree, loopback API client, event stream, and native capability adapters. Its
+static assets ship with Tauri.
 
-Keep server state in shared feature stores fed by snapshot and event reducers.
-Routes should be deep-linkable:
+`apps/web` is the later remote browser application. It owns remote
+authentication, server connection and recovery, and route-level capability
+gating. Reuse shared feature views where behavior matches, but do not import the
+desktop route tree or expose a desktop-only control that the server cannot
+perform.
+
+Keep shared server state in feature stores fed by snapshot and event reducers.
+Each application owns the stores for state that differs by transport or host.
+Desktop routes should be deep-linkable:
 
 ```text
 /workspaces/:workspaceId/sessions/:sessionId
@@ -31,7 +39,9 @@ Diagnostics mode adds a dedicated view for versions, capabilities, transport and
 replay state, process lifecycle, bounded redacted logs and traces, and diagnostic
 export. Keep these details out of normal task surfaces unless they explain a
 current failure. Mark diagnostics mode visibly while it is enabled. Put
-fault-injection controls in a separate development-only panel.
+fault-injection controls in a separate development-only panel. The desktop view
+reports the local app and loopback backend. The web view reports the browser,
+remote connection, and server without claiming access to desktop-native state.
 
 ## Design direction
 

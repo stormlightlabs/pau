@@ -2,10 +2,12 @@
 
 ## Purpose
 
-Pau is a local IDE and session orchestrator for developers who use Pi and other
-coding agents. It brings concurrent sessions, files, review, editing, and
-terminal tools into one workspace without hiding the underlying processes or
-files.
+Pau is an IDE and session orchestrator for developers who use Pi and other
+coding agents. The desktop app works on its local machine. The later web app
+works on the machine that runs the configured Pau server, whether the operator
+opens it locally or through an authenticated private connection. Both bring
+concurrent sessions, files, review, editing, and terminal tools into one
+workspace without hiding the underlying processes or files.
 
 Pi is the reference implementation. Other agents are supported where their CLIs
 expose enough control to provide a reliable adapter.

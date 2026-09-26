@@ -38,14 +38,21 @@ navigation, search, copy controls, theme behavior, and narrow layouts.
 ## Web and desktop security
 
 Desktop startup binds Axum to an ephemeral loopback port and supplies a random
-bearer token to the webview. During desktop development, the same UI may run in
-a normal browser against this local endpoint. This browser workflow is a
-development aid, not the standalone web-server deliverable. Tokens must not be
-written to normal logs.
+bearer token to the webview. During desktop development, the desktop frontend
+may run in a normal browser against this local endpoint. This is a development
+path for `apps/desktop`, not the remote web product. Tokens must not be written
+to normal logs.
 
-The standalone web server ships after the desktop application. It serves the
-built UI, owns process lifetime without Tauri, and defaults to loopback with a
-tokenized URL. Remote access is a separate mode with an explicit listen address
-and configured authentication. TLS should terminate in a documented reverse
-proxy until the product has a reason to own certificates. The UI must state that
-authenticated users can run commands with the server account's privileges.
+The standalone web server and `apps/web` ship after the desktop application. The
+server owns process lifetime without Tauri and defaults to loopback with a
+tokenized URL. The web app is usable on the server host and through an
+operator-provided private connection such as SSH port forwarding or a Tailscale
+network. A tunnel does not weaken Pau's authentication or origin checks.
+
+Direct non-loopback binding remains a separate mode with an explicit listen
+address and durable authentication. Use authenticated tailnet HTTPS or terminate
+TLS in a documented reverse proxy. Mosh does not carry browser HTTP traffic by
+itself; an operator may use it for a shell while using SSH forwarding, Tailscale,
+or another suitable transport for Pau. The UI must state which host runs the
+work and that authenticated users can run commands with the server account's
+privileges.

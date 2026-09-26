@@ -32,8 +32,8 @@
 		},
 		{
 			href: '/screens/neovim',
-			title: 'Neovim surface',
-			description: 'Embeds Neovim as an external UI with its own mode line, command line, and start-up choices.'
+			title: 'Embedded editor study',
+			description: 'Preserves the deferred Neovim embedding study without placing it in the first-release path.'
 		},
 		{
 			href: '/screens/terminal',
@@ -48,7 +48,7 @@
 		{
 			href: '/screens/settings',
 			title: 'Settings',
-			description: 'Makes theme, font, agent discovery, and Neovim choices visible without hiding their consequences.'
+			description: 'Makes theme, font, agent discovery, and preferred-editor choices visible without hiding their scope.'
 		},
 		{
 			href: '/docs',

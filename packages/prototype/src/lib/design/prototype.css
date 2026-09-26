@@ -16,7 +16,7 @@
 	overflow-x: hidden;
 	overflow-y: auto;
 	overscroll-behavior: none;
-	border-right: 1px solid var(--color-line);
+	border-right: var(--border-thin) solid var(--color-line);
 	background: var(--color-surface);
 	scrollbar-gutter: stable;
 }
@@ -107,7 +107,7 @@
 .prototype-nav__footer {
 	margin-top: auto;
 	padding: 1rem 0.625rem 0;
-	border-top: 1px solid var(--color-line);
+	border-top: var(--border-thin) solid var(--color-line);
 	color: var(--color-text-muted);
 	font-size: 0.75rem;
 }
@@ -180,7 +180,7 @@
 	max-width: 96rem;
 	margin: 0 auto;
 	overflow: hidden;
-	border: 1px solid var(--color-line);
+	border: var(--border-thin) solid var(--color-line);
 	background: var(--color-surface);
 }
 
@@ -196,7 +196,7 @@
 	align-items: center;
 	gap: var(--space-3);
 	padding: 0 var(--space-2);
-	border-bottom: 1px solid var(--color-line);
+	border-bottom: var(--border-thin) solid var(--color-line);
 	background: var(--color-surface);
 }
 
@@ -264,7 +264,7 @@
 	gap: 1px;
 	padding: 0 0.5rem;
 	overflow-x: auto;
-	border-bottom: 1px solid var(--color-line);
+	border-bottom: var(--border-thin) solid var(--color-line);
 	background: var(--color-surface);
 }
 
@@ -283,15 +283,26 @@
 	background: var(--color-canvas);
 }
 
+.mock-app__view-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.15rem;
+	margin-left: auto;
+}
+
+.mock-app__topbar:not(:has(.mock-app__view-actions)) .mock-app__command {
+	margin-left: auto;
+}
+
 .mock-app__command {
 	display: flex;
 	width: min(18rem, 28vw);
 	min-height: var(--row-sm);
 	align-items: center;
 	gap: 0.5rem;
-	margin-left: auto;
 	padding: 0 0.7rem;
-	border: 1px solid var(--color-line);
+	border: var(--border-thin) solid var(--color-line);
+	border-radius: var(--radius-control);
 	color: var(--color-text-muted);
 	background: var(--color-canvas);
 	font-size: 0.75rem;
@@ -351,7 +362,6 @@
 	align-items: center;
 	gap: 0.15rem;
 	padding: var(--space-2) 0;
-	border-right: 1px solid var(--color-line);
 	background: var(--color-surface);
 }
 
@@ -400,11 +410,11 @@
 }
 
 .mock-context-rail {
-	border-right: 1px solid var(--color-line);
+	border-right: 0;
 }
 
 .mock-inspector {
-	border-left: 1px solid var(--color-line);
+	border-left: var(--border-thin) solid var(--color-line);
 }
 
 .mock-main {
@@ -413,7 +423,7 @@
 }
 
 .inspector-section {
-	border-bottom: 1px solid var(--color-line);
+	border-bottom: var(--border-thin) solid var(--color-line);
 }
 
 .inspector-section + .inspector-section {
@@ -500,7 +510,7 @@
 	align-items: stretch;
 	gap: 1px;
 	padding: 0 var(--space-2);
-	border-bottom: 1px solid var(--color-line);
+	border-bottom: var(--border-thin) solid var(--color-line);
 	background: var(--color-surface);
 }
 
@@ -529,8 +539,8 @@
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
 	max-width: 96rem;
 	margin: 0 auto;
-	border-top: 1px solid var(--color-line);
-	border-left: 1px solid var(--color-line);
+	border-top: var(--border-thin) solid var(--color-line);
+	border-left: var(--border-thin) solid var(--color-line);
 }
 
 .hub-card {
@@ -538,8 +548,8 @@
 	min-height: 11.5rem;
 	flex-direction: column;
 	padding: 1.5rem;
-	border-right: 1px solid var(--color-line);
-	border-bottom: 1px solid var(--color-line);
+	border-right: var(--border-thin) solid var(--color-line);
+	border-bottom: var(--border-thin) solid var(--color-line);
 	text-decoration: none;
 	transition:
 		background-color 160ms ease,
@@ -613,7 +623,7 @@
 		padding: 0.6rem 0.75rem;
 		overflow: hidden;
 		border-right: 0;
-		border-bottom: 1px solid var(--color-line);
+		border-bottom: var(--border-thin) solid var(--color-line);
 		scrollbar-gutter: auto;
 	}
 

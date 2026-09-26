@@ -34,19 +34,25 @@
 ## Editor and terminal
 
 - Browse workspace files with ignored and hidden files handled predictably.
-- Open and save text files in CodeMirror.
+- Use CodeMirror as Pau's primary built-in editor for reading, quick edits,
+  saving, agent-change review, diffs, diagnostics, and external-change handling.
+  Do not expand it into a replacement for a full development environment.
 - Show Git diffs and changed-file state.
+- Open a workspace, file, line and column, or diff in the operator's preferred
+  external editor when that editor supports the operation. Provide known launch
+  adapters for Neovim, Vim, Helix, Visual
+  Studio Code, and Zed, plus a configurable command template.
+- Keep workspace files as the source of truth and detect changes made by an
+  external editor instead of synchronizing private editor state.
 - Run multiple persistent PTY terminals with tabs, resize, bounded scrollback,
   reconnect, search, copy and paste, activity state, and exit reporting.
 - Start terminals in the workspace with the user's shell and support explicitly
-  trusted direnv environments.
-- Start Neovim clean by default, or explicitly load the user's `init.lua`, then
-  attach with `--embed` as an external UI and forward redraw, input, clipboard,
-  and resize events.
-- Prefer maintained terminal, PTY, Neovim RPC, and rendering libraries over
-  custom implementations.
-- Add LSP-backed CodeMirror features later; do not build a second
-  language-server manager before the Neovim path works.
+  trusted direnv environments. Vim, Neovim, Helix, and other terminal editors
+  run through the same persistent PTY surface.
+- Add optional LSP-backed CodeMirror features later through a backend
+  language-server supervisor. Deep browser embedding for a specific editor is
+  outside
+  the first release.
 
 ## Resources
 
@@ -74,7 +80,8 @@
 ## Resource use
 
 - Show current and peak resource use for Pau and each managed process tree,
-  including Pi, Claude, terminals, Neovim, and stdio MCP servers.
+  including Pi, Claude, terminals, external editors launched by Pau, and stdio
+  MCP servers.
 - Report CPU, resident memory, process count, elapsed time, and disk I/O where
   the operating system exposes it reliably.
 - Keep a short local history and a final session summary. Do not retain raw
@@ -82,6 +89,27 @@
 - Warn about sustained resource pressure and offer interrupt or stop controls.
   Do not throttle or terminate work automatically by default.
 - Keep model context, token, and cost usage separate from machine resource use.
+
+## Diagnostics
+
+- Ship diagnostics in release builds behind an explicit settings control and CLI
+  flag. Keep fault injection and other behavior-changing controls in development
+  builds.
+- Show frontend, backend, adapter, and relevant dependency versions together
+  with adapter capabilities and handshake results.
+- Report transport state, reconnect attempts, event sequence and replay gaps,
+  managed process identity and exit history, queue pressure, slow consumers, and
+  dropped updates.
+- Keep bounded backend and adapter logs and a small redacted metadata trace.
+  Require temporary explicit enablement before capturing protocol payloads.
+- Let the operator export a diagnostic bundle with versions, capabilities,
+  process summaries, transport state, configuration shape, and recent redacted
+  logs.
+- Exclude credentials, environment values, prompts, file contents, tool
+  arguments, transcript content, paths outside the workspace, and other
+  sensitive values from routine diagnostics and exported bundles.
+- Diagnostics must not change process supervision, permissions, sandboxing,
+  retry policy, or timeouts.
 
 ## Permission controls
 

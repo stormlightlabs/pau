@@ -22,6 +22,17 @@ and an optional inspector for tool calls, diffs, and permissions. Avoid a
 dashboard-first design; opening the app should return the operator to active
 work.
 
+Resource use remains visible outside diagnostics mode. Show a compact summary in
+the session inspector and provide a workspace Processes view for process trees,
+current and peak measurements, history, warnings, and explicit interrupt or stop
+actions.
+
+Diagnostics mode adds a dedicated view for versions, capabilities, transport and
+replay state, process lifecycle, bounded redacted logs and traces, and diagnostic
+export. Keep these details out of normal task surfaces unless they explain a
+current failure. Mark diagnostics mode visibly while it is enabled. Put
+fault-injection controls in a separate development-only panel.
+
 ## Design direction
 
 The references in `dev/design/` guide the whole application rather than isolated
@@ -34,16 +45,14 @@ component-local values.
 
 The first release ships Eldritch, Nord, Iceberg, Catppuccin Mocha, and Vitesse
 Dark. Each theme defines application surfaces and text, semantic states, syntax
-colors, the terminal's ANSI palette, CodeMirror highlighting, and Neovim
-highlight mappings. Source the palettes from their upstream projects and retain
-required licenses and attribution. The optional “Apply theme to Neovim” setting
-changes highlights only after explicit opt-in; loading the user's `init.lua` and
-overriding its colors remain separate choices.
+colors, the terminal's ANSI palette, and CodeMirror highlighting. Source the
+palettes from their upstream projects and retain required licenses and
+attribution. Pau does not apply its theme to external or terminal editors.
 
 The wide layout has a persistent product rail, a contextual workspace or section
 rail, one main task surface, and an optional right inspector. The command bar
 stays globally available. The main surface switches among conversation, editor,
-Neovim, terminal, and resource views; the inspector holds review, plan, checks,
+terminal, and resource views; the inspector holds review, plan, checks,
 permissions, or selected-resource detail. The terminal bottom dock is the only
 surface that may share the main column vertically.
 
@@ -65,6 +74,6 @@ integration. Every icon-only control needs an accessible name, and state must
 not rely on icon shape or color alone.
 
 At narrower widths, collapse the contextual rail before the product rail, move
-the inspector to an overlay or full view, and let editor, Neovim, and terminal
-surfaces use all available space. Do not shrink the three-column desktop
+the inspector to an overlay or full view, and let editor and terminal surfaces
+use all available space. Do not shrink the three-column desktop
 composition until its text and controls no longer fit.

@@ -21,8 +21,9 @@
   sandboxed tool host whose descendants inherit the same restrictions. Disable
   tools without a proven execution boundary while a sandbox profile is active.
 - Apply containment to supported model-initiated tools and their descendants,
-  including stdio MCP servers. Operator terminals and Neovim remain unsandboxed
-  by default and require a separate explicit sandbox selection.
+  including stdio MCP servers. Operator terminals and editors launched by Pau
+  remain unsandboxed by default and require a separate explicit sandbox
+  selection when that launch path supports containment.
 - Include opt-in credential brokerage for sandboxed tools. Give a tool a
   per-session placeholder instead of the credential and replace it only on
   encrypted requests to explicitly configured destinations. Never broker model
@@ -32,13 +33,21 @@
 - Label unsandboxed permission controls as guardrails rather than sandboxing.
 - Record process exit status and adapter errors without mixing diagnostic output
   into protocol streams.
+- Redact diagnostics before they enter UI events, in-memory traces, exported
+  bundles, or logs. Protocol payload tracing requires temporary explicit
+  enablement and must still exclude credentials and environment values.
+- Keep behavior-changing diagnostic controls out of release builds. Enabling
+  release diagnostics must not weaken authentication, permissions, sandboxing,
+  redaction, retry policy, or process limits.
 
 ## Persistence
 
 SQLite stores workspace registrations, UI preferences, process metadata,
 completed-process resource summaries, event sequence checkpoints, and resource
-indexes. Raw resource samples remain in bounded memory. `tokio-rusqlite`
-provides the initial asynchronous access layer through one serialized
-connection; pooling requires measured contention. Native Pi and third-party
-session files remain authoritative. The database may cache transcript
-projections for search, but deleting the cache must not delete agent history.
+indexes. Raw resource samples and routine diagnostic logs and traces remain in
+bounded memory. Persist a diagnostic bundle only when the operator explicitly
+exports it. `tokio-rusqlite` provides the initial asynchronous access layer
+through one serialized connection; pooling requires measured contention. Native
+Pi and third-party session files remain authoritative. The database may cache
+transcript projections for search, but deleting the cache must not delete agent
+history.

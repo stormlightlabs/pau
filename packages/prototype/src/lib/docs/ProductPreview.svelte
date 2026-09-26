@@ -68,7 +68,7 @@
 										activeSession = 'mcp';
 										sessionSteered = false;
 									}}>
-									<span class="i-simple-icons-anthropic" aria-hidden="true"></span>
+									<span class="i-logos-claude-code" aria-hidden="true"></span>
 									<span class="grid min-w-0"
 										><strong class="text-[0.72rem]">Review MCP diagnostics</strong><small
 											class="font-sitecode text-[0.58rem] op-55">Claude · waiting</small

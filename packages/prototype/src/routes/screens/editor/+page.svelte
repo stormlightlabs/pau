@@ -137,7 +137,7 @@
 <PrototypePage
 	section="V1 screen · 05"
 	title="Editor and review"
-	note="CodeMirror handles the quick edit: gutter, diff markers, diagnostics, and a review rail that stays out of the code. Rendered in Catppuccin Mocha so syntax, diff, and selection colors come from the theme rather than the component.">
+	note="CodeMirror is Pau’s primary built-in editor for quick changes and review. Files can open in a preferred external editor while Pau keeps dirty and external-change state visible.">
 	<MockApp context="pau / editor" branch="session-shell" theme="catppuccin">
 		<div class="mock-layout">
 			<ProductRail active="editor" />
@@ -231,7 +231,10 @@
 					<span class="text-text">SessionView.svelte</span><span class="i-tabler-chevron-right" aria-hidden="true"
 					></span>
 					<span class="font-mono text-text">openTool</span>
-					<span class="chip-warning ml-auto"
+					<button class="app-button ml-auto min-h-6! px-2! text-micro!" type="button" aria-label="Open in Neovim">
+						<span class="i-tabler-external-link" aria-hidden="true"></span><span class="hidden xl:inline">Open in Neovim</span>
+					</button>
+					<span class="chip-warning"
 						><span class="i-tabler-alert-triangle" aria-hidden="true"></span>1 problem</span>
 				</div>
 

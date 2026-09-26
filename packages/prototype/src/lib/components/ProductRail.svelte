@@ -20,7 +20,6 @@
 		{ name: 'orchestration', label: 'Harness control', icon: 'i-tabler-topology-star-3' },
 		{ name: 'scratchpad', label: 'Scratchpad', icon: 'i-tabler-notebook' },
 		{ name: 'editor', label: 'Editor', icon: 'i-tabler-code' },
-		{ name: 'neovim', label: 'Neovim', icon: 'i-simple-icons-neovim' },
 		{ name: 'terminal', label: 'Terminal', icon: 'i-tabler-terminal-2' },
 		{ name: 'resources', label: 'Resources', icon: 'i-tabler-plug-connected' }
 	] as const;

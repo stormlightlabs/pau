@@ -6,7 +6,7 @@
 .docs-frame {
 	--site-ink: #202536;
 	--site-muted: #5d667e;
-	--site-line: #cdd4e2;
+	--site-line: #dce1eb;
 	--site-paper: #f5f7fc;
 	--site-paper-deep: #e9edf6;
 	--site-raised: #ffffff;
@@ -15,7 +15,7 @@
 	--site-focus: #7651c5;
 	--site-highlight: #087c99;
 	--site-code: #171b27;
-	--site-code-line: #343b52;
+	--site-code-line: #293044;
 	--site-code-ink: #e6e9f2;
 	color-scheme: light;
 }
@@ -23,7 +23,7 @@
 .docs-frame[data-theme='dark'] {
 	--site-ink: #e6e9f2;
 	--site-muted: #9aa3bd;
-	--site-line: #343b52;
+	--site-line: #293044;
 	--site-paper: #12151d;
 	--site-paper-deep: #171b27;
 	--site-raised: #202536;
@@ -32,7 +32,7 @@
 	--site-focus: #a48cf2;
 	--site-highlight: #f1fc79;
 	--site-code: #0e1118;
-	--site-code-line: #343b52;
+	--site-code-line: #293044;
 	--site-code-ink: #e6e9f2;
 	color-scheme: dark;
 }
@@ -71,7 +71,7 @@
 .hero-orbit::after,
 .hero-orbit__path {
 	position: absolute;
-	border: 1px solid var(--site-line);
+	border: var(--border-thin) solid var(--site-line);
 	border-radius: 50%;
 	content: '';
 }
@@ -94,7 +94,7 @@
 	position: absolute;
 	display: grid;
 	place-items: center;
-	border: 1px solid var(--site-line);
+	border: var(--border-thin) solid var(--site-line);
 	background: var(--site-raised);
 	box-shadow: 0 12px 30px color-mix(in srgb, var(--site-ink) 10%, transparent);
 }
@@ -151,6 +151,11 @@
 	background: color-mix(in srgb, var(--site-focus) 10%, var(--site-paper));
 }
 
+.product-preview {
+	overflow: hidden;
+	border-radius: var(--radius-surface);
+}
+
 .preview-demo {
 	animation: preview-swap 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
@@ -165,7 +170,7 @@
 	position: relative;
 	width: 1.9rem;
 	height: 1rem;
-	border: 1px solid var(--site-code-line);
+	border: var(--border-thin) solid var(--site-code-line);
 	border-radius: 1rem;
 }
 
@@ -211,7 +216,7 @@
 	width: 1.4rem;
 	height: 1.4rem;
 	place-items: center;
-	border: 1px solid var(--site-code-line);
+	border: var(--border-thin) solid var(--site-code-line);
 	border-radius: 50%;
 	background: var(--site-code);
 	font-style: normal;

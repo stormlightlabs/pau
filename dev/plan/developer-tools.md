@@ -32,32 +32,32 @@ conservatively and never execute commands on click.
 
 In the workspace layout, terminals can occupy the main surface or a resizable
 bottom dock. A narrow viewport uses a full-surface terminal rather than
-compressing it beside the workspace and review rails. Neovim may run in a
-terminal as an escape hatch, but the embedded Neovim UI remains a separate
-primary editor path.
+compressing it beside the workspace and review rails. Vim, Neovim, Helix, and
+other terminal editors run as ordinary persistent PTY sessions with their native
+configuration and behavior.
 
-## Neovim and editor
+## Editors
 
-The Neovim path is a real external UI:
+CodeMirror is Pau's primary built-in editor. It handles file reading, quick
+edits, read-only previews, agent-change review, diffs, diagnostics, dirty state,
+external-change detection, and explicit save or revert. Keep it focused on work
+that benefits from staying beside sessions and review context. Do not reproduce
+a full development environment in the browser. Optional language services reuse
+a backend language-server supervisor instead of running servers in the browser.
 
-1. Rust starts `nvim --embed` in the workspace.
-2. A maintained RPC library speaks msgpack-RPC and calls `nvim_ui_attach` with
-   line-grid capabilities.
-3. Redraw batches are translated to compact WebSocket events.
-4. An existing embeddable web renderer handles grids and input when the
-   dependency spike finds a suitable one; otherwise the browser supplies a thin
-   canvas or DOM grid layer.
-5. Clipboard and file-open requests cross explicit backend APIs.
+The operator can configure a preferred external editor. Known launch adapters
+open a workspace, file, line and column, or diff in Neovim, Vim, Helix, Visual
+Studio Code, and Zed. A command template covers other editors. Adapters expose
+only supported launch capabilities and do not pretend to share buffers, cursor
+state, tabs, extensions, or language-server state.
 
-Implement or adopt the base line grid before enabling multigrid, floating
-windows, or GUI font shaping. Keep the renderer behind a frontend interface so a
-library or rendering strategy can change without changing the Rust protocol.
+Workspace files remain authoritative. Pau watches for changes made by an
+external or terminal editor and applies the same dirty-file and conflict rules
+used for any external modification. Launch commands show their executable and
+arguments before the operator saves a custom template. An editor launched by
+Pau reports startup failure and process exit when the platform provides a useful
+process handle; Pau does not claim ownership of a detached editor process.
 
-A Neovim session starts clean by default. The user can instead load their
-`init.lua`; applying Pau's theme is an independent option. A maintained
-Kickstart configuration preset is a backlog item, not a first-release
-requirement.
-
-CodeMirror handles quick edits, read-only previews, and diffs. Neovim is the
-primary full editor. LSP support for CodeMirror is optional and should reuse a
-backend language-server supervisor rather than run servers in the browser.
+Deep browser embedding for Neovim or another editor is deferred beyond the first
+release. It may later add editor-specific capabilities without expanding the
+common launch contract.

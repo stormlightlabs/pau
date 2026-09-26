@@ -31,9 +31,9 @@ composer in one view.
 
 ### Settings
 
-[`ib-settings.png`](ib-settings.png) explores theme previews, agent discovery,
-and separate controls for applying the Pau theme to Neovim and loading the
-user's `init.lua`.
+[`ib-settings.png`](ib-settings.png) explored theme previews, agent discovery,
+and embedded Neovim settings. The current direction keeps editor configuration
+separate from Pau themes and uses a preferred-editor launcher.
 
 ### Resources and MCP
 
@@ -43,8 +43,9 @@ scope, connection state, configuration, tools, agent access, and test controls.
 
 ### Editor and review
 
-[`nvim-catp.png`](nvim-catp.png) explores a workspace file tree, editor tabs, an
-embedded Neovim surface, and a review inspector with changed files and hunks.
+[`nvim-catp.png`](nvim-catp.png) explored a workspace file tree, editor tabs, an
+embedded Neovim surface, and a review inspector. Deep editor embedding is now a
+later research item rather than a first-release requirement.
 
 The sketches may contain placeholder names, controls, icons, copy, and states.
 Do not infer a requirement from an image when the specification or plan does not

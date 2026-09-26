@@ -1,5 +1,6 @@
 <script lang="ts">
 	import MockApp from '$lib/components/MockApp.svelte';
+	import PiMark from '$lib/components/PiMark.svelte';
 	import ProductRail from '$lib/components/ProductRail.svelte';
 	import PrototypePage from '$lib/components/PrototypePage.svelte';
 
@@ -98,19 +99,30 @@
 
 {#snippet harnessMark(harness: Harness)}
 	{#if harness === 'Pi'}
-		<b class="text-accent">π</b>
+		<PiMark class="size-5.5" />
 	{:else if harness === 'Claude Code'}
-		<span class="i-simple-icons-anthropic" aria-hidden="true"></span>
+		<span class="i-logos-claude-code" aria-hidden="true"></span>
 	{:else}
 		<span class="i-simple-icons-openai" aria-hidden="true"></span>
 	{/if}
+{/snippet}
+
+{#snippet viewActions()}
+	<button
+		class="icon-button optional-panel-toggle"
+		type="button"
+		aria-label="Toggle run details"
+		aria-pressed={detailsOpen}
+		onclick={() => (detailsOpen = !detailsOpen)}>
+		<span class="i-tabler-layout-sidebar-right" aria-hidden="true"></span>
+	</button>
 {/snippet}
 
 <PrototypePage
 	section="Product surface · 03"
 	title="Harness control"
 	note="A session manager rather than a control-room dashboard. The left rail answers what is running, the center stays on one selected task, and process metadata remains optional.">
-	<MockApp context="control / all sessions">
+	<MockApp context="control / all sessions" actions={viewActions}>
 		<div class="orchestration-layout" class:orchestration-layout--details={detailsOpen}>
 			<ProductRail active="orchestration" />
 
@@ -164,14 +176,6 @@
 						<button class="app-button" type="button" onclick={() => (interrupted = !interrupted)}>
 							<span class={interrupted ? 'i-tabler-player-play' : 'i-tabler-player-stop'} aria-hidden="true"></span
 							>{interrupted ? 'Resume' : 'Interrupt'}
-						</button>
-						<button
-							class="icon-button optional-panel-toggle"
-							type="button"
-							aria-label="Toggle run details"
-							aria-pressed={detailsOpen}
-							onclick={() => (detailsOpen = !detailsOpen)}>
-							<span class="i-tabler-layout-sidebar-right" aria-hidden="true"></span>
 						</button>
 					</div>
 				</header>

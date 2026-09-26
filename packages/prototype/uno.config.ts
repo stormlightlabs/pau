@@ -28,6 +28,9 @@ export default defineConfig({
 			prose: ['var(--text-md)', '1.65'],
 			code: ['0.78rem', '1.7']
 		},
+		borderWidth: {
+			DEFAULT: 'var(--border-thin)'
+		},
 		colors: {
 			canvas: 'var(--color-canvas)',
 			surface: 'var(--color-surface)',
@@ -87,17 +90,17 @@ export default defineConfig({
 		'site-eyebrow': 'm-0 mb-3.5 font-sitecode text-[0.72rem] font-650 tracking-[0.065em] uppercase text-site-accent',
 		'site-heading': 'font-heading font-600 tracking-[-0.035em]',
 		'site-button':
-			'inline-flex min-h-11.5 items-center justify-center gap-2 border border-site-line bg-transparent px-4 py-2 font-650 text-site-ink hover:border-site-accent',
+			'inline-flex min-h-11.5 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-site-line bg-transparent px-4 py-2 font-650 text-site-ink hover:border-site-accent',
 		'site-button-primary': 'site-button border-site-accent bg-site-accent text-site-paper',
 		'app-button':
-			'inline-flex min-h-8 items-center justify-center gap-2 border border-line bg-surface-raised px-3 text-body text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+			'inline-flex min-h-8 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-line bg-surface-raised px-3 text-body text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
 		'app-button-primary':
-			'inline-flex min-h-8 items-center justify-center gap-2 border border-accent bg-accent px-3 text-body font-650 text-canvas transition-opacity hover:opacity-88 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+			'inline-flex min-h-8 items-center justify-center gap-2 rounded-[var(--radius-control)] border border-accent bg-accent px-3 text-body font-650 text-canvas transition-opacity hover:opacity-88 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
 		'icon-button':
-			'inline-flex size-8 items-center justify-center border border-transparent text-muted transition-colors hover:border-line hover:bg-surface-raised hover:text-text aria-pressed:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+			'inline-flex size-8 items-center justify-center rounded-[var(--radius-control)] border border-transparent text-muted transition-colors hover:border-line hover:bg-surface-raised hover:text-text aria-pressed:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
 		'status-dot': 'inline-block size-2 rounded-full bg-current',
 		'app-field':
-			'min-h-8 w-full border border-line bg-canvas px-2 text-body text-text outline-none placeholder:text-muted focus:border-accent',
+			'min-h-8 w-full rounded-[var(--radius-control)] border border-line bg-canvas px-2 text-body text-text outline-none placeholder:text-muted focus:border-accent',
 
 		// Panes and bars
 		'pane-header': 'flex min-h-11 items-center gap-2 border-b border-line bg-surface pl-3 pr-2',
@@ -110,7 +113,7 @@ export default defineConfig({
 			'flex min-h-7.5 items-center gap-3 whitespace-nowrap border-t border-line bg-surface px-3 font-mono text-micro text-muted',
 
 		// Small inline objects
-		chip: 'inline-flex min-h-5.5 max-w-full items-center gap-1.5 whitespace-nowrap border border-line bg-canvas px-1.5 text-micro text-muted',
+		chip: 'inline-flex min-h-5.5 max-w-full items-center gap-1.5 whitespace-nowrap rounded-[var(--radius-control)] border border-line bg-canvas px-1.5 text-micro text-muted',
 		'chip-code': 'chip font-mono',
 		'chip-accent': 'chip border-accent-soft bg-accent-soft text-accent',
 		'chip-warning': 'chip border-warning text-warning',
@@ -140,7 +143,7 @@ export default defineConfig({
 
 		// Composer
 		'composer-chip':
-			'inline-flex min-h-6 items-center gap-1.5 border border-line bg-canvas py-0 pl-1.5 pr-1 text-micro text-text',
+			'inline-flex min-h-6 items-center gap-1.5 rounded-[var(--radius-control)] border border-line bg-canvas py-0 pl-1.5 pr-1 text-micro text-text',
 		'composer-tool':
 			'inline-flex size-8 items-center justify-center border-0 bg-transparent text-muted hover:bg-surface-selected hover:text-text',
 		'composer-menu':

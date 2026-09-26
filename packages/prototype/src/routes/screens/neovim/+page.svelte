@@ -96,8 +96,8 @@
 
 <PrototypePage
 	section="V1 screen · 06"
-	title="Neovim surface"
-	note="Neovim runs as an embedded external UI. Pau forwards redraw, input, clipboard, and resize, and draws nothing over the buffer. The mode line, command line, and messages belong to Neovim. The tabs, rails, and inspector around them belong to Pau.">
+	title="Embedded editor study"
+	note="This deferred study records what deep Neovim embedding would require. The first release uses CodeMirror for built-in editing and opens Neovim through a terminal or external-editor adapter.">
 	<MockApp context="pau / neovim" branch="session-shell">
 		<div class="mock-layout">
 			<ProductRail active="neovim" />

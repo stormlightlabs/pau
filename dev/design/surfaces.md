@@ -14,7 +14,7 @@ when purpose, hierarchy, responsive behavior, or a durable interaction changes.
 | Harness control   | `/screens/orchestration` | `src/routes/screens/orchestration/+page.svelte` | Supervise concurrent native sessions               |
 | Scratchpad        | `/screens/scratchpad`    | `src/routes/screens/scratchpad/+page.svelte`    | Capture notes and send selected context            |
 | Editor and review | `/screens/editor`        | `src/routes/screens/editor/+page.svelte`        | Edit a file and review changes                     |
-| Neovim            | `/screens/neovim`        | `src/routes/screens/neovim/+page.svelte`        | Work in an embedded Neovim UI                      |
+| Embedded editor study | `/screens/neovim`     | `src/routes/screens/neovim/+page.svelte`        | Record a deferred deep-integration direction       |
 | Terminal          | `/screens/terminal`      | `src/routes/screens/terminal/+page.svelte`      | Use persistent PTY sessions                        |
 | Resources         | `/screens/resources`     | `src/routes/screens/resources/+page.svelte`     | Inspect scope, trust, and capability               |
 | Settings          | `/screens/settings`      | `src/routes/screens/settings/+page.svelte`      | Change product and editor preferences              |
@@ -47,8 +47,8 @@ Priority order:
 
 Use one main list rather than permanent workspace and detail rails. Workspace
 and status filters belong in the list toolbar. Changed files and checks open in
-a toggleable activity panel. Do not repeat harness health when session state
-already reports whether each process is usable.
+a toggleable activity panel from the top app bar. Do not repeat harness health
+when session state already reports whether each process is usable.
 
 At narrow widths, keep the attention item and work list. Hide the optional
 activity panel and move its content to a dedicated view when implemented.
@@ -58,8 +58,8 @@ Preserve status text alongside color.
 
 The transcript and composer lead. Tool activity is compact and can open detail
 without turning the transcript into a log viewer. The session rail and inspector
-can close independently. Focus mode removes all surrounding navigation while
-preserving the active session and composer.
+can close independently from controls in the top app bar. Focus mode removes
+all surrounding navigation while preserving the active session and composer.
 
 The terminal dock is the only secondary surface that splits the main column.
 The composer distinguishes queueing a follow-up from steering the current turn
@@ -87,7 +87,7 @@ Use a session-manager layout rather than a control-room table:
 - A compact rail groups and filters sessions
 - The main surface follows one selected run
 - Current activity, changes, and checks stay in that run's context
-- Low-frequency process metadata and capabilities open in a details panel
+- Low-frequency process metadata and capabilities open from the top app bar
 - Recent events stay collapsed until requested
 
 The details panel shows only controls and capabilities reported by the selected
@@ -134,11 +134,13 @@ keeps a useful measure.
 
 ## Editor and review
 
-CodeMirror handles quick edits and file previews. The file tree supplies
-workspace context; the review inspector supplies changed files and hunks. The
-file rail provides content search and explicit controls for hidden and ignored
-files. Tree rows use arrow-key navigation and preserve full paths through
-accessible labels when visible names must truncate. The code surface remains
+CodeMirror handles built-in editing, quick changes, and file previews. The file
+tree supplies workspace context; the review inspector supplies changed files and
+hunks. A file or workspace can open in the preferred external editor without
+hiding CodeMirror's dirty or external-change state. The file rail provides
+content search and explicit controls for hidden and ignored files. Tree rows use
+arrow-key navigation and preserve full paths through accessible labels when
+visible names must truncate. The code surface remains
 wider than either rail.
 
 Diff color combines background, foreground, and markers. Diagnostics, dirty
@@ -148,15 +150,17 @@ explicit states.
 At narrow widths, the editor owns the full surface. File navigation and review
 open separately. Do not compress code between two narrow rails.
 
-## Neovim
+## Embedded editor study
 
-Neovim owns its grid, mode line, command line, messages, and popup UI. Pau owns
-surrounding tabs, rails, process state, and explicit choices to load `init.lua`
-or apply a Pau theme.
+This fixture preserves a possible deep Neovim integration for later research. It
+is not part of the first release and must not shape the common editor contract.
+The first release uses CodeMirror for built-in editing, opens terminal editors
+in persistent terminals, and hands files or workspaces to a preferred external
+editor.
 
-Pau must not draw application overlays over the Neovim buffer. Reconnect keeps
-the process, buffer, mode, and cursor. At narrow widths, the grid gets the full
-surface and peripheral information moves away.
+If deep embedding becomes a product priority, Neovim owns its grid, mode line,
+command line, messages, and popup UI. Pau owns surrounding process state and
+must not draw application overlays over the buffer.
 
 ## Terminal
 
@@ -185,11 +189,11 @@ clear return to the filtered list.
 ## Settings
 
 Settings group durable choices by user intent. Scope and consequence appear next
-to each setting. Theme, font, agent discovery, Neovim configuration, and Neovim
-color application remain distinct choices.
+to each setting. Theme, font, agent discovery, preferred editor, and terminal
+editor launch behavior remain distinct choices.
 
-Loading the user's `init.lua` can execute configuration. Applying a Pau theme
-changes highlights only after opt-in. At narrow widths, section navigation
+Pau themes apply only to Pau surfaces. External and terminal editors retain
+their own configuration and colors. At narrow widths, section navigation
 collapses before controls lose their labels or descriptions.
 
 ## Website and documentation

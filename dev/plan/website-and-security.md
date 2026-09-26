@@ -25,10 +25,10 @@ Documentation changes belong to the same unit of work as the behavior they
 describe. Document only working behavior. Each page should answer one task or
 concept, start with the useful fact or instruction, include commands that can be
 copied, and link to deeper detail instead of repeating it. The initial
-information architecture covers installation, quickstart, Claude bridge, desktop
-use, workspaces and sessions, terminal and Neovim, resources and MCP, server
-deployment, security, configuration reference, resource monitoring, local
-sandboxing, architecture, and contributing.
+information architecture covers installation, quickstart, Claude bridge,
+desktop use, workspaces and sessions, built-in and external editors, terminal,
+resources and MCP, server deployment, security, configuration reference,
+resource monitoring, local sandboxing, architecture, and contributing.
 
 The website build validates frontmatter, internal links, heading structure, code
 examples that can be checked without credentials, raw Markdown routes, and

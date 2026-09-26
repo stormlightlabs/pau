@@ -13,7 +13,8 @@ matters, especially protocol framing, event sequences, and path handling. Use
 Tokio's paused clock for timeout, retry, and shutdown behavior instead of
 sleeping in tests.
 
-Integration tests launch fake Pi, Claude, terminal, and Neovim processes. They
+Integration tests launch fake Pi, Claude, terminal, and external editor
+processes. They
 cover partial and oversized frames, invalid UTF-8 where the protocol permits
 bytes, early exits, ignored signals, cancellation races, output backpressure,
 replay gaps, symlink and traversal attempts, SQLite rollback and migration
@@ -21,6 +22,14 @@ failure, and cleanup after dropped clients. Platform-specific PTY and filesystem
 tests run on Linux and macOS. Fuzz targets are appropriate for parsers exposed
 to agent or network input, but they remain a separate scheduled or manual job
 rather than slowing every pull request.
+
+Diagnostics tests verify bounded retention, concurrent writers, log-level
+changes, process and session correlation, reconnect and replay metadata, slow
+consumer reporting, and export failure. Seed every sensitive field class and
+confirm it is absent from in-memory records, UI events, logs, and exported
+bundles. Development-only tests exercise forced disconnects, delayed events,
+child crashes, and replay gaps without exposing those controls in a release
+build.
 
 ## Storybook and component tests
 
@@ -53,9 +62,10 @@ assertions.
 
 `apps/web` owns Playwright workflows against the real Axum API with fake agent
 executables. These tests cover route composition, authentication, reconnect,
-concurrent sessions, files, terminal, Neovim, and resources from the user's
-point of view. The same web build is consumed by Tauri, so `apps/desktop` adds
-only native smoke coverage for startup, backend lifecycle, asset loading, and
+concurrent sessions, files, terminal, external editor launch, and resources from
+the user's point of view. The same web build is consumed by Tauri, so
+`apps/desktop` adds only native smoke coverage for startup, backend lifecycle,
+asset loading, and
 shutdown rather than duplicating browser behavior.
 
 `apps/website` tests frontmatter, internal links, raw Markdown routes, search,

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import MockApp from '$lib/components/MockApp.svelte';
+	import PiMark from '$lib/components/PiMark.svelte';
 	import ProductRail from '$lib/components/ProductRail.svelte';
 	import PrototypePage from '$lib/components/PrototypePage.svelte';
 
@@ -83,19 +84,30 @@
 
 {#snippet harnessMark(harness: Work['harness'])}
 	{#if harness === 'Pi'}
-		<b class="text-accent">π</b>
+		<PiMark class="size-5.5" />
 	{:else if harness === 'Claude Code'}
-		<span class="i-simple-icons-anthropic" aria-hidden="true"></span>
+		<span class="i-logos-claude-code" aria-hidden="true"></span>
 	{:else}
 		<span class="i-simple-icons-openai" aria-hidden="true"></span>
 	{/if}
+{/snippet}
+
+{#snippet viewActions()}
+	<button
+		class="icon-button optional-panel-toggle"
+		type="button"
+		aria-label="Activity"
+		aria-pressed={activityOpen}
+		onclick={() => (activityOpen = !activityOpen)}>
+		<span class="i-tabler-activity" aria-hidden="true"></span>
+	</button>
 {/snippet}
 
 <PrototypePage
 	section="Product surface · 01"
 	title="Agentic IDE dashboard"
 	note="A quiet return point for active work. One attention item leads, session rows carry the operational detail, and changed files and checks stay in a panel until the operator asks for them.">
-	<MockApp context="home">
+	<MockApp context="home" actions={viewActions}>
 		<div class="dashboard-layout" class:dashboard-layout--activity={activityOpen}>
 			<ProductRail active="home" />
 
@@ -114,13 +126,6 @@
 								<option>claude-bridge</option>
 							</select>
 						</div>
-						<button
-							class="app-button optional-panel-toggle"
-							type="button"
-							aria-pressed={activityOpen}
-							onclick={() => (activityOpen = !activityOpen)}>
-							<span class="i-tabler-activity" aria-hidden="true"></span>Activity
-						</button>
 						<button class="app-button-primary dashboard-new-session" type="button" aria-label="New session">
 							<span class="i-tabler-plus" aria-hidden="true"></span><span class="dashboard-new-label">New session</span>
 						</button>

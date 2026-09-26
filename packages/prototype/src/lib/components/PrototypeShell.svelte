@@ -20,7 +20,7 @@
 				{ href: '/screens/orchestration', label: 'Harness control', icon: 'i-tabler-topology-star-3' },
 				{ href: '/screens/scratchpad', label: 'Scratchpad', icon: 'i-tabler-notebook' },
 				{ href: '/screens/editor', label: 'Editor & review', icon: 'i-tabler-code' },
-				{ href: '/screens/neovim', label: 'Neovim', icon: 'i-simple-icons-neovim' },
+				{ href: '/screens/neovim', label: 'Embedded editor study', icon: 'i-simple-icons-neovim' },
 				{ href: '/screens/terminal', label: 'Terminal', icon: 'i-tabler-terminal-2' },
 				{ href: '/screens/resources', label: 'Resources', icon: 'i-tabler-plug-connected' },
 				{ href: '/screens/settings', label: 'Settings', icon: 'i-tabler-adjustments' }

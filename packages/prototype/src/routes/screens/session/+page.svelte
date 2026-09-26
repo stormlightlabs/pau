@@ -1,5 +1,6 @@
 <script lang="ts">
 	import MockApp from '$lib/components/MockApp.svelte';
+	import PiMark from '$lib/components/PiMark.svelte';
 	import ProductRail from '$lib/components/ProductRail.svelte';
 	import PrototypePage from '$lib/components/PrototypePage.svelte';
 
@@ -62,11 +63,44 @@
 	}
 </script>
 
+{#snippet viewActions()}
+	<button
+		class="icon-button"
+		type="button"
+		aria-label="Toggle sessions sidebar"
+		aria-pressed={contextRailOpen && !focused}
+		onclick={() => {
+			focused = false;
+			contextRailOpen = !contextRailOpen;
+		}}>
+		<span
+			class={contextRailOpen && !focused
+				? 'i-tabler-layout-sidebar-left-collapse'
+				: 'i-tabler-layout-sidebar-left-expand'}
+			aria-hidden="true"></span>
+	</button>
+	<button
+		class="icon-button"
+		type="button"
+		aria-label="Toggle inspector"
+		aria-pressed={inspectorOpen && !focused}
+		onclick={() => {
+			focused = false;
+			inspectorOpen = !inspectorOpen;
+		}}>
+		<span
+			class={inspectorOpen && !focused
+				? 'i-tabler-layout-sidebar-right-collapse'
+				: 'i-tabler-layout-sidebar-right-expand'}
+			aria-hidden="true"></span>
+	</button>
+{/snippet}
+
 <PrototypePage
 	section="V1 screen · 02"
 	title="Session workspace"
 	note="The center stays devoted to the current task. Either sidebar can close independently, the terminal dock splits the main column when you open it, and focus mode removes all navigation while preserving the session and composer.">
-	<MockApp context="workspaces / pau" branch={session.branch}>
+	<MockApp context="workspaces / pau" branch={session.branch} actions={viewActions}>
 		<div
 			class="mock-layout session-layout relative"
 			class:session-layout--no-context={!contextRailOpen && !focused}
@@ -128,7 +162,7 @@
 						<span class="truncate font-mono">{session.name}</span>
 					</span>
 					<span class="hidden shrink-0 items-center gap-1.5 text-micro text-muted lg:flex">
-						<span class="chip-code">π pi</span>
+						<span class="chip-code"><PiMark class="size-4.5" />pi</span>
 						<span>running {session.elapsed}</span>
 					</span>
 					<div class="pane-actions">
@@ -149,36 +183,6 @@
 							aria-pressed={dockOpen}
 							onclick={() => (dockOpen = !dockOpen)}>
 							<span class="i-tabler-terminal-2" aria-hidden="true"></span>
-						</button>
-						<button
-							class="icon-button"
-							type="button"
-							aria-label="Toggle sessions sidebar"
-							aria-pressed={contextRailOpen && !focused}
-							onclick={() => {
-								focused = false;
-								contextRailOpen = !contextRailOpen;
-							}}>
-							<span
-								class={contextRailOpen && !focused
-									? 'i-tabler-layout-sidebar-left-collapse'
-									: 'i-tabler-layout-sidebar-left-expand'}
-								aria-hidden="true"></span>
-						</button>
-						<button
-							class="icon-button"
-							type="button"
-							aria-label="Toggle inspector"
-							aria-pressed={inspectorOpen && !focused}
-							onclick={() => {
-								focused = false;
-								inspectorOpen = !inspectorOpen;
-							}}>
-							<span
-								class={inspectorOpen && !focused
-									? 'i-tabler-layout-sidebar-right-collapse'
-									: 'i-tabler-layout-sidebar-right-expand'}
-								aria-hidden="true"></span>
 						</button>
 						<button
 							class="icon-button"
@@ -367,7 +371,7 @@
 			{#if extensionDialogOpen}
 				<div class="absolute inset-0 z-30 grid place-items-center bg-canvas/80 p-4">
 					<div
-						class="w-full max-w-md border border-focus bg-surface p-4 shadow-2xl"
+						class="w-full max-w-md rounded-[var(--radius-surface)] border border-focus bg-surface p-4 shadow-2xl"
 						role="dialog"
 						aria-modal="true"
 						aria-labelledby="extension-dialog-title">

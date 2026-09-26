@@ -33,7 +33,8 @@ The interface should be recognizable by:
 
 - precise multi-pane composition;
 - compact but readable type;
-- square corners and thin separators;
+- mostly square geometry, hairline separators, and slight rounding on
+  free-standing controls and overlays;
 - visible native-process and workspace state;
 - agent, file, Git, terminal, and editor details that use their real visual
   vocabulary.
@@ -65,7 +66,7 @@ At narrower widths:
 1. Remove the inspector from the grid and open it as an overlay or full view.
 2. Collapse the contextual rail.
 3. Keep the product rail while its destinations still fit and remain useful.
-4. Give conversation, editor, Neovim, and terminal surfaces the remaining area.
+4. Give conversation, editor, and terminal surfaces the remaining area.
 5. Use a focused full-surface view when the task cannot tolerate persistent
    chrome.
 
@@ -83,9 +84,13 @@ intervals between distinct tasks.
 - Compact rows: 28–36px when keyboard and pointer use dominate.
 - Coarse-pointer targets: at least 44px even when the visible icon is smaller.
 
-Use borders for stable pane boundaries and selected-row indicators. Reserve
-shadows for overlays that occlude content. Avoid rounding pane boundaries.
-Controls may use a 2–4px radius where it clarifies their shape.
+Use faint 0.5 CSS pixel rules where a stable pane boundary needs a divider.
+Increase them to one pixel when the user requests more contrast. Adjacent rails
+and sidebars may rely on surface color and spacing instead of a border.
+Selected-row indicators stay stronger than structural rules. Reserve shadows
+for overlays that occlude content. Keep pane boundaries, rows, tabs, and
+attached controls square. Free-standing controls use a 3px radius. Floating
+surfaces and overlays may use up to 5px.
 
 ## Typography
 
@@ -114,7 +119,7 @@ Every theme maps the same semantic roles:
 - border and strong border;
 - accent, focus, and selection;
 - positive, warning, danger, and information;
-- syntax, diff, editor, terminal ANSI, and Neovim highlight roles.
+- syntax, diff, editor, and terminal ANSI roles.
 
 The first release themes are Eldritch, Nord, Iceberg, Catppuccin Mocha, and
 Vitesse Dark. Palette values come from their upstream projects and retain the
@@ -134,6 +139,9 @@ Use one control vocabulary across screens:
 - left-edge indicator plus surface change for selected rows;
 - compact chips for scope, branch, model, state, and attached context;
 - section labels for stable pane regions, not as decoration above every block.
+
+Controls that show or hide a rail, sidebar, or inspector belong in the top app
+bar. Keep task-specific actions in the task surface.
 
 Every relevant control state needs a visible treatment. Icon-only controls need
 an accessible name and, where meaning is not obvious, a tooltip or adjacent

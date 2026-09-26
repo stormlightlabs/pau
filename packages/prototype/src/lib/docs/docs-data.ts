@@ -58,10 +58,10 @@ export const capabilities = [
 		description: 'Edit text with CodeMirror and review changed files and hunks in the same workspace.'
 	},
 	{
-		name: 'Persistent terminal and Neovim',
+		name: 'Persistent terminal and editor handoff',
 		area: 'Developer tools',
 		status: 'Planned',
-		description: 'Keep PTY tabs and embedded Neovim sessions alive across route changes and UI reloads.'
+		description: 'Keep terminal editors alive and open files or workspaces in a preferred external editor.'
 	},
 	{
 		name: 'Local sandbox and resource monitoring',

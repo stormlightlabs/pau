@@ -3,18 +3,18 @@
 ## Architecture
 
 ```text
-┌──────────────── SvelteKit SPA ────────────────┐
-│ sessions · resources · files · nvim · terminal│
-└────────────────── HTTP / WS ──────────────────┘
-                         │
+┌──────────────── SvelteKit SPA ─────────────────┐
+│ sessions · resources · files · editor · terminal│
+└─────────────────── HTTP / WS ──────────────────┘
+                          │
 ┌──────────────────── Axum core ──────────────────┐
 │ auth · state snapshots · event log · file API   │
 │ workspace registry · SQLite · process registry  │
 ├─────────────────────────────────────────────────┤
-│ Pi RPC │ CLI adapters │ PTY │ nvim msgpack-RPC  │
+│ Pi RPC │ CLI adapters │ PTY │ editor launch     │
 └───────┬────────┬─────────────┬──────────────────┘
         │        │             │
-       pi    claude/codex/     nvim --embed
+       pi    claude/codex/     vim/nvim/hx/code/zed
               antigravity
 ```
 
@@ -41,7 +41,7 @@ crates/
   pi/                  pau-pi: Pi RPC child-process adapter
   cli/                 pau-cli: executable, diagnostics, and maintenance commands
   server/              pau-server: Axum API, WebSocket hub, auth, and static assets
-  term/                pau-term: PTY sessions and embedded Neovim integration
+  term/                pau-term: PTY sessions and terminal process supervision
 ```
 
 `packages/claude-bridge` ships first and remains useful without the desktop
@@ -58,10 +58,11 @@ explicit interfaces supplied by the app.
 Start with a Cargo workspace and pnpm workspace. The crate directory and Cargo
 package names are fixed as shown above. `pau-core` contains no concrete agent,
 terminal, server, or CLI implementation. `pau-agent` defines the adapter
-boundary shared by `pau-pi` and later agents. `pau-term` owns both PTYs and
-Neovim because they share process, input, resize, and reconnect concerns.
-`pau-server` composes application services for HTTP and WebSocket clients, while
-`pau-cli` constructs the runnable process.
+boundary shared by `pau-pi` and later agents. `pau-term` owns PTYs and terminal
+process supervision. External editor launch uses narrow application services
+and does not expose editor-specific types through the wire protocol. `pau-server`
+composes application services for HTTP and WebSocket clients, while `pau-cli`
+constructs the runnable process.
 
 Keep package boundaries similarly concrete: reusable UI and its component tests
 belong in `packages/ui`, while routing, transport wiring, and integration tests
@@ -76,8 +77,9 @@ Pau is dual-licensed under MIT or Apache-2.0. Published JavaScript packages use
 the `@stormlightlabs/pau-*` namespace. The executable and configuration name is
 `pau`, and the Tauri bundle identifier is `org.stormlightlabs.pau`.
 
-Development follows current stable releases of Pi, Claude Code, Neovim, Node.js,
-Rust, and supported operating systems. Pin exact dependency versions in
+Development follows current stable releases of Pi, Claude Code, Node.js, Rust,
+and supported operating systems. Known editor launch adapters follow current
+stable releases of their editors. Pin exact dependency versions in
 lockfiles and record versions exercised by a release. Add minimum-version
 guarantees only after compatibility evidence justifies them.
 

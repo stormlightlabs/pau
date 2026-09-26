@@ -1,5 +1,6 @@
 <script lang="ts">
 	import PauMark from '$lib/components/PauMark.svelte';
+	import PiMark from '$lib/components/PiMark.svelte';
 	import { featureDemos, type FeatureKey, type View } from './docs-data';
 	import ProductPreview from './ProductPreview.svelte';
 
@@ -36,7 +37,7 @@
 			aria-hidden="true">
 			<div class="hero-orbit__path"></div>
 			<div class="hero-orbit__core"><PauMark /></div>
-			<span class="hero-orbit__node hero-orbit__node--pi"><strong>π</strong><small>Pi</small></span>
+			<span class="hero-orbit__node hero-orbit__node--pi"><PiMark class="size-8" /><small>Pi</small></span>
 			<span class="hero-orbit__node hero-orbit__node--claude"
 				><span class="i-logos-claude-code"></span><small>Claude Code</small></span>
 			<span class="hero-orbit__node hero-orbit__node--codex"
@@ -104,7 +105,7 @@
 					<span class="size-2.5 rounded-full bg-site-focus"></span>Planned
 				</h3>
 				<ul class="grid list-none gap-6 p-0">
-					{#each [{ icon: 'i-tabler-code', title: 'Editing and review', text: 'Edit files, navigate agent changes, and review diffs in the same workspace.' }, { icon: 'i-tabler-terminal-2', title: 'Terminal and Neovim', text: 'Keep terminals and embedded Neovim sessions alive while agents run.' }, { icon: 'i-tabler-shield-lock', title: 'Local execution controls', text: 'Inspect resource use and choose explicit sandbox and credential policies.' }] as item}<li
+					{#each [{ icon: 'i-tabler-code', title: 'Editing and review', text: 'Edit files, navigate agent changes, and review diffs in the same workspace.' }, { icon: 'i-tabler-terminal-2', title: 'Terminal and external editors', text: 'Keep terminal editors alive and hand files to your preferred external editor.' }, { icon: 'i-tabler-shield-lock', title: 'Local execution controls', text: 'Inspect resource use and choose explicit sandbox and credential policies.' }] as item}<li
 							class="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-3 text-[0.88rem] leading-6 text-site-muted">
 							<span class={`${item.icon} mt-1 text-base text-site-accent`}></span><span class="grid gap-0.5"
 								><strong class="text-[0.95rem] text-site-ink">{item.title}</strong>{item.text}</span>

@@ -51,74 +51,6 @@ status `complete`.
 The SvelteKit app runs in a normal browser during development. Tauri is the
 shipped application in this deliverable.
 
-### Pi compatibility
-
-#### 2.37 Extension UI requests
-
-Status: complete
-Blocked by: none
-
-Surface supported Pi RPC extension dialogs, notifications, status text, and
-string widgets without attempting to render terminal-only custom components.
-Keep the operator's configured extensions and do not inject a Pau helper
-extension.
-
-Verification:
-
-- Cover confirmation, selection, input, editor, notification, status, widget,
-  cancellation, timeout, and unsupported custom UI requests with a fixture
-  extension.
-- Confirm a terminal-only custom component reports the limitation and can be
-  used by opening vanilla Pi in a Pau terminal.
-
-### MCP
-
-#### 2.47 MCP configuration discovery
-
-Status: complete
-Blocked by: none
-
-Discover Pi and Claude MCP configuration without treating their formats as one
-schema. Preserve unknown fields and identify source and scope. Keep existing
-native MCP configuration active. Store Pau-managed enablement as a workspace
-default with a per-session override. For Pi, recognize the explicitly installed
-`pi-mcp-adapter` package and its documented shared, user, project, package, and
-Pi-specific sources without silently installing, importing, enabling, or
-connecting it. Update prompts to follow indexed project documentation.
-
-Verification:
-
-- Round-trip representative Pi and Claude fixtures without changing unknown
-  fields or formatting unrelated entries.
-- Exercise `pi-mcp-adapter` precedence, disabled overrides, unknown fields, and
-  source provenance against the pinned release and one compatible update.
-- Confirm Pau-managed MCP is off before explicit enablement and show an
-  actionable unavailable state when Pi MCP is configured but the package is
-  absent or disabled.
-
-#### 2.48 MCP editing and diagnostics
-
-Status: complete
-Blocked by: 2.37, 2.47
-
-Add create, edit, remove, enable, disable, authenticate, and test operations
-through the Pi and Claude adapters. Report startup diagnostics and negotiated
-capabilities. Enable servers individually and connect lazily. Pi delegates MCP
-execution to the explicitly installed `pi-mcp-adapter` package. Native clients
-retain OAuth credentials, and MCP tool calls use the active adapter permission
-capability when available.
-
-Verification:
-
-- Run the pinned `pi-mcp-adapter` under Pi RPC and exercise stdio and HTTP
-  fixture servers, lazy startup, environment variables, approval, elicitation,
-  OAuth, startup timeout, protocol failure, status updates, and clean shutdown.
-- Confirm Pi's supported dialogs and notifications work through the extension UI
-  protocol and no test depends on parsing a terminal-only MCP panel.
-- Exercise the corresponding native configuration, authentication, test, status,
-  failure, and shutdown flows for Claude.
-- Confirm secrets remain redacted in UI events and logs.
-
 ### Workspace tools
 
 #### 2.19 Workspace registry and file access
@@ -166,8 +98,10 @@ Verification:
 Status: planned
 Blocked by: 2.19, 2.20
 
-Add text-file viewing and saving with CodeMirror 6, dirty state, external-change
-detection, and the active theme's syntax colors.
+Add Pau's primary built-in editing surface with CodeMirror 6: text-file viewing
+and saving, dirty state, external-change detection, and the active theme's
+syntax colors. Keep the surface focused on quick edits and review rather than a
+full development environment.
 
 Verification:
 
@@ -198,8 +132,9 @@ Blocked by: none
 
 Sample Pau-owned process trees and show aggregate and per-session CPU, current
 and peak resident memory, process count, elapsed time, and disk I/O where the
-platform reports it reliably. Keep bounded raw history in memory and persist a
-small summary when a process ends. Keep token, context, and cost usage separate.
+platform reports it reliably. Show a compact session summary and a workspace
+Processes view. Keep bounded raw history in memory and persist a small summary
+when a process ends. Keep token, context, and cost usage separate.
 
 Verification:
 
@@ -209,6 +144,34 @@ Verification:
 - Exercise sustained-pressure warnings and explicit interrupt and stop actions
   without automatically terminating work.
 - Run focused process-tree and metric smoke tests on Linux and macOS.
+
+#### 2.50 Diagnostics mode
+
+Status: planned
+Blocked by: 2.41
+
+Add release-build diagnostics behind an explicit settings control and CLI flag.
+Show versions, adapter capabilities and handshakes, transport and replay state,
+process lifecycle, queue pressure, and bounded redacted logs and metadata traces.
+Keep payload tracing temporary and off by default. Export a user-reviewed
+bundle on request. Put fault injection and other behavior-changing controls in
+development builds only.
+
+Verification:
+
+- Cover frontend, backend, adapter, and dependency versions; capability
+  handshakes; reconnects; event sequence and replay gaps; process starts and
+  exits; slow consumers; queue pressure; and dropped updates.
+- Exercise bounded retention, concurrent writers, runtime log levels, temporary
+  payload tracing, export failure, and process and session correlation.
+- Seed credentials, environment values, prompts, file contents, tool arguments,
+  transcript content, outside-workspace paths, and sensitive URLs. Confirm they
+  are absent from traces, UI events, logs, and exported bundles.
+- Confirm release builds omit fault injection and that diagnostics do not change
+  authentication, supervision, retry timing, permissions, sandboxing, or
+  process limits.
+- Capture and inspect one diagnostic bundle during a self-hosted desktop run
+  before the primary dogfood gate.
 
 #### 2.42 Local sandbox dependency and policy spike
 
@@ -230,7 +193,7 @@ Verification:
   operations on Linux and macOS.
 - Verify workspace-write and read-only profiles, network-off defaults, explicit
   grants, no silent unsandboxed fallback, and separate opt-in profiles for
-  operator terminals and Neovim.
+  operator terminals and supported editor launch paths.
 - Exercise the runtime's dependency checks, Ubuntu user-namespace restriction,
   symlink handling, resolved-address guards, descendant inheritance, violation
   attribution, cleanup, and fail-closed startup behavior.
@@ -252,8 +215,8 @@ with a per-session override and show effective access before sandboxed work.
 Implement the Pi extension and tool-host protocol for every enabled built-in
 file, search, and command tool. Apply the profile to tool descendants and
 supported stdio MCP servers. Disable unreviewed in-process and remote tools while
-the profile is active. Terminals and Neovim require a separate explicit sandbox
-selection.
+the profile is active. Terminals and supported editor launch paths require a
+separate explicit sandbox selection.
 
 Verification:
 
@@ -307,7 +270,7 @@ Verification:
 #### 2.44 Permission policy and Pi enforcement spike
 
 Status: planned
-Blocked by: 2.37
+Blocked by: none
 
 Validate the cross-agent permission model against native adapter callbacks and
 the selected `@gotgenes/pi-permission-system` release. Map Pau's no-prompts,
@@ -375,7 +338,8 @@ theme.
 Verification:
 
 - Run shell, alternate-screen, mouse, Unicode, selection, search, and resize
-  scenarios in Playwright.
+  scenarios in Playwright, including representative Vim, Neovim, and Helix
+  sessions.
 - Verify terminal tabs survive route changes and reconnect to their PTYs after a
   frontend reload.
 - Confirm sandboxed terminal profiles inherit their recorded filesystem,
@@ -384,7 +348,7 @@ Verification:
 #### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.23, 2.25, 2.37, 2.45, 2.48
+Blocked by: 2.23, 2.25, 2.45, 2.50, 2.51
 
 Complete desktop equivalents for vanilla Pi input history, image input, queues,
 interrupt and retry controls, models, thinking levels, context and cost,
@@ -398,13 +362,15 @@ Verification:
   controls, recording unsupported native capabilities with an explanation.
 - Complete normal project work through Pau using configured skills, prompts,
   extensions, MCP tools when installed, queued messages, compaction, session
-  branching, review, and the persistent terminal.
+  branching, review, CodeMirror, preferred-editor handoff, and the persistent
+  terminal.
 
 **Primary dogfood replacement point:** When 2.40 is complete, Pau replaces
 vanilla Pi with `pi-mcp-adapter` in a terminal for routine Pi work, including
 MCP. Vanilla Pi remains available in Pau's persistent terminal for terminal-only
 extension components. Pau is also the primary dogfood interface for routine
-Claude work. Embedded Neovim and release packaging remain later milestones.
+Claude work. Deep editor embedding and release packaging remain later
+milestones.
 
 #### 2.26 Workspace shell environments
 
@@ -433,81 +399,33 @@ Verification:
 - Cover new branches, existing branches, existing worktrees, dirty source
   repositories, duplicate paths, and cleanup after a failed creation.
 
-### Neovim UI
+### Editors
 
-#### 2.28 Embedded Neovim lifecycle
+#### 2.51 External editor launch
 
 Status: planned
-Blocked by: 2.41, 2.43
+Blocked by: 2.22, 2.25, 2.41
 
-Start and supervise `nvim --embed` in `pau-term`, attach through the selected
-RPC library, and report version and exit state.
+Configure a preferred editor and expose its supported workspace, file, line and
+column, and diff launch capabilities through known adapters for Neovim, Vim,
+Helix, Visual Studio Code, and Zed. Add an explicit command template for other
+editors. Launch terminal editors in a persistent Pau terminal. Keep files
+authoritative, detect external changes, and report startup failure or useful
+process status without claiming ownership of a detached editor.
 
 Verification:
 
-- Cover missing and unsupported Neovim, startup failure, clean exit, crash, and
-  staged shutdown.
-
-#### 2.29 Base Neovim grid
-
-Status: planned
-Blocked by: 2.28
-
-Handle line-grid redraws, highlights, cursor, mode, and resize using the
-selected renderer or the thin renderer approved by unit 2.9.
-
-Verification:
-
-- Replay redraw fixtures for ASCII, Unicode, wide glyphs, combining characters,
-  scrolling, highlight changes, and cursor movement.
-- Compare rendered screenshots at two sizes.
-
-#### 2.30 Neovim input and clipboard
-
-Status: planned
-Blocked by: 2.29
-
-Forward keyboard, mouse, focus, paste, and clipboard operations without stealing
-application shortcuts outside the editor surface.
-
-Verification:
-
-- Exercise insert, normal, visual, command, mouse, IME, paste, and clipboard
-  flows.
-- Confirm focus entering and leaving the editor restores the correct application
-  shortcuts.
-
-#### 2.31 Neovim multigrid and floating windows
-
-Status: planned
-Blocked by: 2.29, 2.30
-
-Enable multigrid, floating windows, external messages, and popup menus after the
-base grid is stable.
-
-Verification:
-
-- Replay fixtures for splits, floating windows, completion menus, messages, and
-  grid destruction.
-- Confirm overlays stay inside the editor viewport.
-
-#### 2.32 Neovim reconnect and theming
-
-Status: planned
-Blocked by: 2.29, 2.30
-
-Reconnect a reloaded frontend without killing Neovim. Start clean by default and
-add separate controls for loading the user's `init.lua` and applying Pau's
-current theme. Keep a bundled or fetched Kickstart preset in the backlog.
-
-Verification:
-
-- Reload during editing and confirm buffer, mode, cursor, and process identity
-  survive.
-- Confirm the default process does not load the user's configuration, then
-  exercise the explicit `init.lua` mode.
-- Test all five bundled highlight mappings with and without user configuration.
-- Confirm Pau does not override Neovim colors until the user opts in.
+- Exercise workspace, file, line, column, and diff launch for fixture commands
+  that model every known adapter and a custom template.
+- Cover missing executables, invalid templates, paths with spaces and non-ASCII
+  characters, detached GUI processes, terminal editor exit, and rapid repeated
+  launch.
+- Confirm the UI shows a custom executable and arguments before saving them and
+  does not pass file content, credentials, or unrelated environment values.
+- Modify an open file from an external and a terminal editor fixture. Confirm
+  CodeMirror reports the external change and preserves unsaved work.
+- Complete one self-hosted handoff from CodeMirror to the configured editor and
+  back through a detected file change.
 
 ### Pi resources
 
@@ -591,7 +509,7 @@ Verification:
 #### 2.38 Website deployment
 
 Status: planned
-Blocked by: 2.25, 2.32, 2.49
+Blocked by: 2.25, 2.49
 
 Deploy `apps/website` to Cloudflare Pages at `https://pau.stormlightlabs.org`
 with preview deployments for pull requests.
@@ -605,7 +523,7 @@ Verification:
 #### 2.39 AppImage packaging
 
 Status: planned
-Blocked by: 2.23, 2.25, 2.32, 2.37, 2.40, 2.41, 2.43, 2.45
+Blocked by: 2.23, 2.25, 2.40, 2.41, 2.43, 2.45, 2.51
 
 Package the first Linux desktop release as an AppImage. Leave `.deb`, RPM,
 Intel macOS, signing, and notarization until release demand or available signing
@@ -616,15 +534,16 @@ Verification:
 - Build the AppImage in the release environment.
 - Launch it on the supported NixOS development machine and representative Ubuntu
   and Fedora environments.
-- Complete the local backend, bundled frontend, terminal, and Neovim startup
-  smoke test.
+- Complete the local backend, bundled frontend, CodeMirror, terminal, and
+  preferred-editor launch smoke test.
 
 Deliverable exit: the Tauri app can run concurrent Pi and Claude work, cover
 vanilla Pi's structured interactive workflows, configure and use their MCP
-servers, inspect and edit a workspace, use a persistent terminal, and use
-embedded Neovim. It reports local resource use and can launch supported work
-inside an explicit local sandbox. The same UI works in a browser against the
-local development backend, all five themes cover the shipped surfaces, and the
+servers, inspect and edit a workspace in CodeMirror, use a persistent terminal,
+and hand work to a preferred external editor. It reports local resource use and
+can launch supported work inside an explicit local sandbox. The same UI works in
+a browser against the local development backend, all five themes cover the
+shipped surfaces, and the
 website and AppImage are publishable.
 
 ## 3. Web server
@@ -650,8 +569,8 @@ Verification:
 Status: planned
 Blocked by: 3.1
 
-Keep agents, terminals, and Neovim alive across browser disconnects. Add orderly
-shutdown and recovery of persisted process metadata after an unclean restart.
+Keep agents and terminals alive across browser disconnects. Add orderly shutdown
+and recovery of persisted process metadata after an unclean restart.
 
 Verification:
 
@@ -669,8 +588,8 @@ packaged standalone server rather than a test-only transport.
 
 Verification:
 
-- Complete workspace, Pi session, Claude session, file, terminal, Neovim,
-  resource, and theme flows against fake adapters in CI.
+- Complete workspace, Pi session, Claude session, file, CodeMirror, terminal,
+  external editor, resource, and theme flows against fake adapters in CI.
 
 ### 3.4 Non-loopback safety gate
 
@@ -721,8 +640,7 @@ Blocked by: 2
 
 Add Codex discovery, structured transport, native resume, capabilities,
 fixtures, and UI exposure through `pau-agent`. Map its native MCP configuration
-and lifecycle into the MCP adapter capabilities established in units 2.47 and
-2.48.
+and lifecycle into the existing MCP adapter capabilities and shared MCP UI.
 
 Verification:
 
@@ -739,8 +657,7 @@ Blocked by: 2
 
 Add Antigravity discovery, structured transport, native resume, capabilities,
 fixtures, and UI exposure through `pau-agent`. Map its native MCP configuration
-and lifecycle into the MCP adapter capabilities established in units 2.47 and
-2.48.
+and lifecycle into the existing MCP adapter capabilities and shared MCP UI.
 
 Verification:
 
@@ -763,7 +680,7 @@ Verification:
 
 - Start one fixture language server, publish diagnostics, request completion,
   restart after failure, and stop it when the workspace closes.
-- Confirm Neovim language-server processes remain independent.
+- Confirm external-editor language-server processes remain independent.
 
 Deliverable exit: Pau runs as a local or explicitly secured remote web service
 without Tauri, with the same UI and backend behavior as the desktop application.
@@ -776,8 +693,9 @@ workspace discovery, process ownership, port forwarding, and reconnect semantics
 before assigning it to a deliverable. Do not assume the local Axum API is safe
 to expose as a remote-control transport.
 
-A Kickstart-based Neovim profile, `.deb` and RPM packages, Intel macOS, signing
-and notarization automation, shared workspaces, agent councils, workflow graphs,
-mobile clients, and extension marketplaces remain backlog items.
+Deep browser embedding for Neovim or another editor, a Kickstart-based Neovim
+profile, `.deb` and RPM packages, Intel macOS, signing and notarization
+automation, shared workspaces, agent councils, workflow graphs, mobile clients,
+and extension marketplaces remain backlog items.
 
 Cloud sandboxes and hosted execution are not planned.

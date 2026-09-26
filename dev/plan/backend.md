@@ -55,6 +55,35 @@ they may offer interrupt or stop, but do not automatically kill or throttle a
 session. Token, context-window, and cost values come from native agent protocols
 and remain separate from operating-system measurements.
 
+## Diagnostics
+
+Diagnostics are available in release builds through an explicit settings control
+and CLI flag. Enabling diagnostics adds observation only. It must not change
+supervision, retry timing, permissions, sandboxing, authentication, or process
+limits. Fault injection, fake events, forced disconnects, and child-process
+failure controls compile or ship only in development builds.
+
+Each subsystem writes structured diagnostic records to bounded in-memory rings.
+Records include component, severity, timestamp, stable process or session IDs,
+operation, duration, transport state, queue pressure, and error classification.
+Keep stderr and protocol traffic separate. A small metadata trace records
+adapter handshakes, capabilities, WebSocket reconnects, event sequence and replay
+gaps, process starts and exits, slow consumers, and dropped updates without
+capturing content payloads.
+
+Payload-level protocol tracing is off by default and requires temporary explicit
+enablement. Apply redaction before a record enters a trace, UI event, log, or
+export buffer. Do not record credentials, environment values, prompts, file
+contents, tool arguments, transcript content, paths outside the workspace, or
+sensitive URL components. A subsystem that cannot prove redaction omits the
+field instead of exporting it.
+
+A user-initiated diagnostic export contains build and dependency versions,
+adapter capabilities and handshake results, process summaries, transport state,
+configuration shape without values, and recent redacted records. Routine traces
+remain non-durable. The export path is the only persistence path for a diagnostic
+bundle, and the UI shows its contents and destination before writing it.
+
 ## Local process sandbox
 
 Follow the two-layer pattern used by
@@ -121,9 +150,12 @@ values and sensitive URL components out of process arguments, diagnostics,
 violation events, and persisted logs. Clear in-memory mappings, generated trust
 material, and sentinels when the session ends.
 
-Operator-controlled terminals and Neovim remain unsandboxed by default; each can
-request a separate sandbox profile. The effective profile shown before launch
-names readable and writable roots, network and local-socket access, brokered and
+Operator-controlled terminals and editors launched by Pau remain unsandboxed by
+default. A terminal editor can use the terminal's explicitly selected sandbox
+profile. Other editor launch adapters expose sandbox selection only after their
+process and descendant behavior has been verified. The effective profile shown
+before launch names readable and writable roots, network and local-socket access,
+brokered and
 denied credentials, process limits, unsandboxed fallback policy, disabled tools,
 and known gaps. Agent permission modes remain guardrails even when they add
 useful restrictions of their own.

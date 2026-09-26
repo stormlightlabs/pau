@@ -86,6 +86,7 @@ button:disabled {
 @media (prefers-contrast: more) {
 	:root,
 	[data-theme] {
+		--border-thin: 1px;
 		--color-line: var(--color-line-strong);
 		--color-text-muted: var(--color-text);
 	}

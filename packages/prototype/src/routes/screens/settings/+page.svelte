@@ -11,15 +11,15 @@
 		{ id: 'vitesse', name: 'Vitesse Dark', colors: ['#4d9375', '#5da994', '#e6cc77', '#cb7676'] }
 	];
 	let theme = $state('iceberg');
-	let applyToNeovim = $state(false);
-	let loadInit = $state(false);
+	let editor = $state('Neovim');
+	let openTerminalEditorsInPau = $state(true);
 	let font = $state('IBM Plex Sans');
 </script>
 
 <PrototypePage
 	section="V1 screen · 09"
 	title="Settings"
-	note="Theme and editor choices show their scope directly. Loading the user’s Neovim configuration remains separate from applying Pau’s colors because the two actions carry different risks.">
+	note="Pau’s theme applies to its built-in surfaces. Preferred editors keep their own configuration and open through a known adapter or explicit command template.">
 	<div
 		data-theme={theme}
 		style:--font-ui={font === 'Inter'
@@ -37,7 +37,7 @@
 						<button type="button" aria-pressed="true"
 							><span class="i-tabler-palette"></span><span>Appearance</span></button>
 						<button type="button"><span class="i-tabler-robot"></span><span>Agents</span></button>
-						<button type="button"><span class="i-tabler-code"></span><span>Neovim</span></button>
+						<button type="button"><span class="i-tabler-code"></span><span>Editors</span></button>
 						<button type="button"><span class="i-tabler-keyboard"></span><span>Keybindings</span></button>
 						<button type="button"><span class="i-tabler-bell"></span><span>Notifications</span></button>
 					</div>
@@ -72,18 +72,6 @@
 
 						<div class="mt-7 max-w-3xl border-y border-line">
 							<label class="flex min-h-12 items-center justify-between gap-4 border-b border-line text-sm">
-								<span>Apply theme to Neovim</span><input
-									class="accent-[var(--color-accent)]"
-									type="checkbox"
-									bind:checked={applyToNeovim} />
-							</label>
-							<label class="flex min-h-12 items-center justify-between gap-4 border-b border-line text-sm">
-								<span>Load my init.lua</span><input
-									class="accent-[var(--color-accent)]"
-									type="checkbox"
-									bind:checked={loadInit} />
-							</label>
-							<label class="flex min-h-12 items-center justify-between gap-4 text-sm">
 								<span>Interface font</span>
 								<select
 									class="border border-line bg-canvas px-2 py-1 text-sm"
@@ -91,6 +79,22 @@
 									aria-label="Interface font">
 									<option>IBM Plex Sans</option><option>Inter</option><option>Atkinson Hyperlegible Next</option>
 								</select>
+							</label>
+							<label class="flex min-h-12 items-center justify-between gap-4 border-b border-line text-sm">
+								<span>Preferred editor</span>
+								<select
+									class="border border-line bg-canvas px-2 py-1 text-sm"
+									bind:value={editor}
+									aria-label="Preferred editor">
+									<option>Neovim</option><option>Vim</option><option>Helix</option><option>Visual Studio Code</option
+									><option>Zed</option><option>Custom command</option>
+								</select>
+							</label>
+							<label class="flex min-h-12 items-center justify-between gap-4 text-sm">
+								<span>Open terminal editors in Pau</span><input
+									class="accent-[var(--color-accent)]"
+									type="checkbox"
+									bind:checked={openTerminalEditorsInPau} />
 							</label>
 						</div>
 

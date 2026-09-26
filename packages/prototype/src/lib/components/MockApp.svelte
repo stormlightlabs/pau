@@ -5,12 +5,15 @@
 		context,
 		branch,
 		theme,
+		actions,
 		children
 	}: {
 		context: string;
 		branch?: string;
 		/** Renders the mock in one of the shipped themes. */
 		theme?: 'eldritch' | 'nord' | 'iceberg' | 'catppuccin' | 'vitesse';
+		/** Adds controls that change the visibility of shell regions. */
+		actions?: import('svelte').Snippet;
 		children: import('svelte').Snippet;
 	} = $props();
 
@@ -32,6 +35,9 @@
 				<span class="chip chip--code"><span class="i-octicon-git-branch-16" aria-hidden="true"></span>{branch}</span>
 			{/if}
 		</div>
+		{#if actions}
+			<div class="mock-app__view-actions">{@render actions()}</div>
+		{/if}
 		<button class="mock-app__command" type="button" aria-label="Open command menu">
 			<span class="i-tabler-search" aria-hidden="true"></span>
 			<span class="mock-app__command-label">Search or run a command</span>

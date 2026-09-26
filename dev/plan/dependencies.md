@@ -13,9 +13,8 @@ The initial choices to validate are:
   serialization, links, clipboard, Unicode, and optional WebGL rendering
 - `portable-pty` for Rust PTY ownership on Linux and macOS
 - CodeMirror 6 for lightweight editing and diff views
-- `nvim-rs` or another maintained Rust client for Neovim msgpack-RPC
-- an existing embeddable Neovim web UI or grid renderer, if one meets current
-  Neovim UI protocol, input, theming, and reconnect requirements
+- editor command-line interfaces for external workspace, file, location, and
+  diff launch
 - Iconify through UnoCSS or unplugin for the selected icon sets
 
 ## Terminal dependency selection
@@ -51,30 +50,21 @@ receives only new output. `pau-term` must provide session ownership, bounded
 scrollback and replay, backpressure, staged shutdown, and control validation.
 No custom terminal parser, emulator, or PTY layer is justified.
 
-Use `nvim-rs` 0.9.2 with its Tokio support for Neovim msgpack-RPC. The crate is
-LGPL-3.0-licensed, supports child-process transports and nested asynchronous
-requests, and remains maintained. Its API is unstable, so keep it inside
-`pau-term` and do not expose its types in Pau's protocol. `neovim-lib` 0.6.1 is
-also LGPL-3.0-licensed, but its repository has been inactive since 2019 and its
-synchronous API is a worse fit for the Tokio backend. The spike attached to
-Neovim 0.12.5 through `nvim --embed`, received line-grid redraws, sent input,
-and resized the external UI.
+## Editor dependency selection
 
-No existing browser renderer meets Pau's requirements. `neovim-component`
-0.10.1 is MIT-licensed, but its last release was in 2017 and it depends on
-Polymer 2, Electron or Node process access, and the old Neovim UI protocol.
-Firenvim is maintained and renders Neovim in Chromium and Firefox, but it is a
-GPL-3.0 browser extension and Neovim plugin rather than an embeddable renderer.
-Its renderer depends on Firenvim's native-messaging transport and page takeover
-lifecycle.
+Use CodeMirror 6 for Pau's built-in file, quick-edit, and diff surfaces. Select
+its exact packages during the CodeMirror unit and keep language services behind
+an optional backend supervisor rather than adding a browser language-server
+runtime.
 
-Pau will own a thin browser grid and input layer behind the renderer interface.
-The base layer handles `grid_resize`, `grid_clear`, `grid_line`, `grid_scroll`,
-`grid_cursor_goto`, highlight definitions, mode changes, and `flush`. It maps
-keyboard, mouse, focus, paste, clipboard, and measured container size to typed
-backend controls. Rust owns process and RPC lifecycle and translates raw redraw
-batches to compact WebSocket events. The browser uses platform text measurement
-and rendering; Pau will not implement msgpack-RPC or a text-shaping engine.
-Multigrid placement, floating windows, external messages, command lines, popup
-menus, tablines, and wildmenus remain unsupported until the later multigrid
-work.
+External editor launch uses each editor's documented command-line interface and
+Rust process APIs. It does not require an editor plugin or a shared editor
+protocol. Keep known argument mappings for Neovim, Vim, Helix, Visual Studio
+Code, and Zed, and allow an explicit command template for another editor.
+Terminal editors run through the selected PTY and xterm.js stack.
+
+Do not add a Neovim RPC client or browser grid renderer in the first release. A
+previous spike proved that `nvim --embed` can provide redraw, input, and resize,
+but a complete integration also owns rendering, multigrid, clipboard, input,
+configuration, theming, version compatibility, and reconnect behavior. Revisit
+those dependencies only if deep embedding becomes a separate product priority.

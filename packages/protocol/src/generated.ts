@@ -34,6 +34,16 @@ created_at: string,
  */
 updated_at: string, };
 
+export type McpEnablement = {
+/**
+ * Workspace default. Missing persisted state is always `false`.
+ */
+workspace_default: boolean,
+/**
+ * Session-specific choice, when one has been recorded.
+ */
+session_override: boolean | null, };
+
 export type FileEntryKind = "file" | "directory" | "symlink";
 
 export type FileEntry = {

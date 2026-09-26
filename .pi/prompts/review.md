@@ -6,12 +6,13 @@ argument-hint: [focus]
 Review the current dirty working tree. Focus on `${@:-all changed behavior}`.
 Do not edit reviewed files.
 
-Read `AGENTS.md` and the active unit in `dev/ROADMAP.md`. Use the indexes in
-`dev/SPEC.md` and `dev/PLAN.md` to read the documents governing the changed
-behavior. Inspect staged and unstaged diffs, relevant untracked files,
-surrounding code, callers, tests, and documentation. Research dependency or
-platform behavior when a finding depends on it. Run focused read-only checks
-when they can confirm or reject a suspected defect.
+Read `AGENTS.md` and the active unit in `dev/ROADMAP.md`. Read `dev/SPEC.md`,
+`dev/PLAN.md`, and every document they link before reviewing the project. Use
+those indexes to identify the documents governing the changed behavior. Inspect
+staged and unstaged diffs, relevant untracked files, surrounding code, callers,
+tests, and documentation. Research dependency or platform behavior when a
+finding depends on it. Run focused read-only checks when they can confirm or
+reject a suspected defect.
 
 Review correctness, edge cases, security, concurrency, process cleanup,
 compatibility, test quality, documentation, and needless complexity. Report only

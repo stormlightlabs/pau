@@ -5,10 +5,11 @@ argument-hint: <unit-id>
 
 Implement roadmap unit `$1`.
 
-Read `AGENTS.md`, then the unit in `dev/ROADMAP.md`. Use the indexes in
-`dev/SPEC.md` and `dev/PLAN.md` to find and read the unit's owning documents
-under `dev/spec/` and `dev/plan/`. Stop if the ID is missing, the unit is not
-`planned` or `in progress`, or any blocker is not `complete`.
+Read `AGENTS.md`, then the unit in `dev/ROADMAP.md`. Read `dev/SPEC.md`,
+`dev/PLAN.md`, and every document they link before changing the project. Use
+those indexes to identify the documents that own the unit's behavior and
+architecture. Stop if the ID is missing, the unit is not `planned` or
+`in progress`, or any blocker is not `complete`.
 
 Before editing, set a `planned` unit to `in progress`. Trace the affected code
 and reuse established libraries and patterns. Implement only the unit's stated

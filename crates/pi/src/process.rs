@@ -161,7 +161,8 @@ impl PiProcess {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
 
-        let mut child = command.spawn().map_err(PiProcessError::Start)?;
+        let mut child =
+            crate::retry_executable_busy(|| command.spawn()).map_err(PiProcessError::Start)?;
         let process_id = child.id().ok_or_else(|| {
             PiProcessError::Start(std::io::Error::other("Pi did not report a process ID"))
         })?;

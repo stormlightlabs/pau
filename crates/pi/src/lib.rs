@@ -1,6 +1,7 @@
 //! Pi discovery, RPC transport, and process supervision.
 
 mod extension_ui;
+mod mcp;
 mod process;
 mod projection;
 mod registry;
@@ -9,6 +10,11 @@ mod session;
 pub use extension_ui::{
     PiExtensionNotificationLevel, PiExtensionUiParseError, PiExtensionUiRequest,
     PiExtensionUiResponse, PiExtensionWidgetPlacement,
+};
+pub use mcp::{
+    DiscoverPiMcpOptions, LATEST_VERIFIED_PI_MCP_ADAPTER_VERSION, PINNED_PI_MCP_ADAPTER_VERSION,
+    PiMcpAdapterAvailability, PiMcpAdapterCompatibility, PiMcpAdapterState, PiMcpDiscovery,
+    discover_pi_mcp,
 };
 pub use process::{
     PiDiagnostic, PiDiagnosticSource, PiProcess, PiProcessError, PiProcessExit, PiProcessOutput,
@@ -32,6 +38,37 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
+
+const EXECUTABLE_BUSY_RETRIES: usize = 5;
+const EXECUTABLE_BUSY_RETRY_DELAY: Duration = Duration::from_millis(10);
+
+/// A package update can leave the Pi executable briefly write-locked on Linux.
+/// Retry only that transient operating-system error; every other failure remains
+/// immediate and unchanged.
+fn retry_executable_busy<T>(
+    mut operation: impl FnMut() -> std::io::Result<T>,
+) -> std::io::Result<T> {
+    for attempt in 0..=EXECUTABLE_BUSY_RETRIES {
+        match operation() {
+            Err(error) if executable_is_busy(&error) && attempt < EXECUTABLE_BUSY_RETRIES => {
+                std::thread::sleep(EXECUTABLE_BUSY_RETRY_DELAY);
+            }
+            result => return result,
+        }
+    }
+    unreachable!("retry loop always returns on its final attempt")
+}
+
+#[cfg(unix)]
+fn executable_is_busy(error: &std::io::Error) -> bool {
+    error.raw_os_error() == Some(libc::ETXTBSY)
+}
+
+#[cfg(not(unix))]
+fn executable_is_busy(_error: &std::io::Error) -> bool {
+    false
+}
 
 /// Identifies the Pi adapter in diagnostics.
 pub const CRATE_NAME: &str = "pau-pi";
@@ -293,21 +330,20 @@ fn find_on_path(path: &OsStr) -> Result<PathBuf, PiDiscoveryError> {
 }
 
 fn read_version(executable_path: &Path) -> Result<Version, PiDiscoveryError> {
-    let output = Command::new(executable_path)
-        .arg("--version")
-        .output()
-        .map_err(|source| {
-            discovery_error(
-                PiDiscoveryErrorCode::VersionCommandFailed,
-                format!(
-                    "Could not run `{} --version`. Check the Pi installation.",
-                    executable_path.display()
-                ),
-                Some(executable_path.to_path_buf()),
-                None,
-                Some(source),
-            )
-        })?;
+    let mut command = Command::new(executable_path);
+    command.arg("--version");
+    let output = retry_executable_busy(|| command.output()).map_err(|source| {
+        discovery_error(
+            PiDiscoveryErrorCode::VersionCommandFailed,
+            format!(
+                "Could not run `{} --version`. Check the Pi installation.",
+                executable_path.display()
+            ),
+            Some(executable_path.to_path_buf()),
+            None,
+            Some(source),
+        )
+    })?;
 
     if !output.status.success() {
         let diagnostic = String::from_utf8_lossy(&output.stderr).trim().to_owned();
@@ -349,21 +385,20 @@ fn verify_rpc_capability(
     executable_path: &Path,
     version: &Version,
 ) -> Result<(), PiDiscoveryError> {
-    let output = Command::new(executable_path)
-        .arg("--help")
-        .output()
-        .map_err(|source| {
-            discovery_error(
-                PiDiscoveryErrorCode::VersionCommandFailed,
-                format!(
-                    "Could not inspect Pi {version} capabilities at {}.",
-                    executable_path.display()
-                ),
-                Some(executable_path.to_path_buf()),
-                Some(version.clone()),
-                Some(source),
-            )
-        })?;
+    let mut command = Command::new(executable_path);
+    command.arg("--help");
+    let output = retry_executable_busy(|| command.output()).map_err(|source| {
+        discovery_error(
+            PiDiscoveryErrorCode::VersionCommandFailed,
+            format!(
+                "Could not inspect Pi {version} capabilities at {}.",
+                executable_path.display()
+            ),
+            Some(executable_path.to_path_buf()),
+            Some(version.clone()),
+            Some(source),
+        )
+    })?;
     let help = String::from_utf8_lossy(&output.stdout);
     let missing = REQUIRED_HELP_MARKERS
         .into_iter()
@@ -475,6 +510,25 @@ mod tests {
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;
+
+    #[cfg(unix)]
+    #[test]
+    fn retries_a_transient_executable_write_lock() {
+        let attempts = std::cell::Cell::new(0);
+        let value = retry_executable_busy(|| {
+            let attempt = attempts.get() + 1;
+            attempts.set(attempt);
+            if attempt < 3 {
+                Err(std::io::Error::from_raw_os_error(libc::ETXTBSY))
+            } else {
+                Ok("started")
+            }
+        })
+        .unwrap();
+
+        assert_eq!(value, "started");
+        assert_eq!(attempts.get(), 3);
+    }
 
     #[test]
     fn uses_a_configured_path_and_reports_configuration() {

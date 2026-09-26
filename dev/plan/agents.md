@@ -135,9 +135,10 @@ package instead of building another MCP client. The evaluated 2.37.0 release
 is MIT-licensed, uses the current `@earendil-works` Pi packages, supports stdio,
 Streamable HTTP, OAuth, elicitation, resources, prompts, lazy tool discovery,
 secure credential storage, public configuration helpers, versioned status
-snapshots, and MCP conformance tests. Pin the exercised version for a Pau
-release and recheck its license, maintenance state, Pi compatibility, package
-contents, and protocol coverage when updating it.
+snapshots, and MCP conformance tests. Configuration discovery also runs against
+compatible release 2.38.0. Pin 2.37.0 for the current Pau release and recheck
+its license, maintenance state, Pi compatibility, package contents, and
+protocol coverage before changing that pin.
 
 [`pi-mcp-extension`](https://pi.dev/packages/pi-mcp-extension) 1.5.0 was not
 selected. It is a smaller MIT-licensed client, but targets the former

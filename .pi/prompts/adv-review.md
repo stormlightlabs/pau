@@ -7,11 +7,12 @@ Adversarially review the current dirty working tree. Focus on
 `${@:-the changed attack and failure surface}`. Do not edit reviewed files.
 Assume a standard review already ran and do not repeat ordinary findings.
 
-Read `AGENTS.md` and the active unit in `dev/ROADMAP.md`. Use the indexes in
-`dev/SPEC.md` and `dev/PLAN.md` to read the documents governing the changed
-attack and failure surface. Inspect staged and unstaged diffs, relevant untracked
-files, surrounding code, callers, tests, and documentation. Research any
-platform, dependency, or protocol behavior needed to test an assumption.
+Read `AGENTS.md` and the active unit in `dev/ROADMAP.md`. Read `dev/SPEC.md`,
+`dev/PLAN.md`, and every document they link before reviewing the project. Use
+those indexes to identify the documents governing the changed attack and failure
+surface. Inspect staged and unstaged diffs, relevant untracked files,
+surrounding code, callers, tests, and documentation. Research any platform,
+dependency, or protocol behavior needed to test an assumption.
 
 Try to break the change with hostile or malformed input, unlucky ordering,
 cancellation, partial failure, process exit, replay, resource exhaustion, path

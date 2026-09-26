@@ -3,6 +3,7 @@
 mod claude;
 mod controls;
 mod events;
+mod mcp;
 
 pub use claude::{
     CLAUDE_BRIDGE_CAPABILITIES, CLAUDE_BRIDGE_PROTOCOL_VERSION, ClaudeAdapterDiagnostic,
@@ -15,6 +16,11 @@ pub use claude::{
 };
 pub use controls::{AgentCapabilities, AgentControl, AgentControlError, PromptQueueChoice};
 pub use events::{AgentEvent, AgentEventKind, AgentSessionStatus};
+pub use mcp::{
+    DiscoverClaudeMcpOptions, DiscoveredMcpServer, McpAgent, McpConfigurationDiscovery,
+    McpConfigurationDocument, McpConfigurationKind, McpConfigurationScope, McpDiscoveryError,
+    McpServerSource, discover_claude_mcp, merge_mcp_layers,
+};
 
 /// Identifies the agent subsystem in diagnostics.
 pub const CRATE_NAME: &str = "pau-agent";

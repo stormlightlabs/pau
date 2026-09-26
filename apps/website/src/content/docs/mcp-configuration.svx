@@ -1,0 +1,55 @@
+---
+title: MCP configuration
+description: Understand how Pau finds Pi and Claude MCP configuration.
+order: 3
+---
+
+# MCP configuration
+
+Pau reads each agent's native Model Context Protocol (MCP) configuration. It
+keeps Pi and Claude formats separate and records the source path and scope for
+each server. Discovery does not install a package, import another client's
+configuration, start a server, or change a native configuration file.
+
+Pau-managed MCP starts off. A workspace can enable it as its default, and an
+individual session can override that choice. This setting does not disable MCP
+that Pi or Claude already loads from native configuration.
+
+## Pi sources
+
+Pi MCP requires an explicitly installed `pi-mcp-adapter` package. Pau recognizes
+the package only when it is declared in Pi's user or project settings. If the
+package is missing, Pau tells you to install the pinned release. If Pi's package
+filters disable its extension, Pau tells you to enable it with `pi config`.
+Pau does not make either change automatically.
+
+Pau follows the adapter's documented precedence, from lowest to highest:
+
+1. `~/.config/mcp/mcp.json`
+2. `~/.agents/mcp.json`
+3. `~/.agents/mcp/mcp.json`
+4. `<Pi agent directory>/mcp.json`
+5. `.mcp.json`
+6. `.pi/mcp.json`
+
+A user-level source can opt into ancestor discovery with
+`settings.ancestorConfigRoots`. Pau uses the nearest configured root that
+contains the workspace. It reads shared and Pi-specific files from that root
+toward the workspace, without searching above the root.
+
+Pau also identifies MCP configuration declared by packages in Pi settings.
+Package servers retain package scope and remain lower precedence than the shared
+and Pi-specific files. A literal `"disabled": true` in the effective Pi server
+definition keeps that server disabled.
+
+## Claude sources
+
+Pau reads Claude Code's user and local MCP servers from `~/.claude.json` and
+shared project servers from `.mcp.json`. User scope has the lowest precedence,
+followed by project scope and the current project's local entry in
+`~/.claude.json`. Claude's per-project `disabledMcpServers` choice remains in
+effect.
+
+Pau retains unknown fields and the original source text. Reading and displaying
+configuration therefore does not reformat comments, reorder keys, or rewrite
+unrelated entries.

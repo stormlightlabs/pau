@@ -13,6 +13,7 @@ const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0001_workspaces_and_settings.sql"),
     include_str!("../migrations/0002_process_metadata.sql"),
+    include_str!("../migrations/0003_mcp_enablement.sql"),
 ];
 
 /// Result returned by persistence operations.
@@ -52,6 +53,11 @@ impl Database {
     /// Returns a repository for application settings.
     pub fn settings(&self) -> ApplicationSettingsRepository {
         ApplicationSettingsRepository::new(self.connection.clone())
+    }
+
+    /// Returns a repository for Pau-managed MCP enablement.
+    pub fn mcp_enablement(&self) -> McpEnablementRepository {
+        McpEnablementRepository::new(self.connection.clone())
     }
 
     /// Returns a repository for persisted process metadata.
@@ -269,6 +275,132 @@ impl ApplicationSettingsRepository {
                     connection.execute("DELETE FROM application_settings WHERE key = ?1", [key])?
                         > 0,
                 )
+            })
+            .await
+    }
+}
+
+/// Pau-managed MCP selection for a workspace and optional session override.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct McpEnablement {
+    /// Workspace default. Missing persisted state is always `false`.
+    pub workspace_default: bool,
+    /// Session-specific choice, when one has been recorded.
+    pub session_override: Option<bool>,
+}
+
+impl McpEnablement {
+    /// Returns the session override or the workspace default.
+    pub fn effective(self) -> bool {
+        self.session_override.unwrap_or(self.workspace_default)
+    }
+}
+
+/// Persistence for Pau-managed MCP selection.
+#[derive(Clone)]
+pub struct McpEnablementRepository {
+    connection: Connection,
+}
+
+impl McpEnablementRepository {
+    fn new(connection: Connection) -> Self {
+        Self { connection }
+    }
+
+    /// Reads enablement without changing native agent configuration.
+    pub async fn get(&self, workspace_id: &str, session_id: Option<&str>) -> Result<McpEnablement> {
+        let workspace_id = workspace_id.to_owned();
+        let session_id = session_id.map(str::to_owned);
+        self.connection
+            .call(move |connection| {
+                let workspace_default = connection
+                    .query_row(
+                        "SELECT enabled FROM workspace_mcp_enablement WHERE workspace_id = ?1",
+                        [&workspace_id],
+                        |row| row.get(0),
+                    )
+                    .optional()?
+                    .unwrap_or(false);
+                let session_override = match session_id {
+                    Some(session_id) => connection
+                        .query_row(
+                            "SELECT enabled FROM session_mcp_enablement
+                             WHERE session_id = ?1 AND workspace_id = ?2",
+                            params![session_id, workspace_id],
+                            |row| row.get(0),
+                        )
+                        .optional()?,
+                    None => None,
+                };
+                Ok(McpEnablement {
+                    workspace_default,
+                    session_override,
+                })
+            })
+            .await
+    }
+
+    /// Sets the workspace default after explicit operator enablement or disablement.
+    pub async fn set_workspace_default(
+        &self,
+        workspace_id: &str,
+        enabled: bool,
+        updated_at: &str,
+    ) -> Result<()> {
+        let workspace_id = workspace_id.to_owned();
+        let updated_at = updated_at.to_owned();
+        self.connection
+            .call(move |connection| {
+                connection.execute(
+                    "INSERT INTO workspace_mcp_enablement (workspace_id, enabled, updated_at)
+                     VALUES (?1, ?2, ?3)
+                     ON CONFLICT(workspace_id) DO UPDATE SET
+                       enabled = excluded.enabled,
+                       updated_at = excluded.updated_at",
+                    params![workspace_id, enabled, updated_at],
+                )?;
+                Ok(())
+            })
+            .await
+    }
+
+    /// Sets one session override without changing the workspace default.
+    pub async fn set_session_override(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        enabled: bool,
+        updated_at: &str,
+    ) -> Result<()> {
+        let workspace_id = workspace_id.to_owned();
+        let session_id = session_id.to_owned();
+        let updated_at = updated_at.to_owned();
+        self.connection
+            .call(move |connection| {
+                connection.execute(
+                    "INSERT INTO session_mcp_enablement
+                       (session_id, workspace_id, enabled, updated_at)
+                     VALUES (?1, ?2, ?3, ?4)
+                     ON CONFLICT(session_id) DO UPDATE SET
+                       workspace_id = excluded.workspace_id,
+                       enabled = excluded.enabled,
+                       updated_at = excluded.updated_at",
+                    params![session_id, workspace_id, enabled, updated_at],
+                )?;
+                Ok(())
+            })
+            .await
+    }
+
+    /// Removes a session override so the workspace default applies again.
+    pub async fn clear_session_override(&self, session_id: &str) -> Result<bool> {
+        let session_id = session_id.to_owned();
+        self.connection
+            .call(move |connection| {
+                Ok(connection.execute(
+                    "DELETE FROM session_mcp_enablement WHERE session_id = ?1",
+                    [session_id],
+                )? > 0)
             })
             .await
     }
@@ -492,6 +624,53 @@ mod tests {
         assert_eq!(
             database.settings().get(&setting.key).await.unwrap(),
             Some(setting)
+        );
+
+        let initial = database
+            .mcp_enablement()
+            .get("workspace-1", Some("session-1"))
+            .await
+            .unwrap();
+        assert_eq!(
+            initial,
+            McpEnablement {
+                workspace_default: false,
+                session_override: None,
+            }
+        );
+        assert!(!initial.effective());
+        database
+            .mcp_enablement()
+            .set_workspace_default("workspace-1", true, UPDATED_AT)
+            .await
+            .unwrap();
+        database
+            .mcp_enablement()
+            .set_session_override("workspace-1", "session-1", false, UPDATED_AT)
+            .await
+            .unwrap();
+        let overridden = database
+            .mcp_enablement()
+            .get("workspace-1", Some("session-1"))
+            .await
+            .unwrap();
+        assert!(overridden.workspace_default);
+        assert_eq!(overridden.session_override, Some(false));
+        assert!(!overridden.effective());
+        assert!(
+            database
+                .mcp_enablement()
+                .clear_session_override("session-1")
+                .await
+                .unwrap()
+        );
+        assert!(
+            database
+                .mcp_enablement()
+                .get("workspace-1", Some("session-1"))
+                .await
+                .unwrap()
+                .effective()
         );
 
         let process = ProcessMetadata {

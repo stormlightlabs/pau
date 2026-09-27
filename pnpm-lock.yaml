@@ -267,7 +267,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-coding-agent':
         specifier: 0.87.1
-        version: 0.87.1(ws@8.21.3)
+        version: 0.87.1(ws@8.21.3)(zod@3.25.76)
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
@@ -350,6 +350,28 @@ importers:
       vite:
         specifier: 7.3.1
         version: 7.3.1(@types/node@24.13.6)(jiti@2.7.0)(yaml@2.9.1)
+
+  packages/sandbox:
+    dependencies:
+      '@anthropic-ai/sandbox-runtime':
+        specifier: 0.0.77
+        version: 0.0.77
+      '@earendil-works/pi-ai':
+        specifier: 0.87.1
+        version: 0.87.1(ws@8.21.3)(zod@3.25.76)
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.87.1
+        version: 0.87.1(ws@8.21.3)(zod@3.25.76)
+      typebox:
+        specifier: 1.3.27
+        version: 1.3.27
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
 
   packages/ui:
     dependencies:
@@ -470,6 +492,11 @@ packages:
 
   '@antfu/install-pkg@2.1.0':
     resolution: {integrity: sha512-sdg9NxU3zR4Mnawfbc/x6GB5Wf17WYud5qOuEuxXjaKpYpMkISSJEjItGebXJ2bQ4DIcly4NYH23mtkGJjvKUw==}
+
+  '@anthropic-ai/sandbox-runtime@0.0.77':
+    resolution: {integrity: sha512-uOe6kkAbo91r5shXXBxZ1DKbOpWmnXkNDDujXrFJRaHSG7D7s8b7Yfsu0pGDkYFgKZ2ECtVCNisl6pCYcaMF7A==}
+    engines: {node: '>=20.11.0'}
+    hasBin: true
 
   '@anthropic-ai/sdk@0.124.0':
     resolution: {integrity: sha512-cN5O8i9UVxHeOQAzj/XjshWXG8KiibJDw9OGpH2Z/eR3n/RBxdoLxDJOcfqAJWvjaMDFfHTBADU04hWRJVkDyA==}
@@ -1643,6 +1670,9 @@ packages:
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
 
+  '@pondwader/socks5-server@1.0.10':
+    resolution: {integrity: sha512-bQY06wzzR8D2+vVCUoBsr5QS2U6UgPUQRmErNwtsuI6vLcyRKkafjkr3KxbtGFf9aBBIV2mcvlsKD1UYaIV+sg==}
+
   '@protobufjs/aspromise@1.1.2':
     resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
 
@@ -2603,6 +2633,10 @@ packages:
   comma-separated-tokens@2.0.3:
     resolution: {integrity: sha512-Fu4hJdvzeylCfQPp9SGWidpzrMs7tTrlu6Vb8XGaRGck8QSNZJJp538Wrb60Lax4fPwR64ViY468OIUTbRlGZg==}
 
+  commander@12.1.0:
+    resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
+    engines: {node: '>=18'}
+
   confbox@0.1.8:
     resolution: {integrity: sha512-RMtmw0iFkeR4YV+fUOSucriAQNb9g8zFR52MWCtl+cCZOFRNL6zeB395vPzFhEjjn4fMxXudmELnl/KF/WrK6w==}
 
@@ -3200,6 +3234,10 @@ packages:
   node-fetch@3.3.2:
     resolution: {integrity: sha512-dRB78srN/l6gqWulah9SrxeYnxeddIG30+GOqK/9OlLVyLg3HPnr6SqOWTWOXKRwC2eGYCkZ59NNuSgvSrpgOA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
+  node-forge@1.4.0:
+    resolution: {integrity: sha512-LarFH0+6VfriEhqMMcLX2F7SwSXeWwnEAJEsYm5QKWchiVYVvJyV9v7UDvUv+w5HO23ZpQTXDv/GxdDdMyOuoQ==}
+    engines: {node: '>= 6.13.0'}
 
   node-releases@2.0.56:
     resolution: {integrity: sha512-x0InOIyzgdk+eyaWaRJFH5snEtiImgBgblZ2CyPrLmqqcuMQkEvcDPHbzqbD8eDsSeJbVOjn+crzyzHaM4D+/A==}
@@ -3984,6 +4022,9 @@ packages:
   zimmerframe@1.1.5:
     resolution: {integrity: sha512-msJxIvYDYcoNL+PJsu+7qmpDWsYmAxTY+2TNYXXF0hzBzBk0BMecOqDOG/EckUoKCuKwObfbugIl8QpqHDXeFA==}
 
+  zod@3.25.76:
+    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
@@ -3996,10 +4037,19 @@ snapshots:
       package-manager-detector: 1.8.0
       tinyexec: 1.3.1
 
-  '@anthropic-ai/sdk@0.124.0':
+  '@anthropic-ai/sandbox-runtime@0.0.77':
+    dependencies:
+      '@pondwader/socks5-server': 1.0.10
+      commander: 12.1.0
+      node-forge: 1.4.0
+      zod: 3.25.76
+
+  '@anthropic-ai/sdk@0.124.0(zod@3.25.76)':
     dependencies:
       json-schema-to-ts: 3.1.1
       standardwebhooks: 1.1.1
+    optionalDependencies:
+      zod: 3.25.76
 
   '@aws-sdk/client-bedrock-runtime@3.1127.0':
     dependencies:
@@ -4470,10 +4520,10 @@ snapshots:
     dependencies:
       esbuild: 0.28.2
 
-  '@earendil-works/pi-agent-core@0.87.1(ws@8.21.3)':
+  '@earendil-works/pi-agent-core@0.87.1(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@earendil-works/chord': 0.87.1
-      '@earendil-works/pi-ai': 0.87.1(ws@8.21.3)
+      '@earendil-works/pi-ai': 0.87.1(ws@8.21.3)(zod@3.25.76)
       '@earendil-works/pi-telemetry': 0.87.1
       diff: 8.0.4
       ignore: 7.0.8
@@ -4488,16 +4538,16 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-ai@0.87.1(ws@8.21.3)':
+  '@earendil-works/pi-ai@0.87.1(ws@8.21.3)(zod@3.25.76)':
     dependencies:
-      '@anthropic-ai/sdk': 0.124.0
+      '@anthropic-ai/sdk': 0.124.0(zod@3.25.76)
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
       '@earendil-works/pi-telemetry': 0.87.1
       '@google/genai': 2.21.0
       '@smithy/node-http-handler': 4.12.1
       http-proxy-agent: 9.1.0
       https-proxy-agent: 9.1.0
-      openai: 6.40.0(ws@8.21.3)
+      openai: 6.40.0(ws@8.21.3)(zod@3.25.76)
       partial-json: 0.1.7
       typebox: 1.3.27
     transitivePeerDependencies:
@@ -4509,11 +4559,11 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-coding-agent@0.87.1(ws@8.21.3)':
+  '@earendil-works/pi-coding-agent@0.87.1(ws@8.21.3)(zod@3.25.76)':
     dependencies:
       '@earendil-works/chord': 0.87.1
-      '@earendil-works/pi-agent-core': 0.87.1(ws@8.21.3)
-      '@earendil-works/pi-ai': 0.87.1(ws@8.21.3)
+      '@earendil-works/pi-agent-core': 0.87.1(ws@8.21.3)(zod@3.25.76)
+      '@earendil-works/pi-ai': 0.87.1(ws@8.21.3)(zod@3.25.76)
       '@earendil-works/pi-tui': 0.87.1
       '@silvia-odwyer/photon-node': 0.3.4
       chalk: 6.0.0
@@ -5214,6 +5264,8 @@ snapshots:
       playwright: 1.63.0
 
   '@polka/url@1.0.0-next.29': {}
+
+  '@pondwader/socks5-server@1.0.10': {}
 
   '@protobufjs/aspromise@1.1.2': {}
 
@@ -6138,6 +6190,8 @@ snapshots:
 
   comma-separated-tokens@2.0.3: {}
 
+  commander@12.1.0: {}
+
   confbox@0.1.8: {}
 
   consola@3.4.2: {}
@@ -6779,6 +6833,8 @@ snapshots:
       fetch-blob: 3.2.0
       formdata-polyfill: 4.0.10
 
+  node-forge@1.4.0: {}
+
   node-releases@2.0.56: {}
 
   obug@2.2.1: {}
@@ -6804,9 +6860,10 @@ snapshots:
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
 
-  openai@6.40.0(ws@8.21.3):
+  openai@6.40.0(ws@8.21.3)(zod@3.25.76):
     optionalDependencies:
       ws: 8.21.3
+      zod: 3.25.76
 
   optionator@0.9.4:
     dependencies:
@@ -7576,5 +7633,7 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   zimmerframe@1.1.5: {}
+
+  zod@3.25.76: {}
 
   zwitch@2.0.4: {}

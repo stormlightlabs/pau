@@ -56,6 +56,11 @@
           darwinPackages = with pkgs; [
             libiconv
           ];
+          linuxSandboxTools = with pkgs; [
+            bubblewrap
+            ripgrep
+            socat
+          ];
         in
         {
           default = pkgs.mkShell {
@@ -70,7 +75,7 @@
               rust-analyzer
               rustc
               rustfmt
-            ];
+            ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux linuxSandboxTools;
 
             buildInputs = with pkgs; [
               neovim

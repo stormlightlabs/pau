@@ -124,7 +124,7 @@ Verification:
 
 #### 2.42 Local sandbox dependency and policy spike
 
-Status: planned
+Status: complete
 Blocked by: none
 
 Evaluate maintained Linux and macOS containment mechanisms using the workspace
@@ -677,6 +677,11 @@ native capabilities honestly, and does not depend on the desktop route tree.
 
 Run the resource-monitoring sampler smoke test on macOS when a runner is
 available.
+
+Run the `packages/sandbox` boundary and Pi fixture runs on macOS before Pau
+offers a sandbox profile there. Run the boundary fixtures on an Ubuntu 24.04
+host with AppArmor's unprivileged user-namespace restriction enabled to confirm
+the startup failure seen with a simulated `bwrap`.
 
 ## Research backlog
 

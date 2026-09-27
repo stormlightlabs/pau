@@ -45,6 +45,7 @@ packages/
   prototype/           static design sandbox, screen fixtures, and screenshots
   ui/                  shared Svelte components, feature views, stores, and tests
   protocol/            generated or checked TypeScript wire types
+  sandbox/             sandbox launcher, Pi tool host, and containment fixtures
 crates/
   core/                pau-core: domain types, persistence, and application services
   agent/               pau-agent: agent contracts, events, and shared supervision

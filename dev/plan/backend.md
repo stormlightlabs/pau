@@ -114,17 +114,107 @@ tools are unavailable under the profile until an equivalent boundary exists.
 This makes the trusted boundary explicit instead of describing path checks in
 the Pi process as containment.
 
-Use the pinned Apache-2.0
-[`@anthropic-ai/sandbox-runtime`](https://github.com/anthropics/sandbox-runtime)
-as the first dependency to validate. Release 0.0.77 uses Bubblewrap, network
-namespaces, and seccomp on Linux and Seatbelt profiles on macOS. It also provides
-a host-side HTTP and SOCKS proxy, resolved-address checks, local-socket controls,
-violation reporting, and fail-closed dependency checks. It is a beta research
-preview, so pin the exercised release, review source and release changes before
-updating, and do not build Pau policy around undocumented behavior. The spike
-must test its documented Linux dependencies and Ubuntu user-namespace limits,
-macOS guarantees, symlink handling, descendant inheritance, cleanup, and
-failure modes. Do not claim equal isolation where platform guarantees differ.
+The prototype confirms this design with Pi 0.87.1 in RPC mode and Pi's faux
+model. The tool host runs each tool's complete `execute` call rather than
+replacing Pi's pluggable file operations: Pi's grep tool starts ripgrep in its
+own process even when custom operations are supplied. The extension forwards
+the session ID, session file, model, and thinking level that built-in tools read
+from the extension context. It also routes operator `!` commands to the tool
+host, activates only the seven built-in tools, and blocks any other tool call.
+When the sandbox cannot start, tool calls fail and nothing runs in the Pi
+process.
+
+Under a profile, disable tools from other extensions, including the Claude
+bridge's delegation tool and every tool from `pi-mcp-adapter`. That adapter
+runs in the Pi process and starts stdio servers there, so its servers need a
+launch path inside the tool host before they can stay enabled.
+
+The tool host has its own Pi agent directory in the session's temporary
+directory, so it cannot read Pi's settings or credential store and cannot
+download tools. That directory holds links to the existing `fd` and a ripgrep
+wrapper. Pi's grep tool rejects a search when ripgrep exits with status 2, and
+ripgrep does so for any unreadable file, including a read-denied `.env` or a
+Bubblewrap placeholder. The wrapper drops permission-denied diagnostics and
+keeps every other error. Replace it if Pi accepts partial ripgrep results.
+
+### Sandbox runtime selection
+
+Use `@anthropic-ai/sandbox-runtime` 0.0.77 from
+[anthropics/sandbox-runtime](https://github.com/anthropics/sandbox-runtime). It
+is Apache-2.0 licensed and is released every one to two weeks; 0.0.77 shipped
+on 2026-09-18. It is a beta research preview, so pin the exercised release,
+review source and release changes before updating, and do not build Pau policy
+around undocumented behavior. On Linux it runs commands under Bubblewrap with
+new user, PID, and network namespaces, a seccomp filter that blocks Unix
+sockets, and host-side HTTP and SOCKS proxies reached through `socat`. On macOS
+it uses Seatbelt profiles. Bubblewrap (LGPL-2.0-or-later), `socat`
+(GPL-2.0), and ripgrep (MIT or Unlicense) are required Linux executables,
+not linked libraries.
+
+`packages/sandbox` holds the prototype launcher, profile translation, tool
+host, and fixture runs. On Linux with Bubblewrap 0.12.0, the fixtures confirmed
+these guarantees for the workspace-write and read-only profiles:
+
+- Writes succeed only in the workspace, the per-session temporary directory,
+  and explicitly granted roots.
+- Credential stores under the home directory and workspace `.env` files are
+  unreadable, while `.env.example` stays readable.
+- Existing and new `.git/hooks` entries, `.git/config`, `.pi`, `.claude`,
+  `.codex`, `.mcp.json`, `.vscode`, and `.idea` are read-only.
+- Reads and writes through host-created and sandbox-created symlinks follow
+  the target's policy.
+- Network access is off by default, including direct TCP that bypasses the
+  proxy. Granted names that resolve to this host's addresses are refused.
+- Host Unix sockets are blocked unless every socket is granted, because Linux
+  cannot filter them by path.
+- Children, grandchildren, and detached descendants inherit the policy and stop
+  when the command exits or its launcher is killed.
+- Provider keys in Pau's environment do not reach the sandbox.
+
+Pau's launcher adds the checks the runtime does not make:
+
+- It builds the whole child environment. sandbox-runtime forwards every
+  variable the caller passes and adds only proxy settings.
+- It runs a no-op sandboxed command before first use. The runtime's dependency
+  check reports a missing `bwrap` or `socat`, but it passes when Ubuntu 24.04's
+  AppArmor user-namespace restriction makes every command fail at run time.
+- It never gives a sandboxed shell a socket on standard input. Node connects
+  piped streams with Unix sockets, and bash then behaves like a remote-shell
+  login: NixOS sources the system bashrc and resets `PATH`, while Debian
+  sources the user's `~/.bashrc`. Structured channels use file descriptor 3.
+- It restores the session's `TMPDIR`. The runtime replaces it with a shared
+  `/tmp/claude` directory.
+- It denies writes to `~/.npm/_logs` and `~/.claude/debug`, which the runtime
+  makes writable by default.
+
+Known gaps to carry into the managed sandbox:
+
+- Reads outside the workspace remain allowed apart from the credential list.
+- `/tmp/claude` is bound writable, and shared by every sandbox, whenever it
+  exists on the host.
+- The wrapped command starts `bwrap` through a `PATH` lookup, so the launcher
+  must control `PATH` or pin the executable.
+- The runtime sets `NO_PROXY` for loopback. Clients that honor it skip the
+  proxy and cannot reach a granted loopback address.
+- Only proxy denials are attributed to the command as violation events.
+  Filesystem, socket, and direct TCP denials surface only as the child's
+  errors.
+- Bubblewrap mounts empty, unreadable placeholders for absent protected paths
+  such as `.bashrc` and `.gitmodules`. They appear in directory listings and on
+  the host while a command runs, and `SandboxManager.reset()` removes them. A
+  crash of the launcher process leaves them behind.
+- `--new-session` detaches the command from its terminal. A shell on a PTY runs
+  with job control off, so an operator terminal profile needs further work
+  before it is offered.
+- `SandboxManager` holds one policy per process, so each policy needs its own
+  launcher process.
+
+Neovim in headless mode keeps the workspace-only write policy, so terminal
+editors can use the terminal profile. Graphical editors start servers and helper
+processes that Pau does not own and remain unsandboxed.
+
+The macOS Seatbelt profile and a real Ubuntu 24.04 host remain unverified. Do
+not claim equal isolation where platform guarantees differ.
 
 The sandbox launcher builds a minimal environment rather than forwarding Pau's
 environment. Credential brokerage is part of the first release but remains

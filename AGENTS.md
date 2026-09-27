@@ -76,7 +76,9 @@ before drafting, not only when polishing the result.
 Always audit changed prose against that skill before finishing. Remove AI
 writing tropes, stock transitions, repetition, inflated claims, and other
 formulaic language. Keep roadmap terms, unit boundaries, and implementation
-phases out of user-facing or published documentation.
+phases out of user-facing or published documentation. Name packages, scripts,
+and files for what they do, not for the unit phase that created them, such as
+a spike.
 
 Wrap prose at about 80 columns. A few trailing characters are acceptable when a
 clean break would hurt readability. Do not wrap tables, long links, indivisible

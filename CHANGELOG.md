@@ -8,6 +8,9 @@
 
 ### Desktop and web
 
+- The desktop application now owns its routes, local API connection, event
+  stream, browser development mode, and Tauri assets. The remote web application
+  remains separate.
 - Added the first desktop and browser interface with responsive navigation, a
   command bar, and an inspector.
 - Added concurrent Pi and Claude sessions with streamed transcripts, tool

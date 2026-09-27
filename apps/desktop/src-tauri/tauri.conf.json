@@ -4,10 +4,10 @@
 	"version": "0.1.0",
 	"identifier": "org.stormlightlabs.pau",
 	"build": {
-		"beforeDevCommand": "pnpm --dir ../web dev",
-		"beforeBuildCommand": "pnpm --dir ../web build",
+		"beforeDevCommand": "pnpm dev:frontend",
+		"beforeBuildCommand": "pnpm build:frontend",
 		"devUrl": "http://localhost:5173",
-		"frontendDist": "../../web/build"
+		"frontendDist": "../build"
 	},
 	"app": { "windows": [] }
 }

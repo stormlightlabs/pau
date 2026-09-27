@@ -4,12 +4,31 @@
 	"version": "0.1.0",
 	"type": "module",
 	"scripts": {
-		"check": "tsc --noEmit",
 		"build": "tauri build",
-		"dev": "tauri dev"
+		"build:frontend": "vite build",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"dev": "tauri dev",
+		"dev:frontend": "vite dev",
+		"test": "svelte-kit sync && vitest run"
+	},
+	"dependencies": {
+		"@stormlightlabs/pau-protocol": "workspace:*",
+		"@stormlightlabs/pau-ui": "workspace:*",
+		"@tauri-apps/api": "2.9.0"
 	},
 	"devDependencies": {
+		"@sveltejs/adapter-static": "3.0.10",
+		"@sveltejs/kit": "2.70.3",
+		"@sveltejs/vite-plugin-svelte": "6.2.4",
 		"@tauri-apps/cli": "2.11.5",
-		"typescript": "6.0.3"
+		"@types/node": "24.13.6",
+		"@vitest/browser-playwright": "4.1.11",
+		"playwright": "1.63.0",
+		"svelte": "5.57.1",
+		"svelte-check": "4.7.6",
+		"typescript": "6.0.3",
+		"vite": "7.3.1",
+		"vitest": "4.1.11",
+		"vitest-browser-svelte": "3.1.0"
 	}
 }

@@ -16,8 +16,8 @@ The application is planned around:
 - Pi's RPC protocol for structured session control
 - Neovim's embedded RPC UI, with CodeMirror as a lightweight editor
 
-The repository contains the workspace scaffold for the web app, desktop shell,
-documentation site, shared packages, and Rust services. See
+The repository contains the desktop application, a remote web application
+scaffold, documentation site, shared packages, and Rust services. See
 [SPEC.md](dev/SPEC.md), [PLAN.md](dev/PLAN.md), and
 [ROADMAP.md](dev/ROADMAP.md).
 
@@ -98,7 +98,7 @@ web app:
 
 ```sh
 PAU_API_TOKEN="$TOKEN" cargo run -p pau-server
-PAU_API_TOKEN="$TOKEN" pnpm --filter @stormlightlabs/pau-web dev
+PAU_API_TOKEN="$TOKEN" pnpm dev:desktop:browser
 ```
 
 The development server authenticates and forwards `/api` requests to the local
@@ -109,13 +109,22 @@ token. Workspace registrations are stored in the local Pau data directory. Set
 To run the desktop app, use the Tauri development command:
 
 ```sh
-pnpm --filter @stormlightlabs/pau-desktop dev
+pnpm dev:desktop
+```
+
+The remote web application remains a separate scaffold. Run its development
+server with:
+
+```sh
+pnpm dev:web
 ```
 
 Tauri generates a new API token, starts the API on an unused loopback port, and
 passes the token to its webview. It stops the API when the app exits. The
-desktop app loads the same SvelteKit static build used by the browser. API logs
-record authentication failures without recording supplied credentials.
+desktop app loads static assets built by `apps/desktop`; the same frontend runs
+in development browser mode. `apps/web` remains a separate scaffold for the
+remote application. API logs record authentication failures without recording
+supplied credentials.
 
 ## Product principles
 

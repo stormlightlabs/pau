@@ -52,30 +52,6 @@ status `complete`.
 during development. Tauri is the shipped application in this deliverable.
 `apps/web` is reserved for the later standalone and remote server product.
 
-### Application ownership
-
-#### 2.52 Desktop product composition
-
-Status: planned
-Blocked by: none
-
-Move the current local product routes, API integration, event stream, and browser
-tests from `apps/web` into the SvelteKit frontend owned by `apps/desktop`. Keep
-shared feature views in `packages/ui`. Give desktop-native capabilities explicit
-interfaces and keep `apps/web` as a separate remote application scaffold rather
-than a build input for Tauri.
-
-Verification:
-
-- Run the desktop frontend in its development browser mode against the loopback
-  Axum backend.
-- Build and launch Tauri from the desktop-owned static assets.
-- Cover backend startup, authentication, reconnect, route composition, native
-  capability availability, and shutdown without importing routes from
-  `apps/web`.
-- Confirm `apps/web` cannot expose desktop-only capabilities through shared UI
-  fixtures or route imports.
-
 ### Process observability and containment
 
 #### 2.41 Resource monitoring
@@ -129,7 +105,7 @@ Verification:
 #### 2.29 Durable process ownership and recovery
 
 Status: planned
-Blocked by: 2.24, 2.52
+Blocked by: 2.24
 
 Keep agent sessions and terminals alive across desktop frontend reloads, route
 changes, and development-browser disconnects. Add orderly Tauri shutdown and
@@ -266,7 +242,7 @@ Verification:
 #### 2.54 Local mutation audit
 
 Status: planned
-Blocked by: 2.43, 2.52
+Blocked by: 2.43
 
 Record bounded, redacted audit events for desktop process, file, worktree,
 package, permission, sandbox, and editor-launch mutations. Keep audit records
@@ -321,7 +297,7 @@ Verification:
 #### 2.25 Terminal UI
 
 Status: planned
-Blocked by: 2.24, 2.29, 2.52
+Blocked by: 2.24, 2.29
 
 Integrate xterm.js with tabs, main-surface and bottom-dock layouts, fit, search,
 copy and paste, activity, exit state, conservative links, and the active ANSI
@@ -396,7 +372,7 @@ Verification:
 #### 2.28 CodeMirror language services
 
 Status: planned
-Blocked by: 2.52
+Blocked by: none
 
 Add an optional backend language-server supervisor and a narrow CodeMirror
 completion and diagnostics client. Reuse desktop workspace process and
@@ -441,7 +417,7 @@ Verification:
 #### 2.47 Codex adapter
 
 Status: planned
-Blocked by: 2.52
+Blocked by: none
 
 Add Codex discovery, structured transport, native resume, capabilities,
 fixtures, and desktop exposure through `pau-agent`. Map its native MCP
@@ -459,7 +435,7 @@ Verification:
 #### 2.48 Antigravity adapter
 
 Status: planned
-Blocked by: 2.52
+Blocked by: none
 
 Add Antigravity discovery, structured transport, native resume, capabilities,
 fixtures, and desktop exposure through `pau-agent`. Map its native MCP
@@ -492,7 +468,7 @@ Verification:
 #### 2.34 Resource browser
 
 Status: planned
-Blocked by: 2.33, 2.52
+Blocked by: 2.33
 
 Build the Skills, Extensions, Prompts, Themes, and Packages views with source,
 scope, trust, validation, filtering, and selected-resource detail.

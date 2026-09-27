@@ -22,7 +22,11 @@ changes.
 
 Run heavyweight verification serially. Do not run `pnpm check`, browser tests,
 Storybook or website builds, and Cargo builds at the same time. Resource
-contention can cause false timeouts in process and interaction tests.
+contention can cause false timeouts in process and interaction tests. Run a full
+application or repository build only when the active unit requires it or the
+change affects that build boundary. After a follow-up edit, rerun the narrowest
+check that covers the changed code; rebuild only when the edit can affect the
+built artifact.
 
 ## Work units
 

@@ -1,27 +1,25 @@
-<script lang="ts">
-	import { sessionFixtures } from '@stormlightlabs/pau-ui';
-	import { onMount } from 'svelte';
+<svelte:head><title>Pau web</title></svelte:head>
 
-	import { getBackendVersion } from '$lib/api';
-	import SessionRoute from '$lib/SessionRoute.svelte';
+<main>
+	<h1>Pau web</h1>
+	<p>The remote web application is not available yet. Use the desktop application for local work.</p>
+</main>
 
-	let disconnected = $state(false);
-
-	onMount(() => {
-		void getBackendVersion(location.search).catch(() => {
-			disconnected = true;
-		});
-	});
-
-	function updateSessionRoute(workspaceId: string, sessionId: string): void {
-		history.replaceState({}, '', `/workspaces/${workspaceId}/sessions/${sessionId}${location.search}`);
+<style>
+	:global(html) {
+		color-scheme: dark;
+		font-family: system-ui, sans-serif;
+		background: #171827;
 	}
-</script>
 
-<svelte:head><title>Sessions · Pau</title></svelte:head>
+	:global(body) {
+		margin: 0;
+	}
 
-<SessionRoute
-	initialWorkspaces={sessionFixtures.concurrent}
-	initialSessionId="diff-gutter"
-	{disconnected}
-	onSessionChange={updateSessionRoute} />
+	main {
+		max-width: 42rem;
+		margin: 20vh auto 0;
+		padding: 1.5rem;
+		color: #e7e9f7;
+	}
+</style>

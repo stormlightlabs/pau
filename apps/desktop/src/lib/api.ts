@@ -1,13 +1,17 @@
 import type {
 	DiagnosticBundle,
 	DiagnosticLevel,
+	EffectiveSandbox,
+	SandboxAdapter,
+	SandboxSelection,
 	FileContent,
 	FileEntry,
 	FileSearchMatch,
 	GitDiff,
 	GitStatus,
 	VersionResponse,
-	Workspace
+	Workspace,
+	WorkspaceSandbox
 } from '@stormlightlabs/pau-protocol';
 
 const DESKTOP_PORT_PARAMETER = 'pau-api-port';
@@ -69,7 +73,7 @@ async function responseJson<T>(response: Response): Promise<T> {
 function workspaceEndpoint(
 	search: string,
 	workspaceId: string,
-	endpoint: 'file' | 'files' | 'search' | 'git/diff' | 'git/status'
+	endpoint: 'file' | 'files' | 'search' | 'git/diff' | 'git/status' | 'sandbox' | 'sandbox/preview'
 ): URL {
 	const origin = resolveApiOrigin(search) || 'https://pau.local';
 	return new URL(`/api/workspaces/${encodeURIComponent(workspaceId)}/${endpoint}`, origin);
@@ -233,6 +237,50 @@ export async function getWorkspaceGitDiff(
 	url.searchParams.set('path', path);
 	const response = await fetcher(requestUrl(url, search), { headers: authorization(resolveApiToken(search)) });
 	return responseJson<GitDiff>(response);
+}
+
+/** Reads a workspace's default sandbox selection for new agent sessions. */
+export async function getWorkspaceSandbox(
+	search: string,
+	workspaceId: string,
+	fetcher: typeof fetch = fetch
+): Promise<WorkspaceSandbox> {
+	const url = workspaceEndpoint(search, workspaceId, 'sandbox');
+	const response = await fetcher(requestUrl(url, search), { headers: authorization(resolveApiToken(search)) });
+	return responseJson<WorkspaceSandbox>(response);
+}
+
+/** Validates and stores a workspace's default sandbox selection. */
+export async function updateWorkspaceSandbox(
+	search: string,
+	workspaceId: string,
+	selection: SandboxSelection,
+	fetcher: typeof fetch = fetch
+): Promise<WorkspaceSandbox> {
+	const url = workspaceEndpoint(search, workspaceId, 'sandbox');
+	const response = await fetcher(requestUrl(url, search), {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json', ...authorization(resolveApiToken(search)) },
+		body: JSON.stringify(selection)
+	});
+	return responseJson<WorkspaceSandbox>(response);
+}
+
+/** Describes the profile a selection would enforce for one agent, or `null` when unsandboxed. */
+export async function previewSandbox(
+	search: string,
+	workspaceId: string,
+	adapter: SandboxAdapter,
+	selection: SandboxSelection,
+	fetcher: typeof fetch = fetch
+): Promise<EffectiveSandbox | null> {
+	const url = workspaceEndpoint(search, workspaceId, 'sandbox/preview');
+	const response = await fetcher(requestUrl(url, search), {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', ...authorization(resolveApiToken(search)) },
+		body: JSON.stringify({ adapter, selection })
+	});
+	return responseJson<EffectiveSandbox | null>(response);
 }
 
 /** Builds an authenticated browser WebSocket handshake for the event stream. */

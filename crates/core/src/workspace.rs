@@ -14,13 +14,13 @@ use tokio::process::Command;
 use ts_rs::TS;
 use uuid::Uuid;
 
-use crate::persistence::{Workspace, WorkspaceRepository};
+use crate::persistence::{ProcessMetadataRepository, Workspace, WorkspaceRepository};
+use crate::sandbox::is_placeholder;
 
 const DEFAULT_SEARCH_LIMIT: usize = 200;
 const MAX_SEARCH_LIMIT: usize = 1_000;
-const MAX_SEARCH_FILE_BYTES: u64 = 2 * 1024 * 1024;
-const MAX_EDITOR_FILE_BYTES: u64 = 2 * 1024 * 1024;
-const MAX_DIFF_FILE_BYTES: usize = 2 * 1024 * 1024;
+/// Largest file the editor opens, search reads, or diff review compares.
+const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 
 /// Failures returned by workspace and file operations.
 #[derive(Debug)]
@@ -221,12 +221,22 @@ pub struct GitDiff {
 #[derive(Clone)]
 pub struct WorkspaceService {
     workspaces: WorkspaceRepository,
+    processes: Option<ProcessMetadataRepository>,
 }
 
 impl WorkspaceService {
     /// Creates a service around the application workspace repository.
     pub fn new(workspaces: WorkspaceRepository) -> Self {
-        Self { workspaces }
+        Self {
+            workspaces,
+            processes: None,
+        }
+    }
+
+    /// Hides the placeholders recorded for running sandboxed processes.
+    pub fn with_processes(mut self, processes: ProcessMetadataRepository) -> Self {
+        self.processes = Some(processes);
+        self
     }
 
     /// Canonicalizes and remembers a directory or Git worktree.
@@ -281,6 +291,7 @@ impl WorkspaceService {
             return Err(WorkspaceError::WrongFileType);
         }
 
+        let hidden = self.hidden_placeholders(workspace_id, &root).await?;
         let mut entries = Vec::new();
         for item in walker(&directory, options, Some(1)) {
             let item = item.map_err(|error| io::Error::other(error.to_string()))?;
@@ -296,7 +307,7 @@ impl WorkspaceService {
                 FileEntryKind::File
             };
             let relative = relative_display(&root, item.path())?;
-            if is_sensitive(&relative) {
+            if is_sensitive(&relative) || is_hidden(&hidden, &relative) {
                 continue;
             }
             let size = (kind == FileEntryKind::File)
@@ -326,12 +337,12 @@ impl WorkspaceService {
             return Err(WorkspaceError::WrongFileType);
         }
         let metadata = path.metadata()?;
-        if metadata.len() > MAX_EDITOR_FILE_BYTES {
+        if metadata.len() > MAX_FILE_BYTES {
             return Err(WorkspaceError::FileTooLarge);
         }
         let directory = Dir::open_ambient_dir(&root, ambient_authority())?;
         let bytes = directory.read(validate_relative(relative_path)?)?;
-        if bytes.len() as u64 > MAX_EDITOR_FILE_BYTES {
+        if bytes.len() as u64 > MAX_FILE_BYTES {
             return Err(WorkspaceError::FileTooLarge);
         }
         if bytes.contains(&0) {
@@ -358,7 +369,7 @@ impl WorkspaceService {
         content: &str,
         expected_revision: Option<&str>,
     ) -> Result<FileContent, WorkspaceError> {
-        if content.len() as u64 > MAX_EDITOR_FILE_BYTES {
+        if content.len() as u64 > MAX_FILE_BYTES {
             return Err(WorkspaceError::FileTooLarge);
         }
         if content.as_bytes().contains(&0) {
@@ -402,7 +413,7 @@ impl WorkspaceService {
     pub async fn git_status(&self, workspace_id: &str) -> Result<GitStatus, WorkspaceError> {
         let root = self.root(workspace_id).await?;
         let output = Command::new("git")
-            .current_dir(root)
+            .current_dir(&root)
             .env("GIT_OPTIONAL_LOCKS", "0")
             .args([
                 "--no-optional-locks",
@@ -419,7 +430,10 @@ impl WorkspaceService {
             .map_err(|error| WorkspaceError::Git(error.to_string()))?;
 
         if output.status.success() {
-            return parse_git_status(&output.stdout);
+            let mut status = parse_git_status(&output.stdout)?;
+            let hidden = self.hidden_placeholders(workspace_id, &root).await?;
+            status.files.retain(|file| !is_hidden(&hidden, &file.path));
+            return Ok(status);
         }
 
         let message = String::from_utf8_lossy(&output.stderr).trim().to_owned();
@@ -463,7 +477,7 @@ impl WorkspaceService {
         };
         let new_bytes = worktree_file(&root, relative_path)?;
         let too_large =
-            old_bytes.len() > MAX_DIFF_FILE_BYTES || new_bytes.len() > MAX_DIFF_FILE_BYTES;
+            old_bytes.len() as u64 > MAX_FILE_BYTES || new_bytes.len() as u64 > MAX_FILE_BYTES;
         let binary = old_bytes.contains(&0)
             || new_bytes.contains(&0)
             || std::str::from_utf8(&old_bytes).is_err()
@@ -503,6 +517,7 @@ impl WorkspaceService {
             .unwrap_or(DEFAULT_SEARCH_LIMIT)
             .clamp(1, MAX_SEARCH_LIMIT);
         let directory = Dir::open_ambient_dir(&root, ambient_authority())?;
+        let hidden = self.hidden_placeholders(workspace_id, &root).await?;
         let mut matches = Vec::new();
 
         for item in walker(&root, options, None) {
@@ -513,12 +528,12 @@ impl WorkspaceService {
             if !file_type.is_file()
                 || item
                     .metadata()
-                    .is_ok_and(|metadata| metadata.len() > MAX_SEARCH_FILE_BYTES)
+                    .is_ok_and(|metadata| metadata.len() > MAX_FILE_BYTES)
             {
                 continue;
             }
             let relative = relative_display(&root, item.path())?;
-            if is_sensitive(&relative) {
+            if is_sensitive(&relative) || is_hidden(&hidden, &relative) {
                 continue;
             }
             let Ok(content) = directory.read_to_string(&relative) else {
@@ -540,7 +555,35 @@ impl WorkspaceService {
         Ok(matches)
     }
 
-    async fn root(&self, workspace_id: &str) -> Result<PathBuf, WorkspaceError> {
+    /// Returns workspace-relative placeholders of running sandboxed processes
+    /// that are still empty. A placeholder the operator has since written is
+    /// a real file and stays visible.
+    async fn hidden_placeholders(
+        &self,
+        workspace_id: &str,
+        root: &Path,
+    ) -> Result<Vec<String>, WorkspaceError> {
+        let Some(processes) = &self.processes else {
+            return Ok(Vec::new());
+        };
+        Ok(processes
+            .list()
+            .await?
+            .into_iter()
+            .filter(|process| {
+                process.ended_at.is_none() && process.workspace_id.as_deref() == Some(workspace_id)
+            })
+            .flat_map(|process| process.sandbox_placeholders)
+            .filter_map(|path| {
+                let path = PathBuf::from(path);
+                let relative = path.strip_prefix(root).ok()?.to_str()?.to_owned();
+                is_placeholder(&path).then_some(relative)
+            })
+            .collect())
+    }
+
+    /// Returns the canonical root of a remembered workspace.
+    pub async fn root(&self, workspace_id: &str) -> Result<PathBuf, WorkspaceError> {
         let workspace = self
             .workspaces
             .get(workspace_id)
@@ -552,6 +595,15 @@ impl WorkspaceService {
         }
         Ok(root)
     }
+}
+
+fn is_hidden(hidden: &[String], relative: &str) -> bool {
+    hidden.iter().any(|placeholder| {
+        relative == placeholder
+            || relative
+                .strip_prefix(placeholder.as_str())
+                .is_some_and(|rest| rest.starts_with('/'))
+    })
 }
 
 async fn git_head_file(root: &Path, relative_path: &str) -> Result<Vec<u8>, WorkspaceError> {
@@ -893,7 +945,7 @@ mod tests {
 
         fs::write(
             root.join("large.txt"),
-            vec![b'x'; MAX_EDITOR_FILE_BYTES as usize + 1],
+            vec![b'x'; MAX_FILE_BYTES as usize + 1],
         )
         .unwrap();
         assert!(matches!(
@@ -905,7 +957,7 @@ mod tests {
                 .write(
                     &workspace.id,
                     "new-large.txt",
-                    &"x".repeat(MAX_EDITOR_FILE_BYTES as usize + 1),
+                    &"x".repeat(MAX_FILE_BYTES as usize + 1),
                     None,
                 )
                 .await,
@@ -1008,6 +1060,79 @@ mod tests {
         assert!(status.detached);
         assert!(status.branch.is_none());
         assert!(status.head.is_some());
+    }
+
+    #[tokio::test]
+    async fn hides_placeholders_of_running_sandboxed_processes() {
+        let directory = tempdir().unwrap();
+        let root = fs::canonicalize(directory.path()).unwrap().join("project");
+        fs::create_dir(&root).unwrap();
+        let database = Database::open(directory.path().join("pau.sqlite3"))
+            .await
+            .unwrap();
+        let service =
+            WorkspaceService::new(database.workspaces()).with_processes(database.processes());
+        let workspace = service.open(&root, None).await.unwrap();
+        let git = |arguments: &[&str]| {
+            let output = std::process::Command::new("git")
+                .current_dir(&root)
+                .args(arguments)
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+        };
+        git(&["init", "--quiet"]);
+        fs::write(root.join(".mcp.json"), "").unwrap();
+        fs::create_dir(root.join(".claude")).unwrap();
+        fs::write(root.join(".bashrc"), "export KEPT=1\n").unwrap();
+        fs::write(root.join("notes.txt"), "notes").unwrap();
+        let placeholders = [".mcp.json", ".claude", ".bashrc"]
+            .map(|name| root.join(name).to_string_lossy().into_owned())
+            .to_vec();
+        let process = crate::persistence::ProcessMetadata {
+            id: "sandboxed".to_owned(),
+            workspace_id: Some(workspace.id.clone()),
+            process_kind: "pi".to_owned(),
+            native_session_id: None,
+            started_at: "2026-09-27T00:00:00Z".to_owned(),
+            ended_at: None,
+            exit_code: None,
+            sandbox_placeholders: placeholders,
+        };
+        database.processes().upsert(process.clone()).await.unwrap();
+        let visible = TraversalOptions {
+            include_hidden: true,
+            include_ignored: true,
+        };
+        let names = |entries: Vec<FileEntry>| {
+            entries
+                .into_iter()
+                .map(|entry| entry.path)
+                .collect::<Vec<_>>()
+        };
+
+        let listed = names(service.list(&workspace.id, "", visible).await.unwrap());
+        assert!(
+            listed.contains(&".bashrc".to_owned()),
+            "written placeholders stay visible"
+        );
+        assert!(listed.contains(&"notes.txt".to_owned()));
+        assert!(!listed.contains(&".mcp.json".to_owned()));
+        assert!(!listed.contains(&".claude".to_owned()));
+        let changed = service.git_status(&workspace.id).await.unwrap().files;
+        assert!(!changed.iter().any(|file| file.path == ".mcp.json"));
+        assert!(changed.iter().any(|file| file.path == "notes.txt"));
+
+        database
+            .processes()
+            .upsert(crate::persistence::ProcessMetadata {
+                ended_at: Some("2026-09-27T01:00:00Z".to_owned()),
+                ..process
+            })
+            .await
+            .unwrap();
+        let listed = names(service.list(&workspace.id, "", visible).await.unwrap());
+        assert!(listed.contains(&".mcp.json".to_owned()));
     }
 
     #[tokio::test]

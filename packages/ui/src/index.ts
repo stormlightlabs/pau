@@ -9,6 +9,7 @@ export type { EditorFileContent, FileEditorSource } from './lib/types/file-edito
 export { default as Icon, type IconProps } from './lib/Icon.svelte';
 export { default as McpConfigurationView } from './lib/McpConfigurationView.svelte';
 export { default as ProcessesView } from './lib/ProcessesView.svelte';
+export { default as SandboxSettingsView } from './lib/SandboxSettingsView.svelte';
 export { default as SessionResourceSummary } from './lib/SessionResourceSummary.svelte';
 export { default as SessionView } from './lib/SessionView.svelte';
 export { default as WorkspaceFiles } from './lib/WorkspaceFiles.svelte';
@@ -41,6 +42,14 @@ export type {
 	McpSourceScope
 } from './lib/types/mcp';
 export type {
+	EffectiveSandboxView,
+	SandboxAdapterName,
+	SandboxGrantsModel,
+	SandboxProfile,
+	SandboxSelectionModel,
+	SandboxSettingsModel
+} from './lib/types/sandbox';
+export type {
 	ProcessResourceActions,
 	ProcessResourceNode,
 	ProcessResourceSnapshot
@@ -66,5 +75,6 @@ export { capabilityFixtures, type CapabilityFixture } from './fixtures/capabilit
 export { diagnosticFixtures } from './fixtures/diagnostics';
 export { mcpConfigurationFixtures } from './fixtures/mcp';
 export { resourceMonitoringFixtures } from './fixtures/resource-monitoring';
+export { sandboxFixtures } from './fixtures/sandbox';
 export { sessionFixtures } from './fixtures/sessions';
 export { workspaceFileFixtures } from './fixtures/workspace-files';

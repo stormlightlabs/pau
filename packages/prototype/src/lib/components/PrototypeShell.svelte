@@ -26,6 +26,7 @@
 				{ href: '/screens/terminal', label: 'Terminal', icon: 'i-tabler-terminal-2' },
 				{ href: '/screens/processes', label: 'Processes', icon: 'i-tabler-activity-heartbeat' },
 				{ href: '/screens/resources', label: 'Resources', icon: 'i-tabler-plug-connected' },
+				{ href: '/screens/sandbox', label: 'Agent sandbox', icon: 'i-tabler-shield-lock' },
 				{ href: '/screens/settings', label: 'Settings', icon: 'i-tabler-adjustments' }
 			]
 		},

@@ -1,5 +1,6 @@
 import type { Model } from '@earendil-works/pi-ai';
 import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
+import type { SandboxedMcpServer } from '@stormlightlabs/pau-protocol';
 
 /** Pi built-in tools that the sandboxed host executes. */
 export type SandboxedToolName = 'read' | 'write' | 'edit' | 'bash' | 'grep' | 'find' | 'ls';
@@ -14,18 +15,28 @@ export const sandboxedToolNames: SandboxedToolName[] = ['read', 'bash', 'edit', 
  */
 export type ToolSession = { id: string; file?: string; model?: Model<string>; thinkingLevel?: string };
 
-/** Requests from the Pi extension to the sandboxed tool host. */
+/**
+ * Requests from the Pi extension to the sandboxed tool host. An MCP server
+ * opened by `mcp-open` is addressed by that request's ID until it exits.
+ */
 export type ToolHostRequest =
 	| { id: string; kind: 'tool'; tool: SandboxedToolName; toolCallId: string; params: unknown; session: ToolSession }
 	| { id: string; kind: 'bash'; command: string; timeout?: number }
-	| { id: string; kind: 'abort' };
+	| { id: string; kind: 'abort' }
+	| { id: string; kind: 'network'; noProxy: string }
+	| { id: string; kind: 'mcp-open'; server: SandboxedMcpServer }
+	| { id: string; kind: 'mcp-write'; data: string }
+	| { id: string; kind: 'mcp-close' };
 
 type WithoutId<T> = T extends unknown ? Omit<T, 'id'> : never;
 
 /** A request before the client assigns its correlation ID. */
 export type ToolHostRequestBody = WithoutId<ToolHostRequest>;
 
-/** Responses from the tool host. Every request ends with one terminal response. */
+/**
+ * Responses from the tool host. Every tool, bash, and MCP request ends with
+ * one terminal response. `data` carries base64 output.
+ */
 export type ToolHostResponse =
 	| { id: 'ready'; kind: 'ready'; pid: number }
 	| { id: string; kind: 'update'; update: AgentToolResult<unknown> }

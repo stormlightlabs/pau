@@ -1,0 +1,94 @@
+import { page, userEvent } from 'vitest/browser';
+import { expect, test, vi } from 'vitest';
+import { render } from 'vitest-browser-svelte';
+
+import { sandboxFixtures } from '../fixtures/sandbox';
+import SandboxSettingsView from '../lib/SandboxSettingsView.svelte';
+
+test('starts unsandboxed and keeps permission prompts separate from the sandbox', async () => {
+	await render(SandboxSettingsView, { selection: sandboxFixtures.unsandboxed });
+
+	await expect.element(page.getByText('Sandbox off')).toBeVisible();
+	await expect.element(page.getByRole('radio', { name: /Unsandboxed/ })).toBeChecked();
+	await expect.element(page.getByText(/Permission prompts decide when an agent asks/)).toBeVisible();
+	await expect.element(page.getByText(/Terminals and editors stay unsandboxed/)).toBeVisible();
+	await expect.element(page.getByRole('group', { name: 'Grants' })).not.toBeInTheDocument();
+});
+
+test('edits a profile and its grants before saving', async () => {
+	const onChange = vi.fn();
+	const onSave = vi.fn();
+	await render(SandboxSettingsView, { selection: sandboxFixtures.unsandboxed, onChange, onSave });
+
+	await userEvent.click(page.getByRole('radio', { name: /Sandboxed/ }));
+	await userEvent.click(page.getByRole('radio', { name: /Read only/ }));
+	await userEvent.fill(
+		page.getByRole('textbox', { name: /Network destinations/ }),
+		'registry.npmjs.org\n\n *.example.com '
+	);
+	await userEvent.click(page.getByRole('textbox', { name: /Extra writable directories/ }));
+	await expect.element(page.getByText(/Recommended while a network destination is granted/)).toBeVisible();
+	await userEvent.click(page.getByRole('checkbox', { name: /Block reads from the home directory/ }));
+	await userEvent.fill(page.getByRole('textbox', { name: /Tools allowed outside the sandbox/ }), 'web_search');
+	await userEvent.click(page.getByRole('button', { name: 'Save workspace default' }));
+
+	expect(onSave).toHaveBeenCalledWith({
+		mode: 'sandboxed',
+		settings: {
+			profile: 'read-only',
+			grants: { domains: ['registry.npmjs.org', '*.example.com'], writableRoots: [], unixSockets: false },
+			homeReadDeny: true,
+			shareClaudeTemp: false,
+			unsandboxedTools: ['web_search']
+		}
+	});
+	expect(onChange).toHaveBeenCalledTimes(5);
+});
+
+test('names the effective access, disabled tools, placeholders, and gaps', async () => {
+	await render(SandboxSettingsView, {
+		selection: sandboxFixtures.granted,
+		effective: sandboxFixtures.grantedEffective
+	});
+
+	await expect.element(page.getByRole('heading', { name: 'Effective access for Pi' })).toBeVisible();
+	await expect.element(page.getByText(/Bubblewrap 0.12.0/)).toBeVisible();
+	await expect.element(page.getByText('(this computer or a private network)')).toBeVisible();
+	await expect.element(page.getByText('Tools from other Pi extensions')).toBeVisible();
+	await expect.element(page.getByText('web_search')).toBeVisible();
+	await expect.element(page.getByText(/File and Git views hide them/)).toBeVisible();
+	await expect.element(page.getByText(/Unix sockets cannot be filtered by path/)).toBeVisible();
+	await expect.element(page.getByText('No credential is brokered.', { exact: false })).toBeVisible();
+});
+
+test('warns on an unverified platform and blocks the sandbox where none can start', async () => {
+	const { rerender } = await render(SandboxSettingsView, {
+		selection: sandboxFixtures.workspaceWrite,
+		effective: sandboxFixtures.macosEffective
+	});
+	await expect.element(page.getByText("Pau has not verified this platform's sandbox.")).toBeVisible();
+
+	await rerender({
+		selection: sandboxFixtures.unsandboxed,
+		effective: undefined,
+		unavailable: sandboxFixtures.unavailable
+	});
+	await expect.element(page.getByRole('radio', { name: /Sandboxed/ })).toBeDisabled();
+	await expect.element(page.getByText(/Unavailable on this computer: bwrap was not found/)).toBeVisible();
+});
+
+test('offers the workspace default for a session override and reports errors', async () => {
+	const onUseWorkspaceDefault = vi.fn();
+	await render(SandboxSettingsView, {
+		selection: sandboxFixtures.workspaceWrite,
+		scope: 'session',
+		error: 'writable root /home contains the home directory',
+		onUseWorkspaceDefault
+	});
+
+	await expect.element(page.getByText('This session only')).toBeVisible();
+	await expect.element(page.getByRole('alert')).toHaveTextContent('contains the home directory');
+	await userEvent.click(page.getByRole('button', { name: 'Use workspace default' }));
+	expect(onUseWorkspaceDefault).toHaveBeenCalledOnce();
+	await expect.element(page.getByRole('button', { name: 'Apply to this session' })).toBeVisible();
+});

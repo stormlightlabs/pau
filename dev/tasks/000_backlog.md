@@ -51,3 +51,7 @@ automation, shared workspaces, agent councils, workflow graphs, mobile clients,
 and extension marketplaces remain backlog items.
 
 Cloud sandboxes and hosted execution are not planned.
+
+## Parking Lot
+
+- We don't need an h1 (`#`) on svx pages (it makes the title redundant)

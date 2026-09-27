@@ -1,12 +1,40 @@
 import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { SandboxProfileName, SandboxSettings } from '@stormlightlabs/pau-protocol';
 
 /** Marker written into every fixture credential. It must never reach tool output. */
 export const SECRET = 'pau-sandbox-secret-7d1c';
 
-/** Temporary host layout shared by the boundary matrix and the Pi smoke run. */
-export type Fixture = { root: string; workspace: string; home: string; outside: string; tempDir: string };
+/**
+ * Temporary host layout shared by the boundary matrix and the Pi smoke run.
+ * `session` is the Pau-owned session directory; the resolver creates its
+ * `tmp` child as the sandbox temporary directory and its `host` child for the
+ * policy file.
+ */
+export type Fixture = {
+	root: string;
+	workspace: string;
+	home: string;
+	outside: string;
+	session: string;
+	tempDir: string;
+};
+
+/** Sandbox settings with every optional field at its default. */
+export function sandboxSettings(
+	profile: SandboxProfileName,
+	overrides: Partial<Omit<SandboxSettings, 'profile'>> = {}
+): SandboxSettings {
+	return {
+		profile,
+		grants: { domains: [], writable_roots: [], unix_sockets: false },
+		home_read_deny: false,
+		share_claude_temp: false,
+		unsandboxed_tools: [],
+		...overrides
+	};
+}
 
 function put(file: string, content: string): void {
 	mkdirSync(path.dirname(file), { recursive: true });
@@ -26,10 +54,10 @@ export function createFixture(): Fixture {
 		workspace: path.join(root, 'workspace'),
 		home: path.join(root, 'home'),
 		outside: path.join(root, 'outside'),
-		tempDir: path.join(root, 'tmp')
+		session: path.join(root, 'session'),
+		tempDir: path.join(root, 'session/tmp')
 	};
 	const { workspace, home, outside } = fixture;
-	mkdirSync(fixture.tempDir, { recursive: true });
 	put(path.join(workspace, 'README.md'), 'workspace readme\n');
 	put(path.join(workspace, 'AGENTS.md'), 'agent notes\n');
 	put(path.join(workspace, 'src/app.ts'), 'export const answer = 41;\n');
@@ -44,6 +72,7 @@ export function createFixture(): Fixture {
 		put(path.join(home, file), `${JSON.stringify({ anthropic: { type: 'api_key', key: SECRET } })}\n`);
 	}
 	mkdirSync(path.join(home, '.npm/_logs'), { recursive: true });
+	put(path.join(home, 'notes.txt'), 'home notes\n');
 	put(path.join(outside, 'notes.txt'), 'outside notes\n');
 	mkdirSync(path.join(outside, 'granted'), { recursive: true });
 	symlinkSync(path.join(home, '.ssh/id_ed25519'), path.join(workspace, 'key-link'));

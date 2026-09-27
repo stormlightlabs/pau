@@ -107,7 +107,7 @@ Verification:
 
 ### 2.43 Managed process sandbox
 
-Status: planned
+Status: complete
 Blocked by: 2.42
 
 Add explicit sandboxed and unsandboxed profiles at each proven adapter or tool

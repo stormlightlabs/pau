@@ -6,8 +6,10 @@ import {
 	getDiagnostics,
 	getWorkspaceGitDiff,
 	getWorkspaceGitStatus,
+	getWorkspaceSandbox,
 	listWorkspaceFiles,
 	PauApiError,
+	previewSandbox,
 	readWorkspaceFile,
 	resolveApiOrigin,
 	resolveApiToken,
@@ -15,6 +17,7 @@ import {
 	searchWorkspaceFiles,
 	startPayloadTracing,
 	updateDiagnosticSettings,
+	updateWorkspaceSandbox,
 	writeWorkspaceFile
 } from './api';
 
@@ -199,5 +202,39 @@ test('configures browser and desktop WebSocket handshakes', () => {
 	expect(resolveEventSocket('', 'http://localhost:5173', 42)).toEqual({
 		url: 'ws://localhost:5173/api/events?after=42',
 		protocols: ['pau']
+	});
+});
+
+describe('workspace sandbox API', () => {
+	test('reads, stores, and previews the workspace selection with the launch token', async () => {
+		const selection = { mode: 'unsandboxed' } as const;
+		const fetcher = vi.fn<typeof fetch>(async () => Response.json({ selection, unavailable: null }, { status: 200 }));
+		await getWorkspaceSandbox(DESKTOP_SEARCH, 'work space', fetcher);
+		await updateWorkspaceSandbox(DESKTOP_SEARCH, 'work space', selection, fetcher);
+		await previewSandbox(DESKTOP_SEARCH, 'work space', 'claude', selection, fetcher);
+
+		const calls = fetcher.mock.calls.map(([url, init]) => [String(url), init?.method ?? 'GET', init?.body]);
+		expect(calls).toEqual([
+			['http://127.0.0.1:43127/api/workspaces/work%20space/sandbox', 'GET', undefined],
+			['http://127.0.0.1:43127/api/workspaces/work%20space/sandbox', 'PUT', JSON.stringify(selection)],
+			[
+				'http://127.0.0.1:43127/api/workspaces/work%20space/sandbox/preview',
+				'POST',
+				JSON.stringify({ adapter: 'claude', selection })
+			]
+		]);
+		for (const [, init] of fetcher.mock.calls) {
+			expect(new Headers(init?.headers).get('Authorization')).toBe(`Bearer ${TOKEN}`);
+		}
+	});
+
+	test('reports an invalid grant with its backend code', async () => {
+		const fetcher = vi.fn<typeof fetch>(async () =>
+			Response.json({ code: 'invalid_sandbox', message: '"x" is not a host or host:port' }, { status: 400 })
+		);
+		await expect(updateWorkspaceSandbox(DESKTOP_SEARCH, 'w', { mode: 'unsandboxed' }, fetcher)).rejects.toMatchObject({
+			status: 400,
+			code: 'invalid_sandbox'
+		});
 	});
 });

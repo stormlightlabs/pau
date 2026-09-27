@@ -19,6 +19,7 @@ when purpose, hierarchy, responsive behavior, or a durable interaction changes.
 | Processes             | `/screens/processes`     | `src/routes/screens/processes/+page.svelte`     | Inspect workspace and session machine resource use |
 | Diagnostics           | `/screens/diagnostics`   | `src/routes/screens/diagnostics/+page.svelte`   | Inspect and export redacted support data           |
 | Resources             | `/screens/resources`     | `src/routes/screens/resources/+page.svelte`     | Inspect scope, trust, and capability               |
+| Agent sandbox         | `/screens/sandbox`       | `src/routes/screens/sandbox/+page.svelte`       | Choose containment and review access before launch |
 | Settings              | `/screens/settings`      | `src/routes/screens/settings/+page.svelte`      | Change product and editor preferences              |
 | Website and docs      | `/docs`                  | `src/routes/docs/+page.svelte`                  | Evaluate Pau, learn a task, or check its status    |
 | Launch                | `/splash/launch`         | `src/routes/splash/launch/+page.svelte`         | Understand current startup work                    |
@@ -213,6 +214,23 @@ Selection must not imply trust. Invalid and untrusted resources remain
 inspectable. Disabled and failed servers keep their details and a direct next
 action. At narrow widths, the selected resource opens as a detail view with a
 clear return to the filtered list.
+
+## Agent sandbox
+
+The sandbox view sets a workspace default for new agent sessions, and the same
+view applies a session override. It leads with the mode, which starts
+unsandboxed, then the profile and explicit grants. Choosing a sandbox shows the
+effective access for the selected agent before anything runs: the enforcing
+mechanism and platform, writable and denied paths, protected configuration,
+network and socket access, credentials, environment, limits, the tools inside
+and outside the sandbox, disabled tools, placeholders, and known gaps. An
+unverified platform carries a warning, and a host without a sandbox disables
+the choice with the reason.
+
+Permission prompts appear only as a note that they never widen the sandbox.
+Terminals and editors are named as unsandboxed so the setting does not read as
+covering them. At narrow widths, the access list becomes stacked label and value
+pairs, and the save action spans the width.
 
 ## Settings
 

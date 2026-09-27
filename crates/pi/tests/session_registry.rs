@@ -1,7 +1,7 @@
 #![cfg(unix)]
 
 use pau_agent::AgentSessionStatus;
-use pau_core::persistence::{Database, Workspace};
+use pau_core::persistence::{Database, ProcessMetadata, Workspace};
 use pau_pi::{
     PiProcessOutput, PiSessionRegistry, PiShutdownTimeouts, StartPiProcessOptions,
     StartRegisteredPiSession,
@@ -95,6 +95,60 @@ async fn rediscovers_native_records_after_registry_restart() {
     assert_eq!(records[1].native_session_id, "native-beta");
 }
 
+#[tokio::test]
+async fn records_placeholders_and_removes_leftovers_before_a_sandboxed_launch() {
+    let fixture = FakePi::new();
+    let database = Database::open(fixture.root.path().join("pau.sqlite3"))
+        .await
+        .unwrap();
+    register_workspaces(&database, &fixture).await;
+    let alpha = fixture.workspace("alpha");
+    let beta = fixture.workspace("beta");
+    // A crashed Pau left an empty placeholder and one the operator later
+    // filled in.
+    fs::write(alpha.join(".mcp.json"), "").unwrap();
+    fs::write(alpha.join(".bashrc"), "export KEEP=1\n").unwrap();
+    database
+        .processes()
+        .upsert(ProcessMetadata {
+            id: "crashed".to_owned(),
+            workspace_id: Some("workspace-alpha".to_owned()),
+            process_kind: "pi".to_owned(),
+            native_session_id: None,
+            started_at: STARTED_AT.to_owned(),
+            ended_at: None,
+            exit_code: None,
+            sandbox_placeholders: [".mcp.json", ".bashrc"]
+                .map(|name| alpha.join(name).to_string_lossy().into_owned())
+                .to_vec(),
+        })
+        .await
+        .unwrap();
+    let registry = PiSessionRegistry::new(database.processes());
+
+    let mut request = fixture.request("beta");
+    request.sandbox_placeholders = vec![beta.join(".claude")];
+    registry.start(request).await.unwrap();
+
+    assert!(!alpha.join(".mcp.json").exists());
+    assert!(alpha.join(".bashrc").exists());
+    let crashed = database.processes().get("crashed").await.unwrap().unwrap();
+    assert!(crashed.sandbox_placeholders.is_empty());
+    let recorded = database.processes().get("beta").await.unwrap().unwrap();
+    assert_eq!(
+        recorded.sandbox_placeholders,
+        [beta.join(".claude").to_string_lossy().into_owned()]
+    );
+
+    // The fake Pi never starts a sandbox, so stop removes the placeholder the
+    // runtime would have cleaned up.
+    fs::create_dir(beta.join(".claude")).unwrap();
+    registry.stop("beta", ENDED_AT).await.unwrap();
+    assert!(!beta.join(".claude").exists());
+    let stopped = database.processes().get("beta").await.unwrap().unwrap();
+    assert!(stopped.sandbox_placeholders.is_empty());
+}
+
 async fn register_workspaces(database: &Database, fixture: &FakePi) {
     for name in ["alpha", "beta"] {
         database
@@ -140,6 +194,7 @@ impl FakePi {
                 executable_path: self.executable.clone(),
                 working_directory: self.workspace(name),
                 arguments: Vec::new(),
+                environment: Vec::new(),
                 shutdown_timeouts: PiShutdownTimeouts {
                     protocol: Duration::from_secs(1),
                     interrupt: Duration::from_secs(1),
@@ -147,6 +202,7 @@ impl FakePi {
                     kill: Duration::from_secs(1),
                 },
             },
+            sandbox_placeholders: Vec::new(),
         }
     }
 }

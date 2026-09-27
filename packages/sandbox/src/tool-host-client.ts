@@ -6,8 +6,9 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { SandboxManager } from '@anthropic-ai/sandbox-runtime';
 import { getAgentDir, type AgentToolResult } from '@earendil-works/pi-coding-agent';
+import type { SandboxedMcpServer } from '@stormlightlabs/pau-protocol';
 import { spawnSandboxed, startSandbox } from './launcher.ts';
-import { buildRuntimeConfig, buildToolEnvironment, type SandboxPolicyInput } from './profile.ts';
+import type { SandboxPolicy } from './policy.ts';
 import type {
 	SandboxedToolName,
 	ToolHostRequest,
@@ -64,18 +65,20 @@ export class ToolHostClient {
 	 * promise rejects with {@link SandboxUnavailableError} when containment
 	 * cannot be proven.
 	 */
-	static async start(policy: SandboxPolicyInput, searchPath: string): Promise<ToolHostClient> {
+	static async start(policy: SandboxPolicy, searchPath: string): Promise<ToolHostClient> {
 		const env = {
-			...buildToolEnvironment({ home: policy.home, tempDir: policy.tempDir, searchPath }),
-			...prepareAgentDir(policy.tempDir, searchPath)
+			...policy.environment,
+			...prepareAgentDir(policy.tempDir, searchPath),
+			PAU_SANDBOX_PLACEHOLDERS: JSON.stringify(policy.placeholders)
 		};
-		await startSandbox(buildRuntimeConfig(policy), env, policy.workspace);
+		await startSandbox(policy.runtimeConfig, env, policy.workspace);
 		const script = fileURLToPath(new URL('tool-host.ts', import.meta.url));
 		try {
 			const child = await spawnSandboxed(`exec ${process.execPath} ${script}`, {
 				env,
 				cwd: policy.workspace,
 				commandId: 'pau-tool-host',
+				noProxy: policy.noProxy,
 				channel: true
 			});
 			const client = new ToolHostClient(child);
@@ -139,11 +142,25 @@ export class ToolHostClient {
 			signal?.addEventListener('abort', abort, { once: true });
 			this.pending.set(id, { onResponse: (response) => onResponse(response, done) });
 			this.send({ ...body, id } as ToolHostRequest);
+			// Pi may abort before the call reaches the tool host, and an
+			// already-aborted signal never fires its event.
+			if (signal?.aborted) abort();
 		});
 	}
 
 	private send(request: ToolHostRequest): void {
+		if (this.exited) return;
 		this.channel.write(`${JSON.stringify(request)}\n`);
+	}
+
+	/** Give commands started after this call a new `NO_PROXY` value. */
+	setNoProxy(noProxy: string): void {
+		this.send({ id: `${this.nextId++}`, kind: 'network', noProxy });
+	}
+
+	/** Whether the tool host process is still running. */
+	get running(): boolean {
+		return !this.exited;
 	}
 
 	/** Run one built-in tool call inside the sandbox. */
@@ -185,6 +202,35 @@ export class ToolHostClient {
 		});
 		if (outcome instanceof Error) throw outcome;
 		return outcome;
+	}
+
+	/**
+	 * Start a stdio MCP server inside the sandbox and relay its standard
+	 * streams. `onExit` runs once when the server exits or fails to start.
+	 */
+	openMcp(
+		server: SandboxedMcpServer,
+		onData: (data: Buffer) => void,
+		onExit: (reason: string) => void
+	): { write: (data: Buffer) => void; close: () => void } {
+		if (this.exited) throw new Error('sandboxed tool host is not running');
+		const id = `${this.nextId++}`;
+		this.pending.set(id, {
+			onResponse: (response) => {
+				if (response.kind === 'data') {
+					onData(Buffer.from(response.data, 'base64'));
+					return;
+				}
+				if (response.kind !== 'exit' && response.kind !== 'error') return;
+				this.pending.delete(id);
+				onExit(response.kind === 'error' ? response.message : `exited (${response.exitCode})`);
+			}
+		});
+		this.send({ id, kind: 'mcp-open', server });
+		return {
+			write: (data) => this.send({ id, kind: 'mcp-write', data: data.toString('base64') }),
+			close: () => this.send({ id, kind: 'mcp-close' })
+		};
 	}
 
 	/** Stop the tool host and release sandbox-runtime proxies and mount points. */

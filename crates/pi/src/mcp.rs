@@ -1007,6 +1007,7 @@ for line in sys.stdin:
             executable_path: executable,
             working_directory: directory.path().to_path_buf(),
             arguments: Vec::new(),
+            environment: Vec::new(),
             shutdown_timeouts: PiShutdownTimeouts {
                 protocol: Duration::from_millis(100),
                 interrupt: Duration::from_millis(100),

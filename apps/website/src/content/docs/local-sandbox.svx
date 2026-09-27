@@ -1,0 +1,122 @@
+---
+title: Local sandbox
+description: Run agent tools inside an operating-system sandbox and see what it allows before launch.
+order: 5
+---
+
+# Local sandbox
+
+Agent tools run with your normal access unless you choose a sandbox. Open a
+workspace's **Agent sandbox** view to set the default for new agent sessions. A
+session can override that default. The sandbox applies to tools the agent calls
+and to their child processes. Terminals and editors that Pau opens stay
+unsandboxed.
+
+When you choose a sandbox, Pau shows the effective access for Pi or Claude
+before any tool runs. If the sandbox cannot start, tool calls fail. Pau never
+runs them outside the sandbox instead.
+
+## Requirements
+
+On Linux, Pau uses Bubblewrap, `socat`, and ripgrep. Install `bwrap` 0.11 or
+later, `socat`, and `rg`, then restart Pau. Pau looks them up once when it
+starts and uses those exact files for every sandboxed launch, so a directory
+added to `PATH` later cannot replace them. If one is missing, the view names it
+and the sandbox choice stays disabled.
+
+On macOS, Pau uses Seatbelt. Pau's own checks have not yet run on macOS, and the
+effective access says so.
+
+## Profiles
+
+Both profiles block network access and hide credential stores until you grant
+more.
+
+- **Workspace write** allows writes to the workspace and a temporary directory
+  for the session.
+- **Read only** allows writes only to the session's temporary directory.
+
+Every profile denies reads of common credential stores, such as `~/.ssh`,
+`~/.aws`, `~/.config/gh`, Pi's `auth.json`, and Claude's credentials file. It
+also denies the workspace's `.env`, `.env.local`, and `.env.*.local` files.
+`.env.example` stays readable.
+
+Writes to repository and agent configuration are blocked even inside the
+workspace: `.git/hooks`, `.git/config`, `.pi`, `.claude`, `.codex`,
+`.mcp.json`, `.vscode`, `.idea`, `.zed`, and shell startup files. A sandboxed
+tool therefore cannot plant configuration that an unsandboxed agent or editor
+would load later.
+
+Only `HOME`, `LANG`, `PATH`, `TERM`, `TMPDIR`, and `PAU_SANDBOX` reach sandboxed
+tools. Provider keys and other variables in Pau's environment do not. Core
+dumps are disabled, and child processes stop when the sandbox ends. Pau does not
+cap CPU, memory, or process count.
+
+## Grants
+
+Each grant widens the profile, and the effective access lists it.
+
+- **Network destinations** take a host, a wildcard such as `*.example.com`, or a
+  host and port such as `127.0.0.1:5173`. Requests go through a proxy that
+  admits only these destinations. A single-label name such as `intranet` is not
+  accepted.
+- **Extra writable directories** take absolute paths. A directory that contains
+  your home directory or a credential store is refused.
+- **Allow Unix sockets** allows every socket, because Linux cannot limit sockets
+  by path. That includes the Docker and SSH agent sockets.
+- **Block reads from the home directory** hides your home directory except the
+  workspace and the files the sandbox needs to start. Turn it on when you grant
+  a network destination, because any readable file could then leave the
+  computer.
+- **Share /tmp/claude with Claude Code** keeps that directory writable. Pau
+  blocks it by default because every sandbox that shares it can change the
+  others' temporary files.
+
+Network grants apply to a running session. A change to files or directories
+waits for the current tool call to finish, then restarts the sandbox before
+the next call.
+
+## Pi
+
+Pi keeps its model credentials and provider traffic outside the sandbox. Pau
+loads an extension that runs Pi's `read`, `bash`, `edit`, `write`, `grep`,
+`find`, and `ls` tools, and `!` commands, inside it. When grep cannot read a
+file because of the sandbox, its result lists the skipped files so you and the
+model know the search was incomplete.
+
+Tools from other Pi extensions are disabled. To allow one, add its name under
+**Tools allowed outside the sandbox**. Each call then asks for your approval and
+runs with your normal access.
+
+With `pi-mcp-adapter` installed, Pau gives the session its own MCP list:
+
+- A stdio server starts inside the sandbox with the same restrictions as every
+  tool.
+- A remote server is included only when its host is a granted network
+  destination. Pi's MCP client still connects from the Pi process, not through
+  the sandbox proxy.
+- Other servers are disabled for the session.
+
+## Claude
+
+Pau starts Claude Code with its own sandbox and the same profile. Claude's
+sandbox covers its Bash tool and the commands it starts, and it cannot retry a
+blocked command outside the sandbox. Claude's Read, Edit, and Write tools follow
+Claude's permission rules rather than the operating-system sandbox. `WebFetch`
+and `WebSearch` are denied unless you allow them outside the sandbox, which
+makes Claude ask before each call. Claude's MCP servers are disabled because
+Claude would start them outside its sandbox.
+
+## Placeholder files
+
+To block creating a protected path that does not exist yet, the sandbox puts an
+empty file or directory there, such as `.mcp.json` or `.claude`. Pau lists
+these placeholders before launch and hides them from file and Git views while
+the sandbox runs. They are removed when the session ends. If Pau stops
+unexpectedly, it removes any that are still empty before the next sandboxed
+launch. A placeholder you have since written to is left alone.
+
+## Permission prompts
+
+Permission prompts decide when an agent asks before acting. They are separate
+from the sandbox and never widen what it allows.

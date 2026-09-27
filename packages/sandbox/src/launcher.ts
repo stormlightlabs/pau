@@ -22,6 +22,8 @@ export type SandboxSpawnOptions = {
 	cwd: string;
 	/** Correlates sandbox-runtime violations with this invocation. */
 	commandId: string;
+	/** `NO_PROXY` inside the sandbox, which sends granted local addresses through the proxy. */
+	noProxy?: string;
 	/** Add a pipe on file descriptor 3 for a structured protocol channel. */
 	channel?: boolean;
 };
@@ -41,7 +43,7 @@ function run(command: string, options: SandboxSpawnOptions): ChildProcess {
 	});
 }
 
-function shellQuote(value: string): string {
+export function shellQuote(value: string): string {
 	return `'${value.replaceAll("'", String.raw`'\''`)}'`;
 }
 
@@ -54,6 +56,8 @@ function collect(child: ChildProcess): Promise<{ code: number | null; stderr: st
 /**
  * Start sandbox-runtime for one policy and prove it with a no-op command.
  *
+ * The policy names absolute `bwrap`, `socat`, and `rg` paths that Pau
+ * resolved once at startup, so a later `PATH` change cannot replace them.
  * sandbox-runtime reports missing binaries, but it cannot see every
  * restriction that stops Bubblewrap at run time, such as Ubuntu's AppArmor
  * user-namespace limit. The self-test turns those failures into a startup
@@ -67,9 +71,13 @@ export async function startSandbox(
 	if (!SandboxManager.isSupportedPlatform()) {
 		throw new SandboxUnavailableError([`unsupported platform ${process.platform}`]);
 	}
-	const dependencies = SandboxManager.checkDependencies();
-	if (dependencies.errors.length > 0) throw new SandboxUnavailableError(dependencies.errors);
 	await SandboxManager.initialize(config);
+	// The dependency check reads the pinned paths from the initialized config.
+	const dependencies = SandboxManager.checkDependencies();
+	if (dependencies.errors.length > 0) {
+		await SandboxManager.reset();
+		throw new SandboxUnavailableError(dependencies.errors);
+	}
 	const selfTest = await collect(await spawnSandboxed('true', { env: probeEnv, cwd, commandId: 'pau-self-test' }));
 	if (selfTest.code === 0) return;
 	await SandboxManager.reset();
@@ -78,16 +86,42 @@ export async function startSandbox(
 	]);
 }
 
+/**
+ * Apply new network rules to the running sandbox. The host-side proxies
+ * enforce domains, so commands that are already running see the change.
+ */
+export function updateNetwork(config: SandboxRuntimeConfig): void {
+	SandboxManager.updateConfig(config);
+}
+
+/**
+ * Commands that run before the wrapped command inside the sandbox.
+ *
+ * sandbox-runtime replaces TMPDIR with its shared /tmp/claude directory, and
+ * its NO_PROXY sends loopback and private addresses around the proxy, where
+ * Linux's empty network namespace cannot reach them. Core dumps are disabled
+ * because a dump written into the workspace can hold secrets from memory.
+ */
+function prelude(options: SandboxSpawnOptions): string {
+	const lines = ['ulimit -c 0'];
+	const tempDir = options.env.TMPDIR;
+	if (tempDir) lines.push(`export TMPDIR=${shellQuote(tempDir)}`);
+	if (options.noProxy !== undefined) {
+		const value = shellQuote(options.noProxy);
+		lines.push(`export NO_PROXY=${value} no_proxy=${value}`);
+	}
+	return `${lines.join('; ')}; `;
+}
+
 /** Wrap and start one command inside the initialized sandbox. */
 export async function spawnSandboxed(command: string, options: SandboxSpawnOptions): Promise<ChildProcess> {
-	// sandbox-runtime replaces TMPDIR with its shared /tmp/claude directory.
-	// Restore the per-session directory inside the sandbox.
-	const tempDir = options.env.TMPDIR;
-	const inner = tempDir ? `export TMPDIR=${shellQuote(tempDir)}; ${command}` : command;
-	const wrapped = await SandboxManager.wrapWithSandbox(inner, undefined, undefined, undefined, {
-		commandId: options.commandId,
-		commandText: command
-	});
+	const wrapped = await SandboxManager.wrapWithSandbox(
+		`${prelude(options)}${command}`,
+		undefined,
+		undefined,
+		undefined,
+		{ commandId: options.commandId, commandText: command }
+	);
 	return run(wrapped, options);
 }
 

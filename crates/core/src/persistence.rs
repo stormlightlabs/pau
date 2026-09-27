@@ -10,6 +10,7 @@ use tokio_rusqlite::{Connection, OptionalExtension, params, rusqlite};
 use ts_rs::TS;
 
 use crate::resource_monitor::ProcessResourceSummary;
+use crate::sandbox::{SandboxSelection, SandboxSelectionState};
 
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 const MIGRATIONS: &[&str] = &[
@@ -17,6 +18,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0002_process_metadata.sql"),
     include_str!("../migrations/0003_mcp_enablement.sql"),
     include_str!("../migrations/0004_process_resource_summaries.sql"),
+    include_str!("../migrations/0005_sandbox.sql"),
 ];
 
 /// Result returned by persistence operations.
@@ -61,6 +63,11 @@ impl Database {
     /// Returns a repository for Pau-managed MCP enablement.
     pub fn mcp_enablement(&self) -> McpEnablementRepository {
         McpEnablementRepository::new(self.connection.clone())
+    }
+
+    /// Returns a repository for sandbox selections.
+    pub fn sandbox_selection(&self) -> SandboxSelectionRepository {
+        SandboxSelectionRepository::new(self.connection.clone())
     }
 
     /// Returns a repository for persisted process metadata.
@@ -414,6 +421,135 @@ impl McpEnablementRepository {
     }
 }
 
+/// Persistence for sandbox selections.
+///
+/// Selections are stored as JSON so a later profile field does not need a
+/// schema change. Missing state is always unsandboxed.
+#[derive(Clone)]
+pub struct SandboxSelectionRepository {
+    connection: Connection,
+}
+
+impl SandboxSelectionRepository {
+    fn new(connection: Connection) -> Self {
+        Self { connection }
+    }
+
+    /// Reads the workspace default and the session override, when one exists.
+    pub async fn get(
+        &self,
+        workspace_id: &str,
+        session_id: Option<&str>,
+    ) -> Result<SandboxSelectionState> {
+        let workspace_id = workspace_id.to_owned();
+        let session_id = session_id.map(str::to_owned);
+        self.connection
+            .call(move |connection| {
+                let workspace_default = connection
+                    .query_row(
+                        "SELECT selection FROM workspace_sandbox_selection WHERE workspace_id = ?1",
+                        [&workspace_id],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .optional()?
+                    .map(|selection| parse_selection(&selection))
+                    .transpose()?
+                    .unwrap_or_default();
+                let session_override = match session_id {
+                    Some(session_id) => connection
+                        .query_row(
+                            "SELECT selection FROM session_sandbox_selection
+                             WHERE session_id = ?1 AND workspace_id = ?2",
+                            params![session_id, workspace_id],
+                            |row| row.get::<_, String>(0),
+                        )
+                        .optional()?
+                        .map(|selection| parse_selection(&selection))
+                        .transpose()?,
+                    None => None,
+                };
+                Ok(SandboxSelectionState {
+                    workspace_default,
+                    session_override,
+                })
+            })
+            .await
+    }
+
+    /// Sets the workspace default for new sessions.
+    pub async fn set_workspace_default(
+        &self,
+        workspace_id: &str,
+        selection: &SandboxSelection,
+        updated_at: &str,
+    ) -> Result<()> {
+        let workspace_id = workspace_id.to_owned();
+        let selection = serde_json::to_string(selection).expect("selection is serializable");
+        let updated_at = updated_at.to_owned();
+        self.connection
+            .call(move |connection| {
+                connection.execute(
+                    "INSERT INTO workspace_sandbox_selection (workspace_id, selection, updated_at)
+                     VALUES (?1, ?2, ?3)
+                     ON CONFLICT(workspace_id) DO UPDATE SET
+                       selection = excluded.selection,
+                       updated_at = excluded.updated_at",
+                    params![workspace_id, selection, updated_at],
+                )?;
+                Ok(())
+            })
+            .await
+    }
+
+    /// Sets one session override without changing the workspace default.
+    pub async fn set_session_override(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+        selection: &SandboxSelection,
+        updated_at: &str,
+    ) -> Result<()> {
+        let workspace_id = workspace_id.to_owned();
+        let session_id = session_id.to_owned();
+        let selection = serde_json::to_string(selection).expect("selection is serializable");
+        let updated_at = updated_at.to_owned();
+        self.connection
+            .call(move |connection| {
+                connection.execute(
+                    "INSERT INTO session_sandbox_selection
+                       (session_id, workspace_id, selection, updated_at)
+                     VALUES (?1, ?2, ?3, ?4)
+                     ON CONFLICT(session_id) DO UPDATE SET
+                       workspace_id = excluded.workspace_id,
+                       selection = excluded.selection,
+                       updated_at = excluded.updated_at",
+                    params![session_id, workspace_id, selection, updated_at],
+                )?;
+                Ok(())
+            })
+            .await
+    }
+
+    /// Removes a session override so the workspace default applies again.
+    pub async fn clear_session_override(&self, session_id: &str) -> Result<bool> {
+        let session_id = session_id.to_owned();
+        self.connection
+            .call(move |connection| {
+                Ok(connection.execute(
+                    "DELETE FROM session_sandbox_selection WHERE session_id = ?1",
+                    [session_id],
+                )? > 0)
+            })
+            .await
+    }
+}
+
+fn parse_selection(selection: &str) -> rusqlite::Result<SandboxSelection> {
+    serde_json::from_str(selection).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, error.into())
+    })
+}
+
 /// Recovery metadata for an application-owned process.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessMetadata {
@@ -431,6 +567,9 @@ pub struct ProcessMetadata {
     pub ended_at: Option<String>,
     /// Process exit code, when the platform supplied one.
     pub exit_code: Option<i32>,
+    /// Absolute placeholder paths the process's sandbox creates. They are
+    /// hidden while the process runs and removed if it ends without cleanup.
+    pub sandbox_placeholders: Vec<String>,
 }
 
 /// Access to process recovery metadata.
@@ -451,15 +590,16 @@ impl ProcessMetadataRepository {
                 connection.execute(
                     "INSERT INTO process_metadata (
                        id, workspace_id, process_kind, native_session_id,
-                       started_at, ended_at, exit_code
-                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                       started_at, ended_at, exit_code, sandbox_placeholders
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
                      ON CONFLICT(id) DO UPDATE SET
                        workspace_id = excluded.workspace_id,
                        process_kind = excluded.process_kind,
                        native_session_id = excluded.native_session_id,
                        started_at = excluded.started_at,
                        ended_at = excluded.ended_at,
-                       exit_code = excluded.exit_code",
+                       exit_code = excluded.exit_code,
+                       sandbox_placeholders = excluded.sandbox_placeholders",
                     params![
                         process.id,
                         process.workspace_id,
@@ -467,7 +607,9 @@ impl ProcessMetadataRepository {
                         process.native_session_id,
                         process.started_at,
                         process.ended_at,
-                        process.exit_code
+                        process.exit_code,
+                        serde_json::to_string(&process.sandbox_placeholders)
+                            .expect("paths are serializable")
                     ],
                 )?;
                 Ok(())
@@ -483,7 +625,7 @@ impl ProcessMetadataRepository {
                 connection
                     .query_row(
                         "SELECT id, workspace_id, process_kind, native_session_id,
-                                started_at, ended_at, exit_code
+                                started_at, ended_at, exit_code, sandbox_placeholders
                          FROM process_metadata WHERE id = ?1",
                         [id],
                         process_from_row,
@@ -499,10 +641,31 @@ impl ProcessMetadataRepository {
             .call(|connection| {
                 let mut statement = connection.prepare(
                     "SELECT id, workspace_id, process_kind, native_session_id,
-                            started_at, ended_at, exit_code
+                            started_at, ended_at, exit_code, sandbox_placeholders
                      FROM process_metadata ORDER BY started_at, id",
                 )?;
                 statement.query_map([], process_from_row)?.collect()
+            })
+            .await
+    }
+
+    /// Replaces the recorded sandbox placeholders for one process.
+    pub async fn set_sandbox_placeholders(
+        &self,
+        id: &str,
+        placeholders: Vec<String>,
+    ) -> Result<()> {
+        let id = id.to_owned();
+        self.connection
+            .call(move |connection| {
+                connection.execute(
+                    "UPDATE process_metadata SET sandbox_placeholders = ?2 WHERE id = ?1",
+                    params![
+                        id,
+                        serde_json::to_string(&placeholders).expect("paths are serializable")
+                    ],
+                )?;
+                Ok(())
             })
             .await
     }
@@ -527,6 +690,9 @@ fn process_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProcessMetadata
         started_at: row.get(4)?,
         ended_at: row.get(5)?,
         exit_code: row.get(6)?,
+        sandbox_placeholders: serde_json::from_str(&row.get::<_, String>(7)?).map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(7, rusqlite::types::Type::Text, error.into())
+        })?,
     })
 }
 
@@ -769,11 +935,65 @@ mod tests {
             started_at: CREATED_AT.to_owned(),
             ended_at: Some(UPDATED_AT.to_owned()),
             exit_code: Some(0),
+            sandbox_placeholders: vec!["/work/pau/.mcp.json".to_owned()],
         };
         database.processes().upsert(process.clone()).await.unwrap();
         assert_eq!(
             database.processes().get(&process.id).await.unwrap(),
-            Some(process)
+            Some(process.clone())
+        );
+        database
+            .processes()
+            .set_sandbox_placeholders(&process.id, Vec::new())
+            .await
+            .unwrap();
+        assert!(
+            database
+                .processes()
+                .get(&process.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .sandbox_placeholders
+                .is_empty()
+        );
+
+        let sandboxes = database.sandbox_selection();
+        let initial = sandboxes
+            .get("workspace-1", Some("session-1"))
+            .await
+            .unwrap();
+        assert_eq!(initial, SandboxSelectionState::default());
+        let sandboxed = SandboxSelection::Sandboxed {
+            settings: crate::sandbox::SandboxSettings::workspace_write(),
+        };
+        sandboxes
+            .set_workspace_default("workspace-1", &sandboxed, UPDATED_AT)
+            .await
+            .unwrap();
+        sandboxes
+            .set_session_override(
+                "workspace-1",
+                "session-1",
+                &SandboxSelection::Unsandboxed,
+                UPDATED_AT,
+            )
+            .await
+            .unwrap();
+        let overridden = sandboxes
+            .get("workspace-1", Some("session-1"))
+            .await
+            .unwrap();
+        assert_eq!(overridden.workspace_default, sandboxed);
+        assert_eq!(overridden.effective(), &SandboxSelection::Unsandboxed);
+        assert!(sandboxes.clear_session_override("session-1").await.unwrap());
+        assert_eq!(
+            sandboxes
+                .get("workspace-1", Some("session-1"))
+                .await
+                .unwrap()
+                .effective(),
+            &sandboxed
         );
 
         let summary = ProcessResourceSummary {
@@ -820,6 +1040,7 @@ mod tests {
                 started_at: CREATED_AT.to_owned(),
                 ended_at: None,
                 exit_code: None,
+                sandbox_placeholders: Vec::new(),
             })
             .await
             .unwrap();

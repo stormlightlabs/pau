@@ -108,11 +108,18 @@ first-party extension replaces every enabled built-in file, search, and command
 tool with calls to a separate Pau tool host. That host runs inside one OS
 sandbox and executes the operations and subprocesses; it never receives
 Pi's model credentials. Tools from other extensions are disabled under a
-sandbox profile unless their execution boundary has been reviewed. Stdio MCP
-servers may run as descendants of the tool host; remote MCP and other in-process
-tools are unavailable under the profile until an equivalent boundary exists.
-This makes the trusted boundary explicit instead of describing path checks in
-the Pi process as containment.
+sandbox profile unless their execution boundary has been reviewed. This makes
+the trusted boundary explicit instead of describing path checks in the Pi
+process as containment.
+
+`pau-core::sandbox` owns the policy. It validates a selection, canonicalizes
+roots, pins the containment executables, and resolves a launch into the
+sandbox-runtime configuration, the tool environment, the predicted placeholders,
+and the effective profile the operator sees. It writes the result to a policy
+file in a host-private session directory that the sandbox cannot read.
+`packages/sandbox` only consumes that file, so the profile shown before launch
+is the one that runs. Its fixtures obtain policies from the same code through
+the `sandbox-policy` binary.
 
 The prototype confirms this design with Pi 0.87.1 in RPC mode and Pi's faux
 model. The tool host runs each tool's complete `execute` call rather than
@@ -124,12 +131,17 @@ host, activates only the seven built-in tools, and blocks any other tool call.
 When the sandbox cannot start, tool calls fail and nothing runs in the Pi
 process.
 
-Tools from other extensions need their own contained launch path. Stdio MCP
-servers start as descendants of the tool host, remote MCP servers reach their
-domains through the sandbox proxy, and the Claude bridge starts Claude with its
-own sandbox enabled and reports that sandbox's guarantees. `pi-mcp-adapter`
-currently runs in the Pi process and starts stdio servers there, so its servers
-need a launch hook before they can use the first path. A tool without a
+Tools from other extensions need their own contained launch path.
+`pi-mcp-adapter` runs in the Pi process, so Pau starts a sandboxed Pi with a
+session MCP configuration through `--mcp-config` and the adapter's exclusive
+mode, which loads no other source. Each enabled stdio server becomes an entry
+for the adapter's Unix socket transport. The extension serves that socket
+outside the sandbox and starts the server as a descendant of the tool host, so
+the server gets the same policy as every tool. A remote server is included only
+when its host is a granted domain. The adapter has no proxy setting, so remote
+MCP traffic leaves from the Pi process rather than through the sandbox proxy;
+the effective profile lists this gap. Other servers are disabled. The Claude
+bridge starts Claude with its own sandbox, described below. A tool without a
 contained path is disabled under a profile by default. The operator may enable
 it for one tool, after which each call asks for approval and states that the
 call runs outside the sandbox.
@@ -159,16 +171,16 @@ it uses Seatbelt profiles. Bubblewrap (LGPL-2.0-or-later), `socat`
 (GPL-2.0), and ripgrep (MIT or Unlicense) are required Linux executables,
 not linked libraries.
 
-`packages/sandbox` holds the prototype launcher, profile translation, tool
-host, and fixture runs. On Linux with Bubblewrap 0.12.0, the fixtures confirmed
-these guarantees for the workspace-write and read-only profiles:
+`packages/sandbox` holds the launcher, the Pi extension and tool host, the MCP
+relay, and the fixture runs. On Linux with Bubblewrap 0.12.0, the fixtures
+confirmed these guarantees for the workspace-write and read-only profiles:
 
 - Writes succeed only in the workspace, the per-session temporary directory,
   and explicitly granted roots.
 - Credential stores under the home directory and workspace `.env` files are
   unreadable, while `.env.example` stays readable.
 - Existing and new `.git/hooks` entries, `.git/config`, `.pi`, `.claude`,
-  `.codex`, `.mcp.json`, `.vscode`, and `.idea` are read-only.
+  `.codex`, `.mcp.json`, `.vscode`, `.idea`, and `.zed` are read-only.
 - Reads and writes through host-created and sandbox-created symlinks follow
   the target's policy.
 - Network access is off by default, including direct TCP that bypasses the
@@ -192,6 +204,7 @@ Pau's launcher adds the checks the runtime does not make:
   sources the user's `~/.bashrc`. Structured channels use file descriptor 3.
 - It restores the session's `TMPDIR`. The runtime replaces it with a shared
   `/tmp/claude` directory.
+- It disables core dumps, which could write process memory into the workspace.
 - It denies writes to `~/.npm/_logs` and `~/.claude/debug`, which the runtime
   makes writable by default.
 
@@ -207,21 +220,23 @@ sandbox-runtime binds `/tmp/claude` writable, and shared by every sandbox,
 whenever it exists on the host. Pau's tools use the session temporary directory,
 and the runtime's Linux proxy sockets live directly in `/tmp`, so Pau denies
 writes to `/tmp/claude` by default. An operator who shares the directory with
-Claude Code on purpose can allow it.
+Claude Code on purpose can allow it with the profile's shared-temp option.
 
-The wrapped command starts `bwrap` through a `PATH` lookup, and the runtime
-starts `socat` the same way. The launcher resolves both once at startup,
-checks the Bubblewrap version, and starts the sandbox with a `PATH` that
-contains only their directories. The effective profile shows the resolved paths
-and version. Ask upstream to honor the explicit `bwrapPath` and `socatPath`
-that its dependency check already accepts, then use that option.
+sandbox-runtime otherwise starts `bwrap`, `socat`, and ripgrep through a `PATH`
+lookup for each command. Release 0.0.77 honors explicit `bwrapPath`,
+`socatPath`, and `ripgrep.command` settings, so Pau resolves the three
+executables once at startup, requires Bubblewrap 0.11 or later, and writes their
+absolute paths into every policy. A directory added to `PATH` later cannot
+replace them. The effective profile shows the resolved paths and version.
 
 The runtime puts loopback and private ranges in `NO_PROXY`. On Linux the
 sandbox has no network interfaces, so clients that honor `NO_PROXY` bypass the
-proxy and cannot reach a granted local address. When a profile grants a
-loopback or private address, the launcher removes it from `NO_PROXY` inside the
-sandbox. Report the behavior upstream and drop the override when the runtime
-handles it. Confirm on macOS whether the override is needed there.
+proxy and cannot reach a granted local address. The policy therefore always
+sets `NO_PROXY` explicitly and removes each entry that covers a granted loopback
+or private address. A network change sends the new value to the running tool
+host, which passes it to commands it starts afterward. Report the behavior
+upstream and drop the override when the runtime handles it. Confirm on macOS
+whether the override is needed there.
 
 sandbox-runtime attributes only proxy denials to a command on Linux.
 Filesystem, socket, and direct TCP denials reach Pau only as the child's
@@ -243,12 +258,17 @@ Bubblewrap can deny an absent protected path only by mounting over a
 placeholder, so the runtime creates empty, unreadable files and directories such
 as `.mcp.json`, `.claude`, and `.bashrc` in the workspace and removes them in
 `SandboxManager.reset()`. Denying creation keeps a sandboxed command from
-planting configuration that a later unsandboxed agent would load. Pau computes
-the placeholders before launch and records them with the process metadata. Its
-file and Git views hide them while the sandbox runs, and Pau removes recorded
-leftovers from a crash before the next sandboxed launch. Test Claude Code, Pi,
-and a common editor with the placeholders present and list any conflict in the
-effective profile.
+planting configuration that a later unsandboxed agent would load. The runtime
+applies its own list of dangerous files to the current directory of the process
+that wraps commands, which is the workspace for Pi. Pau predicts the
+placeholders from both lists before launch, the boundary fixtures compare the
+prediction with a real launch, and the Pi registry records them with the
+process metadata. File, search, and Git views hide recorded placeholders of a
+running process while they are still empty. Stopping a session removes any the
+runtime left, and the next sandboxed launch removes empty leftovers from a
+crash, except paths a live session still records. Pi runs its built-in tools
+with the placeholders present. Test Claude Code and a common editor with them
+present and list any conflict in the effective profile.
 
 `SandboxManager` holds one policy and one proxy pair per process, so each
 sandboxed session has its own launcher. Pi sessions use the extension inside
@@ -273,6 +293,16 @@ processes that Pau does not own and remain unsandboxed.
 
 The macOS Seatbelt profile and a real Ubuntu 24.04 host remain unverified. Do
 not claim equal isolation where platform guarantees differ.
+
+Claude runs as its own sandbox host. For a sandboxed Claude session, Pau writes
+a Claude settings file with the same filesystem and network policy, requires
+the sandbox to start, disables Claude's unsandboxed retry, and uses a strict
+domain allowlist. The bridge passes it with `--settings` and adds
+`--strict-mcp-config`, because Claude starts MCP servers outside its sandbox.
+`WebFetch` and `WebSearch` are denied unless the operator enables them outside
+the sandbox, which makes them ask on every call. Claude's sandbox covers Bash
+and its descendants; its file tools follow Claude's permission rules, and the
+effective profile names that gap.
 
 The sandbox launcher builds a minimal environment rather than forwarding Pau's
 environment. Credential brokerage is part of the first release but remains

@@ -24,7 +24,14 @@ use pau_core::{
     diagnostics::{
         DiagnosticBundle, DiagnosticLevel, DiagnosticRecordInput, Diagnostics, TransportDiagnostic,
     },
-    persistence::{ApplicationSetting, ApplicationSettingsRepository, Database, Workspace},
+    persistence::{
+        ApplicationSetting, ApplicationSettingsRepository, Database, SandboxSelectionRepository,
+        Workspace,
+    },
+    sandbox::{
+        EffectiveSandbox, SandboxExecutables, SandboxLaunchInput, SandboxPreviewRequest,
+        SandboxSelection, WorkspaceSandbox, resolve_sandbox, validate_selection,
+    },
     workspace::{
         FileContent, FileEntry, FileSearchMatch, GitDiff, GitStatus, TraversalOptions,
         WorkspaceError, WorkspaceService,
@@ -114,6 +121,32 @@ struct ApiState {
     workspaces: Option<WorkspaceService>,
     diagnostics: Diagnostics,
     settings: Option<ApplicationSettingsRepository>,
+    sandbox: Option<SandboxApi>,
+}
+
+/// Sandbox selections and the host facts needed to describe a profile.
+#[derive(Clone)]
+struct SandboxApi {
+    selections: SandboxSelectionRepository,
+    /// Executables pinned at startup, or why none could be resolved.
+    executables: Result<SandboxExecutables, String>,
+    home: PathBuf,
+    /// Parent of per-session sandbox directories.
+    sessions: PathBuf,
+}
+
+impl SandboxApi {
+    /// Pins the containment executables from the startup `PATH`.
+    fn new(selections: SandboxSelectionRepository, sessions: PathBuf) -> Self {
+        let search_path = env::var_os("PATH").unwrap_or_default();
+        Self {
+            selections,
+            executables: SandboxExecutables::resolve(&search_path)
+                .map_err(|error| error.to_string()),
+            home: dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")),
+            sessions,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -324,19 +357,19 @@ struct EventSubscription {
 /// Builds the authenticated API used by desktop and browser clients.
 pub fn router(token: ApiToken) -> Router {
     let diagnostics = default_diagnostics();
-    router_with_services(token, EventHub::default(), None, diagnostics, None)
+    router_with_services(token, EventHub::default(), None, diagnostics, None, None)
 }
 
 /// Builds the API around an event hub supplied by the application owner.
 pub fn router_with_events(token: ApiToken, events: EventHub) -> Router {
     let diagnostics = default_diagnostics();
-    router_with_services(token, events, None, diagnostics, None)
+    router_with_services(token, events, None, diagnostics, None, None)
 }
 
 /// Builds the API with an explicit diagnostics collector.
 pub fn router_with_diagnostics(token: ApiToken, diagnostics: Diagnostics) -> Router {
     let events = EventHub::default().with_diagnostics(diagnostics.clone());
-    router_with_services(token, events, None, diagnostics, None)
+    router_with_services(token, events, None, diagnostics, None, None)
 }
 
 fn router_with_services(
@@ -345,6 +378,7 @@ fn router_with_services(
     workspaces: Option<WorkspaceService>,
     diagnostics: Diagnostics,
     settings: Option<ApplicationSettingsRepository>,
+    sandbox: Option<SandboxApi>,
 ) -> Router {
     diagnostics.register_sensitive_value(token.expose());
     Router::new()
@@ -367,6 +401,14 @@ fn router_with_services(
         .route("/api/workspaces/{workspace_id}/search", get(search_files))
         .route("/api/workspaces/{workspace_id}/git/status", get(git_status))
         .route("/api/workspaces/{workspace_id}/git/diff", get(git_diff))
+        .route(
+            "/api/workspaces/{workspace_id}/sandbox",
+            get(get_workspace_sandbox).put(update_workspace_sandbox),
+        )
+        .route(
+            "/api/workspaces/{workspace_id}/sandbox/preview",
+            post(preview_sandbox),
+        )
         .layer(middleware::from_fn_with_state(token, authenticate))
         .layer(CorsLayer::permissive())
         .with_state(ApiState {
@@ -374,6 +416,7 @@ fn router_with_services(
             workspaces,
             diagnostics,
             settings,
+            sandbox,
         })
 }
 
@@ -539,12 +582,22 @@ enum ApiError {
     Workspace(Box<WorkspaceError>),
     Diagnostics(String),
     ServiceUnavailable,
+    /// The selection names an invalid grant, root, or tool.
+    InvalidSandbox(String),
+    /// No sandbox can start on this host.
+    SandboxUnavailable(String),
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code, message) = match self {
             Self::Diagnostics(message) => (StatusCode::BAD_REQUEST, "diagnostics_error", message),
+            Self::InvalidSandbox(message) => (StatusCode::BAD_REQUEST, "invalid_sandbox", message),
+            Self::SandboxUnavailable(message) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "sandbox_unavailable",
+                message,
+            ),
             Self::ServiceUnavailable => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "workspace_service_unavailable",
@@ -745,6 +798,103 @@ async fn git_diff(
         .await
         .map(Json)
         .map_err(ApiError::from)
+}
+
+fn sandbox_api(state: &ApiState) -> Result<&SandboxApi, ApiError> {
+    state.sandbox.as_ref().ok_or(ApiError::ServiceUnavailable)
+}
+
+async fn workspace_sandbox(
+    state: &ApiState,
+    workspace_id: &str,
+) -> Result<WorkspaceSandbox, ApiError> {
+    let sandbox = sandbox_api(state)?;
+    // Confirms the workspace exists before reading its selection.
+    workspace_service(state)?.root(workspace_id).await?;
+    let selection = sandbox
+        .selections
+        .get(workspace_id, None)
+        .await
+        .map_err(|error| ApiError::from(WorkspaceError::from(error)))?
+        .workspace_default;
+    Ok(WorkspaceSandbox {
+        selection,
+        unavailable: sandbox.executables.as_ref().err().cloned(),
+    })
+}
+
+async fn get_workspace_sandbox(
+    State(state): State<ApiState>,
+    AxumPath(workspace_id): AxumPath<String>,
+) -> Result<Json<WorkspaceSandbox>, ApiError> {
+    workspace_sandbox(&state, &workspace_id).await.map(Json)
+}
+
+/// Stores the workspace default for new sessions. Validation runs first, so
+/// an invalid grant never reaches a launch.
+async fn update_workspace_sandbox(
+    State(state): State<ApiState>,
+    AxumPath(workspace_id): AxumPath<String>,
+    Json(selection): Json<SandboxSelection>,
+) -> Result<Json<WorkspaceSandbox>, ApiError> {
+    validate_selection(&selection).map_err(|error| ApiError::InvalidSandbox(error.to_string()))?;
+    let root = workspace_service(&state)?.root(&workspace_id).await?;
+    let sandbox = sandbox_api(&state)?;
+    if selection.settings().is_some() {
+        describe(
+            sandbox,
+            &root,
+            &workspace_id,
+            &SandboxPreviewRequest {
+                adapter: pau_core::sandbox::SandboxAdapter::Pi,
+                selection: selection.clone(),
+            },
+        )?;
+    }
+    sandbox
+        .selections
+        .set_workspace_default(&workspace_id, &selection, &diagnostic_timestamp())
+        .await
+        .map_err(|error| ApiError::from(WorkspaceError::from(error)))?;
+    workspace_sandbox(&state, &workspace_id).await.map(Json)
+}
+
+/// Describes the profile a selection would enforce, before anything runs.
+async fn preview_sandbox(
+    State(state): State<ApiState>,
+    AxumPath(workspace_id): AxumPath<String>,
+    Json(request): Json<SandboxPreviewRequest>,
+) -> Result<Json<Option<EffectiveSandbox>>, ApiError> {
+    let root = workspace_service(&state)?.root(&workspace_id).await?;
+    describe(sandbox_api(&state)?, &root, &workspace_id, &request).map(Json)
+}
+
+fn describe(
+    sandbox: &SandboxApi,
+    workspace: &std::path::Path,
+    workspace_id: &str,
+    request: &SandboxPreviewRequest,
+) -> Result<Option<EffectiveSandbox>, ApiError> {
+    let Some(settings) = request.selection.settings() else {
+        return Ok(None);
+    };
+    let executables = sandbox
+        .executables
+        .as_ref()
+        .map_err(|error| ApiError::SandboxUnavailable(error.clone()))?;
+    let tool_path = env::var("PATH").unwrap_or_default();
+    resolve_sandbox(&SandboxLaunchInput {
+        adapter: request.adapter,
+        settings,
+        workspace,
+        home: &sandbox.home,
+        session_directory: &sandbox.sessions.join(format!("preview-{workspace_id}")),
+        executables,
+        runtime_roots: &[],
+        tool_path: &tool_path,
+    })
+    .map(|resolved| Some(resolved.effective))
+    .map_err(|error| ApiError::InvalidSandbox(error.to_string()))
 }
 
 #[derive(Deserialize)]
@@ -962,7 +1112,12 @@ pub async fn start_with_token_and_options(
         .await
         .map_err(io::Error::other)?
         .is_some_and(|setting| setting.value == "true");
-    let workspaces = WorkspaceService::new(database.workspaces());
+    let workspaces =
+        WorkspaceService::new(database.workspaces()).with_processes(database.processes());
+    let sandbox = SandboxApi::new(
+        database.sandbox_selection(),
+        state_directory()?.join("sandbox"),
+    );
     let diagnostics = default_diagnostics();
     diagnostics.register_sensitive_value(token.expose());
     diagnostics.set_enabled(options.diagnostics || persisted_diagnostics);
@@ -986,6 +1141,7 @@ pub async fn start_with_token_and_options(
                     Some(workspaces),
                     server_diagnostics,
                     Some(server_settings),
+                    Some(sandbox),
                 ),
             )
             .with_graceful_shutdown(async move {
@@ -1018,6 +1174,16 @@ pub async fn start_with_token_and_options(
         diagnostics,
         shutdown: Some(shutdown),
         task: Some(task),
+    })
+}
+
+/// Directory that holds Pau's database and per-session sandbox state.
+fn state_directory() -> io::Result<PathBuf> {
+    database_path()?.parent().map(PathBuf::from).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "the database has no parent directory",
+        )
     })
 }
 
@@ -1352,6 +1518,107 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn stores_and_describes_workspace_sandbox_selections() {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("project");
+        fs::create_dir(&root).unwrap();
+        let database = Database::open(":memory:").await.unwrap();
+        let workspaces = WorkspaceService::new(database.workspaces());
+        let workspace = workspaces.open(&root, None).await.unwrap();
+        let sandbox = SandboxApi::new(
+            database.sandbox_selection(),
+            directory.path().join("sandbox"),
+        );
+        let available = sandbox.executables.is_ok();
+        let app = router_with_services(
+            test_token(),
+            EventHub::default(),
+            Some(workspaces),
+            default_diagnostics(),
+            None,
+            Some(sandbox),
+        );
+        let call = |method: &str, path: &str, body: Option<serde_json::Value>| {
+            let builder = Request::builder()
+                .method(method)
+                .uri(format!("/api/workspaces/{}/{path}", workspace.id))
+                .header(header::AUTHORIZATION, format!("Bearer {TEST_TOKEN}"))
+                .header(header::CONTENT_TYPE, "application/json");
+            let request = builder
+                .body(body.map_or_else(Body::empty, |body| Body::from(body.to_string())))
+                .unwrap();
+            let app = app.clone();
+            async move {
+                let response = app.oneshot(request).await.unwrap();
+                let status = response.status();
+                let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+                (
+                    status,
+                    serde_json::from_slice::<serde_json::Value>(&bytes).unwrap_or_default(),
+                )
+            }
+        };
+
+        let (status, initial) = call("GET", "sandbox", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            initial["selection"],
+            serde_json::json!({"mode": "unsandboxed"})
+        );
+
+        let sandboxed = serde_json::json!({"mode": "sandboxed", "settings": {
+            "profile": "workspace-write",
+            "grants": {"domains": ["registry.npmjs.org"], "writable_roots": [], "unix_sockets": false}
+        }});
+        let invalid = serde_json::json!({"mode": "sandboxed", "settings": {
+            "profile": "workspace-write",
+            "grants": {"domains": ["https://registry.npmjs.org/"], "writable_roots": [], "unix_sockets": false}
+        }});
+        let (status, error) = call("PUT", "sandbox", Some(invalid)).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(error["code"], "invalid_sandbox");
+
+        let (status, preview) = call(
+            "POST",
+            "sandbox/preview",
+            Some(serde_json::json!({"adapter": "claude", "selection": sandboxed})),
+        )
+        .await;
+        if !available {
+            assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+            return;
+        }
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(preview["adapter"], "claude");
+        assert_eq!(
+            preview["network"]["domains"],
+            serde_json::json!(["registry.npmjs.org"])
+        );
+        assert!(
+            preview["disabled_tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|tool| tool == "WebFetch")
+        );
+
+        let (status, stored) = call("PUT", "sandbox", Some(sandboxed.clone())).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(stored["selection"]["settings"]["grants"], sandboxed["settings"]["grants"]);
+        assert_eq!(stored["selection"]["settings"]["home_read_deny"], false);
+        assert_eq!(call("GET", "sandbox", None).await.1, stored);
+
+        let (status, unsandboxed) = call(
+            "POST",
+            "sandbox/preview",
+            Some(serde_json::json!({"adapter": "pi", "selection": {"mode": "unsandboxed"}})),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(unsandboxed.is_null());
+    }
+
+    #[tokio::test]
     async fn serves_workspace_and_file_apis() {
         let directory = tempdir().unwrap();
         let root = directory.path().join("café project");
@@ -1364,6 +1631,7 @@ mod tests {
             EventHub::default(),
             Some(WorkspaceService::new(database.workspaces())),
             default_diagnostics(),
+            None,
             None,
         );
         let authorization = format!("Bearer {TEST_TOKEN}");

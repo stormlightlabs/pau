@@ -45,6 +45,8 @@ pub struct StartPiProcessOptions {
     pub working_directory: PathBuf,
     /// Additional Pi CLI arguments, after `--mode rpc`.
     pub arguments: Vec<OsString>,
+    /// Variables added to Pau's environment for this process.
+    pub environment: Vec<(OsString, OsString)>,
     /// Deadlines for orderly shutdown and signal escalation.
     pub shutdown_timeouts: PiShutdownTimeouts,
 }
@@ -155,6 +157,12 @@ impl PiProcess {
             .arg("--mode")
             .arg("rpc")
             .args(&options.arguments)
+            .envs(
+                options
+                    .environment
+                    .iter()
+                    .map(|(name, value)| (name, value)),
+            )
             .current_dir(&options.working_directory)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -656,6 +664,7 @@ while :; do :; done
                 executable_path: self.executable.clone(),
                 working_directory: self.root.path().to_path_buf(),
                 arguments: Vec::new(),
+                environment: Vec::new(),
                 shutdown_timeouts,
             })
             .unwrap()

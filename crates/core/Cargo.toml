@@ -25,3 +25,7 @@ tempfile = "3.27.0"
 [[bin]]
 name = "generate-protocol"
 path = "src/bin/generate_protocol.rs"
+
+[[bin]]
+name = "sandbox-policy"
+path = "src/bin/sandbox_policy.rs"

@@ -57,6 +57,11 @@
 			description: 'Explores trust, scope, connection state, and agent access for MCP servers and Pi resources.'
 		},
 		{
+			href: '/screens/sandbox',
+			title: 'Agent sandbox',
+			description: 'Chooses a workspace sandbox and shows the access, disabled tools, and known gaps before launch.'
+		},
+		{
 			href: '/screens/settings',
 			title: 'Settings',
 			description:

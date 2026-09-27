@@ -20,6 +20,9 @@ changes.
 
 `cargo clean` regularly to keep the disk clean.
 
+Run JavaScript tools through pnpm with `pnpm exec`, `pnpm --filter`, or a
+package script. Do not use `npx`.
+
 Run heavyweight verification serially. Do not run `pnpm check`, browser tests,
 Storybook or website builds, and Cargo builds at the same time. Resource
 contention can cause false timeouts in process and interaction tests. Run a full

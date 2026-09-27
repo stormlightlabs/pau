@@ -193,6 +193,7 @@ impl FakePi {
             executable_path: self.executable.clone(),
             working_directory: self.root.path().to_path_buf(),
             arguments: Vec::new(),
+            environment: Vec::new(),
             shutdown_timeouts: PiShutdownTimeouts {
                 protocol: Duration::from_secs(1),
                 interrupt: Duration::from_secs(1),

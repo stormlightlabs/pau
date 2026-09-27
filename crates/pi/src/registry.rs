@@ -1,8 +1,10 @@
 use crate::{PiProcessOutput, PiSession, PiSessionError, StartPiProcessOptions};
 use pau_core::persistence::{ProcessMetadata, ProcessMetadataRepository};
+use pau_core::sandbox::remove_placeholders;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, broadcast};
 
@@ -20,6 +22,9 @@ pub struct StartRegisteredPiSession {
     pub started_at: String,
     /// Native Pi process options for this workspace.
     pub process: StartPiProcessOptions,
+    /// Placeholders the session's sandbox creates, from
+    /// [`crate::PiSandboxLaunch`]. Empty for an unsandboxed session.
+    pub sandbox_placeholders: Vec<PathBuf>,
 }
 
 /// Persisted Pi session metadata available after Pau restarts.
@@ -155,6 +160,9 @@ impl PiSessionRegistry {
         &self,
         request: &StartRegisteredPiSession,
     ) -> Result<Arc<PiSession>, PiSessionRegistryError> {
+        if !request.sandbox_placeholders.is_empty() {
+            self.remove_leftover_placeholders().await?;
+        }
         let session = Arc::new(
             PiSession::start(request.process.clone())
                 .map_err(PiSessionError::from)
@@ -176,6 +184,11 @@ impl PiSessionRegistry {
             started_at: request.started_at.clone(),
             ended_at: None,
             exit_code: None,
+            sandbox_placeholders: request
+                .sandbox_placeholders
+                .iter()
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect(),
         };
         if let Err(error) = self.processes.upsert(metadata).await {
             let _ = session.stop().await;
@@ -234,6 +247,19 @@ impl PiSessionRegistry {
             })?;
         metadata.ended_at = Some(ended_at.into());
         metadata.exit_code = exit.code;
+        // sandbox-runtime removes its placeholders when the extension shuts
+        // down. A killed Pi leaves them, so remove any that remain.
+        let recorded = std::mem::take(&mut metadata.sandbox_placeholders);
+        if !recorded.is_empty() {
+            let in_use = self.live_placeholders(Some(id)).await?;
+            remove_placeholders(
+                &recorded
+                    .into_iter()
+                    .map(PathBuf::from)
+                    .filter(|path| !in_use.contains(path))
+                    .collect::<Vec<_>>(),
+            );
+        }
         self.processes
             .upsert(metadata)
             .await
@@ -248,6 +274,70 @@ impl PiSessionRegistry {
             state.sessions.remove(id);
         }
         Ok(())
+    }
+
+    /// Removes placeholders recorded by sessions that are no longer live,
+    /// such as those of a Pau process that crashed, before a new sandbox
+    /// starts. Placeholders recorded by a live session stay: removing one
+    /// would detach that sandbox's mount and lift the deny rule.
+    async fn remove_leftover_placeholders(&self) -> Result<(), PiSessionRegistryError> {
+        let persistence = |error: pau_core::persistence::Result<()>| {
+            error.map_err(|error| PiSessionRegistryError::Persistence(error.to_string()))
+        };
+        let live = self.live_ids().await;
+        let in_use = self.live_placeholders(None).await?;
+        for record in self.records().await? {
+            if live.contains(&record.id) || record.sandbox_placeholders.is_empty() {
+                continue;
+            }
+            remove_placeholders(
+                &record
+                    .sandbox_placeholders
+                    .iter()
+                    .map(PathBuf::from)
+                    .filter(|path| !in_use.contains(path))
+                    .collect::<Vec<_>>(),
+            );
+            persistence(
+                self.processes
+                    .set_sandbox_placeholders(&record.id, Vec::new())
+                    .await,
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Placeholders recorded by live sessions other than `except`.
+    async fn live_placeholders(
+        &self,
+        except: Option<&str>,
+    ) -> Result<HashSet<PathBuf>, PiSessionRegistryError> {
+        let live = self.live_ids().await;
+        Ok(self
+            .records()
+            .await?
+            .into_iter()
+            .filter(|record| live.contains(&record.id) && Some(record.id.as_str()) != except)
+            .flat_map(|record| record.sandbox_placeholders)
+            .map(PathBuf::from)
+            .collect())
+    }
+
+    async fn live_ids(&self) -> HashSet<String> {
+        let state = self.state.lock().await;
+        state
+            .sessions
+            .keys()
+            .chain(state.starting.iter())
+            .cloned()
+            .collect()
+    }
+
+    async fn records(&self) -> Result<Vec<ProcessMetadata>, PiSessionRegistryError> {
+        self.processes
+            .list()
+            .await
+            .map_err(|error| PiSessionRegistryError::Persistence(error.to_string()))
     }
 
     /// Lists Pi native session records persisted by earlier and current runs.

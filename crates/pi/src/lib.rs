@@ -5,6 +5,7 @@ mod mcp;
 mod process;
 mod projection;
 mod registry;
+mod sandbox;
 mod session;
 
 pub use extension_ui::{
@@ -28,6 +29,7 @@ pub use registry::{
     DiscoveredPiSession, PiSessionOutput, PiSessionRegistry, PiSessionRegistryError,
     StartRegisteredPiSession,
 };
+pub use sandbox::{PiSandboxLaunch, PreparePiSandbox, prepare_pi_sandbox};
 pub use session::{PI_RPC_CAPABILITIES, PiNativeSession, PiSession, PiSessionError};
 
 use semver::Version;

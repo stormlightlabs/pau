@@ -507,3 +507,282 @@ snapshot: ServerSnapshot, } | { "type": "event",
  * Sequenced state change.
  */
 event: ServerEvent, };
+
+export type SandboxProfileName = "workspace-write" | "read-only";
+
+export type SandboxGrants = {
+/**
+ * Hosts in sandbox-runtime syntax, such as `example.com`,
+ * `*.example.com`, or `127.0.0.1:8080`.
+ */
+domains: Array<string>,
+/**
+ * Absolute writable directories outside the workspace.
+ */
+writable_roots: Array<string>,
+/**
+ * Allows every Unix socket. Linux cannot filter sockets by path.
+ */
+unix_sockets: boolean, };
+
+export type SandboxSettings = {
+/**
+ * Base profile.
+ */
+profile: SandboxProfileName,
+/**
+ * Explicit widening of the base profile.
+ */
+grants: SandboxGrants,
+/**
+ * Denies reads from the home directory except the workspace and the
+ * directories the tool host needs.
+ */
+home_read_deny: boolean,
+/**
+ * Keeps `/tmp/claude` writable for an operator who shares it with Claude
+ * Code on purpose. Pau denies it by default.
+ */
+share_claude_temp: boolean,
+/**
+ * Tools without a contained launch path that the operator enabled. Each
+ * call runs outside the sandbox after its own approval.
+ */
+unsandboxed_tools: Array<string>, };
+
+export type SandboxSelection = { "mode": "unsandboxed" } | { "mode": "sandboxed",
+/**
+ * Profile and grants.
+ */
+settings: SandboxSettings, };
+
+export type SandboxSelectionState = {
+/**
+ * Workspace default. Missing persisted state is unsandboxed.
+ */
+workspace_default: SandboxSelection,
+/**
+ * Session-specific choice, when one has been recorded.
+ */
+session_override: SandboxSelection | null, };
+
+export type SandboxAdapter = "pi" | "claude";
+
+export type SandboxExecutable = {
+/**
+ * Executable name.
+ */
+name: string,
+/**
+ * Absolute path used for every launch.
+ */
+path: string,
+/**
+ * Reported version, when the executable reports one.
+ */
+version: string | null, };
+
+export type SandboxReadAccess = {
+/**
+ * Whether the home directory is unreadable apart from `allowed`.
+ */
+home_denied: boolean,
+/**
+ * Paths re-allowed inside a denied region.
+ */
+allowed: Array<string>,
+/**
+ * Paths and patterns that cannot be read.
+ */
+denied: Array<string>, };
+
+export type SandboxNetworkAccess = {
+/**
+ * Granted destinations. Empty means network access is off.
+ */
+domains: Array<string>,
+/**
+ * Granted destinations that name this host or a private network.
+ */
+local_addresses: Array<string>,
+/**
+ * Whether every Unix socket is reachable.
+ */
+unix_sockets: boolean, };
+
+export type SandboxCredentialAccess = {
+/**
+ * Credential paths that cannot be read.
+ */
+denied: Array<string>,
+/**
+ * Credentials substituted by a broker. Brokerage is not available yet.
+ */
+brokered: Array<string>, };
+
+export type EffectiveSandbox = {
+/**
+ * Adapter whose boundary the profile applies to.
+ */
+adapter: SandboxAdapter,
+/**
+ * Operating system that enforces the profile.
+ */
+platform: string,
+/**
+ * Containment mechanism.
+ */
+mechanism: string,
+/**
+ * Whether Pau's fixtures have verified this platform.
+ */
+verified: boolean,
+/**
+ * Pinned executables.
+ */
+executables: Array<SandboxExecutable>,
+/**
+ * Base profile.
+ */
+profile: SandboxProfileName,
+/**
+ * Readable scope.
+ */
+readable: SandboxReadAccess,
+/**
+ * Writable roots.
+ */
+writable: Array<string>,
+/**
+ * Paths inside writable roots that stay read-only.
+ */
+protected: Array<string>,
+/**
+ * Network scope.
+ */
+network: SandboxNetworkAccess,
+/**
+ * Credential handling.
+ */
+credentials: SandboxCredentialAccess,
+/**
+ * Names of the variables in the tool environment.
+ */
+environment: Array<string>,
+/**
+ * Process limits and lifetime rules.
+ */
+limits: Array<string>,
+/**
+ * Tools that run inside the sandbox.
+ */
+sandboxed_tools: Array<string>,
+/**
+ * Tools that run outside it after a per-call approval.
+ */
+unsandboxed_tools: Array<string>,
+/**
+ * Tools and servers that are unavailable while the profile is active.
+ */
+disabled_tools: Array<string>,
+/**
+ * Empty placeholder files and directories created for absent protected
+ * paths. File and Git views hide them while the sandbox runs.
+ */
+placeholders: Array<string>,
+/**
+ * Limits of the guarantee on this platform and adapter.
+ */
+known_gaps: Array<string>, };
+
+export type SandboxedMcpServer = {
+/**
+ * Native server name.
+ */
+name: string,
+/**
+ * Host-side Unix socket the MCP client connects to.
+ */
+socket: string,
+/**
+ * Executable started by the tool host.
+ */
+command: string,
+/**
+ * Arguments after interpolation.
+ */
+args: Array<string>,
+/**
+ * Working directory.
+ */
+cwd: string,
+/**
+ * Variables the server configuration sets. They are added to the tool
+ * environment for this server only.
+ */
+env: { [key in string]: string }, };
+
+export type SandboxPolicyFile = {
+/**
+ * Policy file format version.
+ */
+version: number,
+/**
+ * Canonical workspace root.
+ */
+workspace: string,
+/**
+ * Dedicated per-session temporary directory.
+ */
+tempDir: string,
+/**
+ * Complete sandbox-runtime configuration.
+ */
+runtimeConfig: unknown,
+/**
+ * Complete tool environment. Nothing else is forwarded.
+ */
+environment: { [key in string]: string },
+/**
+ * `NO_PROXY` value inside the sandbox. Granted local addresses are
+ * removed so they use the proxy.
+ */
+noProxy: string,
+/**
+ * Tools that may run outside the sandbox after a per-call approval.
+ */
+unsandboxedTools: Array<string>,
+/**
+ * Stdio MCP servers that start as descendants of the tool host.
+ */
+mcpServers: Array<SandboxedMcpServer>,
+/**
+ * Session MCP configuration that lists only contained servers. When it
+ * is present, the MCP client's tools may run under the profile.
+ */
+mcpConfig: string | null,
+/**
+ * Placeholders omitted from grep's skipped-file report because they are
+ * not real files.
+ */
+placeholders: Array<string>, };
+
+export type WorkspaceSandbox = {
+/**
+ * Workspace default.
+ */
+selection: SandboxSelection,
+/**
+ * Why no sandbox can start on this host, when that is the case.
+ */
+unavailable: string | null, };
+
+export type SandboxPreviewRequest = {
+/**
+ * Adapter whose boundary would receive the profile.
+ */
+adapter: SandboxAdapter,
+/**
+ * Selection to describe.
+ */
+selection: SandboxSelection, };

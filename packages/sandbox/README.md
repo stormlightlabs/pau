@@ -5,30 +5,38 @@ sandbox while Pi and its model credentials stay outside it. It uses the pinned
 `@anthropic-ai/sandbox-runtime` release: Bubblewrap on Linux and Seatbelt on
 macOS.
 
-The package contains:
+Pau resolves the policy in Rust (`pau-core::sandbox`) and writes it to a policy
+file. This package only reads that file. It contains:
 
-- `src/profile.ts`: translates Pau's workspace-write and read-only profiles
-  into a sandbox-runtime policy and builds the tool environment
+- `src/policy.ts`: reads and validates the policy file and classifies a change
+  as a network update or a tool host restart
 - `src/launcher.ts`: starts the sandbox, proves it with a no-op command, and
   refuses to run anything when that fails
 - `src/pi-extension.ts`: replaces Pi's `read`, `bash`, `edit`, `write`,
   `grep`, `find`, and `ls` tools and operator `!` commands with calls to the
-  tool host, and blocks every other tool
-- `src/tool-host.ts`: runs those tools inside the sandbox
+  tool host, blocks every other tool, and asks before each call to a tool the
+  operator enabled outside the sandbox
+- `src/sandbox-session.ts`: applies policy file changes and restarts the tool
+  host between tool calls when filesystem access changes
+- `src/tool-host.ts`: runs those tools and contained stdio MCP servers inside
+  the sandbox
+- `src/mcp-relay.ts`: serves each contained MCP server on the Unix socket that
+  `pi-mcp-adapter` connects to
 
-Load the extension with the policy in `PAU_SANDBOX_POLICY`:
+Pau loads the extension and names the policy file in `PAU_SANDBOX_POLICY_FILE`:
 
 ```sh
-PAU_SANDBOX_POLICY='{"profile":"workspace-write","workspace":"/path/to/repo","tempDir":"/path/to/session-tmp","home":"/home/me"}' \
+PAU_SANDBOX_POLICY_FILE=/path/to/session/host/policy.json \
   pi --extension packages/sandbox/src/pi-extension.ts
 ```
 
 ## Run the fixtures
 
 Linux needs `bwrap`, `socat`, and `rg` on `PATH`. The Nix development shell
-provides them. Both runs create a temporary fixture, print one line per check,
-and exit non-zero when a check fails. Neither calls a model provider or the
-network.
+provides them. The fixtures build Pau's `sandbox-policy` resolver with Cargo on
+first use. Set `PAU_SANDBOX_POLICY_BIN` to a built resolver to skip that step.
+Each run creates a temporary fixture, prints one line per check, and exits
+non-zero when a check fails. Neither calls a model provider or the network.
 
 ```sh
 pnpm --filter @stormlightlabs/pau-sandbox test:boundary
@@ -36,9 +44,12 @@ pnpm --filter @stormlightlabs/pau-sandbox test:pi
 ```
 
 `test:boundary` runs file, credential, protected-configuration, symlink,
-network, socket, environment, subprocess, cleanup, terminal, and startup-failure
-cases against each profile. `test:pi` starts Pi in RPC mode with a scripted
-model and checks every built-in tool through the sandbox.
+network, socket, environment, subprocess, placeholder, cleanup, terminal, and
+startup-failure cases against each profile. It also checks live network
+changes and pinned executables. `test:pi` starts Pi in RPC mode with a scripted
+model and checks every built-in tool through the sandbox, including streaming,
+abort, timeout, truncation, tool host crashes, grant changes during a session,
+a contained stdio MCP server, and per-call approval.
 
 See [backend contracts](../../dev/plan/backend.md#sandbox-runtime-selection)
 for the measured guarantees and known gaps.

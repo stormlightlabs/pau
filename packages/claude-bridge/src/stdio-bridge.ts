@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline';
 import { pathToFileURL } from 'node:url';
 
 import { discoverClaude } from './discovery.js';
-import { ClaudeProcessRegistry } from './lifecycle.js';
+import { CLAUDE_STRUCTURED_ARGS, ClaudeProcessRegistry } from './lifecycle.js';
 import {
 	BRIDGE_PROTOCOL_VERSION,
 	FrameDecoder,
@@ -20,7 +20,20 @@ export type ClaudeStdioBridgeOptions = {
 	readonly claudePath: string;
 	readonly cwd: string;
 	readonly nativeSessionId?: string;
+	/**
+	 * Claude settings file that starts Claude with its own sandbox. Pau writes
+	 * it for a sandboxed session. Claude then loads no MCP server, because
+	 * Claude starts MCP servers outside its sandbox.
+	 */
+	readonly settingsPath?: string;
 };
+
+/** Claude CLI arguments for one bridge host. */
+export function claudeArguments(options: Pick<ClaudeStdioBridgeOptions, 'settingsPath'>): readonly string[] {
+	return options.settingsPath
+		? [...CLAUDE_STRUCTURED_ARGS, '--settings', options.settingsPath, '--strict-mcp-config']
+		: CLAUDE_STRUCTURED_ARGS;
+}
 
 /**
  * Run one Claude process behind the package's public command, event, and
@@ -29,9 +42,10 @@ export type ClaudeStdioBridgeOptions = {
 export async function runClaudeStdioBridge(options: ClaudeStdioBridgeOptions): Promise<void> {
 	const registry = new ClaudeProcessRegistry();
 	const discovery = await discoverClaude({ executablePath: options.claudePath });
+	const args = claudeArguments(options);
 	const process = options.nativeSessionId
-		? await registry.resume({ discovery, cwd: options.cwd, nativeSessionId: options.nativeSessionId })
-		: await registry.start({ discovery, cwd: options.cwd });
+		? await registry.resume({ discovery, cwd: options.cwd, args, nativeSessionId: options.nativeSessionId })
+		: await registry.start({ discovery, cwd: options.cwd, args });
 	const decoder = new FrameDecoder(commandFrameSchema);
 	let promptActive = false;
 	let stopping = false;
@@ -138,7 +152,8 @@ function bridgeError(code: string, message: string, recoverable: boolean): Error
 	return Object.assign(new Error(message), { code, recoverable });
 }
 
-function parseOptions(arguments_: readonly string[]): ClaudeStdioBridgeOptions {
+/** Parse the bridge host's command-line arguments. */
+export function parseBridgeArguments(arguments_: readonly string[]): ClaudeStdioBridgeOptions {
 	const values = new Map<string, string>();
 	for (let index = 0; index < arguments_.length; index += 2) {
 		const name = arguments_[index];
@@ -149,12 +164,21 @@ function parseOptions(arguments_: readonly string[]): ClaudeStdioBridgeOptions {
 	}
 	const claudePath = values.get('--claude');
 	const cwd = values.get('--cwd');
-	if (!claudePath || !cwd) throw new Error('Usage: pau-claude-bridge --claude <path> --cwd <path> [--resume <id>]');
-	return { claudePath, cwd, ...(values.has('--resume') ? { nativeSessionId: values.get('--resume') } : {}) };
+	if (!claudePath || !cwd) {
+		throw new Error('Usage: pau-claude-bridge --claude <path> --cwd <path> [--resume <id>] [--settings <path>]');
+	}
+	const nativeSessionId = values.get('--resume');
+	const settingsPath = values.get('--settings');
+	return {
+		claudePath,
+		cwd,
+		...(nativeSessionId === undefined ? {} : { nativeSessionId }),
+		...(settingsPath === undefined ? {} : { settingsPath })
+	};
 }
 
 if (import.meta.url === pathToFileURL(globalThis.process.argv[1] ?? '').href) {
-	runClaudeStdioBridge(parseOptions(globalThis.process.argv.slice(2))).catch((error: unknown) => {
+	runClaudeStdioBridge(parseBridgeArguments(globalThis.process.argv.slice(2))).catch((error: unknown) => {
 		globalThis.process.stderr.write(
 			encodeDiagnosticFrame({
 				version: BRIDGE_PROTOCOL_VERSION,

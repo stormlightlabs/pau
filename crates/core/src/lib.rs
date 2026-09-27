@@ -6,6 +6,7 @@ use ts_rs::TS;
 pub mod diagnostics;
 pub mod persistence;
 pub mod resource_monitor;
+pub mod sandbox;
 pub mod workspace;
 
 /// Response returned by the backend health endpoint.

@@ -24,6 +24,7 @@ async fn exercises_the_fixture_extension_through_pi_rpc() {
                 "--extension".into(),
                 fixture.into_os_string(),
             ],
+            environment: Vec::new(),
             shutdown_timeouts: PiShutdownTimeouts::default(),
         })
         .unwrap(),

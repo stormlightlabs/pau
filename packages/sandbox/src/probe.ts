@@ -7,6 +7,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { appendFileSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
+import { createInterface } from 'node:readline';
 
 const [operation = '', first = '', second = ''] = process.argv.slice(2);
 
@@ -84,6 +85,30 @@ switch (operation) {
 		child.unref();
 		appendFileSync(first, 'start');
 		setTimeout(() => finish(true, 'spawned'), 300);
+		break;
+	}
+	case 'mcp-server': {
+		// A stdio server for the MCP relay check. Each request line is answered
+		// with what this process could reach: a credential file, a write outside
+		// the workspace, and a provider key in its environment.
+		const attempt = (operation: () => void): boolean => {
+			try {
+				operation();
+				return true;
+			} catch {
+				return false;
+			}
+		};
+		createInterface({ input: process.stdin }).on('line', (line) => {
+			const { id } = JSON.parse(line) as { id: number };
+			const result = {
+				credential: attempt(() => readFileSync(first)),
+				outsideWrite: attempt(() => writeFileSync(second, 'mcp')),
+				providerKey: process.env.ANTHROPIC_API_KEY !== undefined,
+				sandboxed: process.env.PAU_SANDBOX === '1'
+			};
+			process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id, result })}\n`);
+		});
 		break;
 	}
 	default: {

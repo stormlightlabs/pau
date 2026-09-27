@@ -1,0 +1,53 @@
+# Backlog
+
+## Verification backlog
+
+Run the resource-monitoring sampler smoke test on macOS when a runner is
+available.
+
+Run the `packages/sandbox` boundary and Pi fixture runs on macOS before Pau
+offers a sandbox profile there. Run the boundary fixtures on an Ubuntu 24.04
+host with AppArmor's unprivileged user-namespace restriction enabled to confirm
+the startup failure seen with a simulated `bwrap`.
+
+## Research backlog
+
+### Remote execution
+
+Running the web server on an operator-configured remote host remains part of
+3.6. Automatic setup or control of another machine from the desktop app is not
+planned. Research these questions before assigning remote execution to a
+deliverable:
+
+- Choose between installing Pau on the remote host and carrying Pau protocols
+  over an SSH-managed transport. Define the trust boundary for each topology.
+- Specify host-key verification, authentication bootstrap, jump-host support,
+  connection sharing, Tailscale use, and recovery after a network change. Check
+  where Mosh helps terminal sessions and where it cannot carry HTTP or
+  WebSocket traffic.
+- Define installation, version negotiation, upgrades, rollback, and compatibility
+  between the desktop app, remote server, adapters, and stored state.
+- Define ownership across disconnects, desktop exit, remote restart, duplicate
+  clients, and partial startup. Include orphan detection and resumability.
+- Prototype remote workspace discovery, path identity, file watching, symlinks,
+  permissions, large transfers, and conflict behavior on high-latency links.
+- Prototype PTY reconnect and resize, signal delivery, clipboard behavior, and
+  forwarding for development servers without exposing arbitrary remote ports.
+- Decide where agent, MCP, Git, and command credentials live. Cover forwarding,
+  revocation, redaction, audit identity, and compromise of either machine.
+- Compare direct host processes, a service manager, rootless containers, and an
+  optional Docker or Podman deployment. Test user IDs, mounted workspaces,
+  resource accounting, and nested local sandboxes before treating a container
+  as an isolation boundary.
+- Define the supported remote operating systems and test network loss, sleep,
+  host replacement, clock skew, low disk space, and protocol downgrade.
+
+The research must produce a threat model, one recommended topology, a small
+end-to-end prototype, and explicit deferred cases before implementation starts.
+
+Deep browser embedding for Neovim or another editor, a Kickstart-based Neovim
+profile, `.deb` and RPM packages, Intel macOS, signing and notarization
+automation, shared workspaces, agent councils, workflow graphs, mobile clients,
+and extension marketplaces remain backlog items.
+
+Cloud sandboxes and hosted execution are not planned.

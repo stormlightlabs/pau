@@ -5,8 +5,8 @@ Read these indexes and every document they link before changing the project:
 - [SPEC.md](dev/SPEC.md) indexes product behavior and scope.
 - [PLAN.md](dev/PLAN.md) indexes architecture, package ownership, design,
   documentation, and testing policy.
-- [ROADMAP.md](dev/ROADMAP.md) defines deliverables, work units, blockers, and
-  verification.
+- [ROADMAP.md](dev/ROADMAP.md) indexes the deliverable files in `dev/tasks/`,
+  which define each work unit's status, blockers, scope, and verification.
 
 Do not repeat their content here. Update the owning document when a product or
 architecture decision changes.
@@ -49,10 +49,10 @@ built artifact.
   pre-existing findings. Do not defer or report those findings as separate
   follow-up work. Keep defects found outside required checks separate unless
   they block verification.
-- Keep completed units in the roadmap until every unit in their named subsection
-  is complete. Then add a concise user-facing changelog entry, remove satisfied
-  blocker references, and remove that subsection. Apply the same cleanup to an
-  entire deliverable when its remaining units are complete.
+- Keep completed units in their deliverable file until every unit in their
+  named subsection is complete. Then add a concise user-facing changelog entry,
+  remove satisfied blocker references, and remove that subsection. Apply the
+  same cleanup to an entire deliverable when its remaining units are complete.
 
 ## Dogfood Pau
 

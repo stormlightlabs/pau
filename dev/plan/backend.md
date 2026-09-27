@@ -124,18 +124,26 @@ host, activates only the seven built-in tools, and blocks any other tool call.
 When the sandbox cannot start, tool calls fail and nothing runs in the Pi
 process.
 
-Under a profile, disable tools from other extensions, including the Claude
-bridge's delegation tool and every tool from `pi-mcp-adapter`. That adapter
-runs in the Pi process and starts stdio servers there, so its servers need a
-launch path inside the tool host before they can stay enabled.
+Tools from other extensions need their own contained launch path. Stdio MCP
+servers start as descendants of the tool host, remote MCP servers reach their
+domains through the sandbox proxy, and the Claude bridge starts Claude with its
+own sandbox enabled and reports that sandbox's guarantees. `pi-mcp-adapter`
+currently runs in the Pi process and starts stdio servers there, so its servers
+need a launch hook before they can use the first path. A tool without a
+contained path is disabled under a profile by default. The operator may enable
+it for one tool, after which each call asks for approval and states that the
+call runs outside the sandbox.
 
 The tool host has its own Pi agent directory in the session's temporary
 directory, so it cannot read Pi's settings or credential store and cannot
 download tools. That directory holds links to the existing `fd` and a ripgrep
 wrapper. Pi's grep tool rejects a search when ripgrep exits with status 2, and
 ripgrep does so for any unreadable file, including a read-denied `.env` or a
-Bubblewrap placeholder. The wrapper drops permission-denied diagnostics and
-keeps every other error. Replace it if Pi accepts partial ripgrep results.
+Bubblewrap placeholder. The wrapper treats permission-denied diagnostics as
+skipped files and keeps every other error. It passes the skipped paths to the
+tool host, which adds them to the grep result so the model and operator know
+the search was incomplete. Placeholders are omitted from that list because they
+are not real files.
 
 ### Sandbox runtime selection
 
@@ -187,27 +195,77 @@ Pau's launcher adds the checks the runtime does not make:
 - It denies writes to `~/.npm/_logs` and `~/.claude/debug`, which the runtime
   makes writable by default.
 
-Known gaps to carry into the managed sandbox:
+Sandbox profiles allow reads outside the workspace apart from the credential
+list, as Claude Code and Codex do. Permission profiles gate outside reads by
+Pi's `read`, `grep`, `find`, and `ls` tools, but not reads made inside `bash`.
+An optional home read-deny setting denies the home directory and re-allows the
+workspace and required toolchain directories. Pau recommends it when a profile
+grants network access, because that is when an unlisted file can leave the
+machine.
 
-- Reads outside the workspace remain allowed apart from the credential list.
-- `/tmp/claude` is bound writable, and shared by every sandbox, whenever it
-  exists on the host.
-- The wrapped command starts `bwrap` through a `PATH` lookup, so the launcher
-  must control `PATH` or pin the executable.
-- The runtime sets `NO_PROXY` for loopback. Clients that honor it skip the
-  proxy and cannot reach a granted loopback address.
-- Only proxy denials are attributed to the command as violation events.
-  Filesystem, socket, and direct TCP denials surface only as the child's
-  errors.
-- Bubblewrap mounts empty, unreadable placeholders for absent protected paths
-  such as `.bashrc` and `.gitmodules`. They appear in directory listings and on
-  the host while a command runs, and `SandboxManager.reset()` removes them. A
-  crash of the launcher process leaves them behind.
-- `--new-session` detaches the command from its terminal. A shell on a PTY runs
-  with job control off, so an operator terminal profile needs further work
-  before it is offered.
-- `SandboxManager` holds one policy per process, so each policy needs its own
-  launcher process.
+sandbox-runtime binds `/tmp/claude` writable, and shared by every sandbox,
+whenever it exists on the host. Pau's tools use the session temporary directory,
+and the runtime's Linux proxy sockets live directly in `/tmp`, so Pau denies
+writes to `/tmp/claude` by default. An operator who shares the directory with
+Claude Code on purpose can allow it.
+
+The wrapped command starts `bwrap` through a `PATH` lookup, and the runtime
+starts `socat` the same way. The launcher resolves both once at startup,
+checks the Bubblewrap version, and starts the sandbox with a `PATH` that
+contains only their directories. The effective profile shows the resolved paths
+and version. Ask upstream to honor the explicit `bwrapPath` and `socatPath`
+that its dependency check already accepts, then use that option.
+
+The runtime puts loopback and private ranges in `NO_PROXY`. On Linux the
+sandbox has no network interfaces, so clients that honor `NO_PROXY` bypass the
+proxy and cannot reach a granted local address. When a profile grants a
+loopback or private address, the launcher removes it from `NO_PROXY` inside the
+sandbox. Report the behavior upstream and drop the override when the runtime
+handles it. Confirm on macOS whether the override is needed there.
+
+sandbox-runtime attributes only proxy denials to a command on Linux.
+Filesystem, socket, and direct TCP denials reach Pau only as the child's
+errors. Pau owns its denial reporting and does not wait for upstream support:
+
+- The tool host compares paths named in a failed tool's errors with the
+  effective policy and reports those outside it as sandbox denials.
+- A Rust preload library, loaded into sandboxed processes on Linux, reports
+  file and connect calls that fail with `EACCES`, `EROFS`, or `EPERM` to the
+  tool host with the operation and path. The kernel still enforces the policy;
+  the library only reports. Statically linked programs bypass it, and a
+  bypass loses the report, never the restriction.
+- macOS reads Seatbelt's denial log through sandbox-runtime once macOS is
+  verified.
+- A failure with no identified cause is labelled as a sandboxed failure, and
+  the model receives the same note.
+
+Bubblewrap can deny an absent protected path only by mounting over a
+placeholder, so the runtime creates empty, unreadable files and directories such
+as `.mcp.json`, `.claude`, and `.bashrc` in the workspace and removes them in
+`SandboxManager.reset()`. Denying creation keeps a sandboxed command from
+planting configuration that a later unsandboxed agent would load. Pau computes
+the placeholders before launch and records them with the process metadata. Its
+file and Git views hide them while the sandbox runs, and Pau removes recorded
+leftovers from a crash before the next sandboxed launch. Test Claude Code, Pi,
+and a common editor with the placeholders present and list any conflict in the
+effective profile.
+
+`SandboxManager` holds one policy and one proxy pair per process, so each
+sandboxed session has its own launcher. Pi sessions use the extension inside
+their RPC process. Rust-owned launches, such as sandboxed terminals, start the
+runtime's `srt` command with a generated policy file. Network grants apply to a
+running session. Filesystem rules are fixed when the tool host starts, so a
+filesystem grant waits for the current tool call, restarts the tool host, and
+tells the operator.
+
+sandbox-runtime starts Bubblewrap with `--new-session`, which detaches the
+command from its controlling terminal so it cannot inject keystrokes into the
+operator's shell. A shell on Pau's PTY therefore runs without job control, and
+terminal interrupts and resizes may not reach it. A sandboxed terminal instead
+starts a `pau-term` relay inside the sandbox. The relay opens its own PTY, runs
+the shell on it, forwards bytes to Pau's PTY, and applies window sizes received
+over a control channel. Injected keystrokes then reach only the inner PTY. The
+sandboxed terminal profile stays hidden until the relay exists.
 
 Neovim in headless mode keeps the workspace-only write policy, so terminal
 editors can use the terminal profile. Graphical editors start servers and helper

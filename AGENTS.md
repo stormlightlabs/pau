@@ -13,8 +13,10 @@ architecture decision changes.
 
 ## Commands
 
-Project prompts live in `.pi/prompts/`: `/implement <unit-id>`,
-`/review [focus]`, and `/adv-review [focus]`.
+Project prompts live in `.pi/prompts/`, with Claude Code equivalents in
+`.claude/commands/`: `/implement <unit-id>`, `/review [focus]`, and
+`/adv-review [focus]`. Keep equivalent commands synchronized when their workflow
+changes.
 
 `cargo clean` regularly to keep the disk clean.
 

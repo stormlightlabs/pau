@@ -704,12 +704,38 @@ available.
 
 ## Research backlog
 
-Automatic remote-machine setup remains separate from the web server. Research
-SSH and Mosh integration, remote workspace discovery, server installation,
-process ownership, port-forward management, and reconnect semantics before Pau
-tries to discover or control a host. The documented web server may run on an
-operator-configured remote host through the authenticated paths in 3.6; Pau does
-not automate that host or treat Mosh as browser transport.
+### Remote execution
+
+Running the web server on an operator-configured remote host remains part of
+3.6. Automatic setup or control of another machine from the desktop app is not
+planned. Research these questions before assigning remote execution to a
+deliverable:
+
+- Choose between installing Pau on the remote host and carrying Pau protocols
+  over an SSH-managed transport. Define the trust boundary for each topology.
+- Specify host-key verification, authentication bootstrap, jump-host support,
+  connection sharing, Tailscale use, and recovery after a network change. Check
+  where Mosh helps terminal sessions and where it cannot carry HTTP or
+  WebSocket traffic.
+- Define installation, version negotiation, upgrades, rollback, and compatibility
+  between the desktop app, remote server, adapters, and stored state.
+- Define ownership across disconnects, desktop exit, remote restart, duplicate
+  clients, and partial startup. Include orphan detection and resumability.
+- Prototype remote workspace discovery, path identity, file watching, symlinks,
+  permissions, large transfers, and conflict behavior on high-latency links.
+- Prototype PTY reconnect and resize, signal delivery, clipboard behavior, and
+  forwarding for development servers without exposing arbitrary remote ports.
+- Decide where agent, MCP, Git, and command credentials live. Cover forwarding,
+  revocation, redaction, audit identity, and compromise of either machine.
+- Compare direct host processes, a service manager, rootless containers, and an
+  optional Docker or Podman deployment. Test user IDs, mounted workspaces,
+  resource accounting, and nested local sandboxes before treating a container
+  as an isolation boundary.
+- Define the supported remote operating systems and test network loss, sleep,
+  host replacement, clock skew, low disk space, and protocol downgrade.
+
+The research must produce a threat model, one recommended topology, a small
+end-to-end prototype, and explicit deferred cases before implementation starts.
 
 Deep browser embedding for Neovim or another editor, a Kickstart-based Neovim
 profile, `.deb` and RPM packages, Intel macOS, signing and notarization

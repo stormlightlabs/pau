@@ -7,6 +7,8 @@
 !/.pi/prompts/*.md
 !/.pi/skills/
 /.claude/*
+!/.claude/commands/
+!/.claude/commands/*.md
 !/.claude/skills
 .direnv/
 result

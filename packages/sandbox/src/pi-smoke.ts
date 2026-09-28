@@ -5,8 +5,8 @@
  * from Pau's Rust resolver, as it does in the desktop app.
  *
  * The runs cover each built-in tool and its streaming, abort, timeout, and
- * truncation behavior, a tool host crash, an operator `!` command, grants
- * applied to a running session, a contained stdio MCP server, an unreviewed
+ * truncation behavior, denial reports for failed calls, a tool host crash, an
+ * operator `!` command, grants applied to a running session, a contained stdio MCP server, an unreviewed
  * extension tool, per-call approval for a tool enabled outside the sandbox,
  * and failing closed when the sandbox cannot start.
  */
@@ -81,9 +81,12 @@ const checks: Check[] = [
 			(!hostNamespace || !end.text.includes(hostNamespace))
 	},
 	{
-		name: 'read denies Pi auth file',
+		name: 'read denies Pi auth file and reports the denial',
 		step: { tool: 'read', args: { path: path.join(home, '.pi/agent/auth.json') } },
-		expect: (end) => end.isError
+		expect: (end) =>
+			end.isError &&
+			end.text.includes(`- read ${path.join(home, '.pi/agent/auth.json')}: the sandbox blocks access`) &&
+			!end.text.includes(SECRET)
 	},
 	{
 		name: 'read workspace file',
@@ -98,7 +101,10 @@ const checks: Check[] = [
 	{
 		name: 'write outside workspace',
 		step: { tool: 'write', args: { path: path.join(outside, 'escape.txt'), content: 'x' } },
-		expect: (end) => end.isError && !existsSync(path.join(outside, 'escape.txt'))
+		expect: (end) =>
+			end.isError &&
+			!existsSync(path.join(outside, 'escape.txt')) &&
+			end.text.includes(`- create ${path.join(outside, 'escape.txt')}: this path is outside`)
 	},
 	{
 		name: 'edit workspace file',
@@ -106,9 +112,26 @@ const checks: Check[] = [
 		expect: (end) => !end.isError && readFileSync(path.join(workspace, 'src/app.ts'), 'utf8').includes('42')
 	},
 	{
-		name: 'edit protected Pi settings',
+		name: 'edit protected Pi settings and report the denial',
 		step: { tool: 'edit', args: { path: '.pi/settings.json', edits: [{ oldText: '{}', newText: '{"x":1}' }] } },
-		expect: (end) => end.isError
+		expect: (end) =>
+			end.isError && end.text.includes('- write .pi/settings.json: the sandbox keeps this path read-only')
+	},
+	{
+		name: 'bash rename into protected configuration reports the denial',
+		step: { tool: 'bash', args: { command: 'cp AGENTS.md moved.md && mv moved.md .pi/moved.md' } },
+		expect: (end) =>
+			end.isError &&
+			!existsSync(path.join(workspace, '.pi/moved.md')) &&
+			end.text.includes('- rename .pi/moved.md: the sandbox keeps this path read-only')
+	},
+	{
+		name: 'bash refusal with no denied path is labelled a sandboxed failure',
+		step: {
+			tool: 'bash',
+			args: { command: 'echo locked-content > locked.txt && chmod 000 locked.txt && cat locked.txt' }
+		},
+		expect: (end) => end.isError && end.text.includes('Sandboxed failure:') && !end.text.includes('locked-content')
 	},
 	{
 		name: 'grep searches the workspace',

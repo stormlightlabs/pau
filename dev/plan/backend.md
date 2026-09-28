@@ -242,8 +242,11 @@ sandbox-runtime attributes only proxy denials to a command on Linux.
 Filesystem, socket, and direct TCP denials reach Pau only as the child's
 errors. Pau owns its denial reporting and does not wait for upstream support:
 
-- The tool host compares paths named in a failed tool's errors with the
-  effective policy and reports those outside it as sandbox denials.
+- The Pi extension compares the paths a failed tool call names with the
+  effective policy and adds the denied ones to the error the model receives.
+  The sandboxed tool host cannot read the policy file, so the comparison runs
+  on the host side. The note names only the operation, the denied path, and
+  the rule that blocked it.
 - A Rust preload library, loaded into sandboxed processes on Linux, reports
   file and connect calls that fail with `EACCES`, `EROFS`, or `EPERM` to the
   tool host with the operation and path. The kernel still enforces the policy;
@@ -251,8 +254,8 @@ errors. Pau owns its denial reporting and does not wait for upstream support:
   bypass loses the report, never the restriction.
 - macOS reads Seatbelt's denial log through sandbox-runtime once macOS is
   verified.
-- A failure with no identified cause is labelled as a sandboxed failure, and
-  the model receives the same note.
+- A failure that reports a refused access but names no denied path is
+  labelled as a sandboxed failure, and the model receives the same note.
 
 Bubblewrap can deny an absent protected path only by mounting over a
 placeholder, so the runtime creates empty, unreadable files and directories such

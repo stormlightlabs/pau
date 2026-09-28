@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-28
+
+### Desktop
+
+- Sandboxed Pi tools now tell the agent which path the sandbox blocked when a
+  call fails.
+
 ## 2026-09-27
 
 ### Desktop

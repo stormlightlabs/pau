@@ -16,6 +16,8 @@ file. This package only reads that file. It contains:
   `grep`, `find`, and `ls` tools and operator `!` commands with calls to the
   tool host, blocks every other tool, and asks before each call to a tool the
   operator enabled outside the sandbox
+- `src/denials.ts`: compares the paths a failed tool call names with the
+  policy and tells the model what the sandbox blocked
 - `src/sandbox-session.ts`: applies policy file changes and restarts the tool
   host between tool calls when filesystem access changes
 - `src/tool-host.ts`: runs those tools and contained stdio MCP servers inside
@@ -29,6 +31,11 @@ Pau loads the extension and names the policy file in `PAU_SANDBOX_POLICY_FILE`:
 PAU_SANDBOX_POLICY_FILE=/path/to/session/host/policy.json \
   pi --extension packages/sandbox/src/pi-extension.ts
 ```
+
+## Run the tests
+
+`pnpm --filter @stormlightlabs/pau-sandbox test` checks denial reports against
+a policy from the Rust resolver. It needs no sandbox executables.
 
 ## Run the fixtures
 

@@ -6,28 +6,10 @@ during development. Tauri is the shipped application in this deliverable.
 
 ## Process containment
 
-### 2.55 Sandbox denial reports from tool errors
-
-Status: planned
-Blocked by: none
-
-Tell the model what the sandbox blocked. Compare paths in failed tool errors
-with the effective policy, and label failures with no identified cause as
-sandboxed.
-
-Verification:
-
-- Cover denied reads, writes, creates, and renames reported through tool
-  errors.
-- Confirm a failure with no identified cause carries the sandboxed-failure
-  label.
-- Confirm reports never include file contents, environment values, or paths
-  outside the workspace beyond the denied path the operator must see.
-
 ### 2.84 Sandbox denial view
 
 Status: planned
-Blocked by: 2.55
+Blocked by: none
 
 Show the operator each sandbox denial in the session that caused it.
 
@@ -41,7 +23,7 @@ Verification:
 ### 2.85 Linux denial preload library
 
 Status: planned
-Blocked by: 2.55
+Blocked by: none
 
 Add a Rust preload library that reports denied file and connect calls from
 sandboxed Linux processes.
@@ -57,7 +39,7 @@ Verification:
 ### 2.86 macOS Seatbelt denial reports
 
 Status: planned
-Blocked by: 2.55
+Blocked by: none
 
 Read macOS Seatbelt denials and attribute them to the sandboxed process that
 caused them.

@@ -7,6 +7,7 @@
 	"license": "MIT OR Apache-2.0",
 	"scripts": {
 		"check": "tsc -p tsconfig.json",
+		"test": "node --test src/denials.test.ts",
 		"test:boundary": "node src/boundary.ts",
 		"test:pi": "node src/pi-smoke.ts"
 	},

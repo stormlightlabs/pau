@@ -19,6 +19,7 @@ import {
 	type ExtensionAPI,
 	type ExtensionContext
 } from '@earendil-works/pi-coding-agent';
+import { explainFailure } from './denials.ts';
 import { startMcpRelays } from './mcp-relay.ts';
 import { SandboxSession } from './sandbox-session.ts';
 import { sandboxedToolNames, type SandboxedToolName } from './tool-host-protocol.ts';
@@ -71,7 +72,15 @@ export default function pauSandbox(pi: ExtensionAPI): void {
 						thinkingLevel: pi.getThinkingLevel()
 					}
 				};
-				return (await session.run((client) => client.executeTool(call, signal, onUpdate as never))) as never;
+				try {
+					return (await session.run((client) => client.executeTool(call, signal, onUpdate as never))) as never;
+				} catch (error) {
+					// Tell the model what the sandbox blocked so it does not retry blindly.
+					const message = error instanceof Error ? error.message : String(error);
+					const { note } = explainFailure(session.policy, name, params, message);
+					if (!note) throw error;
+					throw new Error(`${message}\n\n${note}`, { cause: error });
+				}
 			}
 		});
 	}

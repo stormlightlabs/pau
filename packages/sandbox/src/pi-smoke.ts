@@ -129,7 +129,10 @@ const checks: Check[] = [
 		name: 'bash refusal with no denied path is labelled a sandboxed failure',
 		step: {
 			tool: 'bash',
-			args: { command: 'echo locked-content > locked.txt && chmod 000 locked.txt && cat locked.txt' }
+			args: {
+				command:
+					'echo locked-content > locked.txt && chmod 000 locked.txt; cat locked.txt; status=$?; rm -f locked.txt; exit $status'
+			}
 		},
 		expect: (end) => end.isError && end.text.includes('Sandboxed failure:') && !end.text.includes('locked-content')
 	},

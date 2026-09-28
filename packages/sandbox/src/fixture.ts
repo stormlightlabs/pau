@@ -1,5 +1,4 @@
 import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import type { SandboxProfileName, SandboxSettings } from '@stormlightlabs/pau-protocol';
 
@@ -43,11 +42,14 @@ function put(file: string, content: string): void {
 
 /**
  * Create a workspace, a fake home with credential stores, a directory outside
- * both, and a dedicated temporary directory. Paths are canonical because
- * macOS reports `/var` through the `/private/var` symlink.
+ * both, and a dedicated temporary directory. The root lives under `/tmp`
+ * rather than `os.tmpdir()`: macOS and nix-shell temporary directories are
+ * long enough that an MCP relay socket in the session directory would exceed
+ * the Unix socket path limit. Paths are canonical because macOS reports
+ * `/tmp` through the `/private/tmp` symlink.
  */
 export function createFixture(): Fixture {
-	const created = mkdtempSync(path.join(os.tmpdir(), 'pau-sandbox-'));
+	const created = mkdtempSync('/tmp/pau-sandbox-');
 	const root = realpathSync(created);
 	const fixture = {
 		root,

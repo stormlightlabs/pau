@@ -4,153 +4,47 @@
 during development. Tauri is the shipped application in this deliverable.
 `apps/web` is reserved for the later standalone and remote server product.
 
-## Process observability and containment
+## Process containment
 
-### 2.41 Resource monitoring
-
-Status: complete
-Blocked by: none
-
-Sample Pau-owned process trees and show aggregate and per-session CPU, current
-and peak resident memory, process count, elapsed time, and disk I/O where the
-platform reports it reliably. Show a compact session summary and a workspace
-Processes view. Keep bounded raw history in memory and persist a small summary
-when a process ends. Keep token, context, and cost usage separate.
-
-Verification:
-
-- Use a deterministic sampler fixture to cover PID reuse, descendants, process
-  exit, missing counters, bounded retention, throttled updates, and summary
-  persistence.
-- Exercise sustained-pressure warnings and explicit interrupt and stop actions
-  without automatically terminating work.
-- Run focused process-tree and metric smoke tests on Linux and macOS.
-
-### 2.50 Diagnostics mode
-
-Status: complete
-Blocked by: 2.41
-
-Add release-build diagnostics behind an explicit settings control and CLI flag.
-Show versions, adapter capabilities and handshakes, transport and replay state,
-process lifecycle, queue pressure, and bounded redacted logs and metadata traces.
-Keep payload tracing temporary and off by default. Export a user-reviewed
-bundle on request. Put fault injection and other behavior-changing controls in
-development builds only.
-
-Verification:
-
-- Cover frontend, backend, adapter, and dependency versions; capability
-  handshakes; reconnects; event sequence and replay gaps; process starts and
-  exits; slow consumers; queue pressure; and dropped updates.
-- Exercise bounded retention, concurrent writers, runtime log levels, temporary
-  payload tracing, export failure, and process and session correlation.
-- Seed credentials, environment values, prompts, file contents, tool arguments,
-  transcript content, outside-workspace paths, and sensitive URLs. Confirm they
-  are absent from traces, UI events, logs, and exported bundles.
-- Confirm release builds omit fault injection and that diagnostics do not change
-  authentication, supervision, retry timing, permissions, sandboxing, or
-  process limits.
-- Capture and inspect one diagnostic bundle during a self-hosted desktop run
-  before the primary dogfood gate.
-
-### 2.29 Durable process ownership and recovery
+### 2.55 Sandbox denial reports from tool errors
 
 Status: planned
-Blocked by: 2.24
-
-Keep agent sessions and terminals alive across desktop frontend reloads, route
-changes, and development-browser disconnects. Add orderly Tauri shutdown and
-recover persisted process metadata after an unclean application restart. Report
-which native sessions can resume instead of implying that every process can be
-reattached.
-
-Verification:
-
-- Reload and disconnect every desktop frontend while agent and terminal
-  processes are active, then reconnect.
-- Send termination signals during active work and confirm bounded cleanup.
-- Restart after a forced kill and report which native sessions can resume.
-- Confirm process recovery does not weaken authentication, sandboxing,
-  permissions, or resource limits.
-
-### 2.42 Local sandbox dependency and policy spike
-
-Status: complete
 Blocked by: none
 
-Evaluate maintained Linux and macOS containment mechanisms using the workspace
-sandboxes in Claude Code and Codex as reference behavior. Exercise pinned
-`@anthropic-ai/sandbox-runtime` 0.0.77 and its Bubblewrap, network namespace, and
-seccomp boundary on Linux and Seatbelt boundary on macOS. Prove the separate Pi
-tool-host design while the RPC agent and its model credentials remain outside
-the sandbox. Do not treat permission hooks, in-process path checks, or
-whole-agent wrapping with exposed credentials as a sandbox.
+Tell the model what the sandbox blocked. Compare paths in failed tool errors
+with the effective policy, and label failures with no identified cause as
+sandboxed.
 
 Verification:
 
-- Run fixture processes that attempt allowed and denied file, network, local
-  socket, environment, credential, protected-configuration, and subprocess
-  operations on Linux and macOS.
-- Verify workspace-write and read-only profiles, network-off defaults, explicit
-  grants, no silent unsandboxed fallback, and separate opt-in profiles for
-  operator terminals and supported editor launch paths.
-- Exercise the runtime's dependency checks, Ubuntu user-namespace restriction,
-  symlink handling, resolved-address guards, descendant inheritance, violation
-  attribution, cleanup, and fail-closed startup behavior.
-- Prototype all Pi built-in file, search, and command tools through a sandboxed
-  worker. Confirm Pi provider traffic and model credentials stay in the RPC
-  host, and identify extension and MCP tools that must be disabled.
-- Record the selected dependencies, licenses, maintenance state, guarantees,
-  known gaps, and the requirement that justifies any custom code in
-  `dev/plan/backend.md`.
+- Cover denied reads, writes, creates, and renames reported through tool
+  errors.
+- Confirm a failure with no identified cause carries the sandboxed-failure
+  label.
+- Confirm reports never include file contents, environment values, or paths
+  outside the workspace beyond the denied path the operator must see.
 
-### 2.43 Managed process sandbox
-
-Status: complete
-Blocked by: 2.42
-
-Add explicit sandboxed and unsandboxed profiles at each proven adapter or tool
-execution boundary. Default to unsandboxed launch. Store a workspace default
-with a per-session override and show effective access before sandboxed work.
-Implement the Pi extension and tool-host protocol for every enabled built-in
-file, search, and command tool. Apply the profile to tool descendants and
-supported stdio MCP servers, route remote MCP through the sandbox proxy, and
-start Claude with its own sandbox. Disable other tools by default and let the
-operator enable one to run unsandboxed with a labelled per-call approval. Pin
-the sandbox executables, clear granted local addresses from `NO_PROXY`, deny
-`/tmp/claude` writes by default, and offer a home read-deny setting. Record
-protected-path placeholders, hide them in file and Git views, and remove
-recorded leftovers before the next sandboxed launch. Terminals and supported
-editor launch paths require a separate explicit sandbox selection.
-
-Verification:
-
-- Cover profile validation, canonicalized roots, read-only and writable mounts,
-  network policy, minimal environment construction, resource limits, descendant
-  inheritance, worker cancellation and crash, startup failure, and cleanup.
-- Confirm network grants apply to a running session and filesystem grants
-  restart the tool host between tool calls.
-- Run parity tests for read, write, edit, list, find, grep, shell execution,
-  streaming output, abort, timeout, and tool-result truncation through the Pi
-  worker. Confirm grep reports files the sandbox skipped.
-- Confirm supported stdio MCP servers inherit the selected sandbox, remote MCP
-  reaches only granted domains, and other tools stay disabled until the operator
-  enables them and approves each unsandboxed call.
-- Confirm new work launches unsandboxed until the operator selects a sandbox
-  profile, the UI names platform guarantees and disabled tools, and permission
-  modes are never presented as containment.
-- Complete a self-hosted Pi and Claude task inside the supported local sandbox.
-
-### 2.55 Sandbox denial reporting
+### 2.84 Sandbox denial view
 
 Status: planned
-Blocked by: 2.43
+Blocked by: 2.55
 
-Tell the operator and the model what the sandbox blocked. Compare paths in
-failed tool errors with the effective policy, add a Rust preload library that
-reports denied file and connect calls from sandboxed Linux processes, and read
-macOS Seatbelt denials. Label failures with no identified cause as sandboxed.
+Show the operator each sandbox denial in the session that caused it.
+
+Verification:
+
+- Component-test file denials, network denials, and unexplained sandboxed
+  failures.
+- Trigger a denial in a self-hosted sandboxed Pi session and find it in the
+  session view.
+
+### 2.85 Linux denial preload library
+
+Status: planned
+Blocked by: 2.55
+
+Add a Rust preload library that reports denied file and connect calls from
+sandboxed Linux processes.
 
 Verification:
 
@@ -158,51 +52,121 @@ Verification:
   from dynamically linked programs and their descendants.
 - Confirm statically linked programs still fail closed and fall back to policy
   comparison or the sandboxed-failure label.
-- Confirm reports never include file contents, environment values, or paths
-  outside the workspace beyond the denied path the operator must see.
 - Measure the library's overhead on a representative build and test command.
 
-### 2.46 Sandboxed credential brokerage
+### 2.86 macOS Seatbelt denial reports
 
 Status: planned
-Blocked by: 2.42, 2.43
+Blocked by: 2.55
 
-Add opt-in credential references for sandboxed tools. Resolve named host
-environment variables in the trusted supervisor, pass real values only to the
-dedicated broker process, place per-session sentinels in the tool host, and
-substitute them through the TLS-terminating egress proxy only for an explicit
-destination set. Persist references, never values. Keep model and MCP OAuth
-credentials in their native hosts and stores. Deny credential files in the
-initial cross-platform profile and reject unsupported protocols, trust
-arrangements, or structured-value mismatches instead of exposing raw values.
+Read macOS Seatbelt denials and attribute them to the sandboxed process that
+caused them.
 
 Verification:
 
-- Cover missing and malformed sources, fail-closed structured extraction,
-  per-session sentinel uniqueness, destination scoping, wildcard and port
-  handling, TLS verification, DNS and resolved-address checks, header and
-  request-body substitution, and teardown.
-- Confirm the real value is absent from the worker environment, filesystem,
-  arguments, tool output, UI events, violation records, diagnostics, and logs.
-- Confirm plaintext HTTP, certificate-pinned and mTLS destinations, SOCKS-only
-  protocols, excluded TLS domains, unknown credential shapes, and proxy failure
-  deny injection without an unsandboxed retry.
-- Exercise common bearer-token and structured environment values on Linux and
-  macOS. Test AWS SigV4 only if it remains in the selected dependency's reviewed
-  surface; otherwise label it unsupported.
-- Demonstrate that a permitted destination may exercise or reflect a brokered
-  credential, and show that limitation in the effective-profile UI and user
-  documentation.
+- Cover denied file access and direct TCP from a sandboxed process and its
+  descendants on macOS.
 
-## Permissions
-
-### 2.44 Permission policy and Pi enforcement spike
+### 2.46 Sandboxed credential references
 
 Status: planned
 Blocked by: none
 
-Validate the cross-agent permission model against native adapter callbacks and
-the selected `@gotgenes/pi-permission-system` release. Map Pau's no-prompts,
+Add opt-in credential references for sandboxed tools. A reference names a host
+environment variable that the trusted supervisor resolves. Persist references,
+never values. Keep model and MCP OAuth credentials in their native hosts and
+stores. Deny credential files in the initial cross-platform profile.
+
+Verification:
+
+- Cover missing and malformed sources.
+- Confirm stored settings contain the reference and never the value.
+
+### 2.87 Credential reference settings
+
+Status: planned
+Blocked by: 2.46
+
+Let the operator add, edit, and remove credential references and their
+destinations for a sandbox profile.
+
+Verification:
+
+- Component-test empty, valid, missing-source, and invalid-destination states.
+
+### 2.88 Credential broker and sentinels
+
+Status: planned
+Blocked by: 2.46
+
+Pass real values only to a dedicated broker process and place per-session
+sentinels in the tool host.
+
+Verification:
+
+- Cover per-session sentinel uniqueness and teardown.
+- Confirm the real value is absent from the worker environment, filesystem,
+  arguments, tool output, UI events, violation records, diagnostics, and logs.
+
+### 2.89 Brokered credential substitution
+
+Status: planned
+Blocked by: 2.88
+
+Substitute sentinels through the TLS-terminating egress proxy only for an
+explicit destination set. Reject unsupported protocols and trust arrangements
+instead of exposing raw values.
+
+Verification:
+
+- Cover destination scoping, wildcard and port handling, TLS verification, DNS
+  and resolved-address checks, and header and request-body substitution.
+- Confirm plaintext HTTP, certificate-pinned and mTLS destinations, SOCKS-only
+  protocols, excluded TLS domains, and proxy failure deny injection without an
+  unsandboxed retry.
+- Exercise common bearer-token values on Linux and macOS.
+
+### 2.91 Brokered destination view
+
+Status: planned
+Blocked by: 2.87, 2.89
+
+Show which destinations receive each brokered credential in the effective
+sandbox profile. State that a permitted destination may exercise or reflect a
+brokered credential.
+
+Verification:
+
+- Component-test profiles with no references, one reference, and several
+  destinations.
+- Demonstrate that a permitted destination can reflect a brokered credential,
+  and document that limitation.
+
+### 2.90 Structured credential values
+
+Status: planned
+Blocked by: 2.89
+
+Extract and substitute structured environment values. Reject unknown
+credential shapes and structured-value mismatches instead of exposing raw
+values.
+
+Verification:
+
+- Cover fail-closed structured extraction and unknown credential shapes.
+- Exercise common structured environment values on Linux and macOS.
+- Test AWS SigV4 only if it remains in the selected dependency's reviewed
+  surface; otherwise label it unsupported.
+
+## Permissions
+
+### 2.44 Pi permission package spike
+
+Status: planned
+Blocked by: none
+
+Validate Pau's permission model against the selected
+`@gotgenes/pi-permission-system` release. Map Pau's no-prompts,
 confirm-writes-and-commands, and confirm-mutating-or-network profiles without
 forking the package. Verify workspace reads, protected sensitive paths,
 outside-workspace reads, session-only approvals, and concurrent request
@@ -212,22 +176,36 @@ Verification:
 
 - Prove allow and deny happen before a fixture tool, shell command, file write,
   sensitive read, network action, and MCP call executes.
-- Confirm unsupported adapters cannot present cosmetic permission controls.
 - Run the pinned Pi package under RPC and verify its non-TUI `select` and `input`
   fallback, fail-closed behavior, configuration scope, review events, and
   compatibility with the selected Pi versions.
 - Recheck and record its source, license, maintenance state, protocol boundary,
   and known gaps in `dev/plan/backend.md`.
 
-### 2.54 Local mutation audit
+### 2.92 Native permission callback spike
 
 Status: planned
-Blocked by: 2.43
+Blocked by: none
 
-Record bounded, redacted audit events for desktop process, file, worktree,
-package, permission, sandbox, and editor-launch mutations. Keep audit records
-separate from diagnostic logs and never retain command secrets, file contents,
-tool arguments, credentials, or environment values.
+Validate the same permission profiles against Claude's native permission
+callbacks.
+
+Verification:
+
+- Prove allow and deny happen before a fixture tool, shell command, file write,
+  and MCP call executes in Claude.
+- Confirm unsupported adapters cannot present cosmetic permission controls.
+- Record the callback surface and known gaps in `dev/plan/backend.md`.
+
+### 2.54 Mutation audit log
+
+Status: planned
+Blocked by: none
+
+Record bounded, redacted audit events for desktop process, file, and sandbox
+mutations. Later mutating features add their own events to this log. Keep audit
+records separate from diagnostic logs and never retain command secrets, file
+contents, tool arguments, credentials, or environment values.
 
 Verification:
 
@@ -238,43 +216,244 @@ Verification:
 - Confirm observation does not change authorization, execution order, retries,
   or process ownership.
 
-### 2.45 Permission profiles and requests
+### 2.45 Pi permission requests
 
 Status: planned
-Blocked by: 2.43, 2.44, 2.54
+Blocked by: 2.44, 2.54
 
-Implement the selected permission profiles through adapter-native callbacks and
-the reviewed Pi package. Show the requesting session, operation, affected paths
-or destination, selected sandbox, and approval lifetime. Keep permission rules
-separate from sandbox profiles and redact audit records.
+Implement the selected permission profiles for Pi through the reviewed package.
+Queue requests per session, apply allow-once and deny decisions, and write
+redacted audit records. Keep permission rules separate from sandbox profiles.
 
 Verification:
 
-- Cover deny, allow once, allow for session, bounded reconnect, timeout,
-  cancellation, concurrent per-session queues, stale responses, session
-  replacement, and adapter failure.
+- Cover deny, allow once, and concurrent per-session queues against the Pi
+  fixture.
 - Confirm an approval cannot exceed sandbox access and direct terminal input
   does not create agent permission prompts.
-- Complete self-hosted Pi, Claude, and MCP fixture flows with permissions off and
-  with each shipped permission profile enabled.
+
+### 2.62 Permission prompts
+
+Status: planned
+Blocked by: 2.45
+
+Show each request's session, operation, affected paths or destination, selected
+sandbox, and approval lifetime. Adapters without permission support show no
+permission controls.
+
+Verification:
+
+- Component-test pending, allowed, denied, and unsupported-adapter states.
+- Approve and deny requests in a self-hosted Pi task.
+
+### 2.93 Permission profile setting
+
+Status: planned
+Blocked by: 2.62
+
+Let the operator choose a permission profile.
+
+Verification:
+
+- Component-test each shipped profile and the permissions-off state.
+- Complete a self-hosted Pi task with permissions off and with each shipped
+  permission profile enabled.
+
+### 2.63 Session approvals
+
+Status: planned
+Blocked by: 2.45
+
+Add allow-for-session approvals.
+
+Verification:
+
+- Cover allow for session, session end, and session replacement against the Pi
+  fixture.
+
+### 2.64 Session approval view
+
+Status: planned
+Blocked by: 2.62, 2.63
+
+Offer allow for session in permission prompts and list the active session
+approvals.
+
+Verification:
+
+- Component-test the allow-for-session choice and the approval list.
+
+### 2.82 Permission request recovery
+
+Status: planned
+Blocked by: 2.63
+
+Handle reconnects, timeouts, cancellation, stale responses, and adapter failure
+for pending permission requests.
+
+Verification:
+
+- Cover bounded reconnect, timeout, cancellation, stale responses, and adapter
+  failure against the Pi fixture.
+
+### 2.83 Permission request recovery states
+
+Status: planned
+Blocked by: 2.64, 2.82
+
+Show timed-out, cancelled, and stale requests. Restore pending prompts after a
+reconnect.
+
+Verification:
+
+- Component-test timed-out, cancelled, and stale requests.
+- Reload the frontend with a pending request and confirm the prompt returns.
+
+### 2.65 Claude permission requests
+
+Status: planned
+Blocked by: 2.82, 2.92
+
+Route Claude's native permission callbacks into the permission request queue.
+
+Verification:
+
+- Cover deny, allow once, allow for session, and adapter failure for Claude.
+- Complete a self-hosted Claude task through the permission prompts with
+  permissions off and with each shipped permission profile enabled.
+
+### 2.94 MCP permission requests
+
+Status: planned
+Blocked by: 2.65
+
+Route MCP tool calls from Pi and Claude through the permission request queue.
+
+Verification:
+
+- Complete self-hosted MCP fixture flows from Pi and Claude with permissions off
+  and with each shipped permission profile enabled.
 
 ## Terminal and shell
 
-### 2.24 PTY backend
+### 2.24 PTY sessions
 
 Status: planned
-Blocked by: 2.41, 2.43
+Blocked by: none
 
-Implement terminal create, attach, input, output, resize, signal, detach, close,
-bounded scrollback, backpressure, and cleanup in `pau-term`.
+Implement terminal create, input, output, resize, signal, close, and cleanup in
+`pau-term`, and stream terminal input and output through the desktop API.
 
 Verification:
 
-- Cover input/output, rapid resize, process exit, noisy output, detach and
-  replay, discarded scrollback, and forced cleanup.
-- Confirm route changes and frontend reloads preserve the PTY while explicit Pau
-  shutdown terminates it.
+- Cover input and output, rapid resize, process exit, noisy output, and forced
+  cleanup.
 - Run focused tests on Linux and macOS.
+
+### 2.25 Terminal view
+
+Status: planned
+Blocked by: 2.24
+
+Integrate xterm.js with terminal tabs, fit, copy and paste, exit state, and the
+active ANSI theme.
+
+Verification:
+
+- Run shell, Unicode, selection, copy and paste, and resize scenarios in
+  Playwright.
+- Confirm exit state and theme changes in each theme.
+
+### 2.57 Terminal detach and replay
+
+Status: planned
+Blocked by: 2.24
+
+Add attach, detach, bounded scrollback, and replay on attach to `pau-term`.
+
+Verification:
+
+- Cover detach and replay and discarded scrollback.
+- Run focused tests on Linux and macOS.
+
+### 2.58 Terminal reattach
+
+Status: planned
+Blocked by: 2.25, 2.57
+
+Reattach terminal tabs with their replayed scrollback after a route change.
+
+Verification:
+
+- Confirm terminal tabs reattach with their scrollback after a route change.
+
+### 2.95 Terminal output backpressure
+
+Status: planned
+Blocked by: 2.57
+
+Apply backpressure when a terminal client reads output more slowly than the
+PTY produces it.
+
+Verification:
+
+- Cover a slow consumer during noisy output without unbounded memory growth.
+
+### 2.96 Terminal layouts
+
+Status: planned
+Blocked by: 2.25
+
+Add main-surface and bottom-dock terminal layouts.
+
+Verification:
+
+- Cover both layouts at desktop and narrow widths.
+
+### 2.97 Terminal search
+
+Status: planned
+Blocked by: 2.25
+
+Add search within terminal output.
+
+Verification:
+
+- Cover matches, no matches, and search across scrollback in Playwright.
+
+### 2.98 Terminal links
+
+Status: planned
+Blocked by: 2.25
+
+Detect conservative links in terminal output and open them on request.
+
+Verification:
+
+- Cover URLs, workspace file paths, and text that must not become a link.
+
+### 2.99 Terminal activity
+
+Status: planned
+Blocked by: 2.25
+
+Mark terminal tabs that have new output while they are in the background.
+
+Verification:
+
+- Component-test idle, active, and exited tabs.
+
+### 2.100 Full-screen terminal programs
+
+Status: planned
+Blocked by: 2.25
+
+Support alternate-screen output and mouse input in the terminal view.
+
+Verification:
+
+- Run alternate-screen and mouse scenarios in Playwright, including
+  representative Vim, Neovim, and Helix sessions.
 
 ### 2.56 Sandboxed terminal relay
 
@@ -293,38 +472,590 @@ Verification:
   crash, and cleanup of the shell's descendants.
 - Confirm keystroke injection from the sandboxed shell reaches only the inner
   PTY.
-- Confirm the profile stays unavailable when the relay cannot start.
+- Confirm sandboxed terminal profiles inherit their recorded filesystem,
+  network, environment, and process limits.
 - Measure the memory of each terminal's `srt` process.
 
-### 2.25 Terminal UI
+### 2.101 Sandboxed terminal selection
 
 Status: planned
-Blocked by: 2.24, 2.29
+Blocked by: 2.25, 2.56
 
-Integrate xterm.js with tabs, main-surface and bottom-dock layouts, fit, search,
-copy and paste, activity, exit state, conservative links, and the active ANSI
-theme.
+Let the operator open a terminal with a sandbox profile and show which profile
+each terminal uses.
 
 Verification:
 
-- Run shell, alternate-screen, mouse, Unicode, selection, search, and resize
-  scenarios in Playwright, including representative Vim, Neovim, and Helix
-  sessions.
-- Verify terminal tabs survive route changes and reconnect to their PTYs after a
-  frontend reload.
-- Confirm sandboxed terminal profiles inherit their recorded filesystem,
-  network, environment, and process limits.
+- Component-test sandboxed, unsandboxed, and unavailable profiles.
+- Confirm the profile stays unavailable when the relay cannot start.
+
+### 2.26 Login shell environment
+
+Status: planned
+Blocked by: 2.24
+
+Add a login-shell launch profile beside the inherited environment.
+
+Verification:
+
+- Cover inherited and login-shell launches and paths containing spaces.
+
+### 2.102 Direnv shell environment
+
+Status: planned
+Blocked by: 2.26
+
+Add a launch profile for explicitly trusted `direnv exec`. Never source `.envrc`
+directly.
+
+Verification:
+
+- Cover workspaces with no `.envrc`, allowed and blocked `.envrc` files, and
+  failed direnv evaluation.
+
+### 2.103 Shell environment selector
+
+Status: planned
+Blocked by: 2.25, 2.102
+
+Let the operator choose a workspace's shell environment and report the active
+mode in each terminal.
+
+Verification:
+
+- Component-test each environment mode and a failed direnv evaluation.
+
+### 2.27 Worktree attachment
+
+Status: planned
+Blocked by: 2.54
+
+Attach existing Git worktrees and register them as workspaces. Record each
+attachment in the mutation audit.
+
+Verification:
+
+- Cover existing worktrees, duplicate paths, and dirty source repositories.
+
+### 2.104 Worktree attachment view
+
+Status: planned
+Blocked by: 2.27
+
+Let the operator attach an existing worktree as a workspace.
+
+Verification:
+
+- Component-test the attach flow, a duplicate path, and a failed attachment.
+
+### 2.105 Worktree creation
+
+Status: planned
+Blocked by: 2.27
+
+Create Git worktrees on new or existing branches and register them as
+workspaces. Do not commit, push, or delete branches automatically. Record each
+creation in the mutation audit.
+
+Verification:
+
+- Cover new branches, existing branches, dirty source repositories, and cleanup
+  after a failed creation.
+
+### 2.106 Worktree creation view
+
+Status: planned
+Blocked by: 2.104, 2.105
+
+Let the operator create a worktree on a new or existing branch.
+
+Verification:
+
+- Component-test new-branch, existing-branch, and failed-creation states.
+
+## Process recovery
+
+### 2.29 Process survival
+
+Status: planned
+Blocked by: 2.57
+
+Keep agent sessions and terminals alive across desktop frontend reloads, route
+changes, and development-browser disconnects.
+
+Verification:
+
+- Disconnect every desktop API client while agent and terminal processes are
+  active, then reconnect through the API.
+- Confirm process survival does not weaken authentication, sandboxing,
+  permissions, or resource limits.
+
+### 2.59 Reconnect states
+
+Status: planned
+Blocked by: 2.29, 2.58
+
+Restore agent sessions and terminal tabs in every desktop frontend after a
+reload or disconnect. Show reconnecting, restored, and lost states.
+
+Verification:
+
+- Reload the desktop frontend and disconnect the development browser while
+  agent and terminal processes are active. Confirm each surface restores its
+  state.
+- Component-test reconnecting, restored, and lost states.
+
+### 2.107 Orderly shutdown
+
+Status: planned
+Blocked by: 2.29
+
+Stop agent sessions and terminals in order when Tauri exits or receives a
+termination signal.
+
+Verification:
+
+- Send termination signals during active work and confirm bounded cleanup.
+
+### 2.60 Restart recovery
+
+Status: planned
+Blocked by: 2.29
+
+Recover persisted process metadata after an unclean application restart. Report
+which native sessions can resume instead of implying that every process can be
+reattached.
+
+Verification:
+
+- Restart after a forced kill and report through the API which native sessions
+  can resume.
+- Confirm recovery does not weaken authentication, sandboxing, permissions, or
+  resource limits.
+
+### 2.61 Restart recovery view
+
+Status: planned
+Blocked by: 2.59, 2.60
+
+After an unclean restart, show which sessions resumed, which can resume, and
+which ended. Let the operator resume each session that supports it.
+
+Verification:
+
+- Component-test resumed, resumable, and ended sessions.
+- Force-quit the desktop app during active work, restart it, and resume a
+  supported session from the view.
+
+## Editors
+
+### 2.28 Language-server supervisor
+
+Status: planned
+Blocked by: none
+
+Add an optional backend language-server supervisor. Reuse desktop workspace
+process and environment handling.
+
+Verification:
+
+- Start one fixture language server, restart it after failure, and stop it when
+  the workspace closes.
+- Confirm external-editor language-server processes remain independent.
+- Confirm the remote web app does not claim a desktop language service unless
+  its server advertises the capability.
+
+### 2.108 CodeMirror diagnostics
+
+Status: planned
+Blocked by: 2.28
+
+Show language-server diagnostics in CodeMirror.
+
+Verification:
+
+- Publish diagnostics from the fixture server and confirm CodeMirror shows and
+  clears them.
+
+### 2.109 CodeMirror completion
+
+Status: planned
+Blocked by: 2.28
+
+Request completions from the language server in CodeMirror.
+
+Verification:
+
+- Request completion from the fixture server and cover empty and failed
+  responses.
+
+### 2.51 Known editor launch
+
+Status: planned
+Blocked by: 2.54
+
+Expose workspace, file, line and column, and diff launch capabilities through
+known adapters for Neovim, Vim, Helix, Visual Studio Code, and Zed. Report
+startup failure or useful process status without claiming ownership of a
+detached editor. Record each launch in the mutation audit.
+
+Verification:
+
+- Exercise workspace, file, line, column, and diff launch for fixture commands
+  that model every known adapter.
+- Cover missing executables, paths with spaces and non-ASCII characters,
+  detached GUI processes, and rapid repeated launch.
+- Confirm a launch does not pass file content, credentials, or unrelated
+  environment values.
+
+### 2.66 Preferred editor setting
+
+Status: planned
+Blocked by: 2.51
+
+Let the operator choose a preferred editor from the known adapters.
+
+Verification:
+
+- Component-test each known editor and a missing executable.
+
+### 2.110 Open in editor
+
+Status: planned
+Blocked by: 2.66
+
+Add open-in-editor actions for the workspace, the file tree, the CodeMirror
+cursor position, and diffs. Show startup failures.
+
+Verification:
+
+- Modify an open file from an external editor fixture. Confirm CodeMirror
+  reports the external change and preserves unsaved work.
+- Complete one self-hosted handoff from CodeMirror to the configured editor and
+  back through a detected file change.
+
+### 2.111 Custom editor command
+
+Status: planned
+Blocked by: 2.51
+
+Add an explicit command template for editors without a known adapter.
+
+Verification:
+
+- Exercise every launch capability through a custom template fixture.
+- Cover invalid templates and paths with spaces and non-ASCII characters.
+
+### 2.112 Custom editor setting
+
+Status: planned
+Blocked by: 2.66, 2.111
+
+Let the operator enter a custom editor command.
+
+Verification:
+
+- Confirm the settings show a custom executable and arguments before saving
+  them.
+
+### 2.67 Terminal editor handoff
+
+Status: planned
+Blocked by: 2.51, 2.58
+
+Launch terminal editors in a persistent Pau terminal tab and report editor exit.
+Files stay authoritative.
+
+Verification:
+
+- Launch each known terminal editor fixture in a terminal tab and cover editor
+  exit.
+- Modify an open file from a terminal editor fixture. Confirm CodeMirror
+  reports the external change and preserves unsaved work.
+
+## Pi desktop parity
+
+### 2.68 Pi input history API
+
+Status: planned
+Blocked by: none
+
+Expose Pi input history through the desktop API.
+
+Verification:
+
+- Cover history recall against the Pi fixture.
+
+### 2.69 Composer input history
+
+Status: planned
+Blocked by: 2.68
+
+Add input history to the session composer.
+
+Verification:
+
+- Component-test history navigation and an empty history.
+
+### 2.113 Pi image attachment API
+
+Status: planned
+Blocked by: none
+
+Accept image attachments with Pi prompts through the desktop API.
+
+Verification:
+
+- Cover prompts with images and unsupported image types against the Pi fixture.
+
+### 2.114 Composer image input
+
+Status: planned
+Blocked by: 2.113
+
+Add image input to the session composer.
+
+Verification:
+
+- Component-test adding, removing, and rejecting images.
+- Send a prompt with an image in a self-hosted Pi session.
+
+### 2.74 Pi command discovery API
+
+Status: planned
+Blocked by: none
+
+Expose Pi command discovery through the desktop API.
+
+Verification:
+
+- Cover command listing against the Pi fixture.
+
+### 2.75 Composer command completion
+
+Status: planned
+Blocked by: 2.74
+
+Add command completion to the session composer.
+
+Verification:
+
+- Component-test command completion and unsupported commands.
+- Run a discovered command in a self-hosted Pi session.
+
+### 2.115 Pi shell context API
+
+Status: planned
+Blocked by: none
+
+Expose Pi shell context through the desktop API.
+
+Verification:
+
+- Cover shell context against the Pi fixture.
+
+### 2.116 Composer shell context
+
+Status: planned
+Blocked by: 2.115
+
+Add shell context to the session composer.
+
+Verification:
+
+- Component-test shell context and its unsupported state.
+
+### 2.70 Pi message queue API
+
+Status: planned
+Blocked by: none
+
+Expose queued messages through the desktop API.
+
+Verification:
+
+- Cover queueing and dequeueing against the Pi fixture.
+
+### 2.71 Message queue view
+
+Status: planned
+Blocked by: 2.70
+
+Show queued messages in the session view.
+
+Verification:
+
+- Component-test empty and queued states.
+- Queue a message in a self-hosted Pi session.
+
+### 2.117 Pi retry API
+
+Status: planned
+Blocked by: none
+
+Expose retry after failure through the desktop API.
+
+Verification:
+
+- Cover retry after failure against the Pi fixture.
+
+### 2.118 Retry control
+
+Status: planned
+Blocked by: 2.117
+
+Add a retry control to failed turns in the session view.
+
+Verification:
+
+- Component-test failed and retrying states.
+
+### 2.76 Pi thinking level API
+
+Status: planned
+Blocked by: none
+
+Expose thinking-level selection through the desktop API.
+
+Verification:
+
+- Cover thinking-level changes against the Pi fixture.
+
+### 2.77 Thinking level control
+
+Status: planned
+Blocked by: 2.76
+
+Add a thinking-level control to the session view.
+
+Verification:
+
+- Component-test each thinking level and a model without thinking levels.
+
+### 2.119 Pi context usage API
+
+Status: planned
+Blocked by: none
+
+Expose context and cost updates through the desktop API.
+
+Verification:
+
+- Cover context and cost updates against the Pi fixture.
+
+### 2.120 Context usage view
+
+Status: planned
+Blocked by: 2.119
+
+Show context use and cost in the session view.
+
+Verification:
+
+- Component-test normal and near-context-limit states.
+
+### 2.78 Pi compaction API
+
+Status: planned
+Blocked by: none
+
+Expose manual and automatic compaction through the desktop API.
+
+Verification:
+
+- Cover manual compaction, automatic compaction, and compaction failure against
+  the Pi fixture.
+
+### 2.79 Compaction controls
+
+Status: planned
+Blocked by: 2.78
+
+Add a compaction control and compaction states to the session view.
+
+Verification:
+
+- Component-test compacting, compacted, and failed states.
+- Compact a self-hosted Pi session.
+
+### 2.72 Pi session tree API
+
+Status: planned
+Blocked by: none
+
+Expose Pi session trees and branch creation through the desktop API.
+
+Verification:
+
+- Cover tree navigation and branch creation against fixture Pi session files.
+
+### 2.73 Session tree view
+
+Status: planned
+Blocked by: 2.72
+
+Add session tree navigation and branching to the session view.
+
+Verification:
+
+- Component-test a large branched session.
+- Branch a self-hosted Pi session.
+
+### 2.80 Pi transcript search API
+
+Status: planned
+Blocked by: none
+
+Expose transcript search through the desktop API.
+
+Verification:
+
+- Cover search against fixture Pi session files.
+
+### 2.81 Transcript search
+
+Status: planned
+Blocked by: 2.80
+
+Add transcript search to the session view.
+
+Verification:
+
+- Component-test search results and no results.
+
+### 2.121 Pi transcript export API
+
+Status: planned
+Blocked by: none
+
+Expose transcript export through the desktop API.
+
+Verification:
+
+- Cover export and export failure against fixture Pi session files.
+
+### 2.122 Transcript copy and export
+
+Status: planned
+Blocked by: 2.121
+
+Add transcript copy and export to the session view.
+
+Verification:
+
+- Component-test copying and export failure.
+- Export a self-hosted Pi session.
 
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.25, 2.45, 2.50, 2.51
+Blocked by: 2.61, 2.67, 2.69, 2.71, 2.73, 2.75, 2.77, 2.79, 2.81, 2.83, 2.93,
+2.94, 2.95, 2.96, 2.97, 2.98, 2.99, 2.100, 2.107, 2.110, 2.112, 2.114, 2.116, 2.118,
+2.120, 2.122
 
-Complete desktop equivalents for vanilla Pi input history, image input, queues,
-interrupt and retry controls, models, thinking levels, context and cost,
-compaction, session navigation, command discovery, shell context, transcript
-search and copy, and export. Use vanilla Pi in the persistent terminal only for
-terminal-specific extension components.
+Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
+normal project work through Pau. Use vanilla Pi in the persistent terminal only
+for terminal-specific extension components.
 
 Verification:
 
@@ -342,115 +1073,111 @@ extension components. Pau is also the primary dogfood interface for routine
 Claude work. Deep editor embedding and release packaging remain later
 milestones.
 
-### 2.26 Workspace shell environments
-
-Status: planned
-Blocked by: 2.24, 2.25
-
-Add shell launch profiles for inherited environment, login shell, and explicitly
-trusted `direnv exec`. Never source `.envrc` directly.
-
-Verification:
-
-- Cover workspaces with no `.envrc`, allowed and blocked `.envrc` files, failed
-  direnv evaluation, and paths containing spaces.
-- Confirm the UI reports the active environment mode.
-
-### 2.27 Worktree creation and attachment
-
-Status: planned
-Blocked by: none
-
-Create or attach Git worktrees and register them as workspaces. Do not commit,
-push, or delete branches automatically.
-
-Verification:
-
-- Cover new branches, existing branches, existing worktrees, dirty source
-  repositories, duplicate paths, and cleanup after a failed creation.
-
-## Editors
-
-### 2.28 CodeMirror language services
-
-Status: planned
-Blocked by: none
-
-Add an optional backend language-server supervisor and a narrow CodeMirror
-completion and diagnostics client. Reuse desktop workspace process and
-environment handling.
-
-Verification:
-
-- Start one fixture language server, publish diagnostics, request completion,
-  restart after failure, and stop it when the workspace closes.
-- Confirm external-editor language-server processes remain independent.
-- Confirm the remote web app does not claim a desktop language service unless
-  its server advertises the capability.
-
-### 2.51 External editor launch
-
-Status: planned
-Blocked by: 2.25, 2.41
-
-Configure a preferred editor and expose its supported workspace, file, line and
-column, and diff launch capabilities through known adapters for Neovim, Vim,
-Helix, Visual Studio Code, and Zed. Add an explicit command template for other
-editors. Launch terminal editors in a persistent Pau terminal. Keep files
-authoritative, detect external changes, and report startup failure or useful
-process status without claiming ownership of a detached editor.
-
-Verification:
-
-- Exercise workspace, file, line, column, and diff launch for fixture commands
-  that model every known adapter and a custom template.
-- Cover missing executables, invalid templates, paths with spaces and non-ASCII
-  characters, detached GUI processes, terminal editor exit, and rapid repeated
-  launch.
-- Confirm the UI shows a custom executable and arguments before saving them and
-  does not pass file content, credentials, or unrelated environment values.
-- Modify an open file from an external and a terminal editor fixture. Confirm
-  CodeMirror reports the external change and preserves unsaved work.
-- Complete one self-hosted handoff from CodeMirror to the configured editor and
-  back through a detected file change.
-
 ## Agent adapters
 
-### 2.47 Codex adapter
+### 2.47 Codex sessions
 
 Status: planned
 Blocked by: none
 
-Add Codex discovery, structured transport, native resume, capabilities,
-fixtures, and desktop exposure through `pau-agent`. Map its native MCP
-configuration and lifecycle into the existing MCP adapter capabilities and
-shared MCP UI.
+Add Codex discovery, structured transport, and capabilities through
+`pau-agent`.
 
 Verification:
 
-- Run discovery, start, prompt, stream, interrupt, resume, failure, and cleanup
-  against a fake Codex executable.
-- Round-trip Codex MCP configuration and exercise one fixture server through the
-  shared MCP UI without changing unknown native fields.
+- Run discovery, start, prompt, stream, interrupt, failure, and cleanup against
+  a fake Codex executable.
 - Keep live Codex tests opt-in.
 
-### 2.48 Antigravity adapter
+### 2.123 Codex in the desktop
+
+Status: planned
+Blocked by: 2.47
+
+Let the operator start Codex sessions from the desktop app, with controls gated
+by Codex's reported capabilities.
+
+Verification:
+
+- Component-test Codex capability states and a missing executable.
+- Start and interrupt a session against the fake Codex executable.
+
+### 2.124 Codex resume
+
+Status: planned
+Blocked by: 2.47
+
+Resume native Codex sessions through `pau-agent`.
+
+Verification:
+
+- Resume a session against the fake Codex executable and cover a missing
+  session.
+
+### 2.125 Codex MCP configuration
+
+Status: planned
+Blocked by: 2.47
+
+Map Codex's native MCP configuration and lifecycle into the existing MCP
+adapter capabilities and shared MCP UI.
+
+Verification:
+
+- Round-trip Codex MCP configuration and exercise one fixture server through the
+  shared MCP UI without changing unknown native fields.
+
+### 2.48 Antigravity sessions
 
 Status: planned
 Blocked by: none
 
-Add Antigravity discovery, structured transport, native resume, capabilities,
-fixtures, and desktop exposure through `pau-agent`. Map its native MCP
-configuration and lifecycle into the existing MCP adapter capabilities and
-shared MCP UI.
+Add Antigravity discovery, structured transport, and capabilities through
+`pau-agent`.
 
 Verification:
 
-- Run discovery, start, prompt, stream, interrupt, resume, failure, and cleanup
-  against a fake Antigravity executable.
+- Run discovery, start, prompt, stream, interrupt, failure, and cleanup against
+  a fake Antigravity executable.
+- Keep live Antigravity tests opt-in.
+
+### 2.126 Antigravity in the desktop
+
+Status: planned
+Blocked by: 2.48
+
+Let the operator start Antigravity sessions from the desktop app, with controls
+gated by Antigravity's reported capabilities.
+
+Verification:
+
+- Component-test Antigravity capability states and a missing executable.
+- Start and interrupt a session against the fake Antigravity executable.
+
+### 2.127 Antigravity resume
+
+Status: planned
+Blocked by: 2.48
+
+Resume native Antigravity sessions through `pau-agent`.
+
+Verification:
+
+- Resume a session against the fake Antigravity executable and cover a missing
+  session.
+
+### 2.128 Antigravity MCP configuration
+
+Status: planned
+Blocked by: 2.48
+
+Map Antigravity's native MCP configuration and lifecycle into the existing MCP
+adapter capabilities and shared MCP UI.
+
+Verification:
+
 - Round-trip Antigravity MCP configuration and exercise one fixture server
   through the shared MCP UI without changing unknown native fields.
-- Keep live Antigravity tests opt-in.
 
 ## Pi resources
 
@@ -473,68 +1200,238 @@ Status: planned
 Blocked by: 2.33
 
 Build the Skills, Extensions, Prompts, Themes, and Packages views with source,
-scope, trust, validation, filtering, and selected-resource detail.
+scope, trust, validation, and selected-resource detail.
 
 Verification:
 
 - Component-test empty, loading, invalid, untrusted, and mixed-scope states.
-- Verify filtering and keyboard navigation against a large fixture index.
 
-### 2.35 Skill and prompt editing
+### 2.129 Resource filtering
 
 Status: planned
-Blocked by: 2.33, 2.34
+Blocked by: 2.34
 
-Create and edit skills and prompts through file-preserving operations, then ask
-Pi to reload resources.
+Filter the resource views by name, scope, and trust.
+
+Verification:
+
+- Verify filtering and keyboard navigation against a large fixture index.
+
+### 2.35 Resource file editing API
+
+Status: planned
+Blocked by: 2.33
+
+Create and edit skill and prompt files through file-preserving operations, then
+ask Pi to reload resources.
 
 Verification:
 
 - Create a valid resource, reject invalid metadata, preserve supporting files,
-  and show reload errors without losing edits.
+  and report reload errors.
 
-### 2.36 Package management
+### 2.130 Skill editor
 
 Status: planned
-Blocked by: 2.33, 2.34
+Blocked by: 2.34, 2.35
 
-Install, update, filter, enable, disable, and remove Pi packages through Pi's
-supported commands or APIs. Show source and scope before mutation.
+Create and edit skills from the resource browser.
+
+Verification:
+
+- Component-test valid, invalid, and reload-failed states without losing edits.
+
+### 2.131 Prompt editor
+
+Status: planned
+Blocked by: 2.130
+
+Create and edit prompt templates from the resource browser.
+
+Verification:
+
+- Component-test valid, invalid, and reload-failed states without losing edits.
+
+### 2.36 Package installation
+
+Status: planned
+Blocked by: 2.33, 2.54
+
+Install Pi packages through Pi's supported commands or APIs. Record each
+installation in the mutation audit.
 
 Verification:
 
 - Exercise npm, Git, and local fixture packages in user and project scope.
-- Cover trust denial, command failure, partial installation, and rollback or
-  recovery guidance.
+- Cover trust denial, command failure, and partial installation with recovery
+  guidance.
+
+### 2.132 Package installation view
+
+Status: planned
+Blocked by: 2.34, 2.36
+
+Let the operator install a package after showing its source and scope.
+
+Verification:
+
+- Component-test the confirmation, trust denial, and failure states.
+
+### 2.133 Package updates
+
+Status: planned
+Blocked by: 2.36
+
+Update installed Pi packages through Pi's supported commands or APIs. Record
+each update in the mutation audit.
+
+Verification:
+
+- Cover npm, Git, and local fixture updates and a failed update with recovery
+  guidance.
+
+### 2.134 Package update view
+
+Status: planned
+Blocked by: 2.132, 2.133
+
+Show available updates and let the operator apply one after showing its source
+and scope.
+
+Verification:
+
+- Component-test up-to-date, update-available, and failed states.
+
+### 2.135 Package removal
+
+Status: planned
+Blocked by: 2.36
+
+Remove Pi packages through Pi's supported commands or APIs. Record each removal
+in the mutation audit.
+
+Verification:
+
+- Cover removal in user and project scope and a failed removal with recovery
+  guidance.
+
+### 2.136 Package removal view
+
+Status: planned
+Blocked by: 2.132, 2.135
+
+Let the operator remove a package after showing its source and scope.
+
+Verification:
+
+- Component-test the confirmation and failure states.
+
+### 2.137 Package enablement
+
+Status: planned
+Blocked by: 2.36
+
+Enable, disable, and filter a package's resources through Pi's supported
+commands or APIs. Record each change in the mutation audit.
+
+Verification:
+
+- Cover enabling, disabling, and filtering in user and project scope.
+
+### 2.138 Package enablement view
+
+Status: planned
+Blocked by: 2.132, 2.137
+
+Let the operator enable, disable, and filter a package's resources.
+
+Verification:
+
+- Component-test enabled, disabled, and filtered packages.
 
 ## Release surfaces
 
-### 2.49 Website interface
+Website units apply the approved public-site direction from
+`packages/prototype` to `apps/website`. Keep available behavior distinct from
+planned work, and keep the prototype's view switcher out of the public
+navigation. Review each website unit at desktop and narrow widths in light and
+dark themes.
+
+### 2.49 Website landing page
 
 Status: planned
 Blocked by: none
 
-Apply the approved public-site direction from `packages/prototype` to
-`apps/website`. Build the landing page, documentation reading shell, generated
-navigation and table of contents, Pagefind search UI, capability reference, and
-light, dark, and system theme controls. Use fixed interactive examples for
-sessions, file selection and diffs, and MCP lifecycle states without connecting
-the public site to agent state. Keep available behavior distinct from planned
-work, and keep the prototype's view switcher out of the public navigation.
+Build the landing page.
 
 Verification:
 
-- Build the website and validate frontmatter, internal links, heading structure,
-  raw Markdown routes, copyable commands, and Pagefind indexing.
-- Exercise global and documentation navigation, search, copy controls, theme
-  persistence, interactive examples, keyboard access, and reduced motion.
-- Review the landing page, documentation shell, and capability reference at
-  desktop and narrow widths in light and dark themes.
+- Build the website and review the landing page.
+
+### 2.139 Documentation shell
+
+Status: planned
+Blocked by: none
+
+Build the documentation reading shell with generated navigation and table of
+contents.
+
+Verification:
+
+- Validate frontmatter, internal links, heading structure, raw Markdown routes,
+  and copyable commands.
+- Exercise global and documentation navigation, copy controls, and keyboard
+  access.
+
+### 2.140 Documentation search
+
+Status: planned
+Blocked by: 2.139
+
+Add the Pagefind search UI.
+
+Verification:
+
+- Validate Pagefind indexing and exercise search with the keyboard.
+
+### 2.141 Capability reference
+
+Status: planned
+Blocked by: 2.139
+
+Build the capability reference.
+
+Verification:
+
+- Confirm available and planned capabilities are labelled distinctly.
+
+### 2.142 Website theme controls
+
+Status: planned
+Blocked by: none
+
+Add light, dark, and system theme controls.
+
+Verification:
+
+- Exercise theme persistence and the system theme.
+
+### 2.143 Website interactive examples
+
+Status: planned
+Blocked by: 2.49
+
+Add fixed interactive examples for sessions, file selection and diffs, and MCP
+lifecycle states without connecting the public site to agent state.
+
+Verification:
+
+- Exercise each example with the keyboard and with reduced motion.
 
 ### 2.38 Website deployment
 
 Status: planned
-Blocked by: 2.25, 2.49
+Blocked by: 2.25, 2.140, 2.141, 2.142, 2.143
 
 Deploy `apps/website` to Cloudflare Pages at `https://pau.stormlightlabs.org`
 with preview deployments for pull requests.
@@ -548,7 +1445,7 @@ Verification:
 ### 2.39 AppImage packaging
 
 Status: planned
-Blocked by: 2.25, 2.40, 2.41, 2.43, 2.45, 2.51
+Blocked by: 2.25, 2.40, 2.45, 2.51
 
 Package the first Linux desktop release as an AppImage. Leave `.deb`, RPM,
 Intel macOS, signing, and notarization until release demand or available signing

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-27
+
+### Desktop
+
+- Added an optional local sandbox for agent tools.
+
+## 2026-09-26
+
+### Desktop
+
+- Added process resource monitoring.
+- Added redacted release diagnostics.
+
 ## 2026-09-23
 
 ### Claude bridge package

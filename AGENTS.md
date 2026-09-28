@@ -52,10 +52,10 @@ built artifact.
   pre-existing findings. Do not defer or report those findings as separate
   follow-up work. Keep defects found outside required checks separate unless
   they block verification.
-- Keep completed units in their deliverable file until every unit in their
-  named subsection is complete. Then add a concise user-facing changelog entry,
-  remove satisfied blocker references, and remove that subsection. Apply the
-  same cleanup to an entire deliverable when its remaining units are complete.
+- When a unit is complete, add a concise user-facing changelog entry when it
+  changes user-facing behavior, remove it from every blocker list, and delete
+  the unit from its deliverable file. Delete a subsection or deliverable when
+  it has no units left.
 
 ## Dogfood Pau
 

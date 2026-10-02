@@ -7,6 +7,7 @@
 		ExtensionUiResponse,
 		ExtensionUiState,
 		PromptQueue,
+		SandboxDenial,
 		SessionViewModel,
 		SessionWorkspace,
 		TranscriptTool
@@ -136,6 +137,26 @@
 	function toolStatus(tool: TranscriptTool): string {
 		return tool.status === 'running' ? 'In progress' : tool.status === 'failed' ? 'Failed' : 'Complete';
 	}
+
+	function denialTitle(denial: SandboxDenial): string {
+		if (denial.target === 'network') return 'Sandbox blocked network access';
+		if (denial.target === 'unexplained') return 'Sandbox may have blocked this call';
+		return `Sandbox blocked a file ${denial.operation}`;
+	}
+
+	function denialExplanation(denial: SandboxDenial): string {
+		if (denial.target === 'network') {
+			return 'The active sandbox does not allow connections to this destination.';
+		}
+		if (denial.target === 'unexplained') {
+			return 'Pau could not identify the blocked file or destination. Open the failed tool call for its error.';
+		}
+		return {
+			unreadable: 'The active sandbox does not allow this path to be read.',
+			protected: 'The active sandbox keeps this path read-only.',
+			'outside-writable': 'This path is outside the folders the active sandbox can write.'
+		}[denial.reason];
+	}
 </script>
 
 <ApplicationShell
@@ -239,13 +260,26 @@
 								<summary>{entry.complete ? 'Thinking' : 'Thinking…'}</summary>
 								<p>{entry.body}</p>
 							</details>
-						{:else}
+						{:else if entry.kind === 'tool'}
 							<details class={`session-tool session-tool--${entry.status}`} open={entry.status !== 'complete'}>
 								<summary>
 									<span>{entry.name}</span><code>{entry.detail}</code><small>{toolStatus(entry)}</small>
 								</summary>
 								{#if entry.result}<pre>{entry.result}</pre>{/if}
 							</details>
+						{:else}
+							<article class="session-denial" aria-label="Sandbox denial">
+								<div>
+									<p class="session-denial__label">Sandbox denial</p>
+									<h2>{denialTitle(entry)}</h2>
+								</div>
+								{#if entry.target === 'file'}
+									<code>{entry.path}</code>
+								{:else if entry.target === 'network'}
+									<code>{entry.destination}</code>
+								{/if}
+								<p>{denialExplanation(entry)}</p>
+							</article>
 						{/if}
 					{/each}
 				{/if}
@@ -593,6 +627,48 @@
 
 	.session-tool small {
 		font-size: 0.6875rem;
+	}
+
+	.session-denial {
+		display: grid;
+		gap: 0.55rem;
+		max-width: 75ch;
+		padding: 0.75rem 0.9rem;
+		background: var(--pau-canvas);
+		border-left: 2px solid var(--pau-danger);
+	}
+
+	.session-denial h2,
+	.session-denial p {
+		margin: 0;
+	}
+
+	.session-denial h2 {
+		font-size: 0.875rem;
+		font-weight: 600;
+	}
+
+	.session-denial .session-denial__label {
+		margin-bottom: 0.2rem;
+		color: var(--pau-danger);
+		font-size: 0.6875rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	.session-denial code {
+		max-width: 100%;
+		overflow-wrap: anywhere;
+		color: var(--pau-text);
+		font-family: ui-monospace, monospace;
+		font-size: 0.75rem;
+	}
+
+	.session-denial > p {
+		color: var(--pau-text-muted);
+		font-size: 0.8125rem;
+		line-height: 1.5;
 	}
 
 	.session-view__composer-stack {

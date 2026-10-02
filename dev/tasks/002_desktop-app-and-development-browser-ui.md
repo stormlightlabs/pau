@@ -6,20 +6,6 @@ during development. Tauri is the shipped application in this deliverable.
 
 ## Process containment
 
-### 2.84 Sandbox denial view
-
-Status: planned
-Blocked by: none
-
-Show the operator each sandbox denial in the session that caused it.
-
-Verification:
-
-- Component-test file denials, network denials, and unexplained sandboxed
-  failures.
-- Trigger a denial in a self-hosted sandboxed Pi session and find it in the
-  session view.
-
 ### 2.85 Linux denial preload library
 
 Status: planned

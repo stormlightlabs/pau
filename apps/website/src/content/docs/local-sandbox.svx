@@ -107,6 +107,17 @@ and `WebSearch` are denied unless you allow them outside the sandbox, which
 makes Claude ask before each call. Claude's MCP servers are disabled because
 Claude would start them outside its sandbox.
 
+## Denials
+
+The session transcript shows each sandbox denial where it occurred. A file
+denial names the operation and path. A network denial names the destination.
+If Pau can tell that the sandbox may have caused a failure but cannot identify
+the blocked access, the transcript labels it as an unexplained sandboxed
+failure. Open the failed tool call to read its error.
+
+Change the active sandbox policy before retrying an operation that it blocks.
+Permission approval does not override the sandbox.
+
 ## Placeholder files
 
 To block creating a protected path that does not exist yet, the sandbox puts an

@@ -44,6 +44,16 @@ export const ResourcePressure: Story = {
 };
 export const Waiting: Story = { args: { workspaces: sessionFixtures.waiting, initialSessionId: 'session-waiting' } };
 export const Failed: Story = { args: { workspaces: sessionFixtures.failed, initialSessionId: 'session-failed' } };
+export const SandboxDenials: Story = {
+	args: { workspaces: sessionFixtures.sandboxDenials, initialSessionId: 'sandbox-denials' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getAllByLabelText('Sandbox denial')).toHaveLength(4);
+		await expect(canvas.getByText('/home/me/.ssh/id_ed25519')).toBeVisible();
+		await expect(canvas.getByText('api.example.com:443')).toBeVisible();
+		await expect(canvas.getByText('Sandbox may have blocked this call')).toBeVisible();
+	}
+};
 export const Stopped: Story = { args: { workspaces: sessionFixtures.stopped, initialSessionId: 'session-stopped' } };
 export const ExtensionConfirmation: Story = {
 	args: { workspaces: sessionFixtures.extensionConfirm, initialSessionId: 'extension-confirm' },
@@ -71,6 +81,6 @@ export const ConcurrentSessions: Story = {
 	}
 };
 export const Narrow: Story = {
-	args: { workspaces: sessionFixtures.concurrent, initialSessionId: 'diff-gutter' },
+	args: { workspaces: sessionFixtures.sandboxDenials, initialSessionId: 'sandbox-denials' },
 	parameters: { viewport: { defaultViewport: 'narrow' } }
 };

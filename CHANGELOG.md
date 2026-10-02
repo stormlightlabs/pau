@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-01
+
+### Desktop
+
+- Session transcripts now show file and network access blocked by the active
+  sandbox, including failures whose blocked access Pau cannot identify.
+
 ## 2026-09-28
 
 ### Desktop

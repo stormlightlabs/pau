@@ -29,8 +29,27 @@ export type TranscriptTool = {
 	status: 'running' | 'complete' | 'failed';
 };
 
+/** File operation blocked by a session's active sandbox policy. */
+export type SandboxFileDenial = {
+	id: string;
+	kind: 'sandbox-denial';
+	target: 'file';
+	operation: 'read' | 'write' | 'create' | 'rename';
+	path: string;
+	reason: 'unreadable' | 'protected' | 'outside-writable';
+};
+
+/** Network connection blocked by a session's active sandbox policy. */
+export type SandboxNetworkDenial = { id: string; kind: 'sandbox-denial'; target: 'network'; destination: string };
+
+/** Sandboxed failure for which Pau could not identify the blocked access. */
+export type UnexplainedSandboxFailure = { id: string; kind: 'sandbox-denial'; target: 'unexplained' };
+
+/** Sandbox refusal or unexplained sandboxed failure shown in its owning session. */
+export type SandboxDenial = SandboxFileDenial | SandboxNetworkDenial | UnexplainedSandboxFailure;
+
 /** One projected transcript entry. Completed messages replace streamed text before display. */
-export type TranscriptEntry = TranscriptMessage | TranscriptThinking | TranscriptTool;
+export type TranscriptEntry = TranscriptMessage | TranscriptThinking | TranscriptTool | SandboxDenial;
 
 /** Blocking interaction requested by a configured Pi extension. */
 export type ExtensionDialog =

@@ -60,9 +60,11 @@ Preserve status text alongside color.
 ## Session
 
 The transcript and composer lead. Tool activity is compact and can open detail
-without turning the transcript into a log viewer. The session rail and inspector
-can close independently from controls in the top app bar. Focus mode removes
-all surrounding navigation while preserving the active session and composer.
+without turning the transcript into a log viewer. Sandbox denials appear inline
+at the point of failure and name the blocked file or network destination when
+Pau can identify it. The session rail and inspector can close independently
+from controls in the top app bar. Focus mode removes all surrounding navigation
+while preserving the active session and composer.
 
 The terminal dock is the only secondary surface that splits the main column.
 The inspector shows a compact machine-resource summary with current and peak

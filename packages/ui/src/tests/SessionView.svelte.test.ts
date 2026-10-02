@@ -60,6 +60,22 @@ test('switches concurrent sessions with the keyboard', async () => {
 		.toHaveAttribute('aria-current', 'page');
 });
 
+test('shows file, network, and unexplained sandbox denials in their owning session', async () => {
+	await render(SessionViewDemo, { workspaces: sessionFixtures.sandboxDenials, initialSessionId: 'sandbox-denials' });
+
+	await expect.element(page.getByText('Sandbox blocked a file read')).toBeVisible();
+	await expect.element(page.getByText('/home/me/.ssh/id_ed25519')).toBeVisible();
+	await expect.element(page.getByText('Sandbox blocked a file write')).toBeVisible();
+	await expect.element(page.getByText('/work/pau/.git/config')).toBeVisible();
+	await expect.element(page.getByText('Sandbox blocked network access')).toBeVisible();
+	await expect.element(page.getByText('api.example.com:443')).toBeVisible();
+	await expect.element(page.getByText('Sandbox may have blocked this call')).toBeVisible();
+
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	await userEvent.click(page.getByRole('button', { name: /Session without denials/ }));
+	await expect.element(page.getByLabelText('Sandbox denial').first()).not.toBeInTheDocument();
+});
+
 test('exposes tool activity and disabled stopped controls', async () => {
 	await render(SessionView, { workspaces: sessionFixtures.stopped, activeSessionId: 'session-stopped' });
 

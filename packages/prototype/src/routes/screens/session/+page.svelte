@@ -223,6 +223,17 @@
 						</button>
 					</details>
 
+					<article
+						class="grid max-w-[74ch] gap-2 border-l-2 border-danger bg-canvas px-3 py-2.5"
+						aria-label="Sandbox denial">
+						<div>
+							<p class="m-0 text-micro font-700 tracking-wide text-danger uppercase">Sandbox denial</p>
+							<h2 class="m-0 mt-0.5 text-body font-600 text-text">Sandbox blocked a file read</h2>
+						</div>
+						<code class="break-all text-meta text-text">/home/me/.ssh/id_ed25519</code>
+						<p class="m-0 text-meta text-muted">The active sandbox does not allow this path to be read.</p>
+					</article>
+
 					<div class="grid gap-2">
 						<div class="turn-label text-accent">Pi<span class="font-400 tracking-normal">· sonnet</span></div>
 						<p class="turn-body">

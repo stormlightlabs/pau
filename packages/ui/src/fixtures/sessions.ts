@@ -94,6 +94,40 @@ export const sessionFixtures = {
 			]
 		}
 	],
+	sandboxDenials: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [
+				session('idle', {
+					id: 'sandbox-denials',
+					title: 'Inspect sandbox denials',
+					transcript: [
+						...transcript,
+						{
+							id: 'denial-file-read',
+							kind: 'sandbox-denial',
+							target: 'file',
+							operation: 'read',
+							path: '/home/me/.ssh/id_ed25519',
+							reason: 'unreadable'
+						},
+						{
+							id: 'denial-file-write',
+							kind: 'sandbox-denial',
+							target: 'file',
+							operation: 'write',
+							path: '/work/pau/.git/config',
+							reason: 'protected'
+						},
+						{ id: 'denial-network', kind: 'sandbox-denial', target: 'network', destination: 'api.example.com:443' },
+						{ id: 'denial-unexplained', kind: 'sandbox-denial', target: 'unexplained' }
+					]
+				}),
+				session('idle', { id: 'sandbox-clean', title: 'Session without denials', transcript: [] })
+			]
+		}
+	],
 	stopped: [{ id: 'pau', name: 'Pau', sessions: [session('stopped', { title: 'Write release notes' })] }],
 	extensionConfirm: [
 		{

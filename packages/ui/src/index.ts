@@ -62,6 +62,7 @@ export type {
 	ExtensionUiState,
 	ExtensionWidget,
 	PromptQueue,
+	SandboxDenial,
 	SessionCapabilities,
 	SessionStatus,
 	SessionViewModel,

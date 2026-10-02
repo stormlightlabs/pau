@@ -34,6 +34,18 @@ pub struct SandboxGrants {
     pub unix_sockets: bool,
 }
 
+/// A host environment variable selected for future credential brokerage.
+///
+/// The reference and its destination set are configuration. The variable's
+/// value is resolved at launch and is never part of this serializable type.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SandboxCredentialReference {
+    /// Name of the variable in Pau's host environment.
+    pub source: String,
+    /// TLS destinations that may receive the credential.
+    pub destinations: Vec<String>,
+}
+
 /// One sandbox profile and its grants.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct SandboxSettings {
@@ -54,6 +66,10 @@ pub struct SandboxSettings {
     /// call runs outside the sandbox after its own approval.
     #[serde(default)]
     pub unsandboxed_tools: Vec<String>,
+    /// Opt-in references to host credentials. Only source names and
+    /// destinations are persisted.
+    #[serde(default)]
+    pub credential_references: Vec<SandboxCredentialReference>,
 }
 
 impl SandboxSettings {
@@ -65,6 +81,7 @@ impl SandboxSettings {
             home_read_deny: false,
             share_claude_temp: false,
             unsandboxed_tools: Vec::new(),
+            credential_references: Vec::new(),
         }
     }
 }
@@ -177,7 +194,54 @@ pub fn validate_selection(selection: &SandboxSelection) -> Result<(), SandboxErr
             )));
         }
     }
+    let mut sources = std::collections::BTreeSet::new();
+    for reference in &settings.credential_references {
+        let mut characters = reference.source.chars();
+        let valid_source = characters
+            .next()
+            .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
+            && characters.all(|character| character.is_ascii_alphanumeric() || character == '_');
+        if !valid_source {
+            return Err(SandboxError::Invalid(format!(
+                "{:?} is not an environment variable name",
+                reference.source
+            )));
+        }
+        if !sources.insert(&reference.source) {
+            return Err(SandboxError::Invalid(format!(
+                "credential source {} is listed more than once",
+                reference.source
+            )));
+        }
+        if is_model_credential(&reference.source) {
+            return Err(SandboxError::Invalid(format!(
+                "{} is a model credential and cannot be brokered to sandboxed tools",
+                reference.source
+            )));
+        }
+        if reference.destinations.is_empty() {
+            return Err(SandboxError::Invalid(format!(
+                "credential source {} needs at least one destination",
+                reference.source
+            )));
+        }
+        for destination in &reference.destinations {
+            validate_domain(destination)?;
+        }
+    }
     Ok(())
+}
+
+fn is_model_credential(source: &str) -> bool {
+    matches!(
+        source,
+        "ANTHROPIC_API_KEY"
+            | "OPENAI_API_KEY"
+            | "GOOGLE_API_KEY"
+            | "GEMINI_API_KEY"
+            | "AZURE_OPENAI_API_KEY"
+            | "AWS_BEARER_TOKEN_BEDROCK"
+    )
 }
 
 #[cfg(test)]
@@ -227,6 +291,41 @@ mod tests {
             };
             assert_eq!(validate_selection(&selection).is_ok(), valid, "{tool:?}");
         }
+    }
+
+    #[test]
+    fn validates_credential_reference_sources_and_destinations() {
+        let mut settings = SandboxSettings::workspace_write();
+        settings.credential_references = vec![SandboxCredentialReference {
+            source: "PACKAGE_TOKEN".to_owned(),
+            destinations: vec!["registry.example.com:443".to_owned()],
+        }];
+        let selection = |settings: &SandboxSettings| SandboxSelection::Sandboxed {
+            settings: settings.clone(),
+        };
+        assert!(validate_selection(&selection(&settings)).is_ok());
+
+        for source in ["", "9TOKEN", "PACKAGE-TOKEN", "TOKEN=value"] {
+            settings.credential_references[0].source = source.to_owned();
+            assert!(
+                validate_selection(&selection(&settings)).is_err(),
+                "{source:?}"
+            );
+        }
+        settings.credential_references[0].source = "ANTHROPIC_API_KEY".to_owned();
+        assert!(validate_selection(&selection(&settings)).is_err());
+
+        settings.credential_references[0].source = "PACKAGE_TOKEN".to_owned();
+        settings.credential_references[0].destinations = vec!["https://example.com".to_owned()];
+        assert!(validate_selection(&selection(&settings)).is_err());
+        settings.credential_references[0].destinations.clear();
+        assert!(validate_selection(&selection(&settings)).is_err());
+
+        settings.credential_references[0].destinations = vec!["example.com".to_owned()];
+        settings
+            .credential_references
+            .push(settings.credential_references[0].clone());
+        assert!(validate_selection(&selection(&settings)).is_err());
     }
 
     #[test]

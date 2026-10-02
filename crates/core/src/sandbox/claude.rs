@@ -30,7 +30,14 @@ pub fn prepare_claude_sandbox(
 ) -> Result<ClaudeSandboxLaunch, SandboxError> {
     let resolved = resolve_sandbox(&SandboxLaunchInput {
         adapter: SandboxAdapter::Claude,
-        ..input.clone()
+        settings: input.settings,
+        workspace: input.workspace,
+        home: input.home,
+        session_directory: input.session_directory,
+        executables: input.executables,
+        runtime_roots: input.runtime_roots,
+        tool_path: input.tool_path,
+        credential_environment: input.credential_environment,
     })?;
     prepare_sandbox(&resolved)?;
     let settings_file = resolved.host_directory.join("claude-settings.json");
@@ -113,6 +120,7 @@ mod tests {
             executables: &executables,
             runtime_roots: &[],
             tool_path: "/usr/bin",
+            credential_environment: &Default::default(),
         })
         .unwrap();
         let file = fixture.session.join("host/claude-settings.json");

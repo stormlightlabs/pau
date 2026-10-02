@@ -52,7 +52,7 @@ async function denied(commandId: string, command: string): Promise<SeatbeltDenia
 			noProxy: active.noProxy
 		});
 		report(result.code !== 0, `${commandId}: operation is denied`, result.stderr.trim());
-		return await log.take(1_000);
+		return await log.take(1000);
 	} finally {
 		log.stop();
 		await SandboxManager.reset();

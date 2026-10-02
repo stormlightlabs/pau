@@ -13,10 +13,10 @@ use pau_core::{
         ResourcePressureKind, ResourcePressureWarning,
     },
     sandbox::{
-        EffectiveSandbox, SandboxAdapter, SandboxCredentialAccess, SandboxExecutable,
-        SandboxGrants, SandboxNetworkAccess, SandboxPolicyFile, SandboxPreviewRequest,
-        SandboxProfileName, SandboxReadAccess, SandboxSelection, SandboxSelectionState,
-        SandboxSettings, SandboxedMcpServer, WorkspaceSandbox,
+        EffectiveSandbox, SandboxAdapter, SandboxCredentialAccess, SandboxCredentialReference,
+        SandboxExecutable, SandboxGrants, SandboxNetworkAccess, SandboxPolicyFile,
+        SandboxPreviewRequest, SandboxProfileName, SandboxReadAccess, SandboxSelection,
+        SandboxSelectionState, SandboxSettings, SandboxedMcpServer, WorkspaceSandbox,
     },
     workspace::{
         FileContent, FileEntry, FileEntryKind, FileSearchMatch, GitDiff, GitFileState,
@@ -60,6 +60,7 @@ fn main() {
         ServerStreamMessage::decl(&config),
         SandboxProfileName::decl(&config),
         SandboxGrants::decl(&config),
+        SandboxCredentialReference::decl(&config),
         SandboxSettings::decl(&config),
         SandboxSelection::decl(&config),
         SandboxSelectionState::decl(&config),

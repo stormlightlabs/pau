@@ -11,12 +11,11 @@ const VIOLATION = /Sandbox:\s+(.+)\((\d+)\)\s+deny\(\d+\)\s+(\S+)(?:\s+(.*))?$/;
 export function parseSeatbeltDenial(line: string): SeatbeltDenial | undefined {
 	const match = line.match(VIOLATION);
 	if (!match) return undefined;
-	const name = match[1]!;
 	const pid = Number(match[2]);
-	const action = match[3]!;
 	if (!Number.isSafeInteger(pid) || pid < 1) return undefined;
+	const action = match[3]!;
 	const target = (match[4] ?? 'unknown destination').trim();
-	const process = { name: name.trim(), pid };
+	const process = { name: match[1]!.trim(), pid };
 
 	if (action.startsWith('file-read')) return { operation: 'read', kind: 'file', target, process };
 	if (action === 'file-write-create') return { operation: 'create', kind: 'file', target, process };
@@ -71,13 +70,12 @@ export class SeatbeltDenialLog {
 	async take(waitMilliseconds = 0): Promise<SeatbeltDenial[]> {
 		if (this.#process && this.#denials.length === 0 && waitMilliseconds > 0) {
 			await new Promise<void>((resolve) => {
-				const timer = setTimeout(done, waitMilliseconds);
-				const self = this;
-				function done(): void {
+				const done = (): void => {
 					clearTimeout(timer);
-					self.#waiters.delete(done);
+					this.#waiters.delete(done);
 					resolve();
-				}
+				};
+				const timer = setTimeout(done, waitMilliseconds);
 				this.#waiters.add(done);
 			});
 		}

@@ -16,7 +16,11 @@ fn prepares_the_extension_policy_and_exclusive_session_mcp() {
         eprintln!("skipped: no supported sandbox on this host");
         return;
     };
-    let root = tempfile::tempdir().unwrap();
+    // Keep the relay socket below the shortest supported Unix socket limit.
+    let root = tempfile::Builder::new()
+        .prefix("pau-pi-sandbox-")
+        .tempdir_in("/tmp")
+        .unwrap();
     let root_path = fs::canonicalize(root.path()).unwrap();
     let workspace = root_path.join("workspace");
     let home = root_path.join("home");
@@ -38,6 +42,7 @@ fn prepares_the_extension_policy_and_exclusive_session_mcp() {
         extension: "/pau/packages/sandbox/src/pi-extension.ts".as_ref(),
         runtime_roots: &[],
         tool_path: "/usr/bin:/bin",
+        credential_environment: &Default::default(),
         mcp_servers: Some(&servers),
     })
     .unwrap();

@@ -883,6 +883,15 @@ fn describe(
         .as_ref()
         .map_err(|error| ApiError::SandboxUnavailable(error.clone()))?;
     let tool_path = env::var("PATH").unwrap_or_default();
+    let credential_environment = settings
+        .credential_references
+        .iter()
+        .filter_map(|reference| {
+            env::var(&reference.source)
+                .ok()
+                .map(|value| (reference.source.clone(), value))
+        })
+        .collect();
     resolve_sandbox(&SandboxLaunchInput {
         adapter: request.adapter,
         settings,
@@ -892,6 +901,7 @@ fn describe(
         executables,
         runtime_roots: &[],
         tool_path: &tool_path,
+        credential_environment: &credential_environment,
     })
     .map(|resolved| Some(resolved.effective))
     .map_err(|error| ApiError::InvalidSandbox(error.to_string()))
@@ -1604,7 +1614,10 @@ mod tests {
 
         let (status, stored) = call("PUT", "sandbox", Some(sandboxed.clone())).await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(stored["selection"]["settings"]["grants"], sandboxed["settings"]["grants"]);
+        assert_eq!(
+            stored["selection"]["settings"]["grants"],
+            sandboxed["settings"]["grants"]
+        );
         assert_eq!(stored["selection"]["settings"]["home_read_deny"], false);
         assert_eq!(call("GET", "sandbox", None).await.1, stored);
 

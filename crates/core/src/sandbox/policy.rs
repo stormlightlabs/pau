@@ -11,8 +11,9 @@ use serde_json::{Value, json};
 use ts_rs::TS;
 
 use super::{
-    SANDBOX_POLICY_VERSION, SANDBOXED_PI_TOOLS, SandboxAdapter, SandboxError, SandboxExecutable,
-    SandboxExecutables, SandboxProfileName, SandboxSelection, SandboxSettings,
+    SANDBOX_POLICY_VERSION, SANDBOXED_PI_TOOLS, SandboxAdapter, SandboxCredentialReference,
+    SandboxError, SandboxExecutable, SandboxExecutables, SandboxProfileName, SandboxSelection,
+    SandboxSettings,
     executables::SandboxPlatform,
     network::{is_local_destination, proxy_exclusions},
     placeholders::{RUNTIME_DANGEROUS_DIRECTORIES, RUNTIME_DANGEROUS_FILES, predict_placeholders},
@@ -71,7 +72,6 @@ const RUNTIME_CONVENIENCE_WRITES: &[&str] = &[".npm/_logs", ".claude/debug"];
 pub(super) const SHARED_CLAUDE_TEMP: &str = "/tmp/claude";
 
 /// Inputs for resolving one sandboxed launch.
-#[derive(Debug, Clone)]
 pub struct SandboxLaunchInput<'a> {
     /// Adapter that owns the execution boundary.
     pub adapter: SandboxAdapter,
@@ -93,6 +93,10 @@ pub struct SandboxLaunchInput<'a> {
     pub runtime_roots: &'a [PathBuf],
     /// `PATH` inside the sandbox.
     pub tool_path: &'a str,
+    /// Host variables selected by the trusted supervisor for configured
+    /// credential references. Values are checked but never copied into the
+    /// resolved policy or effective profile.
+    pub credential_environment: &'a BTreeMap<String, String>,
 }
 
 /// A resolved launch and everything needed to start and describe it.
@@ -186,7 +190,9 @@ pub struct SandboxNetworkAccess {
 pub struct SandboxCredentialAccess {
     /// Credential paths that cannot be read.
     pub denied: Vec<String>,
-    /// Credentials substituted by a broker. Brokerage is not available yet.
+    /// Configured host-variable references and their destination sets.
+    pub references: Vec<SandboxCredentialReference>,
+    /// Credentials substituted by a broker.
     pub brokered: Vec<String>,
 }
 
@@ -239,6 +245,18 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
     validate_selection(&SandboxSelection::Sandboxed {
         settings: settings.clone(),
     })?;
+    for reference in &settings.credential_references {
+        if !input
+            .credential_environment
+            .get(&reference.source)
+            .is_some_and(|value| !value.is_empty())
+        {
+            return Err(SandboxError::Invalid(format!(
+                "credential source {} is missing from Pau's host environment",
+                reference.source
+            )));
+        }
+    }
     if !input.session_directory.is_absolute() {
         return Err(SandboxError::Invalid(
             "the session directory must be absolute".into(),
@@ -388,6 +406,7 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
         },
         credentials: SandboxCredentialAccess {
             denied: strings(&credentials),
+            references: settings.credential_references.clone(),
             brokered: Vec::new(),
         },
         environment: environment.keys().cloned().collect(),
@@ -647,6 +666,53 @@ mod tests {
             path_string(&fixture.session.join("tmp"))
         );
         assert_eq!(resolved.effective.environment.len(), 6);
+    }
+
+    #[test]
+    fn resolves_referenced_sources_without_exposing_values() {
+        const VALUE: &str = "credential-value-that-must-not-be-serialized";
+        let fixture = fixture();
+        let mut settings = SandboxSettings::workspace_write();
+        settings.credential_references = vec![SandboxCredentialReference {
+            source: "PACKAGE_TOKEN".to_owned(),
+            destinations: vec!["registry.example.com".to_owned()],
+        }];
+        let executables = crate::sandbox::fixtures::executables();
+        let resolve_with = |credential_environment: &BTreeMap<String, String>| {
+            resolve_sandbox(&SandboxLaunchInput {
+                adapter: SandboxAdapter::Pi,
+                settings: &settings,
+                workspace: &fixture.workspace,
+                home: &fixture.home,
+                session_directory: &fixture.session,
+                executables: &executables,
+                runtime_roots: &[],
+                tool_path: "/usr/bin:/bin",
+                credential_environment,
+            })
+        };
+
+        let missing = BTreeMap::new();
+        assert_eq!(
+            resolve_with(&missing).unwrap_err(),
+            SandboxError::Invalid(
+                "credential source PACKAGE_TOKEN is missing from Pau's host environment".to_owned()
+            )
+        );
+        let empty = BTreeMap::from([("PACKAGE_TOKEN".to_owned(), String::new())]);
+        assert!(resolve_with(&empty).is_err());
+
+        let present = BTreeMap::from([("PACKAGE_TOKEN".to_owned(), VALUE.to_owned())]);
+        let resolved = resolve_with(&present).unwrap();
+        assert_eq!(
+            resolved.effective.credentials.references,
+            settings.credential_references
+        );
+        let policy = serde_json::to_string(&resolved.policy).unwrap();
+        let effective = serde_json::to_string(&resolved.effective).unwrap();
+        assert!(!policy.contains(VALUE));
+        assert!(!effective.contains(VALUE));
+        assert!(!resolved.policy.environment.contains_key("PACKAGE_TOKEN"));
     }
 
     #[test]

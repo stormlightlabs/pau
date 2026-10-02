@@ -1,4 +1,4 @@
-import { chmod, copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +25,7 @@ describe('Claude process lifecycle', () => {
 		await copyFile(fakeClaude, executablePath);
 		await chmod(executablePath, 0o755);
 		await mkdir(cwd);
+		const canonicalCwd = await realpath(cwd);
 
 		const discovery = await discoverClaude({ executablePath });
 		const registry = makeRegistry();
@@ -40,7 +41,7 @@ describe('Claude process lifecycle', () => {
 		expect(exit).toEqual({ code: 0, signal: null, expected: true, shutdownStage: 'protocol' });
 		expect(process.state).toBe('stopped');
 		expect(process.exitInfo).toEqual(exit);
-		expect(await readFile(cwdReport, 'utf8')).toBe(cwd);
+		expect(await readFile(cwdReport, 'utf8')).toBe(canonicalCwd);
 		expect(registry.size).toBe(0);
 	});
 

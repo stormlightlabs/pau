@@ -21,25 +21,10 @@ Verification:
   comparison or the sandboxed-failure label.
 - Measure the library's overhead on a representative build and test command.
 
-### 2.46 Sandboxed credential references
-
-Status: planned
-Blocked by: none
-
-Add opt-in credential references for sandboxed tools. A reference names a host
-environment variable that the trusted supervisor resolves. Persist references,
-never values. Keep model and MCP OAuth credentials in their native hosts and
-stores. Deny credential files in the initial cross-platform profile.
-
-Verification:
-
-- Cover missing and malformed sources.
-- Confirm stored settings contain the reference and never the value.
-
 ### 2.87 Credential reference settings
 
 Status: planned
-Blocked by: 2.46
+Blocked by: none
 
 Let the operator add, edit, and remove credential references and their
 destinations for a sandbox profile.
@@ -51,7 +36,7 @@ Verification:
 ### 2.88 Credential broker and sentinels
 
 Status: planned
-Blocked by: 2.46
+Blocked by: none
 
 Pass real values only to a dedicated broker process and place per-session
 sentinels in the tool host.

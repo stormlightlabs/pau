@@ -40,7 +40,6 @@ const STDIO_FIELDS: &[&str] = &[
 ];
 
 /// Inputs for one sandboxed Pi launch.
-#[derive(Debug, Clone)]
 pub struct PreparePiSandbox<'a> {
     /// Selected profile.
     pub settings: &'a SandboxSettings,
@@ -59,6 +58,9 @@ pub struct PreparePiSandbox<'a> {
     pub runtime_roots: &'a [PathBuf],
     /// `PATH` inside the sandbox.
     pub tool_path: &'a str,
+    /// Host variables selected for configured credential references. Values
+    /// never enter Pi's environment or the sandbox policy.
+    pub credential_environment: &'a BTreeMap<String, String>,
     /// Effective Pi MCP servers, when pi-mcp-adapter is active for Pi.
     pub mcp_servers: Option<&'a [DiscoveredMcpServer]>,
 }
@@ -97,6 +99,7 @@ pub fn prepare_pi_sandbox(input: &PreparePiSandbox<'_>) -> Result<PiSandboxLaunc
         executables: input.executables,
         runtime_roots: input.runtime_roots,
         tool_path: input.tool_path,
+        credential_environment: input.credential_environment,
     })?;
     let mut arguments = vec![OsString::from("--extension"), input.extension.into()];
     let mut environment = Vec::new();

@@ -31,8 +31,9 @@ pub use policy::{
     prepare_sandbox, resolve_sandbox, write_private_file,
 };
 pub use selection::{
-    SandboxAdapter, SandboxGrants, SandboxPreviewRequest, SandboxProfileName, SandboxSelection,
-    SandboxSelectionState, SandboxSettings, WorkspaceSandbox, validate_selection,
+    SandboxAdapter, SandboxCredentialReference, SandboxGrants, SandboxPreviewRequest,
+    SandboxProfileName, SandboxSelection, SandboxSelectionState, SandboxSettings, WorkspaceSandbox,
+    validate_selection,
 };
 
 /// Current version of the policy file read by `packages/sandbox`.

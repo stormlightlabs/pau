@@ -96,8 +96,10 @@ function exerciseStdioBridge(installedPackage, cwd, env) {
 			}
 		});
 		child.once('error', finish);
-		child.once('exit', (code) => {
-			if (!completed) finish(new Error(`Stdio bridge exited before completion (${code}):\n${stderr}`));
+		child.once('close', (code) => {
+			if (!completed) {
+				finish(new Error(`Stdio bridge exited before completion (${code}):\nstdout: ${stdout}\nstderr: ${stderr}`));
+			}
 		});
 		child.stdin.write('{"version":1,"type":"command","id":"status","command":"status"}\n');
 	});

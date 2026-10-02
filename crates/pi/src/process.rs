@@ -618,16 +618,25 @@ cat >/dev/null
             r#"
 trap 'printf "interrupt\n" >> "$PWD/signals"' INT
 trap 'printf "terminate\n" >> "$PWD/signals"; exit 0' TERM
+: > "$PWD/ready"
 while :; do :; done
 "#,
         );
         let signal_log = fixture.root.path().join("signals");
+        let ready = fixture.root.path().join("ready");
         let process = fixture.start(PiShutdownTimeouts {
             protocol: Duration::from_millis(50),
             interrupt: Duration::from_millis(200),
             terminate: Duration::from_secs(2),
             kill: Duration::from_secs(1),
         });
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !ready.exists() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
 
         let exit = process.shutdown().await.unwrap();
 

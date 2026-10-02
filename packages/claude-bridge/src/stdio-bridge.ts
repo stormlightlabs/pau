@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 import { discoverClaude } from './discovery.js';
 import { CLAUDE_STRUCTURED_ARGS, ClaudeProcessRegistry } from './lifecycle.js';
@@ -177,7 +178,8 @@ export function parseBridgeArguments(arguments_: readonly string[]): ClaudeStdio
 	};
 }
 
-if (import.meta.url === pathToFileURL(globalThis.process.argv[1] ?? '').href) {
+const entrypoint = globalThis.process.argv[1];
+if (entrypoint && realpathSync(entrypoint) === realpathSync(fileURLToPath(import.meta.url))) {
 	runClaudeStdioBridge(parseBridgeArguments(globalThis.process.argv.slice(2))).catch((error: unknown) => {
 		globalThis.process.stderr.write(
 			encodeDiagnosticFrame({

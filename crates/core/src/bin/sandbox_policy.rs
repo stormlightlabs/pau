@@ -5,6 +5,7 @@
 //! they exercise the same policy that Pau launches.
 
 use std::{
+    collections::BTreeMap,
     io::{self, Read},
     path::PathBuf,
     process::ExitCode,
@@ -56,6 +57,16 @@ fn run(input: &str) -> Result<String, String> {
     let search_path = std::env::var_os("PATH").unwrap_or_default();
     let executables =
         SandboxExecutables::resolve(&search_path).map_err(|error| error.to_string())?;
+    let credential_environment = request
+        .settings
+        .credential_references
+        .iter()
+        .filter_map(|reference| {
+            std::env::var(&reference.source)
+                .ok()
+                .map(|value| (reference.source.clone(), value))
+        })
+        .collect::<BTreeMap<_, _>>();
     let mut resolved = resolve_sandbox(&SandboxLaunchInput {
         adapter: request.adapter,
         settings: &request.settings,
@@ -65,6 +76,7 @@ fn run(input: &str) -> Result<String, String> {
         executables: &executables,
         runtime_roots: &request.runtime_roots,
         tool_path: &request.tool_path,
+        credential_environment: &credential_environment,
     })
     .map_err(|error| error.to_string())?;
     resolved.policy.mcp_servers = request.mcp_servers;

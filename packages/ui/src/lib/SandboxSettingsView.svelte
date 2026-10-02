@@ -38,7 +38,8 @@
 		grants: { domains: [], writableRoots: [], unixSockets: false },
 		homeReadDeny: false,
 		shareClaudeTemp: false,
-		unsandboxedTools: []
+		unsandboxedTools: [],
+		credentialReferences: []
 	};
 
 	let draft = $state<SandboxSelectionModel>({ mode: 'unsandboxed' });

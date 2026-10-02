@@ -7,7 +7,7 @@ test('parses file denials with the responsible process', () => {
 		parseSeatbeltDenial(
 			'2026-10-01 22:03:53.896 E kernel[0:1] (Sandbox) Sandbox: bash(46087) deny(1) file-write-create /tmp/outside/child.txt'
 		),
-		{ operation: 'create', kind: 'file', target: '/tmp/outside/child.txt', process: { name: 'bash', pid: 46087 } }
+		{ operation: 'create', kind: 'file', target: '/tmp/outside/child.txt', process: { name: 'bash', pid: 46_087 } }
 	);
 	assert.deepEqual(parseSeatbeltDenial('Sandbox: node(91) deny(1) file-read-data /tmp/private'), {
 		operation: 'read',
@@ -22,7 +22,7 @@ test('parses direct TCP denials with the responsible process', () => {
 		operation: 'connect',
 		kind: 'tcp',
 		target: 'remote:*:9',
-		process: { name: 'node', pid: 46141 }
+		process: { name: 'node', pid: 46_141 }
 	});
 });
 

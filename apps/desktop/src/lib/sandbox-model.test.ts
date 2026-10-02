@@ -1,4 +1,4 @@
-import { sandboxFixtures } from '@stormlightlabs/pau-ui';
+import { sandboxFixtures, type SandboxSelectionModel } from '@stormlightlabs/pau-ui';
 import { expect, test } from 'vitest';
 
 import { effectiveView, selectionView, selectionWire } from './sandbox-model';
@@ -11,6 +11,14 @@ test('round-trips selections between the wire and the settings view', () => {
 		mode: 'sandboxed',
 		settings: { grants: { writable_roots: ['/home/me/.cache/pnpm'] }, home_read_deny: true }
 	});
+	const referenced = {
+		mode: 'sandboxed',
+		settings: {
+			...sandboxFixtures.granted.settings,
+			credentialReferences: [{ source: 'PACKAGE_TOKEN', destinations: ['registry.example.com'] }]
+		}
+	} satisfies SandboxSelectionModel;
+	expect(selectionView(selectionWire(referenced))).toEqual(referenced);
 });
 
 test('maps the effective profile without dropping restrictions', () => {
@@ -25,7 +33,11 @@ test('maps the effective profile without dropping restrictions', () => {
 		writable: ['/tmp/s'],
 		protected: ['/work/.pi'],
 		network: { domains: ['127.0.0.1:8080'], local_addresses: ['127.0.0.1:8080'], unix_sockets: false },
-		credentials: { denied: ['/home/me/.ssh'], brokered: [] },
+		credentials: {
+			denied: ['/home/me/.ssh'],
+			references: [{ source: 'PACKAGE_TOKEN', destinations: ['registry.example.com'] }],
+			brokered: []
+		},
 		environment: ['HOME'],
 		limits: ['Core dumps are disabled'],
 		sandboxed_tools: ['Bash'],
@@ -37,6 +49,7 @@ test('maps the effective profile without dropping restrictions', () => {
 	expect(view.readable).toEqual({ homeDenied: true, allowed: ['/work'], denied: ['/home/me'] });
 	expect(view.network.localAddresses).toEqual(['127.0.0.1:8080']);
 	expect(view.executables[0]?.version).toBeUndefined();
+	expect(view.credentials.references).toEqual([{ source: 'PACKAGE_TOKEN', destinations: ['registry.example.com'] }]);
 	expect(view.unsandboxedTools).toEqual(['WebFetch']);
 	expect(view.knownGaps).toEqual(['gap']);
 });

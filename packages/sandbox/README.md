@@ -38,6 +38,19 @@ PAU_SANDBOX_POLICY_FILE=/path/to/session/host/policy.json \
   pi --extension packages/sandbox/src/pi-extension.ts
 ```
 
+## Credential references
+
+A sandbox profile can reference a tool credential by its host environment
+variable and list the TLS destinations that may receive it. Pau validates the
+variable name and confirms that the variable has a nonempty value when it
+resolves the profile. Persisted settings and the effective sandbox description
+contain the reference, not the value. Model provider credentials and MCP OAuth
+credentials remain in their native hosts and stores.
+
+Credential files remain unreadable in both initial cross-platform profiles.
+A reference does not inject its value into the tool host or a sandboxed
+process.
+
 ## Run the tests
 
 `pnpm --filter @stormlightlabs/pau-sandbox test` checks denial reports against

@@ -5,7 +5,8 @@ const workspaceWrite: SandboxSettingsModel = {
 	grants: { domains: [], writableRoots: [], unixSockets: false },
 	homeReadDeny: false,
 	shareClaudeTemp: false,
-	unsandboxedTools: []
+	unsandboxedTools: [],
+	credentialReferences: []
 };
 
 const granted: SandboxSettingsModel = {
@@ -51,7 +52,11 @@ const effective: EffectiveSandboxView = {
 		'/home/me/work/pau/.zed'
 	],
 	network: { domains: [], localAddresses: [], unixSockets: false },
-	credentials: { denied: ['/home/me/.ssh', '/home/me/.aws', '/home/me/.pi/agent/auth.json'], brokered: [] },
+	credentials: {
+		denied: ['/home/me/.ssh', '/home/me/.aws', '/home/me/.pi/agent/auth.json'],
+		references: [],
+		brokered: []
+	},
 	environment: ['HOME', 'LANG', 'PATH', 'PAU_SANDBOX', 'TERM', 'TMPDIR'],
 	limits: [
 		'Descendants stop when the tool host exits',

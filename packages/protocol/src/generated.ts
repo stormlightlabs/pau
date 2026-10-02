@@ -525,6 +525,16 @@ writable_roots: Array<string>,
  */
 unix_sockets: boolean, };
 
+export type SandboxCredentialReference = {
+/**
+ * Name of the variable in Pau's host environment.
+ */
+source: string,
+/**
+ * TLS destinations that may receive the credential.
+ */
+destinations: Array<string>, };
+
 export type SandboxSettings = {
 /**
  * Base profile.
@@ -548,7 +558,12 @@ share_claude_temp: boolean,
  * Tools without a contained launch path that the operator enabled. Each
  * call runs outside the sandbox after its own approval.
  */
-unsandboxed_tools: Array<string>, };
+unsandboxed_tools: Array<string>,
+/**
+ * Opt-in references to host credentials. Only source names and
+ * destinations are persisted.
+ */
+credential_references: Array<SandboxCredentialReference>, };
 
 export type SandboxSelection = { "mode": "unsandboxed" } | { "mode": "sandboxed",
 /**
@@ -616,7 +631,11 @@ export type SandboxCredentialAccess = {
  */
 denied: Array<string>,
 /**
- * Credentials substituted by a broker. Brokerage is not available yet.
+ * Configured host-variable references and their destination sets.
+ */
+references: Array<SandboxCredentialReference>,
+/**
+ * Credentials substituted by a broker.
  */
 brokered: Array<string>, };
 

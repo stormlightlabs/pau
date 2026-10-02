@@ -1,6 +1,6 @@
 //! Shared launch fixtures for sandbox tests.
 
-use std::{fs, path::PathBuf};
+use std::{collections::BTreeMap, fs, path::PathBuf};
 
 use serde_json::Value;
 
@@ -61,6 +61,11 @@ pub(super) fn resolve(
     settings: &SandboxSettings,
 ) -> Result<ResolvedSandbox, SandboxError> {
     let executables = executables();
+    let credential_environment = settings
+        .credential_references
+        .iter()
+        .map(|reference| (reference.source.clone(), "fixture-secret".to_owned()))
+        .collect::<BTreeMap<_, _>>();
     resolve_sandbox(&SandboxLaunchInput {
         adapter,
         settings,
@@ -70,6 +75,7 @@ pub(super) fn resolve(
         executables: &executables,
         runtime_roots: &[fixture.home.join("runtime")],
         tool_path: "/usr/bin:/bin",
+        credential_environment: &credential_environment,
     })
 }
 

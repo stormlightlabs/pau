@@ -44,6 +44,7 @@ export type {
 export type {
 	EffectiveSandboxView,
 	SandboxAdapterName,
+	SandboxCredentialReferenceModel,
 	SandboxGrantsModel,
 	SandboxProfile,
 	SandboxSelectionModel,

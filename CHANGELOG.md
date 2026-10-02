@@ -2,8 +2,15 @@
 
 ## 2026-10-01
 
+### Claude bridge package
+
+- Fixed packaged bridge startup when its executable path contains a symbolic
+  link.
+
 ### Desktop
 
+- Sandbox profiles can now save tool credential references and their configured
+  destinations without storing credential values.
 - Sandboxed macOS tools now report blocked file and direct TCP attempts from
   tool-host processes and their descendants.
 - Sandboxed Linux tools now report blocked file and connection attempts from

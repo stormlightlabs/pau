@@ -16,7 +16,11 @@ export function selectionView(selection: SandboxSelection): SandboxSelectionMode
 			},
 			homeReadDeny: settings.home_read_deny,
 			shareClaudeTemp: settings.share_claude_temp,
-			unsandboxedTools: settings.unsandboxed_tools
+			unsandboxedTools: settings.unsandboxed_tools,
+			credentialReferences: settings.credential_references.map((reference) => ({
+				source: reference.source,
+				destinations: reference.destinations
+			}))
 		}
 	};
 }
@@ -36,7 +40,11 @@ export function selectionWire(selection: SandboxSelectionModel): SandboxSelectio
 			},
 			home_read_deny: settings.homeReadDeny,
 			share_claude_temp: settings.shareClaudeTemp,
-			unsandboxed_tools: settings.unsandboxedTools
+			unsandboxed_tools: settings.unsandboxedTools,
+			credential_references: settings.credentialReferences.map((reference) => ({
+				source: reference.source,
+				destinations: reference.destinations
+			}))
 		}
 	};
 }

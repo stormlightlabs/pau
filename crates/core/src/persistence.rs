@@ -964,13 +964,42 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(initial, SandboxSelectionState::default());
+        let mut sandbox_settings = crate::sandbox::SandboxSettings::workspace_write();
+        sandbox_settings.credential_references = vec![crate::sandbox::SandboxCredentialReference {
+            source: "PACKAGE_TOKEN".to_owned(),
+            destinations: vec!["registry.example.com".to_owned()],
+        }];
         let sandboxed = SandboxSelection::Sandboxed {
-            settings: crate::sandbox::SandboxSettings::workspace_write(),
+            settings: sandbox_settings,
         };
         sandboxes
             .set_workspace_default("workspace-1", &sandboxed, UPDATED_AT)
             .await
             .unwrap();
+        let stored_selection = database
+            .connection
+            .call(|connection| {
+                connection.query_row(
+                    "SELECT selection FROM workspace_sandbox_selection WHERE workspace_id = ?1",
+                    ["workspace-1"],
+                    |row| row.get::<_, String>(0),
+                )
+            })
+            .await
+            .unwrap();
+        let stored_selection: serde_json::Value = serde_json::from_str(&stored_selection).unwrap();
+        assert_eq!(
+            stored_selection["settings"]["credential_references"],
+            serde_json::json!([{
+                "source": "PACKAGE_TOKEN",
+                "destinations": ["registry.example.com"]
+            }])
+        );
+        assert!(
+            stored_selection["settings"]["credential_references"][0]
+                .get("value")
+                .is_none()
+        );
         sandboxes
             .set_session_override(
                 "workspace-1",

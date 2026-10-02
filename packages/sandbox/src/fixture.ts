@@ -31,6 +31,7 @@ export function sandboxSettings(
 		home_read_deny: false,
 		share_claude_temp: false,
 		unsandboxed_tools: [],
+		credential_references: [],
 		...overrides
 	};
 }

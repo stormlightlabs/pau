@@ -4,6 +4,9 @@ export type SandboxProfile = 'workspace-write' | 'read-only';
 /** Explicit access added to a profile. */
 export type SandboxGrantsModel = { domains: string[]; writableRoots: string[]; unixSockets: boolean };
 
+/** A host credential reference and its configured TLS destinations. */
+export type SandboxCredentialReferenceModel = { source: string; destinations: string[] };
+
 /** Profile, grants, and options for a sandboxed selection. */
 export type SandboxSettingsModel = {
 	profile: SandboxProfile;
@@ -11,6 +14,7 @@ export type SandboxSettingsModel = {
 	homeReadDeny: boolean;
 	shareClaudeTemp: boolean;
 	unsandboxedTools: string[];
+	credentialReferences: SandboxCredentialReferenceModel[];
 };
 
 /** Sandbox selection for agent tools. */
@@ -31,7 +35,7 @@ export type EffectiveSandboxView = {
 	writable: string[];
 	protected: string[];
 	network: { domains: string[]; localAddresses: string[]; unixSockets: boolean };
-	credentials: { denied: string[]; brokered: string[] };
+	credentials: { denied: string[]; references: SandboxCredentialReferenceModel[]; brokered: string[] };
 	environment: string[];
 	limits: string[];
 	sandboxedTools: string[];

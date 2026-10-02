@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Sandboxed macOS tools now report blocked file and direct TCP attempts from
+  tool-host processes and their descendants.
 - Sandboxed Linux tools now report blocked file and connection attempts from
   dynamically linked processes and their descendants.
 - Session transcripts now show file and network access blocked by the active

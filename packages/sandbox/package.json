@@ -8,8 +8,9 @@
 	"scripts": {
 		"build": "cargo build -p pau-sandbox-denial-preload",
 		"check": "tsc -p tsconfig.json",
-		"test": "node --test src/denials.test.ts src/preload.test.ts",
+		"test": "node --test src/denials.test.ts src/preload.test.ts src/seatbelt.test.ts",
 		"test:boundary": "cargo build -p pau-sandbox-denial-preload && node src/boundary.ts",
+		"test:seatbelt": "node src/seatbelt-smoke.ts",
 		"test:pi": "cargo build -p pau-sandbox-denial-preload && node src/pi-smoke.ts"
 	},
 	"engines": {

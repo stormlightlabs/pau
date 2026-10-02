@@ -10,6 +10,7 @@ import type { SandboxedMcpServer } from '@stormlightlabs/pau-protocol';
 import { SandboxUnavailableError, spawnSandboxed, startSandbox } from './launcher.ts';
 import type { SandboxPolicy } from './policy.ts';
 import { configurePreloadEnvironment, type PreloadDenial } from './preload.ts';
+import { SeatbeltDenialLog } from './seatbelt.ts';
 import type {
 	SandboxedToolName,
 	ToolHostRequest,
@@ -79,18 +80,21 @@ export class ToolHostClient {
 		}
 		await startSandbox(policy.runtimeConfig, env, policy.workspace);
 		const script = fileURLToPath(new URL('tool-host.ts', import.meta.url));
+		const commandId = 'pau-tool-host';
+		const seatbeltDenials = new SeatbeltDenialLog(commandId);
 		try {
 			const child = await spawnSandboxed(`exec ${process.execPath} ${script}`, {
 				env,
 				cwd: policy.workspace,
-				commandId: 'pau-tool-host',
+				commandId,
 				noProxy: policy.noProxy,
 				channel: true
 			});
-			const client = new ToolHostClient(child);
+			const client = new ToolHostClient(child, seatbeltDenials);
 			await client.ready;
 			return client;
 		} catch (error) {
+			seatbeltDenials.stop();
 			await SandboxManager.reset();
 			throw error;
 		}
@@ -99,6 +103,7 @@ export class ToolHostClient {
 	private readonly channel: Duplex;
 	private readonly pending = new Map<string, Pending>();
 	private readonly observedDenials: PreloadDenial[] = [];
+	private readonly seatbeltDenials: SeatbeltDenialLog;
 	private nextId = 0;
 	private exited = false;
 
@@ -106,8 +111,9 @@ export class ToolHostClient {
 	/** Process ID reported by the tool host from inside the sandbox. */
 	readonly ready: Promise<number>;
 
-	private constructor(child: ChildProcess) {
+	private constructor(child: ChildProcess, seatbeltDenials: SeatbeltDenialLog) {
 		this.child = child;
+		this.seatbeltDenials = seatbeltDenials;
 		this.channel = child.stdio[3] as Duplex;
 		let stderr = '';
 		child.stderr?.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
@@ -175,9 +181,11 @@ export class ToolHostClient {
 		return !this.exited;
 	}
 
-	/** Return and clear the bounded denial reports observed since the previous drain. */
-	takeDenials(): PreloadDenial[] {
-		return this.observedDenials.splice(0);
+	/** Return and clear the bounded native reports observed since the previous drain. */
+	async takeDenials(waitMilliseconds = 0): Promise<PreloadDenial[]> {
+		const linux = this.observedDenials.splice(0);
+		const macos = await this.seatbeltDenials.take(waitMilliseconds);
+		return [...linux, ...macos];
 	}
 
 	/** Run one built-in tool call inside the sandbox. */
@@ -254,6 +262,7 @@ export class ToolHostClient {
 	async stop(): Promise<void> {
 		this.channel.end();
 		if (!this.exited) this.child.kill('SIGTERM');
+		this.seatbeltDenials.stop();
 		await SandboxManager.reset();
 	}
 }

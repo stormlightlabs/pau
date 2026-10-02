@@ -21,19 +21,6 @@ Verification:
   comparison or the sandboxed-failure label.
 - Measure the library's overhead on a representative build and test command.
 
-### 2.86 macOS Seatbelt denial reports
-
-Status: planned
-Blocked by: none
-
-Read macOS Seatbelt denials and attribute them to the sandboxed process that
-caused them.
-
-Verification:
-
-- Cover denied file access and direct TCP from a sandboxed process and its
-  descendants on macOS.
-
 ### 2.46 Sandboxed credential references
 
 Status: planned

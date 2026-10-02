@@ -21,6 +21,7 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import { explainFailure } from './denials.ts';
 import { startMcpRelays } from './mcp-relay.ts';
+import type { PreloadDenial } from './preload.ts';
 import { SandboxSession } from './sandbox-session.ts';
 import { sandboxedToolNames, type SandboxedToolName } from './tool-host-protocol.ts';
 
@@ -72,12 +73,24 @@ export default function pauSandbox(pi: ExtensionAPI): void {
 						thinkingLevel: pi.getThinkingLevel()
 					}
 				};
+				let observed: PreloadDenial[] = [];
 				try {
-					return (await session.run((client) => client.executeTool(call, signal, onUpdate as never))) as never;
+					return (await session.run(async (client) => {
+						// Native reports belong to the session rather than a tool request.
+						// Discard reports completed before this call to avoid stale attribution.
+						await client.takeDenials();
+						try {
+							return await client.executeTool(call, signal, onUpdate as never);
+						} catch (error) {
+							// Unified logging is asynchronous. Wait only after a failed call.
+							observed = await client.takeDenials(500);
+							throw error;
+						}
+					})) as never;
 				} catch (error) {
 					// Tell the model what the sandbox blocked so it does not retry blindly.
 					const message = error instanceof Error ? error.message : String(error);
-					const { note } = explainFailure(session.policy, name, params, message);
+					const { note } = explainFailure(session.policy, name, params, message, observed);
 					if (!note) throw error;
 					throw new Error(`${message}\n\n${note}`, { cause: error });
 				}

@@ -255,8 +255,11 @@ errors. Pau owns its denial reporting and does not wait for upstream support:
   output. The kernel still enforces the policy; the library only reports.
   Statically linked programs bypass it, and a bypass loses the report, never
   the restriction.
-- macOS reads Seatbelt's denial log through sandbox-runtime once macOS is
-  verified.
+- On macOS, Pau reads Seatbelt denials from unified logging with the
+  attribution key that sandbox-runtime adds to each command. The report keeps
+  the process name and PID from Seatbelt, including for descendants. Fixture
+  runs cover denied file access and direct TCP from a sandboxed process and
+  its descendants.
 - A failure that reports a refused access but names no denied path is
   labelled as a sandboxed failure, and the model receives the same note.
 
@@ -297,8 +300,9 @@ Neovim in headless mode keeps the workspace-only write policy, so terminal
 editors can use the terminal profile. Graphical editors start servers and helper
 processes that Pau does not own and remain unsandboxed.
 
-The macOS Seatbelt profile and a real Ubuntu 24.04 host remain unverified. Do
-not claim equal isolation where platform guarantees differ.
+The complete macOS Seatbelt profile and a real Ubuntu 24.04 host remain
+unverified. macOS denial reporting is verified, but do not claim equal
+isolation where platform guarantees differ.
 
 Claude runs as its own sandbox host. For a sandboxed Claude session, Pau writes
 a Claude settings file with the same filesystem and network policy, requires

@@ -20,6 +20,8 @@ file. This package only reads that file. It contains:
   denied file and connection calls without changing the kernel result
 - `src/preload.ts`: loads bounded, versioned Linux denial reports from the
   tool host and its descendants
+- `src/seatbelt.ts`: reads attributed macOS Seatbelt denial reports from
+  unified logging
 - `src/denials.ts`: compares the paths a failed tool call names with the
   policy and tells the model what the sandbox blocked
 - `src/sandbox-session.ts`: applies policy file changes and restarts the tool
@@ -39,8 +41,8 @@ PAU_SANDBOX_POLICY_FILE=/path/to/session/host/policy.json \
 ## Run the tests
 
 `pnpm --filter @stormlightlabs/pau-sandbox test` checks denial reports against
-a policy from the Rust resolver and validates the preload report parser. It
-needs no sandbox executables.
+a policy from the Rust resolver and validates the Linux and macOS report
+parsers. It needs no sandbox executables.
 
 ## Run the fixtures
 
@@ -52,16 +54,19 @@ non-zero when a check fails. Neither calls a model provider or the network.
 
 ```sh
 pnpm --filter @stormlightlabs/pau-sandbox test:boundary
+pnpm --filter @stormlightlabs/pau-sandbox test:seatbelt
 pnpm --filter @stormlightlabs/pau-sandbox test:pi
 ```
 
 `test:boundary` runs file, credential, protected-configuration, symlink,
 network, socket, environment, subprocess, placeholder, cleanup, terminal, and
 startup-failure cases against each profile. It also checks live network
-changes and pinned executables. `test:pi` starts Pi in RPC mode with a scripted
-model and checks every built-in tool through the sandbox, including streaming,
-abort, timeout, truncation, tool host crashes, grant changes during a session,
-a contained stdio MCP server, and per-call approval.
+changes and pinned executables. `test:seatbelt` runs on macOS and checks denied
+file and direct TCP access from a sandboxed process and its descendants.
+`test:pi` starts Pi in RPC mode with a scripted model and checks every built-in
+tool through the sandbox, including streaming, abort, timeout, truncation,
+tool host crashes, grant changes during a session, a contained stdio MCP
+server, and per-call approval.
 
 See [backend contracts](../../dev/plan/backend.md#sandbox-runtime-selection)
 for the measured guarantees and known gaps.

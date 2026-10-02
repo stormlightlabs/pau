@@ -6,13 +6,12 @@ during development. Tauri is the shipped application in this deliverable.
 
 ## Process containment
 
-### 2.85 Linux denial preload library
+### 2.144 Linux denial preload verification
 
 Status: planned
 Blocked by: none
 
-Add a Rust preload library that reports denied file and connect calls from
-sandboxed Linux processes.
+Verify the denial preload library on a Linux host and record its overhead.
 
 Verification:
 

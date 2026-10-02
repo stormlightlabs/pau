@@ -23,6 +23,10 @@ changes.
 Run JavaScript tools through pnpm with `pnpm exec`, `pnpm --filter`, or a
 package script. Do not use `npx`.
 
+Do not start Docker Desktop or another container or virtual-machine runtime
+without explicit user approval. Use an already-running runtime only when the
+active unit requires it.
+
 Run heavyweight verification serially. Do not run `pnpm check`, browser tests,
 Storybook or website builds, and Cargo builds at the same time. Resource
 contention can cause false timeouts in process and interaction tests. Run a full

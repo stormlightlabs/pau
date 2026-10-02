@@ -7,8 +7,9 @@ import { fileURLToPath } from 'node:url';
 import { SandboxManager } from '@anthropic-ai/sandbox-runtime';
 import { getAgentDir, type AgentToolResult } from '@earendil-works/pi-coding-agent';
 import type { SandboxedMcpServer } from '@stormlightlabs/pau-protocol';
-import { spawnSandboxed, startSandbox } from './launcher.ts';
+import { SandboxUnavailableError, spawnSandboxed, startSandbox } from './launcher.ts';
 import type { SandboxPolicy } from './policy.ts';
+import { configurePreloadEnvironment, type PreloadDenial } from './preload.ts';
 import type {
 	SandboxedToolName,
 	ToolHostRequest,
@@ -71,6 +72,11 @@ export class ToolHostClient {
 			...prepareAgentDir(policy.tempDir, searchPath),
 			PAU_SANDBOX_PLACEHOLDERS: JSON.stringify(policy.placeholders)
 		};
+		try {
+			configurePreloadEnvironment(env, policy.tempDir);
+		} catch (error) {
+			throw new SandboxUnavailableError([error instanceof Error ? error.message : String(error)]);
+		}
 		await startSandbox(policy.runtimeConfig, env, policy.workspace);
 		const script = fileURLToPath(new URL('tool-host.ts', import.meta.url));
 		try {
@@ -92,6 +98,7 @@ export class ToolHostClient {
 
 	private readonly channel: Duplex;
 	private readonly pending = new Map<string, Pending>();
+	private readonly observedDenials: PreloadDenial[] = [];
 	private nextId = 0;
 	private exited = false;
 
@@ -115,6 +122,11 @@ export class ToolHostClient {
 		});
 		createInterface({ input: this.channel }).on('line', (line) => {
 			const response = JSON.parse(line) as ToolHostResponse;
+			if (response.kind === 'denial') {
+				this.observedDenials.push(...response.denials);
+				if (this.observedDenials.length > 256) this.observedDenials.splice(0, this.observedDenials.length - 256);
+				return;
+			}
 			this.pending.get(response.id)?.onResponse(response);
 		});
 		child.once('exit', (code, signal) => {
@@ -161,6 +173,11 @@ export class ToolHostClient {
 	/** Whether the tool host process is still running. */
 	get running(): boolean {
 		return !this.exited;
+	}
+
+	/** Return and clear the bounded denial reports observed since the previous drain. */
+	takeDenials(): PreloadDenial[] {
+		return this.observedDenials.splice(0);
 	}
 
 	/** Run one built-in tool call inside the sandbox. */

@@ -1,6 +1,7 @@
 import { existsSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import type { SandboxPolicy } from './policy.ts';
+import type { PreloadDenial } from './preload.ts';
 import type { SandboxedToolName } from './tool-host-protocol.ts';
 
 /** File operation that the sandbox blocked. */
@@ -152,7 +153,8 @@ export function explainFailure(
 	policy: SandboxPolicy,
 	tool: SandboxedToolName,
 	params: unknown,
-	message: string
+	message: string,
+	observed: PreloadDenial[] = []
 ): FailureReport {
 	const rules = new PolicyRules(policy);
 	const { workspace } = policy;
@@ -161,6 +163,16 @@ export function explainFailure(
 	if (typeof argument === 'string' && tool !== 'bash') candidates.unshift({ path: argument, line: message });
 
 	const denials: SandboxDenial[] = [];
+	for (const denial of observed) {
+		if (denial.kind !== 'file' || denial.operation === 'connect') continue;
+		const target = path.resolve(workspace, denial.target);
+		const paths = forms(target);
+		const reason =
+			denial.operation === 'read' ? (rules.unreadable(paths) ? 'unreadable' : undefined) : rules.unwritable(paths);
+		if (reason && denials.every((existing) => !(existing.path === target && existing.operation === denial.operation))) {
+			denials.push({ operation: denial.operation, path: target, reason });
+		}
+	}
 	for (const candidate of candidates) {
 		const refused = REFUSAL.test(candidate.line);
 		if (!refused && !MISSING.test(candidate.line)) continue;
@@ -185,10 +197,14 @@ export function explainFailure(
 		}
 	}
 
-	if (denials.length > 0) {
+	const connections = observed.filter((denial) => denial.operation === 'connect');
+	if (denials.length > 0 || connections.length > 0) {
 		const lines = denials.map(
 			(denial) => `- ${denial.operation} ${display(workspace, denial.path)}: ${REASON_TEXT[denial.reason]}`
 		);
+		for (const connection of connections) {
+			lines.push(`- connect ${connection.target}: the sandbox blocks this connection`);
+		}
 		return {
 			denials,
 			unexplained: false,

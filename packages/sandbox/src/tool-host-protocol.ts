@@ -1,6 +1,7 @@
 import type { Model } from '@earendil-works/pi-ai';
 import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
 import type { SandboxedMcpServer } from '@stormlightlabs/pau-protocol';
+import type { PreloadDenial } from './preload.ts';
 
 /** Pi built-in tools that the sandboxed host executes. */
 export type SandboxedToolName = 'read' | 'write' | 'edit' | 'bash' | 'grep' | 'find' | 'ls';
@@ -35,10 +36,13 @@ export type ToolHostRequestBody = WithoutId<ToolHostRequest>;
 
 /**
  * Responses from the tool host. Every tool, bash, and MCP request ends with
- * one terminal response. `data` carries base64 output.
+ * one terminal response. Unsolicited `denial` records belong to the session,
+ * not a request, because contained calls may run concurrently. `data` carries
+ * base64 output.
  */
 export type ToolHostResponse =
 	| { id: 'ready'; kind: 'ready'; pid: number }
+	| { id: 'denial'; kind: 'denial'; denials: PreloadDenial[] }
 	| { id: string; kind: 'update'; update: AgentToolResult<unknown> }
 	| { id: string; kind: 'data'; data: string }
 	| { id: string; kind: 'result'; result: AgentToolResult<unknown> }

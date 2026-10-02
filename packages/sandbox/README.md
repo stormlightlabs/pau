@@ -16,6 +16,10 @@ file. This package only reads that file. It contains:
   `grep`, `find`, and `ls` tools and operator `!` commands with calls to the
   tool host, blocks every other tool, and asks before each call to a tool the
   operator enabled outside the sandbox
+- `native/denial-preload`: builds the Linux `LD_PRELOAD` library that observes
+  denied file and connection calls without changing the kernel result
+- `src/preload.ts`: loads bounded, versioned Linux denial reports from the
+  tool host and its descendants
 - `src/denials.ts`: compares the paths a failed tool call names with the
   policy and tells the model what the sandbox blocked
 - `src/sandbox-session.ts`: applies policy file changes and restarts the tool
@@ -35,7 +39,8 @@ PAU_SANDBOX_POLICY_FILE=/path/to/session/host/policy.json \
 ## Run the tests
 
 `pnpm --filter @stormlightlabs/pau-sandbox test` checks denial reports against
-a policy from the Rust resolver. It needs no sandbox executables.
+a policy from the Rust resolver and validates the preload report parser. It
+needs no sandbox executables.
 
 ## Run the fixtures
 

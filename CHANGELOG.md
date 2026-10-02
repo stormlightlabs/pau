@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Sandboxed Linux tools now report blocked file and connection attempts from
+  dynamically linked processes and their descendants.
 - Session transcripts now show file and network access blocked by the active
   sandbox, including failures whose blocked access Pau cannot identify.
 

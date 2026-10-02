@@ -26,6 +26,7 @@ import {
 	type ExtensionContext
 } from '@earendil-works/pi-coding-agent';
 import type { SandboxedMcpServer } from '@stormlightlabs/pau-protocol';
+import { PreloadDenialLog } from './preload.ts';
 import type { ToolHostRequest, ToolHostResponse } from './tool-host-protocol.ts';
 
 const cwd = process.cwd();
@@ -44,6 +45,15 @@ const running = new Map<string, AbortController>();
 const servers = new Map<string, ChildProcessWithoutNullStreams>();
 /** Serializes grep calls, whose skipped-file report uses a process-wide variable. */
 const grepLock = { busy: false, waiters: [] as (() => void)[] };
+const denialLog = new PreloadDenialLog();
+const denialState = { offset: 0 };
+
+/** Forward each native report once without assigning it to a concurrent call. */
+function flushDenials(): void {
+	const drained = denialLog.drainAfter(denialState.offset);
+	denialState.offset = drained.nextOffset;
+	if (drained.denials.length > 0) send({ id: 'denial', kind: 'denial', denials: drained.denials });
+}
 
 async function acquireGrep(): Promise<void> {
 	if (!grepLock.busy) {
@@ -114,14 +124,21 @@ function openServer(id: string, server: SandboxedMcpServer): void {
 		stdio: ['pipe', 'pipe', 'pipe']
 	});
 	servers.set(id, child);
-	child.stdout.on('data', (chunk: Buffer) => send({ id, kind: 'data', data: chunk.toString('base64') }));
-	child.stderr.on('data', (chunk: Buffer) => process.stderr.write(`[mcp:${server.name}] ${chunk.toString()}`));
+	child.stdout.on('data', (chunk: Buffer) => {
+		flushDenials();
+		send({ id, kind: 'data', data: chunk.toString('base64') });
+	});
+	child.stderr.on('data', (chunk: Buffer) => {
+		flushDenials();
+		process.stderr.write(`[mcp:${server.name}] ${chunk.toString()}`);
+	});
 	child.once('error', (error) => {
 		servers.delete(id);
 		send({ id, kind: 'error', message: `MCP server ${server.name} failed to start: ${error.message}` });
 	});
 	child.once('exit', (code) => {
 		if (!servers.delete(id)) return;
+		flushDenials();
 		send({ id, kind: 'exit', exitCode: code });
 	});
 }
@@ -174,6 +191,7 @@ async function handle(request: ToolHostRequest): Promise<void> {
 					context
 				) as Promise<AgentToolResult<unknown>>;
 			const result = request.tool === 'grep' ? await runGrep(execute, request.id) : await execute();
+			flushDenials();
 			send({ id: request.id, kind: 'result', result });
 		} else {
 			const { exitCode } = await createLocalBashOperations().exec(request.command, cwd, {
@@ -181,9 +199,11 @@ async function handle(request: ToolHostRequest): Promise<void> {
 				signal: controller.signal,
 				timeout: request.timeout
 			});
+			flushDenials();
 			send({ id: request.id, kind: 'exit', exitCode });
 		}
 	} catch (error) {
+		flushDenials();
 		send({ id: request.id, kind: 'error', message: message(error) });
 	} finally {
 		running.delete(request.id);

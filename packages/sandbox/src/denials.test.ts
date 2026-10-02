@@ -135,6 +135,16 @@ test('follows home read-deny with workspace and secret exceptions', () => {
 	assert.equal(explainFailure(strict, 'read', { path: '.env.example' }, 'EACCES: permission denied').denials.length, 0);
 });
 
+test('uses preload observations when a program omits the denied target', () => {
+	const file = path.join(workspace, '.pi/settings.json');
+	const report = explainFailure(policy, 'bash', {}, 'Operation not permitted', [
+		{ operation: 'write', kind: 'file', target: file },
+		{ operation: 'connect', kind: 'tcp', target: '203.0.113.10:443' }
+	]);
+	assert.deepEqual(report.denials, [{ operation: 'write', path: file, reason: 'protected' }]);
+	assert.match(report.note, /- connect 203\.0\.113\.10:443: the sandbox blocks this connection/);
+});
+
 test('labels a refusal with no denied path as a sandboxed failure', () => {
 	const report = explainFailure(
 		policy,

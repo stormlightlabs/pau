@@ -6,10 +6,11 @@
 	"type": "module",
 	"license": "MIT OR Apache-2.0",
 	"scripts": {
+		"build": "cargo build -p pau-sandbox-denial-preload",
 		"check": "tsc -p tsconfig.json",
-		"test": "node --test src/denials.test.ts",
-		"test:boundary": "node src/boundary.ts",
-		"test:pi": "node src/pi-smoke.ts"
+		"test": "node --test src/denials.test.ts src/preload.test.ts",
+		"test:boundary": "cargo build -p pau-sandbox-denial-preload && node src/boundary.ts",
+		"test:pi": "cargo build -p pau-sandbox-denial-preload && node src/pi-smoke.ts"
 	},
 	"engines": {
 		"node": ">=24"

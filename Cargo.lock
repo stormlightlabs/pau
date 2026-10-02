@@ -2640,6 +2640,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pau-sandbox-denial-preload"
+version = "0.1.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "pau-server"
 version = "0.1.0"
 dependencies = [

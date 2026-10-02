@@ -1,0 +1,14 @@
+[package]
+name = "pau-sandbox-denial-preload"
+description = "Linux preload library for observing sandbox denials"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+libc.workspace = true

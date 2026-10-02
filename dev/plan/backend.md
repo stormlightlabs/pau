@@ -249,9 +249,12 @@ errors. Pau owns its denial reporting and does not wait for upstream support:
   the rule that blocked it.
 - A Rust preload library, loaded into sandboxed processes on Linux, reports
   file and connect calls that fail with `EACCES`, `EROFS`, or `EPERM` to the
-  tool host with the operation and path. The kernel still enforces the policy;
-  the library only reports. Statically linked programs bypass it, and a
-  bypass loses the report, never the restriction.
+  tool host with the operation and path. It also reports `ENETUNREACH` from a
+  direct TCP connection in Linux's empty network namespace. Reports use a
+  versioned per-session file capped at 1 MiB and remain separate from command
+  output. The kernel still enforces the policy; the library only reports.
+  Statically linked programs bypass it, and a bypass loses the report, never
+  the restriction.
 - macOS reads Seatbelt's denial log through sandbox-runtime once macOS is
   verified.
 - A failure that reports a refused access but names no denied path is

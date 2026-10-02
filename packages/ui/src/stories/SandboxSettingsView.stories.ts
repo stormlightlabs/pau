@@ -33,6 +33,37 @@ export const WithGrants: Story = {
 	args: { selection: sandboxFixtures.granted, effective: sandboxFixtures.grantedEffective }
 };
 
+export const EmptyCredentialReferences: Story = {
+	args: { selection: sandboxFixtures.workspaceWrite, effective: sandboxFixtures.effective }
+};
+
+export const WithCredentialReference: Story = {
+	args: { selection: sandboxFixtures.referenced, effective: sandboxFixtures.effective },
+	play: async ({ args, canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.clear(canvas.getByRole('textbox', { name: /Source environment variable/ }));
+		await userEvent.type(canvas.getByRole('textbox', { name: /Source environment variable/ }), 'NPM_TOKEN');
+		await userEvent.tab();
+		await expect(args.onChange).toHaveBeenCalled();
+		const latestSelection = args.onChange.mock.calls.at(-1)?.[0];
+		await expect(latestSelection?.mode).toBe('sandboxed');
+		if (latestSelection?.mode === 'sandboxed') {
+			await expect(latestSelection.settings.credentialReferences[0]?.source).toBe('NPM_TOKEN');
+		}
+	}
+};
+
+export const MissingCredentialSource: Story = {
+	args: { selection: sandboxFixtures.missingCredentialSource, error: '"" is not an environment variable name' }
+};
+
+export const InvalidCredentialDestination: Story = {
+	args: {
+		selection: sandboxFixtures.invalidCredentialDestination,
+		error: '"https://registry.example.com/token" is not a host or host:port'
+	}
+};
+
 export const Claude: Story = {
 	args: { selection: sandboxFixtures.workspaceWrite, effective: sandboxFixtures.claudeEffective }
 };
@@ -57,6 +88,6 @@ export const InvalidGrant: Story = {
 };
 
 export const Narrow: Story = {
-	args: { selection: sandboxFixtures.granted, effective: sandboxFixtures.grantedEffective },
+	args: { selection: sandboxFixtures.referenced, effective: sandboxFixtures.effective },
 	parameters: { viewport: { defaultViewport: 'narrow' } }
 };

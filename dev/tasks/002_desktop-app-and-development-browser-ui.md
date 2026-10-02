@@ -21,18 +21,6 @@ Verification:
   comparison or the sandboxed-failure label.
 - Measure the library's overhead on a representative build and test command.
 
-### 2.87 Credential reference settings
-
-Status: planned
-Blocked by: none
-
-Let the operator add, edit, and remove credential references and their
-destinations for a sandbox profile.
-
-Verification:
-
-- Component-test empty, valid, missing-source, and invalid-destination states.
-
 ### 2.88 Credential broker and sentinels
 
 Status: planned
@@ -68,7 +56,7 @@ Verification:
 ### 2.91 Brokered destination view
 
 Status: planned
-Blocked by: 2.87, 2.89
+Blocked by: 2.89
 
 Show which destinations receive each brokered credential in the effective
 sandbox profile. State that a permitted destination may exercise or reflect a

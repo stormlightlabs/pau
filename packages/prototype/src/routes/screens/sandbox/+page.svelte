@@ -6,6 +6,7 @@
 	let sandboxed = $state(true);
 	let homeReadDeny = $state(false);
 	let domains = $state('registry.npmjs.org');
+	let credentials = $state([{ source: 'PACKAGE_TOKEN', destinations: 'registry.npmjs.org' }]);
 
 	const access = [
 		['Writable', '~/work/pau · session temporary directory'],
@@ -70,6 +71,49 @@
 										>Recommended while a network destination is granted.</small
 									></span
 								></label>
+						</section>
+
+						<section class="border-b border-line py-5" aria-labelledby="credential-title">
+							<div class="flex items-center justify-between gap-3">
+								<div>
+									<h3 id="credential-title" class="m-0 text-sm">Credential references</h3>
+									<p class="m-0 mt-1 text-xs text-muted">
+										Pau saves variable names and TLS destinations, never values.
+									</p>
+								</div>
+								<button
+									class="app-button"
+									type="button"
+									onclick={() => (credentials = [...credentials, { source: '', destinations: '' }])}
+									>Add credential reference</button>
+							</div>
+							{#if credentials.length === 0}
+								<p class="m-0 mt-3 text-xs text-muted">No credential references.</p>
+							{:else}
+								<div class="mt-3 grid gap-3">
+									{#each credentials as credential, index (credential)}
+										<fieldset class="m-0 grid grid-cols-2 gap-3 border border-line p-3">
+											<legend class="px-1 text-xs font-semibold">Credential {index + 1}</legend>
+											<label class="grid gap-1 text-xs"
+												>Source environment variable<input
+													class="border border-line bg-canvas p-2 mock-code"
+													type="text"
+													bind:value={credential.source} /></label>
+											<label class="grid gap-1 text-xs"
+												>TLS destinations<textarea
+													class="border border-line bg-canvas p-2 mock-code"
+													rows="2"
+													bind:value={credential.destinations}></textarea
+												></label>
+											<button
+												class="app-button justify-self-start"
+												type="button"
+												onclick={() => (credentials = credentials.filter((_, itemIndex) => itemIndex !== index))}
+												>Remove credential</button>
+										</fieldset>
+									{/each}
+								</div>
+							{/if}
 						</section>
 
 						<section class="border-b border-line py-5" aria-labelledby="effective-title">

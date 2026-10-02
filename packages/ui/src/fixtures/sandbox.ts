@@ -20,6 +20,13 @@ const granted: SandboxSettingsModel = {
 	unsandboxedTools: ['web_search']
 };
 
+const referenced: SandboxSettingsModel = {
+	...workspaceWrite,
+	credentialReferences: [
+		{ source: 'PACKAGE_TOKEN', destinations: ['registry.example.com', '*.packages.example.com:443'] }
+	]
+};
+
 const effective: EffectiveSandboxView = {
 	adapter: 'pi',
 	platform: 'linux',
@@ -79,6 +86,18 @@ export const sandboxFixtures = {
 	unsandboxed: { mode: 'unsandboxed' } satisfies SandboxSelectionModel,
 	workspaceWrite: { mode: 'sandboxed', settings: workspaceWrite } satisfies SandboxSelectionModel,
 	granted: { mode: 'sandboxed', settings: granted } satisfies SandboxSelectionModel,
+	referenced: { mode: 'sandboxed', settings: referenced } satisfies SandboxSelectionModel,
+	missingCredentialSource: {
+		mode: 'sandboxed',
+		settings: { ...workspaceWrite, credentialReferences: [{ source: '', destinations: ['registry.example.com'] }] }
+	} satisfies SandboxSelectionModel,
+	invalidCredentialDestination: {
+		mode: 'sandboxed',
+		settings: {
+			...workspaceWrite,
+			credentialReferences: [{ source: 'PACKAGE_TOKEN', destinations: ['https://registry.example.com/token'] }]
+		}
+	} satisfies SandboxSelectionModel,
 	effective,
 	grantedEffective: {
 		...effective,

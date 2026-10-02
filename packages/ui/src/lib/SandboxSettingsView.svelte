@@ -71,6 +71,30 @@
 		if (settings) setSettings({ grants: { ...settings.grants, ...change } });
 	}
 
+	function addCredentialReference(): void {
+		if (!settings) return;
+		setSettings({ credentialReferences: [...settings.credentialReferences, { source: '', destinations: [] }] });
+	}
+
+	function updateCredentialReference(
+		index: number,
+		change: Partial<SandboxSettingsModel['credentialReferences'][number]>
+	): void {
+		if (!settings) return;
+		setSettings({
+			credentialReferences: settings.credentialReferences.map((reference, referenceIndex) =>
+				referenceIndex === index ? { ...reference, ...change } : reference
+			)
+		});
+	}
+
+	function removeCredentialReference(index: number): void {
+		if (!settings) return;
+		setSettings({
+			credentialReferences: settings.credentialReferences.filter((_, referenceIndex) => referenceIndex !== index)
+		});
+	}
+
 	function lines(value: string): string[] {
 		return value
 			.split('\n')
@@ -213,6 +237,47 @@
 					<small>Every sandbox that shares it can read and change the other's temporary files.</small>
 				</span>
 			</label>
+		</fieldset>
+
+		<fieldset class="sandbox__section sandbox__credentials">
+			<legend>Credential references</legend>
+			<p>
+				Name a variable in Pau's host environment and the TLS destinations that may receive it. Pau saves the variable
+				name, never its value.
+			</p>
+			{#if settings.credentialReferences.length === 0}
+				<p>No credential references.</p>
+			{:else}
+				{#each settings.credentialReferences as reference, index (index)}
+					<fieldset class="sandbox__credential">
+						<legend>Credential {index + 1}</legend>
+						<label>
+							<span>Source environment variable</span>
+							<small>For example, PACKAGE_TOKEN. Model provider credentials cannot be used.</small>
+							<input
+								type="text"
+								value={reference.source}
+								autocomplete="off"
+								spellcheck="false"
+								oninput={(event) => updateCredentialReference(index, { source: event.currentTarget.value.trim() })} />
+						</label>
+						<label>
+							<span>TLS destinations</span>
+							<small>One host, wildcard, or host and port per line. Do not include a URL scheme or path.</small>
+							<textarea
+								rows="2"
+								value={reference.destinations.join('\n')}
+								oninput={(event) =>
+									updateCredentialReference(index, { destinations: lines(event.currentTarget.value) })}></textarea>
+						</label>
+						<button class="quiet sandbox__remove" type="button" onclick={() => removeCredentialReference(index)}>
+							Remove credential
+						</button>
+					</fieldset>
+				{/each}
+			{/if}
+			<button class="quiet sandbox__add" type="button" onclick={addCredentialReference}
+				>Add credential reference</button>
 		</fieldset>
 
 		{#if effective}
@@ -450,13 +515,40 @@
 		display: block;
 	}
 
-	.sandbox__grants > label:not(.sandbox__check) {
+	.sandbox__grants > label:not(.sandbox__check),
+	.sandbox__credential label {
 		display: grid;
 		gap: 0.25rem;
 		font-size: 0.875rem;
 	}
 
-	textarea {
+	.sandbox__credentials > p:first-of-type {
+		max-width: 44rem;
+	}
+
+	.sandbox__credential {
+		padding: 0.875rem;
+		background: var(--workbench-canvas);
+		border: 1px solid var(--workbench-border);
+	}
+
+	.sandbox__credential legend {
+		float: none;
+		width: auto;
+		margin-bottom: 0.5rem;
+	}
+
+	.sandbox__remove,
+	.sandbox__add {
+		justify-self: start;
+	}
+
+	.sandbox__remove {
+		color: var(--workbench-unavailable-text);
+	}
+
+	textarea,
+	input[type='text'] {
 		width: 100%;
 		min-height: 2.5rem;
 		padding: 0.5rem;
@@ -466,6 +558,11 @@
 		border-radius: 0.25rem;
 		font: 0.8125rem/1.4 var(--workbench-mono, ui-monospace, monospace);
 		resize: vertical;
+	}
+
+	input[type='text'] {
+		min-height: 2.5rem;
+		resize: none;
 	}
 
 	textarea:focus-visible,

@@ -39,10 +39,65 @@ test('edits a profile and its grants before saving', async () => {
 			grants: { domains: ['registry.npmjs.org', '*.example.com'], writableRoots: [], unixSockets: false },
 			homeReadDeny: true,
 			shareClaudeTemp: false,
-			unsandboxedTools: ['web_search']
+			unsandboxedTools: ['web_search'],
+			credentialReferences: []
 		}
 	});
 	expect(onChange).toHaveBeenCalledTimes(5);
+});
+
+test('shows an empty credential-reference state', async () => {
+	await render(SandboxSettingsView, { selection: sandboxFixtures.workspaceWrite });
+
+	await expect.element(page.getByText('No credential references.')).toBeVisible();
+	await expect.element(page.getByRole('button', { name: 'Add credential reference' })).toBeVisible();
+});
+
+test('adds, edits, and removes valid credential references', async () => {
+	const onChange = vi.fn();
+	const onSave = vi.fn();
+	await render(SandboxSettingsView, { selection: sandboxFixtures.referenced, onChange, onSave });
+
+	await expect.element(page.getByRole('textbox', { name: /Source environment variable/ })).toHaveValue('PACKAGE_TOKEN');
+	await userEvent.fill(page.getByRole('textbox', { name: /Source environment variable/ }), 'NPM_TOKEN');
+	await userEvent.fill(page.getByRole('textbox', { name: /TLS destinations/ }), 'registry.npmjs.org\n*.npmjs.org:443');
+	await userEvent.tab();
+	await userEvent.click(page.getByRole('button', { name: 'Add credential reference' }));
+	await expect.element(page.getByRole('group', { name: 'Credential 2' })).toBeVisible();
+	await userEvent.click(page.getByRole('button', { name: 'Remove credential' }).last());
+	await userEvent.click(page.getByRole('button', { name: 'Save workspace default' }));
+
+	expect(onSave).toHaveBeenCalledWith({
+		mode: 'sandboxed',
+		settings: {
+			...sandboxFixtures.referenced.settings,
+			credentialReferences: [{ source: 'NPM_TOKEN', destinations: ['registry.npmjs.org', '*.npmjs.org:443'] }]
+		}
+	});
+});
+
+test('shows a missing credential source error without losing its destination', async () => {
+	await render(SandboxSettingsView, {
+		selection: sandboxFixtures.missingCredentialSource,
+		error: '"" is not an environment variable name'
+	});
+
+	await expect.element(page.getByRole('textbox', { name: /Source environment variable/ })).toHaveValue('');
+	await expect.element(page.getByRole('textbox', { name: /TLS destinations/ })).toHaveValue('registry.example.com');
+	await expect.element(page.getByRole('alert')).toHaveTextContent('is not an environment variable name');
+});
+
+test('shows an invalid credential destination without losing the reference', async () => {
+	await render(SandboxSettingsView, {
+		selection: sandboxFixtures.invalidCredentialDestination,
+		error: '"https://registry.example.com/token" is not a host or host:port'
+	});
+
+	await expect.element(page.getByRole('textbox', { name: /Source environment variable/ })).toHaveValue('PACKAGE_TOKEN');
+	await expect
+		.element(page.getByRole('textbox', { name: /TLS destinations/ }))
+		.toHaveValue('https://registry.example.com/token');
+	await expect.element(page.getByRole('alert')).toHaveTextContent('is not a host or host:port');
 });
 
 test('names the effective access, disabled tools, placeholders, and gaps', async () => {

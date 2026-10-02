@@ -225,9 +225,11 @@ unsandboxed, then the profile and explicit grants. Choosing a sandbox shows the
 effective access for the selected agent before anything runs: the enforcing
 mechanism and platform, writable and denied paths, protected configuration,
 network and socket access, credentials, environment, limits, the tools inside
-and outside the sandbox, disabled tools, placeholders, and known gaps. An
-unverified platform carries a warning, and a host without a sandbox disables
-the choice with the reason.
+and outside the sandbox, disabled tools, placeholders, and known gaps. The
+profile can hold credential references as a host environment variable name and
+one or more TLS destinations. Each reference stays editable and removable, and
+an empty list has a direct add action. An unverified platform carries a warning,
+and a host without a sandbox disables the choice with the reason.
 
 Permission prompts appear only as a note that they never widen the sandbox.
 Terminals and editors are named as unsandboxed so the setting does not read as

@@ -76,6 +76,17 @@ Network grants apply to a running session. A change to files or directories
 waits for the current tool call to finish, then restarts the sandbox before
 the next call.
 
+## Credential references
+
+A sandbox profile can save references to credentials in Pau's host environment.
+Each reference contains an environment variable name, such as `PACKAGE_TOKEN`,
+and the TLS destinations that may receive it. Enter each destination as a host,
+wildcard, or host and port without a URL scheme or path.
+
+Pau stores the variable name and destinations, never the variable's value. Model
+provider credentials cannot be referenced. Saving a reference does not put the
+value in the agent or tool environment.
+
 ## Pi
 
 Pi keeps its model credentials and provider traffic outside the sandbox. Pau

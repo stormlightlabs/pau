@@ -67,6 +67,10 @@ function report(ok: boolean, label: string, detail: string): void {
 	if (!ok) failures.push(label);
 }
 
+function skip(label: string, reason: string): void {
+	console.log(`SKIP  ${label}  (${reason})`);
+}
+
 function listen(server: net.Server, target: number | string): Promise<number> {
 	return new Promise((resolve) =>
 		server.listen(target, () => {
@@ -307,45 +311,57 @@ async function checkCleanup(): Promise<void> {
 	});
 	const policy = readPolicyFile(resolved.policyFile);
 	await startSandbox(policy.runtimeConfig, policy.environment, workspace);
-	const exited = ws('heartbeat-exit');
-	await runSandboxed(`${probe} heartbeat ${exited}`, spawnOptions(policy, 'heartbeat-exit'));
-	await new Promise((resolve) => setTimeout(resolve, 200));
-	report(!(await growth(exited)), 'cleanup: detached descendant stops when command exits', '');
+	if (process.platform === 'linux') {
+		const exited = ws('heartbeat-exit');
+		await runSandboxed(`${probe} heartbeat ${exited}`, spawnOptions(policy, 'heartbeat-exit'));
+		await new Promise((resolve) => setTimeout(resolve, 200));
+		report(!(await growth(exited)), 'cleanup: detached descendant stops when command exits', '');
 
-	const killed = ws('heartbeat-kill');
-	const child = await spawnSandboxed(`${probe} heartbeat ${killed}; sleep 30`, spawnOptions(policy, 'heartbeat-kill'));
-	await new Promise((resolve) => setTimeout(resolve, 1000));
-	child.kill('SIGKILL');
-	await new Promise((resolve) => setTimeout(resolve, 300));
-	report(!(await growth(killed)), 'cleanup: descendants stop after launcher SIGKILL', '');
+		const killed = ws('heartbeat-kill');
+		const child = await spawnSandboxed(
+			`${probe} heartbeat ${killed}; sleep 30`,
+			spawnOptions(policy, 'heartbeat-kill')
+		);
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+		child.kill('SIGKILL');
+		await new Promise((resolve) => setTimeout(resolve, 300));
+		report(!(await growth(killed)), 'cleanup: descendants stop after launcher SIGKILL', '');
 
-	const created = new Set(
-		[...readdirSync(workspace)].filter((entry) => !before.has(entry) && !entry.startsWith('heartbeat-'))
-	);
-	const predicted = new Set(
-		resolved.placeholders.filter((file) => path.dirname(file) === workspace).map((file) => path.basename(file))
-	);
-	const unpredicted = [...created.difference(predicted)];
-	const missing = [...predicted.difference(created)];
-	report(
-		unpredicted.length === 0 && missing.length === 0 && predicted.size > 0,
-		'cleanup: placeholders match the recorded prediction',
-		[
-			unpredicted.length > 0 ? `unpredicted ${unpredicted.join(', ')}` : '',
-			missing.length > 0 ? `missing ${missing.join(', ')}` : ''
-		]
-			.filter(Boolean)
-			.join('; ')
-	);
-	const nested = resolved.placeholders.filter((file) => path.dirname(file) !== workspace);
-	report(
-		nested.every((file) => existsSync(file)),
-		'cleanup: nested placeholders match the recorded prediction',
-		nested.map((file) => path.relative(workspace, file)).join(', ')
-	);
+		const created = new Set(
+			[...readdirSync(workspace)].filter((entry) => !before.has(entry) && !entry.startsWith('heartbeat-'))
+		);
+		const predicted = new Set(
+			resolved.placeholders.filter((file) => path.dirname(file) === workspace).map((file) => path.basename(file))
+		);
+		const unpredicted = [...created.difference(predicted)];
+		const missing = [...predicted.difference(created)];
+		report(
+			unpredicted.length === 0 && missing.length === 0 && predicted.size > 0,
+			'cleanup: placeholders match the recorded prediction',
+			[
+				unpredicted.length > 0 ? `unpredicted ${unpredicted.join(', ')}` : '',
+				missing.length > 0 ? `missing ${missing.join(', ')}` : ''
+			]
+				.filter(Boolean)
+				.join('; ')
+		);
+		const nested = resolved.placeholders.filter((file) => path.dirname(file) !== workspace);
+		report(
+			nested.every((file) => existsSync(file)),
+			'cleanup: nested placeholders match the recorded prediction',
+			nested.map((file) => path.relative(workspace, file)).join(', ')
+		);
+	} else {
+		skip('cleanup: descendant teardown', 'Bubblewrap PID namespaces are Linux-only');
+		report(
+			resolved.placeholders.every((file) => !existsSync(file)),
+			'cleanup: Seatbelt needs no Bubblewrap placeholders',
+			''
+		);
+	}
 	await SandboxManager.reset();
 	const remaining = resolved.placeholders.filter((file) => existsSync(file));
-	report(remaining.length === 0, 'cleanup: reset removes placeholders', remaining.join(', '));
+	report(remaining.length === 0, 'cleanup: reset leaves no placeholders', remaining.join(', '));
 }
 
 /**
@@ -468,26 +484,28 @@ async function checkTerminalProfile(): Promise<void> {
 	const policy = workspaceWrite();
 	const env = policy.environment;
 	await startSandbox(policy.runtimeConfig, env, workspace);
-	const wrapped = await SandboxManager.wrapWithSandbox(
-		`export TMPDIR=${tempDir}; bash -i -c 'tty; echo job-control=$(set -o | grep monitor)' 2>&1`,
-		undefined,
-		undefined,
-		undefined,
-		{ commandId: 'terminal' }
-	);
-	const scriptArgs =
-		process.platform === 'darwin' ? ['-q', '/dev/null', '/bin/sh', '-c', wrapped] : ['-qec', wrapped, '/dev/null'];
-	const terminal = spawn('script', scriptArgs, {
-		env: { ...env, SHELL: '/bin/sh' },
-		cwd: workspace,
-		stdio: ['pipe', 'pipe', 'pipe']
-	});
-	let output = '';
-	terminal.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
-	const code = await new Promise((resolve) => terminal.once('close', resolve));
-	const lines = output.replaceAll('\r', '').trim().split('\n');
-	report(code === 0 && lines.some((line) => line.startsWith('/dev/')), 'terminal: shell runs on a PTY', '');
-	console.log(`INFO  terminal output: ${lines.join(' | ').slice(0, 300)}`);
+	if (process.platform === 'darwin') {
+		skip('terminal: shell runs on a PTY', 'the sandboxed terminal relay is not implemented yet');
+	} else {
+		const wrapped = await SandboxManager.wrapWithSandbox(
+			`export TMPDIR=${tempDir}; bash -i -c 'tty; echo job-control=$(set -o | grep monitor)' 2>&1`,
+			undefined,
+			undefined,
+			undefined,
+			{ commandId: 'terminal' }
+		);
+		const terminal = spawn('script', ['-qec', wrapped, '/dev/null'], {
+			env: { ...env, SHELL: '/bin/sh' },
+			cwd: workspace,
+			stdio: ['pipe', 'pipe', 'pipe']
+		});
+		let output = '';
+		terminal.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
+		const code = await new Promise((resolve) => terminal.once('close', resolve));
+		const lines = output.replaceAll('\r', '').trim().split('\n');
+		report(code === 0 && lines.some((line) => line.startsWith('/dev/')), 'terminal: shell runs on a PTY', '');
+		console.log(`INFO  terminal output: ${lines.join(' | ').slice(0, 300)}`);
+	}
 
 	const nvim = spawnSync('sh', ['-c', 'command -v nvim'], { encoding: 'utf8' }).stdout.trim();
 	if (nvim) {

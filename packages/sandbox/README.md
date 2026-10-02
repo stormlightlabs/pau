@@ -61,7 +61,9 @@ pnpm --filter @stormlightlabs/pau-sandbox test:pi
 `test:boundary` runs file, credential, protected-configuration, symlink,
 network, socket, environment, subprocess, placeholder, cleanup, terminal, and
 startup-failure cases against each profile. It also checks live network
-changes and pinned executables. `test:seatbelt` runs on macOS and checks denied
+changes and pinned executables. Descendant teardown and Bubblewrap placeholder
+checks run only on Linux. The macOS PTY check remains skipped until the
+sandboxed terminal relay exists. `test:seatbelt` runs on macOS and checks denied
 file and direct TCP access from a sandboxed process and its descendants.
 `test:pi` starts Pi in RPC mode with a scripted model and checks every built-in
 tool through the sandbox, including streaming, abort, timeout, truncation,

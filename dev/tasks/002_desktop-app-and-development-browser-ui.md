@@ -21,24 +21,10 @@ Verification:
   comparison or the sandboxed-failure label.
 - Measure the library's overhead on a representative build and test command.
 
-### 2.88 Credential broker and sentinels
-
-Status: planned
-Blocked by: none
-
-Pass real values only to a dedicated broker process and place per-session
-sentinels in the tool host.
-
-Verification:
-
-- Cover per-session sentinel uniqueness and teardown.
-- Confirm the real value is absent from the worker environment, filesystem,
-  arguments, tool output, UI events, violation records, diagnostics, and logs.
-
 ### 2.89 Brokered credential substitution
 
 Status: planned
-Blocked by: 2.88
+Blocked by: none
 
 Substitute sentinels through the TLS-terminating egress proxy only for an
 explicit destination set. Reject unsupported protocols and trust arrangements

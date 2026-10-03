@@ -44,12 +44,10 @@ export const WithCredentialReference: Story = {
 		await userEvent.clear(canvas.getByRole('textbox', { name: /Source environment variable/ }));
 		await userEvent.type(canvas.getByRole('textbox', { name: /Source environment variable/ }), 'NPM_TOKEN');
 		await userEvent.tab();
-		await expect(args.onChange).toHaveBeenCalled();
-		const latestSelection = args.onChange.mock.calls.at(-1)?.[0];
-		await expect(latestSelection?.mode).toBe('sandboxed');
-		if (latestSelection?.mode === 'sandboxed') {
-			await expect(latestSelection.settings.credentialReferences[0]?.source).toBe('NPM_TOKEN');
-		}
+		const credential = expect.objectContaining({ source: 'NPM_TOKEN' });
+		const settings = expect.objectContaining({ credentialReferences: [credential] });
+		const selection = expect.objectContaining({ mode: 'sandboxed', settings });
+		await expect(args.onChange).toHaveBeenLastCalledWith(selection);
 	}
 };
 

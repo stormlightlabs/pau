@@ -23,6 +23,7 @@ import {
 	updateNetwork,
 	type SandboxSpawnOptions
 } from './launcher.ts';
+import { CredentialBroker } from './credential-broker.ts';
 import { readPolicyFile, resolvePolicy, type SandboxPolicy } from './policy.ts';
 
 type Outcome = 'allow' | 'deny';
@@ -475,6 +476,35 @@ async function checkStartupFailures(): Promise<void> {
 	await expectUnavailable('startup: restricted user namespaces', restricted);
 }
 
+/** Confirm a brokered source becomes only a per-session worker sentinel. */
+async function checkCredentialSentinels(): Promise<void> {
+	const settings = sandboxSettings('workspace-write');
+	settings.credential_references = [{ source: 'PAU_SEEDED_TOKEN', destinations: ['registry.example.com'] }];
+	const first = policyFor(settings);
+	const second = policyFor(settings);
+	const sentinel = first.environment.PAU_SEEDED_TOKEN;
+	if (!sentinel) throw new Error('resolver omitted the credential sentinel');
+	const broker = await CredentialBroker.start([
+		{ source: 'PAU_SEEDED_TOKEN', value: SECRET, sentinel, destinations: ['registry.example.com'] }
+	]);
+	try {
+		await startSandbox(first.runtimeConfig, first.environment, workspace);
+		const worker = await runSandboxed('printf %s "$PAU_SEEDED_TOKEN"', spawnOptions(first, 'credential-sentinel'));
+		report(
+			worker.code === 0 &&
+				worker.stdout === sentinel &&
+				sentinel !== second.environment.PAU_SEEDED_TOKEN &&
+				!worker.stdout.includes(SECRET) &&
+				!broker.diagnostics.includes(SECRET),
+			'credentials: worker receives a unique sentinel and no real value',
+			''
+		);
+	} finally {
+		await broker.stop();
+		await SandboxManager.reset();
+	}
+}
+
 /**
  * Operator terminals need a PTY. sandbox-runtime starts Bubblewrap with
  * `--new-session`, so this records what an interactive shell and a terminal
@@ -525,6 +555,7 @@ try {
 	for (const group of groups) await runGroup(group);
 	await checkCleanup();
 	await checkNetworkUpdate();
+	await checkCredentialSentinels();
 	await checkTerminalProfile();
 	await checkStartupFailures();
 	const summary = readFileSync(ws('README.md'), 'utf8') === 'workspace readme\n';

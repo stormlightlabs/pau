@@ -47,10 +47,11 @@ workspace: `.git/hooks`, `.git/config`, `.pi`, `.claude`, `.codex`,
 tool therefore cannot plant configuration that an unsandboxed agent or editor
 would load later.
 
-Only `HOME`, `LANG`, `PATH`, `TERM`, `TMPDIR`, and `PAU_SANDBOX` reach sandboxed
-tools. Provider keys and other variables in Pau's environment do not. Core
-dumps are disabled, and child processes stop when the sandbox ends. Pau does not
-cap CPU, memory, or process count.
+Only `HOME`, `LANG`, `PATH`, `TERM`, `TMPDIR`, `PAU_SANDBOX`, and configured
+credential source names reach sandboxed tools. Each credential source contains
+a sentinel instead of the real value. Provider keys and other variables in
+Pau's environment do not. Core dumps are disabled, and child processes stop
+when the sandbox ends. Pau does not cap CPU, memory, or process count.
 
 ## Grants
 
@@ -84,8 +85,14 @@ and the TLS destinations that may receive it. Enter each destination as a host,
 wildcard, or host and port without a URL scheme or path.
 
 Pau stores the variable name and destinations, never the variable's value. Model
-provider credentials cannot be referenced. Saving a reference does not put the
-value in the agent or tool environment.
+provider credentials cannot be referenced. For each session, the tool
+environment receives a unique sentinel under the source variable's name. Pau
+sends the real value only to a dedicated broker process through a private pipe,
+keeps it out of process arguments and logs, and clears the broker mapping when
+the session ends.
+
+The broker does not substitute sentinels into network requests. A request
+that sends one cannot authenticate.
 
 ## Pi
 

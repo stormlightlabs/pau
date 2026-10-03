@@ -9,6 +9,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use ts_rs::TS;
+use uuid::Uuid;
 
 use super::{
     SANDBOX_POLICY_VERSION, SANDBOXED_PI_TOOLS, SandboxAdapter, SandboxCredentialReference,
@@ -360,7 +361,7 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
         runtime_config["socatPath"] = json!(socat.path);
     }
 
-    let environment = BTreeMap::from([
+    let mut environment = BTreeMap::from([
         ("HOME".to_owned(), path_string(&home)),
         ("LANG".to_owned(), "C.UTF-8".to_owned()),
         ("PATH".to_owned(), input.tool_path.to_owned()),
@@ -368,6 +369,14 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
         ("TERM".to_owned(), "dumb".to_owned()),
         ("TMPDIR".to_owned(), path_string(&temp_dir)),
     ]);
+    for reference in &settings.credential_references {
+        // The broker receives the real value through its private startup pipe.
+        // Sandboxed workers receive only this unguessable per-session value.
+        environment.insert(
+            reference.source.clone(),
+            format!("pau_credential_{}", Uuid::new_v4().simple()),
+        );
+    }
     let placeholders = if settings.profile == SandboxProfileName::WorkspaceWrite {
         predict_placeholders(&workspace, &protected)
     } else {
@@ -407,7 +416,11 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
         credentials: SandboxCredentialAccess {
             denied: strings(&credentials),
             references: settings.credential_references.clone(),
-            brokered: Vec::new(),
+            brokered: settings
+                .credential_references
+                .iter()
+                .map(|reference| reference.source.clone())
+                .collect(),
         },
         environment: environment.keys().cloned().collect(),
         limits: vec![
@@ -712,7 +725,13 @@ mod tests {
         let effective = serde_json::to_string(&resolved.effective).unwrap();
         assert!(!policy.contains(VALUE));
         assert!(!effective.contains(VALUE));
-        assert!(!resolved.policy.environment.contains_key("PACKAGE_TOKEN"));
+        let sentinel = &resolved.policy.environment["PACKAGE_TOKEN"];
+        assert!(sentinel.starts_with("pau_credential_"));
+        assert_eq!(sentinel.len(), 47);
+        assert_eq!(resolved.effective.credentials.brokered, ["PACKAGE_TOKEN"]);
+
+        let other_session = resolve_with(&present).unwrap();
+        assert_ne!(sentinel, &other_session.policy.environment["PACKAGE_TOKEN"]);
     }
 
     #[test]

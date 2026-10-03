@@ -9,6 +9,9 @@
 
 ### Desktop
 
+- Sandboxed tools now receive a unique credential sentinel for each session,
+  while real values stay in a dedicated broker process and are cleared when the
+  session ends.
 - Sandbox profiles can now save tool credential references and their configured
   destinations without storing credential values.
 - Sandboxed macOS tools now report blocked file and direct TCP attempts from

@@ -12,6 +12,10 @@ file. This package only reads that file. It contains:
   as a network update or a tool host restart
 - `src/launcher.ts`: starts the sandbox, proves it with a no-op command, and
   refuses to run anything when that fails
+- `src/credential-broker.ts`: owns one trusted broker process per session and
+  sends real credential values to it through a private startup pipe
+- `src/credential-broker-process.ts`: retains credential mappings in memory and
+  exposes only per-session sentinels to the sandbox launcher
 - `src/pi-extension.ts`: replaces Pi's `read`, `bash`, `edit`, `write`,
   `grep`, `find`, and `ls` tools and operator `!` commands with calls to the
   tool host, blocks every other tool, and asks before each call to a tool the
@@ -48,8 +52,14 @@ contain the reference, not the value. Model provider credentials and MCP OAuth
 credentials remain in their native hosts and stores.
 
 Credential files remain unreadable in both initial cross-platform profiles.
-A reference does not inject its value into the tool host or a sandboxed
-process.
+For each reference, Pau places an unguessable per-session sentinel under the
+source variable's name in the tool environment. The real value crosses only
+the trusted broker's startup pipe and remains in that process's memory. Stopping
+the session clears the broker's mapping and ends the process.
+
+The sentinel is not usable as a credential by itself. A later egress-proxy
+layer substitutes it only for configured TLS destinations. Until that layer is
+active, requests that send the sentinel cannot authenticate.
 
 ## Run the tests
 

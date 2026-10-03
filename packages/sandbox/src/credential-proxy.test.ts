@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { SandboxManager } from '@anthropic-ai/sandbox-runtime';
+import { createSigv4Planner } from '@anthropic-ai/sandbox-runtime/dist/sandbox/credential-aws-pairs.js';
 import {
 	credentialInjectionHost,
 	credentialRequestFilter,
@@ -12,6 +13,7 @@ import {
 const sentinel = 'pau_credential_0123456789abcdef0123456789abcdef';
 const reference: CredentialProxyReference = {
 	source: 'PACKAGE_TOKEN',
+	shape: 'whole-value',
 	sentinel,
 	destinations: ['api.example.com:8443', '*.packages.example.com']
 };
@@ -107,5 +109,99 @@ test('substitutes common bearer-token headers only at configured hosts', () => {
 		}
 	} finally {
 		registry.clear();
+	}
+});
+
+test('extracts URL passwords and colon-pair credentials without exposing the complete value', () => {
+	const registry = SandboxManager.getSentinelRegistry();
+	registry.clear();
+	try {
+		const urlReference = { ...reference, source: 'DATABASE_URL', shape: 'url-password' as const };
+		const pairSentinel = 'pau_credential_33333333333333333333333333333333';
+		const pairReference = {
+			...reference,
+			source: 'REGISTRY_AUTH',
+			shape: 'colon-pair' as const,
+			sentinel: pairSentinel
+		};
+		const environment = registerCredentialSubstitution([urlReference, pairReference], {
+			DATABASE_URL: 'postgresql://builder:p%40ssword@database.example.com/app?sslmode=require',
+			REGISTRY_AUTH: 'builder:token:with:colons'
+		});
+
+		assert.equal(environment.DATABASE_URL, `postgresql://builder:${sentinel}@database.example.com/app?sslmode=require`);
+		assert.equal(environment.REGISTRY_AUTH, `builder:${pairSentinel}`);
+		assert.equal(registry.lookupReal(sentinel), 'p@ssword');
+		assert.equal(registry.lookupReal(pairSentinel), 'token:with:colons');
+	} finally {
+		registry.clear();
+	}
+});
+
+test('rejects structured mismatches and unknown shapes before registering any value', () => {
+	const registry = SandboxManager.getSentinelRegistry();
+	registry.clear();
+	const structured = { ...reference, source: 'DATABASE_URL', shape: 'url-password' as const };
+	assert.throws(
+		() => registerCredentialSubstitution([structured], { DATABASE_URL: 'not-a-url' }),
+		/does not match the selected url-password shape/
+	);
+	assert.equal(registry.size, 0);
+	assert.throws(
+		() =>
+			registerCredentialSubstitution([{ ...reference, shape: 'future-shape' } as unknown as CredentialProxyReference], {
+				PACKAGE_TOKEN: 'secret'
+			}),
+		/unknown credential shape/
+	);
+	assert.equal(registry.size, 0);
+});
+
+test('registers conventional whole-value AWS credentials for SigV4 re-signing', () => {
+	const registry = SandboxManager.getSentinelRegistry();
+	const awsRegistry = SandboxManager.getAwsPairRegistry();
+	registry.clear();
+	awsRegistry.clear();
+	const accessSentinel = 'pau_credential_11111111111111111111111111111111';
+	const secretSentinel = 'pau_credential_22222222222222222222222222222222';
+	try {
+		registerCredentialSubstitution(
+			[
+				{ ...reference, source: 'AWS_ACCESS_KEY_ID', sentinel: accessSentinel },
+				{ ...reference, source: 'AWS_SECRET_ACCESS_KEY', sentinel: secretSentinel }
+			],
+			{ AWS_ACCESS_KEY_ID: 'AKIAEXAMPLE', AWS_SECRET_ACCESS_KEY: 'aws-secret-example' }
+		);
+		assert.deepEqual(awsRegistry.lookup(accessSentinel), {
+			accessKeyIdSentinel: accessSentinel,
+			realAccessKeyId: 'AKIAEXAMPLE',
+			realSecretAccessKey: 'aws-secret-example',
+			injectHosts: ['api.example.com', '*.packages.example.com']
+		});
+
+		const planner = createSigv4Planner(awsRegistry, undefined, (host, pattern) => host === pattern);
+		const authorization =
+			`AWS4-HMAC-SHA256 Credential=${accessSentinel}/20261003/us-east-1/service/aws4_request, ` +
+			`SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=${'0'.repeat(64)}`;
+		const headers = { authorization, 'x-amz-content-sha256': 'UNSIGNED-PAYLOAD', 'x-amz-date': '20261003T120000Z' };
+		const plan = planner('GET', '/resource', headers, 'api.example.com');
+		assert.equal(plan?.action, 'resign');
+		if (plan?.action !== 'resign') throw new Error('expected SigV4 re-signing');
+		const forwarded = { ...headers };
+		plan.apply(forwarded, 'api.example.com', 'UNSIGNED-PAYLOAD');
+		assert.match(forwarded.authorization, /Credential=AKIAEXAMPLE\//);
+		assert.doesNotMatch(forwarded.authorization, new RegExp(accessSentinel));
+		assert.equal(planner('GET', '/resource', headers, 'other.example.com'), undefined);
+
+		const streaming = planner(
+			'PUT',
+			'/resource',
+			{ ...headers, 'x-amz-content-sha256': 'STREAMING-AWS4-HMAC-SHA256-PAYLOAD' },
+			'api.example.com'
+		);
+		assert.equal(streaming?.action, 'deny');
+	} finally {
+		registry.clear();
+		awsRegistry.clear();
 	}
 });

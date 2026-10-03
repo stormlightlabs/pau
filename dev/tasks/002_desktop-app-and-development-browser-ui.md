@@ -37,22 +37,6 @@ Verification:
 - Demonstrate that a permitted destination can reflect a brokered credential,
   and document that limitation.
 
-### 2.90 Structured credential values
-
-Status: planned
-Blocked by: none
-
-Extract and substitute structured environment values. Reject unknown
-credential shapes and structured-value mismatches instead of exposing raw
-values.
-
-Verification:
-
-- Cover fail-closed structured extraction and unknown credential shapes.
-- Exercise common structured environment values on Linux and macOS.
-- Test AWS SigV4 only if it remains in the selected dependency's reviewed
-  surface; otherwise label it unsupported.
-
 ## Permissions
 
 ### 2.44 Pi permission package spike

@@ -76,21 +76,20 @@ export class ToolHostClient {
 		};
 		try {
 			configurePreloadEnvironment(env, policy.tempDir);
-		} catch (error) {
-			throw new SandboxUnavailableError([error instanceof Error ? error.message : String(error)]);
-		}
-		await startSandbox(policy.runtimeConfig, env, policy.workspace);
-		try {
-			registerCredentialSubstitution(
-				policy.credentialReferences.map((reference) => ({
-					...reference,
-					sentinel: policy.environment[reference.source] ?? ''
-				}))
+			Object.assign(
+				env,
+				registerCredentialSubstitution(
+					policy.credentialReferences.map((reference) => ({
+						...reference,
+						sentinel: policy.environment[reference.source] ?? ''
+					}))
+				)
 			);
 		} catch (error) {
 			await SandboxManager.reset();
 			throw new SandboxUnavailableError([error instanceof Error ? error.message : String(error)]);
 		}
+		await startSandbox(policy.runtimeConfig, env, policy.workspace);
 		const script = fileURLToPath(new URL('tool-host.ts', import.meta.url));
 		const commandId = 'pau-tool-host';
 		const seatbeltDenials = new SeatbeltDenialLog(commandId);

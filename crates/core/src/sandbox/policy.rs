@@ -13,8 +13,8 @@ use uuid::Uuid;
 
 use super::{
     SANDBOX_POLICY_VERSION, SANDBOXED_PI_TOOLS, SandboxAdapter, SandboxCredentialReference,
-    SandboxError, SandboxExecutable, SandboxExecutables, SandboxProfileName, SandboxSelection,
-    SandboxSettings,
+    SandboxCredentialShape, SandboxError, SandboxExecutable, SandboxExecutables,
+    SandboxProfileName, SandboxSelection, SandboxSettings,
     executables::SandboxPlatform,
     network::{is_local_destination, proxy_exclusions},
     placeholders::{RUNTIME_DANGEROUS_DIRECTORIES, RUNTIME_DANGEROUS_FILES, predict_placeholders},
@@ -250,14 +250,17 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
         settings: settings.clone(),
     })?;
     for reference in &settings.credential_references {
-        if !input
-            .credential_environment
-            .get(&reference.source)
-            .is_some_and(|value| !value.is_empty())
-        {
+        let Some(value) = input.credential_environment.get(&reference.source) else {
             return Err(SandboxError::Invalid(format!(
                 "credential source {} is missing from Pau's host environment",
                 reference.source
+            )));
+        };
+        if !credential_shape_matches(value, reference.shape) {
+            return Err(SandboxError::Invalid(format!(
+                "credential source {} does not match the selected {} shape",
+                reference.source,
+                credential_shape_name(reference.shape)
             )));
         }
     }
@@ -492,6 +495,69 @@ pub fn write_private_file(path: &Path, contents: &[u8]) -> Result<(), SandboxErr
     Ok(())
 }
 
+fn credential_shape_name(shape: SandboxCredentialShape) -> &'static str {
+    match shape {
+        SandboxCredentialShape::WholeValue => "whole-value",
+        SandboxCredentialShape::UrlPassword => "URL password",
+        SandboxCredentialShape::ColonPair => "colon-pair",
+    }
+}
+
+fn credential_shape_matches(value: &str, shape: SandboxCredentialShape) -> bool {
+    match shape {
+        SandboxCredentialShape::WholeValue => !value.is_empty(),
+        SandboxCredentialShape::UrlPassword => {
+            let Some((scheme, rest)) = value.split_once("://") else {
+                return false;
+            };
+            if scheme.is_empty()
+                || !scheme.chars().enumerate().all(|(index, character)| {
+                    character.is_ascii_alphabetic()
+                        || (index > 0 && (character.is_ascii_digit() || "+-.".contains(character)))
+                })
+            {
+                return false;
+            }
+            let authority = rest
+                .split(['/', '?', '#'])
+                .next()
+                .expect("split always yields one entry");
+            let Some((userinfo, host)) = authority.rsplit_once('@') else {
+                return false;
+            };
+            let Some((user, password)) = userinfo.split_once(':') else {
+                return false;
+            };
+            !user.is_empty()
+                && !password.is_empty()
+                && !host.is_empty()
+                && valid_percent_encoding(password)
+        }
+        SandboxCredentialShape::ColonPair => value
+            .split_once(':')
+            .is_some_and(|(name, credential)| !name.is_empty() && !credential.is_empty()),
+    }
+}
+
+fn valid_percent_encoding(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            if index + 2 >= bytes.len()
+                || !bytes[index + 1].is_ascii_hexdigit()
+                || !bytes[index + 2].is_ascii_hexdigit()
+            {
+                return false;
+            }
+            index += 3;
+        } else {
+            index += 1;
+        }
+    }
+    true
+}
+
 fn create_private_directory(path: &Path) -> Result<(), SandboxError> {
     let mut builder = fs::DirBuilder::new();
     builder.recursive(true);
@@ -700,6 +766,7 @@ mod tests {
         let mut settings = SandboxSettings::workspace_write();
         settings.credential_references = vec![SandboxCredentialReference {
             source: "PACKAGE_TOKEN".to_owned(),
+            shape: SandboxCredentialShape::WholeValue,
             destinations: vec!["registry.example.com".to_owned()],
         }];
         let executables = crate::sandbox::fixtures::executables();
@@ -741,12 +808,69 @@ mod tests {
         assert!(sentinel.starts_with("pau_credential_"));
         assert_eq!(sentinel.len(), 47);
         assert_eq!(resolved.effective.credentials.brokered, ["PACKAGE_TOKEN"]);
-        assert_eq!(resolved.policy.credential_references, settings.credential_references);
-        assert_eq!(resolved.policy.runtime_config["network"]["tlsTerminate"], json!({}));
+        assert_eq!(
+            resolved.policy.credential_references,
+            settings.credential_references
+        );
+        assert_eq!(
+            resolved.policy.runtime_config["network"]["tlsTerminate"],
+            json!({})
+        );
         assert_eq!(resolved.policy.runtime_config["credentials"], json!({}));
 
         let other_session = resolve_with(&present).unwrap();
         assert_ne!(sentinel, &other_session.policy.environment["PACKAGE_TOKEN"]);
+    }
+
+    #[test]
+    fn rejects_structured_credential_shape_mismatches_without_serializing_values() {
+        const URL: &str = "postgresql://build:p%40ssword@database.example.com/app";
+        const PAIR: &str = "deploy:token:value";
+        let fixture = fixture();
+        let executables = crate::sandbox::fixtures::executables();
+        let mut settings = SandboxSettings::workspace_write();
+        let resolve_with = |settings: &SandboxSettings, value: &str| {
+            let credential_environment =
+                BTreeMap::from([("STRUCTURED_CREDENTIAL".to_owned(), value.to_owned())]);
+            resolve_sandbox(&SandboxLaunchInput {
+                adapter: SandboxAdapter::Pi,
+                settings,
+                workspace: &fixture.workspace,
+                home: &fixture.home,
+                session_directory: &fixture.session,
+                executables: &executables,
+                runtime_roots: &[],
+                tool_path: "/usr/bin:/bin",
+                credential_environment: &credential_environment,
+            })
+        };
+
+        for (shape, value) in [
+            (SandboxCredentialShape::UrlPassword, URL),
+            (SandboxCredentialShape::ColonPair, PAIR),
+        ] {
+            settings.credential_references = vec![SandboxCredentialReference {
+                source: "STRUCTURED_CREDENTIAL".to_owned(),
+                shape,
+                destinations: vec!["service.example.com".to_owned()],
+            }];
+            let resolved = resolve_with(&settings, value).unwrap();
+            assert!(
+                !serde_json::to_string(&resolved.policy)
+                    .unwrap()
+                    .contains(value)
+            );
+            assert!(resolve_with(&settings, "not-the-selected-shape").is_err());
+        }
+
+        settings.credential_references[0].shape = SandboxCredentialShape::UrlPassword;
+        for value in [
+            "postgresql://build@database.example.com/app",
+            "postgresql://build:@database.example.com/app",
+            "postgresql://build:bad%2@database.example.com/app",
+        ] {
+            assert!(resolve_with(&settings, value).is_err(), "{value}");
+        }
     }
 
     #[test]

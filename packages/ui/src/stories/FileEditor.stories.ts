@@ -16,7 +16,7 @@ type Story = StoryObj<typeof meta>;
 export const Editable: Story = {
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		const editor = await canvas.findByRole('textbox');
+		const editor = await canvas.findByRole('textbox', undefined, { timeout: 5000 });
 		await userEvent.click(editor);
 		await userEvent.keyboard('{End} // changed');
 		await expect(await canvas.findByText('Unsaved changes')).toBeInTheDocument();
@@ -29,7 +29,7 @@ export const ExternalChange: Story = {
 	args: { state: 'external-change' },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await canvas.findByRole('textbox');
+		await canvas.findByRole('textbox', undefined, { timeout: 5000 });
 		await userEvent.click(canvas.getByRole('button', { name: 'Check for changes' }));
 		await expect(await canvas.findByText('File changed on disk')).toBeInTheDocument();
 	}

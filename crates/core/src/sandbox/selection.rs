@@ -34,14 +34,31 @@ pub struct SandboxGrants {
     pub unix_sockets: bool,
 }
 
-/// A host environment variable selected for future credential brokerage.
+/// Credential value shapes that Pau can replace without exposing the value.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(rename_all = "kebab-case")]
+pub enum SandboxCredentialShape {
+    /// The complete environment value is the credential.
+    #[default]
+    WholeValue,
+    /// The password in a URL with `scheme://user:password@host` syntax.
+    UrlPassword,
+    /// The value after the first colon in a `name:credential` pair.
+    ColonPair,
+}
+
+/// A host environment variable selected for credential brokerage.
 ///
-/// The reference and its destination set are configuration. The variable's
+/// The reference, shape, and destination set are configuration. The variable's
 /// value is resolved at launch and is never part of this serializable type.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct SandboxCredentialReference {
     /// Name of the variable in Pau's host environment.
     pub source: String,
+    /// Shape used to extract the credential from the environment value.
+    #[serde(default)]
+    pub shape: SandboxCredentialShape,
     /// TLS destinations that may receive the credential.
     pub destinations: Vec<String>,
 }
@@ -298,6 +315,7 @@ mod tests {
         let mut settings = SandboxSettings::workspace_write();
         settings.credential_references = vec![SandboxCredentialReference {
             source: "PACKAGE_TOKEN".to_owned(),
+            shape: SandboxCredentialShape::WholeValue,
             destinations: vec!["registry.example.com:443".to_owned()],
         }];
         let selection = |settings: &SandboxSettings| SandboxSelection::Sandboxed {
@@ -326,6 +344,13 @@ mod tests {
             .credential_references
             .push(settings.credential_references[0].clone());
         assert!(validate_selection(&selection(&settings)).is_err());
+
+        let unknown_shape = serde_json::json!({
+            "source": "PACKAGE_TOKEN",
+            "shape": "future-shape",
+            "destinations": ["example.com"]
+        });
+        assert!(serde_json::from_value::<SandboxCredentialReference>(unknown_shape).is_err());
     }
 
     #[test]

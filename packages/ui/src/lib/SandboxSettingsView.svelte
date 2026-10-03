@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type {
 		EffectiveSandboxView,
+		SandboxCredentialShape,
 		SandboxProfile,
 		SandboxSelectionModel,
 		SandboxSettingsModel
@@ -73,7 +74,9 @@
 
 	function addCredentialReference(): void {
 		if (!settings) return;
-		setSettings({ credentialReferences: [...settings.credentialReferences, { source: '', destinations: [] }] });
+		setSettings({
+			credentialReferences: [...settings.credentialReferences, { source: '', shape: 'whole-value', destinations: [] }]
+		});
 	}
 
 	function updateCredentialReference(
@@ -109,6 +112,11 @@
 			detail: 'Writes the workspace and a session temporary directory.'
 		},
 		{ value: 'read-only', label: 'Read only', detail: 'Writes only the session temporary directory.' }
+	];
+	const credentialShapes: { value: SandboxCredentialShape; label: string }[] = [
+		{ value: 'whole-value', label: 'Whole value' },
+		{ value: 'url-password', label: 'Password in a URL' },
+		{ value: 'colon-pair', label: 'Credential after a colon' }
 	];
 </script>
 
@@ -242,8 +250,9 @@
 		<fieldset class="sandbox__section sandbox__credentials">
 			<legend>Credential references</legend>
 			<p>
-				Name a variable in Pau's host environment and the TLS destinations that may receive it. Pau saves the variable
-				name, never its value.
+				Name a variable in Pau's host environment, its value shape, and the TLS destinations that may receive it. Pau
+				saves the variable name, never its value. A value that does not match the selected shape blocks the sandbox from
+				starting.
 			</p>
 			{#if settings.credentialReferences.length === 0}
 				<p>No credential references.</p>
@@ -260,6 +269,18 @@
 								autocomplete="off"
 								spellcheck="false"
 								oninput={(event) => updateCredentialReference(index, { source: event.currentTarget.value.trim() })} />
+						</label>
+						<label>
+							<span>Value shape</span>
+							<small>Choose how Pau finds the credential without exposing the rest of the value.</small>
+							<select
+								value={reference.shape}
+								onchange={(event) =>
+									updateCredentialReference(index, { shape: event.currentTarget.value as SandboxCredentialShape })}>
+								{#each credentialShapes as shape (shape.value)}
+									<option value={shape.value}>{shape.label}</option>
+								{/each}
+							</select>
 						</label>
 						<label>
 							<span>TLS destinations</span>
@@ -548,6 +569,7 @@
 	}
 
 	textarea,
+	select,
 	input[type='text'] {
 		width: 100%;
 		min-height: 2.5rem;
@@ -560,12 +582,14 @@
 		resize: vertical;
 	}
 
+	select,
 	input[type='text'] {
 		min-height: 2.5rem;
 		resize: none;
 	}
 
 	textarea:focus-visible,
+	select:focus-visible,
 	input:focus-visible,
 	button:focus-visible {
 		outline: 3px solid var(--workbench-focus);

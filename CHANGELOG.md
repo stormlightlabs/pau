@@ -9,6 +9,9 @@
 
 ### Desktop
 
+- Sandbox credential references can now protect URL passwords and
+  colon-separated credentials while preserving the surrounding value.
+- Brokered AWS credentials now support destination-scoped SigV4 re-signing.
 - Brokered credential sentinels are now replaced in HTTPS request headers and
   bodies only for each credential's configured hosts and ports.
 - Sandboxed tools now receive a unique credential sentinel for each session,

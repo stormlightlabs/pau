@@ -6,7 +6,7 @@
 	let sandboxed = $state(true);
 	let homeReadDeny = $state(false);
 	let domains = $state('registry.npmjs.org');
-	let credentials = $state([{ source: 'PACKAGE_TOKEN', destinations: 'registry.npmjs.org' }]);
+	let credentials = $state([{ source: 'PACKAGE_TOKEN', shape: 'Whole value', destinations: 'registry.npmjs.org' }]);
 
 	const access = [
 		['Writable', '~/work/pau · session temporary directory'],
@@ -78,13 +78,14 @@
 								<div>
 									<h3 id="credential-title" class="m-0 text-sm">Credential references</h3>
 									<p class="m-0 mt-1 text-xs text-muted">
-										Pau saves variable names and TLS destinations, never values.
+										Pau saves variable names, value shapes, and TLS destinations, never values.
 									</p>
 								</div>
 								<button
 									class="app-button"
 									type="button"
-									onclick={() => (credentials = [...credentials, { source: '', destinations: '' }])}
+									onclick={() =>
+										(credentials = [...credentials, { source: '', shape: 'Whole value', destinations: '' }])}
 									>Add credential reference</button>
 							</div>
 							{#if credentials.length === 0}
@@ -92,13 +93,21 @@
 							{:else}
 								<div class="mt-3 grid gap-3">
 									{#each credentials as credential, index (credential)}
-										<fieldset class="m-0 grid grid-cols-2 gap-3 border border-line p-3">
+										<fieldset class="m-0 grid grid-cols-1 gap-3 border border-line p-3 md:grid-cols-3">
 											<legend class="px-1 text-xs font-semibold">Credential {index + 1}</legend>
 											<label class="grid gap-1 text-xs"
 												>Source environment variable<input
 													class="border border-line bg-canvas p-2 mock-code"
 													type="text"
 													bind:value={credential.source} /></label>
+											<label class="grid gap-1 text-xs"
+												>Value shape<select
+													class="border border-line bg-canvas p-2 mock-code"
+													bind:value={credential.shape}>
+													<option>Whole value</option>
+													<option>Password in a URL</option>
+													<option>Credential after a colon</option>
+												</select></label>
 											<label class="grid gap-1 text-xs"
 												>TLS destinations<textarea
 													class="border border-line bg-canvas p-2 mock-code"

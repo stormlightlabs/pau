@@ -23,7 +23,11 @@ const granted: SandboxSettingsModel = {
 const referenced: SandboxSettingsModel = {
 	...workspaceWrite,
 	credentialReferences: [
-		{ source: 'PACKAGE_TOKEN', destinations: ['registry.example.com', '*.packages.example.com:443'] }
+		{
+			source: 'PACKAGE_TOKEN',
+			shape: 'whole-value',
+			destinations: ['registry.example.com', '*.packages.example.com:443']
+		}
 	]
 };
 
@@ -87,15 +91,29 @@ export const sandboxFixtures = {
 	workspaceWrite: { mode: 'sandboxed', settings: workspaceWrite } satisfies SandboxSelectionModel,
 	granted: { mode: 'sandboxed', settings: granted } satisfies SandboxSelectionModel,
 	referenced: { mode: 'sandboxed', settings: referenced } satisfies SandboxSelectionModel,
+	structuredReferenced: {
+		mode: 'sandboxed',
+		settings: {
+			...referenced,
+			credentialReferences: [
+				{ source: 'DATABASE_URL', shape: 'url-password', destinations: ['database.example.com:5432'] }
+			]
+		}
+	} satisfies SandboxSelectionModel,
 	missingCredentialSource: {
 		mode: 'sandboxed',
-		settings: { ...workspaceWrite, credentialReferences: [{ source: '', destinations: ['registry.example.com'] }] }
+		settings: {
+			...workspaceWrite,
+			credentialReferences: [{ source: '', shape: 'whole-value', destinations: ['registry.example.com'] }]
+		}
 	} satisfies SandboxSelectionModel,
 	invalidCredentialDestination: {
 		mode: 'sandboxed',
 		settings: {
 			...workspaceWrite,
-			credentialReferences: [{ source: 'PACKAGE_TOKEN', destinations: ['https://registry.example.com/token'] }]
+			credentialReferences: [
+				{ source: 'PACKAGE_TOKEN', shape: 'whole-value', destinations: ['https://registry.example.com/token'] }
+			]
 		}
 	} satisfies SandboxSelectionModel,
 	effective,

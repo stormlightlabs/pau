@@ -12,7 +12,7 @@ import type {
 import { credentialRequestFilter } from './credential-proxy.ts';
 
 /** Policy file format this package reads. */
-const POLICY_VERSION = 2;
+const POLICY_VERSION = 3;
 
 /** A policy file after validation, with a typed runtime configuration. */
 export type SandboxPolicy = Omit<SandboxPolicyFile, 'runtimeConfig'> & { runtimeConfig: SandboxRuntimeConfig };

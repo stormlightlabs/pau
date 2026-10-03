@@ -60,6 +60,7 @@ test('adds, edits, and removes valid credential references', async () => {
 
 	await expect.element(page.getByRole('textbox', { name: /Source environment variable/ })).toHaveValue('PACKAGE_TOKEN');
 	await userEvent.fill(page.getByRole('textbox', { name: /Source environment variable/ }), 'NPM_TOKEN');
+	await userEvent.selectOptions(page.getByRole('combobox', { name: /Value shape/ }), 'url-password');
 	await userEvent.fill(page.getByRole('textbox', { name: /TLS destinations/ }), 'registry.npmjs.org\n*.npmjs.org:443');
 	await userEvent.tab();
 	await userEvent.click(page.getByRole('button', { name: 'Add credential reference' }));
@@ -71,7 +72,9 @@ test('adds, edits, and removes valid credential references', async () => {
 		mode: 'sandboxed',
 		settings: {
 			...sandboxFixtures.referenced.settings,
-			credentialReferences: [{ source: 'NPM_TOKEN', destinations: ['registry.npmjs.org', '*.npmjs.org:443'] }]
+			credentialReferences: [
+				{ source: 'NPM_TOKEN', shape: 'url-password', destinations: ['registry.npmjs.org', '*.npmjs.org:443'] }
+			]
 		}
 	});
 });

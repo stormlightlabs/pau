@@ -19,6 +19,7 @@ export function selectionView(selection: SandboxSelection): SandboxSelectionMode
 			unsandboxedTools: settings.unsandboxed_tools,
 			credentialReferences: settings.credential_references.map((reference) => ({
 				source: reference.source,
+				shape: reference.shape,
 				destinations: reference.destinations
 			}))
 		}
@@ -43,6 +44,7 @@ export function selectionWire(selection: SandboxSelectionModel): SandboxSelectio
 			unsandboxed_tools: settings.unsandboxedTools,
 			credential_references: settings.credentialReferences.map((reference) => ({
 				source: reference.source,
+				shape: reference.shape,
 				destinations: reference.destinations
 			}))
 		}

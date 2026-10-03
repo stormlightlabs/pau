@@ -4,8 +4,11 @@ export type SandboxProfile = 'workspace-write' | 'read-only';
 /** Explicit access added to a profile. */
 export type SandboxGrantsModel = { domains: string[]; writableRoots: string[]; unixSockets: boolean };
 
+/** Supported environment-value shapes for credential extraction. */
+export type SandboxCredentialShape = 'whole-value' | 'url-password' | 'colon-pair';
+
 /** A host credential reference and its configured TLS destinations. */
-export type SandboxCredentialReferenceModel = { source: string; destinations: string[] };
+export type SandboxCredentialReferenceModel = { source: string; shape: SandboxCredentialShape; destinations: string[] };
 
 /** Profile, grants, and options for a sandboxed selection. */
 export type SandboxSettingsModel = {

@@ -525,11 +525,17 @@ writable_roots: Array<string>,
  */
 unix_sockets: boolean, };
 
+export type SandboxCredentialShape = "whole-value" | "url-password" | "colon-pair";
+
 export type SandboxCredentialReference = {
 /**
  * Name of the variable in Pau's host environment.
  */
 source: string,
+/**
+ * Shape used to extract the credential from the environment value.
+ */
+shape: SandboxCredentialShape,
 /**
  * TLS destinations that may receive the credential.
  */

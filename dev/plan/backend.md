@@ -324,11 +324,20 @@ Its TLS-terminating proxy substitutes that sentinel in headers or request bodies
 only for the credential's explicit destination set. Require verified upstream
 TLS, keep plaintext injection disabled, and fail closed when certificate
 pinning, mTLS, an unsupported protocol, or an unrecognized credential shape
-prevents safe substitution. Use whole-value masking or reviewed structured
-formats with a fail-closed no-match policy; do not accept an operator regex that
-can silently expose the source. Credential files remain denied in the initial
-cross-platform profile because runtime file masking degrades to denial on macOS.
-Model and MCP OAuth credentials are never eligible for tool brokerage.
+prevents safe substitution. The reviewed environment shapes are a whole value,
+a password in `scheme://user:password@host` syntax, and everything after the
+first colon in a `name:credential` pair. Reject a structured value that does not
+match its selected shape. Do not accept an operator regex that can silently
+expose the source. Credential files remain denied in the initial cross-platform
+profile because runtime file masking degrades to denial on macOS. Model and MCP
+OAuth credentials are never eligible for tool brokerage.
+
+Whole-value `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` references use
+sandbox-runtime 0.0.77's reviewed AWS Signature Version 4 re-signing path. An
+optional whole-value `AWS_SESSION_TOKEN` joins the pair. Header-signed SigV4
+requests are re-signed only for the access key's destination set. Keep the
+runtime's fail-closed defaults for streaming signatures, presigned URLs, and
+SigV4a.
 
 This broker limits ambient disclosure; it does not make a credential harmless.
 A tool authorized for a destination can exercise that credential at the

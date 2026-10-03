@@ -31,13 +31,13 @@ pub use policy::{
     prepare_sandbox, resolve_sandbox, write_private_file,
 };
 pub use selection::{
-    SandboxAdapter, SandboxCredentialReference, SandboxGrants, SandboxPreviewRequest,
-    SandboxProfileName, SandboxSelection, SandboxSelectionState, SandboxSettings, WorkspaceSandbox,
-    validate_selection,
+    SandboxAdapter, SandboxCredentialReference, SandboxCredentialShape, SandboxGrants,
+    SandboxPreviewRequest, SandboxProfileName, SandboxSelection, SandboxSelectionState,
+    SandboxSettings, WorkspaceSandbox, validate_selection,
 };
 
 /// Current version of the policy file read by `packages/sandbox`.
-pub const SANDBOX_POLICY_VERSION: u32 = 2;
+pub const SANDBOX_POLICY_VERSION: u32 = 3;
 
 /// Pi built-in tools that run in the sandboxed tool host.
 pub const SANDBOXED_PI_TOOLS: [&str; 7] = ["read", "bash", "edit", "write", "grep", "find", "ls"];

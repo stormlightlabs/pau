@@ -15,7 +15,7 @@ test('round-trips selections between the wire and the settings view', () => {
 		mode: 'sandboxed',
 		settings: {
 			...sandboxFixtures.granted.settings,
-			credentialReferences: [{ source: 'PACKAGE_TOKEN', destinations: ['registry.example.com'] }]
+			credentialReferences: [{ source: 'PACKAGE_TOKEN', shape: 'url-password', destinations: ['registry.example.com'] }]
 		}
 	} satisfies SandboxSelectionModel;
 	expect(selectionView(selectionWire(referenced))).toEqual(referenced);
@@ -35,7 +35,7 @@ test('maps the effective profile without dropping restrictions', () => {
 		network: { domains: ['127.0.0.1:8080'], local_addresses: ['127.0.0.1:8080'], unix_sockets: false },
 		credentials: {
 			denied: ['/home/me/.ssh'],
-			references: [{ source: 'PACKAGE_TOKEN', destinations: ['registry.example.com'] }],
+			references: [{ source: 'PACKAGE_TOKEN', shape: 'colon-pair', destinations: ['registry.example.com'] }],
 			brokered: []
 		},
 		environment: ['HOME'],
@@ -49,7 +49,9 @@ test('maps the effective profile without dropping restrictions', () => {
 	expect(view.readable).toEqual({ homeDenied: true, allowed: ['/work'], denied: ['/home/me'] });
 	expect(view.network.localAddresses).toEqual(['127.0.0.1:8080']);
 	expect(view.executables[0]?.version).toBeUndefined();
-	expect(view.credentials.references).toEqual([{ source: 'PACKAGE_TOKEN', destinations: ['registry.example.com'] }]);
+	expect(view.credentials.references).toEqual([
+		{ source: 'PACKAGE_TOKEN', shape: 'colon-pair', destinations: ['registry.example.com'] }
+	]);
 	expect(view.unsandboxedTools).toEqual(['WebFetch']);
 	expect(view.knownGaps).toEqual(['gap']);
 });

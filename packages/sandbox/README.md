@@ -47,11 +47,20 @@ PAU_SANDBOX_POLICY_FILE=/path/to/session/host/policy.json \
 ## Credential references
 
 A sandbox profile can reference a tool credential by its host environment
-variable and list the TLS destinations that may receive it. Pau validates the
-variable name and confirms that the variable has a nonempty value when it
-resolves the profile. Persisted settings and the effective sandbox description
-contain the reference, not the value. Model provider credentials and MCP OAuth
-credentials remain in their native hosts and stores.
+variable and list the TLS destinations that may receive it. Each reference uses
+one reviewed value shape:
+
+- `whole-value` replaces the complete value.
+- `url-password` replaces the password in
+  `scheme://user:password@host` syntax.
+- `colon-pair` replaces everything after the first colon in a
+  `name:credential` pair.
+
+Pau rejects unknown shapes and values that do not match the selected shape. It
+never forwards the raw value as a fallback. Persisted settings and the effective
+sandbox description contain the reference and shape, not the value. Model
+provider credentials and MCP OAuth credentials remain in their native hosts and
+stores.
 
 Credential files remain unreadable in both initial cross-platform profiles.
 For each reference, Pau places an unguessable per-session sentinel under the
@@ -66,6 +75,14 @@ sandbox network policy, and verifies the upstream certificate. Plain HTTP,
 SOCKS-only traffic, excluded TLS hosts, certificate-pinned clients, and mTLS
 connections receive the sentinel or fail instead of receiving the real value.
 Pau never retries a failed proxy request outside the sandbox.
+
+When a profile brokers whole-value `AWS_ACCESS_KEY_ID` and
+`AWS_SECRET_ACCESS_KEY` variables, Pau registers the pair with sandbox-runtime's
+reviewed AWS Signature Version 4 (SigV4) re-signing path. An optional brokered
+`AWS_SESSION_TOKEN` joins the pair. Header-signed SigV4 requests are re-signed
+only for the access key's configured destinations. Streaming signatures,
+presigned URLs, and SigV4a fail closed because Pau keeps sandbox-runtime's
+default denial policy for those forms.
 
 ## Run the tests
 

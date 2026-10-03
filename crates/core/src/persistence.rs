@@ -967,6 +967,7 @@ mod tests {
         let mut sandbox_settings = crate::sandbox::SandboxSettings::workspace_write();
         sandbox_settings.credential_references = vec![crate::sandbox::SandboxCredentialReference {
             source: "PACKAGE_TOKEN".to_owned(),
+            shape: crate::sandbox::SandboxCredentialShape::WholeValue,
             destinations: vec!["registry.example.com".to_owned()],
         }];
         let sandboxed = SandboxSelection::Sandboxed {
@@ -992,6 +993,7 @@ mod tests {
             stored_selection["settings"]["credential_references"],
             serde_json::json!([{
                 "source": "PACKAGE_TOKEN",
+                "shape": "whole-value",
                 "destinations": ["registry.example.com"]
             }])
         );

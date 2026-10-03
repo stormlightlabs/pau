@@ -51,6 +51,19 @@ export const WithCredentialReference: Story = {
 	}
 };
 
+export const StructuredCredentialReference: Story = {
+	args: { selection: sandboxFixtures.structuredReferenced, effective: sandboxFixtures.effective },
+	play: async ({ args, canvasElement }) => {
+		const canvas = within(canvasElement);
+		const shape = canvas.getByRole('combobox', { name: /Value shape/ });
+		await expect(shape).toHaveValue('url-password');
+		await userEvent.selectOptions(shape, 'colon-pair');
+		const credential = expect.objectContaining({ source: 'DATABASE_URL', shape: 'colon-pair' });
+		const settings = expect.objectContaining({ credentialReferences: [credential] });
+		await expect(args.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ settings }));
+	}
+};
+
 export const MissingCredentialSource: Story = {
 	args: { selection: sandboxFixtures.missingCredentialSource, error: '"" is not an environment variable name' }
 };

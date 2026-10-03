@@ -24,6 +24,7 @@ import {
 	type SandboxSpawnOptions
 } from './launcher.ts';
 import { CredentialBroker } from './credential-broker.ts';
+import { registerCredentialSubstitution } from './credential-proxy.ts';
 import { readPolicyFile, resolvePolicy, type SandboxPolicy } from './policy.ts';
 
 type Outcome = 'allow' | 'deny';
@@ -476,27 +477,62 @@ async function checkStartupFailures(): Promise<void> {
 	await expectUnavailable('startup: restricted user namespaces', restricted);
 }
 
-/** Confirm a brokered source becomes only a per-session worker sentinel. */
+/** Confirm brokered whole and structured values become only worker sentinels. */
 async function checkCredentialSentinels(): Promise<void> {
 	const settings = sandboxSettings('workspace-write');
-	settings.credential_references = [{ source: 'PAU_SEEDED_TOKEN', destinations: ['registry.example.com'] }];
-	const first = policyFor(settings);
-	const second = policyFor(settings);
+	settings.credential_references = [
+		{ source: 'PAU_SEEDED_TOKEN', shape: 'whole-value', destinations: ['registry.example.com'] },
+		{ source: 'PAU_DATABASE_URL', shape: 'url-password', destinations: ['database.example.com'] },
+		{ source: 'PAU_REGISTRY_AUTH', shape: 'colon-pair', destinations: ['registry.example.com'] }
+	];
+	const hostEnvironment = {
+		...process.env,
+		PAU_SEEDED_TOKEN: SECRET,
+		PAU_DATABASE_URL: `postgresql://builder:${SECRET}@database.example.com/app`,
+		PAU_REGISTRY_AUTH: `builder:${SECRET}`
+	};
+	const first = policyFor(settings, hostEnvironment);
+	const second = policyFor(settings, hostEnvironment);
 	const sentinel = first.environment.PAU_SEEDED_TOKEN;
-	if (!sentinel) throw new Error('resolver omitted the credential sentinel');
+	const urlSentinel = first.environment.PAU_DATABASE_URL;
+	const pairSentinel = first.environment.PAU_REGISTRY_AUTH;
+	if (!sentinel || !urlSentinel || !pairSentinel) throw new Error('resolver omitted a credential sentinel');
 	const broker = await CredentialBroker.start([
 		{ source: 'PAU_SEEDED_TOKEN', value: SECRET, sentinel, destinations: ['registry.example.com'] }
 	]);
 	try {
+		const sentinels: Record<string, string> = {
+			PAU_SEEDED_TOKEN: sentinel,
+			PAU_DATABASE_URL: urlSentinel,
+			PAU_REGISTRY_AUTH: pairSentinel
+		};
+		Object.assign(
+			first.environment,
+			registerCredentialSubstitution(
+				settings.credential_references.map((reference) => ({
+					...reference,
+					sentinel: sentinels[reference.source] ?? ''
+				})),
+				hostEnvironment
+			)
+		);
 		await startSandbox(first.runtimeConfig, first.environment, workspace);
-		const worker = await runSandboxed('printf %s "$PAU_SEEDED_TOKEN"', spawnOptions(first, 'credential-sentinel'));
+		const worker = await runSandboxed(
+			'printf "%s\n%s\n%s" "$PAU_SEEDED_TOKEN" "$PAU_DATABASE_URL" "$PAU_REGISTRY_AUTH"',
+			spawnOptions(first, 'credential-sentinel')
+		);
+		const expected = [
+			sentinel,
+			`postgresql://builder:${urlSentinel}@database.example.com/app`,
+			`builder:${pairSentinel}`
+		].join('\n');
 		report(
 			worker.code === 0 &&
-				worker.stdout === sentinel &&
+				worker.stdout === expected &&
 				sentinel !== second.environment.PAU_SEEDED_TOKEN &&
 				!worker.stdout.includes(SECRET) &&
 				!broker.diagnostics.includes(SECRET),
-			'credentials: worker receives a unique sentinel and no real value',
+			'credentials: worker receives shaped, unique sentinels and no real value',
 			''
 		);
 	} finally {

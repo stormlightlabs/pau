@@ -16,6 +16,8 @@ file. This package only reads that file. It contains:
   sends real credential values to it through a private startup pipe
 - `src/credential-broker-process.ts`: retains credential mappings in memory and
   exposes only per-session sentinels to the sandbox launcher
+- `src/credential-proxy.ts`: limits each sentinel to its configured TLS hosts
+  and ports, then registers it with sandbox-runtime's terminating proxy
 - `src/pi-extension.ts`: replaces Pi's `read`, `bash`, `edit`, `write`,
   `grep`, `find`, and `ls` tools and operator `!` commands with calls to the
   tool host, blocks every other tool, and asks before each call to a tool the
@@ -57,15 +59,20 @@ source variable's name in the tool environment. The real value crosses only
 the trusted broker's startup pipe and remains in that process's memory. Stopping
 the session clears the broker's mapping and ends the process.
 
-The sentinel is not usable as a credential by itself. A later egress-proxy
-layer substitutes it only for configured TLS destinations. Until that layer is
-active, requests that send the sentinel cannot authenticate.
+The sentinel is not usable as a credential by itself. The egress proxy
+substitutes it in request headers and bodies only after it terminates TLS,
+checks the configured host and port, resolves the destination through the
+sandbox network policy, and verifies the upstream certificate. Plain HTTP,
+SOCKS-only traffic, excluded TLS hosts, certificate-pinned clients, and mTLS
+connections receive the sentinel or fail instead of receiving the real value.
+Pau never retries a failed proxy request outside the sandbox.
 
 ## Run the tests
 
-`pnpm --filter @stormlightlabs/pau-sandbox test` checks denial reports against
-a policy from the Rust resolver and validates the Linux and macOS report
-parsers. It needs no sandbox executables.
+`pnpm --filter @stormlightlabs/pau-sandbox test` checks credential destination
+matching and substitution, denial reports against a policy from the Rust
+resolver, and the Linux and macOS report parsers. It needs no sandbox
+executables.
 
 ## Run the fixtures
 

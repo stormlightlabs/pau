@@ -91,8 +91,12 @@ sends the real value only to a dedicated broker process through a private pipe,
 keeps it out of process arguments and logs, and clears the broker mapping when
 the session ends.
 
-The broker does not substitute sentinels into network requests. A request
-that sends one cannot authenticate.
+Pau substitutes a sentinel in request headers or bodies only when the request
+uses the sandbox's TLS-terminating proxy and its host and port match that
+credential's destination list. The proxy verifies the upstream certificate
+before it sends the real value. Plain HTTP, SOCKS-only traffic, excluded TLS
+hosts, certificate-pinned clients, and mTLS connections receive the sentinel
+or fail instead. Pau does not retry the request outside the sandbox.
 
 ## Pi
 

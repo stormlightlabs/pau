@@ -37,7 +37,7 @@ pub use selection::{
 };
 
 /// Current version of the policy file read by `packages/sandbox`.
-pub const SANDBOX_POLICY_VERSION: u32 = 1;
+pub const SANDBOX_POLICY_VERSION: u32 = 2;
 
 /// Pi built-in tools that run in the sandboxed tool host.
 pub const SANDBOXED_PI_TOOLS: [&str; 7] = ["read", "bash", "edit", "write", "grep", "find", "ls"];

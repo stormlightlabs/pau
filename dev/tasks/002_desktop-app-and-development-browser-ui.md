@@ -21,28 +21,10 @@ Verification:
   comparison or the sandboxed-failure label.
 - Measure the library's overhead on a representative build and test command.
 
-### 2.89 Brokered credential substitution
-
-Status: planned
-Blocked by: none
-
-Substitute sentinels through the TLS-terminating egress proxy only for an
-explicit destination set. Reject unsupported protocols and trust arrangements
-instead of exposing raw values.
-
-Verification:
-
-- Cover destination scoping, wildcard and port handling, TLS verification, DNS
-  and resolved-address checks, and header and request-body substitution.
-- Confirm plaintext HTTP, certificate-pinned and mTLS destinations, SOCKS-only
-  protocols, excluded TLS domains, and proxy failure deny injection without an
-  unsandboxed retry.
-- Exercise common bearer-token values on Linux and macOS.
-
 ### 2.91 Brokered destination view
 
 Status: planned
-Blocked by: 2.89
+Blocked by: none
 
 Show which destinations receive each brokered credential in the effective
 sandbox profile. State that a permitted destination may exercise or reflect a
@@ -58,7 +40,7 @@ Verification:
 ### 2.90 Structured credential values
 
 Status: planned
-Blocked by: 2.89
+Blocked by: none
 
 Extract and substitute structured environment values. Reject unknown
 credential shapes and structured-value mismatches instead of exposing raw

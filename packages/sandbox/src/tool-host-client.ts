@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { SandboxManager } from '@anthropic-ai/sandbox-runtime';
 import { getAgentDir, type AgentToolResult } from '@earendil-works/pi-coding-agent';
 import type { SandboxedMcpServer } from '@stormlightlabs/pau-protocol';
+import { registerCredentialSubstitution } from './credential-proxy.ts';
 import { SandboxUnavailableError, spawnSandboxed, startSandbox } from './launcher.ts';
 import type { SandboxPolicy } from './policy.ts';
 import { configurePreloadEnvironment, type PreloadDenial } from './preload.ts';
@@ -79,6 +80,17 @@ export class ToolHostClient {
 			throw new SandboxUnavailableError([error instanceof Error ? error.message : String(error)]);
 		}
 		await startSandbox(policy.runtimeConfig, env, policy.workspace);
+		try {
+			registerCredentialSubstitution(
+				policy.credentialReferences.map((reference) => ({
+					...reference,
+					sentinel: policy.environment[reference.source] ?? ''
+				}))
+			);
+		} catch (error) {
+			await SandboxManager.reset();
+			throw new SandboxUnavailableError([error instanceof Error ? error.message : String(error)]);
+		}
 		const script = fileURLToPath(new URL('tool-host.ts', import.meta.url));
 		const commandId = 'pau-tool-host';
 		const seatbeltDenials = new SeatbeltDenialLog(commandId);

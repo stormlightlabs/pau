@@ -17,6 +17,7 @@ export type {
 	HealthResponse,
 	SandboxAdapter,
 	SandboxCredentialAccess,
+	SandboxCredentialReference,
 	SandboxExecutable,
 	SandboxGrants,
 	SandboxNetworkAccess,

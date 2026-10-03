@@ -12,9 +12,9 @@ the startup failure seen with a simulated `bwrap`.
 
 Add a Nix-built Docker image that runs the `packages/sandbox` unit tests,
 boundary fixtures, and Pi fixtures under Bubblewrap, so Linux sandbox behavior
-can be checked from a macOS development machine. Use it to confirm the denial
-reports for failed tool calls and the ripgrep wrapper's skipped-file report on
-Linux.
+can be checked from a macOS development machine. Use it to confirm credential
+substitution with common bearer-token values, denial reports for failed tool
+calls, and the ripgrep wrapper's skipped-file report on Linux.
 
 ## Research backlog
 

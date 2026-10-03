@@ -772,6 +772,11 @@ noProxy: string,
  */
 unsandboxedTools: Array<string>,
 /**
+ * Credential sources and the TLS destinations where their sentinels may
+ * be substituted. This contains no credential values.
+ */
+credentialReferences: Array<SandboxCredentialReference>,
+/**
  * Stdio MCP servers that start as descendants of the tool host.
  */
 mcpServers: Array<SandboxedMcpServer>,

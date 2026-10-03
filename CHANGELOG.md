@@ -9,6 +9,8 @@
 
 ### Desktop
 
+- Brokered credential sentinels are now replaced in HTTPS request headers and
+  bodies only for each credential's configured hosts and ports.
 - Sandboxed tools now receive a unique credential sentinel for each session,
   while real values stay in a dedicated broker process and are cleared when the
   session ends.

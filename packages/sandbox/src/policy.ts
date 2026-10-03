@@ -9,9 +9,10 @@ import type {
 	SandboxPolicyFile,
 	SandboxSettings
 } from '@stormlightlabs/pau-protocol';
+import { credentialRequestFilter } from './credential-proxy.ts';
 
 /** Policy file format this package reads. */
-const POLICY_VERSION = 1;
+const POLICY_VERSION = 2;
 
 /** A policy file after validation, with a typed runtime configuration. */
 export type SandboxPolicy = Omit<SandboxPolicyFile, 'runtimeConfig'> & { runtimeConfig: SandboxRuntimeConfig };
@@ -26,7 +27,18 @@ export function readPolicyFile(file: string): SandboxPolicy {
 	if (policy.version !== POLICY_VERSION) {
 		throw new Error(`Unsupported sandbox policy version ${String(policy.version)}`);
 	}
-	return { ...policy, runtimeConfig: SandboxRuntimeConfigSchema.parse(policy.runtimeConfig) };
+	const runtimeConfig = SandboxRuntimeConfigSchema.parse(policy.runtimeConfig);
+	if (policy.credentialReferences.length > 0) {
+		const references = policy.credentialReferences.map((reference) => ({
+			...reference,
+			sentinel: policy.environment[reference.source] ?? ''
+		}));
+		if (references.some((reference) => !reference.sentinel)) {
+			throw new Error('Sandbox policy omitted a credential sentinel');
+		}
+		runtimeConfig.network.filterRequest = credentialRequestFilter(references);
+	}
+	return { ...policy, runtimeConfig };
 }
 
 /** How a policy change reaches a running session. */

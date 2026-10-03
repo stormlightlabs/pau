@@ -134,6 +134,9 @@ pub struct SandboxPolicyFile {
     pub no_proxy: String,
     /// Tools that may run outside the sandbox after a per-call approval.
     pub unsandboxed_tools: Vec<String>,
+    /// Credential sources and the TLS destinations where their sentinels may
+    /// be substituted. This contains no credential values.
+    pub credential_references: Vec<SandboxCredentialReference>,
     /// Stdio MCP servers that start as descendants of the tool host.
     pub mcp_servers: Vec<SandboxedMcpServer>,
     /// Session MCP configuration that lists only contained servers. When it
@@ -354,6 +357,14 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
         },
         "ripgrep": { "command": input.executables.ripgrep.path },
     });
+    if !settings.credential_references.is_empty() {
+        // Credential substitution is enabled only on sandbox-runtime's
+        // certificate-verifying TLS termination path. The TypeScript host
+        // registers Pau's existing per-session sentinels after the proxy
+        // starts; no real value enters this serializable configuration.
+        runtime_config["network"]["tlsTerminate"] = json!({});
+        runtime_config["credentials"] = json!({});
+    }
     if let (Some(bubblewrap), Some(socat)) =
         (&input.executables.bubblewrap, &input.executables.socat)
     {
@@ -442,6 +453,7 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
         environment,
         no_proxy: proxy_exclusions(&settings.grants.domains),
         unsandboxed_tools: settings.unsandboxed_tools.clone(),
+        credential_references: settings.credential_references.clone(),
         mcp_servers: Vec::new(),
         mcp_config: None,
         placeholders: strings(&placeholders),
@@ -729,6 +741,9 @@ mod tests {
         assert!(sentinel.starts_with("pau_credential_"));
         assert_eq!(sentinel.len(), 47);
         assert_eq!(resolved.effective.credentials.brokered, ["PACKAGE_TOKEN"]);
+        assert_eq!(resolved.policy.credential_references, settings.credential_references);
+        assert_eq!(resolved.policy.runtime_config["network"]["tlsTerminate"], json!({}));
+        assert_eq!(resolved.policy.runtime_config["credentials"], json!({}));
 
         let other_session = resolve_with(&present).unwrap();
         assert_ne!(sentinel, &other_session.policy.environment["PACKAGE_TOKEN"]);

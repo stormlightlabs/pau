@@ -74,7 +74,9 @@ checks the configured host and port, resolves the destination through the
 sandbox network policy, and verifies the upstream certificate. Plain HTTP,
 SOCKS-only traffic, excluded TLS hosts, certificate-pinned clients, and mTLS
 connections receive the sentinel or fail instead of receiving the real value.
-Pau never retries a failed proxy request outside the sandbox.
+Pau never retries a failed proxy request outside the sandbox. A permitted
+destination can use the credential on the operator's behalf or return it in a
+response that the sandboxed tool can read.
 
 When a profile brokers whole-value `AWS_ACCESS_KEY_ID` and
 `AWS_SECRET_ACCESS_KEY` variables, Pau registers the pair with sandbox-runtime's

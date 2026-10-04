@@ -112,6 +112,24 @@ test('substitutes common bearer-token headers only at configured hosts', () => {
 	}
 });
 
+test('a permitted destination can reflect a substituted credential to the sandboxed caller', async () => {
+	const registry = SandboxManager.getSentinelRegistry();
+	registry.clear();
+	try {
+		const value = 'reflected-example-token';
+		registerCredentialSubstitution([reference], { PACKAGE_TOKEN: value });
+		const forwarded = { authorization: `Bearer ${sentinel}` };
+		registry.substituteInHeaders(forwarded, 'api.example.com', (host, pattern) => host === pattern);
+
+		// The egress proxy controls where substitution happens. It cannot control
+		// what an authorized service does with the credential after receiving it.
+		const response = new Response(forwarded.authorization);
+		assert.equal(await response.text(), `Bearer ${value}`);
+	} finally {
+		registry.clear();
+	}
+});
+
 test('extracts URL passwords and colon-pair credentials without exposing the complete value', () => {
 	const registry = SandboxManager.getSentinelRegistry();
 	registry.clear();

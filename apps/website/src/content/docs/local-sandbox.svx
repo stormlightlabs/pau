@@ -98,6 +98,11 @@ before it sends the real value. Plain HTTP, SOCKS-only traffic, excluded TLS
 hosts, certificate-pinned clients, and mTLS connections receive the sentinel
 or fail instead. Pau does not retry the request outside the sandbox.
 
+A destination on the list can receive the real credential when a sandboxed
+tool sends its sentinel. The destination can use that credential on your behalf
+or return it in a response, where the sandboxed tool can read it. Grant only
+destinations you trust with the credential and the operations it authorizes.
+
 ## Pi
 
 Pi keeps its model credentials and provider traffic outside the sandbox. Pau

@@ -21,22 +21,6 @@ Verification:
   comparison or the sandboxed-failure label.
 - Measure the library's overhead on a representative build and test command.
 
-### 2.91 Brokered destination view
-
-Status: planned
-Blocked by: none
-
-Show which destinations receive each brokered credential in the effective
-sandbox profile. State that a permitted destination may exercise or reflect a
-brokered credential.
-
-Verification:
-
-- Component-test profiles with no references, one reference, and several
-  destinations.
-- Demonstrate that a permitted destination can reflect a brokered credential,
-  and document that limitation.
-
 ## Permissions
 
 ### 2.44 Pi permission package spike

@@ -38,7 +38,7 @@ export const EmptyCredentialReferences: Story = {
 };
 
 export const WithCredentialReference: Story = {
-	args: { selection: sandboxFixtures.referenced, effective: sandboxFixtures.effective },
+	args: { selection: sandboxFixtures.referenced, effective: sandboxFixtures.referencedEffective },
 	play: async ({ args, canvasElement }) => {
 		const canvas = within(canvasElement);
 		await userEvent.clear(canvas.getByRole('textbox', { name: /Source environment variable/ }));
@@ -48,6 +48,16 @@ export const WithCredentialReference: Story = {
 		const settings = expect.objectContaining({ credentialReferences: [credential] });
 		const selection = expect.objectContaining({ mode: 'sandboxed', settings });
 		await expect(args.onChange).toHaveBeenLastCalledWith(selection);
+	}
+};
+
+export const SeveralBrokeredDestinations: Story = {
+	args: { selection: sandboxFixtures.referenced, effective: sandboxFixtures.severalBrokeredDestinationsEffective },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByText('*.packages.example.com:443', { exact: true })).toBeVisible();
+		await expect(canvas.getByText('deploy.example.com', { exact: true })).toBeVisible();
+		await expect(canvas.getByText(/can use a brokered credential on your behalf or return it/)).toBeVisible();
 	}
 };
 

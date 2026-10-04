@@ -54,6 +54,11 @@
 	let settings = $derived(draft.mode === 'sandboxed' ? draft.settings : undefined);
 	let networkGranted = $derived((settings?.grants.domains.length ?? 0) > 0);
 	let agentLabel = $derived(effective?.adapter === 'claude' ? 'Claude' : 'Pi');
+	let brokeredCredentials = $derived(
+		effective?.credentials.references.filter((reference) =>
+			effective.credentials.brokered.includes(reference.source)
+		) ?? []
+	);
 
 	function update(next: SandboxSelectionModel): void {
 		draft = next;
@@ -358,9 +363,28 @@
 						{effective.network.unixSockets ? 'Every Unix socket is reachable.' : 'Unix sockets are blocked.'}
 					</dd>
 					<dt>Credentials</dt>
-					<dd>
-						{effective.credentials.denied.length} credential stores denied.
-						{effective.credentials.brokered.length === 0 ? 'No credential is brokered.' : ''}
+					<dd class="sandbox__brokered">
+						<p>{effective.credentials.denied.length} credential stores denied.</p>
+						{#if brokeredCredentials.length === 0}
+							<p>No credential is brokered.</p>
+						{:else}
+							<ul aria-label="Brokered credential destinations">
+								{#each brokeredCredentials as reference (reference.source)}
+									<li>
+										<code>{reference.source}</code>
+										<span>may be sent to</span>
+										<ul>
+											{#each reference.destinations as destination (destination)}
+												<li><code>{destination}</code></li>
+											{/each}
+										</ul>
+									</li>
+								{/each}
+							</ul>
+							<p class="warning">
+								A permitted destination can use a brokered credential on your behalf or return it in a response.
+							</p>
+						{/if}
 					</dd>
 					<dt>Environment</dt>
 					<dd>Only {effective.environment.join(', ')}</dd>
@@ -626,6 +650,24 @@
 	.warning,
 	.sandbox__error {
 		color: var(--workbench-unavailable-text);
+	}
+
+	.sandbox__brokered,
+	.sandbox__brokered > ul,
+	.sandbox__brokered > ul > li {
+		display: grid;
+		gap: 0.375rem;
+	}
+
+	.sandbox__brokered > ul > li {
+		padding-left: 0.75rem;
+		border-left: 2px solid var(--workbench-border);
+	}
+
+	.sandbox__brokered > ul > li > ul {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 0.75rem;
 	}
 
 	.sandbox__gaps ul {

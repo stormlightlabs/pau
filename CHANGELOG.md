@@ -9,6 +9,8 @@
 
 ### Desktop
 
+- Effective sandbox profiles now list the destinations for each brokered
+  credential and warn that those destinations can use or return it.
 - Sandbox credential references can now protect URL passwords and
   colon-separated credentials while preserving the surrounding value.
 - Brokered AWS credentials now support destination-scoped SigV4 re-signing.

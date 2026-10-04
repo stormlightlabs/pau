@@ -117,6 +117,29 @@ export const sandboxFixtures = {
 		}
 	} satisfies SandboxSelectionModel,
 	effective,
+	referencedEffective: {
+		...effective,
+		credentials: {
+			...effective.credentials,
+			references: [{ source: 'PACKAGE_TOKEN', shape: 'whole-value', destinations: ['registry.example.com'] }],
+			brokered: ['PACKAGE_TOKEN']
+		}
+	} satisfies EffectiveSandboxView,
+	severalBrokeredDestinationsEffective: {
+		...effective,
+		credentials: {
+			...effective.credentials,
+			references: [
+				{
+					source: 'PACKAGE_TOKEN',
+					shape: 'whole-value',
+					destinations: ['registry.example.com', '*.packages.example.com:443']
+				},
+				{ source: 'DEPLOY_TOKEN', shape: 'colon-pair', destinations: ['deploy.example.com'] }
+			],
+			brokered: ['PACKAGE_TOKEN', 'DEPLOY_TOKEN']
+		}
+	} satisfies EffectiveSandboxView,
 	grantedEffective: {
 		...effective,
 		readable: {

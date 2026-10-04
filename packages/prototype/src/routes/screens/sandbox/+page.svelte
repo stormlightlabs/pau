@@ -139,6 +139,20 @@
 									>{homeReadDeny
 										? 'Outside the home directory, plus the workspace'
 										: 'Everything except the denied paths'}</span>
+								<span class="text-muted">Credentials</span>
+								<div class="grid gap-2">
+									{#if credentials.length === 0}
+										<span>No credential is brokered.</span>
+									{:else}
+										{#each credentials as credential (credential)}
+											<span class="mock-code"
+												>{credential.source} may be sent to {credential.destinations || 'no destination'}</span>
+										{/each}
+										<p class="m-0 text-warning">
+											A permitted destination can use a brokered credential on your behalf or return it in a response.
+										</p>
+									{/if}
+								</div>
 							</div>
 						</section>
 

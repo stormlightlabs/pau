@@ -119,6 +119,35 @@ test('names the effective access, disabled tools, placeholders, and gaps', async
 	await expect.element(page.getByText('No credential is brokered.', { exact: false })).toBeVisible();
 });
 
+test('shows one brokered credential and its permitted destination', async () => {
+	await render(SandboxSettingsView, {
+		selection: sandboxFixtures.referenced,
+		effective: sandboxFixtures.referencedEffective
+	});
+
+	await expect.element(page.getByRole('list', { name: 'Brokered credential destinations' })).toBeVisible();
+	await expect.element(page.getByText('PACKAGE_TOKEN', { exact: true })).toBeVisible();
+	await expect.element(page.getByText('registry.example.com', { exact: true })).toBeVisible();
+	await expect.element(page.getByText(/can use a brokered credential on your behalf or return it/)).toBeVisible();
+});
+
+test('shows every destination for each brokered credential', async () => {
+	await render(SandboxSettingsView, {
+		selection: sandboxFixtures.referenced,
+		effective: sandboxFixtures.severalBrokeredDestinationsEffective
+	});
+
+	for (const value of [
+		'PACKAGE_TOKEN',
+		'registry.example.com',
+		'*.packages.example.com:443',
+		'DEPLOY_TOKEN',
+		'deploy.example.com'
+	]) {
+		await expect.element(page.getByText(value, { exact: true })).toBeVisible();
+	}
+});
+
 test('warns on an unverified platform and blocks the sandbox where none can start', async () => {
 	const { rerender } = await render(SandboxSettingsView, {
 		selection: sandboxFixtures.workspaceWrite,

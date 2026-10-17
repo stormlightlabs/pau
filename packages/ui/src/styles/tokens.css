@@ -1,0 +1,42 @@
+/*
+ * Theme-independent scale tokens. Names mirror the Scale collection in
+ * pau.fig: `space/1` becomes `--pau-space-1`, `text/xs` becomes `--pau-type-xs`,
+ * and `size/row-md` becomes `--pau-size-row-md`. Type uses `--pau-type-*`
+ * because `--pau-text` is the theme's text color. Colors and the UI font come
+ * from `themeCssProperties` because they change with the operator's choice.
+ *
+ * Spacing and type use rem so browser zoom and default font size scale them.
+ * No product text goes below `--pau-type-xs` (12px).
+ */
+@import './fonts.css';
+
+:root {
+	--pau-space-1: 0.25rem;
+	--pau-space-2: 0.5rem;
+	--pau-space-3: 0.75rem;
+	--pau-space-4: 1rem;
+	--pau-space-5: 1.5rem;
+	--pau-space-6: 2rem;
+
+	--pau-type-xs: 0.75rem;
+	--pau-type-sm: 0.8125rem;
+	--pau-type-md: 0.875rem;
+	--pau-type-lg: 1rem;
+	--pau-type-xl: 1.25rem;
+
+	--pau-radius-control: 3px;
+	--pau-radius-surface: 5px;
+	--pau-border-thin: 0.5px;
+
+	--pau-size-target-compact: 2rem;
+	--pau-size-target-touch: 2.75rem;
+	--pau-size-row-sm: 1.75rem;
+	--pau-size-row-md: 2rem;
+	--pau-size-row-lg: 2.25rem;
+	--pau-size-bar-height: 1.875rem;
+	--pau-size-rail-product: 3rem;
+	--pau-size-rail-context: 15.5rem;
+	--pau-size-rail-inspector: 19rem;
+
+	--pau-font-code: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}

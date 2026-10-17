@@ -73,10 +73,10 @@
 		bottom: 0.75rem;
 		z-index: 10;
 		margin: 0;
-		padding: 0.4rem 0.6rem;
+		padding: var(--pau-space-2) var(--pau-space-2);
 		color: var(--pau-text-muted);
 		background: var(--pau-canvas);
 		border: 1px solid var(--pau-border);
-		font: 0.6875rem var(--pau-font-ui);
+		font: var(--pau-type-xs) var(--pau-font-ui);
 	}
 </style>

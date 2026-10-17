@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../styles/tokens.css';
 	import '@xterm/xterm/css/xterm.css';
 	import { FitAddon } from '@xterm/addon-fit';
 	import { Unicode11Addon } from '@xterm/addon-unicode11';
@@ -146,6 +147,6 @@
 	/* Fit subtracts the terminal element's padding, not the container's. */
 	.terminal-view :global(.xterm) {
 		height: 100%;
-		padding: 0.5rem;
+		padding: var(--pau-space-2);
 	}
 </style>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../styles/tokens.css';
 	import type { Snippet } from 'svelte';
 
 	import type { ExtensionUiResponse, ExtensionUiState } from './types/session';
@@ -177,8 +178,8 @@
 <style>
 	.extension-ui__notifications {
 		display: grid;
-		gap: 0.35rem;
-		margin-bottom: 0.5rem;
+		gap: var(--pau-space-1);
+		margin-bottom: var(--pau-space-2);
 	}
 
 	.extension-ui__notification,
@@ -187,11 +188,11 @@
 	}
 
 	.extension-ui__notification {
-		padding: 0.55rem 0.7rem;
+		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--pau-text);
 		background: var(--pau-canvas);
 		border-inline-start: 2px solid var(--pau-info);
-		font-size: 0.8125rem;
+		font-size: var(--pau-type-sm);
 	}
 
 	.extension-ui__notification--warning {
@@ -203,12 +204,12 @@
 	}
 
 	.extension-ui__widget {
-		padding: 0.65rem 0.75rem;
+		padding: var(--pau-space-3) var(--pau-space-3);
 		color: var(--pau-text-muted);
 		background: var(--pau-canvas);
 		border: 1px solid var(--pau-border);
-		font-family: ui-monospace, monospace;
-		font-size: 0.75rem;
+		font-family: var(--pau-font-code);
+		font-size: var(--pau-type-xs);
 		line-height: 1.5;
 		white-space: pre-wrap;
 	}
@@ -216,12 +217,12 @@
 	.extension-ui__statuses {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.4rem 1rem;
-		padding: 0.4rem 0.65rem;
+		gap: var(--pau-space-2) var(--pau-space-4);
+		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--pau-text-muted);
 		background: var(--pau-canvas);
 		border-inline: 1px solid var(--pau-border);
-		font-size: 0.6875rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.extension-ui__statuses strong {
@@ -232,7 +233,7 @@
 	.extension-ui__dialog {
 		width: min(32rem, calc(100% - 2rem));
 		max-height: min(38rem, calc(100dvh - 2rem));
-		padding: 1rem;
+		padding: var(--pau-space-4);
 		overflow: auto;
 		color: var(--pau-text);
 		background: var(--pau-surface);
@@ -251,11 +252,11 @@
 	}
 
 	.extension-ui__dialog h2 {
-		font-size: 1rem;
+		font-size: var(--pau-type-lg);
 	}
 
 	.extension-ui__dialog > p {
-		margin-top: 0.65rem;
+		margin-top: var(--pau-space-3);
 		color: var(--pau-text-muted);
 		line-height: 1.5;
 	}
@@ -263,25 +264,25 @@
 	.extension-ui__dialog form,
 	.extension-ui__options {
 		display: grid;
-		gap: 0.5rem;
-		margin-top: 1rem;
+		gap: var(--pau-space-2);
+		margin-top: var(--pau-space-4);
 	}
 
 	.extension-ui__dialog label,
 	.extension-ui__dialog label span {
 		display: grid;
-		gap: 0.4rem;
+		gap: var(--pau-space-2);
 	}
 
 	.extension-ui__dialog label span {
 		color: var(--pau-text-muted);
-		font-size: 0.75rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.extension-ui__dialog input,
 	.extension-ui__dialog textarea {
 		width: 100%;
-		padding: 0.65rem;
+		padding: var(--pau-space-3);
 		resize: vertical;
 		color: var(--pau-text);
 		background: var(--pau-canvas);
@@ -297,8 +298,8 @@
 	}
 
 	.extension-ui__dialog button {
-		min-height: 2.75rem;
-		padding-inline: 0.85rem;
+		min-height: var(--pau-size-target-touch);
+		padding-inline: var(--pau-space-3);
 		color: var(--pau-canvas);
 		background: var(--pau-accent);
 		border: 0;
@@ -323,16 +324,16 @@
 	.extension-ui__actions {
 		display: flex;
 		justify-content: flex-end;
-		gap: 0.5rem;
-		margin-top: 1rem;
+		gap: var(--pau-space-2);
+		margin-top: var(--pau-space-4);
 	}
 
 	.extension-ui__cancel {
-		margin-top: 0.5rem;
+		margin-top: var(--pau-space-2);
 	}
 
 	.extension-ui__error {
-		margin-top: 0.75rem !important;
+		margin-top: var(--pau-space-3) !important;
 		color: var(--pau-danger) !important;
 	}
 

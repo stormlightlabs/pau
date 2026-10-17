@@ -74,9 +74,15 @@ Do not scale the desktop composition down. Recompose it.
 
 ## Spatial system
 
-The spacing scale uses a 4px base from `space/1` to `space/6`. Use tight
-intervals within controls and rows, medium intervals within a section, and larger
-intervals between distinct tasks.
+The spacing scale uses 4, 8, 12, 16, 24, and 32px steps, named `space/1` to
+`space/6`. Use tight intervals within controls and rows, medium intervals within
+a section, and larger intervals between distinct tasks.
+
+The Scale collection in `pau.fig` names the spacing, type, radius, border, row,
+and rail values. `packages/ui` mirrors those names as CSS custom properties, so
+`space/3` becomes `--pau-space-3` and `size/row-md` becomes
+`--pau-size-row-md`. Type sizes use `--pau-type-*` because `--pau-text` names
+the text color.
 
 - Product rail: about 48–56px.
 - Context rail: about 224–256px.
@@ -96,9 +102,10 @@ surfaces and overlays may use up to 5px.
 
 IBM Plex Sans Variable is the default application face. Operators may select
 Inter Variable, Atkinson Hyperlegible Next Variable, or Atkinson Hyperlegible
-Soft. Font choice must not change layout roles.
+Soft. Font choice must not change layout roles. IBM Plex Mono sets code,
+commands, paths, and identifiers in every UI font choice.
 
-- Use a fixed product type scale.
+- Use the fixed product type scale: 12, 13, 14, 16, and 20px.
 - Keep ordinary transcript prose near 14–16px with a maximum measure of about
   74 characters.
 - Keep metadata readable at 12–13px with sufficient contrast and line height.

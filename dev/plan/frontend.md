@@ -70,7 +70,8 @@ Bundle the application UI fonts and let the operator choose between IBM Plex
 Sans Variable, Inter Variable, Atkinson Hyperlegible Next Variable, and
 Atkinson Hyperlegible Soft. Use Fontsource variable packages for the first
 three. Vendor Atkinson Hyperlegible Soft from its upstream repository with its
-license and attribution. The documentation site uses IBM Plex Sans Variable for
+license and attribution. Set code in IBM Plex Mono from its Fontsource
+package. The documentation site uses IBM Plex Sans Variable for
 body copy, Google Sans Variable for headings, and Google Sans Code Variable for
 code. Self-host every
 font file; do not fetch fonts at runtime. Preserve the compact

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../styles/tokens.css';
 	import { formatBytes, formatCpu, formatElapsed } from './resource-format';
 	import type { ProcessResourceActions, ProcessResourceSnapshot } from './types/resource-monitoring';
 
@@ -121,8 +122,8 @@
 		display: flex;
 		align-items: end;
 		justify-content: space-between;
-		gap: 1rem;
-		margin-bottom: 1.5rem;
+		gap: var(--pau-space-4);
+		margin-bottom: var(--pau-space-5);
 	}
 
 	header p,
@@ -143,11 +144,12 @@
 	}
 
 	header p {
-		font-size: 0.72rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	h1 {
-		font-size: 1.35rem;
+		font-size: var(--pau-type-lg);
+		font-weight: 600;
 	}
 
 	.processes-view__table {
@@ -160,18 +162,17 @@
 		display: grid;
 		grid-template-columns: minmax(12rem, 1.6fr) repeat(5, minmax(5.5rem, 0.75fr)) minmax(7.5rem, 0.8fr);
 		align-items: center;
-		gap: 0.75rem;
+		gap: var(--pau-space-3);
 		min-height: 3.75rem;
-		padding-inline: 0.75rem;
+		padding-inline: var(--pau-space-3);
 		border-bottom: 1px solid var(--pau-border);
 	}
 
 	.processes-view__table-heading {
-		min-height: 2.25rem;
+		min-height: var(--pau-size-row-lg);
 		color: var(--pau-text-muted);
-		font-size: 0.68rem;
-		font-weight: 700;
-		letter-spacing: 0.04em;
+		font-size: var(--pau-type-xs);
+		font-weight: 600;
 	}
 
 	.process-row {
@@ -192,9 +193,9 @@
 	.process-row__identity > button {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--pau-space-2);
 		min-width: 0;
-		padding: 0.35rem 0;
+		padding: var(--pau-space-1) 0;
 		color: inherit;
 		background: transparent;
 		border: 0;
@@ -210,30 +211,30 @@
 	}
 
 	.process-row__identity em {
-		padding-inline: 0.35rem;
+		padding-inline: var(--pau-space-1);
 		color: var(--pau-warning);
-		font-size: 0.68rem;
+		font-size: var(--pau-type-xs);
 		font-style: normal;
 		white-space: nowrap;
 	}
 
 	.process-row small {
-		font-size: 0.68rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.process-row__actions {
 		display: flex;
 		justify-content: end;
-		gap: 0.35rem;
+		gap: var(--pau-space-1);
 	}
 
 	.process-row__actions button {
-		min-height: 2rem;
-		padding-inline: 0.55rem;
+		min-height: var(--pau-size-row-md);
+		padding-inline: var(--pau-space-2);
 		color: var(--pau-text);
 		background: transparent;
 		border: 1px solid var(--pau-border);
-		border-radius: 3px;
+		border-radius: var(--pau-radius-control);
 		font: inherit;
 		cursor: pointer;
 	}
@@ -248,19 +249,19 @@
 	}
 
 	.process-tree {
-		padding: 0.75rem 1rem 1rem 2.75rem;
+		padding: var(--pau-space-3) var(--pau-space-4) var(--pau-space-4) 2.75rem;
 		border-bottom: 1px solid var(--pau-border);
 		background: var(--pau-surface-raised);
 	}
 
 	.process-tree h2 {
-		font-size: 0.78rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.process-tree ul {
 		display: grid;
-		gap: 0.4rem;
-		margin: 0.6rem 0 0;
+		gap: var(--pau-space-2);
+		margin: var(--pau-space-2) 0 0;
 		padding: 0;
 		list-style: none;
 	}
@@ -268,26 +269,27 @@
 	.process-tree li {
 		display: grid;
 		grid-template-columns: minmax(7rem, 1fr) repeat(2, minmax(7rem, 1fr));
-		gap: 1rem;
+		gap: var(--pau-space-4);
 		max-width: 36rem;
 	}
 
 	.process-tree code {
-		font-family: ui-monospace, monospace;
+		font-family: var(--pau-font-code);
+		font-size: var(--pau-type-xs);
 	}
 
 	.processes-view__empty {
-		padding: 3rem 1rem;
+		padding: 3rem var(--pau-space-4);
 		border-block: 1px solid var(--pau-border);
 		text-align: center;
 	}
 
 	.processes-view__empty h2 {
-		font-size: 1rem;
+		font-size: var(--pau-type-lg);
 	}
 
 	.processes-view__empty p {
-		margin-top: 0.35rem;
+		margin-top: var(--pau-space-1);
 		color: var(--pau-text-muted);
 	}
 
@@ -313,8 +315,8 @@
 
 		.process-row {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
-			gap: 0.65rem 1rem;
-			padding-block: 0.8rem;
+			gap: var(--pau-space-3) var(--pau-space-4);
+			padding-block: var(--pau-space-3);
 		}
 
 		.process-row__identity,
@@ -324,7 +326,7 @@
 
 		.process-row > span::before {
 			color: var(--pau-text-muted);
-			font-size: 0.68rem;
+			font-size: var(--pau-type-xs);
 			content: attr(data-label);
 		}
 
@@ -333,12 +335,12 @@
 		}
 
 		.process-tree {
-			padding-inline: 0.75rem;
+			padding-inline: var(--pau-space-3);
 		}
 
 		.process-tree li {
 			grid-template-columns: 1fr;
-			gap: 0.1rem;
+			gap: 0;
 		}
 	}
 </style>

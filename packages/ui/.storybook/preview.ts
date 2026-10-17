@@ -1,6 +1,7 @@
 import type { Preview } from '@storybook/svelte-vite';
 
 import { themeCssProperties } from '../src/theme';
+import '../src/styles/tokens.css';
 import './preview.css';
 
 const preview = {
@@ -65,7 +66,7 @@ const preview = {
 			}
 		}
 	},
-	initialGlobals: { theme: 'eldritch', uiFont: 'inter', reducedMotion: 'off', capabilityProfile: 'full' },
+	initialGlobals: { theme: 'eldritch', uiFont: 'ibm-plex-sans', reducedMotion: 'off', capabilityProfile: 'full' },
 	parameters: {
 		a11y: { test: 'error' },
 		layout: 'centered',

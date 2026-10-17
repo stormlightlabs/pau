@@ -18,8 +18,11 @@
 	background: var(--pau-canvas, #171928);
 }
 
+/* Match the application shell so standalone component stories use product type. */
 body {
 	margin: 0;
+	font-size: var(--pau-type-sm);
+	line-height: 1.4;
 }
 
 :root[data-reduced-motion='on'] *,

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../styles/tokens.css';
 	import type { ThemeName, UiFontName } from '../theme';
 	import ApplicationShell, { type ShellNavItem } from './ApplicationShell.svelte';
 	import Icon from './Icon.svelte';
@@ -271,14 +272,14 @@
 	.terminal-surface {
 		display: grid;
 		grid-template-rows: auto auto minmax(0, 1fr);
-		height: calc(100% + 2 * clamp(1rem, 3vw, 2.5rem));
-		margin: calc(-1 * clamp(1rem, 3vw, 2.5rem));
+		height: calc(100% + 2 * clamp(var(--pau-space-4), 3vw, var(--pau-space-6)));
+		margin: calc(-1 * clamp(var(--pau-space-4), 3vw, var(--pau-space-6)));
 	}
 
 	.terminal-surface__bar {
 		display: flex;
 		align-items: stretch;
-		min-height: 2.5rem;
+		min-height: var(--pau-size-row-lg);
 		border-bottom: 1px solid var(--shell-border);
 		background: var(--shell-bg);
 	}
@@ -302,12 +303,12 @@
 	.terminal-surface__tab {
 		display: flex;
 		align-items: center;
-		gap: 0.45rem;
-		padding: 0 0.85rem;
+		gap: var(--pau-space-2);
+		padding: 0 var(--pau-space-3);
 		border-right: 1px solid var(--shell-border);
 		box-shadow: inset 0 -2px 0 transparent;
-		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.75rem;
+		font-family: var(--pau-font-code);
+		font-size: var(--pau-type-xs);
 		white-space: nowrap;
 	}
 
@@ -319,7 +320,7 @@
 
 	.terminal-surface__badge {
 		color: var(--shell-muted);
-		font-size: 0.6875rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.terminal-surface__badge.failed {
@@ -329,7 +330,7 @@
 	.terminal-surface__icon-button {
 		display: grid;
 		place-items: center;
-		width: 2.5rem;
+		width: var(--pau-size-row-lg);
 	}
 
 	.terminal-surface__actions {
@@ -357,9 +358,9 @@
 	.terminal-surface__error,
 	.terminal-surface__exit {
 		margin: 0;
-		padding: 0.5rem 0.75rem;
+		padding: var(--pau-space-2) var(--pau-space-3);
 		border-bottom: 1px solid var(--shell-border);
-		font-size: 0.75rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.terminal-surface__error {
@@ -391,7 +392,7 @@
 		display: grid;
 		place-content: center;
 		justify-items: center;
-		gap: 0.75rem;
+		gap: var(--pau-space-3);
 		color: var(--shell-muted);
 	}
 
@@ -400,8 +401,8 @@
 	}
 
 	.terminal-surface__primary {
-		min-height: 2rem;
-		padding-inline: 0.85rem;
+		min-height: var(--pau-size-row-md);
+		padding-inline: var(--pau-space-3);
 		color: var(--shell-bg);
 		background: var(--shell-accent);
 		border: 0;
@@ -417,13 +418,13 @@
 
 	.terminal-surface__rail-empty {
 		margin: 0;
-		padding: 0.75rem 1rem;
+		padding: var(--pau-space-3) var(--pau-space-4);
 		color: var(--shell-muted);
 	}
 
 	.terminal-surface__list {
 		margin: 0;
-		padding: 0.25rem 0;
+		padding: var(--pau-space-1) 0;
 		list-style: none;
 	}
 
@@ -431,10 +432,10 @@
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr) auto;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--pau-space-2);
 		width: 100%;
-		min-height: 2.25rem;
-		padding: 0.35rem 0.75rem;
+		min-height: var(--pau-size-row-lg);
+		padding: var(--pau-space-1) var(--pau-space-3);
 		text-align: left;
 		box-shadow: inset 2px 0 0 transparent;
 	}
@@ -447,13 +448,13 @@
 
 	.terminal-surface__title {
 		overflow: hidden;
-		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-family: var(--pau-font-code);
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
 	.terminal-surface__list small {
-		font-size: 0.6875rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.terminal-surface__dot {

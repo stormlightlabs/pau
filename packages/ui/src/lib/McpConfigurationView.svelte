@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../styles/tokens.css';
 	import type { McpConfigurationViewModel } from './types/mcp';
 
 	let {
@@ -163,7 +164,7 @@
 	.mcp__unavailable,
 	.mcp__servers,
 	.mcp__sources {
-		padding: 1rem 1.125rem;
+		padding: var(--pau-space-4) var(--pau-space-4);
 	}
 
 	.mcp__header,
@@ -174,7 +175,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
+		gap: var(--pau-space-4);
 	}
 
 	.mcp__header,
@@ -192,12 +193,12 @@
 	}
 
 	h2 {
-		font-size: 1rem;
+		font-size: var(--pau-type-lg);
 	}
 
 	h3,
 	h4 {
-		font-size: 0.75rem;
+		font-size: var(--pau-type-xs);
 		font-weight: 650;
 		letter-spacing: 0.03em;
 	}
@@ -206,13 +207,13 @@
 	li,
 	small {
 		color: var(--workbench-muted);
-		font-size: 0.8125rem;
+		font-size: var(--pau-type-sm);
 		line-height: 1.5;
 	}
 
 	.mcp__managed-state {
 		color: var(--workbench-available-text);
-		font-size: 0.75rem;
+		font-size: var(--pau-type-xs);
 		font-weight: 650;
 	}
 
@@ -228,12 +229,12 @@
 	.mcp__unavailable strong,
 	.mcp__server-detail strong {
 		display: block;
-		margin-bottom: 0.25rem;
-		font-size: 0.875rem;
+		margin-bottom: var(--pau-space-1);
+		font-size: var(--pau-type-md);
 	}
 
 	.mcp__section-heading {
-		margin-bottom: 0.75rem;
+		margin-bottom: var(--pau-space-3);
 	}
 
 	.mcp__server-layout {
@@ -263,7 +264,7 @@
 		justify-content: space-between;
 		width: 100%;
 		min-height: 3.25rem;
-		padding: 0.5rem 0.75rem;
+		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--workbench-muted);
 		background: transparent;
 		border: 0;
@@ -283,34 +284,34 @@
 	}
 
 	.mcp__server-row > span:last-child {
-		font-size: 0.75rem;
+		font-size: var(--pau-type-xs);
 		text-transform: capitalize;
 	}
 
 	.mcp__server-detail {
 		display: grid;
 		align-content: start;
-		gap: 1rem;
+		gap: var(--pau-space-4);
 		min-width: 0;
-		padding: 0.875rem;
+		padding: var(--pau-space-3);
 	}
 
 	.mcp__actions {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.5rem;
+		gap: var(--pau-space-2);
 	}
 
 	button {
 		flex: none;
-		min-height: 2.5rem;
-		padding: 0.5rem 0.75rem;
+		min-height: var(--pau-size-row-lg);
+		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--workbench-button-text);
 		background: var(--workbench-button-surface);
 		border: 1px solid transparent;
-		border-radius: 0.25rem;
+		border-radius: var(--pau-radius-control);
 		font: inherit;
-		font-size: 0.75rem;
+		font-size: var(--pau-type-xs);
 		font-weight: 650;
 		cursor: pointer;
 	}
@@ -342,12 +343,12 @@
 	}
 
 	.mcp__sources h3 {
-		margin-bottom: 0.75rem;
+		margin-bottom: var(--pau-space-3);
 	}
 
 	.mcp__source {
 		min-width: 0;
-		padding: 0.625rem 0;
+		padding: var(--pau-space-2) 0;
 	}
 
 	code {

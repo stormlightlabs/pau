@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../styles/tokens.css';
 	import { HighlightStyle, LanguageDescription, syntaxHighlighting } from '@codemirror/language';
 	import { languages } from '@codemirror/language-data';
 	import { EditorState, type Extension } from '@codemirror/state';
@@ -79,7 +80,7 @@
 	function editorTheme(): Extension {
 		return EditorView.theme({
 			'&': { height: '100%', color: 'var(--pau-text)', backgroundColor: 'var(--pau-canvas)' },
-			'.cm-content': { caretColor: 'var(--pau-accent)', fontFamily: 'ui-monospace, SFMono-Regular, monospace' },
+			'.cm-content': { caretColor: 'var(--pau-accent)', fontFamily: 'var(--pau-font-code)' },
 			'.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--pau-accent)' },
 			'&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
 				backgroundColor: 'var(--pau-selection)'
@@ -256,9 +257,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.75rem;
-		min-height: 2.75rem;
-		padding: 0.35rem 0.75rem;
+		gap: var(--pau-space-3);
+		min-height: var(--pau-size-target-touch);
+		padding: var(--pau-space-1) var(--pau-space-3);
 		border-bottom: 1px solid var(--pau-border);
 		background: var(--pau-surface);
 	}
@@ -275,20 +276,17 @@
 
 	.file-editor__header > div:first-child > p {
 		overflow: hidden;
-		font:
-			0.75rem/1.35 ui-monospace,
-			SFMono-Regular,
-			monospace;
+		font: var(--pau-type-xs)/1.35 var(--pau-font-code);
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
 	.file-editor__states {
 		display: flex;
-		gap: 0.5rem;
+		gap: var(--pau-space-2);
 		min-height: 1rem;
 		color: var(--pau-text-muted);
-		font-size: 0.7rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.file-editor__dirty {
@@ -299,14 +297,14 @@
 	.file-editor__external > div:last-child {
 		display: flex;
 		flex: none;
-		gap: 0.35rem;
+		gap: var(--pau-space-1);
 	}
 
 	button {
-		min-height: 1.75rem;
-		padding: 0.2rem 0.55rem;
+		min-height: var(--pau-size-row-sm);
+		padding: var(--pau-space-1) var(--pau-space-2);
 		border: 1px solid var(--pau-border);
-		border-radius: 3px;
+		border-radius: var(--pau-radius-control);
 		background: var(--pau-surface-raised);
 		color: var(--pau-text);
 		font: inherit;
@@ -335,11 +333,11 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.55rem 0.75rem;
+		gap: var(--pau-space-4);
+		padding: var(--pau-space-2) var(--pau-space-3);
 		border-bottom: 1px solid var(--pau-warning);
 		background: color-mix(in srgb, var(--pau-warning) 12%, var(--pau-surface));
-		font-size: 0.75rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.file-editor__external p {
@@ -349,7 +347,7 @@
 	.file-editor__code {
 		min-height: 0;
 		overflow: hidden;
-		font-size: 0.8rem;
+		font-size: var(--pau-type-sm);
 	}
 
 	.file-editor__code :global(.cm-editor) {
@@ -365,8 +363,8 @@
 		justify-self: center;
 		display: grid;
 		max-width: 32rem;
-		gap: 0.5rem;
-		padding: 1.5rem;
+		gap: var(--pau-space-2);
+		padding: var(--pau-space-5);
 		text-align: center;
 	}
 
@@ -393,7 +391,7 @@
 
 	@media (pointer: coarse) {
 		button {
-			min-height: 2.75rem;
+			min-height: var(--pau-size-target-touch);
 		}
 	}
 </style>

@@ -92,7 +92,7 @@
 	}
 
 	.conversation header {
-		padding-bottom: 1.5rem;
+		padding-bottom: var(--pau-space-5);
 		border-bottom: 1px solid var(--shell-border, #353951);
 	}
 
@@ -103,30 +103,30 @@
 	}
 
 	h1 {
-		margin-top: 0.4rem;
-		font-size: 1rem;
+		margin-top: var(--pau-space-2);
+		font-size: var(--pau-type-lg);
 		font-weight: 550;
 	}
 
 	h2,
 	header p {
 		color: var(--shell-muted, #a9a8c0);
-		font-size: 0.75rem;
+		font-size: var(--pau-type-xs);
 		font-weight: 500;
 	}
 
 	.tool-log {
 		display: grid;
-		gap: 0.7rem;
-		margin-block: 1.5rem;
-		padding-left: 1rem;
+		gap: var(--pau-space-3);
+		margin-block: var(--pau-space-5);
+		padding-left: var(--pau-space-4);
 		border-left: 1px solid var(--shell-border, #353951);
 	}
 
 	.tool-log p {
 		display: grid;
 		grid-template-columns: 3rem minmax(0, 1fr) auto;
-		gap: 0.75rem;
+		gap: var(--pau-space-3);
 	}
 
 	.tool-log span,
@@ -139,29 +139,29 @@
 	}
 
 	.conversation > p {
-		margin-top: 0.55rem;
+		margin-top: var(--pau-space-2);
 		line-height: 1.65;
 	}
 
 	.note {
-		margin-top: 2rem;
+		margin-top: var(--pau-space-6);
 	}
 
 	.note p {
-		margin-top: 0.5rem;
+		margin-top: var(--pau-space-2);
 		line-height: 1.65;
 	}
 
 	.inspection h2 {
-		margin: 1rem 0 0.75rem;
-		font-size: 0.7rem;
+		margin: var(--pau-space-4) 0 var(--pau-space-3);
+		font-size: var(--pau-type-xs);
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 	}
 
 	.inspection ul {
 		display: grid;
-		gap: 0.85rem;
+		gap: var(--pau-space-3);
 		margin: 0;
 		padding: 0;
 		list-style: none;
@@ -170,13 +170,13 @@
 	.inspection li {
 		display: grid;
 		grid-template-columns: 0.5rem 1fr;
-		gap: 0.55rem;
+		gap: var(--pau-space-2);
 	}
 
 	.inspection li span {
 		width: 0.4rem;
 		height: 0.4rem;
-		margin-top: 0.35rem;
+		margin-top: var(--pau-space-1);
 		background: var(--pau-info, #8bd7ff);
 		border-radius: 50%;
 	}
@@ -191,7 +191,7 @@
 
 	dl {
 		display: grid;
-		gap: 0.65rem;
+		gap: var(--pau-space-3);
 		margin: 0;
 	}
 

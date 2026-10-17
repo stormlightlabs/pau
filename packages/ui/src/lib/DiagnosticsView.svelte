@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../styles/tokens.css';
 	import type { DiagnosticBundleView, DiagnosticLevel } from './types/diagnostics';
 
 	let {
@@ -223,12 +224,12 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
+		gap: var(--pau-space-4);
 	}
 
 	header {
 		align-items: end;
-		margin-bottom: 1.5rem;
+		margin-bottom: var(--pau-space-5);
 	}
 
 	header p,
@@ -250,22 +251,23 @@
 
 	header p,
 	small {
-		font-size: 0.72rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	h1 {
-		font-size: 1.35rem;
+		font-size: var(--pau-type-lg);
+		font-weight: 600;
 	}
 
 	h2 {
-		font-size: 0.9rem;
+		font-size: var(--pau-type-md);
 	}
 
 	.diagnostics-view__mode {
-		padding: 0.25rem 0.45rem;
+		padding: var(--pau-space-1) var(--pau-space-2);
 		color: var(--pau-text-muted);
 		border: 1px solid var(--pau-border);
-		font-size: 0.72rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.diagnostics-view__mode--active {
@@ -277,27 +279,27 @@
 		display: grid;
 		grid-template-columns: minmax(16rem, 1fr) auto auto;
 		align-items: center;
-		gap: 1.5rem;
-		padding: 1rem;
+		gap: var(--pau-space-5);
+		padding: var(--pau-space-4);
 		border-block: 1px solid var(--pau-border);
 	}
 
 	.diagnostics-view__settings p {
 		max-width: 48rem;
-		margin-top: 0.25rem;
+		margin-top: var(--pau-space-1);
 	}
 
 	.diagnostics-view label {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.78rem;
+		gap: var(--pau-space-2);
+		font-size: var(--pau-type-xs);
 	}
 
 	.diagnostics-view select,
 	.diagnostics-view__export input {
-		min-height: 2.2rem;
-		padding-inline: 0.55rem;
+		min-height: var(--pau-size-row-lg);
+		padding-inline: var(--pau-space-2);
 		color: var(--pau-text);
 		background: var(--pau-canvas);
 		border: 1px solid var(--pau-border);
@@ -305,12 +307,12 @@
 	}
 
 	.diagnostics-view button {
-		min-height: 2.2rem;
-		padding-inline: 0.7rem;
+		min-height: var(--pau-size-row-lg);
+		padding-inline: var(--pau-space-3);
 		color: var(--pau-text);
 		background: transparent;
 		border: 1px solid var(--pau-border);
-		border-radius: 3px;
+		border-radius: var(--pau-radius-control);
 		font: inherit;
 		cursor: pointer;
 	}
@@ -333,13 +335,13 @@
 	}
 
 	.diagnostics-view__empty {
-		padding: 3rem 1rem;
+		padding: 3rem var(--pau-space-4);
 		text-align: center;
 		border-bottom: 1px solid var(--pau-border);
 	}
 
 	.diagnostics-view__empty p {
-		margin-top: 0.35rem;
+		margin-top: var(--pau-space-1);
 		color: var(--pau-text-muted);
 	}
 
@@ -351,8 +353,8 @@
 
 	.diagnostics-view__versions div {
 		display: grid;
-		gap: 0.2rem;
-		padding: 0.8rem 1rem;
+		gap: var(--pau-space-1);
+		padding: var(--pau-space-3) var(--pau-space-4);
 		border-right: 1px solid var(--pau-border);
 	}
 
@@ -360,7 +362,7 @@
 	.diagnostics-view__section-heading p,
 	.diagnostics-view__trace p,
 	.diagnostics-view__review p {
-		font-size: 0.72rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.diagnostics-view__versions span {
@@ -368,34 +370,39 @@
 	}
 
 	.diagnostics-view__versions strong,
+	.diagnostics-view__records,
+	.diagnostics-view__review strong {
+		font-family: var(--pau-font-code);
+	}
+
+	.diagnostics-view__versions strong,
 	.diagnostics-view__transport,
 	.diagnostics-view__records,
 	.diagnostics-view__review strong {
-		font-family: ui-monospace, monospace;
 		font-variant-numeric: tabular-nums;
 	}
 
 	.diagnostics-view__section {
-		padding-block: 1.25rem;
+		padding-block: var(--pau-space-4);
 		border-bottom: 1px solid var(--pau-border);
 	}
 
 	.diagnostics-view__section-heading {
-		padding-inline: 0.75rem;
+		padding-inline: var(--pau-space-3);
 	}
 
 	.diagnostics-view__section-heading > span {
 		color: var(--pau-text-muted);
-		font-size: 0.72rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.diagnostics-view__section-empty {
-		padding: 1rem 0.75rem 0;
+		padding: var(--pau-space-4) var(--pau-space-3) 0;
 	}
 
 	.diagnostics-view__rows,
 	.diagnostics-view__records {
-		margin: 0.75rem 0 0;
+		margin: var(--pau-space-3) 0 0;
 		padding: 0;
 		list-style: none;
 	}
@@ -404,9 +411,9 @@
 		display: grid;
 		grid-template-columns: minmax(10rem, 0.8fr) auto minmax(14rem, 1.5fr);
 		align-items: center;
-		gap: 1rem;
+		gap: var(--pau-space-4);
 		min-height: 3rem;
-		padding-inline: 0.75rem;
+		padding-inline: var(--pau-space-3);
 		border-top: 1px solid var(--pau-border);
 	}
 
@@ -420,19 +427,19 @@
 
 	.diagnostics-view__rows li p {
 		color: var(--pau-text-muted);
-		font-size: 0.72rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.diagnostics-view__transport {
-		margin-top: 0.75rem;
-		font-size: 0.75rem;
+		margin-top: var(--pau-space-3);
+		font-size: var(--pau-type-xs);
 	}
 
 	.diagnostics-view__transport > div {
 		display: grid;
 		grid-template-columns: minmax(8rem, 1.5fr) repeat(5, minmax(5rem, 1fr));
-		gap: 0.75rem;
-		padding: 0.65rem 0.75rem;
+		gap: var(--pau-space-3);
+		padding: var(--pau-space-3) var(--pau-space-3);
 		border-top: 1px solid var(--pau-border);
 	}
 
@@ -441,24 +448,24 @@
 	}
 
 	.diagnostics-view__trace {
-		margin-top: 0.75rem;
-		padding: 0.75rem;
+		margin-top: var(--pau-space-3);
+		padding: var(--pau-space-3);
 		background: var(--pau-surface-raised);
 	}
 
 	.diagnostics-view__trace p {
 		max-width: 48rem;
-		margin-top: 0.2rem;
+		margin-top: var(--pau-space-1);
 	}
 
 	.diagnostics-view__records li {
 		display: grid;
 		grid-template-columns: 11rem 3.5rem 7rem minmax(10rem, 1fr) minmax(8rem, 1fr);
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0.55rem 0.75rem;
+		gap: var(--pau-space-3);
+		padding: var(--pau-space-2) var(--pau-space-3);
 		border-top: 1px solid var(--pau-border);
-		font-size: 0.72rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.diagnostics-view__records time,
@@ -483,13 +490,13 @@
 
 	.diagnostics-view__export {
 		display: grid;
-		gap: 0.75rem;
+		gap: var(--pau-space-3);
 	}
 
 	.diagnostics-view__export > label,
 	.diagnostics-view__export-actions,
 	.diagnostics-view__review {
-		margin-inline: 0.75rem;
+		margin-inline: var(--pau-space-3);
 	}
 
 	.diagnostics-view__export > label {
@@ -502,13 +509,13 @@
 	}
 
 	.diagnostics-view__review {
-		padding: 0.75rem;
+		padding: var(--pau-space-3);
 		border-left: 3px solid var(--pau-accent);
 		background: var(--pau-surface-raised);
 	}
 
 	.diagnostics-view__review p {
-		margin-top: 0.35rem;
+		margin-top: var(--pau-space-1);
 	}
 
 	@media (max-width: 50rem) {
@@ -527,15 +534,15 @@
 		.diagnostics-view__transport [role='cell']::before {
 			display: block;
 			color: var(--pau-text-muted);
-			font-size: 0.65rem;
+			font-size: var(--pau-type-xs);
 			content: attr(data-label);
 		}
 
 		.diagnostics-view__rows li,
 		.diagnostics-view__records li {
 			grid-template-columns: 1fr;
-			gap: 0.2rem;
-			padding-block: 0.75rem;
+			gap: var(--pau-space-1);
+			padding-block: var(--pau-space-3);
 		}
 
 		.diagnostics-view__trace,

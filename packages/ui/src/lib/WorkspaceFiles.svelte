@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../styles/tokens.css';
 	import { onMount, tick } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 
@@ -572,20 +573,20 @@
 <style>
 	.workspace-files__browser {
 		min-width: 0;
-		font-size: 0.75rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.workspace-files__git {
 		display: grid;
-		gap: 0.35rem;
-		padding: 0 0.75rem 0.75rem;
+		gap: var(--pau-space-1);
+		padding: 0 var(--pau-space-3) var(--pau-space-3);
 		border-bottom: 1px solid var(--shell-border);
 	}
 
 	.workspace-files__git p {
 		display: flex;
 		align-items: center;
-		gap: 0.4rem;
+		gap: var(--pau-space-2);
 		margin: 0;
 		color: var(--shell-muted);
 	}
@@ -598,8 +599,8 @@
 		display: grid;
 		grid-template-columns: 0.875rem minmax(0, 1fr) auto;
 		align-items: center;
-		gap: 0.4rem;
-		min-height: 1.75rem;
+		gap: var(--pau-space-2);
+		min-height: var(--pau-size-row-sm);
 	}
 
 	.workspace-files__git-branch strong,
@@ -607,21 +608,21 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-family: ui-monospace, 'Cascadia Code', monospace;
+		font-family: var(--pau-font-code);
 		font-weight: 500;
 	}
 
 	.workspace-files__git-branch small,
 	.workspace-files__git li small {
 		color: var(--shell-muted);
-		font-size: 0.6875rem;
+		font-size: var(--pau-type-xs);
 		white-space: nowrap;
 	}
 
 	.workspace-files__git ul {
 		display: grid;
 		max-height: 10rem;
-		margin: 0 -0.75rem;
+		margin: 0 calc(-1 * var(--pau-space-3));
 		padding: 0;
 		overflow: auto;
 		list-style: none;
@@ -631,10 +632,10 @@
 		display: grid;
 		grid-template-columns: 0.875rem minmax(0, 1fr) auto;
 		align-items: center;
-		gap: 0.4rem;
+		gap: var(--pau-space-2);
 		width: 100%;
-		min-height: 1.75rem;
-		padding: 0.25rem 0.75rem;
+		min-height: var(--pau-size-row-sm);
+		padding: var(--pau-space-1) var(--pau-space-3);
 		color: var(--shell-text);
 		background: transparent;
 		border: 0;
@@ -650,8 +651,8 @@
 
 	.workspace-files__review {
 		display: grid;
-		gap: 0.5rem;
-		font-size: 0.75rem;
+		gap: var(--pau-space-2);
+		font-size: var(--pau-type-xs);
 	}
 
 	.workspace-files__review header,
@@ -659,7 +660,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.4rem;
+		gap: var(--pau-space-2);
 	}
 
 	.workspace-files__review header > div:first-child {
@@ -675,7 +676,7 @@
 
 	.workspace-files__review header button {
 		width: 1.75rem;
-		height: 1.75rem;
+		height: var(--pau-size-row-sm);
 		color: var(--shell-text);
 		background: var(--shell-surface-raised);
 		border: 1px solid var(--shell-border);
@@ -684,7 +685,7 @@
 
 	.workspace-files__review ul {
 		display: grid;
-		margin: 0 -1rem;
+		margin: 0 calc(-1 * var(--pau-space-4));
 		padding: 0;
 		list-style: none;
 	}
@@ -692,10 +693,10 @@
 	.workspace-files__review li button {
 		display: grid;
 		grid-template-columns: 0.875rem minmax(0, 1fr);
-		gap: 0.15rem 0.4rem;
+		gap: 0 var(--pau-space-2);
 		width: 100%;
-		min-height: 2.5rem;
-		padding: 0.35rem 1rem;
+		min-height: var(--pau-size-row-lg);
+		padding: var(--pau-space-1) var(--pau-space-4);
 		color: var(--shell-text);
 		background: transparent;
 		border: 0;
@@ -718,7 +719,7 @@
 
 	.workspace-files__review li small {
 		grid-column: 2;
-		font-size: 0.6875rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.workspace-files__review-error {
@@ -727,8 +728,8 @@
 
 	.workspace-files__search {
 		display: grid;
-		gap: 0.35rem;
-		padding: 0.65rem 0.75rem 0.75rem;
+		gap: var(--pau-space-1);
+		padding: var(--pau-space-3) var(--pau-space-3) var(--pau-space-3);
 		border-bottom: 1px solid var(--shell-border);
 	}
 
@@ -736,7 +737,7 @@
 	.workspace-files__visibility legend,
 	.workspace-files__tree-header {
 		color: var(--shell-muted);
-		font-size: 0.6875rem;
+		font-size: var(--pau-type-xs);
 		font-weight: 650;
 		letter-spacing: 0.04em;
 	}
@@ -744,9 +745,9 @@
 	.workspace-files__search > div {
 		display: flex;
 		align-items: center;
-		gap: 0.45rem;
-		height: 2rem;
-		padding-inline: 0.55rem;
+		gap: var(--pau-space-2);
+		height: var(--pau-size-row-md);
+		padding-inline: var(--pau-space-2);
 		border: 1px solid var(--shell-border);
 		background: var(--shell-surface);
 	}
@@ -773,9 +774,9 @@
 	.workspace-files__visibility {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
-		gap: 0.25rem 0.75rem;
+		gap: var(--pau-space-1) var(--pau-space-3);
 		margin: 0;
-		padding: 0.65rem 0.75rem;
+		padding: var(--pau-space-3) var(--pau-space-3);
 		border: 0;
 		border-bottom: 1px solid var(--shell-border);
 	}
@@ -791,7 +792,7 @@
 	.workspace-files__visibility label {
 		display: flex;
 		align-items: center;
-		gap: 0.35rem;
+		gap: var(--pau-space-1);
 		min-height: 1.5rem;
 		color: var(--shell-muted);
 		white-space: nowrap;
@@ -805,8 +806,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		height: 2rem;
-		padding-inline: 0.75rem;
+		height: var(--pau-size-row-md);
+		padding-inline: var(--pau-space-3);
 		text-transform: uppercase;
 	}
 
@@ -818,16 +819,16 @@
 	.workspace-files__tree {
 		display: grid;
 		min-width: 0;
-		padding-bottom: 0.75rem;
+		padding-bottom: var(--pau-space-3);
 	}
 
 	.workspace-files__tree-row {
 		display: grid;
 		grid-template-columns: 0.875rem 1rem minmax(0, 1fr);
 		align-items: center;
-		gap: 0.35rem;
+		gap: var(--pau-space-1);
 		min-width: 0;
-		min-height: 2rem;
+		min-height: var(--pau-size-row-md);
 		padding: 0.25rem 0.65rem 0.25rem min(calc(0.65rem + var(--tree-depth) * 0.8rem), 4rem);
 		color: var(--shell-muted);
 		background: transparent;
@@ -858,13 +859,13 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-family: ui-monospace, 'Cascadia Code', monospace;
+		font-family: var(--pau-font-code);
 	}
 
 	.workspace-files__state,
 	.workspace-files__branch-state {
 		margin: 0;
-		padding: 0.75rem;
+		padding: var(--pau-space-3);
 		color: var(--shell-muted);
 	}
 
@@ -874,12 +875,12 @@
 	}
 
 	.workspace-files__state p {
-		margin: 0 0 0.6rem;
+		margin: 0 0 var(--pau-space-2);
 	}
 
 	.workspace-files__state button {
-		min-height: 2rem;
-		padding-inline: 0.65rem;
+		min-height: var(--pau-size-row-md);
+		padding-inline: var(--pau-space-3);
 		color: var(--shell-text);
 		background: var(--shell-surface-raised);
 		border: 1px solid var(--shell-border);
@@ -887,24 +888,24 @@
 	}
 
 	.workspace-files__branch-state {
-		padding-inline-start: 2rem;
-		font-size: 0.6875rem;
+		padding-inline-start: var(--pau-space-6);
+		font-size: var(--pau-type-xs);
 	}
 
 	.workspace-files__surface {
 		display: grid;
 		grid-template-rows: auto minmax(0, 1fr);
 		min-height: 100%;
-		margin: calc(-1 * clamp(1rem, 3vw, 2.5rem));
+		margin: calc(-1 * clamp(var(--pau-space-4), 3vw, var(--pau-space-6)));
 	}
 
 	.workspace-files__surface > header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
+		gap: var(--pau-space-4);
 		min-height: 3.5rem;
-		padding: 0.65rem 1rem;
+		padding: var(--pau-space-3) var(--pau-space-4);
 		border-bottom: 1px solid var(--shell-border);
 	}
 
@@ -916,12 +917,12 @@
 	.workspace-files__surface header p,
 	.workspace-files__surface header span {
 		color: var(--shell-muted);
-		font-size: 0.6875rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.workspace-files__surface header h1 {
-		margin-top: 0.1rem;
-		font-size: 0.875rem;
+		margin-top: 0;
+		font-size: var(--pau-type-md);
 		font-weight: 600;
 	}
 
@@ -929,13 +930,13 @@
 		align-self: center;
 		justify-self: center;
 		max-width: 34rem;
-		padding: 2rem;
+		padding: var(--pau-space-6);
 		color: var(--shell-muted);
 		text-align: center;
 	}
 
 	.workspace-files__surface-state p {
-		margin: 0.7rem 0 0.25rem;
+		margin: var(--pau-space-3) 0 var(--pau-space-1);
 		color: var(--shell-text);
 	}
 
@@ -961,10 +962,10 @@
 
 	.workspace-files__results button {
 		display: grid;
-		gap: 0.4rem;
+		gap: var(--pau-space-2);
 		width: 100%;
 		min-width: 0;
-		padding: 0.75rem 1rem;
+		padding: var(--pau-space-3) var(--pau-space-4);
 		color: var(--shell-text);
 		background: transparent;
 		border: 0;
@@ -981,7 +982,7 @@
 		display: grid;
 		grid-template-columns: 1rem minmax(0, 1fr) auto;
 		align-items: center;
-		gap: 0.35rem;
+		gap: var(--pau-space-1);
 		min-width: 0;
 	}
 
@@ -989,8 +990,8 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-family: ui-monospace, 'Cascadia Code', monospace;
-		font-size: 0.75rem;
+		font-family: var(--pau-font-code);
+		font-size: var(--pau-type-xs);
 		font-weight: 500;
 	}
 
@@ -1003,14 +1004,14 @@
 		color: var(--shell-muted);
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-size: 0.75rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	@media (pointer: coarse) {
 		.workspace-files__tree-row,
 		.workspace-files__visibility label,
 		.workspace-files__results button {
-			min-height: 2.75rem;
+			min-height: var(--pau-size-target-touch);
 		}
 	}
 </style>

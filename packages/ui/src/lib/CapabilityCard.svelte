@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../styles/tokens.css';
 	import type { CapabilityFixture } from '../fixtures/capabilities';
 
 	let { capability }: { capability: CapabilityFixture } = $props();
@@ -23,25 +24,25 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 2rem;
+		gap: var(--pau-space-6);
 		width: min(34rem, calc(100vw - 3rem));
-		padding: 1.25rem;
+		padding: var(--pau-space-4);
 		color: var(--workbench-text);
 		background: var(--workbench-surface);
 		border: 1px solid var(--workbench-border);
-		border-radius: 0.75rem;
+		border-radius: var(--pau-radius-surface);
 		box-shadow: 0 1rem 2.5rem color-mix(in srgb, var(--workbench-shadow) 18%, transparent);
 	}
 
 	.capability-card__copy {
 		display: grid;
-		gap: 0.625rem;
+		gap: var(--pau-space-2);
 	}
 
 	.capability-card__heading {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: var(--pau-space-3);
 	}
 
 	h2,
@@ -50,23 +51,23 @@
 	}
 
 	h2 {
-		font-size: 1rem;
+		font-size: var(--pau-type-lg);
 		line-height: 1.35;
 	}
 
 	p {
 		max-width: 26rem;
 		color: var(--workbench-muted);
-		font-size: 0.875rem;
+		font-size: var(--pau-type-md);
 		line-height: 1.5;
 	}
 
 	span {
-		padding: 0.2rem 0.45rem;
+		padding: var(--pau-space-1) var(--pau-space-2);
 		color: var(--workbench-unavailable-text);
 		background: var(--workbench-unavailable-surface);
-		border-radius: 999px;
-		font-size: 0.6875rem;
+		border-radius: var(--pau-radius-control);
+		font-size: var(--pau-type-xs);
 		font-weight: 650;
 	}
 
@@ -77,14 +78,14 @@
 
 	button {
 		min-width: 5.25rem;
-		min-height: 2.75rem;
-		padding: 0.625rem 0.875rem;
+		min-height: var(--pau-size-target-touch);
+		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--workbench-button-text);
 		background: var(--workbench-button-surface);
 		border: 1px solid transparent;
-		border-radius: 0.5rem;
+		border-radius: var(--pau-radius-control);
 		font: inherit;
-		font-size: 0.8125rem;
+		font-size: var(--pau-type-sm);
 		font-weight: 650;
 		cursor: pointer;
 		transition:
@@ -109,7 +110,7 @@
 		.capability-card {
 			align-items: stretch;
 			flex-direction: column;
-			gap: 1rem;
+			gap: var(--pau-space-4);
 		}
 
 		button {

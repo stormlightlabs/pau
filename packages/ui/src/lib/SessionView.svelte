@@ -1,6 +1,8 @@
 <script lang="ts">
+	import '../styles/tokens.css';
 	import ApplicationShell, { type ShellNavItem } from './ApplicationShell.svelte';
 	import ExtensionUi from './ExtensionUi.svelte';
+	import Icon from './Icon.svelte';
 	import SessionResourceSummary from './SessionResourceSummary.svelte';
 	import type { ProcessResourceSnapshot } from './types/resource-monitoring';
 	import type {
@@ -432,6 +434,7 @@
 						{/if}
 						<label class="session-composer__field">
 							<span class="session-view__sr-only">Prompt</span>
+							<Icon name="chevronRight" class="session-composer__prompt" />
 							<textarea
 								bind:this={composer}
 								bind:value={draft}
@@ -485,7 +488,7 @@
 
 <style>
 	.session-rail {
-		padding: 0 0.55rem 1rem;
+		padding: 0 var(--pau-space-2) var(--pau-space-4);
 	}
 
 	.session-rail__heading {
@@ -498,11 +501,11 @@
 		display: grid;
 		place-items: center;
 		width: 2rem;
-		min-height: 2rem;
+		min-height: var(--pau-size-row-md);
 		grid-template-columns: 1fr;
 		padding: 0;
 		color: var(--pau-text-muted);
-		font-size: 1rem;
+		font-size: var(--pau-type-lg);
 		text-align: center;
 	}
 
@@ -512,14 +515,14 @@
 	}
 
 	.session-rail section + section {
-		margin-top: 1rem;
+		margin-top: var(--pau-space-4);
 	}
 
 	.session-rail h2 {
 		margin: 0;
-		padding: 0.55rem 0.65rem;
+		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--pau-text-muted);
-		font-size: 0.6875rem;
+		font-size: var(--pau-type-xs);
 		font-weight: 700;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
@@ -527,7 +530,7 @@
 
 	.session-rail ul {
 		display: grid;
-		gap: 0.2rem;
+		gap: var(--pau-space-1);
 		margin: 0;
 		padding: 0;
 		list-style: none;
@@ -537,10 +540,10 @@
 		display: grid;
 		grid-template-columns: 0.5rem minmax(0, 1fr) auto;
 		align-items: center;
-		gap: 0.6rem;
+		gap: var(--pau-space-2);
 		width: 100%;
-		min-height: 2.75rem;
-		padding: 0.45rem 0.65rem;
+		min-height: var(--pau-size-target-touch);
+		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--pau-text-muted);
 		background: transparent;
 		border: 0;
@@ -588,12 +591,12 @@
 
 	.session-rail small {
 		color: inherit;
-		font-size: 0.6875rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.session-rail__empty {
 		margin: 0;
-		padding: 0.5rem 0.65rem;
+		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--pau-text-muted);
 	}
 
@@ -620,8 +623,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
-		padding-bottom: 1rem;
+		gap: var(--pau-space-4);
+		padding-bottom: var(--pau-space-4);
 		border-bottom: 1px solid var(--pau-border);
 	}
 
@@ -639,13 +642,13 @@
 	.session-view__header p,
 	.session-message h2 {
 		color: var(--pau-text-muted);
-		font-size: 0.75rem;
+		font-size: var(--pau-type-xs);
 		font-weight: 500;
 	}
 
 	.session-view__header h1 {
-		margin-top: 0.3rem;
-		font-size: 1rem;
+		margin-top: var(--pau-space-1);
+		font-size: var(--pau-type-lg);
 		font-weight: 600;
 		text-wrap: balance;
 	}
@@ -653,17 +656,18 @@
 	.session-view__header-actions {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: var(--pau-space-3);
 		flex: none;
 	}
 
 	.session-view__stop,
 	.session-view__retry {
-		min-height: 2.75rem;
-		padding-inline: 0.85rem;
+		min-height: var(--pau-size-row-md);
+		padding-inline: var(--pau-space-3);
 		color: var(--pau-text);
 		background: transparent;
 		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-control);
 		font: inherit;
 		cursor: pointer;
 	}
@@ -675,16 +679,16 @@
 	}
 
 	.session-view__retry {
-		margin-top: 1rem;
+		margin-top: var(--pau-space-4);
 	}
 
 	.session-view__status {
 		display: flex;
 		align-items: center;
-		gap: 0.45rem;
+		gap: var(--pau-space-2);
 		flex: none;
 		color: var(--pau-text-muted);
-		font-size: 0.75rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.session-view__status span {
@@ -710,15 +714,15 @@
 	.session-view__notices {
 		grid-area: notice;
 		display: grid;
-		gap: 0.5rem;
+		gap: var(--pau-space-2);
 	}
 
 	.session-view__notices > :first-child {
-		margin-top: 1rem;
+		margin-top: var(--pau-space-4);
 	}
 
 	.session-view__notice {
-		padding: 0.7rem 0.85rem;
+		padding: var(--pau-space-3) var(--pau-space-3);
 		color: var(--pau-text-muted);
 		background: var(--pau-canvas);
 		border-left: 2px solid var(--pau-info);
@@ -738,8 +742,8 @@
 		grid-area: transcript;
 		display: grid;
 		align-content: start;
-		gap: 1.4rem;
-		padding-block: 1.5rem 2rem;
+		gap: var(--pau-space-5);
+		padding-block: var(--pau-space-5) var(--pau-space-6);
 		overflow: auto;
 	}
 
@@ -748,14 +752,14 @@
 	}
 
 	.session-message--user {
-		padding-left: 0.9rem;
+		padding-left: var(--pau-space-4);
 		border-left: 2px solid var(--pau-accent);
 	}
 
 	.session-message p,
 	.session-thinking p {
-		margin: 0.4rem 0 0;
-		font-size: 0.9375rem;
+		margin: var(--pau-space-2) 0 0;
+		font-size: var(--pau-type-md);
 		line-height: 1.65;
 		white-space: pre-wrap;
 	}
@@ -767,25 +771,30 @@
 
 	.session-thinking summary,
 	.session-tool summary {
-		min-height: 2.75rem;
+		min-height: var(--pau-size-row-md);
 		cursor: pointer;
 	}
 
 	.session-thinking p {
-		padding-left: 1rem;
-		font-size: 0.8125rem;
+		padding-left: var(--pau-space-4);
+		font-size: var(--pau-type-sm);
 	}
 
 	.session-tool {
 		border-left: 1px solid var(--pau-border);
 	}
 
+	/* Consecutive tool calls read as one compact block under a shared rule. */
+	.session-tool + .session-tool {
+		margin-top: calc(-1 * var(--pau-space-5));
+	}
+
 	.session-tool summary {
 		display: grid;
 		grid-template-columns: 4rem minmax(0, 1fr) auto;
 		align-items: center;
-		gap: 0.8rem;
-		padding: 0.4rem 0.75rem;
+		gap: var(--pau-space-3);
+		padding: var(--pau-space-1) var(--pau-space-3);
 		color: var(--pau-text-muted);
 		list-style-position: outside;
 	}
@@ -801,27 +810,27 @@
 	.session-tool code,
 	.session-tool pre {
 		color: var(--pau-text);
-		font-family: ui-monospace, monospace;
-		font-size: 0.75rem;
+		font-family: var(--pau-font-code);
+		font-size: var(--pau-type-xs);
 		font-variant-ligatures: none;
 	}
 
 	.session-tool pre {
 		margin: 0;
-		padding: 0.5rem 1rem 0.75rem;
+		padding: var(--pau-space-2) var(--pau-space-4) var(--pau-space-3);
 		overflow: auto;
 		white-space: pre-wrap;
 	}
 
 	.session-tool small {
-		font-size: 0.6875rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.session-denial {
 		display: grid;
-		gap: 0.55rem;
+		gap: var(--pau-space-2);
 		max-width: 75ch;
-		padding: 0.75rem 0.9rem;
+		padding: var(--pau-space-3) var(--pau-space-4);
 		background: var(--pau-canvas);
 		border-left: 2px solid var(--pau-danger);
 	}
@@ -832,14 +841,14 @@
 	}
 
 	.session-denial h2 {
-		font-size: 0.875rem;
+		font-size: var(--pau-type-md);
 		font-weight: 600;
 	}
 
 	.session-denial .session-denial__label {
-		margin-bottom: 0.2rem;
+		margin-bottom: var(--pau-space-1);
 		color: var(--pau-danger);
-		font-size: 0.6875rem;
+		font-size: var(--pau-type-xs);
 		font-weight: 700;
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
@@ -849,13 +858,13 @@
 		max-width: 100%;
 		overflow-wrap: anywhere;
 		color: var(--pau-text);
-		font-family: ui-monospace, monospace;
-		font-size: 0.75rem;
+		font-family: var(--pau-font-code);
+		font-size: var(--pau-type-xs);
 	}
 
 	.session-denial > p {
 		color: var(--pau-text-muted);
-		font-size: 0.8125rem;
+		font-size: var(--pau-type-sm);
 		line-height: 1.5;
 	}
 
@@ -864,7 +873,7 @@
 		grid-area: composer;
 		bottom: 0;
 		display: grid;
-		gap: 0.4rem;
+		gap: var(--pau-space-2);
 	}
 
 	.session-composer {
@@ -887,12 +896,12 @@
 		grid-area: queue;
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.4rem 0.65rem;
+		gap: var(--pau-space-2);
+		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--pau-text-muted);
 		background: var(--pau-canvas);
 		border-bottom: 1px solid var(--pau-border);
-		font-size: 0.6875rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.session-composer__queue select {
@@ -905,14 +914,22 @@
 	.session-composer__field {
 		grid-area: field;
 		display: flex;
+		align-items: start;
 		min-width: 0;
+	}
+
+	.session-composer__field :global(.session-composer__prompt) {
+		flex: none;
+		margin: var(--pau-space-3) 0 0 var(--pau-space-3);
+		color: var(--pau-accent);
+		font-size: var(--pau-type-lg);
 	}
 
 	.session-composer textarea {
 		width: 100%;
 		min-height: 3.5rem;
 		max-height: 10rem;
-		padding: 0.85rem;
+		padding: var(--pau-space-3);
 		resize: vertical;
 		color: var(--pau-text);
 		background: transparent;
@@ -934,16 +951,17 @@
 		grid-area: actions;
 		display: flex;
 		align-items: end;
-		gap: 0.45rem;
-		padding: 0.45rem;
+		gap: var(--pau-space-2);
+		padding: var(--pau-space-2);
 	}
 
 	.session-composer__actions button {
-		min-height: 2.75rem;
-		padding-inline: 0.85rem;
+		min-height: var(--pau-size-row-md);
+		padding-inline: var(--pau-space-3);
 		color: var(--pau-canvas);
 		background: var(--pau-accent);
 		border: 0;
+		border-radius: var(--pau-radius-control);
 		font: inherit;
 		font-weight: 650;
 		cursor: pointer;
@@ -963,26 +981,26 @@
 	}
 
 	.session-composer kbd {
-		margin-left: 0.35rem;
+		margin-left: var(--pau-space-1);
 		color: inherit;
 		font: inherit;
-		font-size: 0.6875rem;
+		font-size: var(--pau-type-xs);
 		opacity: 0.75;
 	}
 
 	.session-composer__hint {
 		grid-column: 1 / -1;
 		margin: 0;
-		padding: 0.5rem 0.75rem;
+		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--pau-text-muted);
 		border-top: 1px solid var(--pau-border);
-		font-size: 0.8125rem;
+		font-size: var(--pau-type-sm);
 	}
 
 	.session-composer__error {
 		grid-area: error;
 		margin: 0;
-		padding: 0.5rem 0.75rem;
+		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--pau-danger);
 		border-top: 1px solid var(--pau-border);
 	}
@@ -992,17 +1010,17 @@
 		align-self: center;
 		max-width: 30rem;
 		margin: auto;
-		padding: 3rem 1rem;
+		padding: 3rem var(--pau-space-4);
 		text-align: center;
 	}
 
 	.session-view__empty h1,
 	.session-view__empty h2 {
-		font-size: 1rem;
+		font-size: var(--pau-type-lg);
 	}
 
 	.session-view__empty p {
-		margin-top: 0.5rem;
+		margin-top: var(--pau-space-2);
 		color: var(--pau-text-muted);
 		line-height: 1.55;
 	}
@@ -1046,6 +1064,16 @@
 
 		.session-composer__actions {
 			align-items: stretch;
+		}
+	}
+
+	@media (pointer: coarse) {
+		.session-thinking summary,
+		.session-tool summary,
+		.session-view__stop,
+		.session-view__retry,
+		.session-composer__actions button {
+			min-height: var(--pau-size-target-touch);
 		}
 	}
 </style>

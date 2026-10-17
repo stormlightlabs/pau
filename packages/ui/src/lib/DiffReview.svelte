@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../styles/tokens.css';
 	import { Chunk, unifiedMergeView } from '@codemirror/merge';
 	import { EditorState, type Extension } from '@codemirror/state';
 	import { basicSetup, EditorView } from 'codemirror';
@@ -50,7 +51,7 @@
 					wrapping,
 					EditorView.theme({
 						'&': { height: '100%', color: 'var(--pau-text)', backgroundColor: 'var(--pau-canvas)' },
-						'.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, monospace' },
+						'.cm-scroller': { fontFamily: 'var(--pau-font-code)' },
 						'.cm-gutters': {
 							backgroundColor: 'var(--pau-surface)',
 							color: 'var(--pau-text-muted)',
@@ -192,9 +193,9 @@
 	.diff-review__hunk-nav {
 		display: flex;
 		align-items: center;
-		gap: 0.6rem;
-		min-height: 2.75rem;
-		padding: 0.4rem 0.75rem;
+		gap: var(--pau-space-2);
+		min-height: var(--pau-size-target-touch);
+		padding: var(--pau-space-2) var(--pau-space-3);
 		border-bottom: 1px solid var(--pau-border);
 		background: var(--pau-surface);
 	}
@@ -211,42 +212,39 @@
 
 	.diff-review__header p {
 		overflow: hidden;
-		font:
-			0.75rem/1.35 ui-monospace,
-			SFMono-Regular,
-			monospace;
+		font: var(--pau-type-xs)/1.35 var(--pau-font-code);
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
 	.diff-review__header small {
 		color: var(--pau-text-muted);
-		font-size: 0.7rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.diff-review__controls,
 	.diff-review__segmented {
 		display: flex;
 		align-items: center;
-		gap: 0.35rem;
+		gap: var(--pau-space-1);
 	}
 
 	.diff-review__controls label {
 		display: flex;
 		align-items: center;
-		gap: 0.35rem;
-		min-height: 1.75rem;
+		gap: var(--pau-space-1);
+		min-height: var(--pau-size-row-sm);
 		color: var(--pau-text-muted);
-		font-size: 0.72rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.diff-review button {
-		min-height: 1.75rem;
-		padding: 0.2rem 0.55rem;
+		min-height: var(--pau-size-row-sm);
+		padding: var(--pau-space-1) var(--pau-space-2);
 		color: var(--pau-text);
 		background: var(--pau-surface-raised);
 		border: 1px solid var(--pau-border);
-		border-radius: 3px;
+		border-radius: var(--pau-radius-control);
 		font: inherit;
 		cursor: pointer;
 	}
@@ -268,7 +266,7 @@
 
 	.diff-review__hunk-nav {
 		min-width: 0;
-		font-size: 0.72rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.diff-review__hunk-nav code {
@@ -283,7 +281,7 @@
 	.diff-review__code {
 		min-height: 0;
 		overflow: hidden;
-		font-size: 0.8rem;
+		font-size: var(--pau-type-sm);
 	}
 
 	.diff-review__code :global(.cm-editor) {
@@ -299,8 +297,8 @@
 		justify-self: center;
 		grid-row: 2 / -1;
 		display: grid;
-		gap: 0.35rem;
-		padding: 2rem;
+		gap: var(--pau-space-1);
+		padding: var(--pau-space-6);
 		color: var(--pau-text-muted);
 		text-align: center;
 	}
@@ -324,7 +322,7 @@
 	@media (pointer: coarse) {
 		.diff-review button,
 		.diff-review__controls label {
-			min-height: 2.75rem;
+			min-height: var(--pau-size-target-touch);
 		}
 	}
 </style>

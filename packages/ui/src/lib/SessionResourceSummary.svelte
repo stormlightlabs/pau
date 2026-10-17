@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../styles/tokens.css';
 	import type { ProcessResourceActions, ProcessResourceSnapshot } from './types/resource-monitoring';
 	import { formatBytes, formatCpu, formatElapsed } from './resource-format';
 
@@ -81,14 +82,14 @@
 		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
-		gap: 0.75rem;
-		padding-block: 0.65rem;
+		gap: var(--pau-space-3);
+		padding-block: var(--pau-space-3);
 		border-bottom: 1px solid var(--pau-border);
 	}
 
 	h2 {
 		margin: 0;
-		font-size: 0.75rem;
+		font-size: var(--pau-type-xs);
 		letter-spacing: 0.04em;
 	}
 
@@ -109,8 +110,8 @@
 	dl > div {
 		display: grid;
 		grid-template-columns: minmax(5rem, 0.75fr) minmax(0, 1.25fr);
-		gap: 0.75rem;
-		padding-block: 0.55rem;
+		gap: var(--pau-space-3);
+		padding-block: var(--pau-space-2);
 		border-bottom: 1px solid color-mix(in srgb, var(--pau-border) 65%, transparent);
 	}
 
@@ -127,31 +128,31 @@
 
 	dd small {
 		display: block;
-		font-size: 0.68rem;
+		font-size: var(--pau-type-xs);
 	}
 
 	.resource-summary__warning {
 		display: grid;
-		gap: 0.35rem;
-		margin-top: 0.75rem;
-		padding: 0.75rem;
+		gap: var(--pau-space-1);
+		margin-top: var(--pau-space-3);
+		padding: var(--pau-space-3);
 		border-left: 3px solid var(--pau-warning);
 		background: var(--pau-surface-raised);
 	}
 
 	.resource-summary__warning > div {
 		display: flex;
-		gap: 0.5rem;
-		margin-top: 0.35rem;
+		gap: var(--pau-space-2);
+		margin-top: var(--pau-space-1);
 	}
 
 	button {
-		min-height: 2rem;
-		padding-inline: 0.65rem;
+		min-height: var(--pau-size-row-md);
+		padding-inline: var(--pau-space-3);
 		color: var(--pau-canvas);
 		background: var(--pau-warning);
 		border: 0;
-		border-radius: 3px;
+		border-radius: var(--pau-radius-control);
 		font: inherit;
 		font-weight: 700;
 		cursor: pointer;
@@ -169,6 +170,6 @@
 
 	.resource-summary__empty {
 		margin: 0;
-		padding-block: 0.75rem;
+		padding-block: var(--pau-space-3);
 	}
 </style>

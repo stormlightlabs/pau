@@ -57,12 +57,44 @@ Verification:
 - Confirm observation does not change authorization, execution order, retries,
   or process ownership.
 
+### 2.162 Pi permission extension
+
+Status: planned
+Blocked by: none
+
+Add `packages/pi-permissions`, a private Pi extension that gates tool calls
+with a per-session policy file and reports structured requests and decisions
+over RPC, as described in `dev/plan/backend.md`.
+
+Verification:
+
+- Cover allow, deny, session approval, protected reads through `read` and
+  `bash`, wrapped commands, MCP annotations, abort, timeout, and a missing or
+  invalid policy file against Pi in RPC mode with a fixture model.
+- Confirm the vendored analysis matches its recorded upstream commit and keeps
+  upstream's license.
+
+### 2.163 Subagent permission setting
+
+Status: planned
+Blocked by: 2.162
+
+Let the operator choose whether a session that loads `pi-subagents` refuses a
+confirming profile or passes the permission extension and policy to child Pi
+processes.
+
+Verification:
+
+- Cover the refusal, its explanation, and a child process that receives the
+  extension and policy file.
+
 ### 2.45 Pi permission requests
 
 Status: planned
-Blocked by: 2.54
+Blocked by: 2.54, 2.162
 
-Implement the selected permission profiles for Pi through the reviewed package.
+Implement the selected permission profiles for Pi through Pau's permission
+extension.
 Queue requests per session, apply allow-once and deny decisions, and write
 redacted audit records. Keep permission rules separate from sandbox profiles.
 
@@ -92,7 +124,8 @@ Verification:
 Status: planned
 Blocked by: 2.62
 
-Let the operator choose a permission profile.
+Let the operator choose a permission profile. Changing it restarts Pi on the
+same session file.
 
 Verification:
 

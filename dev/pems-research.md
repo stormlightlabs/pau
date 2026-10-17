@@ -334,17 +334,78 @@ permission notice with them. Pau should:
 `web-tree-sitter` and `tree-sitter-bash` are MIT and stay ordinary
 dependencies, so their notices come with their packages.
 
-## Open questions
+## Decisions
 
-- Should the package stay private, or be published so vanilla Pi users can
-  use Pau's profiles?
-- Should the first version skip bash analysis, asking for every `bash` call
-  and leaving protected reads through `bash` to the prompt? That ships the
-  confirm-writes profile with about 1,100 lines, but the confirm-mutating
-  profile and `bash` protected-path denial need the vendored analysis.
-- Should the confirm-writes profile also allow MCP tools annotated read-only
-  and closed-world?
-- Should sessions using `pi-subagents` disable the confirming profiles, or
-  should Pau pass its extension and policy to child processes?
-- Is a mid-session profile change needed, or can a profile change restart the
-  Pi process?
+Pau adopted the recommendation, with Valibot in place of Zod for validation.
+
+- The package stays private for now.
+- The first release includes the vendored bash analysis.
+- The confirm-writes profile allows MCP tools annotated as read-only and
+  closed-world.
+- A setting controls sessions that load `pi-subagents`. The default refuses a
+  confirming profile, and the alternative passes the extension and policy
+  file to child processes.
+- Changing a profile restarts Pi on the same session file. The
+  `/pau-permissions reload` command remains a documented alternative.
+
+## Upstream behavior under Pi RPC
+
+An earlier spike ran `@gotgenes/pi-permission-system` 40.3.0 under Pi 1.0.0 RPC
+with a local scripted model.
+
+- The `tool_call` gate decides before execution for an extension tool, a
+  `bash` command, a `write`, a Pi MCP tool (`mcp__<server>__<tool>`), and a
+  `curl` request. No marker file or network request existed when the prompt
+  appeared. A denial left none afterward, and an approval produced one.
+- Protected reads through `read` and through `cat` in `bash` are denied without
+  a prompt, and the denial result does not contain the file. Workspace reads
+  pass silently. Reads outside the workspace ask.
+- Outside TUI mode, the dialog is an RPC `select` titled
+  `Permission Required` with `Yes`, a session approval, `No`, and
+  `No, provide reason`. The last option sends an `input` request, and its text
+  reaches the agent as the denial reason. The session option text names the
+  granted pattern, such as `touch *`, so Pau must answer with the exact option
+  string. A later matching command in the same process runs without a prompt.
+- Cancelling a dialog, answering with an unknown option, closing Pi's stdin,
+  and letting `promptTimeoutMs` expire each deny the request. An invalid global
+  configuration file asks for everything, including operations the file meant
+  to allow. With no configuration, every gated operation asks.
+- Two tool calls in one turn produce one dialog at a time, in order.
+- Session approvals live only in the Pi process. The package has no durable
+  approval storage.
+
+Configuration is read from
+`<agent dir>/extensions/pi-permission-system/config.json` and from
+`<cwd>/.pi/extensions/pi-permission-system/config.json`. Pi loads the project
+file only when the project is trusted, and in RPC mode trust comes from
+`--approve`, a saved decision, or `defaultProjectTrust`. Neither file is
+scoped to one session. Writing the user file changes every personal Pi
+session, and `--approve` also loads the project's other Pi resources. A
+project file replaces matching user rules, so a trusted repository can relax a
+user's protected-path rule. The package has no API for setting policy from
+another extension. A per-session profile without these side effects remains
+open upstream in
+[issue #799](https://github.com/gotgenes/pi-packages/issues/799).
+
+Review events stay inside the Pi process. `permissions:ui_prompt` and
+`permissions:decision` on the extension event bus carry a request ID, surface,
+value, matched rule, and resolution, and the review log at
+`<agent dir>/extensions/pi-permission-system/logs/` adds the tool call ID. RPC
+receives only the dialog text and option labels. To show the session,
+operation, and affected paths as structured fields, Pau would need its own
+extension.
+
+Known gaps:
+
+- Pi emits `tool_execution_start` before the gate runs, including for denied
+  calls. Pau must not present that event as execution or approval.
+- Pi does not dismiss a pending dialog when a run is aborted, and the package
+  accepts a later answer. The tool still does not run, but the decision event
+  reports `user_approved`. Pau must cancel its pending requests on abort and
+  reject stale answers itself.
+- The package does not read MCP tool annotations, so read-only MCP tools ask
+  under both confirming profiles. The `mcp` proxy tool from `pi-mcp-adapter`
+  was not exercised. The run used Pi's built-in MCP client.
+- The review log records `bash` commands and tool input previews. Pau's audit
+  records must not copy them.
+- Only Pi 1.0.0 was exercised.

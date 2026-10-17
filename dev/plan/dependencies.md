@@ -17,6 +17,13 @@ The initial choices to validate are:
   diff launch
 - Iconify through UnoCSS or unplugin for the selected icon sets
 
+## Pi permission extension dependencies
+
+The vendored bash analysis in `packages/pi-permissions` uses `web-tree-sitter`
+and the `tree-sitter-bash` grammar, both MIT-licensed. Pau ships only the
+grammar's WebAssembly file and keeps `tree-sitter-bash` out of the packages
+allowed to run install scripts.
+
 ## Resource monitoring dependency selection
 
 Use `sysinfo` 0.38.4 for process discovery and CPU, accumulated CPU time,

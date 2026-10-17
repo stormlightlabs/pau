@@ -8,6 +8,8 @@
 		recordPrompt,
 		type HistoryCursor
 	} from './composer-history';
+	import CommandCompletion from './CommandCompletion.svelte';
+	import { commandName, commandQuery, filterCommands } from './command-completion';
 	import ExtensionUi from './ExtensionUi.svelte';
 	import Icon from './Icon.svelte';
 	import ModelPicker from './ModelPicker.svelte';
@@ -16,6 +18,7 @@
 	import SessionResourceSummary from './SessionResourceSummary.svelte';
 	import type { ProcessResourceSnapshot } from './types/resource-monitoring';
 	import type {
+		CommandOption,
 		ExtensionUiResponse,
 		ExtensionUiState,
 		ModelOption,
@@ -42,6 +45,12 @@
 		 * Up and Down keys in the composer. A rejection leaves the history empty.
 		 */
 		onLoadHistory?: (sessionId: string) => Promise<string[]>;
+		/**
+		 * Lists the slash commands a session accepts, for completion in the
+		 * composer. Called once per session and again after it restarts. A
+		 * rejection leaves the composer without completion until the next try.
+		 */
+		onLoadCommands?: (sessionId: string) => Promise<CommandOption[]>;
 		onInterrupt?: (sessionId: string) => void | Promise<void>;
 		onStop?: (sessionId: string) => void | Promise<void>;
 		/** Re-sends the last prompt after a failed turn. A rejected promise shows its message beside the control. */
@@ -93,6 +102,7 @@
 		onSelectSession = () => {},
 		onSend = () => {},
 		onLoadHistory,
+		onLoadCommands,
 		onInterrupt = () => {},
 		onStop = () => {},
 		onRetry = () => {},
@@ -120,6 +130,14 @@
 	let histories = $state<Record<string, string[]>>({});
 	let historyCursor = $state<HistoryCursor>(idleHistoryCursor);
 	const historyRequested = new Set<string>();
+	let commands = $state<Record<string, CommandOption[]>>({});
+	const commandsRequested = new Set<string>();
+	let commandSelected = $state(0);
+	/** Whether the user typed the draft, so a recalled `/prompt` does not open completion. */
+	let draftTyped = $state(false);
+	/** The draft that Escape closed completion for. */
+	let dismissedDraft = $state<string>();
+	const commandListId = 'composer-commands';
 	let sending = $state(false);
 	let error = $state<string>();
 	let composer = $state<HTMLTextAreaElement>();
@@ -144,6 +162,25 @@
 	const activeQueue = $derived<PromptQueue>(
 		activeSession && !activeSession.capabilities.steer && activeSession.capabilities.followUp ? 'follow-up' : queue
 	);
+	const sessionCommands = $derived(
+		activeSession?.capabilities.commandDiscovery && activeSession ? commands[activeSession.id] : undefined
+	);
+	const commandMatches = $derived.by(() => {
+		const query = commandQuery(draft);
+		return sessionCommands && draftTyped && query !== undefined && dismissedDraft !== draft
+			? filterCommands(sessionCommands, query)
+			: undefined;
+	});
+	const unknownCommand = $derived.by(() => {
+		const name = commandName(draft);
+		return sessionCommands !== undefined &&
+			name !== undefined &&
+			commandQuery(draft) === undefined &&
+			!sessionCommands.some((command) => command.name === name)
+			? name
+			: undefined;
+	});
+
 	const canRetry = $derived(
 		Boolean(activeSession?.capabilities.retry) && activeSession?.status === 'idle' && !disconnected
 	);
@@ -270,6 +307,26 @@
 		);
 	});
 
+	$effect(() => {
+		const session = activeSession;
+		if (!session || !onLoadCommands || !session.capabilities.commandDiscovery) return;
+		const sessionId = session.id;
+		if (['starting', 'stopping', 'stopped', 'failed'].includes(session.status)) {
+			// The next ready state reloads, since a restart can change the commands.
+			commandsRequested.delete(sessionId);
+			delete commands[sessionId];
+			return;
+		}
+		if (commandsRequested.has(sessionId)) return;
+		commandsRequested.add(sessionId);
+		onLoadCommands(sessionId).then(
+			(loaded) => {
+				commands[sessionId] = loaded;
+			},
+			() => commandsRequested.delete(sessionId)
+		);
+	});
+
 	async function stop(): Promise<void> {
 		if (!activeSession) return;
 		controlError = undefined;
@@ -287,6 +344,7 @@
 		queueError = undefined;
 		error = undefined;
 		draft = '';
+		draftTyped = false;
 		historyCursor = idleHistoryCursor;
 		onSelectSession(sessionId);
 	}
@@ -308,6 +366,7 @@
 			histories[activeSession.id] = recordPrompt(histories[activeSession.id] ?? [], text);
 			historyCursor = idleHistoryCursor;
 			draft = '';
+			draftTyped = false;
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'The prompt could not be sent. Try again.';
 		} finally {
@@ -324,6 +383,33 @@
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'The session could not be interrupted. Try again.';
 		}
+	}
+
+	function acceptCommand(command: CommandOption): void {
+		historyCursor = idleHistoryCursor;
+		draft = `/${command.name} `;
+		draftTyped = false;
+		composer?.focus();
+	}
+
+	function handleCommandKeydown(event: KeyboardEvent, matches: CommandOption[]): boolean {
+		const modified = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
+		if (event.key === 'Escape') {
+			dismissedDraft = draft;
+		} else if (modified || matches.length === 0) {
+			return false;
+		} else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+			const step = event.key === 'ArrowUp' ? -1 : 1;
+			commandSelected = (commandSelected + step + matches.length) % matches.length;
+		} else if (event.key === 'Enter' || event.key === 'Tab') {
+			const command = matches[Math.min(commandSelected, matches.length - 1)];
+			if (!command) return false;
+			acceptCommand(command);
+		} else {
+			return false;
+		}
+		event.preventDefault();
+		return true;
 	}
 
 	async function retry(): Promise<void> {
@@ -364,6 +450,7 @@
 	}
 
 	function handleComposerKeydown(event: KeyboardEvent): void {
+		if (commandMatches && handleCommandKeydown(event, commandMatches)) return;
 		if (event.key === 'Escape' && activeSession?.status === 'running') {
 			event.preventDefault();
 			void interrupt();
@@ -386,6 +473,7 @@
 				event.preventDefault();
 				historyCursor = step.cursor;
 				draft = step.draft;
+				draftTyped = false;
 			}
 			return;
 		}
@@ -731,6 +819,15 @@
 								</select>
 							</label>
 						{/if}
+						{#if commandMatches}
+							<div class="session-composer__commands">
+								<CommandCompletion
+									id={commandListId}
+									commands={commandMatches}
+									selected={commandSelected}
+									onAccept={acceptCommand} />
+							</div>
+						{/if}
 						<label class="session-composer__field">
 							<span class="session-view__sr-only">Prompt</span>
 							<Icon name="chevronRight" class="session-composer__prompt" />
@@ -738,6 +835,15 @@
 								bind:this={composer}
 								bind:value={draft}
 								onkeydown={handleComposerKeydown}
+								oninput={() => {
+									draftTyped = true;
+									commandSelected = 0;
+								}}
+								aria-autocomplete={commandMatches ? 'list' : undefined}
+								aria-controls={commandMatches?.length ? commandListId : undefined}
+								aria-activedescendant={commandMatches?.length
+									? `${commandListId}-option-${Math.min(commandSelected, commandMatches.length - 1)}`
+									: undefined}
 								placeholder={activeSession.status === 'running'
 									? 'Add direction or queue a follow-up'
 									: 'Message the agent'}
@@ -763,6 +869,9 @@
 								<kbd>⌘↵</kbd>
 							</button>
 						</div>
+						{#if unknownCommand !== undefined}
+							<p class="session-composer__hint">Not a known command. It will be sent as written.</p>
+						{/if}
 						{#if composerUnavailable}
 							<p id="composer-unavailable" class="session-composer__hint">{composerUnavailable}</p>
 						{/if}
@@ -1279,6 +1388,7 @@
 		display: grid;
 		grid-template-areas:
 			'queue queue'
+			'commands commands'
 			'field actions'
 			'error error';
 		grid-template-columns: minmax(0, 1fr) auto;
@@ -1308,6 +1418,15 @@
 		background: transparent;
 		border: 0;
 		font: inherit;
+	}
+
+	.session-composer__commands {
+		grid-area: commands;
+		border-bottom: 1px solid var(--pau-border);
+	}
+
+	.session-composer__commands :global(.command-completion) {
+		border: 0;
 	}
 
 	.session-composer__field {

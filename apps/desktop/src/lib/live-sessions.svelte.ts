@@ -2,6 +2,7 @@ import type { AgentSession, ServerEvent, Workspace } from '@stormlightlabs/pau-p
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import type {
 	ExtensionUiResponse,
+	CommandOption,
 	MessageQueue,
 	ModelOption,
 	PromptQueue,
@@ -20,6 +21,7 @@ import {
 	getSessionQueue,
 	interruptSession,
 	listNativeSessions,
+	listSessionCommands,
 	listSessionModels,
 	listSessions,
 	listWorkspaces,
@@ -272,6 +274,20 @@ export class LiveSessions {
 		}
 	}
 
+	/** Lists the slash commands a session accepts. Rejects with operator-facing copy. */
+	async listCommands(sessionId: string): Promise<CommandOption[]> {
+		try {
+			const commands = await listSessionCommands(this.#options.search, sessionId, this.#fetcher);
+			return commands.map((command) => ({
+				name: command.name,
+				description: command.description ?? undefined,
+				source: command.source
+			}));
+		} catch (cause) {
+			throw new Error(sessionErrorMessage(cause, 'control'), { cause });
+		}
+	}
+
 	/** Switches a session's model. */
 	selectModel(sessionId: string, model: ModelOption): Promise<void> {
 		return this.#control(() =>
@@ -517,7 +533,8 @@ export class LiveSessions {
 				retry: session.capabilities.retry,
 				modelSelection: session.capabilities.model_selection,
 				messageQueue: session.capabilities.message_queue,
-				thinkingLevel: session.capabilities.thinking_level
+				thinkingLevel: session.capabilities.thinking_level,
+				commandDiscovery: session.capabilities.command_discovery
 			},
 			thinkingLevel: this.#thinkingLevels[session.id],
 			transcript: transcript.entries,

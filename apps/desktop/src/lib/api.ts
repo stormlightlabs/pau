@@ -13,6 +13,7 @@ import type {
 	GitStatus,
 	NativeSessionList,
 	SessionExtensionUi,
+	SessionCommand,
 	SessionModel,
 	SessionModelSelection,
 	SessionMessageQueue,
@@ -448,6 +449,18 @@ export async function listSessionModels(
 		headers: authorization(resolveApiToken(search))
 	});
 	return responseJson<SessionModel[]>(response);
+}
+
+/** Lists the slash commands a live session accepts in a prompt. */
+export async function listSessionCommands(
+	search: string,
+	sessionId: string,
+	fetcher: typeof fetch = fetch
+): Promise<SessionCommand[]> {
+	const response = await fetcher(sessionUrl(search, `/${encodeURIComponent(sessionId)}/commands`), {
+		headers: authorization(resolveApiToken(search))
+	});
+	return responseJson<SessionCommand[]>(response);
 }
 
 /** Switches an idle session to another model. */

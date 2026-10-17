@@ -519,6 +519,23 @@ test('disables the picker when the session cannot select models', async () => {
 	await expect.element(page.getByRole('button', { name: /^Model:/ })).toBeDisabled();
 });
 
+test('loads session commands for completion and sends the chosen command as a prompt', async () => {
+	const prompt = vi.fn(() => new Response(null, { status: 202 }));
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/sessions/session-1/commands': () =>
+			json([{ name: 'review', description: 'Review changes', source: 'prompt', path: null }]),
+		'POST /api/sessions/session-1/prompt': prompt
+	});
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+
+	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), '/rev');
+	await expect.element(page.getByRole('option', { name: /\/review/ })).toBeVisible();
+	await userEvent.keyboard('{Enter}{Control>}{Enter}{/Control}');
+
+	expect(prompt).toHaveBeenCalledWith(expect.objectContaining({ body: expect.stringContaining('/review') }));
+});
+
 test('shows the queued messages, follows queue updates, and restores them when cleared', async () => {
 	const clear = vi.fn(() => json({ steering: ['Keep the API.'], follow_up: ['Add a test.'] }));
 	const { props, sockets } = setup({

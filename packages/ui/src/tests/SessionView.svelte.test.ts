@@ -2,6 +2,7 @@ import { page, userEvent } from 'vitest/browser';
 import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
+import { commandFixtures } from '../fixtures/commands';
 import { sessionFixtures } from '../fixtures/sessions';
 import SessionView from '../lib/SessionView.svelte';
 import SessionViewDemo from '../stories/SessionViewDemo.svelte';
@@ -139,7 +140,7 @@ test('explains why a running session without queues cannot take a prompt', async
 
 	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeDisabled();
 	await expect.element(page.getByText(/Claude cannot take new direction during a run/)).toBeVisible();
-	await expect.element(page.getByRole('combobox')).not.toBeInTheDocument();
+	await expect.element(page.getByRole('listbox')).not.toBeInTheDocument();
 });
 
 test('stops the active session from its header', async () => {
@@ -236,6 +237,69 @@ test('recalls a prompt sent in this view', async () => {
 	await expect.element(prompt).toHaveValue('');
 	await userEvent.keyboard('{ArrowUp}');
 	await expect.element(prompt).toHaveValue('ship it');
+});
+
+const commandProps = {
+	workspaces: sessionFixtures.running,
+	initialSessionId: 'session-running',
+	commands: commandFixtures.populated,
+	history: ['earlier']
+};
+
+test('completes a command with the keyboard ahead of history', async () => {
+	await render(SessionViewDemo, commandProps);
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.type(prompt, '/');
+	await expect.element(page.getByRole('listbox', { name: 'Commands' })).toBeVisible();
+	await expect.element(page.getByRole('listbox').getByRole('option')).toHaveLength(4);
+
+	await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowUp}');
+	await expect.element(page.getByRole('listbox').getByRole('option', { selected: true })).toHaveTextContent('/review');
+	await userEvent.keyboard('{Tab}');
+	await expect.element(prompt).toHaveValue('/review ');
+	await expect.element(page.getByRole('listbox').getByRole('option')).not.toBeInTheDocument();
+});
+
+test('closes the list with Escape without interrupting the run', async () => {
+	await render(SessionViewDemo, commandProps);
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.type(prompt, '/re');
+	await userEvent.keyboard('{Escape}');
+
+	await expect.element(page.getByRole('listbox').getByRole('option')).not.toBeInTheDocument();
+	await expect.element(prompt).toHaveValue('/re');
+	await expect.element(page.getByText('No action sent')).toBeVisible();
+});
+
+test('keeps history navigation when no list is open', async () => {
+	await render(SessionViewDemo, commandProps);
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.click(prompt);
+	await userEvent.keyboard('{ArrowUp}');
+	await expect.element(prompt).toHaveValue('earlier');
+	await expect.element(page.getByRole('listbox').getByRole('option')).not.toBeInTheDocument();
+});
+
+test('shows a hint for an unknown command and still sends it', async () => {
+	await render(SessionViewDemo, commandProps);
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.type(prompt, '/nope now');
+	await expect.element(page.getByText('Not a known command. It will be sent as written.')).toBeVisible();
+
+	await userEvent.keyboard('{Control>}{Enter}{/Control}');
+	await expect.element(page.getByText(/session-running: steer: \/nope now/)).toBeVisible();
+});
+
+test('offers no completion when the session cannot discover commands', async () => {
+	await render(SessionViewDemo, {
+		...commandProps,
+		workspaces: sessionFixtures.runningWithoutQueue,
+		initialSessionId: 'session-no-queue'
+	});
+	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), '/nope');
+
+	await expect.element(page.getByRole('listbox')).not.toBeInTheDocument();
+	await expect.element(page.getByText(/Not a known command/)).not.toBeInTheDocument();
 });
 
 test('lists queued messages by kind and hides an empty or unsupported queue', async () => {

@@ -7,7 +7,8 @@ const fullCapabilities = {
 	interrupt: true,
 	stop: true,
 	retry: true,
-	messageQueue: true
+	messageQueue: true,
+	commandDiscovery: true
 } satisfies SessionCapabilities;
 
 const claudeCapabilities = {

@@ -1,6 +1,12 @@
 <script lang="ts">
 	import type { ProcessResourceSnapshot } from '../lib/types/resource-monitoring';
-	import type { ExtensionUiResponse, MessageQueue, PromptQueue, SessionWorkspace } from '../lib/types/session';
+	import type {
+		CommandOption,
+		ExtensionUiResponse,
+		MessageQueue,
+		PromptQueue,
+		SessionWorkspace
+	} from '../lib/types/session';
 	import SessionView from '../lib/SessionView.svelte';
 
 	let {
@@ -12,7 +18,8 @@
 		startFailure,
 		retryFailure,
 		history = [],
-		clearedQueue = { steering: [], followUp: [] }
+		clearedQueue = { steering: [], followUp: [] },
+		commands = []
 	}: {
 		workspaces: SessionWorkspace[];
 		initialSessionId?: string;
@@ -25,6 +32,8 @@
 		retryFailure?: string;
 		/** Earlier prompts the composer can recall, newest first. */
 		history?: string[];
+		/** Slash commands the composer can complete. */
+		commands?: CommandOption[];
 		/** What clearing the queue returns. */
 		clearedQueue?: MessageQueue;
 	} = $props();
@@ -60,6 +69,7 @@
 	onSelectSession={(sessionId) => (activeSessionId = sessionId)}
 	onSend={send}
 	onLoadHistory={async () => history}
+	onLoadCommands={async () => commands}
 	onInterrupt={(sessionId) => {
 		lastAction = `${sessionId}: interrupt`;
 	}}

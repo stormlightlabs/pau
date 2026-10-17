@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/svelte-vite';
 import { expect, userEvent, within } from 'storybook/test';
 
+import { commandFixtures } from '../fixtures/commands';
 import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
 import { sessionFixtures } from '../fixtures/sessions';
 import SessionViewDemo from './SessionViewDemo.svelte';
@@ -83,6 +84,53 @@ export const EmptyPromptHistory: Story = {
 		await userEvent.click(prompt);
 		await userEvent.keyboard('{ArrowUp}{ArrowDown}');
 		await expect(prompt).toHaveValue('');
+	}
+};
+export const CommandCompletion: Story = {
+	args: { commands: commandFixtures.populated },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const prompt = canvas.getByRole('textbox', { name: 'Prompt' });
+		await userEvent.type(prompt, '/');
+		await expect(await canvas.findByRole('listbox', { name: 'Commands' })).toBeInTheDocument();
+		await expect(within(canvas.getByRole('listbox')).getAllByRole('option')).toHaveLength(4);
+		await userEvent.keyboard('{ArrowDown}{Enter}');
+		await expect(canvas.getByRole('textbox', { name: 'Prompt' })).toHaveValue('/review ');
+	}
+};
+export const CommandCompletionFiltering: Story = {
+	args: { commands: commandFixtures.populated },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), '/re');
+		await expect(await canvas.findByRole('option', { name: /release-notes/ })).toBeInTheDocument();
+		const options = within(canvas.getByRole('listbox')).getAllByRole('option');
+		await expect(options).toHaveLength(2);
+		await expect(options[0]).toHaveTextContent('/review');
+		await expect(options[1]).toHaveTextContent('/skill:release-notes');
+	}
+};
+export const CommandCompletionNoMatches: Story = {
+	args: { commands: commandFixtures.populated },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), '/zzz');
+		await expect(await canvas.findByText('No matching commands')).toBeInTheDocument();
+		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), ' now');
+		await expect(await canvas.findByText(/Not a known command/)).toBeInTheDocument();
+	}
+};
+export const CommandCompletionUnsupported: Story = {
+	args: {
+		workspaces: sessionFixtures.runningWithoutQueue,
+		initialSessionId: 'session-no-queue',
+		commands: commandFixtures.populated
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), '/');
+		await expect(canvas.queryByRole('listbox')).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/Not a known command/)).not.toBeInTheDocument();
 	}
 };
 export const ResourcePressure: Story = {

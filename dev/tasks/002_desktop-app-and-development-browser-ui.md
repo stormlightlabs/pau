@@ -671,18 +671,6 @@ Verification:
 - Component-test adding, removing, and rejecting images.
 - Send a prompt with an image in a self-hosted Pi session.
 
-### 2.75 Composer command completion
-
-Status: planned
-Blocked by: none
-
-Add command completion to the session composer.
-
-Verification:
-
-- Component-test command completion and unsupported commands.
-- Run a discovered command in a self-hosted Pi session.
-
 ### 2.115 Pi shell context API
 
 Status: planned
@@ -788,7 +776,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.165, 2.73, 2.75, 2.79, 2.114, 2.120, 2.156
+Blocked by: 2.165, 2.73, 2.79, 2.114, 2.120, 2.156
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

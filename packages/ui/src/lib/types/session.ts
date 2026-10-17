@@ -16,6 +16,16 @@ export type SessionCapabilities = {
 	messageQueue?: boolean;
 	/** Whether the agent can change the thinking level. Absent means the surface offers no control. */
 	thinkingLevel?: boolean;
+	/** Whether the agent can list its slash commands. Absent means the composer offers no completion. */
+	commandDiscovery?: boolean;
+};
+
+/** One slash command the agent accepts in a prompt. */
+export type CommandOption = {
+	/** The name typed after the slash, without the slash. */
+	name: string;
+	description?: string;
+	source: 'extension' | 'prompt' | 'skill';
 };
 
 /** Thinking levels in the order the control lists them. The model may clamp a level it does not support. */

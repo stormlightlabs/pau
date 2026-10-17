@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Type `/` in the composer to browse and complete Pi's extension commands,
+  prompt templates, and skills.
 - Queued steering and follow-up messages appear above the composer, and
   "Clear queue" puts them back in the composer for editing.
 - Choose how hard the model thinks from the session header, with levels from

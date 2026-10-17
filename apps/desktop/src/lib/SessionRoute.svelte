@@ -63,6 +63,7 @@
 	onStartSession={startSession}
 	onLoadSavedSessions={(workspaceId) => sessions.listSaved(workspaceId)}
 	onResumeSession={resumeSession}
+	onLoadCommands={(sessionId) => sessions.listCommands(sessionId)}
 	onLoadModels={(sessionId) => sessions.listModels(sessionId)}
 	onSelectModel={(sessionId, model) => sessions.selectModel(sessionId, model)}
 	onSelectThinkingLevel={(sessionId, level) => sessions.selectThinkingLevel(sessionId, level)}

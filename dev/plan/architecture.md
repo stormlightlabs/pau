@@ -104,9 +104,10 @@ annotated `vX.Y.0` tag. Fixes found while using a tagged build raise the
 patch version. Only tagged builds are installed for dogfooding. Untagged builds
 report a `-dev` version with the commit, use the `org.stormlightlabs.pau.dev`
 bundle identifier and the product name "Pau Dev", and keep their own data
-directory so they never migrate the installed app's database. Migrations only
-move forward, and the app refuses to open a database whose schema is newer than
-its own.
+directory so they never migrate the installed app's database. Before 1.0.0,
+migrations only move forward, and the app refuses to open a database whose
+schema is newer than its own. From 1.0.0, every migration also has a down
+migration so an installed release can return to an earlier version.
 
 Rust owns the wire types. Generate the checked TypeScript contract in
 `packages/protocol` from Rust and fail CI when regeneration changes committed

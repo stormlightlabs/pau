@@ -484,6 +484,10 @@ fn router_with_services(
             get(sessions::get_session_queue).delete(sessions::clear_session_queue),
         )
         .route(
+            "/api/sessions/{session_id}/history",
+            get(sessions::get_session_history),
+        )
+        .route(
             "/api/sessions/{session_id}/usage",
             get(sessions::get_session_usage),
         )

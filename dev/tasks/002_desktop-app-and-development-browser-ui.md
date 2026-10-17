@@ -677,21 +677,10 @@ Verification:
   not.
 - Trigger a notification from a self-hosted Pi session.
 
-### 2.68 Pi input history API
-
-Status: planned
-Blocked by: none
-
-Expose Pi input history through the desktop API.
-
-Verification:
-
-- Cover history recall against the Pi fixture.
-
 ### 2.69 Composer input history
 
 Status: planned
-Blocked by: 2.68
+Blocked by: none
 
 Add input history to the session composer.
 

@@ -281,6 +281,18 @@ done
 }
 
 #[tokio::test]
+async fn recalls_user_prompts_newest_first() {
+    let fixture = FakePi::new(CONTROL_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+    assert_eq!(
+        session.input_history().await.unwrap(),
+        vec!["second\nline", "second", "first"]
+    );
+    session.stop().await.unwrap();
+    assert_command(&fixture.commands()[0], "get_entries");
+}
+
+#[tokio::test]
 async fn sends_extension_ui_responses_without_command_ids() {
     let fixture = FakePi::new(CONTROL_FIXTURE);
     let session = PiSession::start(fixture.options()).unwrap();
@@ -482,6 +494,9 @@ while IFS= read -r command; do
             ;;
         *'"type":"get_available_models"'*)
             printf '{"id":"%s","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"model-one","name":"Model One","provider":"fixture","reasoning":true},{"id":"model-two","provider":"fixture","reasoning":false}]}}\n' "$id"
+            ;;
+        *'"type":"get_entries"'*)
+            printf '{"id":"%s","type":"response","command":"get_entries","success":true,"data":{"entries":[{"type":"message","id":"a","message":{"role":"user","content":"first"}},{"type":"message","id":"b","message":{"role":"assistant","content":[{"type":"text","text":"reply"}]}},{"type":"message","id":"c","message":{"role":"user","content":[{"type":"text","text":"second"},{"type":"image","data":"x"}]}},{"type":"compaction","id":"d"},{"type":"message","id":"e","message":{"role":"user","content":"second\\nline"}},{"type":"message","id":"f","message":{"role":"user","content":"second\\nline"}},{"type":"message","id":"g","message":{"role":"user","content":[{"type":"image","data":"x"}]}}]}}\n' "$id"
             ;;
         *'"type":"get_commands"'*)
             printf '{"id":"%s","type":"response","command":"get_commands","success":true,"data":{"commands":[{"name":"review","description":"Review the changes","source":"prompt","sourceInfo":{"path":"/prompts/review.md","source":"local","scope":"project","origin":"top-level"}},{"name":"skill:lint","source":"skill"},{"name":"ping","description":"Ping","source":"extension"}]}}\n' "$id"

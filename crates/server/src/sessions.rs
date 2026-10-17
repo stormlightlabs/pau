@@ -917,6 +917,15 @@ pub(crate) async fn set_session_auto_compaction(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Returns the prompts the user sent, newest first, for input recall.
+pub(crate) async fn get_session_history(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+) -> Result<Json<Vec<String>>, ApiError> {
+    let (_, session) = session_api(&state)?.live(&session_id).await?;
+    Ok(Json(session.input_history().await?))
+}
+
 /// Returns the session's context fill and cumulative token and cost usage.
 pub(crate) async fn get_session_usage(
     State(state): State<ApiState>,

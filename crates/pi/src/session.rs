@@ -97,6 +97,9 @@ pub struct PiCommand {
     pub path: Option<String>,
 }
 
+/// The most prompts [`PiSession::input_history`] returns.
+pub const PI_INPUT_HISTORY_LIMIT: usize = 100;
+
 /// How full the model's context window is.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PiContextUsage {
@@ -279,6 +282,37 @@ impl PiSession {
             .iter()
             .map(|entry| parse_model(entry, current.as_ref()))
             .collect()
+    }
+
+    /// Lists the prompts the user sent, newest first, as Pi's editor recalls them.
+    ///
+    /// Pi keeps recall history only in its terminal editor and rebuilds it from
+    /// the session's user messages on resume, so this reads the same messages
+    /// from `get_entries`. Consecutive repeats collapse, as in Pi's editor, and
+    /// at most [`PI_INPUT_HISTORY_LIMIT`] prompts return.
+    pub async fn input_history(&self) -> Result<Vec<String>, PiSessionError> {
+        let control = AgentControl::Prompt;
+        self.require_capability(control)?;
+        let response = self
+            .command(control, json!({"type": "get_entries"}))
+            .await?;
+        let entries = response
+            .get("data")
+            .and_then(|data| data.get("entries"))
+            .and_then(Value::as_array)
+            .ok_or_else(|| {
+                PiSessionError::NativeSession("Pi did not report session entries".to_owned())
+            })?;
+        let mut history: Vec<String> = Vec::new();
+        for text in entries.iter().rev().filter_map(entry_prompt) {
+            if history.last() != Some(&text) {
+                history.push(text);
+            }
+            if history.len() == PI_INPUT_HISTORY_LIMIT {
+                break;
+            }
+        }
+        Ok(history)
     }
 
     /// Starts work, or queues it during a run when the caller chooses a queue.
@@ -597,6 +631,28 @@ fn parse_command(entry: &Value) -> Result<PiCommand, PiSessionError> {
             .and_then(Value::as_str)
             .map(str::to_owned),
     })
+}
+
+/// The text of a user message entry, or `None` for other entries and for
+/// messages without text.
+fn entry_prompt(entry: &Value) -> Option<String> {
+    if entry.get("type").and_then(Value::as_str) != Some("message") {
+        return None;
+    }
+    let message = entry.get("message")?;
+    if message.get("role").and_then(Value::as_str) != Some("user") {
+        return None;
+    }
+    let text = match message.get("content")? {
+        Value::String(text) => text.clone(),
+        Value::Array(blocks) => blocks
+            .iter()
+            .filter_map(|block| block.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => return None,
+    };
+    (!text.trim().is_empty()).then_some(text)
 }
 
 fn parse_usage(data: &Value) -> Option<PiSessionUsage> {

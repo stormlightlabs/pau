@@ -101,6 +101,9 @@ while IFS= read -r command; do
         *'"type":"get_available_models"'*)
             printf '{"id":"%s","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"model-one","name":"Model One","provider":"fixture","reasoning":true},{"id":"model-two","provider":"fixture","reasoning":false}]}}\n' "$id"
             ;;
+        *'"type":"get_entries"'*)
+            printf '{"id":"%s","type":"response","command":"get_entries","success":true,"data":{"entries":[{"type":"message","id":"a","message":{"role":"user","content":"first"}},{"type":"message","id":"b","message":{"role":"assistant","content":"reply"}},{"type":"message","id":"c","message":{"role":"user","content":[{"type":"text","text":"second"}]}}]}}\n' "$id"
+            ;;
         *'"type":"get_commands"'*)
             printf '{"id":"%s","type":"response","command":"get_commands","success":true,"data":{"commands":[{"name":"review","description":"Review the changes","source":"prompt","sourceInfo":{"path":"/prompts/review.md"}},{"name":"skill:lint","source":"skill"}]}}\n' "$id"
             ;;
@@ -278,6 +281,10 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
         ])
     );
 
+    let (status, history) = fixture.call("GET", &format!("{base}/history"), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(history, json!(["second", "first"]));
+
     let model = json!({"provider": "fixture", "model_id": "model-one"});
     let (status, selected) = fixture
         .call("PUT", &format!("{base}/model"), Some(model))
@@ -407,6 +414,7 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
             "get_commands",
             "get_state",
             "get_available_models",
+            "get_entries",
             "set_model",
             "set_model",
             "set_thinking_level",

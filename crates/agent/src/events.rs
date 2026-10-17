@@ -32,6 +32,8 @@ pub enum AgentEventKind {
     ToolCall,
     /// A partial or completed tool result.
     ToolResult,
+    /// Context compaction started or finished.
+    Compaction,
 }
 
 /// An event category paired with a payload owned by an agent adapter.

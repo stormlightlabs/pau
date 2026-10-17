@@ -1,11 +1,12 @@
 use pau_agent::{AgentEventKind, AgentSessionStatus};
 use pau_pi::{
-    PiEventPayload, PiEventReducer, PiLifecycleEvent, PiMessagePhase, PiProjectedContent,
-    PiToolResultPhase,
+    PiCompactionOutcome, PiCompactionReason, PiEventPayload, PiEventReducer, PiLifecycleEvent,
+    PiMessagePhase, PiProjectedContent, PiToolResultPhase,
 };
 use serde_json::Value;
 
 const CAPTURED_EVENTS: &str = include_str!("fixtures/event-projection.jsonl");
+const COMPACTION_EVENTS: &str = include_str!("fixtures/compaction-events.jsonl");
 
 #[test]
 fn replays_captured_events_and_replaces_streamed_messages() {
@@ -138,5 +139,91 @@ fn agent_end_keeps_the_session_running_until_agent_settled() {
             event: PiLifecycleEvent::AgentSettled,
             status: AgentSessionStatus::Idle,
         }
+    ));
+}
+
+#[test]
+fn projects_automatic_compaction_results_and_failures() {
+    let mut reducer = PiEventReducer::default();
+    let mut started = Vec::new();
+    let mut ended = Vec::new();
+
+    for line in COMPACTION_EVENTS.lines() {
+        let native: Value = serde_json::from_str(line).unwrap();
+        let Some(event) = reducer.reduce(&native) else {
+            continue;
+        };
+        match event.payload {
+            PiEventPayload::CompactionStarted { reason } => {
+                assert_eq!(event.kind, AgentEventKind::Compaction);
+                assert_eq!(reducer.status(), AgentSessionStatus::Running);
+                started.push(reason);
+            }
+            PiEventPayload::CompactionEnded {
+                reason,
+                outcome,
+                will_retry,
+            } => {
+                assert_eq!(event.kind, AgentEventKind::Compaction);
+                ended.push((reason, outcome, will_retry, reducer.status()));
+            }
+            _ => {}
+        }
+    }
+
+    assert_eq!(
+        started,
+        vec![
+            PiCompactionReason::Threshold,
+            PiCompactionReason::Overflow,
+            PiCompactionReason::Threshold,
+            PiCompactionReason::Manual,
+        ]
+    );
+    assert!(started[..3].iter().all(PiCompactionReason::is_automatic));
+    assert!(!started[3].is_automatic());
+    assert_eq!(ended.len(), 4);
+
+    let PiCompactionOutcome::Completed(threshold) = &ended[0].1 else {
+        panic!("threshold compaction should succeed");
+    };
+    assert_eq!(threshold.summary, "Threshold summary");
+    assert_eq!(threshold.first_kept_entry_id.as_deref(), Some("entry-4"));
+    assert_eq!(threshold.tokens_before, Some(180000));
+    assert_eq!(threshold.estimated_tokens_after, Some(40000));
+    assert_eq!(threshold.native["details"]["futureDetail"], true);
+    // Automatic compaction inside a run leaves settlement to `agent_settled`.
+    assert_eq!(ended[0].3, AgentSessionStatus::Running);
+
+    assert_eq!(ended[1].0, PiCompactionReason::Overflow);
+    assert!(matches!(ended[1].1, PiCompactionOutcome::Completed(_)));
+    assert!(ended[1].2);
+
+    assert_eq!(
+        ended[2].1,
+        PiCompactionOutcome::Failed {
+            message: "Summarization failed: 529 overloaded".to_owned(),
+        }
+    );
+    assert_eq!(ended[2].3, AgentSessionStatus::Running);
+
+    assert_eq!(ended[3].1, PiCompactionOutcome::Aborted);
+    // Manual compaction from idle returns the session to idle when it ends.
+    assert_eq!(ended[3].3, AgentSessionStatus::Idle);
+}
+
+#[test]
+fn reports_a_compaction_end_without_a_result_as_failed() {
+    let mut reducer = PiEventReducer::default();
+    let event = reducer
+        .reduce(&serde_json::json!({"type": "compaction_end", "reason": "threshold"}))
+        .unwrap();
+
+    assert!(matches!(
+        event.payload,
+        PiEventPayload::CompactionEnded {
+            outcome: PiCompactionOutcome::Failed { message },
+            ..
+        } if message == "Pi did not report a compaction result"
     ));
 }

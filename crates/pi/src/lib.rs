@@ -22,8 +22,9 @@ pub use process::{
     PiShutdownTimeouts, StartPiProcessOptions,
 };
 pub use projection::{
-    PiEventPayload, PiEventReducer, PiLifecycleEvent, PiMessagePhase, PiProjectedContent,
-    PiProjectedMessage, PiToolCallPhase, PiToolResultPhase,
+    PiCompactionOutcome, PiCompactionReason, PiCompactionResult, PiEventPayload, PiEventReducer,
+    PiLifecycleEvent, PiMessagePhase, PiProjectedContent, PiProjectedMessage, PiToolCallPhase,
+    PiToolResultPhase,
 };
 pub use registry::{
     DiscoveredPiSession, PiSessionOutput, PiSessionRegistry, PiSessionRegistryError,

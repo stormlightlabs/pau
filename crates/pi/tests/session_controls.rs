@@ -5,7 +5,8 @@ use pau_agent::{
     PromptQueueChoice, ThinkingLevel,
 };
 use pau_pi::{
-    PI_RPC_CAPABILITIES, PiCommand, PiCommandSource, PiExtensionUiResponse, PiProcess, PiSession,
+    PI_RPC_CAPABILITIES, PiCommand, PiCommandSource, PiCompactionOutcome, PiCompactionReason,
+    PiEventPayload, PiEventReducer, PiExtensionUiResponse, PiProcess, PiProcessOutput, PiSession,
     PiSessionError, PiShutdownTimeouts, StartPiProcessOptions,
 };
 use serde_json::Value;
@@ -255,6 +256,82 @@ async fn returns_capability_and_native_rejection_errors() {
     assert_eq!(fixture.commands().len(), 2);
 }
 
+#[tokio::test]
+async fn compacts_manually_and_reports_failed_compaction() {
+    let fixture = FakePi::new(CONTROL_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+    let mut output = session.subscribe();
+
+    let result = session
+        .compact(Some("Focus on code changes".to_owned()))
+        .await
+        .unwrap();
+    assert_eq!(result.summary, "Fixture summary");
+    assert_eq!(result.first_kept_entry_id.as_deref(), Some("entry-2"));
+    assert_eq!(result.tokens_before, Some(150000));
+    assert_eq!(result.estimated_tokens_after, Some(32000));
+    assert_eq!(result.native["usage"]["totalTokens"], 33200);
+    assert_eq!(session.status().await, AgentSessionStatus::Idle);
+
+    let failed = session.compact(None).await.unwrap_err();
+    assert!(matches!(
+        failed,
+        PiSessionError::Control(AgentControlError::Rejected {
+            control: AgentControl::Compact,
+            message,
+        }) if message == "Nothing to compact (session too small)"
+    ));
+    assert_eq!(session.status().await, AgentSessionStatus::Idle);
+
+    session.set_auto_compaction(false).await.unwrap();
+
+    session.prompt("start", None).await.unwrap();
+    let busy = session.compact(None).await.unwrap_err();
+    assert!(matches!(
+        busy,
+        PiSessionError::Control(AgentControlError::InvalidState {
+            control: AgentControl::Compact,
+            status: AgentSessionStatus::Running,
+            ..
+        })
+    ));
+    session.stop().await.unwrap();
+
+    let mut reducer = PiEventReducer::default();
+    let mut outcomes = Vec::new();
+    while let Ok(record) = output.try_recv() {
+        if let PiProcessOutput::Event(event) = record
+            && let Some(projected) = reducer.reduce(&event)
+            && let PiEventPayload::CompactionEnded {
+                reason, outcome, ..
+            } = projected.payload
+        {
+            outcomes.push((reason, outcome));
+        }
+    }
+    assert_eq!(outcomes.len(), 2);
+    assert_eq!(outcomes[0].0, PiCompactionReason::Manual);
+    assert!(matches!(
+        &outcomes[0].1,
+        PiCompactionOutcome::Completed(result) if result.summary == "Fixture summary"
+    ));
+    assert_eq!(
+        outcomes[1].1,
+        PiCompactionOutcome::Failed {
+            message: "Nothing to compact (session too small)".to_owned(),
+        }
+    );
+
+    let commands = fixture.commands();
+    assert_command(&commands[0], "compact");
+    assert_eq!(commands[0]["customInstructions"], "Focus on code changes");
+    assert_command(&commands[1], "compact");
+    assert!(commands[1].get("customInstructions").is_none());
+    assert_command(&commands[2], "set_auto_compaction");
+    assert_eq!(commands[2]["enabled"], false);
+    assert_eq!(commands.len(), 4);
+}
+
 fn assert_command(command: &Value, expected: &str) {
     assert_eq!(command["type"], expected);
     assert!(command["id"].as_str().unwrap().starts_with("pau-"));
@@ -297,6 +374,19 @@ while IFS= read -r command; do
             ;;
         *'"type":"get_commands"'*)
             printf '{"id":"%s","type":"response","command":"get_commands","success":true,"data":{"commands":[{"name":"review","description":"Review the changes","source":"prompt","sourceInfo":{"path":"/prompts/review.md","source":"local","scope":"project","origin":"top-level"}},{"name":"skill:lint","source":"skill"},{"name":"ping","description":"Ping","source":"extension"}]}}\n' "$id"
+            ;;
+        *'"customInstructions"'*)
+            printf '{"type":"compaction_start","reason":"manual"}\n'
+            printf '{"type":"compaction_end","reason":"manual","result":{"summary":"Fixture summary","firstKeptEntryId":"entry-2","tokensBefore":150000,"estimatedTokensAfter":32000,"usage":{"totalTokens":33200},"details":{}},"aborted":false,"willRetry":false}\n'
+            printf '{"id":"%s","type":"response","command":"compact","success":true,"data":{"summary":"Fixture summary","firstKeptEntryId":"entry-2","tokensBefore":150000,"estimatedTokensAfter":32000,"usage":{"totalTokens":33200},"details":{}}}\n' "$id"
+            ;;
+        *'"type":"compact"'*)
+            printf '{"type":"compaction_start","reason":"manual"}\n'
+            printf '{"type":"compaction_end","reason":"manual","aborted":false,"willRetry":false,"errorMessage":"Nothing to compact (session too small)"}\n'
+            printf '{"id":"%s","type":"response","command":"compact","success":false,"error":"Nothing to compact (session too small)"}\n' "$id"
+            ;;
+        *'"type":"set_auto_compaction"'*)
+            printf '{"id":"%s","type":"response","command":"set_auto_compaction","success":true}\n' "$id"
             ;;
         *'"type":"extension_ui_response"'*) ;;
         *) exit 65 ;;

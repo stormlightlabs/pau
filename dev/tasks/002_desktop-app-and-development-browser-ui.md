@@ -811,22 +811,10 @@ Verification:
 
 - Component-test normal and near-context-limit states.
 
-### 2.78 Pi compaction API
-
-Status: planned
-Blocked by: none
-
-Expose manual and automatic compaction through the desktop API.
-
-Verification:
-
-- Cover manual compaction, automatic compaction, and compaction failure against
-  the Pi fixture.
-
 ### 2.79 Compaction controls
 
 Status: planned
-Blocked by: 2.78, 2.146
+Blocked by: 2.146
 
 Add a compaction control and compaction states to the session view.
 

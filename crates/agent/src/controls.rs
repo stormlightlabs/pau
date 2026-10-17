@@ -21,6 +21,10 @@ pub enum AgentControl {
     SetThinkingLevel,
     /// List the slash commands the session offers.
     ListCommands,
+    /// Summarize older context so the conversation fits the context window.
+    Compact,
+    /// Enable or disable compaction when context is nearly full.
+    AutoCompaction,
     /// Stop the session process.
     Stop,
 }
@@ -36,6 +40,8 @@ impl fmt::Display for AgentControl {
             Self::SelectModel => "model selection",
             Self::SetThinkingLevel => "thinking-level selection",
             Self::ListCommands => "command discovery",
+            Self::Compact => "compact",
+            Self::AutoCompaction => "change automatic compaction",
             Self::Stop => "stop",
         };
         formatter.write_str(name)
@@ -61,6 +67,9 @@ pub struct AgentCapabilities {
     pub thinking_level: bool,
     /// Whether the adapter can list the session's slash commands.
     pub command_discovery: bool,
+    /// Whether the adapter can compact context manually and configure
+    /// automatic compaction.
+    pub compaction: bool,
     /// Whether the adapter can stop its session process.
     pub stop: bool,
 }
@@ -77,6 +86,7 @@ impl AgentCapabilities {
             AgentControl::SelectModel => self.model_selection,
             AgentControl::SetThinkingLevel => self.thinking_level,
             AgentControl::ListCommands => self.command_discovery,
+            AgentControl::Compact | AgentControl::AutoCompaction => self.compaction,
             AgentControl::Stop => self.stop,
         }
     }

@@ -1,0 +1,11 @@
+{"type":"agent_start"}
+{"type":"agent_end","messages":[],"willRetry":false}
+{"type":"compaction_start","reason":"threshold"}
+{"type":"compaction_end","reason":"threshold","result":{"summary":"Threshold summary","firstKeptEntryId":"entry-4","tokensBefore":180000,"estimatedTokensAfter":40000,"usage":{"totalTokens":41000},"details":{"futureDetail":true}},"aborted":false,"willRetry":false}
+{"type":"compaction_start","reason":"overflow"}
+{"type":"compaction_end","reason":"overflow","result":{"summary":"Overflow summary","firstKeptEntryId":"entry-6","tokensBefore":210000,"estimatedTokensAfter":38000,"details":{}},"aborted":false,"willRetry":true}
+{"type":"compaction_start","reason":"threshold"}
+{"type":"compaction_end","reason":"threshold","aborted":false,"willRetry":false,"errorMessage":"Summarization failed: 529 overloaded"}
+{"type":"agent_settled"}
+{"type":"compaction_start","reason":"manual"}
+{"type":"compaction_end","reason":"manual","aborted":true,"willRetry":false}

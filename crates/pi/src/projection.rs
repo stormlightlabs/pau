@@ -76,6 +76,88 @@ pub enum PiLifecycleEvent {
     AgentSettled,
 }
 
+/// Why Pi started compacting context.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PiCompactionReason {
+    /// The operator requested compaction.
+    Manual,
+    /// Context use crossed the configured automatic-compaction threshold.
+    Threshold,
+    /// The provider rejected the context as too large; Pi compacts and retries.
+    Overflow,
+    /// A reason added by a newer Pi version.
+    Other(String),
+}
+
+impl PiCompactionReason {
+    fn from_native(event: &Value) -> Self {
+        match event.get("reason").and_then(Value::as_str) {
+            Some("manual") => Self::Manual,
+            Some("threshold") => Self::Threshold,
+            Some("overflow") => Self::Overflow,
+            Some(other) => Self::Other(other.to_owned()),
+            None => Self::Other(String::new()),
+        }
+    }
+
+    /// Reports whether Pi started this compaction without an operator request.
+    pub fn is_automatic(&self) -> bool {
+        !matches!(self, Self::Manual)
+    }
+}
+
+/// The summary Pi wrote when compaction succeeded.
+///
+/// Pi may change usage and extension details between versions, so known
+/// fields are optional and `native` keeps the complete value.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PiCompactionResult {
+    /// The summary that replaces older context.
+    pub summary: String,
+    /// The first session entry kept verbatim after the summary.
+    pub first_kept_entry_id: Option<String>,
+    /// Context tokens before compaction.
+    pub tokens_before: Option<u64>,
+    /// Pi's heuristic estimate of context tokens after compaction.
+    pub estimated_tokens_after: Option<u64>,
+    /// The complete native result, including usage and extension details.
+    pub native: Value,
+}
+
+impl PiCompactionResult {
+    /// Reads a result from a `compact` response or `compaction_end` event.
+    pub fn from_native(result: &Value) -> Self {
+        Self {
+            summary: result
+                .get("summary")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned(),
+            first_kept_entry_id: result
+                .get("firstKeptEntryId")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+            tokens_before: result.get("tokensBefore").and_then(Value::as_u64),
+            estimated_tokens_after: result.get("estimatedTokensAfter").and_then(Value::as_u64),
+            native: result.clone(),
+        }
+    }
+}
+
+/// How a compaction attempt ended.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PiCompactionOutcome {
+    /// Pi replaced older context with a summary.
+    Completed(PiCompactionResult),
+    /// An abort request cancelled compaction.
+    Aborted,
+    /// Compaction failed and the context was left unchanged.
+    Failed {
+        /// Pi's description of the failure.
+        message: String,
+    },
+}
+
 /// Adapter-owned payload carried by a `pau-agent` event.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PiEventPayload {
@@ -135,6 +217,20 @@ pub enum PiEventPayload {
         /// Whether the completed tool reported an error.
         is_error: bool,
     },
+    /// Pi started compacting context.
+    CompactionStarted {
+        /// Why compaction started.
+        reason: PiCompactionReason,
+    },
+    /// Pi finished, cancelled, or failed a compaction attempt.
+    CompactionEnded {
+        /// Why compaction started.
+        reason: PiCompactionReason,
+        /// The result, cancellation, or failure.
+        outcome: PiCompactionOutcome,
+        /// Whether Pi will retry the overflowed prompt after this compaction.
+        will_retry: bool,
+    },
 }
 
 /// Reduces native Pi session events into display state and `pau-agent` events.
@@ -146,6 +242,9 @@ pub struct PiEventReducer {
     status: AgentSessionStatus,
     messages: Vec<PiProjectedMessage>,
     active_message: Option<usize>,
+    /// Manual compaction runs outside an agent run, so the reducer marks the
+    /// session running for its duration and restores idle when it ends.
+    compacting_from_idle: bool,
 }
 
 impl Default for PiEventReducer {
@@ -154,6 +253,7 @@ impl Default for PiEventReducer {
             status: AgentSessionStatus::Idle,
             messages: Vec::new(),
             active_message: None,
+            compacting_from_idle: false,
         }
     }
 }
@@ -205,6 +305,24 @@ impl PiEventReducer {
                     .and_then(Value::as_bool)
                     .unwrap_or(false),
             )?),
+            "compaction_start" => {
+                if self.status == AgentSessionStatus::Idle {
+                    self.status = AgentSessionStatus::Running;
+                    self.compacting_from_idle = true;
+                }
+                Some(AgentEvent::new(
+                    AgentEventKind::Compaction,
+                    PiEventPayload::CompactionStarted {
+                        reason: PiCompactionReason::from_native(event),
+                    },
+                ))
+            }
+            "compaction_end" => {
+                if std::mem::take(&mut self.compacting_from_idle) {
+                    self.status = AgentSessionStatus::Idle;
+                }
+                Some(compaction_end_event(event))
+            }
             _ => None,
         }
     }
@@ -457,6 +575,37 @@ fn tool_result_event(
             is_error,
         },
     ))
+}
+
+/// Projects every `compaction_end`, including malformed failures, so a failed
+/// compaction is never silently dropped.
+fn compaction_end_event(event: &Value) -> AgentEvent<PiEventPayload> {
+    let outcome = match event.get("result") {
+        Some(result) if result.is_object() => {
+            PiCompactionOutcome::Completed(PiCompactionResult::from_native(result))
+        }
+        _ if event.get("aborted").and_then(Value::as_bool) == Some(true) => {
+            PiCompactionOutcome::Aborted
+        }
+        _ => PiCompactionOutcome::Failed {
+            message: event
+                .get("errorMessage")
+                .and_then(Value::as_str)
+                .unwrap_or("Pi did not report a compaction result")
+                .to_owned(),
+        },
+    };
+    AgentEvent::new(
+        AgentEventKind::Compaction,
+        PiEventPayload::CompactionEnded {
+            reason: PiCompactionReason::from_native(event),
+            outcome,
+            will_retry: event
+                .get("willRetry")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        },
+    )
 }
 
 fn project_message(message: &Value, complete: bool) -> Option<PiProjectedMessage> {

@@ -1,6 +1,6 @@
 use crate::{
-    PiExtensionUiResponse, PiProcess, PiProcessError, PiProcessExit, PiProcessOutput,
-    StartPiProcessOptions,
+    PiCompactionResult, PiExtensionUiResponse, PiProcess, PiProcessError, PiProcessExit,
+    PiProcessOutput, StartPiProcessOptions,
 };
 use pau_agent::{
     AgentCapabilities, AgentControl, AgentControlError, AgentMessageQueue, AgentSessionStatus,
@@ -22,6 +22,7 @@ pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     model_selection: true,
     thinking_level: true,
     command_discovery: true,
+    compaction: true,
     stop: true,
 };
 
@@ -329,6 +330,58 @@ impl PiSession {
         self.command(
             control,
             json!({"type": "set_thinking_level", "level": level.as_str()}),
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Summarizes older context while the session is idle.
+    ///
+    /// The session reports `Running` until Pi answers, so prompts must choose a
+    /// queue and [`Self::interrupt`] cancels the compaction. Pi also emits
+    /// `compaction_start` and `compaction_end` events for the attempt. A failed
+    /// or cancelled compaction returns [`AgentControlError::Rejected`] with
+    /// Pi's message.
+    pub async fn compact(
+        &self,
+        custom_instructions: Option<String>,
+    ) -> Result<PiCompactionResult, PiSessionError> {
+        let control = AgentControl::Compact;
+        self.require_capability(control)?;
+        {
+            let mut status = self.status.lock().await;
+            if *status != AgentSessionStatus::Idle {
+                return Err(not_ready(control, *status));
+            }
+            *status = AgentSessionStatus::Running;
+        }
+        let mut command = json!({"type": "compact"});
+        if let Some(instructions) = custom_instructions {
+            command["customInstructions"] = Value::String(instructions);
+        }
+        // Compaction can take as long as a model call, so the status lock is
+        // released while Pi works to keep status reads and interrupts available.
+        let result = self.command(control, command).await;
+        let mut status = self.status.lock().await;
+        if *status == AgentSessionStatus::Running {
+            *status = AgentSessionStatus::Idle;
+        }
+        let response = result?;
+        Ok(PiCompactionResult::from_native(
+            response.get("data").unwrap_or(&Value::Null),
+        ))
+    }
+
+    /// Enables or disables Pi's compaction when context is nearly full.
+    ///
+    /// Automatic compaction reports progress through `compaction_start` and
+    /// `compaction_end` events rather than a command response.
+    pub async fn set_auto_compaction(&self, enabled: bool) -> Result<(), PiSessionError> {
+        let control = AgentControl::AutoCompaction;
+        self.require_capability(control)?;
+        self.command(
+            control,
+            json!({"type": "set_auto_compaction", "enabled": enabled}),
         )
         .await?;
         Ok(())

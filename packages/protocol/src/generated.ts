@@ -908,6 +908,17 @@ ended_at: string | null,
  */
 exit_code: number | null,
 /**
+ * Identifier of the native Pi session the process is running, which
+ * matches a saved session's `id`. It changes when the session branches.
+ * Absent until Pi reports it.
+ */
+native_session_id: string | null,
+/**
+ * Thinking level Pi currently applies, after any clamping to the model.
+ * Absent until Pi reports it.
+ */
+thinking_level: SessionThinkingLevel | null,
+/**
  * Controls this session accepts.
  */
 capabilities: SessionCapabilities, };

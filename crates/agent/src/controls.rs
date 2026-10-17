@@ -171,6 +171,20 @@ pub enum ThinkingLevel {
 }
 
 impl ThinkingLevel {
+    /// Parses a level name from Pi's RPC protocol, the inverse of [`Self::as_str`].
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "off" => Some(Self::Off),
+            "minimal" => Some(Self::Minimal),
+            "low" => Some(Self::Low),
+            "medium" => Some(Self::Medium),
+            "high" => Some(Self::High),
+            "xhigh" => Some(Self::ExtraHigh),
+            "max" => Some(Self::Max),
+            _ => None,
+        }
+    }
+
     /// The level name used by Pi's RPC protocol.
     pub fn as_str(self) -> &'static str {
         match self {

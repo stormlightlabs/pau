@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- The thinking-level control shows the level Pi is using, and opening a saved
+  session that is already running selects it instead of resuming it again.
 - Browse a session's tree in the inspector and branch from an earlier prompt.
   Pau puts that prompt back in the composer so you can edit and resend it.
 - Type `/` in the composer to browse and complete Pi's extension commands,

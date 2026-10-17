@@ -192,7 +192,8 @@ export class LiveSessions {
 	#queues = $state<Record<string, MessageQueue>>({});
 	/** Sessions whose queue an event updated while its read was in flight, so the read is stale. */
 	readonly #queueUpdated = new SvelteSet<string>();
-	#thinkingLevels = $state<Record<string, ThinkingLevel>>({});
+	/** Levels the operator selected whose requests are still in flight. */
+	#pendingThinkingLevels = $state<Record<string, ThinkingLevel>>({});
 	/** Extension events received while the session's extension UI read is in flight. */
 	readonly #extensionReplay = new SvelteMap<string, unknown[]>();
 	/** Sessions whose extension UI changed during the read in flight and needs another read. */
@@ -278,7 +279,8 @@ export class LiveSessions {
 				sessions: list.sessions.map((saved) => ({
 					id: saved.id,
 					title: saved.name?.trim() || saved.first_message?.trim() || 'Untitled session',
-					modifiedAt: saved.modified_at ?? saved.created_at
+					modifiedAt: saved.modified_at ?? saved.created_at,
+					live: this.#liveSessionFor(workspaceId, saved.id) !== undefined
 				})),
 				warnings: list.warnings
 			};
@@ -287,8 +289,13 @@ export class LiveSessions {
 		}
 	}
 
-	/** Resumes a saved Pi session and returns the new live session's ID. */
+	/**
+	 * Opens a saved Pi session and returns the live session's ID. A saved session
+	 * that a live session already runs is selected instead of resumed twice.
+	 */
 	async resume(workspaceId: string, savedSessionId: string): Promise<string> {
+		const running = this.#liveSessionFor(workspaceId, savedSessionId);
+		if (running) return running.id;
 		try {
 			const session = await startSession(this.#options.search, workspaceId, this.#fetcher, savedSessionId);
 			this.#sessions[session.id] = session;
@@ -341,12 +348,25 @@ export class LiveSessions {
 	}
 
 	/**
-	 * Sets a session's thinking level. Pi does not report the level back, so the
-	 * store remembers the last one it sent. Pi may clamp it to what the model supports.
+	 * Sets a session's thinking level. The selected level shows while the request
+	 * is in flight; afterwards the view shows the level Pi reports, which may be
+	 * clamped to what the model supports.
 	 */
 	async selectThinkingLevel(sessionId: string, level: ThinkingLevel): Promise<void> {
-		await this.#control(() => setSessionThinkingLevel(this.#options.search, sessionId, level, this.#fetcher));
-		this.#thinkingLevels[sessionId] = level;
+		this.#pendingThinkingLevels[sessionId] = level;
+		try {
+			await this.#control(() => setSessionThinkingLevel(this.#options.search, sessionId, level, this.#fetcher));
+		} finally {
+			delete this.#pendingThinkingLevels[sessionId];
+		}
+	}
+
+	/** The live session in a workspace that runs the saved Pi session, if any. */
+	#liveSessionFor(workspaceId: string, savedSessionId: string): AgentSession | undefined {
+		return Object.values(this.#sessions).find(
+			(session) =>
+				isLive(session) && session.workspace_id === workspaceId && session.native_session_id === savedSessionId
+		);
 	}
 
 	/** Prompts an idle session, or steers or queues a follow-up during a run. */
@@ -620,7 +640,7 @@ export class LiveSessions {
 				thinkingLevel: session.capabilities.thinking_level,
 				commandDiscovery: session.capabilities.command_discovery
 			},
-			thinkingLevel: this.#thinkingLevels[session.id],
+			thinkingLevel: this.#pendingThinkingLevels[session.id] ?? session.thinking_level ?? undefined,
 			transcript: transcript.entries,
 			extensionUi: extensionUiView(extensionUi),
 			autoRetry: transcript.autoRetry,

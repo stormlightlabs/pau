@@ -7,7 +7,7 @@
 		load: () => Promise<SavedSessionList>;
 		/** Starts a new session. A rejection shows its message. */
 		onNew: () => void | Promise<void>;
-		/** Resumes a saved session. A rejection shows its message. */
+		/** Opens a saved session, resuming it unless it is already running. A rejection shows its message. */
 		onResume: (savedSessionId: string) => void | Promise<void>;
 		onClose?: () => void;
 		disabled?: boolean;
@@ -100,14 +100,22 @@
 				<li>
 					<div>
 						<strong>{saved.title}</strong>
-						{#if modified(saved.modifiedAt)}<small>Modified {modified(saved.modifiedAt)}</small>{/if}
+						{#if saved.live}
+							<small>Running</small>
+						{:else if modified(saved.modifiedAt)}
+							<small>Modified {modified(saved.modifiedAt)}</small>
+						{/if}
 					</div>
 					<button
 						type="button"
-						aria-label={`Resume ${saved.title}`}
+						aria-label={`${saved.live ? 'Open' : 'Resume'} ${saved.title}`}
 						disabled={disabled || busyId !== undefined}
 						onclick={() => run(saved.id, () => onResume(saved.id))}>
-						{busyId === saved.id ? 'Resuming…' : 'Resume'}
+						{#if saved.live}
+							{busyId === saved.id ? 'Opening…' : 'Open'}
+						{:else}
+							{busyId === saved.id ? 'Resuming…' : 'Resume'}
+						{/if}
 					</button>
 				</li>
 			{/each}

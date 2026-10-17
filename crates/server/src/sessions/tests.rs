@@ -27,12 +27,14 @@ if [ "$1" = '--version' ]; then echo 1.0.0; exit 0; fi
 [ "$1" = '--mode' ] && [ "$2" = 'rpc' ] || exit 64
 printf '%s\n' "$*" > "$PWD/args.txt"
 current=model-one
+level=medium
+native=native
 while IFS= read -r command; do
     printf '%s\n' "$command" >> "$PWD/commands.jsonl"
     id=$(printf '%s' "$command" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
     case "$command" in
         *'"type":"get_state"'*)
-            printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"native","sessionFile":"%s/session.jsonl","model":{"provider":"fixture","id":"%s"}}}\n' "$id" "$PWD" "$current"
+            printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"%s","sessionFile":"%s/session.jsonl","thinkingLevel":"%s","model":{"provider":"fixture","id":"%s"}}}\n' "$id" "$native" "$PWD" "$level" "$current"
             ;;
         *'"message":"exit"'*) exit 3 ;;
         *'"message":"dialogs"'*)
@@ -80,6 +82,7 @@ while IFS= read -r command; do
             ;;
         *'"modelId":"model-two"'*)
             current=model-two
+            level=off
             printf '{"id":"%s","type":"response","command":"set_model","success":true,"data":{"provider":"fixture","id":"model-two"}}\n' "$id"
             ;;
         *'"type":"set_model"'*)
@@ -87,6 +90,7 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"set_model","success":true,"data":{"provider":"fixture","id":"model-one"}}\n' "$id"
             ;;
         *'"type":"set_thinking_level"'*)
+            level=$(printf '%s' "$command" | sed -n 's/.*"level":"\([^"]*\)".*/\1/p')
             printf '{"id":"%s","type":"response","command":"set_thinking_level","success":true}\n' "$id"
             ;;
         *'"name":""'*)
@@ -96,6 +100,7 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"set_session_name","success":true}\n' "$id"
             ;;
         *'"type":"clone"'*)
+            native=cloned
             printf '{"id":"%s","type":"response","command":"clone","success":true,"data":{"cancelled":false}}\n' "$id"
             ;;
         *'"customInstructions":"fail"'*)
@@ -126,6 +131,7 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"fork","success":false,"error":"Entry missing not found"}\n' "$id"
             ;;
         *'"type":"fork"'*)
+            native=forked
             printf '{"id":"%s","type":"response","command":"fork","success":true,"data":{"text":"Fix the login bug","cancelled":false}}\n' "$id"
             ;;
         *'"type":"get_available_models"'*)
@@ -465,13 +471,16 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
         [
             "get_state",
             "set_model",
+            "get_state",
             "get_commands",
             "get_state",
             "get_available_models",
             "get_entries",
             "set_model",
+            "get_state",
             "set_model",
             "set_thinking_level",
+            "get_state",
             "compact",
             "compact",
             "set_auto_compaction",
@@ -596,6 +605,7 @@ async fn reports_usage_on_request_and_after_assistant_messages() {
         fixture.commands(),
         [
             "get_state",
+            "get_state",
             "get_session_stats",
             "prompt",
             "get_session_stats"
@@ -636,7 +646,9 @@ async fn renames_and_clones_a_session() {
 
     let (status, cloned) = fixture.call("POST", &format!("{base}/clone"), None).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(cloned, json!({"native_session_id": "native"}));
+    assert_eq!(cloned, json!({"native_session_id": "cloned"}));
+    let (_, current) = fixture.call("GET", &base, None).await;
+    assert_eq!(current["native_session_id"], "cloned");
     next_event(&mut stream, session_changed("idle")).await;
 
     let (status, missing) = fixture
@@ -648,9 +660,11 @@ async fn renames_and_clones_a_session() {
         fixture.commands(),
         [
             "get_state",
+            "get_state",
             "set_session_name",
             "set_session_name",
             "clone",
+            "get_state",
             "get_state"
         ]
     );
@@ -855,6 +869,8 @@ async fn lists_and_resumes_native_sessions() {
         .await;
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(started["status"], "idle");
+    assert_eq!(started["native_session_id"], "native");
+    assert_eq!(started["thinking_level"], "medium");
     let args = fs::read_to_string(fixture.workspace_root.join("args.txt")).unwrap();
     assert!(args.starts_with("--mode rpc --session "));
     assert!(args.trim_end().ends_with("2026_good.jsonl"));
@@ -890,6 +906,51 @@ async fn lists_and_resumes_native_sessions() {
             "{id}"
         );
     }
+}
+
+fn session_field(field: &'static str, value: &'static str) -> impl FnMut(&ServerEvent) -> bool {
+    move |event| {
+        event.kind == ServerEventKind::SessionChanged
+            && serde_json::from_str::<Value>(&event.payload).unwrap()[field] == value
+    }
+}
+
+#[tokio::test]
+async fn reports_native_session_state_as_pi_changes_it() {
+    let fixture = Fixture::new(None).await;
+    let mut stream = fixture.events.subscribe(None);
+    let (_, started) = fixture.start(None).await;
+    assert_eq!(started["native_session_id"], "native");
+    assert_eq!(started["thinking_level"], "medium");
+    let id = started["id"].as_str().unwrap();
+    let base = format!("/api/sessions/{id}");
+
+    let level = json!({"level": "xhigh"});
+    fixture
+        .call("PUT", &format!("{base}/thinking-level"), Some(level))
+        .await;
+    next_event(&mut stream, session_field("thinking_level", "xhigh")).await;
+
+    // Pi clamps the level when the new model cannot reason.
+    let model = json!({"provider": "fixture", "model_id": "model-two"});
+    fixture
+        .call("PUT", &format!("{base}/model"), Some(model))
+        .await;
+    next_event(&mut stream, session_field("thinking_level", "off")).await;
+
+    // A branch moves the session to a new native session.
+    fixture
+        .call(
+            "POST",
+            &format!("{base}/branch"),
+            Some(json!({"entry_id": "a1"})),
+        )
+        .await;
+    let branched = next_event(&mut stream, session_field("native_session_id", "forked")).await;
+    let branched: Value = serde_json::from_str(&branched.payload).unwrap();
+    assert_eq!(branched["thinking_level"], "off");
+    let (_, current) = fixture.call("GET", &base, None).await;
+    assert_eq!(current["native_session_id"], "forked");
 }
 
 /// Matches the last request the fake Pi sends for a `dialogs` prompt. The

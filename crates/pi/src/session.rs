@@ -77,6 +77,15 @@ pub struct PiNativeSession {
     pub file: String,
 }
 
+/// The parts of Pi's `get_state` that change while a session runs.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PiSessionState {
+    /// Pi's current session identifier, which changes when Pi branches.
+    pub native_id: Option<String>,
+    /// The thinking level Pi applies, after any clamping to the model.
+    pub thinking_level: Option<ThinkingLevel>,
+}
+
 /// Where Pi loaded a slash command from.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PiCommandSource {
@@ -266,6 +275,25 @@ impl PiSession {
                 "Pi did not report a persisted native session".to_owned(),
             )),
         }
+    }
+
+    /// Reads the session identifier and thinking level Pi currently reports.
+    ///
+    /// Pi changes both on its own: branching starts a new native session and
+    /// a model change clamps the thinking level.
+    pub async fn state(&self) -> Result<PiSessionState, PiSessionError> {
+        let response = self.process.command(json!({"type": "get_state"})).await?;
+        if response.get("success").and_then(Value::as_bool) != Some(true) {
+            return Err(PiSessionError::NativeSession(
+                "Pi rejected the session-state request".to_owned(),
+            ));
+        }
+        let data = response.get("data");
+        let text = |key: &str| data.and_then(|data| data.get(key)).and_then(Value::as_str);
+        Ok(PiSessionState {
+            native_id: text("sessionId").map(str::to_owned),
+            thinking_level: text("thinkingLevel").and_then(ThinkingLevel::from_name),
+        })
     }
 
     /// Lists the prompt templates, skills, and extension commands Pi offers.

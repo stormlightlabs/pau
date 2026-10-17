@@ -83,6 +83,15 @@ pub struct AgentSession {
     pub ended_at: Option<String>,
     /// Process exit code, when the process exited with one.
     pub exit_code: Option<i32>,
+    /// Identifier of the native Pi session the process is running, which
+    /// matches a saved session's `id`. It changes when the session branches.
+    /// Absent until Pi reports it.
+    #[serde(default)]
+    pub native_session_id: Option<String>,
+    /// Thinking level Pi currently applies, after any clamping to the model.
+    /// Absent until Pi reports it.
+    #[serde(default)]
+    pub thinking_level: Option<SessionThinkingLevel>,
     /// Controls this session accepts.
     pub capabilities: SessionCapabilities,
 }

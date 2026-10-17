@@ -27,6 +27,8 @@ const idleSession: AgentSession = {
 	started_at: '2026-04-01T12:00:00Z',
 	ended_at: null,
 	exit_code: null,
+	native_session_id: null,
+	thinking_level: null,
 	capabilities: {
 		prompt: true,
 		follow_up: true,
@@ -453,6 +455,24 @@ test('resumes a saved session from the picker and selects it', async () => {
 	expect(changes).toEqual(['session-1']);
 });
 
+test('selects the live session that already runs a saved session instead of resuming it', async () => {
+	const start = vi.fn(() => json(idleSession, 201));
+	const changes: string[] = [];
+	const { props } = setup({
+		'GET /api/sessions': () => json([{ ...idleSession, native_session_id: 'native-1' }]),
+		'GET /api/workspaces/pau/pi-sessions': () => json(savedList),
+		'POST /api/sessions': start
+	});
+	await render(SessionRoute, { ...props, onSessionChange: (_workspace: string, id: string) => changes.push(id) });
+
+	await openSavedSessions();
+	await expect.element(page.getByText('Running')).toBeVisible();
+	await userEvent.click(page.getByRole('button', { name: 'Open Fix the gutter' }));
+
+	expect(start).not.toHaveBeenCalled();
+	expect(changes).toEqual(['session-1']);
+});
+
 test.each([
 	['native_session_not_found', 404, 'Pi no longer has that saved session'],
 	['invalid_native_session', 422, 'Pi could not read that saved session']
@@ -635,10 +655,16 @@ test('hides the queue when the session cannot expose it', async () => {
 	expect(read).not.toHaveBeenCalled();
 });
 
-test('sets the thinking level and shows the level it sent', async () => {
-	const put = vi.fn(() => new Response(null, { status: 204 }));
-	const { props } = setup({
-		'GET /api/sessions': () => json([idleSession]),
+test('shows the thinking level Pi reports, and the selected level only while the request runs', async () => {
+	let finish: () => void = () => {};
+	const put = vi.fn(
+		() =>
+			new Promise<Response>((resolve) => {
+				finish = () => resolve(new Response(null, { status: 204 }));
+			})
+	);
+	const { props, sockets } = setup({
+		'GET /api/sessions': () => json([{ ...idleSession, thinking_level: 'low' }]),
 		'GET /api/sessions/session-1/models': () => json(modelList('sonnet')),
 		'PUT /api/sessions/session-1/thinking-level': put
 	});
@@ -650,6 +676,13 @@ test('sets the thinking level and shows the level it sent', async () => {
 
 	expect(put).toHaveBeenCalledWith(expect.objectContaining({ body: '{"level":"high"}' }));
 	await expect.element(control).toHaveValue('high');
+
+	// Pi clamps the level, and the reported level wins once the request ends.
+	finish();
+	await expect.element(control).toHaveValue('low');
+	sockets[0]?.open();
+	sockets[0]?.receive(sessionChanged({ ...idleSession, thinking_level: 'medium' }));
+	await expect.element(control).toHaveValue('medium');
 });
 
 test('explains a rejected thinking level', async () => {

@@ -43,6 +43,22 @@ test('lists saved sessions with relative times and resumes the chosen one', asyn
 	expect(onResume).toHaveBeenCalledWith('native-2');
 });
 
+test('offers to open a saved session that is already running', async () => {
+	const onResume = vi.fn();
+	const sessions = savedSessionFixtures.populated.sessions.map((saved) =>
+		saved.id === 'native-2' ? { ...saved, live: true } : saved
+	);
+	await renderPicker({ ...savedSessionFixtures.populated, sessions }, { onResume });
+
+	await expect.element(page.getByText('Running')).toBeVisible();
+	await expect
+		.element(page.getByRole('button', { name: 'Resume Fix the flaky terminal test' }))
+		.not.toBeInTheDocument();
+	await userEvent.click(page.getByRole('button', { name: 'Open Fix the flaky terminal test' }));
+
+	expect(onResume).toHaveBeenCalledWith('native-2');
+});
+
 test('starts a new session', async () => {
 	const onNew = vi.fn();
 	await renderPicker(savedSessionFixtures.populated, { onNew });

@@ -79,6 +79,20 @@ struct SessionRecord {
     workspace_id: String,
     started_at: String,
     capabilities: AgentCapabilities,
+    /// What Pi last reported about the session. Shared between clones so
+    /// output forwarding describes the latest state.
+    native: Arc<Mutex<NativeState>>,
+}
+
+/// The session state Pi changes by itself, refreshed from `get_state`.
+///
+/// Pi reports it only on request, so the API reads it when the session starts
+/// and after the controls that change it (model, thinking level, branch)
+/// instead of on every event.
+#[derive(Clone, Default, PartialEq)]
+struct NativeState {
+    session_id: Option<String>,
+    thinking_level: Option<SessionThinkingLevel>,
 }
 
 /// Starts Pi sessions and publishes their lifecycle and output events.
@@ -360,6 +374,33 @@ impl SessionApi {
         }
     }
 
+    /// Reads Pi's session identifier and thinking level into the record and
+    /// reports whether either changed. A failed read keeps the last values.
+    async fn refresh_native(&self, record: &SessionRecord, session: &PiSession) -> bool {
+        let Ok(state) = session.state().await else {
+            return false;
+        };
+        let fresh = NativeState {
+            session_id: state.native_id,
+            thinking_level: state.thinking_level.map(session_thinking_level),
+        };
+        let mut native = record.native.lock().expect("native state lock poisoned");
+        let changed = *native != fresh;
+        *native = fresh;
+        changed
+    }
+
+    /// Refreshes the native state after a control that can change it and
+    /// publishes the session when it did.
+    async fn refresh_and_publish(&self, id: &str) {
+        let Ok((record, session)) = self.live(id).await else {
+            return;
+        };
+        if self.refresh_native(&record, &session).await {
+            self.publish_current(id).await;
+        }
+    }
+
     fn publish(&self, session: &AgentSession) {
         self.events.publish(
             diagnostic_timestamp(),
@@ -486,6 +527,11 @@ fn session_usage(usage: PiSessionUsage) -> SessionUsage {
 }
 
 fn describe(id: &str, record: &SessionRecord, status: SessionStatus) -> AgentSession {
+    let native = record
+        .native
+        .lock()
+        .expect("native state lock poisoned")
+        .clone();
     AgentSession {
         id: id.to_owned(),
         workspace_id: record.workspace_id.clone(),
@@ -493,6 +539,8 @@ fn describe(id: &str, record: &SessionRecord, status: SessionStatus) -> AgentSes
         started_at: record.started_at.clone(),
         ended_at: None,
         exit_code: None,
+        native_session_id: native.session_id,
+        thinking_level: native.thinking_level,
         capabilities: session_capabilities(record.capabilities),
     }
 }
@@ -556,6 +604,18 @@ fn session_model(model: PiModel) -> SessionModel {
         name: model.name,
         reasoning: model.reasoning,
         current: model.current,
+    }
+}
+
+fn session_thinking_level(level: ThinkingLevel) -> SessionThinkingLevel {
+    match level {
+        ThinkingLevel::Off => SessionThinkingLevel::Off,
+        ThinkingLevel::Minimal => SessionThinkingLevel::Minimal,
+        ThinkingLevel::Low => SessionThinkingLevel::Low,
+        ThinkingLevel::Medium => SessionThinkingLevel::Medium,
+        ThinkingLevel::High => SessionThinkingLevel::High,
+        ThinkingLevel::ExtraHigh => SessionThinkingLevel::ExtraHigh,
+        ThinkingLevel::Max => SessionThinkingLevel::Max,
     }
 }
 
@@ -727,6 +787,7 @@ pub(crate) async fn start_session(
         workspace_id: request.workspace_id.clone(),
         started_at: diagnostic_timestamp(),
         capabilities: pau_pi::PI_RPC_CAPABILITIES,
+        native: Arc::default(),
     };
     api.records
         .lock()
@@ -770,6 +831,7 @@ pub(crate) async fn start_session(
         return Err(error.into());
     }
 
+    api.refresh_native(&record, &session).await;
     let summary = describe(&id, &record, session_status(session.status().await));
     api.publish(&summary);
     Ok((StatusCode::CREATED, Json(summary)))
@@ -937,12 +999,14 @@ pub(crate) async fn select_session_model(
     AxumPath(session_id): AxumPath<String>,
     Json(request): Json<SessionModelSelection>,
 ) -> Result<Json<Value>, ApiError> {
-    let (_, session) = session_api(&state)?.live(&session_id).await?;
-    session
+    let api = session_api(&state)?;
+    let (_, session) = api.live(&session_id).await?;
+    let model = session
         .select_model(request.provider, request.model_id)
-        .await
-        .map(Json)
-        .map_err(ApiError::from)
+        .await?;
+    // Pi clamps the thinking level to what the new model supports.
+    api.refresh_and_publish(&session_id).await;
+    Ok(Json(model))
 }
 
 /// Selects the thinking level for later model turns.
@@ -951,10 +1015,12 @@ pub(crate) async fn set_session_thinking_level(
     AxumPath(session_id): AxumPath<String>,
     Json(request): Json<SessionThinkingLevelRequest>,
 ) -> Result<StatusCode, ApiError> {
-    let (_, session) = session_api(&state)?.live(&session_id).await?;
+    let api = session_api(&state)?;
+    let (_, session) = api.live(&session_id).await?;
     session
         .set_thinking_level(thinking_level(request.level))
         .await?;
+    api.refresh_and_publish(&session_id).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1032,8 +1098,10 @@ pub(crate) async fn clone_session(
     AxumPath(session_id): AxumPath<String>,
 ) -> Result<Json<SessionCloneResult>, ApiError> {
     let api = session_api(&state)?;
-    let (_, session) = api.live(&session_id).await?;
+    let (record, session) = api.live(&session_id).await?;
     let native = session.clone_session().await?;
+    // The clone continues in a new native session, so its reported ID changes.
+    api.refresh_native(&record, &session).await;
     api.publish_current(&session_id).await;
     Ok(Json(SessionCloneResult {
         native_session_id: native.id,
@@ -1132,8 +1200,11 @@ pub(crate) async fn branch_session(
     AxumPath(session_id): AxumPath<String>,
     Json(request): Json<SessionBranchRequest>,
 ) -> Result<Json<SessionBranchResult>, ApiError> {
-    let (_, session) = session_api(&state)?.live(&session_id).await?;
+    let api = session_api(&state)?;
+    let (_, session) = api.live(&session_id).await?;
     let outcome = session.branch(request.entry_id).await?;
+    // A branch starts a new native session.
+    api.refresh_and_publish(&session_id).await;
     Ok(Json(SessionBranchResult {
         text: outcome.text,
         cancelled: outcome.cancelled,

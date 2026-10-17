@@ -168,6 +168,8 @@ export type SavedSession = {
 	title: string;
 	/** RFC 3339 time of the last change, when known. */
 	modifiedAt?: string;
+	/** Whether a live session already runs it, so opening it selects that session. */
+	live?: boolean;
 };
 
 /** Saved sessions for one workspace, newest first, with files that could not be read. */

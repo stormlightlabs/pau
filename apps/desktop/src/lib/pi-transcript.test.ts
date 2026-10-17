@@ -119,3 +119,44 @@ test('reads the whole queue from a queue update and ignores other events', () =>
 	expect(queueFromEvent({ type: 'queue_update' })).toEqual({ steering: [], followUp: [] });
 	expect(queueFromEvent({ type: 'agent_end' })).toBeUndefined();
 });
+
+test('shows a running compaction and replaces it with a marker when it ends', () => {
+	const running = reduce([{ type: 'compaction_start', reason: 'threshold' }]);
+	expect(running.compaction).toEqual({ status: 'running', reason: 'threshold' });
+
+	const done = reduce(
+		[
+			{
+				type: 'compaction_end',
+				reason: 'threshold',
+				result: { summary: 'Short summary.', firstKeptEntryId: 'e7', tokensBefore: 90000 },
+				aborted: false,
+				willRetry: true
+			}
+		],
+		running
+	);
+	expect(done.compaction).toBeUndefined();
+	expect(done.entries).toEqual([
+		{
+			id: 'compaction:0',
+			kind: 'compaction',
+			reason: 'threshold',
+			summary: 'Short summary.',
+			firstKeptEntryId: 'e7',
+			tokensBefore: 90000,
+			willRetry: true
+		}
+	]);
+});
+
+test('keeps a failed or aborted compaction until the next run or compaction', () => {
+	const failed = reduce([{ type: 'compaction_end', reason: 'manual', aborted: false, errorMessage: 'Too small.' }]);
+	expect(failed.compaction).toEqual({ status: 'failed', reason: 'manual', message: 'Too small.' });
+	expect(failed.entries).toEqual([]);
+
+	const aborted = reduce([{ type: 'compaction_end', reason: 'overflow', aborted: true }]);
+	expect(aborted.compaction).toEqual({ status: 'aborted', reason: 'overflow' });
+	expect(reduce([{ type: 'agent_start' }], aborted).compaction).toBeUndefined();
+	expect(reduce([{ type: 'compaction_start', reason: 'manual' }], failed).compaction?.status).toBe('running');
+});

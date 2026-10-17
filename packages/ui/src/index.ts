@@ -70,6 +70,8 @@ export type {
 } from './lib/types/resource-monitoring';
 export type {
 	AutoRetry,
+	CompactionReason,
+	CompactionState,
 	ExtensionDialog,
 	ExtensionNotification,
 	ExtensionStatus,
@@ -90,6 +92,7 @@ export type {
 	SessionTreeItem,
 	SessionTreeSnapshot,
 	SessionWorkspace,
+	TranscriptCompaction,
 	TranscriptEntry,
 	ThinkingLevel,
 	TranscriptTool

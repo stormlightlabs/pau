@@ -271,3 +271,96 @@ export const Narrow: Story = {
 	args: { workspaces: sessionFixtures.sandboxDenials, initialSessionId: 'sandbox-denials' },
 	parameters: { viewport: { defaultViewport: 'narrow' } }
 };
+
+export const CompactingManually: Story = {
+	args: { workspaces: sessionFixtures.compactingManual, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByText('Compacting the conversation…', { selector: 'p' })).toBeVisible();
+		await expect(canvas.getByRole('button', { name: 'Compacting…' })).toBeDisabled();
+		await expect(canvas.getByRole('textbox', { name: 'Prompt' })).toBeDisabled();
+		await expect(canvas.getByText(/You can send a prompt when it finishes/)).toBeVisible();
+	}
+};
+export const CompactingAutomatically: Story = {
+	args: { workspaces: sessionFixtures.compactingAutomatic, initialSessionId: 'session-running' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByText(/because the context is nearly full/)).toBeVisible();
+		await expect(canvas.getByRole('button', { name: 'Compacting…' })).toBeDisabled();
+		// Steering still queues behind the compaction.
+		const prompt = canvas.getByRole('textbox', { name: 'Prompt' });
+		await expect(prompt).toBeEnabled();
+		await userEvent.type(prompt, 'Keep going');
+		await userEvent.click(canvas.getByRole('button', { name: /Send prompt/ }));
+		await expect(canvas.getByText('session-running: steer: Keep going')).toBeInTheDocument();
+	}
+};
+export const CompactAction: Story = {
+	args: { workspaces: sessionFixtures.idle, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(canvas.getByRole('button', { name: 'Compact' }));
+		await userEvent.type(canvas.getByLabelText('Instructions (optional)'), 'Keep the file list');
+		await userEvent.click(canvas.getByRole('button', { name: 'Compact now' }));
+		await expect(canvas.getByText('session-idle: compact: Keep the file list')).toBeInTheDocument();
+	}
+};
+export const CompactRejected: Story = {
+	args: {
+		workspaces: sessionFixtures.idle,
+		initialSessionId: 'session-idle',
+		compactFailure: 'Pi could not compact this session: Nothing to compact (session too small)'
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(canvas.getByRole('button', { name: 'Compact' }));
+		await userEvent.click(canvas.getByRole('button', { name: 'Compact now' }));
+		await expect(await canvas.findByRole('alert')).toHaveTextContent('Nothing to compact');
+		await expect(canvas.getByRole('button', { name: 'Compact' })).toBeEnabled();
+	}
+};
+export const Compacted: Story = {
+	args: { workspaces: sessionFixtures.compacted, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const marker = canvas.getByLabelText('Compacted context');
+		await expect(within(marker).getByText('Context compacted')).toBeVisible();
+		await expect(within(marker).getByText('84,210 → about 12,300 tokens')).toBeVisible();
+		await userEvent.click(within(marker).getByText('Context compacted'));
+		await expect(within(marker).getByText(/renderer in src\/diff\/gutter.ts/)).toBeVisible();
+	}
+};
+export const CompactedAutomatically: Story = {
+	args: { workspaces: sessionFixtures.compactedAutomatically, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByText('Context compacted automatically')).toBeVisible();
+		await expect(canvas.getByText('201,000 tokens before')).toBeVisible();
+	}
+};
+export const CompactionFailed: Story = {
+	args: { workspaces: sessionFixtures.compactionFailed, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByRole('alert')).toHaveTextContent(
+			'Compaction failed. Nothing to compact (session too small). The conversation is unchanged.'
+		);
+		await expect(canvas.getByRole('textbox', { name: 'Prompt' })).toBeEnabled();
+	}
+};
+export const CompactionAborted: Story = {
+	args: { workspaces: sessionFixtures.compactionAborted, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByText('Compaction cancelled.')).toBeVisible();
+		await expect(canvas.getByRole('button', { name: 'Compact' })).toBeEnabled();
+	}
+};
+export const CompactionUnsupported: Story = {
+	args: { workspaces: sessionFixtures.compactionUnsupported, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.queryByRole('button', { name: 'Compact' })).not.toBeInTheDocument();
+	}
+};

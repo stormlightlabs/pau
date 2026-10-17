@@ -73,6 +73,7 @@
 	onLoadHistory={(sessionId) => sessions.history(sessionId)}
 	onInterrupt={(sessionId) => sessions.interrupt(sessionId)}
 	onRetry={(sessionId) => sessions.retry(sessionId)}
+	onCompact={(sessionId, instructions) => sessions.compact(sessionId, instructions)}
 	onClearQueue={(sessionId) => sessions.clearQueue(sessionId)}
 	onCancelRetry={(sessionId) => sessions.cancelRetry(sessionId)}
 	onStop={(sessionId) => sessions.stop(sessionId)}

@@ -9,7 +9,8 @@ const fullCapabilities = {
 	branching: true,
 	retry: true,
 	messageQueue: true,
-	commandDiscovery: true
+	commandDiscovery: true,
+	compaction: true
 } satisfies SessionCapabilities;
 
 const claudeCapabilities = {
@@ -69,6 +70,28 @@ const failedTurn: SessionViewModel['transcript'] = [
 	}
 ];
 
+const compactedTranscript: SessionViewModel['transcript'] = [
+	{
+		id: 'compaction-1',
+		kind: 'compaction',
+		reason: 'manual',
+		summary:
+			'The user is fixing gutter markers that drift under soft-wrap. The renderer in src/diff/gutter.ts now uses visual line offsets.',
+		tokensBefore: 84210,
+		tokensAfter: 12300
+	},
+	transcript[0]!
+];
+
+const automaticCompaction: SessionViewModel['transcript'][number] = {
+	id: 'compaction-2',
+	kind: 'compaction',
+	reason: 'overflow',
+	summary: 'The user is fixing gutter markers that drift under soft-wrap.',
+	tokensBefore: 201000,
+	willRetry: true
+};
+
 const extensionUi = {
 	notifications: [{ id: 'notification-fixture', message: 'The extension is ready.', level: 'info' as const }],
 	statuses: [{ key: 'fixture', text: 'Waiting for your response' }],
@@ -116,6 +139,64 @@ export const sessionFixtures = {
 						followUp: ['Add a regression test for soft-wrap.', 'Summarize the change for the changelog.']
 					}
 				})
+			]
+		}
+	],
+	compactingManual: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [session('idle', { title: 'Fix diff gutter', compaction: { status: 'running', reason: 'manual' } })]
+		}
+	],
+	compactingAutomatic: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [
+				session('running', { title: 'Fix diff gutter', compaction: { status: 'running', reason: 'threshold' } })
+			]
+		}
+	],
+	compacted: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [session('idle', { title: 'Fix diff gutter', transcript: compactedTranscript })]
+		}
+	],
+	compactedAutomatically: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [session('idle', { title: 'Fix diff gutter', transcript: [automaticCompaction] })]
+		}
+	],
+	compactionFailed: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [
+				session('idle', {
+					title: 'Fix diff gutter',
+					compaction: { status: 'failed', reason: 'manual', message: 'Nothing to compact (session too small).' }
+				})
+			]
+		}
+	],
+	compactionAborted: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [session('idle', { title: 'Fix diff gutter', compaction: { status: 'aborted', reason: 'threshold' } })]
+		}
+	],
+	compactionUnsupported: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [
+				session('idle', { title: 'Review adapter fixtures', agent: 'Claude', capabilities: claudeCapabilities })
 			]
 		}
 	],

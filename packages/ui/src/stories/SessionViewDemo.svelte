@@ -17,6 +17,7 @@
 		disconnected = false,
 		startFailure,
 		retryFailure,
+		compactFailure,
 		history = [],
 		clearedQueue = { steering: [], followUp: [] },
 		commands = []
@@ -30,6 +31,8 @@
 		startFailure?: string;
 		/** When set, retrying a failed turn fails with this message. */
 		retryFailure?: string;
+		/** When set, compacting fails with this message. */
+		compactFailure?: string;
 		/** Earlier prompts the composer can recall, newest first. */
 		history?: string[];
 		/** Slash commands the composer can complete. */
@@ -76,6 +79,10 @@
 	onRetry={(sessionId) => {
 		if (retryFailure) throw new Error(retryFailure);
 		lastAction = `${sessionId}: retry`;
+	}}
+	onCompact={(sessionId, instructions) => {
+		if (compactFailure) throw new Error(compactFailure);
+		lastAction = `${sessionId}: compact: ${instructions ?? 'no instructions'}`;
 	}}
 	onClearQueue={async (sessionId) => {
 		lastAction = `${sessionId}: clear queue`;

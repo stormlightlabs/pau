@@ -18,6 +18,7 @@ import {
 	PauApiError,
 	branchSession,
 	cancelSessionRetry,
+	compactSession,
 	clearSessionQueue,
 	getSessionExtensionUi,
 	getSessionTree,
@@ -79,7 +80,7 @@ const NOTIFICATION_MS = 8000;
  */
 export function sessionErrorMessage(
 	cause: unknown,
-	action: 'start' | 'control' | 'resume' | 'retry' | 'branch'
+	action: 'start' | 'control' | 'resume' | 'retry' | 'branch' | 'compact'
 ): string {
 	if (!(cause instanceof PauApiError)) {
 		return 'Pau could not reach its backend. Check that the desktop app is still running, then try again.';
@@ -111,6 +112,7 @@ export function sessionErrorMessage(
 			return 'The session changed state before Pau could send that. If it is running, wait for the run to finish, then try again.';
 		case 'control_rejected':
 			if (action === 'retry') return 'That turn did not fail, so there is nothing to retry.';
+			if (action === 'compact') return `Pi could not compact this session: ${cause.message}`;
 			return `Pi rejected the request: ${cause.message}`;
 		case 'invalid_extension_response':
 			return `The extension could not use that answer. ${cause.message}`;
@@ -194,6 +196,8 @@ export class LiveSessions {
 	readonly #queueUpdated = new SvelteSet<string>();
 	/** Levels the operator selected whose requests are still in flight. */
 	#pendingThinkingLevels = $state<Record<string, ThinkingLevel>>({});
+	/** Estimated context size after each manual compaction, by session and first kept entry. Compaction events omit it. */
+	#compactionEstimates = $state<Record<string, Record<string, number>>>({});
 	/** Extension events received while the session's extension UI read is in flight. */
 	readonly #extensionReplay = new SvelteMap<string, unknown[]>();
 	/** Sessions whose extension UI changed during the read in flight and needs another read. */
@@ -446,6 +450,24 @@ export class LiveSessions {
 		}
 	}
 
+	/**
+	 * Compacts an idle session. The marker in the transcript comes from Pi's
+	 * `compaction_end` event; the response adds the size estimate that event lacks.
+	 */
+	async compact(sessionId: string, customInstructions?: string): Promise<void> {
+		try {
+			const result = await compactSession(this.#options.search, sessionId, customInstructions || null, this.#fetcher);
+			if (result.first_kept_entry_id !== null && result.estimated_tokens_after !== null) {
+				this.#compactionEstimates[sessionId] = {
+					...this.#compactionEstimates[sessionId],
+					[result.first_kept_entry_id]: result.estimated_tokens_after
+				};
+			}
+		} catch (cause) {
+			throw new Error(sessionErrorMessage(cause, 'compact'), { cause });
+		}
+	}
+
 	/** Clears the queued messages and returns what the queue held. */
 	async clearQueue(sessionId: string): Promise<MessageQueue> {
 		try {
@@ -638,10 +660,16 @@ export class LiveSessions {
 				modelSelection: session.capabilities.model_selection,
 				messageQueue: session.capabilities.message_queue,
 				thinkingLevel: session.capabilities.thinking_level,
-				commandDiscovery: session.capabilities.command_discovery
+				commandDiscovery: session.capabilities.command_discovery,
+				compaction: session.capabilities.compaction
 			},
 			thinkingLevel: this.#pendingThinkingLevels[session.id] ?? session.thinking_level ?? undefined,
-			transcript: transcript.entries,
+			transcript: transcript.entries.map((entry) => {
+				if (entry.kind !== 'compaction' || !entry.firstKeptEntryId) return entry;
+				const tokensAfter = this.#compactionEstimates[session.id]?.[entry.firstKeptEntryId];
+				return tokensAfter === undefined ? entry : { ...entry, tokensAfter };
+			}),
+			compaction: transcript.compaction,
 			extensionUi: extensionUiView(extensionUi),
 			autoRetry: transcript.autoRetry,
 			messageQueue: this.#queues[session.id]

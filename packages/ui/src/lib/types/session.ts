@@ -20,6 +20,8 @@ export type SessionCapabilities = {
 	thinkingLevel?: boolean;
 	/** Whether the agent can list its slash commands. Absent means the composer offers no completion. */
 	commandDiscovery?: boolean;
+	/** Whether the agent can compact its context on request. Absent means the surface offers no control. */
+	compaction?: boolean;
 };
 
 /** One slash command the agent accepts in a prompt. */
@@ -66,6 +68,30 @@ export type TranscriptTool = {
 	status: 'running' | 'complete' | 'failed';
 };
 
+/** What started a compaction: the operator, a full context, or a provider overflow. */
+export type CompactionReason = 'manual' | 'threshold' | 'overflow';
+
+/** Marker for a finished compaction, where older context became a summary. */
+export type TranscriptCompaction = {
+	id: string;
+	kind: 'compaction';
+	reason: CompactionReason;
+	summary: string;
+	tokensBefore?: number;
+	/** First agent entry kept verbatim after the summary. Hosts match later estimates to the marker by it. */
+	firstKeptEntryId?: string;
+	/** Estimate of the context size after compaction, when the agent reported one. */
+	tokensAfter?: number;
+	/** Whether the agent resends the interrupted message once compaction ends. */
+	willRetry?: boolean;
+};
+
+/** A compaction in progress, or the last one that did not finish. A finished one becomes a transcript marker. */
+export type CompactionState =
+	| { status: 'running'; reason: CompactionReason }
+	| { status: 'failed'; reason: CompactionReason; message?: string }
+	| { status: 'aborted'; reason: CompactionReason };
+
 /** File operation blocked by a session's active sandbox policy. */
 export type SandboxFileDenial = {
 	id: string;
@@ -86,7 +112,8 @@ export type UnexplainedSandboxFailure = { id: string; kind: 'sandbox-denial'; ta
 export type SandboxDenial = SandboxFileDenial | SandboxNetworkDenial | UnexplainedSandboxFailure;
 
 /** One projected transcript entry. Completed messages replace streamed text before display. */
-export type TranscriptEntry = TranscriptMessage | TranscriptThinking | TranscriptTool | SandboxDenial;
+export type TranscriptEntry =
+	TranscriptMessage | TranscriptThinking | TranscriptTool | TranscriptCompaction | SandboxDenial;
 
 /** Blocking interaction requested by a configured Pi extension. */
 export type ExtensionDialog =
@@ -151,6 +178,7 @@ export type SessionViewModel = {
 	transcript: TranscriptEntry[];
 	extensionUi?: ExtensionUiState;
 	autoRetry?: AutoRetry;
+	compaction?: CompactionState;
 	/** Queued steering and follow-up messages. Absent or empty hides the queue. */
 	messageQueue?: MessageQueue;
 };

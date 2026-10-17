@@ -20,6 +20,7 @@
 	import type { ProcessResourceSnapshot } from './types/resource-monitoring';
 	import type {
 		CommandOption,
+		CompactionReason,
 		ExtensionUiResponse,
 		ExtensionUiState,
 		ModelOption,
@@ -32,6 +33,7 @@
 		SessionTreeSnapshot,
 		SessionViewModel,
 		SessionWorkspace,
+		TranscriptCompaction,
 		TranscriptTool
 	} from './types/session';
 
@@ -60,6 +62,12 @@
 		onRetry?: (sessionId: string) => void | Promise<void>;
 		/** Cancels an automatic retry that is waiting to run. */
 		onCancelRetry?: (sessionId: string) => void | Promise<void>;
+		/**
+		 * Compacts an idle session's context. With this and the `compaction`
+		 * capability, the session header offers a Compact control with an optional
+		 * instructions field. A rejected promise shows its message in the notices.
+		 */
+		onCompact?: (sessionId: string, customInstructions?: string) => void | Promise<void>;
 		/**
 		 * Clears the session's queued messages and returns what the queue held.
 		 * The view puts the returned text back in the composer. A rejected
@@ -119,6 +127,7 @@
 		onInterrupt = () => {},
 		onStop = () => {},
 		onRetry = () => {},
+		onCompact,
 		onClearQueue,
 		onCancelRetry = () => {},
 		onStartSession,
@@ -163,6 +172,10 @@
 	let retryingSessionId = $state<string>();
 	let retryError = $state<string>();
 	let queueError = $state<string>();
+	let compactOpen = $state(false);
+	let compactInstructions = $state('');
+	let compactingSessionId = $state<string>();
+	let compactError = $state<string>();
 	let now = $state(Date.now());
 
 	const pickerWorkspace = $derived(workspaces.find((workspace) => workspace.id === pickerWorkspaceId));
@@ -217,7 +230,13 @@
 			? `${autoRetrySeconds > 0 ? `Retrying in ${autoRetrySeconds}s` : 'Retrying now'}, attempt ${autoRetry.attempt} of ${autoRetry.maxAttempts}.`
 			: ''
 	);
-	const composerUnavailable = $derived(composerUnavailableReason(activeSession, disconnected));
+	const canCompact = $derived(Boolean(activeSession?.capabilities.compaction) && onCompact !== undefined);
+	const compactionState = $derived(activeSession?.compaction);
+	const compacting = $derived(
+		compactionState?.status === 'running' ||
+			(compactingSessionId !== undefined && compactingSessionId === activeSession?.id)
+	);
+	const composerUnavailable = $derived(composerUnavailableReason(activeSession, disconnected, compacting));
 	const productItems = $derived([
 		{
 			id: 'sessions',
@@ -246,6 +265,9 @@
 	$effect(() => {
 		void activeSession?.id;
 		retryError = undefined;
+		compactError = undefined;
+		compactOpen = false;
+		compactInstructions = '';
 	});
 
 	function hasAttention(session: SessionViewModel): boolean {
@@ -265,10 +287,18 @@
 	}
 
 	/** Explains why the composer is disabled, or returns `undefined` when it accepts text. */
-	function composerUnavailableReason(session: SessionViewModel | undefined, offline: boolean): string | undefined {
+	function composerUnavailableReason(
+		session: SessionViewModel | undefined,
+		offline: boolean,
+		compactingNow: boolean
+	): string | undefined {
 		if (!session) return undefined;
 		if (['starting', 'stopping', 'stopped', 'failed'].includes(session.status)) return '';
 		if (offline) return 'Pau is reconnecting to the backend. You can send prompts again once it reconnects.';
+		// During a run, steering and follow-ups still queue behind the compaction.
+		if (compactingNow && session.status !== 'running') {
+			return `${session.agent} is compacting the conversation. You can send a prompt when it finishes.`;
+		}
 		if (!session.capabilities.prompt) return `${session.agent} does not accept prompts in this session.`;
 		if (session.status === 'running' && !session.capabilities.steer && !session.capabilities.followUp) {
 			return `${session.agent} cannot take new direction during a run. Send your prompt when this run finishes.`;
@@ -306,6 +336,50 @@
 		if (session.status === 'running') return 'Wait for this run to finish before changing the thinking level.';
 		if (session.status !== 'idle') return 'This session cannot change its thinking level right now.';
 		return undefined;
+	}
+
+	/** Explains why Compact is disabled, or returns `undefined` when it can run. */
+	function compactUnavailableReason(session: SessionViewModel, offline: boolean, busy: boolean): string | undefined {
+		if (offline) return 'Pau is reconnecting to the backend. You can compact once it reconnects.';
+		if (busy) return 'The conversation is already being compacted.';
+		if (session.status === 'running') return 'Wait for this run to finish before compacting.';
+		if (session.status !== 'idle') return 'This session cannot be compacted right now.';
+		return undefined;
+	}
+
+	function compactingLabel(reason: CompactionReason): string {
+		return {
+			manual: 'Compacting the conversation…',
+			threshold: 'Pi is compacting the conversation because the context is nearly full.',
+			overflow: "Pi is compacting the conversation because it outgrew the model's context window."
+		}[reason];
+	}
+
+	const tokenFormat = new Intl.NumberFormat('en-US');
+
+	function compactionSizes(entry: TranscriptCompaction): string | undefined {
+		if (entry.tokensBefore === undefined) return undefined;
+		const before = tokenFormat.format(entry.tokensBefore);
+		return entry.tokensAfter === undefined
+			? `${before} tokens before`
+			: `${before} → about ${tokenFormat.format(entry.tokensAfter)} tokens`;
+	}
+
+	async function compact(): Promise<void> {
+		if (!onCompact || !activeSession || compacting) return;
+		const sessionId = activeSession.id;
+		const instructions = compactInstructions.trim();
+		compactError = undefined;
+		compactingSessionId = sessionId;
+		compactOpen = false;
+		try {
+			await onCompact(sessionId, instructions || undefined);
+			if (activeSessionId === sessionId) compactInstructions = '';
+		} catch (cause) {
+			compactError = cause instanceof Error ? cause.message : 'The conversation could not be compacted. Try again.';
+		} finally {
+			if (compactingSessionId === sessionId) compactingSessionId = undefined;
+		}
 	}
 
 	async function startSession(workspace: SessionWorkspace): Promise<void> {
@@ -709,6 +783,44 @@
 							{/if}
 						{/key}
 					{/if}
+					{#if canCompact}
+						{@const compactReason = compactUnavailableReason(activeSession, disconnected, compacting)}
+						<div class="session-compact">
+							<button
+								type="button"
+								class="session-view__stop"
+								aria-expanded={compactOpen}
+								aria-controls="compact-panel"
+								disabled={compactReason !== undefined}
+								title={compactReason}
+								onclick={() => (compactOpen = !compactOpen)}>
+								{compacting ? 'Compacting…' : 'Compact'}
+							</button>
+							{#if compactOpen && compactReason === undefined}
+								<form
+									id="compact-panel"
+									class="session-compact__panel"
+									aria-label="Compact conversation"
+									onsubmit={(event) => {
+										event.preventDefault();
+										void compact();
+									}}>
+									<p>Replace older messages with a summary to free up context.</p>
+									<label>
+										<span>Instructions (optional)</span>
+										<textarea bind:value={compactInstructions} rows="3" placeholder="What the summary should keep"
+										></textarea>
+									</label>
+									<div>
+										<button type="button" class="session-view__stop" onclick={() => (compactOpen = false)}>
+											Cancel
+										</button>
+										<button type="submit" class="session-view__stop">Compact now</button>
+									</div>
+								</form>
+							{/if}
+						</div>
+					{/if}
 					<div class={`session-view__status session-view__status--${activeSession.status}`} role="status">
 						<span></span>{statusLabel(activeSession.status)}
 					</div>
@@ -763,6 +875,23 @@
 						{/if}
 					</div>
 				{/if}
+				{#if compactionState?.status === 'running'}
+					<p class="session-view__notice" role="status">{compactingLabel(compactionState.reason)}</p>
+				{:else if compactionState?.status === 'failed'}
+					<p class="session-view__notice session-view__notice--failed" role="alert">
+						<strong>Compaction failed.</strong>
+						{compactionState.message ?? 'Pi did not say why.'} The conversation is unchanged.
+					</p>
+				{:else if compactionState?.status === 'aborted'}
+					<p class="session-view__notice" role="status">
+						<strong>Compaction cancelled.</strong> The conversation is unchanged.
+					</p>
+				{:else if compactingSessionId === activeSession.id}
+					<p class="session-view__notice" role="status">{compactingLabel('manual')}</p>
+				{/if}
+				{#if compactError && compactionState?.status !== 'failed'}
+					<p class="session-view__notice session-view__notice--failed" role="alert">{compactError}</p>
+				{/if}
 				{#if retryError}<p class="session-view__notice session-view__notice--failed" role="alert">{retryError}</p>{/if}
 			</div>
 
@@ -799,6 +928,15 @@
 									<span>{entry.name}</span><code>{entry.detail}</code><small>{toolStatus(entry)}</small>
 								</summary>
 								{#if entry.result}<pre>{entry.result}</pre>{/if}
+							</details>
+						{:else if entry.kind === 'compaction'}
+							<details class="session-compaction" aria-label="Compacted context">
+								<summary>
+									<span>Context compacted{entry.reason === 'manual' ? '' : ' automatically'}</span>
+									{#if compactionSizes(entry)}<small>{compactionSizes(entry)}</small>{/if}
+								</summary>
+								<p>{entry.summary}</p>
+								{#if entry.willRetry}<p>Pi resends your last message next.</p>{/if}
 							</details>
 						{:else}
 							<article class="session-denial" aria-label="Sandbox denial">
@@ -1305,6 +1443,79 @@
 
 	.session-tool small {
 		font-size: var(--pau-type-xs);
+	}
+
+	.session-compaction {
+		max-width: 75ch;
+		padding-block: var(--pau-space-1);
+		color: var(--pau-text-muted);
+		border-block: 1px dashed var(--pau-border);
+	}
+
+	.session-compaction summary {
+		display: flex;
+		align-items: center;
+		gap: var(--pau-space-3);
+		min-height: var(--pau-size-row-md);
+		cursor: pointer;
+	}
+
+	.session-compaction small {
+		font-size: var(--pau-type-xs);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.session-compaction p {
+		margin: var(--pau-space-2) 0 0;
+		padding-left: var(--pau-space-4);
+		font-size: var(--pau-type-sm);
+		line-height: 1.65;
+		white-space: pre-wrap;
+	}
+
+	.session-compact {
+		position: relative;
+	}
+
+	.session-compact__panel {
+		position: absolute;
+		top: calc(100% + var(--pau-space-2));
+		right: 0;
+		z-index: 5;
+		display: grid;
+		gap: var(--pau-space-3);
+		width: min(22rem, 90vw);
+		padding: var(--pau-space-3);
+		background: var(--pau-canvas);
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-control);
+		font-size: var(--pau-type-sm);
+	}
+
+	.session-compact__panel p {
+		margin: 0;
+		color: var(--pau-text-muted);
+	}
+
+	.session-compact__panel label {
+		display: grid;
+		gap: var(--pau-space-1);
+	}
+
+	.session-compact__panel textarea {
+		padding: var(--pau-space-2);
+		color: var(--pau-text);
+		background: transparent;
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-control);
+		font: inherit;
+		resize: vertical;
+	}
+
+	.session-compact__panel div {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--pau-space-2);
 	}
 
 	.session-denial {

@@ -16,6 +16,8 @@ import type {
 	SessionBranchResult,
 	SessionExtensionUi,
 	SessionCommand,
+	SessionCompactionResult,
+	SessionCompactRequest,
 	SessionModel,
 	SessionModelSelection,
 	SessionMessageQueue,
@@ -495,6 +497,25 @@ export async function listSessionCommands(
 		headers: authorization(resolveApiToken(search))
 	});
 	return responseJson<SessionCommand[]>(response);
+}
+
+/**
+ * Compacts an idle session's context into a summary. Resolves with Pi's
+ * result once it finishes, which can take as long as a model call.
+ */
+export async function compactSession(
+	search: string,
+	sessionId: string,
+	customInstructions: string | null,
+	fetcher: typeof fetch = fetch
+): Promise<SessionCompactionResult> {
+	const request: SessionCompactRequest = { custom_instructions: customInstructions };
+	const response = await fetcher(sessionUrl(search, `/${encodeURIComponent(sessionId)}/compact`), {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', ...authorization(resolveApiToken(search)) },
+		body: JSON.stringify(request)
+	});
+	return responseJson<SessionCompactionResult>(response);
 }
 
 /** Switches an idle session to another model. */

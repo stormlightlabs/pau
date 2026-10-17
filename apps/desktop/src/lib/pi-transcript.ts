@@ -1,4 +1,11 @@
-import type { AutoRetry, MessageQueue, TranscriptEntry, TranscriptTool } from '@stormlightlabs/pau-ui';
+import type {
+	AutoRetry,
+	CompactionReason,
+	CompactionState,
+	MessageQueue,
+	TranscriptEntry,
+	TranscriptTool
+} from '@stormlightlabs/pau-ui';
 
 /**
  * Display transcript rebuilt from native Pi events.
@@ -15,6 +22,8 @@ export type PiTranscript = {
 	messages: number;
 	/** Automatic retry that Pi has scheduled and not yet started or abandoned. */
 	autoRetry?: AutoRetry;
+	/** Compaction that is running, or the last one that failed or was aborted. */
+	compaction?: CompactionState;
 };
 
 /** A transcript with no events applied. */
@@ -32,6 +41,35 @@ function text(value: unknown): string | undefined {
 
 function numberField(value: unknown): number | undefined {
 	return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function compactionReason(value: unknown): CompactionReason {
+	return value === 'threshold' || value === 'overflow' ? value : 'manual';
+}
+
+/** Applies a finished compaction: a marker on success, or the state that explains why none was added. */
+function applyCompactionEnd(state: PiTranscript, event: JsonObject): PiTranscript {
+	const reason = compactionReason(event.reason);
+	const result = isObject(event.result) ? event.result : undefined;
+	if (event.aborted === true) return { ...state, compaction: { status: 'aborted', reason } };
+	if (!result) return { ...state, compaction: { status: 'failed', reason, message: text(event.errorMessage) } };
+	const count = state.entries.filter((entry) => entry.kind === 'compaction').length;
+	return {
+		...state,
+		compaction: undefined,
+		entries: [
+			...state.entries,
+			{
+				id: `compaction:${count}`,
+				kind: 'compaction',
+				reason,
+				summary: text(result.summary) ?? '',
+				firstKeptEntryId: text(result.firstKeptEntryId),
+				tokensBefore: numberField(result.tokensBefore),
+				willRetry: event.willRetry === true ? true : undefined
+			}
+		]
+	};
 }
 
 function toolEntryId(callId: string): string {
@@ -249,6 +287,12 @@ export function reducePiEvent(state: PiTranscript, event: unknown): PiTranscript
 				)
 			};
 		}
+		case 'compaction_start':
+			return { ...state, compaction: { status: 'running', reason: compactionReason(event.reason) } };
+		case 'compaction_end':
+			return applyCompactionEnd(state, event);
+		case 'agent_start':
+			return state.compaction && state.compaction.status !== 'running' ? { ...state, compaction: undefined } : state;
 		case 'auto_retry_start': {
 			const attempt = numberField(event.attempt);
 			const maxAttempts = numberField(event.maxAttempts);

@@ -1,4 +1,4 @@
-<p align="center"><img src=".github/assets/banner.png" alt="Pau: a desktop workspace for running Pi and other coding agents" width="880"></p>
+<p align="center"><img src=".github/assets/banner.png" alt="Pau: Pi, plus a little more" width="880"></p>
 
 # Pau
 

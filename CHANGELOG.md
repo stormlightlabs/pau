@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Fixed the installed app opening to a "404 Not Found" page.
+- The app icon now follows the macOS icon shape instead of sitting on a plate.
 - `scripts/install.sh` builds a release tag on your Mac and installs it,
   prompting for the version or taking it as an argument.
 - Resumed, branched, and reloaded sessions show their full conversation from

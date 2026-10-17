@@ -136,6 +136,17 @@ async fn wait_for_queue(session: &PiSession, expected: &AgentMessageQueue) {
     panic!("queue never reached {expected:?}");
 }
 
+async fn wait_for_commands(fixture: &FakePi, count: usize) -> Vec<Value> {
+    for _ in 0..100 {
+        let commands = fixture.commands();
+        if commands.len() >= count {
+            return commands;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("the fake Pi never recorded {count} commands");
+}
+
 #[tokio::test]
 async fn lists_prompt_skill_and_extension_commands() {
     let fixture = FakePi::new(CONTROL_FIXTURE);
@@ -310,9 +321,11 @@ async fn sends_extension_ui_responses_without_command_ids() {
         })
         .await
         .unwrap();
+    // Responses get no reply, so wait for the fake to log both before
+    // shutdown can interrupt its read loop.
+    let commands = wait_for_commands(&fixture, 2).await;
     session.stop().await.unwrap();
 
-    let commands = fixture.commands();
     assert_eq!(commands[0]["type"], "extension_ui_response");
     assert_eq!(commands[0]["id"], "extension-request");
     assert_eq!(commands[0]["value"], "Allow");

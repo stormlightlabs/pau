@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Browse a workspace's saved Pi sessions and resume one from the session
+  picker.
 - Pau is now tested with Pi 1.0. The permission extension runs MCP tools that
   declare themselves read-only and closed-world without asking.
 - Text across the app is now at least 12px with consistent spacing and corner

@@ -1,9 +1,10 @@
 import type { AgentSession, ServerEvent, Workspace } from '@stormlightlabs/pau-protocol';
-import type { PromptQueue, SessionViewModel, SessionWorkspace } from '@stormlightlabs/pau-ui';
+import type { PromptQueue, SavedSessionList, SessionViewModel, SessionWorkspace } from '@stormlightlabs/pau-ui';
 
 import {
 	PauApiError,
 	interruptSession,
+	listNativeSessions,
 	listSessions,
 	listWorkspaces,
 	promptSession,
@@ -28,7 +29,7 @@ const TITLE_LENGTH = 60;
  * Turns an API failure into copy for the operator. Starting and controlling a
  * session share most codes, but `not_found` names a different missing thing.
  */
-export function sessionErrorMessage(cause: unknown, action: 'start' | 'control'): string {
+export function sessionErrorMessage(cause: unknown, action: 'start' | 'control' | 'resume'): string {
 	if (!(cause instanceof PauApiError)) {
 		return 'Pau could not reach its backend. Check that the desktop app is still running, then try again.';
 	}
@@ -37,8 +38,12 @@ export function sessionErrorMessage(cause: unknown, action: 'start' | 'control')
 			return 'Pau could not find a working Pi installation. Install Pi or add it to your PATH, then try again.';
 		case 'sandboxed_session_unsupported':
 			return 'This workspace uses a sandbox, and sandboxed sessions cannot start from the desktop yet. Turn off the sandbox in the workspace settings to start a session.';
+		case 'native_session_not_found':
+			return 'Pi no longer has that saved session. It may have been deleted. Pick another session or start a new one.';
+		case 'invalid_native_session':
+			return 'Pi could not read that saved session, so it cannot be resumed. Pick another session or start a new one.';
 		case 'not_found':
-			return action === 'start'
+			return action !== 'control'
 				? 'This workspace is no longer registered with Pau.'
 				: 'This session has ended. Start a new session to continue.';
 		case 'session_exited':
@@ -151,6 +156,34 @@ export class LiveSessions {
 			return session.id;
 		} catch (cause) {
 			throw new Error(sessionErrorMessage(cause, 'start'), { cause });
+		}
+	}
+
+	/** Lists a workspace's saved Pi sessions. Rejects with operator-facing copy. */
+	async listSaved(workspaceId: string): Promise<SavedSessionList> {
+		try {
+			const list = await listNativeSessions(this.#options.search, workspaceId, this.#fetcher);
+			return {
+				sessions: list.sessions.map((saved) => ({
+					id: saved.id,
+					title: saved.name?.trim() || saved.first_message?.trim() || 'Untitled session',
+					modifiedAt: saved.modified_at ?? saved.created_at
+				})),
+				warnings: list.warnings
+			};
+		} catch (cause) {
+			throw new Error(sessionErrorMessage(cause, 'start'), { cause });
+		}
+	}
+
+	/** Resumes a saved Pi session and returns the new live session's ID. */
+	async resume(workspaceId: string, savedSessionId: string): Promise<string> {
+		try {
+			const session = await startSession(this.#options.search, workspaceId, this.#fetcher, savedSessionId);
+			this.#sessions[session.id] = session;
+			return session.id;
+		} catch (cause) {
+			throw new Error(sessionErrorMessage(cause, 'resume'), { cause });
 		}
 	}
 

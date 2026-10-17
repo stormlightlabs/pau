@@ -46,6 +46,12 @@
 		selectedSessionId = sessionId;
 		onSessionChange?.(workspaceId, sessionId);
 	}
+
+	async function resumeSession(workspaceId: string, savedSessionId: string): Promise<void> {
+		const sessionId = await sessions.resume(workspaceId, savedSessionId);
+		selectedSessionId = sessionId;
+		onSessionChange?.(workspaceId, sessionId);
+	}
 </script>
 
 <SessionView
@@ -55,6 +61,8 @@
 	disconnected={sessions.disconnected}
 	onSelectSession={selectSession}
 	onStartSession={startSession}
+	onLoadSavedSessions={(workspaceId) => sessions.listSaved(workspaceId)}
+	onResumeSession={resumeSession}
 	onSend={(sessionId, text, queue) => sessions.send(sessionId, text, queue)}
 	onInterrupt={(sessionId) => sessions.interrupt(sessionId)}
 	onStop={(sessionId) => sessions.stop(sessionId)} />

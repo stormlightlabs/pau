@@ -100,3 +100,15 @@ export type SessionWorkspace = { id: string; name: string; sessions: SessionView
 
 /** Queue used when the operator sends text during an active run. */
 export type PromptQueue = 'steer' | 'follow-up';
+
+/** A saved Pi session that a workspace can resume. */
+export type SavedSession = {
+	id: string;
+	/** Name the operator gave the session, or the start of its first message. */
+	title: string;
+	/** RFC 3339 time of the last change, when known. */
+	modifiedAt?: string;
+};
+
+/** Saved sessions for one workspace, newest first, with files that could not be read. */
+export type SavedSessionList = { sessions: SavedSession[]; warnings: { path: string; message: string }[] };

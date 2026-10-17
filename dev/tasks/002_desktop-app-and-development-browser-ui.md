@@ -632,17 +632,18 @@ Verification:
   exits while a dialog is open.
 - Answer an extension dialog in a self-hosted Pi session.
 
-### 2.148 Session picker
+### 2.165 Live session native IDs
 
 Status: planned
 Blocked by: none
 
-Let the operator browse, resume, and start Pi sessions from the desktop app.
+Report each live Pi session's native session ID so the session picker selects
+a session that is already running instead of resuming it a second time.
 
 Verification:
 
-- Component-test empty, populated, and failed-resume states.
-- Resume a self-hosted Pi session from the picker.
+- Cover the native ID on start, resume, clone, and branch against the fake Pi
+  executable, and component-test selecting an already-live saved session.
 
 ### 2.150 Session rename and clone controls
 
@@ -856,7 +857,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.69, 2.71, 2.161, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120, 2.148,
+Blocked by: 2.69, 2.71, 2.161, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120,
 2.152, 2.156
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do

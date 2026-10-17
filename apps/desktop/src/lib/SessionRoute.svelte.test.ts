@@ -169,3 +169,57 @@ test('reports a disconnected backend when the session list cannot load', async (
 
 	await expect.element(page.getByText('Disconnected', { exact: true })).toBeVisible();
 });
+
+const savedList = {
+	sessions: [
+		{
+			id: 'native-1',
+			name: null,
+			first_message: 'Fix the gutter',
+			created_at: '2026-04-01T10:00:00Z',
+			modified_at: '2026-04-01T11:00:00Z',
+			path: '/home/me/.pi/native-1.jsonl'
+		}
+	],
+	warnings: []
+};
+
+async function openSavedSessions(): Promise<void> {
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	await userEvent.click(page.getByRole('button', { name: 'Browse saved sessions in Pau' }));
+}
+
+test('resumes a saved session from the picker and selects it', async () => {
+	const start = vi.fn(() => json({ ...idleSession, status: 'starting' }, 201));
+	const changes: string[] = [];
+	const { props } = setup({
+		'GET /api/workspaces/pau/pi-sessions': () => json(savedList),
+		'POST /api/sessions': start
+	});
+	await render(SessionRoute, { ...props, onSessionChange: (_workspace: string, id: string) => changes.push(id) });
+
+	await openSavedSessions();
+	await userEvent.click(page.getByRole('button', { name: 'Resume Fix the gutter' }));
+
+	await expect.element(page.getByText('Starting the agent process…')).toBeVisible();
+	expect(start).toHaveBeenCalledWith(
+		expect.objectContaining({ body: '{"workspace_id":"pau","model":null,"native_session_id":"native-1"}' })
+	);
+	expect(changes).toEqual(['session-1']);
+});
+
+test.each([
+	['native_session_not_found', 404, 'Pi no longer has that saved session'],
+	['invalid_native_session', 422, 'Pi could not read that saved session']
+])('explains a %s resume failure', async (code, status, expected) => {
+	const { props } = setup({
+		'GET /api/workspaces/pau/pi-sessions': () => json(savedList),
+		'POST /api/sessions': () => json({ code, message: 'backend detail' }, status)
+	});
+	await render(SessionRoute, props);
+
+	await openSavedSessions();
+	await userEvent.click(page.getByRole('button', { name: 'Resume Fix the gutter' }));
+
+	await expect.element(page.getByRole('alert')).toHaveTextContent(expected);
+});

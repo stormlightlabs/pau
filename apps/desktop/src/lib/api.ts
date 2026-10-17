@@ -10,6 +10,7 @@ import type {
 	FileSearchMatch,
 	GitDiff,
 	GitStatus,
+	NativeSessionList,
 	SessionMessageRequest,
 	SessionPromptRequest,
 	SessionQueue,
@@ -80,7 +81,7 @@ async function responseJson<T>(response: Response): Promise<T> {
 function workspaceEndpoint(
 	search: string,
 	workspaceId: string,
-	endpoint: 'file' | 'files' | 'search' | 'git/diff' | 'git/status' | 'sandbox' | 'sandbox/preview'
+	endpoint: 'file' | 'files' | 'search' | 'git/diff' | 'git/status' | 'sandbox' | 'sandbox/preview' | 'pi-sessions'
 ): URL {
 	const origin = resolveApiOrigin(search) || 'https://pau.local';
 	return new URL(`/api/workspaces/${encodeURIComponent(workspaceId)}/${endpoint}`, origin);
@@ -319,13 +320,28 @@ export async function listSessions(search: string, fetcher: typeof fetch = fetch
 	return responseJson<AgentSession[]>(response);
 }
 
-/** Starts a Pi session in a registered workspace with the agent's default model. */
-export async function startSession(
+/** Lists the workspace's saved Pi sessions, newest first. */
+export async function listNativeSessions(
 	search: string,
 	workspaceId: string,
 	fetcher: typeof fetch = fetch
+): Promise<NativeSessionList> {
+	const url = requestUrl(workspaceEndpoint(search, workspaceId, 'pi-sessions'), search);
+	const response = await fetcher(url, { headers: authorization(resolveApiToken(search)) });
+	return responseJson<NativeSessionList>(response);
+}
+
+/**
+ * Starts a Pi session in a registered workspace with the agent's default
+ * model. Passing a saved session's ID resumes it instead of starting fresh.
+ */
+export async function startSession(
+	search: string,
+	workspaceId: string,
+	fetcher: typeof fetch = fetch,
+	nativeSessionId: string | null = null
 ): Promise<AgentSession> {
-	const request: StartSessionRequest = { workspace_id: workspaceId, model: null, native_session_id: null };
+	const request: StartSessionRequest = { workspace_id: workspaceId, model: null, native_session_id: nativeSessionId };
 	const response = await fetcher(sessionUrl(search, ''), {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', ...authorization(resolveApiToken(search)) },

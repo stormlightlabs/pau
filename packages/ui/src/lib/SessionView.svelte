@@ -3,6 +3,7 @@
 	import ApplicationShell, { type ShellNavItem } from './ApplicationShell.svelte';
 	import ExtensionUi from './ExtensionUi.svelte';
 	import Icon from './Icon.svelte';
+	import SessionPicker from './SessionPicker.svelte';
 	import SessionResourceSummary from './SessionResourceSummary.svelte';
 	import type { ProcessResourceSnapshot } from './types/resource-monitoring';
 	import type {
@@ -10,6 +11,7 @@
 		ExtensionUiState,
 		PromptQueue,
 		SandboxDenial,
+		SavedSessionList,
 		SessionViewModel,
 		SessionWorkspace,
 		TranscriptTool
@@ -31,6 +33,13 @@
 		 * failed start.
 		 */
 		onStartSession?: (workspaceId: string) => void | Promise<void>;
+		/**
+		 * Lists a workspace's saved sessions. With `onResumeSession`, the rail
+		 * offers a session picker for each workspace.
+		 */
+		onLoadSavedSessions?: (workspaceId: string) => Promise<SavedSessionList>;
+		/** Resumes a saved session. A rejected promise shows its message in the picker. */
+		onResumeSession?: (workspaceId: string, savedSessionId: string) => void | Promise<void>;
 		resourceSnapshot?: ProcessResourceSnapshot;
 		onExtensionUiResponse?: (sessionId: string, response: ExtensionUiResponse) => void | Promise<void>;
 		onExtensionUiTimeout?: (sessionId: string, requestId: string) => void;
@@ -47,6 +56,8 @@
 		onInterrupt = () => {},
 		onStop = () => {},
 		onStartSession,
+		onLoadSavedSessions,
+		onResumeSession,
 		resourceSnapshot,
 		onExtensionUiResponse = () => {},
 		onExtensionUiTimeout = () => {},
@@ -63,7 +74,9 @@
 	let startingWorkspaceId = $state<string>();
 	let startFailure = $state<{ workspaceId: string; workspaceName: string; message: string }>();
 	let controlError = $state<string>();
+	let pickerWorkspaceId = $state<string>();
 
+	const pickerWorkspace = $derived(workspaces.find((workspace) => workspace.id === pickerWorkspaceId));
 	const sessions = $derived(workspaces.flatMap((workspace) => workspace.sessions));
 	const activeSession = $derived(sessions.find((session) => session.id === activeSessionId));
 	const activeWorkspace = $derived(
@@ -146,6 +159,7 @@
 	}
 
 	function selectSession(sessionId: string): void {
+		pickerWorkspaceId = undefined;
 		startFailure = undefined;
 		controlError = undefined;
 		error = undefined;
@@ -251,6 +265,16 @@
 									<span aria-hidden="true">+</span>
 								</button>
 							{/if}
+							{#if onLoadSavedSessions && onResumeSession}
+								<button
+									type="button"
+									class="session-rail__saved"
+									aria-label={`Browse saved sessions in ${workspace.name}`}
+									aria-pressed={pickerWorkspaceId === workspace.id}
+									title="Saved sessions"
+									disabled={disconnected}
+									onclick={() => (pickerWorkspaceId = workspace.id)}>Saved</button>
+							{/if}
 						</div>
 						{#if workspace.sessions.length === 0}
 							<p class="session-rail__empty">
@@ -297,7 +321,26 @@
 			onStop={(sessionId) => onStop(sessionId)} />
 	{/snippet}
 
-	{#if startFailure}
+	{#if pickerWorkspace && onLoadSavedSessions && onResumeSession}
+		{#key pickerWorkspace.id}
+			<div class="session-view session-view--empty">
+				<SessionPicker
+					workspaceName={pickerWorkspace.name}
+					disabled={disconnected}
+					load={() => onLoadSavedSessions(pickerWorkspace.id)}
+					onNew={async () => {
+						if (!onStartSession) return;
+						await onStartSession(pickerWorkspace.id);
+						pickerWorkspaceId = undefined;
+					}}
+					onResume={async (savedSessionId) => {
+						await onResumeSession(pickerWorkspace.id, savedSessionId);
+						pickerWorkspaceId = undefined;
+					}}
+					onClose={() => (pickerWorkspaceId = undefined)} />
+			</div>
+		{/key}
+	{:else if startFailure}
 		<section class="session-view session-view--empty" aria-labelledby="start-failed-title">
 			<div class="session-view__empty" role="alert">
 				<h1 id="start-failed-title">Could not start a session in {startFailure.workspaceName}</h1>
@@ -509,7 +552,16 @@
 		text-align: center;
 	}
 
-	.session-rail .session-rail__start:disabled {
+	.session-rail .session-rail__saved {
+		width: auto;
+		min-height: var(--pau-size-row-md);
+		padding: 0 var(--pau-space-2);
+		color: var(--pau-text-muted);
+		font-size: var(--pau-type-xs);
+	}
+
+	.session-rail .session-rail__start:disabled,
+	.session-rail .session-rail__saved:disabled {
 		cursor: not-allowed;
 		opacity: 0.5;
 	}

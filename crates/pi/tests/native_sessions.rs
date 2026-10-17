@@ -3,10 +3,7 @@
 use std::fs;
 use std::path::Path;
 
-use pau_pi::{
-    MAX_TREE_ENTRIES, PiSessionFileError, find_pi_session_file, list_pi_session_files,
-    read_pi_session_tree,
-};
+use pau_pi::{PiSessionFileError, find_pi_session_file, list_pi_session_files};
 
 fn header(id: &str, cwd: &str) -> String {
     format!(
@@ -117,64 +114,4 @@ fn finds_only_this_workspaces_sessions_by_identifier() {
             "{id}"
         );
     }
-}
-
-#[test]
-fn reads_a_branched_tree_and_skips_malformed_lines() {
-    let sessions = tempfile::tempdir().unwrap();
-    let assistant = r#"{"type":"message","id":"b2","parentId":"a1","timestamp":"2026-01-02T03:06:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Fixed"},{"type":"toolCall"}]}}"#;
-    let retry = r#"{"type":"message","id":"c3","parentId":"a1","timestamp":"2026-01-02T03:07:00.000Z","message":{"role":"user","content":"Try  another\napproach"}}"#;
-    let summary = r#"{"type":"compaction","id":"d4","parentId":"c3","timestamp":"2026-01-02T03:08:00.000Z","summary":"Earlier work"}"#;
-    write(
-        sessions.path(),
-        "2026_tree.jsonl",
-        &[
-            header("tree", "/work/app"),
-            USER.to_owned(),
-            "not json".to_owned(),
-            r#"{"type":"message","parentId":"a1"}"#.to_owned(),
-            assistant.to_owned(),
-            retry.to_owned(),
-            summary.to_owned(),
-        ],
-    );
-    let path = find_pi_session_file(sessions.path(), Path::new("/work/app"), "tree").unwrap();
-
-    let tree = read_pi_session_tree(&path).unwrap();
-    let ids: Vec<_> = tree.entries.iter().map(|entry| entry.id.as_str()).collect();
-    assert_eq!(ids, ["a1", "b2", "c3", "d4"]);
-    assert_eq!(tree.leaf_id.as_deref(), Some("d4"));
-    assert!(!tree.truncated);
-    assert_eq!(tree.entries[0].parent_id, None);
-    assert_eq!(tree.entries[0].preview, "Fix the login bug");
-    assert_eq!(tree.entries[1].parent_id.as_deref(), Some("a1"));
-    assert_eq!(tree.entries[1].role.as_deref(), Some("assistant"));
-    assert_eq!(tree.entries[1].preview, "Fixed");
-    assert_eq!(tree.entries[2].parent_id.as_deref(), Some("a1"));
-    assert_eq!(tree.entries[2].preview, "Try another approach");
-    assert_eq!(tree.entries[3].kind, "compaction");
-    assert_eq!(tree.entries[3].preview, "Earlier work");
-
-    write(sessions.path(), "2026_bad.jsonl", &["{}".to_owned()]);
-    let bad = sessions.path().join("--work-app--/2026_bad.jsonl");
-    assert!(read_pi_session_tree(&bad).is_err());
-}
-
-#[test]
-fn bounds_the_tree_to_the_newest_entries() {
-    let sessions = tempfile::tempdir().unwrap();
-    let mut lines = vec![header("big", "/work/app")];
-    for index in 0..MAX_TREE_ENTRIES + 3 {
-        lines.push(format!(
-            r#"{{"type":"message","id":"e{index}","parentId":null,"message":{{"role":"user","content":"m"}}}}"#
-        ));
-    }
-    write(sessions.path(), "2026_big.jsonl", &lines);
-    let path = sessions.path().join("--work-app--/2026_big.jsonl");
-
-    let tree = read_pi_session_tree(&path).unwrap();
-    assert_eq!(tree.entries.len(), MAX_TREE_ENTRIES);
-    assert_eq!(tree.entries[0].id, "e3");
-    assert_eq!(tree.leaf_id, Some(format!("e{}", MAX_TREE_ENTRIES + 2)));
-    assert!(tree.truncated);
 }

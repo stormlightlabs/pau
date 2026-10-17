@@ -57,44 +57,12 @@ Verification:
 - Confirm observation does not change authorization, execution order, retries,
   or process ownership.
 
-### 2.162 Pi permission extension
-
-Status: planned
-Blocked by: none
-
-Add `packages/pi-permissions`, a private Pi extension that gates tool calls
-with a per-session policy file and reports structured requests and decisions
-over RPC, as described in `dev/plan/backend.md`.
-
-Verification:
-
-- Cover allow, deny, session approval, protected reads through `read` and
-  `bash`, wrapped commands, MCP annotations, abort, timeout, and a missing or
-  invalid policy file against Pi in RPC mode with a fixture model.
-- Confirm the vendored analysis matches its recorded upstream commit and keeps
-  upstream's license.
-
-### 2.163 Subagent permission setting
-
-Status: planned
-Blocked by: 2.162
-
-Let the operator choose whether a session that loads `pi-subagents` refuses a
-confirming profile or passes the permission extension and policy to child Pi
-processes.
-
-Verification:
-
-- Cover the refusal, its explanation, and a child process that receives the
-  extension and policy file.
-
 ### 2.45 Pi permission requests
 
 Status: planned
-Blocked by: 2.54, 2.162
+Blocked by: 2.54
 
-Implement the selected permission profiles for Pi through Pau's permission
-extension.
+Implement the selected permission profiles for Pi through the reviewed package.
 Queue requests per session, apply allow-once and deny decisions, and write
 redacted audit records. Keep permission rules separate from sandbox profiles.
 
@@ -124,8 +92,7 @@ Verification:
 Status: planned
 Blocked by: 2.62
 
-Let the operator choose a permission profile. Changing it restarts Pi on the
-same session file.
+Let the operator choose a permission profile.
 
 Verification:
 
@@ -710,10 +677,21 @@ Verification:
   not.
 - Trigger a notification from a self-hosted Pi session.
 
-### 2.69 Composer input history
+### 2.68 Pi input history API
 
 Status: planned
 Blocked by: none
+
+Expose Pi input history through the desktop API.
+
+Verification:
+
+- Cover history recall against the Pi fixture.
+
+### 2.69 Composer input history
+
+Status: planned
+Blocked by: 2.68
 
 Add input history to the session composer.
 
@@ -721,10 +699,21 @@ Verification:
 
 - Component-test history navigation and an empty history.
 
-### 2.114 Composer image input
+### 2.113 Pi image attachment API
 
 Status: planned
 Blocked by: none
+
+Accept image attachments with Pi prompts through the desktop API.
+
+Verification:
+
+- Cover prompts with images and unsupported image types against the Pi fixture.
+
+### 2.114 Composer image input
+
+Status: planned
+Blocked by: 2.113
 
 Add image input to the session composer.
 
@@ -779,10 +768,21 @@ Verification:
 - Component-test empty and queued states.
 - Queue a message in a self-hosted Pi session.
 
-### 2.118 Retry control
+### 2.117 Pi retry API
 
 Status: planned
 Blocked by: none
+
+Expose retry after failure through the desktop API.
+
+Verification:
+
+- Cover retry after failure against the Pi fixture.
+
+### 2.118 Retry control
+
+Status: planned
+Blocked by: 2.117
 
 Add a retry control to failed turns in the session view.
 
@@ -824,10 +824,21 @@ Verification:
 - Component-test compacting, compacted, and failed states.
 - Compact a self-hosted Pi session.
 
-### 2.73 Session tree view
+### 2.72 Pi session tree API
 
 Status: planned
 Blocked by: none
+
+Expose Pi session trees and branch creation through the desktop API.
+
+Verification:
+
+- Cover tree navigation and branch creation against fixture Pi session files.
+
+### 2.73 Session tree view
+
+Status: planned
+Blocked by: 2.72
 
 Add session tree navigation and branching to the session view.
 
@@ -1265,9 +1276,7 @@ Verification:
 
 ### 2.156 macOS dogfood build
 
-Status: blocked
-Status note: The release script and unsigned build work. Signing needs a
-Developer ID Application certificate, which the development Mac lacks.
+Status: planned
 Blocked by: none
 
 Build a signed and notarized Apple Silicon app from a release tag and install

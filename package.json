@@ -16,8 +16,7 @@
 		"test:ui": "pnpm --filter @stormlightlabs/pau-ui test",
 		"format": "prettier --write .",
 		"generate:protocol": "cargo run --quiet -p pau-core --bin generate-protocol",
-		"lint": "eslint apps packages --max-warnings=0",
-		"release:macos": "pnpm --filter @stormlightlabs/pau-desktop release:macos"
+		"lint": "eslint apps packages --max-warnings=0"
 	},
 	"devDependencies": {
 		"@eslint/js": "10.0.1",

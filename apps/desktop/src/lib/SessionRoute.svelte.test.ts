@@ -32,8 +32,6 @@ const idleSession: AgentSession = {
 		command_discovery: true,
 		usage: true,
 		compaction: true,
-		branching: true,
-		retry: true,
 		stop: true
 	}
 };
@@ -122,7 +120,7 @@ test('streams a live transcript and sends prompts to the session', async () => {
 
 	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), 'Add a test.');
 	await userEvent.click(page.getByRole('button', { name: /Send prompt/ }));
-	expect(prompt).toHaveBeenCalledWith(expect.objectContaining({ body: '{"message":"Add a test.","queue":null,"images":null}' }));
+	expect(prompt).toHaveBeenCalledWith(expect.objectContaining({ body: '{"message":"Add a test.","queue":null}' }));
 });
 
 test.each([

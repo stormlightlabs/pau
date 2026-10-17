@@ -231,26 +231,6 @@ pub enum PiEventPayload {
         /// Whether Pi will retry the overflowed prompt after this compaction.
         will_retry: bool,
     },
-    /// Pi scheduled an automatic retry after a transient provider error.
-    AutoRetryStarted {
-        /// One-based attempt number.
-        attempt: u64,
-        /// Attempts Pi makes before giving up.
-        max_attempts: u64,
-        /// Delay before the attempt runs.
-        delay_ms: u64,
-        /// The provider error that triggered the retry.
-        error_message: String,
-    },
-    /// Automatic retry succeeded or ran out of attempts.
-    AutoRetryEnded {
-        /// Whether the final attempt succeeded.
-        success: bool,
-        /// The last attempt number.
-        attempt: u64,
-        /// The error that ended retrying when `success` is false.
-        final_error: Option<String>,
-    },
 }
 
 /// Reduces native Pi session events into display state and `pau-agent` events.
@@ -343,36 +323,6 @@ impl PiEventReducer {
                 }
                 Some(compaction_end_event(event))
             }
-            "auto_retry_start" => Some(AgentEvent::new(
-                AgentEventKind::Lifecycle,
-                PiEventPayload::AutoRetryStarted {
-                    attempt: event.get("attempt").and_then(Value::as_u64).unwrap_or(0),
-                    max_attempts: event
-                        .get("maxAttempts")
-                        .and_then(Value::as_u64)
-                        .unwrap_or(0),
-                    delay_ms: event.get("delayMs").and_then(Value::as_u64).unwrap_or(0),
-                    error_message: event
-                        .get("errorMessage")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_owned(),
-                },
-            )),
-            "auto_retry_end" => Some(AgentEvent::new(
-                AgentEventKind::Lifecycle,
-                PiEventPayload::AutoRetryEnded {
-                    success: event
-                        .get("success")
-                        .and_then(Value::as_bool)
-                        .unwrap_or(false),
-                    attempt: event.get("attempt").and_then(Value::as_u64).unwrap_or(0),
-                    final_error: event
-                        .get("finalError")
-                        .and_then(Value::as_str)
-                        .map(str::to_owned),
-                },
-            )),
             _ => None,
         }
     }

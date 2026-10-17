@@ -53,17 +53,17 @@ slashes replaced by hyphens, such as `screens-session-focused.png`.
 `foundations-tokens.png` exports the token table.
 
 To regenerate an image, open `pau.fig` in OpenPencil, select the frame, and
-export it as PNG at 1x. From a terminal, the CLI exports one frame by node ID:
+export it as PNG at 1x. Export from the app rather than the headless
+`openpencil export` command. The headless renderer in OpenPencil 0.15 draws
+icons at the wrong size and drops trailing spaces in text layers.
+
+Reduce each new PNG to a 112-color palette before committing it, which keeps
+the full set under 1.4 MB:
 
 ```sh
-openpencil export pau.fig --node <frame-id> -o dev/prototype/<page>-<state>.png
-```
-
-Reduce each new PNG to a 128-color palette before committing it:
-
-```sh
-magick mogrify -strip -dither None -colors 128 -define png:format=png8 \
-  dev/prototype/<page>-<state>.png
+magick mogrify -strip -dither None -colors 112 \
+  -define png:compression-level=9 -define png:compression-strategy=0 \
+  -define png:format=png8 dev/prototype/<page>-<state>.png
 ```
 
 ## Add a screen or state

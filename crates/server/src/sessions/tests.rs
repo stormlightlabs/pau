@@ -26,13 +26,12 @@ const FAKE_PI: &str = r#"#!/bin/sh
 if [ "$1" = '--version' ]; then echo 0.87.1; exit 0; fi
 [ "$1" = '--mode' ] && [ "$2" = 'rpc' ] || exit 64
 printf '%s\n' "$*" > "$PWD/args.txt"
-current=model-one
 while IFS= read -r command; do
     printf '%s\n' "$command" >> "$PWD/commands.jsonl"
     id=$(printf '%s' "$command" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
     case "$command" in
         *'"type":"get_state"'*)
-            printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"native","sessionFile":"%s/session.jsonl","model":{"provider":"fixture","id":"%s"}}}\n' "$id" "$PWD" "$current"
+            printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"native","sessionFile":"%s/session.jsonl","model":{"provider":"fixture","id":"model-one"}}}\n' "$id" "$PWD"
             ;;
         *'"message":"exit"'*) exit 3 ;;
         *'"message":"dialogs"'*)
@@ -78,12 +77,7 @@ while IFS= read -r command; do
         *'"modelId":"missing"'*)
             printf '{"id":"%s","type":"response","command":"set_model","success":false,"error":"Model not found: fixture/missing"}\n' "$id"
             ;;
-        *'"modelId":"model-two"'*)
-            current=model-two
-            printf '{"id":"%s","type":"response","command":"set_model","success":true,"data":{"provider":"fixture","id":"model-two"}}\n' "$id"
-            ;;
         *'"type":"set_model"'*)
-            current=model-one
             printf '{"id":"%s","type":"response","command":"set_model","success":true,"data":{"provider":"fixture","id":"model-one"}}\n' "$id"
             ;;
         *'"type":"set_thinking_level"'*)
@@ -98,32 +92,14 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"compact","success":true,"data":{"summary":"Short summary","firstKeptEntryId":"entry-2","tokensBefore":9000}}\n' "$id"
             printf '{"type":"compaction_end","reason":"manual","aborted":false,"willRetry":false,"result":{"summary":"Short summary","firstKeptEntryId":"entry-2","tokensBefore":9000}}\n'
             ;;
-        *'"type":"get_messages"'*)
-            printf '{"id":"%s","type":"response","command":"get_messages","success":true,"data":{"messages":[{"role":"user","content":"failing prompt"},{"role":"assistant","content":[],"stopReason":"error","errorMessage":"529 overloaded"}]}}\n' "$id"
-            ;;
-        *'"type":"set_auto_retry"'*)
-            printf '{"id":"%s","type":"response","command":"set_auto_retry","success":true}\n' "$id"
-            ;;
-        *'"type":"abort_retry"'*)
-            printf '{"id":"%s","type":"response","command":"abort_retry","success":true}\n' "$id"
-            ;;
         *'"type":"set_auto_compaction"'*)
             printf '{"id":"%s","type":"response","command":"set_auto_compaction","success":true}\n' "$id"
             ;;
         *'"type":"get_session_stats"'*)
             printf '{"id":"%s","type":"response","command":"get_session_stats","success":true,"data":{"tokens":{"input":50000,"output":10000,"cacheRead":40000,"cacheWrite":5000,"total":105000},"cost":0.45,"contextUsage":{"tokens":60000,"contextWindow":200000,"percent":30}}}\n' "$id"
             ;;
-        *'"entryId":"missing"'*)
-            printf '{"id":"%s","type":"response","command":"fork","success":false,"error":"Entry missing not found"}\n' "$id"
-            ;;
-        *'"type":"fork"'*)
-            printf '{"id":"%s","type":"response","command":"fork","success":true,"data":{"text":"Fix the login bug","cancelled":false}}\n' "$id"
-            ;;
         *'"type":"get_available_models"'*)
-            printf '{"id":"%s","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"model-one","name":"Model One","provider":"fixture","reasoning":true,"input":["text","image"]},{"id":"model-two","provider":"fixture","reasoning":false,"input":["text"]}]}}\n' "$id"
-            ;;
-        *'"type":"get_entries"'*)
-            printf '{"id":"%s","type":"response","command":"get_entries","success":true,"data":{"entries":[{"type":"message","id":"a","message":{"role":"user","content":"first"}},{"type":"message","id":"b","message":{"role":"assistant","content":"reply"}},{"type":"message","id":"c","message":{"role":"user","content":[{"type":"text","text":"second"}]}}]}}\n' "$id"
+            printf '{"id":"%s","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"model-one","name":"Model One","provider":"fixture","reasoning":true},{"id":"model-two","provider":"fixture","reasoning":false}]}}\n' "$id"
             ;;
         *'"type":"get_commands"'*)
             printf '{"id":"%s","type":"response","command":"get_commands","success":true,"data":{"commands":[{"name":"review","description":"Review the changes","source":"prompt","sourceInfo":{"path":"/prompts/review.md"}},{"name":"skill:lint","source":"skill"}]}}\n' "$id"
@@ -302,10 +278,6 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
         ])
     );
 
-    let (status, history) = fixture.call("GET", &format!("{base}/history"), None).await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(history, json!(["second", "first"]));
-
     let model = json!({"provider": "fixture", "model_id": "model-one"});
     let (status, selected) = fixture
         .call("PUT", &format!("{base}/model"), Some(model))
@@ -403,30 +375,6 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
     assert_eq!(fixture.call("GET", &base, None).await.1["status"], "idle");
     next_event(&mut stream, output("session_usage")).await;
 
-    let (status, idle) = fixture.call("DELETE", &format!("{base}/retry"), None).await;
-    assert_eq!(status, StatusCode::CONFLICT);
-    assert_eq!(idle["code"], "invalid_session_state");
-    let (status, _) = fixture.call("POST", &format!("{base}/retry"), None).await;
-    assert_eq!(status, StatusCode::ACCEPTED);
-    next_event(&mut stream, session_changed("running")).await;
-    let (status, busy) = fixture.call("POST", &format!("{base}/retry"), None).await;
-    assert_eq!(status, StatusCode::CONFLICT);
-    assert_eq!(busy["code"], "invalid_session_state");
-    let (status, _) = fixture
-        .call(
-            "PUT",
-            &format!("{base}/auto-retry"),
-            Some(json!({"enabled": false})),
-        )
-        .await;
-    assert_eq!(status, StatusCode::NO_CONTENT);
-    let (status, _) = fixture.call("DELETE", &format!("{base}/retry"), None).await;
-    assert_eq!(status, StatusCode::NO_CONTENT);
-    let (status, _) = fixture
-        .call("POST", &format!("{base}/interrupt"), None)
-        .await;
-    assert_eq!(status, StatusCode::NO_CONTENT);
-
     let reconnected = fixture.events.subscribe(None);
     let [ServerStreamMessage::Snapshot { snapshot }] = &reconnected.initial[..] else {
         panic!("a new subscriber starts from a snapshot");
@@ -459,7 +407,6 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
             "get_commands",
             "get_state",
             "get_available_models",
-            "get_entries",
             "set_model",
             "set_model",
             "set_thinking_level",
@@ -474,85 +421,7 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
             "clear_queue",
             "abort",
             "get_session_stats",
-            "get_messages",
-            "prompt",
-            "set_auto_retry",
-            "abort_retry",
-            "abort",
-            "get_session_stats",
         ]
-    );
-}
-
-#[tokio::test]
-async fn validates_prompt_images_and_the_model_that_receives_them() {
-    use base64::{Engine, engine::general_purpose::STANDARD};
-    let fixture = Fixture::new(None).await;
-    let (_, session) = fixture
-        .start(Some(
-            json!({"provider": "fixture", "model_id": "model-one"}),
-        ))
-        .await;
-    let base = format!("/api/sessions/{}", session["id"].as_str().unwrap());
-    let prompt_path = format!("{base}/prompt");
-    let image =
-        |bytes: usize| json!({"mime_type": "image/png", "data": STANDARD.encode(vec![0u8; bytes])});
-    let send = |images: Value| {
-        fixture.call(
-            "POST",
-            &prompt_path,
-            Some(json!({"message": "look", "images": images})),
-        )
-    };
-    let mib = 1024 * 1024;
-
-    let cases = [
-        (
-            json!([{"mime_type": "image/svg+xml", "data": "AAAA"}]),
-            "unsupported_image_type",
-        ),
-        (
-            json!([{"mime_type": "image/png", "data": "not base64!"}]),
-            "invalid_image_data",
-        ),
-        (json!([image(5 * mib + 1)]), "image_too_large"),
-        (
-            json!([image(7 * mib / 2), image(7 * mib / 2), image(7 * mib / 2)]),
-            "request_images_too_large",
-        ),
-    ];
-    for (images, code) in cases {
-        let (status, error) = send(images).await;
-        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{code}");
-        assert_eq!(error["code"], code);
-    }
-
-    let text_only = json!({"provider": "fixture", "model_id": "model-two"});
-    fixture
-        .call("PUT", &format!("{base}/model"), Some(text_only))
-        .await;
-    let (status, error) = send(json!([image(8)])).await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(error["code"], "image_input_unsupported");
-    assert!(
-        !fixture.commands().contains(&"prompt".to_owned()),
-        "a refused prompt must not reach Pi"
-    );
-
-    let capable = json!({"provider": "fixture", "model_id": "model-one"});
-    fixture
-        .call("PUT", &format!("{base}/model"), Some(capable))
-        .await;
-    assert_eq!(send(json!([image(8)])).await.0, StatusCode::ACCEPTED);
-    let recorded = fs::read_to_string(fixture.workspace_root.join("commands.jsonl")).unwrap();
-    let prompt: Value = recorded
-        .lines()
-        .map(|line| serde_json::from_str::<Value>(line).unwrap())
-        .find(|command| command["type"] == "prompt")
-        .unwrap();
-    assert_eq!(
-        prompt["images"],
-        json!([{"type": "image", "data": STANDARD.encode([0u8; 8]), "mimeType": "image/png"}])
     );
 }
 
@@ -705,66 +574,6 @@ fn native_header(fixture: &Fixture, id: &str, cwd: Option<&str>) -> String {
     let root = fixture.workspace_root.canonicalize().unwrap();
     let cwd = cwd.unwrap_or_else(|| root.to_str().unwrap());
     json!({"type": "session", "version": 3, "id": id, "timestamp": "2026-01-02T03:04:05.000Z", "cwd": cwd}).to_string()
-}
-
-#[tokio::test]
-async fn reads_the_session_tree_and_branches_through_pi() {
-    let fixture = Fixture::new(None).await;
-    let (_, started) = fixture
-        .call(
-            "POST",
-            "/api/sessions",
-            Some(json!({"workspace_id": fixture.workspace_id})),
-        )
-        .await;
-    let base = format!("/api/sessions/{}", started["id"].as_str().unwrap());
-
-    // The fake Pi reports `session.jsonl` in its working directory.
-    let lines = [
-        native_header(&fixture, "native", None),
-        r#"{"type":"message","id":"a1","parentId":null,"timestamp":"t1","message":{"role":"user","content":"Fix the login bug"}}"#.to_owned(),
-        "not json".to_owned(),
-        r#"{"type":"message","id":"b2","parentId":"a1","timestamp":"t2","message":{"role":"assistant","content":[{"type":"text","text":"Done"}]}}"#.to_owned(),
-        r#"{"type":"message","id":"c3","parentId":"a1","timestamp":"t3","message":{"role":"user","content":"Try again"}}"#.to_owned(),
-    ];
-    fs::write(
-        fixture.workspace_root.join("session.jsonl"),
-        lines.join("\n"),
-    )
-    .unwrap();
-
-    let (status, tree) = fixture.call("GET", &format!("{base}/tree"), None).await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(tree["leaf_id"], "c3");
-    assert_eq!(tree["truncated"], false);
-    assert_eq!(
-        tree["entries"][1],
-        json!({"id": "b2", "parent_id": "a1", "kind": "message", "role": "assistant", "preview": "Done", "timestamp": "t2"})
-    );
-    assert_eq!(tree["entries"].as_array().unwrap().len(), 3);
-
-    let (status, branch) = fixture
-        .call(
-            "POST",
-            &format!("{base}/branch"),
-            Some(json!({"entry_id": "a1"})),
-        )
-        .await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(
-        branch,
-        json!({"text": "Fix the login bug", "cancelled": false})
-    );
-
-    let (status, rejected) = fixture
-        .call(
-            "POST",
-            &format!("{base}/branch"),
-            Some(json!({"entry_id": "missing"})),
-        )
-        .await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(rejected["code"], "control_rejected");
 }
 
 #[tokio::test]

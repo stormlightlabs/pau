@@ -862,14 +862,6 @@ usage: boolean,
  */
 compaction: boolean,
 /**
- * Whether the session exposes its entry tree and can branch from it.
- */
-branching: boolean,
-/**
- * Whether the session can retry a failed turn and manage automatic retry.
- */
-retry: boolean,
-/**
  * Whether the session can stop its process.
  */
 stop: boolean, };
@@ -1050,62 +1042,6 @@ reasoning: boolean,
  */
 current: boolean, };
 
-export type SessionTreeEntry = {
-/**
- * The agent's entry identifier, usable as a branch point.
- */
-id: string,
-/**
- * The entry this one continues, or none for a root.
- */
-parent_id: string | null,
-/**
- * The agent's entry type, such as `message` or `compaction`.
- */
-kind: string,
-/**
- * The message role, for message entries.
- */
-role: string | null,
-/**
- * The start of the entry's text, empty when it has none.
- */
-preview: string,
-/**
- * The entry's ISO 8601 time, when recorded.
- */
-timestamp: string | null, };
-
-export type SessionTree = {
-/**
- * Entries, oldest first. Follow `parent_id` to rebuild branches.
- */
-entries: Array<SessionTreeEntry>,
-/**
- * The entry the session currently continues from.
- */
-leaf_id: string | null,
-/**
- * Whether older entries were left out to bound the response.
- */
-truncated: boolean, };
-
-export type SessionBranchRequest = {
-/**
- * The user message entry to branch from.
- */
-entry_id: string, };
-
-export type SessionBranchResult = {
-/**
- * The text of the message branched from, for the prompt editor.
- */
-text: string | null,
-/**
- * Whether an extension cancelled the branch.
- */
-cancelled: boolean, };
-
 export type SessionModelSelection = {
 /**
  * Provider that serves the model.
@@ -1180,16 +1116,6 @@ message: string, };
 
 export type SessionQueue = "steer" | "follow_up";
 
-export type SessionImage = {
-/**
- * The image's MIME type, such as `image/png`.
- */
-mime_type: string,
-/**
- * The image bytes, base64-encoded.
- */
-data: string, };
-
 export type SessionPromptRequest = {
 /**
  * Prompt text.
@@ -1199,21 +1125,13 @@ message: string,
  * Queue for a prompt sent during an active run. A running session rejects
  * a prompt without one.
  */
-queue: SessionQueue | null,
-/**
- * Images sent with the prompt.
- */
-images: Array<SessionImage> | null, };
+queue: SessionQueue | null, };
 
 export type SessionMessageRequest = {
 /**
  * Message text.
  */
-message: string,
-/**
- * Images sent with the message.
- */
-images: Array<SessionImage> | null, };
+message: string, };
 
 export type SessionThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -1338,12 +1256,6 @@ cost: number, };
 export type SessionAutoCompactionRequest = {
 /**
  * Whether the session compacts when its context is nearly full.
- */
-enabled: boolean, };
-
-export type SessionAutoRetryRequest = {
-/**
- * Whether the session retries overloaded, rate-limited, and 5xx failures.
  */
 enabled: boolean, };
 

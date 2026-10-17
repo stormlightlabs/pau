@@ -101,7 +101,8 @@ Soft. Font choice must not change layout roles.
 - Use a fixed product type scale.
 - Keep ordinary transcript prose near 14–16px with a maximum measure of about
   74 characters.
-- Keep metadata readable at 11–13px with sufficient contrast and line height.
+- Keep metadata readable at 12–13px with sufficient contrast and line height.
+  No product text goes below 12px.
 - Use weight and spacing before large size jumps.
 - Use monospace for code, commands, paths, identifiers, terminal output, and
   aligned counts. Do not use it as a general technical accent.

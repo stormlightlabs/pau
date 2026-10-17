@@ -41,7 +41,6 @@ use axum::{
     extract::{Path as AxumPath, State},
     http::StatusCode,
 };
-use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use pau_agent::{
     AgentCapabilities, AgentControlError, AgentMessageQueue, AgentSessionStatus, PromptQueueChoice,
     ThinkingLevel,
@@ -51,18 +50,16 @@ use pau_core::{
     session::{
         AgentSession, ExtensionDialog, ExtensionStatus, ExtensionUiResponse, ExtensionWidget,
         ExtensionWidgetPlacement, NativeSessionList, NativeSessionSummary, NativeSessionWarning,
-        SessionAutoCompactionRequest, SessionAutoRetryRequest, SessionBranchRequest,
-        SessionBranchResult, SessionCapabilities, SessionCommand, SessionCommandSource,
+        SessionAutoCompactionRequest, SessionCapabilities, SessionCommand, SessionCommandSource,
         SessionCompactRequest, SessionCompactionResult, SessionContextUsage, SessionExtensionUi,
-        SessionImage, SessionMessageQueue, SessionMessageRequest, SessionModel,
-        SessionModelSelection, SessionPromptRequest, SessionQueue, SessionStatus,
-        SessionThinkingLevel, SessionThinkingLevelRequest, SessionTokenUsage, SessionTree,
-        SessionTreeEntry, SessionUsage, StartSessionRequest,
+        SessionMessageQueue, SessionMessageRequest, SessionModel, SessionModelSelection,
+        SessionPromptRequest, SessionQueue, SessionStatus, SessionThinkingLevel,
+        SessionThinkingLevelRequest, SessionTokenUsage, SessionUsage, StartSessionRequest,
     },
 };
 use pau_pi::{
     DiscoverPiOptions, PiCommand, PiCommandSource, PiExtensionUiRequest, PiExtensionUiResponse,
-    PiExtensionWidgetPlacement, PiImage, PiModel, PiProcessError, PiProcessOutput, PiSession,
+    PiExtensionWidgetPlacement, PiModel, PiProcessError, PiProcessOutput, PiSession,
     PiSessionError, PiSessionOutput, PiSessionRegistry, PiSessionRegistryError, PiSessionUsage,
     PiShutdownTimeouts, StartPiProcessOptions, StartRegisteredPiSession, discover_pi,
     find_pi_session_file, list_pi_session_files, pi_configuration_paths,
@@ -521,8 +518,6 @@ fn session_capabilities(capabilities: AgentCapabilities) -> SessionCapabilities 
         command_discovery: capabilities.command_discovery,
         usage: capabilities.usage,
         compaction: capabilities.compaction,
-        branching: capabilities.branching,
-        retry: capabilities.retry,
         stop: capabilities.stop,
     }
 }
@@ -794,86 +789,6 @@ pub(crate) async fn stop_session(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Largest decoded size of one prompt image.
-const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
-/// Largest combined decoded size of the images in one request.
-const MAX_REQUEST_IMAGE_BYTES: usize = 10 * 1024 * 1024;
-/// Request body limit for routes that accept images. Base64 inflates the
-/// request cap by a third, and the rest covers the message and JSON framing.
-pub(crate) const IMAGE_BODY_LIMIT: usize = 16 * 1024 * 1024;
-/// MIME types Pi forwards to models.
-const IMAGE_MIME_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-
-/// Validates prompt images and converts them for Pi.
-///
-/// Every failure is `422` with one of `unsupported_image_type`,
-/// `invalid_image_data`, `image_too_large`, `request_images_too_large`, or
-/// `image_input_unsupported`. Pi does not check the model's image support, so
-/// the current model is checked here.
-async fn prepare_images(
-    session: &PiSession,
-    images: Option<Vec<SessionImage>>,
-) -> Result<Vec<PiImage>, ApiError> {
-    let images = images.unwrap_or_default();
-    if images.is_empty() {
-        return Ok(Vec::new());
-    }
-    let mut total = 0;
-    for (index, image) in images.iter().enumerate() {
-        let number = index + 1;
-        if !IMAGE_MIME_TYPES.contains(&image.mime_type.as_str()) {
-            return Err(ApiError::InvalidImage(
-                "unsupported_image_type",
-                format!(
-                    "Image {number} is {}. Attach a PNG, JPEG, GIF, or WebP image.",
-                    image.mime_type
-                ),
-            ));
-        }
-        let size = BASE64
-            .decode(&image.data)
-            .map_err(|_| {
-                ApiError::InvalidImage(
-                    "invalid_image_data",
-                    format!("Image {number} is not valid base64."),
-                )
-            })?
-            .len();
-        if size > MAX_IMAGE_BYTES {
-            return Err(ApiError::InvalidImage(
-                "image_too_large",
-                format!("Image {number} is larger than 5 MiB."),
-            ));
-        }
-        total += size;
-    }
-    if total > MAX_REQUEST_IMAGE_BYTES {
-        return Err(ApiError::InvalidImage(
-            "request_images_too_large",
-            "Attached images total more than 10 MiB.".to_owned(),
-        ));
-    }
-    let accepts_images = session
-        .models()
-        .await?
-        .iter()
-        .any(|model| model.current && model.image_input);
-    if !accepts_images {
-        return Err(ApiError::InvalidImage(
-            "image_input_unsupported",
-            "The selected model does not accept images. Choose a model with image input."
-                .to_owned(),
-        ));
-    }
-    Ok(images
-        .into_iter()
-        .map(|image| PiImage {
-            mime_type: image.mime_type,
-            data: image.data,
-        })
-        .collect())
-}
-
 /// Starts work, or queues it during a run when the request names a queue.
 pub(crate) async fn prompt_session(
     State(state): State<ApiState>,
@@ -886,8 +801,7 @@ pub(crate) async fn prompt_session(
         SessionQueue::Steer => PromptQueueChoice::Steer,
         SessionQueue::FollowUp => PromptQueueChoice::FollowUp,
     });
-    let images = prepare_images(&session, request.images).await?;
-    session.prompt(request.message, images, queue).await?;
+    session.prompt(request.message, queue).await?;
     api.publish_current(&session_id).await;
     Ok(StatusCode::ACCEPTED)
 }
@@ -899,8 +813,7 @@ pub(crate) async fn steer_session(
     Json(request): Json<SessionMessageRequest>,
 ) -> Result<StatusCode, ApiError> {
     let (_, session) = session_api(&state)?.live(&session_id).await?;
-    let images = prepare_images(&session, request.images).await?;
-    session.steer(request.message, images).await?;
+    session.steer(request.message).await?;
     Ok(StatusCode::ACCEPTED)
 }
 
@@ -911,8 +824,7 @@ pub(crate) async fn follow_up_session(
     Json(request): Json<SessionMessageRequest>,
 ) -> Result<StatusCode, ApiError> {
     let (_, session) = session_api(&state)?.live(&session_id).await?;
-    let images = prepare_images(&session, request.images).await?;
-    session.follow_up(request.message, images).await?;
+    session.follow_up(request.message).await?;
     Ok(StatusCode::ACCEPTED)
 }
 
@@ -1005,48 +917,6 @@ pub(crate) async fn set_session_auto_compaction(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Returns the prompts the user sent, newest first, for input recall.
-pub(crate) async fn get_session_history(
-    State(state): State<ApiState>,
-    AxumPath(session_id): AxumPath<String>,
-) -> Result<Json<Vec<String>>, ApiError> {
-    let (_, session) = session_api(&state)?.live(&session_id).await?;
-    Ok(Json(session.input_history().await?))
-}
-
-/// Runs the last prompt again after a failed assistant turn.
-pub(crate) async fn retry_session(
-    State(state): State<ApiState>,
-    AxumPath(session_id): AxumPath<String>,
-) -> Result<StatusCode, ApiError> {
-    let api = session_api(&state)?;
-    let (_, session) = api.live(&session_id).await?;
-    session.retry().await?;
-    api.publish_current(&session_id).await;
-    Ok(StatusCode::ACCEPTED)
-}
-
-/// Turns automatic retry of transient provider errors on or off.
-pub(crate) async fn set_session_auto_retry(
-    State(state): State<ApiState>,
-    AxumPath(session_id): AxumPath<String>,
-    Json(request): Json<SessionAutoRetryRequest>,
-) -> Result<StatusCode, ApiError> {
-    let (_, session) = session_api(&state)?.live(&session_id).await?;
-    session.set_auto_retry(request.enabled).await?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
-/// Cancels an automatic retry that is waiting to run.
-pub(crate) async fn abort_session_retry(
-    State(state): State<ApiState>,
-    AxumPath(session_id): AxumPath<String>,
-) -> Result<StatusCode, ApiError> {
-    let (_, session) = session_api(&state)?.live(&session_id).await?;
-    session.abort_retry().await?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
 /// Returns the session's context fill and cumulative token and cost usage.
 pub(crate) async fn get_session_usage(
     State(state): State<ApiState>,
@@ -1064,45 +934,6 @@ pub(crate) async fn list_session_models(
     let (_, session) = session_api(&state)?.live(&session_id).await?;
     let models = session.models().await?;
     Ok(Json(models.into_iter().map(session_model).collect()))
-}
-
-/// Returns the entry tree of the session's persisted file.
-pub(crate) async fn get_session_tree(
-    State(state): State<ApiState>,
-    AxumPath(session_id): AxumPath<String>,
-) -> Result<Json<SessionTree>, ApiError> {
-    let (_, session) = session_api(&state)?.live(&session_id).await?;
-    let tree = session.tree().await?;
-    Ok(Json(SessionTree {
-        entries: tree
-            .entries
-            .into_iter()
-            .map(|entry| SessionTreeEntry {
-                id: entry.id,
-                parent_id: entry.parent_id,
-                kind: entry.kind,
-                role: entry.role,
-                preview: entry.preview,
-                timestamp: entry.timestamp,
-            })
-            .collect(),
-        leaf_id: tree.leaf_id,
-        truncated: tree.truncated,
-    }))
-}
-
-/// Branches the session from an earlier user message through Pi.
-pub(crate) async fn branch_session(
-    State(state): State<ApiState>,
-    AxumPath(session_id): AxumPath<String>,
-    Json(request): Json<SessionBranchRequest>,
-) -> Result<Json<SessionBranchResult>, ApiError> {
-    let (_, session) = session_api(&state)?.live(&session_id).await?;
-    let outcome = session.branch(request.entry_id).await?;
-    Ok(Json(SessionBranchResult {
-        text: outcome.text,
-        cancelled: outcome.cancelled,
-    }))
 }
 
 /// Lists the slash commands the session offers.

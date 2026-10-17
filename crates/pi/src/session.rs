@@ -1,6 +1,6 @@
 use crate::{
     PiCompactionResult, PiExtensionUiResponse, PiProcess, PiProcessError, PiProcessExit,
-    PiProcessOutput, PiSessionTree, StartPiProcessOptions, read_pi_session_tree,
+    PiProcessOutput, StartPiProcessOptions,
 };
 use pau_agent::{
     AgentCapabilities, AgentControl, AgentControlError, AgentMessageQueue, AgentSessionStatus,
@@ -24,8 +24,6 @@ pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     command_discovery: true,
     usage: true,
     compaction: true,
-    branching: true,
-    retry: true,
     stop: true,
 };
 
@@ -99,9 +97,6 @@ pub struct PiCommand {
     pub path: Option<String>,
 }
 
-/// The most prompts [`PiSession::input_history`] returns.
-pub const PI_INPUT_HISTORY_LIMIT: usize = 100;
-
 /// How full the model's context window is.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PiContextUsage {
@@ -140,29 +135,6 @@ pub struct PiSessionUsage {
     pub cost: f64,
 }
 
-/// An image sent with a prompt, as Pi's `ImageContent`.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PiImage {
-    /// The image's MIME type, such as `image/png`.
-    pub mime_type: String,
-    /// The base64-encoded image bytes.
-    pub data: String,
-}
-
-impl PiImage {
-    /// Adds `images` to a prompt, steer, or follow-up command. Pi's `images`
-    /// field is optional, so an empty list leaves the command unchanged.
-    fn attach(command: &mut Value, images: Vec<Self>) {
-        if images.is_empty() {
-            return;
-        }
-        command["images"] = images
-            .into_iter()
-            .map(|image| json!({"type": "image", "data": image.data, "mimeType": image.mime_type}))
-            .collect();
-    }
-}
-
 /// A model Pi can run, as configured for the session.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PiModel {
@@ -174,19 +146,8 @@ pub struct PiModel {
     pub name: Option<String>,
     /// Whether the model supports reasoning.
     pub reasoning: bool,
-    /// Whether the model accepts image input.
-    pub image_input: bool,
     /// Whether this is the model the session currently uses.
     pub current: bool,
-}
-
-/// What Pi did with a branch request.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PiBranchOutcome {
-    /// The text of the message branched from.
-    pub text: Option<String>,
-    /// Whether an extension cancelled the branch.
-    pub cancelled: bool,
 }
 
 /// Owns the controls and observed lifecycle state for one Pi RPC process.
@@ -320,92 +281,16 @@ impl PiSession {
             .collect()
     }
 
-    /// Reads the entry tree from the session file Pi persists.
-    pub async fn tree(&self) -> Result<PiSessionTree, PiSessionError> {
-        self.require_capability(AgentControl::Branching)?;
-        let file = self.native_session().await?.file;
-        tokio::task::spawn_blocking(move || read_pi_session_tree(std::path::Path::new(&file)))
-            .await
-            .map_err(|error| PiSessionError::NativeSession(error.to_string()))?
-            .map_err(PiSessionError::NativeSession)
-    }
-
-    /// Continues from the user message `entry_id` in a new session file.
-    ///
-    /// Pi does the branching; the session file is never edited here. The
-    /// session must be idle. After a branch Pi runs against the new file.
-    pub async fn branch(&self, entry_id: String) -> Result<PiBranchOutcome, PiSessionError> {
-        let control = AgentControl::Branching;
-        self.require_capability(control)?;
-        let status = self.status.lock().await;
-        if *status != AgentSessionStatus::Idle {
-            return Err(invalid_state(
-                control,
-                *status,
-                "wait for the session to become idle",
-            ));
-        }
-        let response = self
-            .command(control, json!({"type": "fork", "entryId": entry_id}))
-            .await?;
-        let data = response.get("data");
-        Ok(PiBranchOutcome {
-            text: data
-                .and_then(|data| data.get("text"))
-                .and_then(Value::as_str)
-                .map(str::to_owned),
-            cancelled: data
-                .and_then(|data| data.get("cancelled"))
-                .and_then(Value::as_bool)
-                == Some(true),
-        })
-    }
-
-    /// Lists the prompts the user sent, newest first, as Pi's editor recalls them.
-    ///
-    /// Pi keeps recall history only in its terminal editor and rebuilds it from
-    /// the session's user messages on resume, so this reads the same messages
-    /// from `get_entries`. Consecutive repeats collapse, as in Pi's editor, and
-    /// at most [`PI_INPUT_HISTORY_LIMIT`] prompts return.
-    pub async fn input_history(&self) -> Result<Vec<String>, PiSessionError> {
-        let control = AgentControl::Prompt;
-        self.require_capability(control)?;
-        let response = self
-            .command(control, json!({"type": "get_entries"}))
-            .await?;
-        let entries = response
-            .get("data")
-            .and_then(|data| data.get("entries"))
-            .and_then(Value::as_array)
-            .ok_or_else(|| {
-                PiSessionError::NativeSession("Pi did not report session entries".to_owned())
-            })?;
-        let mut history: Vec<String> = Vec::new();
-        for text in entries.iter().rev().filter_map(entry_prompt) {
-            if history.last() != Some(&text) {
-                history.push(text);
-            }
-            if history.len() == PI_INPUT_HISTORY_LIMIT {
-                break;
-            }
-        }
-        Ok(history)
-    }
-
     /// Starts work, or queues it during a run when the caller chooses a queue.
-    ///
-    /// Pi forwards `images` to the model without checking its image support, so
-    /// callers check [`PiModel::image_input`] first.
     pub async fn prompt(
         &self,
         message: impl Into<String>,
-        images: Vec<PiImage>,
         queue: Option<PromptQueueChoice>,
     ) -> Result<(), PiSessionError> {
         let control = AgentControl::Prompt;
         self.require_capability(control)?;
         let mut status = self.status.lock().await;
-        let mut command = match (*status, queue) {
+        let command = match (*status, queue) {
             (AgentSessionStatus::Idle, _) => json!({
                 "type": "prompt",
                 "message": message.into(),
@@ -427,29 +312,20 @@ impl PiSession {
             }
             _ => return Err(not_ready(control, *status)),
         };
-        PiImage::attach(&mut command, images);
         self.command(control, command).await?;
         *status = AgentSessionStatus::Running;
         Ok(())
     }
 
     /// Queues work to run after Pi finishes its current work.
-    pub async fn follow_up(
-        &self,
-        message: impl Into<String>,
-        images: Vec<PiImage>,
-    ) -> Result<(), PiSessionError> {
-        self.running_message_control(AgentControl::FollowUp, "follow_up", message.into(), images)
+    pub async fn follow_up(&self, message: impl Into<String>) -> Result<(), PiSessionError> {
+        self.running_message_control(AgentControl::FollowUp, "follow_up", message.into())
             .await
     }
 
     /// Queues an instruction after the current assistant turn and tool calls.
-    pub async fn steer(
-        &self,
-        message: impl Into<String>,
-        images: Vec<PiImage>,
-    ) -> Result<(), PiSessionError> {
-        self.running_message_control(AgentControl::Steer, "steer", message.into(), images)
+    pub async fn steer(&self, message: impl Into<String>) -> Result<(), PiSessionError> {
+        self.running_message_control(AgentControl::Steer, "steer", message.into())
             .await
     }
 
@@ -602,70 +478,6 @@ impl PiSession {
         Ok(())
     }
 
-    /// Runs the last user prompt again after the assistant turn failed.
-    ///
-    /// Pi's RPC protocol has no retry command, so this reads the conversation
-    /// with `get_messages`, requires the last message to be an assistant turn
-    /// that ended with an error, and sends the user prompt before it as a new
-    /// prompt. The retry therefore adds a second copy of that prompt to the
-    /// session history. Use [`Self::set_auto_retry`] for transient provider
-    /// errors that Pi can retry in place.
-    pub async fn retry(&self) -> Result<(), PiSessionError> {
-        let control = AgentControl::Retry;
-        self.require_capability(control)?;
-        let mut status = self.status.lock().await;
-        if *status != AgentSessionStatus::Idle {
-            return Err(not_ready(control, *status));
-        }
-        let response = self
-            .command(control, json!({"type": "get_messages"}))
-            .await?;
-        let messages = response
-            .pointer("/data/messages")
-            .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
-        let message = failed_turn_prompt(messages).map_err(|message| {
-            PiSessionError::Control(AgentControlError::Rejected { control, message })
-        })?;
-        self.command(control, json!({"type": "prompt", "message": message}))
-            .await?;
-        *status = AgentSessionStatus::Running;
-        Ok(())
-    }
-
-    /// Enables or disables Pi's automatic retry of transient provider errors.
-    ///
-    /// Pi reports each attempt through `auto_retry_start` and `auto_retry_end`
-    /// events.
-    pub async fn set_auto_retry(&self, enabled: bool) -> Result<(), PiSessionError> {
-        let control = AgentControl::AutoRetry;
-        self.require_capability(control)?;
-        self.command(
-            control,
-            json!({"type": "set_auto_retry", "enabled": enabled}),
-        )
-        .await?;
-        Ok(())
-    }
-
-    /// Cancels the delay before an automatic retry and stops retrying.
-    pub async fn abort_retry(&self) -> Result<(), PiSessionError> {
-        let control = AgentControl::AbortRetry;
-        self.require_capability(control)?;
-        let status = self.status.lock().await;
-        if *status != AgentSessionStatus::Running {
-            return Err(invalid_state(
-                control,
-                *status,
-                "only a running session can have a pending retry",
-            ));
-        }
-        self.command(control, json!({"type": "abort_retry"}))
-            .await?;
-        Ok(())
-    }
-
     /// Responds to a blocking request from a configured Pi extension.
     ///
     /// Pi correlates this record with the extension request directly. It does not
@@ -714,7 +526,6 @@ impl PiSession {
         control: AgentControl,
         command_type: &'static str,
         message: String,
-        images: Vec<PiImage>,
     ) -> Result<(), PiSessionError> {
         self.require_capability(control)?;
         let status = self.status.lock().await;
@@ -725,9 +536,8 @@ impl PiSession {
                 "this queue accepts messages only during an active run",
             ));
         }
-        let mut command = json!({"type": command_type, "message": message});
-        PiImage::attach(&mut command, images);
-        self.command(control, command).await?;
+        self.command(control, json!({"type": command_type, "message": message}))
+            .await?;
         Ok(())
     }
 
@@ -789,28 +599,6 @@ fn parse_command(entry: &Value) -> Result<PiCommand, PiSessionError> {
     })
 }
 
-/// The text of a user message entry, or `None` for other entries and for
-/// messages without text.
-fn entry_prompt(entry: &Value) -> Option<String> {
-    if entry.get("type").and_then(Value::as_str) != Some("message") {
-        return None;
-    }
-    let message = entry.get("message")?;
-    if message.get("role").and_then(Value::as_str) != Some("user") {
-        return None;
-    }
-    let text = match message.get("content")? {
-        Value::String(text) => text.clone(),
-        Value::Array(blocks) => blocks
-            .iter()
-            .filter_map(|block| block.get("text").and_then(Value::as_str))
-            .collect::<Vec<_>>()
-            .join("\n"),
-        _ => return None,
-    };
-    (!text.trim().is_empty()).then_some(text)
-}
-
 fn parse_usage(data: &Value) -> Option<PiSessionUsage> {
     let tokens = data.get("tokens")?;
     let count = |key: &str| tokens.get(key).and_then(Value::as_u64);
@@ -855,46 +643,8 @@ fn parse_model(entry: &Value, current: Option<&ModelKey<'_>>) -> Result<PiModel,
         id: id.to_owned(),
         name: entry.get("name").and_then(Value::as_str).map(str::to_owned),
         reasoning: entry.get("reasoning").and_then(Value::as_bool) == Some(true),
-        image_input: entry
-            .get("input")
-            .and_then(Value::as_array)
-            .is_some_and(|input| input.iter().any(|kind| kind.as_str() == Some("image"))),
         current: current == Some(&key),
     })
-}
-
-/// Returns the user prompt that preceded a failed final assistant turn, or why
-/// there is nothing to retry.
-fn failed_turn_prompt(messages: &[Value]) -> Result<String, String> {
-    fn role(message: &Value) -> Option<&str> {
-        message.get("role").and_then(Value::as_str)
-    }
-    let failed = messages.last().is_some_and(|message| {
-        role(message) == Some("assistant")
-            && message.get("stopReason").and_then(Value::as_str) == Some("error")
-    });
-    if !failed {
-        return Err("the last assistant turn did not fail".to_owned());
-    }
-    let user = messages
-        .iter()
-        .rev()
-        .find(|message| role(message) == Some("user"))
-        .ok_or_else(|| "the failed turn has no user prompt to retry".to_owned())?;
-    let text = match user.get("content") {
-        Some(Value::String(text)) => text.clone(),
-        Some(Value::Array(blocks)) => blocks
-            .iter()
-            .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
-            .filter_map(|block| block.get("text").and_then(Value::as_str))
-            .collect::<Vec<_>>()
-            .join("\n"),
-        _ => String::new(),
-    };
-    if text.is_empty() {
-        return Err("the failed prompt has no text to retry".to_owned());
-    }
-    Ok(text)
 }
 
 fn invalid_state(

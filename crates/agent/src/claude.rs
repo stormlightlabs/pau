@@ -33,8 +33,6 @@ pub const CLAUDE_BRIDGE_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     command_discovery: false,
     usage: false,
     compaction: false,
-    branching: false,
-    retry: false,
     stop: true,
 };
 

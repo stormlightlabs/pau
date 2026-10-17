@@ -28,8 +28,8 @@ async fn interleaves_sessions_and_stops_only_the_selected_process() {
     let alpha = registry.start(fixture.request("alpha")).await.unwrap();
     let beta = registry.start(fixture.request("beta")).await.unwrap();
     let (alpha_prompt, beta_prompt) = tokio::join!(
-        alpha.prompt("alpha work", Vec::new(), None),
-        beta.prompt("beta work", Vec::new(), None)
+        alpha.prompt("alpha work", None),
+        beta.prompt("beta work", None)
     );
     alpha_prompt.unwrap();
     beta_prompt.unwrap();

@@ -8,6 +8,18 @@ export type SessionCapabilities = {
 	steer: boolean;
 	interrupt: boolean;
 	stop: boolean;
+	/** Whether the agent can switch models. Absent means the surface offers no picker. */
+	modelSelection?: boolean;
+};
+
+/** One model the agent can switch to. */
+export type ModelOption = {
+	provider: string;
+	id: string;
+	/** Display name, when the agent reports one. */
+	name?: string;
+	reasoning: boolean;
+	current: boolean;
 };
 
 export type TranscriptMessage = {

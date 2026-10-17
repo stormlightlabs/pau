@@ -642,19 +642,6 @@ Verification:
 
 - Component-test renaming, cloning, and a failed rename.
 
-### 2.152 Model picker
-
-Status: planned
-Blocked by: none
-
-Add a model picker to the session view.
-
-Verification:
-
-- Component-test model selection, a rejected selection, and no available
-  models.
-- Switch models in a self-hosted Pi session.
-
 ### 2.153 Attention notifications
 
 Status: planned
@@ -832,8 +819,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.71, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120,
-2.152, 2.156
+Blocked by: 2.71, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120, 2.156
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

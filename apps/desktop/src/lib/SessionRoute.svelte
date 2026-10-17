@@ -63,6 +63,8 @@
 	onStartSession={startSession}
 	onLoadSavedSessions={(workspaceId) => sessions.listSaved(workspaceId)}
 	onResumeSession={resumeSession}
+	onLoadModels={(sessionId) => sessions.listModels(sessionId)}
+	onSelectModel={(sessionId, model) => sessions.selectModel(sessionId, model)}
 	onSend={(sessionId, text, queue) => sessions.send(sessionId, text, queue)}
 	onLoadHistory={(sessionId) => sessions.history(sessionId)}
 	onInterrupt={(sessionId) => sessions.interrupt(sessionId)}

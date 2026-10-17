@@ -2,6 +2,7 @@ import type { AgentSession, ServerEvent, Workspace } from '@stormlightlabs/pau-p
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import type {
 	ExtensionUiResponse,
+	ModelOption,
 	PromptQueue,
 	SavedSessionList,
 	SessionViewModel,
@@ -14,11 +15,13 @@ import {
 	getSessionHistory,
 	interruptSession,
 	listNativeSessions,
+	listSessionModels,
 	listSessions,
 	listWorkspaces,
 	promptSession,
 	queueSessionMessage,
 	respondToExtensionUi,
+	selectSessionModel,
 	startSession,
 	stopSession
 } from './api';
@@ -77,7 +80,7 @@ export function sessionErrorMessage(cause: unknown, action: 'start' | 'control' 
 		case 'unsupported_control':
 			return 'This session does not support that action.';
 		case 'invalid_session_state':
-			return 'The session changed state before Pau could send that. Try again.';
+			return 'The session changed state before Pau could send that. If it is running, wait for the run to finish, then try again.';
 		case 'control_rejected':
 			return `Pi rejected the request: ${cause.message}`;
 		case 'invalid_extension_response':
@@ -239,6 +242,34 @@ export class LiveSessions {
 		} catch (cause) {
 			throw new Error(sessionErrorMessage(cause, 'resume'), { cause });
 		}
+	}
+
+	/** Lists the models a session can select. Rejects with operator-facing copy. */
+	async listModels(sessionId: string): Promise<ModelOption[]> {
+		try {
+			const models = await listSessionModels(this.#options.search, sessionId, this.#fetcher);
+			return models.map((model) => ({
+				provider: model.provider,
+				id: model.id,
+				name: model.name ?? undefined,
+				reasoning: model.reasoning,
+				current: model.current
+			}));
+		} catch (cause) {
+			throw new Error(sessionErrorMessage(cause, 'control'), { cause });
+		}
+	}
+
+	/** Switches a session's model. */
+	selectModel(sessionId: string, model: ModelOption): Promise<void> {
+		return this.#control(() =>
+			selectSessionModel(
+				this.#options.search,
+				sessionId,
+				{ provider: model.provider, model_id: model.id },
+				this.#fetcher
+			)
+		);
 	}
 
 	/** Prompts an idle session, or steers or queues a follow-up during a run. */
@@ -411,7 +442,8 @@ export class LiveSessions {
 				followUp: session.capabilities.follow_up,
 				steer: session.capabilities.steer,
 				interrupt: session.capabilities.interrupt,
-				stop: session.capabilities.stop
+				stop: session.capabilities.stop,
+				modelSelection: session.capabilities.model_selection
 			},
 			transcript: transcript.entries,
 			extensionUi: extensionUiView(extensionUi)

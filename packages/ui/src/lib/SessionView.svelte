@@ -10,12 +10,14 @@
 	} from './composer-history';
 	import ExtensionUi from './ExtensionUi.svelte';
 	import Icon from './Icon.svelte';
+	import ModelPicker from './ModelPicker.svelte';
 	import SessionPicker from './SessionPicker.svelte';
 	import SessionResourceSummary from './SessionResourceSummary.svelte';
 	import type { ProcessResourceSnapshot } from './types/resource-monitoring';
 	import type {
 		ExtensionUiResponse,
 		ExtensionUiState,
+		ModelOption,
 		PromptQueue,
 		SandboxDenial,
 		SavedSessionList,
@@ -52,6 +54,13 @@
 		onLoadSavedSessions?: (workspaceId: string) => Promise<SavedSessionList>;
 		/** Resumes a saved session. A rejected promise shows its message in the picker. */
 		onResumeSession?: (workspaceId: string, savedSessionId: string) => void | Promise<void>;
+		/**
+		 * Lists the models a session can use. With `onSelectModel`, the session
+		 * header offers a model picker. A rejected promise shows its message.
+		 */
+		onLoadModels?: (sessionId: string) => Promise<ModelOption[]>;
+		/** Switches a session's model. A rejected promise shows its message in the picker. */
+		onSelectModel?: (sessionId: string, model: ModelOption) => void | Promise<void>;
 		resourceSnapshot?: ProcessResourceSnapshot;
 		onExtensionUiResponse?: (sessionId: string, response: ExtensionUiResponse) => void | Promise<void>;
 		onExtensionUiTimeout?: (sessionId: string, requestId: string) => void;
@@ -71,6 +80,8 @@
 		onStartSession,
 		onLoadSavedSessions,
 		onResumeSession,
+		onLoadModels,
+		onSelectModel,
 		resourceSnapshot,
 		onExtensionUiResponse = () => {},
 		onExtensionUiTimeout = () => {},
@@ -144,6 +155,14 @@
 		if (session.status === 'running' && !session.capabilities.steer && !session.capabilities.followUp) {
 			return `${session.agent} cannot take new direction during a run. Send your prompt when this run finishes.`;
 		}
+		return undefined;
+	}
+
+	/** Explains why the model picker is read-only, or returns `undefined` when it accepts a change. */
+	function modelUnavailableReason(session: SessionViewModel, offline: boolean): string | undefined {
+		if (offline) return 'Pau is reconnecting to the backend. You can switch models once it reconnects.';
+		if (session.status === 'running') return 'Wait for this run to finish before switching models.';
+		if (session.status !== 'idle') return 'This session cannot switch models right now.';
 		return undefined;
 	}
 
@@ -419,10 +438,24 @@
 		<section class="session-view" aria-labelledby="session-title">
 			<header class="session-view__header">
 				<div>
-					<p>{activeSession.agent}{activeSession.model ? ` · ${activeSession.model}` : ''}</p>
+					<p>
+						{activeSession.agent}{activeSession.model && !(onLoadModels && onSelectModel)
+							? ` · ${activeSession.model}`
+							: ''}
+					</p>
 					<h1 id="session-title">{activeSession.title}</h1>
 				</div>
 				<div class="session-view__header-actions">
+					{#if onLoadModels && onSelectModel}
+						{#key activeSession.id}
+							<ModelPicker
+								load={() => onLoadModels(activeSession.id)}
+								onSelect={(model) => onSelectModel(activeSession.id, model)}
+								supported={activeSession.capabilities.modelSelection ?? false}
+								unavailableReason={modelUnavailableReason(activeSession, disconnected)}
+								fallbackLabel={activeSession.model} />
+						{/key}
+					{/if}
 					<div class={`session-view__status session-view__status--${activeSession.status}`} role="status">
 						<span></span>{statusLabel(activeSession.status)}
 					</div>

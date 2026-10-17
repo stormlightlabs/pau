@@ -466,3 +466,55 @@ test.each([
 
 	await expect.element(page.getByRole('alert')).toHaveTextContent(expected);
 });
+
+const modelList = (current: string) => [
+	{ provider: 'anthropic', id: 'sonnet', name: 'Sonnet', reasoning: true, current: current === 'sonnet' },
+	{ provider: 'openai', id: 'gpt-5', name: null, reasoning: false, current: current === 'gpt-5' }
+];
+
+test('lists models, switches the session model, and refreshes the header', async () => {
+	let current = 'sonnet';
+	const select = vi.fn(() => {
+		current = 'gpt-5';
+		return json({ id: 'gpt-5' });
+	});
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/sessions/session-1/models': () => json(modelList(current)),
+		'PUT /api/sessions/session-1/model': select
+	});
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+
+	await userEvent.click(page.getByRole('button', { name: 'Model: Sonnet' }));
+	await userEvent.click(page.getByRole('button', { name: /gpt-5/ }));
+
+	expect(select).toHaveBeenCalledWith(expect.objectContaining({ body: '{"provider":"openai","model_id":"gpt-5"}' }));
+	await expect.element(page.getByRole('button', { name: 'Model: gpt-5' })).toBeVisible();
+});
+
+test.each([
+	['invalid_session_state', 409, 'wait for the run to finish'],
+	['control_rejected', 422, 'Pi rejected the request: No API key for openai']
+])('explains a %s model selection failure', async (code, status, expected) => {
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/sessions/session-1/models': () => json(modelList('sonnet')),
+		'PUT /api/sessions/session-1/model': () => json({ code, message: 'No API key for openai' }, status)
+	});
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+
+	await userEvent.click(page.getByRole('button', { name: 'Model: Sonnet' }));
+	await userEvent.click(page.getByRole('button', { name: /gpt-5/ }));
+
+	await expect.element(page.getByRole('alert')).toHaveTextContent(expected);
+});
+
+test('disables the picker when the session cannot select models', async () => {
+	const { props } = setup({
+		'GET /api/sessions': () =>
+			json([{ ...idleSession, capabilities: { ...idleSession.capabilities, model_selection: false } }])
+	});
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+
+	await expect.element(page.getByRole('button', { name: /^Model:/ })).toBeDisabled();
+});

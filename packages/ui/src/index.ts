@@ -8,6 +8,7 @@ export { default as FileEditor } from './lib/FileEditor.svelte';
 export type { EditorFileContent, FileEditorSource } from './lib/types/file-editor';
 export { default as Icon, type IconProps } from './lib/Icon.svelte';
 export { default as McpConfigurationView } from './lib/McpConfigurationView.svelte';
+export { default as ModelPicker } from './lib/ModelPicker.svelte';
 export { default as ProcessesView } from './lib/ProcessesView.svelte';
 export { default as SandboxSettingsView } from './lib/SandboxSettingsView.svelte';
 export { default as SessionResourceSummary } from './lib/SessionResourceSummary.svelte';
@@ -70,6 +71,7 @@ export type {
 	ExtensionNotification,
 	ExtensionStatus,
 	ExtensionUiResponse,
+	ModelOption,
 	ExtensionUiState,
 	ExtensionWidget,
 	PromptQueue,

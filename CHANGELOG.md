@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Switch a Pi session's model from the session header. The picker is
+  disabled while a run is in progress.
 - Press Up and Down in the prompt box to recall earlier prompts from the
   session, then return to what you were typing.
 - Live Pi sessions now show extension dialogs, notifications, status text, and

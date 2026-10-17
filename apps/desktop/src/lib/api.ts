@@ -13,6 +13,8 @@ import type {
 	GitStatus,
 	NativeSessionList,
 	SessionExtensionUi,
+	SessionModel,
+	SessionModelSelection,
 	SessionMessageRequest,
 	SessionPromptRequest,
 	SessionQueue,
@@ -300,7 +302,7 @@ function sessionUrl(search: string, path: string): string {
 async function sendSessionRequest(
 	search: string,
 	path: string,
-	method: 'POST' | 'DELETE',
+	method: 'POST' | 'PUT' | 'DELETE',
 	body: unknown,
 	fetcher: typeof fetch
 ): Promise<void> {
@@ -396,6 +398,28 @@ export function interruptSession(search: string, sessionId: string, fetcher: typ
 /** Stops a session's process. Its final state arrives on the event stream. */
 export function stopSession(search: string, sessionId: string, fetcher: typeof fetch = fetch): Promise<void> {
 	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}`, 'DELETE', undefined, fetcher);
+}
+
+/** Lists the models a live session can select. */
+export async function listSessionModels(
+	search: string,
+	sessionId: string,
+	fetcher: typeof fetch = fetch
+): Promise<SessionModel[]> {
+	const response = await fetcher(sessionUrl(search, `/${encodeURIComponent(sessionId)}/models`), {
+		headers: authorization(resolveApiToken(search))
+	});
+	return responseJson<SessionModel[]>(response);
+}
+
+/** Switches an idle session to another model. */
+export function selectSessionModel(
+	search: string,
+	sessionId: string,
+	model: SessionModelSelection,
+	fetcher: typeof fetch = fetch
+): Promise<void> {
+	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}/model`, 'PUT', model, fetcher);
 }
 
 /** Reads a live session's unanswered extension dialogs, status lines, and widgets. */

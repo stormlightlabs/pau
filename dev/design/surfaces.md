@@ -74,6 +74,12 @@ Pi extensions may add keyed status text and string widgets around the composer.
 Their selection, confirmation, input, and editor requests use a focused dialog.
 Notifications do not block the transcript.
 
+Each workspace in the session rail has a start control. When a session cannot
+start, the task surface names the cause and offers a retry. While the backend
+connection is down, the session stays readable but sending, starting, and
+stopping are disabled until Pau reconnects. A control the agent does not
+support is hidden, and the composer explains when no delivery mode is left.
+
 Terminal-only custom extension components show an explicit limitation instead
 of an empty or broken control. The message directs the operator to vanilla Pi
 in a Pau terminal.

@@ -1,18 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { sessionFixtures } from '@stormlightlabs/pau-ui';
-	import { onMount } from 'svelte';
 
-	import { getBackendVersion } from '$lib/api';
 	import SessionRoute from '$lib/SessionRoute.svelte';
-
-	let disconnected = $state(false);
-
-	onMount(() => {
-		void getBackendVersion(location.search).catch(() => {
-			disconnected = true;
-		});
-	});
 
 	function updateSessionRoute(workspaceId: string, sessionId: string): void {
 		history.replaceState({}, '', `/workspaces/${workspaceId}/sessions/${sessionId}${location.search}`);
@@ -21,8 +10,4 @@
 
 <svelte:head><title>Session · Pau</title></svelte:head>
 
-<SessionRoute
-	initialWorkspaces={sessionFixtures.concurrent}
-	initialSessionId={page.params.sessionId}
-	{disconnected}
-	onSessionChange={updateSessionRoute} />
+<SessionRoute search={location.search} initialSessionId={page.params.sessionId} onSessionChange={updateSessionRoute} />

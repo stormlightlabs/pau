@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- The session view now shows live Pi sessions. Start a session in a workspace,
+  follow its streaming transcript, prompt, steer, queue follow-ups, interrupt,
+  and stop.
 - The local API can list a workspace's saved Pi sessions and resume one.
 - The local API can open workspace terminals with live input, output, resize,
   signals, and close.

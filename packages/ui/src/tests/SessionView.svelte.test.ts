@@ -83,3 +83,69 @@ test('exposes tool activity and disabled stopped controls', async () => {
 	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeDisabled();
 	await expect.element(page.getByRole('button', { name: /Send prompt/ })).toBeDisabled();
 });
+
+test('shows the loading state before sessions arrive', async () => {
+	await render(SessionView, { workspaces: [], loading: true });
+
+	await expect.element(page.getByRole('heading', { name: 'Loading sessions…' })).toBeVisible();
+});
+
+test('explains a failed start and retries it', async () => {
+	const onStartSession = vi
+		.fn()
+		.mockRejectedValueOnce(new Error('Pau could not find a working Pi installation.'))
+		.mockResolvedValueOnce(undefined);
+	await render(SessionView, { workspaces: sessionFixtures.workspaceWithoutSessions, onStartSession });
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+
+	await userEvent.click(page.getByRole('button', { name: 'Start session in Pau' }));
+	await expect.element(page.getByRole('alert')).toHaveTextContent('Pau could not find a working Pi installation.');
+
+	await userEvent.click(page.getByRole('button', { name: 'Close navigation' }));
+	await userEvent.click(page.getByRole('button', { name: 'Try again' }));
+	expect(onStartSession).toHaveBeenNthCalledWith(2, 'pau');
+	await expect.element(page.getByRole('heading', { name: 'No session selected' })).toBeVisible();
+});
+
+test('disables sending and stopping while disconnected', async () => {
+	await render(SessionView, {
+		workspaces: sessionFixtures.idle,
+		activeSessionId: 'session-idle',
+		disconnected: true,
+		onStartSession: vi.fn()
+	});
+
+	await expect.element(page.getByText(/Pau lost its connection to the backend/)).toBeVisible();
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeDisabled();
+	await expect.element(page.getByRole('button', { name: 'Stop', exact: true })).toBeDisabled();
+});
+
+test('disables interrupting while disconnected', async () => {
+	const onInterrupt = vi.fn();
+	await render(SessionView, {
+		workspaces: sessionFixtures.running,
+		activeSessionId: 'session-running',
+		disconnected: true,
+		onInterrupt
+	});
+
+	await expect.element(page.getByRole('button', { name: /Interrupt/ })).toBeDisabled();
+	await userEvent.keyboard('{Escape}');
+	expect(onInterrupt).not.toHaveBeenCalled();
+});
+
+test('explains why a running session without queues cannot take a prompt', async () => {
+	await render(SessionView, { workspaces: sessionFixtures.runningWithoutQueue, activeSessionId: 'session-no-queue' });
+
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeDisabled();
+	await expect.element(page.getByText(/Claude cannot take new direction during a run/)).toBeVisible();
+	await expect.element(page.getByRole('combobox')).not.toBeInTheDocument();
+});
+
+test('stops the active session from its header', async () => {
+	const onStop = vi.fn();
+	await render(SessionView, { workspaces: sessionFixtures.idle, activeSessionId: 'session-idle', onStop });
+
+	await userEvent.click(page.getByRole('button', { name: 'Stop', exact: true }));
+	expect(onStop).toHaveBeenCalledWith('session-idle');
+});

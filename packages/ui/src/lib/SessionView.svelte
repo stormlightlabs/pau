@@ -17,10 +17,18 @@
 		workspaces: SessionWorkspace[];
 		activeSessionId?: string;
 		disconnected?: boolean;
+		/** Shows the loading state until the first session list arrives. */
+		loading?: boolean;
 		onSelectSession?: (sessionId: string) => void;
 		onSend?: (sessionId: string, text: string, queue?: PromptQueue) => void | Promise<void>;
 		onInterrupt?: (sessionId: string) => void | Promise<void>;
 		onStop?: (sessionId: string) => void | Promise<void>;
+		/**
+		 * Starts a session in a workspace. When set, the rail offers a start
+		 * control for each workspace. A rejected promise shows its message as a
+		 * failed start.
+		 */
+		onStartSession?: (workspaceId: string) => void | Promise<void>;
 		resourceSnapshot?: ProcessResourceSnapshot;
 		onExtensionUiResponse?: (sessionId: string, response: ExtensionUiResponse) => void | Promise<void>;
 		onExtensionUiTimeout?: (sessionId: string, requestId: string) => void;
@@ -31,10 +39,12 @@
 		workspaces,
 		activeSessionId,
 		disconnected = false,
+		loading = false,
 		onSelectSession = () => {},
 		onSend = () => {},
 		onInterrupt = () => {},
 		onStop = () => {},
+		onStartSession,
 		resourceSnapshot,
 		onExtensionUiResponse = () => {},
 		onExtensionUiTimeout = () => {},
@@ -48,12 +58,22 @@
 	let sending = $state(false);
 	let error = $state<string>();
 	let composer = $state<HTMLTextAreaElement>();
+	let startingWorkspaceId = $state<string>();
+	let startFailure = $state<{ workspaceId: string; workspaceName: string; message: string }>();
+	let controlError = $state<string>();
 
 	const sessions = $derived(workspaces.flatMap((workspace) => workspace.sessions));
 	const activeSession = $derived(sessions.find((session) => session.id === activeSessionId));
 	const activeWorkspace = $derived(
 		workspaces.find((workspace) => workspace.sessions.some((session) => session.id === activeSessionId))
 	);
+	const canQueue = $derived(
+		activeSession ? activeSession.capabilities.steer || activeSession.capabilities.followUp : false
+	);
+	const activeQueue = $derived<PromptQueue>(
+		activeSession && !activeSession.capabilities.steer && activeSession.capabilities.followUp ? 'follow-up' : queue
+	);
+	const composerUnavailable = $derived(composerUnavailableReason(activeSession, disconnected));
 	const productItems = $derived([
 		{
 			id: 'sessions',
@@ -84,7 +104,48 @@
 		}[status];
 	}
 
+	/** Explains why the composer is disabled, or returns `undefined` when it accepts text. */
+	function composerUnavailableReason(session: SessionViewModel | undefined, offline: boolean): string | undefined {
+		if (!session) return undefined;
+		if (['starting', 'stopping', 'stopped', 'failed'].includes(session.status)) return '';
+		if (offline) return 'Pau is reconnecting to the backend. You can send prompts again once it reconnects.';
+		if (!session.capabilities.prompt) return `${session.agent} does not accept prompts in this session.`;
+		if (session.status === 'running' && !session.capabilities.steer && !session.capabilities.followUp) {
+			return `${session.agent} cannot take new direction during a run. Send your prompt when this run finishes.`;
+		}
+		return undefined;
+	}
+
+	async function startSession(workspace: SessionWorkspace): Promise<void> {
+		if (!onStartSession || startingWorkspaceId) return;
+		startingWorkspaceId = workspace.id;
+		startFailure = undefined;
+		try {
+			await onStartSession(workspace.id);
+		} catch (cause) {
+			startFailure = {
+				workspaceId: workspace.id,
+				workspaceName: workspace.name,
+				message: cause instanceof Error ? cause.message : 'Try again, or open Diagnostics for details.'
+			};
+		} finally {
+			startingWorkspaceId = undefined;
+		}
+	}
+
+	async function stop(): Promise<void> {
+		if (!activeSession) return;
+		controlError = undefined;
+		try {
+			await onStop(activeSession.id);
+		} catch (cause) {
+			controlError = cause instanceof Error ? cause.message : 'The session could not be stopped. Try again.';
+		}
+	}
+
 	function selectSession(sessionId: string): void {
+		startFailure = undefined;
+		controlError = undefined;
 		error = undefined;
 		draft = '';
 		onSelectSession(sessionId);
@@ -103,7 +164,7 @@
 		sending = true;
 		error = undefined;
 		try {
-			await onSend(activeSession.id, text, activeSession.status === 'running' ? queue : undefined);
+			await onSend(activeSession.id, text, activeSession.status === 'running' ? activeQueue : undefined);
 			draft = '';
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'The prompt could not be sent. Try again.';
@@ -114,7 +175,7 @@
 	}
 
 	async function interrupt(): Promise<void> {
-		if (!activeSession || !activeSession.capabilities.interrupt) return;
+		if (disconnected || !activeSession || !activeSession.capabilities.interrupt) return;
 		error = undefined;
 		try {
 			await onInterrupt(activeSession.id);
@@ -168,12 +229,32 @@
 	inspectorOpen={Boolean(resourceSnapshot)}>
 	{#snippet context()}
 		<nav class="session-rail" aria-label="Workspaces and sessions">
-			{#if sessions.length === 0}
+			{#if loading}
+				<p class="session-rail__empty">Loading…</p>
+			{:else if workspaces.length === 0}
 				<p class="session-rail__empty">No sessions yet</p>
 			{:else}
 				{#each workspaces as workspace (workspace.id)}
 					<section aria-labelledby={`workspace-${workspace.id}`}>
-						<h2 id={`workspace-${workspace.id}`}>{workspace.name}</h2>
+						<div class="session-rail__heading">
+							<h2 id={`workspace-${workspace.id}`}>{workspace.name}</h2>
+							{#if onStartSession}
+								<button
+									type="button"
+									class="session-rail__start"
+									aria-label={`Start session in ${workspace.name}`}
+									title="Start session"
+									disabled={disconnected || startingWorkspaceId !== undefined}
+									onclick={() => void startSession(workspace)}>
+									<span aria-hidden="true">+</span>
+								</button>
+							{/if}
+						</div>
+						{#if workspace.sessions.length === 0}
+							<p class="session-rail__empty">
+								{startingWorkspaceId === workspace.id ? 'Starting a session…' : 'No sessions yet'}
+							</p>
+						{/if}
 						<ul>
 							{#each workspace.sessions as session (session.id)}
 								<li>
@@ -214,33 +295,75 @@
 			onStop={(sessionId) => onStop(sessionId)} />
 	{/snippet}
 
-	{#if activeSession}
+	{#if startFailure}
+		<section class="session-view session-view--empty" aria-labelledby="start-failed-title">
+			<div class="session-view__empty" role="alert">
+				<h1 id="start-failed-title">Could not start a session in {startFailure.workspaceName}</h1>
+				<p>{startFailure.message}</p>
+				{#if onStartSession}
+					<button
+						type="button"
+						class="session-view__retry"
+						disabled={disconnected || startingWorkspaceId !== undefined}
+						onclick={() => {
+							const workspace = workspaces.find((candidate) => candidate.id === startFailure?.workspaceId);
+							if (workspace) void startSession(workspace);
+						}}>Try again</button>
+				{/if}
+			</div>
+		</section>
+	{:else if loading && !activeSession}
+		<section class="session-view session-view--empty" aria-labelledby="loading-title">
+			<div class="session-view__empty" role="status">
+				<h1 id="loading-title">Loading sessions…</h1>
+			</div>
+		</section>
+	{:else if activeSession}
 		<section class="session-view" aria-labelledby="session-title">
 			<header class="session-view__header">
 				<div>
 					<p>{activeSession.agent}{activeSession.model ? ` · ${activeSession.model}` : ''}</p>
 					<h1 id="session-title">{activeSession.title}</h1>
 				</div>
-				<div class={`session-view__status session-view__status--${activeSession.status}`} role="status">
-					<span></span>{statusLabel(activeSession.status)}
+				<div class="session-view__header-actions">
+					<div class={`session-view__status session-view__status--${activeSession.status}`} role="status">
+						<span></span>{statusLabel(activeSession.status)}
+					</div>
+					{#if activeSession.capabilities.stop && ['idle', 'running', 'waiting'].includes(activeSession.status)}
+						<button type="button" class="session-view__stop" disabled={disconnected} onclick={() => void stop()}>
+							Stop
+						</button>
+					{/if}
 				</div>
 			</header>
 
-			{#if activeSession.status === 'starting'}
-				<p class="session-view__notice" role="status">Starting the agent process…</p>
-			{:else if activeSession.status === 'waiting'}
-				<p class="session-view__notice session-view__notice--attention" role="alert">
-					<strong>Attention required.</strong>
-					{activeSession.attention ?? 'The agent is waiting for your response.'}
-				</p>
-			{:else if activeSession.status === 'failed'}
-				<p class="session-view__notice session-view__notice--failed" role="alert">
-					<strong>Session failed.</strong>
-					{activeSession.error ?? 'Open the diagnostics and start a new session.'}
-				</p>
-			{:else if activeSession.status === 'stopped'}
-				<p class="session-view__notice" role="status">This session has stopped. Its transcript remains available.</p>
-			{/if}
+			<div class="session-view__notices">
+				{#if disconnected}
+					<p class="session-view__notice session-view__notice--attention" role="status">
+						<strong>Disconnected.</strong>
+						Pau lost its connection to the backend and is reconnecting. The agent keeps running.
+					</p>
+				{/if}
+				{#if controlError}<p class="session-view__notice session-view__notice--failed" role="alert">
+						{controlError}
+					</p>{/if}
+
+				{#if activeSession.status === 'starting'}
+					<p class="session-view__notice" role="status">Starting the agent process…</p>
+				{:else if activeSession.status === 'waiting'}
+					<p class="session-view__notice session-view__notice--attention" role="alert">
+						<strong>Attention required.</strong>
+						{activeSession.attention ?? 'The agent is waiting for your response.'}
+					</p>
+				{:else if activeSession.status === 'failed'}
+					<p class="session-view__notice session-view__notice--failed" role="alert">
+						<strong>Session failed.</strong>
+						{activeSession.error ?? 'Open the diagnostics and start a new session.'}
+					</p>
+				{:else if activeSession.status === 'stopped'}
+					<p class="session-view__notice" role="status">This session has stopped. Its transcript remains available.</p>
+				{/if}
+			</div>
 
 			<div class="session-view__transcript" aria-label="Transcript" aria-live="polite">
 				{#if activeSession.transcript.length === 0}
@@ -298,10 +421,10 @@
 							event.preventDefault();
 							void submitPrompt();
 						}}>
-						{#if activeSession.status === 'running' && (activeSession.capabilities.steer || activeSession.capabilities.followUp)}
+						{#if activeSession.status === 'running' && canQueue}
 							<label class="session-composer__queue">
 								<span>Send as</span>
-								<select bind:value={queue}>
+								<select value={activeQueue} onchange={(event) => (queue = event.currentTarget.value as PromptQueue)}>
 									{#if activeSession.capabilities.steer}<option value="steer">Steer now</option>{/if}
 									{#if activeSession.capabilities.followUp}<option value="follow-up">Follow up</option>{/if}
 								</select>
@@ -316,29 +439,31 @@
 								placeholder={activeSession.status === 'running'
 									? 'Add direction or queue a follow-up'
 									: 'Message the agent'}
-								disabled={!activeSession.capabilities.prompt ||
-									['starting', 'stopping', 'stopped', 'failed'].includes(activeSession.status)}></textarea>
+								aria-describedby={composerUnavailable ? 'composer-unavailable' : undefined}
+								disabled={composerUnavailable !== undefined}></textarea>
 						</label>
 						<div class="session-composer__actions">
 							{#if activeSession.status === 'running' && activeSession.capabilities.interrupt}
-								<button type="button" class="session-composer__interrupt" onclick={() => void interrupt()}>
+								<button
+									type="button"
+									class="session-composer__interrupt"
+									disabled={disconnected}
+									onclick={() => void interrupt()}>
 									Interrupt <kbd>Esc</kbd>
 								</button>
 							{/if}
-							<button
-								type="submit"
-								disabled={!draft.trim() ||
-									sending ||
-									!activeSession.capabilities.prompt ||
-									['starting', 'stopping', 'stopped', 'failed'].includes(activeSession.status)}>
+							<button type="submit" disabled={!draft.trim() || sending || composerUnavailable !== undefined}>
 								{sending
 									? 'Sending…'
-									: queue === 'follow-up' && activeSession.status === 'running'
+									: activeQueue === 'follow-up' && activeSession.status === 'running'
 										? 'Queue prompt'
 										: 'Send prompt'}
 								<kbd>⌘↵</kbd>
 							</button>
 						</div>
+						{#if composerUnavailable}
+							<p id="composer-unavailable" class="session-composer__hint">{composerUnavailable}</p>
+						{/if}
 						{#if error}<p class="session-composer__error" role="alert">{error}</p>{/if}
 					</form>
 				</ExtensionUi>
@@ -348,7 +473,11 @@
 		<section class="session-view session-view--empty" aria-labelledby="empty-title">
 			<div class="session-view__empty">
 				<h1 id="empty-title">No session selected</h1>
-				<p>Select a session from the rail, or start one in this workspace.</p>
+				<p>
+					{onStartSession
+						? 'Select a session from the rail, or start one with the + button next to a workspace.'
+						: 'Select a session from the rail, or start one in this workspace.'}
+				</p>
 			</div>
 		</section>
 	{/if}
@@ -357,6 +486,29 @@
 <style>
 	.session-rail {
 		padding: 0 0.55rem 1rem;
+	}
+
+	.session-rail__heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.session-rail .session-rail__start {
+		display: grid;
+		place-items: center;
+		width: 2rem;
+		min-height: 2rem;
+		grid-template-columns: 1fr;
+		padding: 0;
+		color: var(--pau-text-muted);
+		font-size: 1rem;
+		text-align: center;
+	}
+
+	.session-rail .session-rail__start:disabled {
+		cursor: not-allowed;
+		opacity: 0.5;
 	}
 
 	.session-rail section + section {
@@ -498,6 +650,34 @@
 		text-wrap: balance;
 	}
 
+	.session-view__header-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		flex: none;
+	}
+
+	.session-view__stop,
+	.session-view__retry {
+		min-height: 2.75rem;
+		padding-inline: 0.85rem;
+		color: var(--pau-text);
+		background: transparent;
+		border: 1px solid var(--pau-border);
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.session-view__stop:disabled,
+	.session-view__retry:disabled {
+		color: var(--pau-text-muted);
+		cursor: not-allowed;
+	}
+
+	.session-view__retry {
+		margin-top: 1rem;
+	}
+
 	.session-view__status {
 		display: flex;
 		align-items: center;
@@ -527,9 +707,17 @@
 		color: var(--pau-danger);
 	}
 
-	.session-view__notice {
+	.session-view__notices {
 		grid-area: notice;
+		display: grid;
+		gap: 0.5rem;
+	}
+
+	.session-view__notices > :first-child {
 		margin-top: 1rem;
+	}
+
+	.session-view__notice {
 		padding: 0.7rem 0.85rem;
 		color: var(--pau-text-muted);
 		background: var(--pau-canvas);
@@ -780,6 +968,15 @@
 		font: inherit;
 		font-size: 0.6875rem;
 		opacity: 0.75;
+	}
+
+	.session-composer__hint {
+		grid-column: 1 / -1;
+		margin: 0;
+		padding: 0.5rem 0.75rem;
+		color: var(--pau-text-muted);
+		border-top: 1px solid var(--pau-border);
+		font-size: 0.8125rem;
 	}
 
 	.session-composer__error {

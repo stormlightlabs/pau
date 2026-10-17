@@ -68,7 +68,8 @@ export type {
 	SessionStatus,
 	SessionViewModel,
 	SessionWorkspace,
-	TranscriptEntry
+	TranscriptEntry,
+	TranscriptTool
 } from './lib/types/session';
 export { ICONS, type IconKind } from './icons';
 export { THEMES, UI_FONTS, themeCssProperties, type PauTheme, type ThemeName, type UiFontName } from './theme';

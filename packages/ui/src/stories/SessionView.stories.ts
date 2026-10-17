@@ -16,6 +16,42 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Empty: Story = { args: { workspaces: sessionFixtures.empty, initialSessionId: undefined } };
+export const Loading: Story = {
+	args: { workspaces: sessionFixtures.empty, initialSessionId: undefined, loading: true },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByRole('heading', { name: 'Loading sessions…' })).toBeInTheDocument();
+	}
+};
+export const FailedStart: Story = {
+	args: {
+		workspaces: sessionFixtures.workspaceWithoutSessions,
+		initialSessionId: undefined,
+		startFailure: 'Pau could not find a working Pi installation. Install Pi or add it to your PATH, then try again.'
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(canvas.getByRole('button', { name: 'Start session in Pau' }));
+		await expect(canvas.getByRole('heading', { name: 'Could not start a session in Pau' })).toBeInTheDocument();
+		await expect(canvas.getByRole('button', { name: 'Try again' })).toBeEnabled();
+	}
+};
+export const Disconnected: Story = {
+	args: { workspaces: sessionFixtures.idle, initialSessionId: 'session-idle', disconnected: true },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByText(/Pau lost its connection to the backend/)).toBeInTheDocument();
+		await expect(canvas.getByRole('textbox', { name: 'Prompt' })).toBeDisabled();
+	}
+};
+export const RunWithoutQueue: Story = {
+	args: { workspaces: sessionFixtures.runningWithoutQueue, initialSessionId: 'session-no-queue' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByText(/cannot take new direction during a run/)).toBeInTheDocument();
+		await expect(canvas.getByRole('button', { name: /Interrupt/ })).toBeEnabled();
+	}
+};
 export const Starting: Story = { args: { workspaces: sessionFixtures.starting, initialSessionId: 'session-starting' } };
 export const Running: Story = {
 	play: async ({ canvasElement }) => {

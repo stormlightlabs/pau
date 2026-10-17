@@ -1,85 +1,60 @@
 <script lang="ts">
-	import {
-		SessionView,
-		resourceMonitoringFixtures,
-		type PromptQueue,
-		type SessionViewModel,
-		type SessionWorkspace,
-		type TranscriptEntry
-	} from '@stormlightlabs/pau-ui';
+	import { SessionView } from '@stormlightlabs/pau-ui';
+	import { onMount } from 'svelte';
+
+	import type { EventSocketFactory } from './event-stream';
+	import { LiveSessions } from './live-sessions.svelte';
 
 	let {
-		initialWorkspaces,
+		search,
 		initialSessionId,
-		disconnected = false,
-		onSessionChange
+		onSessionChange,
+		fetcher,
+		socketFactory
 	}: {
-		initialWorkspaces: SessionWorkspace[];
+		/** Query string carrying the desktop API port and token. */
+		search: string;
 		initialSessionId?: string;
-		disconnected?: boolean;
 		onSessionChange?: (workspaceId: string, sessionId: string) => void;
+		fetcher?: typeof fetch;
+		socketFactory?: EventSocketFactory;
 	} = $props();
 
-	let workspaces = $state<SessionWorkspace[]>([]);
-	let activeSessionId = $state<string>();
-	let initialized = $state(false);
+	// The route mounts once per navigation, so the transport options are fixed
+	// for the life of the store.
+	// svelte-ignore state_referenced_locally
+	const sessions = new LiveSessions({ search, browserOrigin: location.origin, fetcher, socketFactory });
+	// svelte-ignore state_referenced_locally
+	let selectedSessionId = $state(initialSessionId);
 
-	$effect.pre(() => {
-		if (initialized) return;
-		workspaces = structuredClone(initialWorkspaces);
-		activeSessionId = initialSessionId ?? workspaces.flatMap((workspace) => workspace.sessions)[0]?.id;
-		initialized = true;
+	const workspaces = $derived(sessions.workspaces);
+	const activeSessionId = $derived(selectedSessionId ?? workspaces.flatMap((workspace) => workspace.sessions)[0]?.id);
+
+	onMount(() => {
+		sessions.connect();
+		return () => sessions.close();
 	});
 
-	function updateSession(sessionId: string, update: (session: SessionViewModel) => SessionViewModel): void {
-		workspaces = workspaces.map((workspace) => ({
-			...workspace,
-			sessions: workspace.sessions.map((session) => (session.id === sessionId ? update(session) : session))
-		}));
-	}
-
 	function selectSession(sessionId: string): void {
-		activeSessionId = sessionId;
+		selectedSessionId = sessionId;
 		const workspace = workspaces.find((candidate) => candidate.sessions.some((session) => session.id === sessionId));
 		if (workspace) onSessionChange?.(workspace.id, sessionId);
 	}
 
-	function send(sessionId: string, text: string, queue?: PromptQueue): void {
-		updateSession(sessionId, (session) => {
-			const entry: TranscriptEntry = {
-				id: `local-${session.transcript.length}`,
-				kind: 'message',
-				role: 'user',
-				label: queue === 'follow-up' ? 'You · follow-up' : queue === 'steer' ? 'You · steer' : 'You',
-				body: text
-			};
-			return { ...session, status: 'running', transcript: [...session.transcript, entry] };
-		});
-	}
-
-	function interrupt(sessionId: string): void {
-		updateSession(sessionId, (session) => ({ ...session, status: 'idle' }));
-	}
-
-	function stop(sessionId: string): void {
-		updateSession(sessionId, (session) => ({ ...session, status: 'stopped' }));
-	}
-
-	function clearExtensionDialog(sessionId: string): void {
-		updateSession(sessionId, (session) =>
-			session.extensionUi ? { ...session, extensionUi: { ...session.extensionUi, dialog: undefined } } : session
-		);
+	async function startSession(workspaceId: string): Promise<void> {
+		const sessionId = await sessions.start(workspaceId);
+		selectedSessionId = sessionId;
+		onSessionChange?.(workspaceId, sessionId);
 	}
 </script>
 
 <SessionView
 	{workspaces}
 	{activeSessionId}
-	{disconnected}
-	resourceSnapshot={resourceMonitoringFixtures.active.find((snapshot) => snapshot.sessionId === activeSessionId)}
+	loading={sessions.loading}
+	disconnected={sessions.disconnected}
 	onSelectSession={selectSession}
-	onSend={send}
-	onInterrupt={interrupt}
-	onStop={stop}
-	onExtensionUiResponse={(sessionId) => clearExtensionDialog(sessionId)}
-	onExtensionUiTimeout={(sessionId) => clearExtensionDialog(sessionId)} />
+	onStartSession={startSession}
+	onSend={(sessionId, text, queue) => sessions.send(sessionId, text, queue)}
+	onInterrupt={(sessionId) => sessions.interrupt(sessionId)}
+	onStop={(sessionId) => sessions.stop(sessionId)} />

@@ -1,4 +1,5 @@
 import type {
+	AgentSession,
 	DiagnosticBundle,
 	DiagnosticLevel,
 	EffectiveSandbox,
@@ -9,6 +10,10 @@ import type {
 	FileSearchMatch,
 	GitDiff,
 	GitStatus,
+	SessionMessageRequest,
+	SessionPromptRequest,
+	SessionQueue,
+	StartSessionRequest,
 	VersionResponse,
 	Workspace,
 	WorkspaceSandbox
@@ -281,6 +286,84 @@ export async function previewSandbox(
 		body: JSON.stringify({ adapter, selection })
 	});
 	return responseJson<EffectiveSandbox | null>(response);
+}
+
+function sessionUrl(search: string, path: string): string {
+	return `${resolveApiOrigin(search)}/api/sessions${path}`;
+}
+
+async function sendSessionRequest(
+	search: string,
+	path: string,
+	method: 'POST' | 'DELETE',
+	body: unknown,
+	fetcher: typeof fetch
+): Promise<void> {
+	const response = await fetcher(sessionUrl(search, path), {
+		method,
+		headers:
+			body === undefined
+				? authorization(resolveApiToken(search))
+				: { 'Content-Type': 'application/json', ...authorization(resolveApiToken(search)) },
+		body: body === undefined ? undefined : JSON.stringify(body)
+	});
+	if (response.ok) return;
+	await responseJson<never>(response);
+}
+
+/** Lists live agent sessions, oldest first. */
+export async function listSessions(search: string, fetcher: typeof fetch = fetch): Promise<AgentSession[]> {
+	const response = await fetcher(sessionUrl(search, ''), { headers: authorization(resolveApiToken(search)) });
+	return responseJson<AgentSession[]>(response);
+}
+
+/** Starts a Pi session in a registered workspace with the agent's default model. */
+export async function startSession(
+	search: string,
+	workspaceId: string,
+	fetcher: typeof fetch = fetch
+): Promise<AgentSession> {
+	const request: StartSessionRequest = { workspace_id: workspaceId, model: null };
+	const response = await fetcher(sessionUrl(search, ''), {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', ...authorization(resolveApiToken(search)) },
+		body: JSON.stringify(request)
+	});
+	return responseJson<AgentSession>(response);
+}
+
+/** Starts work in an idle session. Progress arrives on the event stream. */
+export function promptSession(
+	search: string,
+	sessionId: string,
+	message: string,
+	fetcher: typeof fetch = fetch
+): Promise<void> {
+	const request: SessionPromptRequest = { message, queue: null };
+	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}/prompt`, 'POST', request, fetcher);
+}
+
+/** Steers the active run or queues a follow-up for after it settles. */
+export function queueSessionMessage(
+	search: string,
+	sessionId: string,
+	queue: SessionQueue,
+	message: string,
+	fetcher: typeof fetch = fetch
+): Promise<void> {
+	const request: SessionMessageRequest = { message };
+	const endpoint = queue === 'steer' ? 'steer' : 'follow-up';
+	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}/${endpoint}`, 'POST', request, fetcher);
+}
+
+/** Interrupts the active run without stopping the session. */
+export function interruptSession(search: string, sessionId: string, fetcher: typeof fetch = fetch): Promise<void> {
+	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}/interrupt`, 'POST', undefined, fetcher);
+}
+
+/** Stops a session's process. Its final state arrives on the event stream. */
+export function stopSession(search: string, sessionId: string, fetcher: typeof fetch = fetch): Promise<void> {
+	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}`, 'DELETE', undefined, fetcher);
 }
 
 /** Builds an authenticated browser WebSocket handshake for the event stream. */

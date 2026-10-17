@@ -1,7 +1,8 @@
 import type { ServerEvent, ServerStreamMessage } from '@stormlightlabs/pau-protocol';
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test } from 'vitest';
 
 import { EventStreamClient, reduceServerMessage, type EventStreamState } from './event-stream';
+import { FakeEventSocket } from './fake-event-socket';
 
 function event(sequence: number, payload = `state-${sequence}`): ServerEvent {
 	return {
@@ -12,10 +13,6 @@ function event(sequence: number, payload = `state-${sequence}`): ServerEvent {
 		kind: 'session_changed',
 		payload
 	};
-}
-
-function message(value: ServerStreamMessage): MessageEvent<string> {
-	return { data: JSON.stringify(value) } as MessageEvent<string>;
 }
 
 describe('event stream reducer', () => {
@@ -36,61 +33,59 @@ describe('event stream reducer', () => {
 		expect(reduceServerMessage(state, { type: 'event', event: event(7, 'duplicate') })).toBe(state);
 		expect(reduceServerMessage(state, { type: 'event', event: event(6, 'old') })).toBe(state);
 	});
+
+	test('advances past session output without keeping it as state', () => {
+		const state: EventStreamState = { sequence: 7, events: [event(7)] };
+		const output = { ...event(8, '{"type":"agent_start"}'), kind: 'session_output' as const };
+
+		expect(reduceServerMessage(state, { type: 'event', event: output })).toEqual({ sequence: 8, events: [event(7)] });
+	});
 });
 
-class FakeSocket {
-	#messageListener: ((event: MessageEvent<string>) => void) | undefined;
-	#closeListener: (() => void) | undefined;
-	close = vi.fn();
-
-	addEventListener(type: 'message' | 'close', listener: ((event: MessageEvent<string>) => void) | (() => void)): void {
-		if (type === 'message') this.#messageListener = listener as (event: MessageEvent<string>) => void;
-		else this.#closeListener = listener as () => void;
-	}
-
-	receive(value: ServerStreamMessage): void {
-		this.#messageListener?.(message(value));
-	}
-
-	disconnect(): void {
-		this.#closeListener?.();
-	}
-}
-
 test('reconnects from the last applied sequence after streamed output disconnects', () => {
-	const sockets: FakeSocket[] = [];
-	const urls: string[] = [];
+	const sockets: FakeEventSocket[] = [];
 	const retries: Array<() => void> = [];
 	const states: EventStreamState[] = [];
-	const client = new EventStreamClient(
-		'',
-		'http://localhost:5173',
-		(state) => {
+	const applied: Array<ServerEvent | undefined> = [];
+	const connection: boolean[] = [];
+	const client = new EventStreamClient({
+		search: '',
+		browserOrigin: 'http://localhost:5173',
+		onState: (state, applyingEvent) => {
 			states.push(state);
+			applied.push(applyingEvent);
 		},
-		(url) => {
-			urls.push(url);
-			const socket = new FakeSocket();
+		onConnectionChange: (connected) => connection.push(connected),
+		socketFactory: (url) => {
+			const socket = new FakeEventSocket(url);
 			sockets.push(socket);
 			return socket;
 		},
-		(retry) => {
+		scheduleRetry: (retry) => {
 			retries.push(retry);
 		}
-	);
+	});
 
 	client.connect();
+	sockets[0]?.open();
 	sockets[0]?.receive({ type: 'snapshot', snapshot: { sequence: 1, events: [event(1, 'A')] } });
 	sockets[0]?.receive({ type: 'event', event: event(2, 'AB') });
 	sockets[0]?.disconnect();
 	retries[0]?.();
+	sockets[1]?.open();
 
-	expect(urls).toEqual(['ws://localhost:5173/api/events', 'ws://localhost:5173/api/events?after=2']);
+	expect(sockets.map((socket) => socket.url)).toEqual([
+		'ws://localhost:5173/api/events?after=0',
+		'ws://localhost:5173/api/events?after=2'
+	]);
+	expect(connection).toEqual([true, false, true]);
 
 	sockets[1]?.receive({ type: 'event', event: event(2, 'duplicate') });
 	sockets[1]?.receive({ type: 'event', event: event(3, 'ABC') });
 	expect(states).toHaveLength(3);
 	expect(states.at(-1)).toEqual({ sequence: 3, events: [event(3, 'ABC')] });
+	expect(applied).toEqual([undefined, event(2, 'AB'), event(3, 'ABC')]);
 
 	client.stop();
+	expect(sockets[1]?.closed).toBe(true);
 });

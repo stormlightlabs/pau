@@ -6,9 +6,19 @@
 	let {
 		workspaces,
 		initialSessionId,
-		resourceSnapshot
-	}: { workspaces: SessionWorkspace[]; initialSessionId?: string; resourceSnapshot?: ProcessResourceSnapshot } =
-		$props();
+		resourceSnapshot,
+		loading = false,
+		disconnected = false,
+		startFailure
+	}: {
+		workspaces: SessionWorkspace[];
+		initialSessionId?: string;
+		resourceSnapshot?: ProcessResourceSnapshot;
+		loading?: boolean;
+		disconnected?: boolean;
+		/** When set, starting a session fails with this message. */
+		startFailure?: string;
+	} = $props();
 
 	let activeSessionId = $state<string>();
 	let lastAction = $state('No action sent');
@@ -21,6 +31,11 @@
 		lastAction = `${sessionId}: ${queue ?? 'prompt'}: ${text}`;
 	}
 
+	function startSession(workspaceId: string): void {
+		if (startFailure) throw new Error(startFailure);
+		lastAction = `${workspaceId}: start session`;
+	}
+
 	function respondToExtension(sessionId: string, response: ExtensionUiResponse): void {
 		lastAction = `${sessionId}: extension response: ${JSON.stringify(response)}`;
 	}
@@ -30,6 +45,9 @@
 	{workspaces}
 	{activeSessionId}
 	{resourceSnapshot}
+	{loading}
+	{disconnected}
+	onStartSession={startSession}
 	onSelectSession={(sessionId) => (activeSessionId = sessionId)}
 	onSend={send}
 	onInterrupt={(sessionId) => {

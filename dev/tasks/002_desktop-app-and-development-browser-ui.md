@@ -632,22 +632,37 @@ Verification:
   executable and confirm its tools run inside the sandbox.
 - Confirm a sandbox that cannot start fails the session start with its reason.
 
-### 2.146 Live session view
+### 2.160 Live extension UI API
 
 Status: planned
 Blocked by: none
 
-Replace the desktop session route's fixtures with live Pi sessions.
+Forward Pi extension dialogs, notifications, status text, and widgets from live
+sessions, and accept dialog responses, through the desktop API.
 
 Verification:
 
-- Component-test loading, failed start, and disconnected states.
-- Prompt a self-hosted Pi session from the desktop app.
+- Cover `select`, `confirm`, `input`, and `editor` requests, their responses, a
+  cancelled request, and a stale response against the fake Pi executable.
+
+### 2.161 Live extension UI
+
+Status: planned
+Blocked by: 2.160
+
+Show extension dialogs, notifications, status text, and widgets for live
+sessions in the session view.
+
+Verification:
+
+- Component-test each dialog type, a cancelled dialog, and a session that
+  exits while a dialog is open.
+- Answer an extension dialog in a self-hosted Pi session.
 
 ### 2.148 Session picker
 
 Status: planned
-Blocked by: 2.146
+Blocked by: none
 
 Let the operator browse, resume, and start Pi sessions from the desktop app.
 
@@ -670,7 +685,7 @@ Verification:
 ### 2.150 Session rename and clone controls
 
 Status: planned
-Blocked by: 2.146, 2.149
+Blocked by: 2.149
 
 Add rename and clone controls to the session view.
 
@@ -692,7 +707,7 @@ Verification:
 ### 2.152 Model picker
 
 Status: planned
-Blocked by: 2.146, 2.151
+Blocked by: 2.151
 
 Add a model picker to the session view.
 
@@ -705,7 +720,7 @@ Verification:
 ### 2.153 Attention notifications
 
 Status: planned
-Blocked by: 2.146
+Blocked by: none
 
 Send a native notification and badge the app icon when a session waits for
 input or fails while its view is not focused.
@@ -730,7 +745,7 @@ Verification:
 ### 2.69 Composer input history
 
 Status: planned
-Blocked by: 2.68, 2.146
+Blocked by: 2.68
 
 Add input history to the session composer.
 
@@ -752,7 +767,7 @@ Verification:
 ### 2.114 Composer image input
 
 Status: planned
-Blocked by: 2.113, 2.146
+Blocked by: 2.113
 
 Add image input to the session composer.
 
@@ -764,7 +779,7 @@ Verification:
 ### 2.75 Composer command completion
 
 Status: planned
-Blocked by: 2.146
+Blocked by: none
 
 Add command completion to the session composer.
 
@@ -787,7 +802,7 @@ Verification:
 ### 2.116 Composer shell context
 
 Status: planned
-Blocked by: 2.115, 2.146
+Blocked by: 2.115
 
 Add shell context to the session composer.
 
@@ -798,7 +813,7 @@ Verification:
 ### 2.71 Message queue view
 
 Status: planned
-Blocked by: 2.146
+Blocked by: none
 
 Show queued messages in the session view.
 
@@ -821,7 +836,7 @@ Verification:
 ### 2.118 Retry control
 
 Status: planned
-Blocked by: 2.117, 2.146
+Blocked by: 2.117
 
 Add a retry control to failed turns in the session view.
 
@@ -832,7 +847,7 @@ Verification:
 ### 2.77 Thinking level control
 
 Status: planned
-Blocked by: 2.146
+Blocked by: none
 
 Add a thinking-level control to the session view.
 
@@ -854,7 +869,7 @@ Verification:
 ### 2.120 Context usage view
 
 Status: planned
-Blocked by: 2.119, 2.146
+Blocked by: 2.119
 
 Show context use and cost in the session view.
 
@@ -865,7 +880,7 @@ Verification:
 ### 2.79 Compaction controls
 
 Status: planned
-Blocked by: 2.146
+Blocked by: none
 
 Add a compaction control and compaction states to the session view.
 
@@ -888,7 +903,7 @@ Verification:
 ### 2.73 Session tree view
 
 Status: planned
-Blocked by: 2.72, 2.146
+Blocked by: 2.72
 
 Add session tree navigation and branching to the session view.
 
@@ -911,7 +926,7 @@ Verification:
 ### 2.81 Transcript search
 
 Status: planned
-Blocked by: 2.80, 2.146
+Blocked by: 2.80
 
 Add transcript search to the session view.
 
@@ -933,7 +948,7 @@ Verification:
 ### 2.122 Transcript copy and export
 
 Status: planned
-Blocked by: 2.121, 2.146
+Blocked by: 2.121
 
 Add transcript copy and export to the session view.
 
@@ -945,7 +960,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.25, 2.69, 2.71, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120, 2.148,
+Blocked by: 2.25, 2.69, 2.71, 2.161, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120, 2.148,
 2.152, 2.156
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do

@@ -73,6 +73,21 @@ export const sessionFixtures = {
 	],
 	idle: [{ id: 'pau', name: 'Pau', sessions: [session('idle', { title: 'Fix diff gutter', transcript: [] })] }],
 	running: [{ id: 'pau', name: 'Pau', sessions: [session('running', { title: 'Fix diff gutter' })] }],
+	runningWithoutQueue: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [
+				session('running', {
+					id: 'session-no-queue',
+					title: 'Review adapter fixtures',
+					agent: 'Claude',
+					capabilities: claudeCapabilities
+				})
+			]
+		}
+	],
+	workspaceWithoutSessions: [{ id: 'pau', name: 'Pau', sessions: [] }],
 	waiting: [
 		{
 			id: 'pau',

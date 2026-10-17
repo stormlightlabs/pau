@@ -739,10 +739,25 @@ Verification:
 - Cover the desktop launch configuration and browser development mode in the
   API client tests.
 
+### 2.169 Workspace opening and app navigation
+
+Status: in progress
+Blocked by: none
+
+Let the operator open a workspace folder from the desktop app, and make the
+product rail navigate to the sessions, terminal, editor, processes, sandbox,
+and diagnostics views.
+
+Verification:
+
+- Component-test the empty first-run state, opening a workspace, a rejected
+  folder, and rail navigation.
+- Open a folder in the installed app and start a session in it.
+
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.168
+Blocked by: 2.156, 2.168, 2.169
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

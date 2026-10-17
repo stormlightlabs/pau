@@ -616,6 +616,21 @@ Verification:
   exits while a dialog is open.
 - Answer an extension dialog in a self-hosted Pi session.
 
+### 2.164 Pi 1.0 compatibility
+
+Status: planned
+Blocked by: none
+
+Verify Pau's Pi adapter, sandbox extension, Claude bridge, and permission
+extension against Pi 1.0, and raise the latest verified Pi version.
+
+Verification:
+
+- Run the Pi fixtures and Pi RPC fixture runs against Pi 1.0 and fix any
+  protocol differences.
+- Confirm the permission extension reads MCP tool annotations from Pi 1.0's
+  built-in MCP client.
+
 ### 2.148 Session picker
 
 Status: planned
@@ -895,7 +910,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.69, 2.71, 2.161, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120, 2.148,
+Blocked by: 2.69, 2.71, 2.161, 2.164, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120, 2.148,
 2.152, 2.156
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do

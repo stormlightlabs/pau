@@ -23,7 +23,6 @@
 		<ul {id} role="listbox" aria-label="Commands">
 			{#each commands as command, index (command.source + command.name)}
 				<!-- The composer keeps focus and handles the keyboard. -->
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<li
 					id="{id}-option-{index}"
 					role="option"

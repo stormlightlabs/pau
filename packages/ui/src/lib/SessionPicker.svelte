@@ -27,13 +27,13 @@
 		['year', 31_536_000],
 		['month', 2_592_000],
 		['day', 86_400],
-		['hour', 3_600],
+		['hour', 3600],
 		['minute', 60]
 	] as const;
 
 	/** Formats a timestamp as "3 hours ago", or an empty string when it is missing or invalid. */
 	function modified(timestamp: string | undefined): string {
-		const time = timestamp ? Date.parse(timestamp) : Number.NaN;
+		const time = timestamp ? Date.parse(timestamp) : NaN;
 		if (Number.isNaN(time)) return '';
 		const seconds = Math.round((time - now.getTime()) / 1000);
 		if (Math.abs(seconds) < 60) return 'just now';

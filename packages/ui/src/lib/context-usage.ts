@@ -25,7 +25,7 @@ export function formatTokens(tokens: number): string {
 	const compact = (value: number, suffix: string) =>
 		`${new Intl.NumberFormat(undefined, { maximumFractionDigits: value < 100 ? 1 : 0 }).format(value)}${suffix}`;
 	if (tokens >= 1_000_000) return compact(tokens / 1_000_000, 'M');
-	if (tokens >= 1_000) return compact(tokens / 1_000, 'k');
+	if (tokens >= 1000) return compact(tokens / 1000, 'k');
 	return new Intl.NumberFormat().format(tokens);
 }
 

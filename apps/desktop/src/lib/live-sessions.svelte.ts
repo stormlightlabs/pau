@@ -97,55 +97,72 @@ export function sessionErrorMessage(
 		return `Pi could not branch from that message: ${cause.message}`;
 	}
 	switch (cause.code) {
-		case 'pi_unavailable':
+		case 'pi_unavailable': {
 			return 'Pau could not find a working Pi installation. Install Pi or add it to your PATH, then try again.';
-		case 'sandboxed_session_unsupported':
+		}
+		case 'sandboxed_session_unsupported': {
 			return 'This workspace uses a sandbox, and sandboxed sessions cannot start from the desktop yet. Turn off the sandbox in the workspace settings to start a session.';
-		case 'native_session_not_found':
+		}
+		case 'native_session_not_found': {
 			return 'Pi no longer has that saved session. It may have been deleted. Pick another session or start a new one.';
-		case 'invalid_native_session':
+		}
+		case 'invalid_native_session': {
 			return 'Pi could not read that saved session, so it cannot be resumed. Pick another session or start a new one.';
-		case 'not_found':
+		}
+		case 'not_found': {
 			return action !== 'control'
 				? 'This workspace is no longer registered with Pau.'
 				: 'This session has ended. Start a new session to continue.';
-		case 'session_exited':
+		}
+		case 'session_exited': {
 			return 'This session has ended. Start a new session to continue.';
-		case 'unsupported_control':
+		}
+		case 'unsupported_control': {
 			return 'This session does not support that action.';
-		case 'invalid_session_state':
+		}
+		case 'invalid_session_state': {
 			return 'The session changed state before Pau could send that. If it is running, wait for the run to finish, then try again.';
-		case 'control_rejected':
+		}
+		case 'control_rejected': {
 			if (action === 'retry') return 'That turn did not fail, so there is nothing to retry.';
 			if (action === 'compact') return `Pi could not compact this session: ${cause.message}`;
 			return `Pi rejected the request: ${cause.message}`;
-		case 'invalid_extension_response':
+		}
+		case 'invalid_extension_response': {
 			return `The extension could not use that answer. ${cause.message}`;
-		case 'unsupported_image_type':
+		}
+		case 'unsupported_image_type': {
 			return 'Pi accepts PNG, JPEG, GIF, and WebP images. Remove the other files and send again.';
-		case 'invalid_image_data':
+		}
+		case 'invalid_image_data': {
 			return 'Pau could not read one of the attached images. Remove it and attach it again.';
-		case 'image_too_large':
+		}
+		case 'image_too_large': {
 			return 'An attached image is larger than 5 MiB. Remove it or attach a smaller one.';
-		case 'request_images_too_large':
+		}
+		case 'request_images_too_large': {
 			return 'The attached images add up to more than 10 MiB. Remove some and send again.';
-		case 'image_input_unsupported':
+		}
+		case 'image_input_unsupported': {
 			return 'The current model cannot read images. Switch to a model with image input, or remove the images and send again.';
-		case 'invalid_agent_response':
+		}
+		case 'invalid_agent_response': {
 			return 'Pi sent a response Pau could not read. Open Diagnostics for details.';
-		default:
+		}
+		default: {
 			return cause.message;
+		}
 	}
 }
 
 function workspaceName(workspace: Workspace): string {
-	return workspace.name ?? workspace.path.split(/[\\/]/).filter(Boolean).at(-1) ?? workspace.path;
+	return workspace.name ?? workspace.path.split(/[\\/]/).findLast(Boolean) ?? workspace.path;
 }
 
 function sessionTitle(transcript: PiTranscript): string {
 	const prompt = transcript.entries.find((entry) => entry.kind === 'message' && entry.role === 'user');
 	if (!prompt || prompt.kind !== 'message') return 'New Pi session';
-	const line = prompt.body.trim().split('\n')[0] ?? '';
+	const line = prompt.body.trim().split('\n', 1)[0] ?? '';
 	return line.length > TITLE_LENGTH ? `${line.slice(0, TITLE_LENGTH - 1)}…` : line;
 }
 
@@ -190,7 +207,6 @@ function failureMessage(session: AgentSession): string | undefined {
  * on top of its result.
  */
 export class LiveSessions {
-	loading = $state(true);
 	#workspaces = $state<Workspace[]>([]);
 	#sessions = $state<Record<string, AgentSession>>({});
 	#transcripts = $state<Record<string, PiTranscript>>({});
@@ -215,13 +231,14 @@ export class LiveSessions {
 	/** Sessions that need another message read once the one in flight ends. */
 	readonly #historyStale = new SvelteSet<string>();
 	/** The event sequence each session's transcript was loaded at. Older output is already in it. */
-	readonly #historySequence = new Map<string, number>();
+	readonly #historySequence = new SvelteMap<string, number>();
 	#loadFailed = $state(false);
 	#socketOpen = $state(false);
 	#connectedOnce = false;
 	readonly #options: LiveSessionsOptions;
 	readonly #fetcher: typeof fetch;
 	readonly #stream: EventStreamClient;
+	loading = $state(true);
 
 	constructor(options: LiveSessionsOptions) {
 		this.#options = options;
@@ -242,6 +259,238 @@ export class LiveSessions {
 		});
 	}
 
+	/** The live session in a workspace that runs the saved Pi session, if any. */
+	#liveSessionFor(workspaceId: string, savedSessionId: string): AgentSession | undefined {
+		return Object.values(this.#sessions).find(
+			(session) =>
+				isLive(session) && session.workspace_id === workspaceId && session.native_session_id === savedSessionId
+		);
+	}
+
+	#updateExtensionUi(sessionId: string, update: (state: LiveExtensionUi) => LiveExtensionUi): void {
+		const current = this.#extensionUi[sessionId] ?? emptyExtensionUi;
+		const next = update(current);
+		if (next === current) return;
+		this.#extensionUi[sessionId] = next;
+		for (const notification of next.notifications) {
+			const timer = `${sessionId}:${notification.id}`;
+			if (this.#notificationTimers.has(timer)) continue;
+			this.#notificationTimers.add(timer);
+			setTimeout(() => {
+				this.#notificationTimers.delete(timer);
+				this.#updateExtensionUi(sessionId, (state) => withoutNotification(state, notification.id));
+			}, NOTIFICATION_MS);
+		}
+	}
+
+	/** Reads the messages, extension UI, and message queue of every live session. */
+	#refresh(): void {
+		for (const session of Object.values(this.#sessions)) {
+			if (!isLive(session)) continue;
+			void this.#readHistory(session.id);
+			void this.#readExtensionUi(session.id);
+			void this.#readQueue(session.id);
+			void this.#readUsage(session.id);
+		}
+	}
+
+	/** Reads a session's usage. A `session_usage` event that arrives during the read is newer. */
+	async #readUsage(sessionId: string): Promise<void> {
+		if (!this.#sessions[sessionId]?.capabilities.usage) return;
+		this.#usageUpdated.delete(sessionId);
+		try {
+			const usage = await getSessionUsage(this.#options.search, sessionId, this.#fetcher);
+			if (!this.#usageUpdated.has(sessionId)) this.#usages[sessionId] = viewUsage(usage);
+		} catch {
+			// The session exited or the backend went away. The next reconnect reads again.
+		}
+	}
+
+	/**
+	 * Rebuilds a session's transcript from its messages, then applies the output
+	 * that arrived during the read and is newer than it. When the read fails,
+	 * for example because the session exited, the held output is applied to
+	 * the transcript the store already has.
+	 */
+	async #readHistory(sessionId: string): Promise<void> {
+		if (this.#historyReplay.has(sessionId)) {
+			this.#historyStale.add(sessionId);
+			return;
+		}
+		this.#historyReplay.set(sessionId, []);
+		let transcript: PiTranscript | undefined;
+		let after = this.#historySequence.get(sessionId) ?? 0;
+		try {
+			const history = await getSessionMessages(this.#options.search, sessionId, this.#fetcher);
+			transcript = piTranscriptFromMessages(history.messages);
+			after = history.sequence;
+		} catch {
+			// Keep what streamed. The next reconnect reads again.
+		}
+		transcript ??= this.#transcripts[sessionId] ?? emptyPiTranscript;
+		const replay = this.#historyReplay.get(sessionId) ?? [];
+		for (const event of replay) {
+			if (event.sequence > after) transcript = reducePiEvent(transcript, JSON.parse(event.payload));
+		}
+		this.#transcripts[sessionId] = transcript;
+		this.#historySequence.set(sessionId, after);
+		this.#historyReplay.delete(sessionId);
+		if (this.#historyStale.delete(sessionId)) void this.#readHistory(sessionId);
+	}
+
+	/**
+	 * Reads a session's queue. Pi sends the whole queue with every update, so an
+	 * update that arrives during the read is newer than the read's result.
+	 */
+	async #readQueue(sessionId: string): Promise<void> {
+		if (!this.#sessions[sessionId]?.capabilities.message_queue) return;
+		this.#queueUpdated.delete(sessionId);
+		try {
+			const queue = await getSessionQueue(this.#options.search, sessionId, this.#fetcher);
+			if (this.#queueUpdated.has(sessionId)) return;
+			this.#queues[sessionId] = { steering: queue.steering, followUp: queue.follow_up };
+		} catch {
+			// The session exited or the backend went away. The next reconnect reads again.
+		}
+	}
+
+	async #readExtensionUi(sessionId: string): Promise<void> {
+		if (this.#extensionReplay.has(sessionId)) {
+			this.#extensionStale.add(sessionId);
+			return;
+		}
+		this.#extensionReplay.set(sessionId, []);
+		try {
+			const server = await getSessionExtensionUi(this.#options.search, sessionId, this.#fetcher);
+			const replay = this.#extensionReplay.get(sessionId) ?? [];
+			this.#updateExtensionUi(sessionId, (state) => {
+				let next = withServerExtensionUi(state, server);
+				for (const event of replay) next = reduceExtensionEvent(next, event);
+				return next;
+			});
+		} catch {
+			// The session exited or the backend went away. The next reconnect reads again.
+		} finally {
+			this.#extensionReplay.delete(sessionId);
+			if (this.#extensionStale.delete(sessionId)) void this.#readExtensionUi(sessionId);
+		}
+	}
+
+	async #control(request: () => Promise<void>): Promise<void> {
+		try {
+			await request();
+		} catch (cause) {
+			throw new Error(sessionErrorMessage(cause, 'control'), { cause });
+		}
+	}
+
+	async #load(): Promise<void> {
+		try {
+			const [workspaces, sessions] = await Promise.all([
+				listWorkspaces(this.#options.search, this.#fetcher),
+				listSessions(this.#options.search, this.#fetcher)
+			]);
+			this.#workspaces = workspaces;
+			for (const session of sessions) this.#sessions[session.id] ??= session;
+			this.#loadFailed = false;
+			this.#refresh();
+		} catch {
+			this.#loadFailed = true;
+		} finally {
+			this.loading = false;
+		}
+	}
+
+	#apply(state: EventStreamState, event: ServerEvent | undefined): void {
+		if (event?.kind === 'session_output' && event.session_id) {
+			const sessionId = event.session_id;
+			const payload: unknown = JSON.parse(event.payload);
+			if (isExtensionEvent(payload)) {
+				const session = this.#sessions[sessionId];
+				if (session && !isLive(session)) return;
+				if (opensDialog(payload)) {
+					void this.#readExtensionUi(sessionId);
+					return;
+				}
+				// A replayed notification is old news.
+				if (payload.method === 'notify' && Date.now() - Date.parse(event.timestamp) > NOTIFICATION_MS) return;
+				this.#extensionReplay.get(sessionId)?.push(payload);
+				this.#updateExtensionUi(sessionId, (current) => reduceExtensionEvent(current, payload));
+				return;
+			}
+			const usage = usageFromEvent(payload);
+			if (usage) {
+				this.#usageUpdated.add(sessionId);
+				this.#usages[sessionId] = usage;
+				return;
+			}
+			const queue = queueFromEvent(payload);
+			if (queue) {
+				this.#queueUpdated.add(sessionId);
+				this.#queues[sessionId] = queue;
+				return;
+			}
+			const replay = this.#historyReplay.get(sessionId);
+			if (replay) {
+				replay.push(event);
+				return;
+			}
+			if (event.sequence <= (this.#historySequence.get(sessionId) ?? 0)) return;
+			const transcript = this.#transcripts[sessionId] ?? emptyPiTranscript;
+			this.#transcripts[sessionId] = reducePiEvent(transcript, payload);
+			return;
+		}
+		for (const changed of state.events) {
+			if (changed.kind !== 'session_changed') continue;
+			const session = JSON.parse(changed.payload) as AgentSession;
+			const known = Object.hasOwn(this.#sessions, session.id);
+			this.#sessions[session.id] = session;
+			if (!known && !this.loading && isLive(session)) void this.#readHistory(session.id);
+			if (!known && isLive(session)) void this.#readUsage(session.id);
+			if (!isLive(session)) this.#updateExtensionUi(session.id, exitedExtensionUi);
+		}
+	}
+
+	#viewModel(session: AgentSession): SessionViewModel {
+		const transcript = this.#transcripts[session.id] ?? emptyPiTranscript;
+		const extensionUi = this.#extensionUi[session.id] ?? emptyExtensionUi;
+		return {
+			id: session.id,
+			workspaceId: session.workspace_id,
+			title: sessionTitle(transcript),
+			agent: 'Pi',
+			status: session.status,
+			error: failureMessage(session),
+			attention: extensionUi.dialogs.length > 0 ? 'An extension is waiting for your answer.' : undefined,
+			capabilities: {
+				prompt: session.capabilities.prompt,
+				followUp: session.capabilities.follow_up,
+				steer: session.capabilities.steer,
+				interrupt: session.capabilities.interrupt,
+				stop: session.capabilities.stop,
+				branching: session.capabilities.branching,
+				retry: session.capabilities.retry,
+				modelSelection: session.capabilities.model_selection,
+				messageQueue: session.capabilities.message_queue,
+				thinkingLevel: session.capabilities.thinking_level,
+				usage: session.capabilities.usage,
+				commandDiscovery: session.capabilities.command_discovery,
+				compaction: session.capabilities.compaction
+			},
+			thinkingLevel: this.#pendingThinkingLevels[session.id] ?? session.thinking_level ?? undefined,
+			transcript: transcript.entries.map((entry) => {
+				if (entry.kind !== 'compaction' || !entry.firstKeptEntryId) return entry;
+				const tokensAfter = this.#compactionEstimates[session.id]?.[entry.firstKeptEntryId];
+				return tokensAfter === undefined ? entry : { ...entry, tokensAfter };
+			}),
+			usage: this.#usages[session.id],
+			compaction: transcript.compaction,
+			extensionUi: extensionUiView(extensionUi),
+			autoRetry: transcript.autoRetry,
+			messageQueue: this.#queues[session.id]
+		};
+	}
+
 	/** Whether the backend is unreachable. The first connection attempt counts as loading. */
 	get disconnected(): boolean {
 		return this.#loadFailed || (this.#connectedOnce && !this.#socketOpen);
@@ -253,8 +502,10 @@ export class LiveSessions {
 			left.started_at.localeCompare(right.started_at)
 		);
 		const known = this.#workspaces.map((workspace) => ({ id: workspace.id, name: workspaceName(workspace) }));
-		const unknown = [...new Set(sessions.map((session) => session.workspace_id))]
-			.filter((id) => !known.some((workspace) => workspace.id === id))
+		const unknown = sessions
+			.map((session) => session.workspace_id)
+			.filter((id, index, ids) => ids.indexOf(id) === index)
+			.filter((id) => known.every((workspace) => workspace.id !== id))
 			.map((id) => ({ id, name: id }));
 		return [...known, ...unknown].map((workspace) => ({
 			...workspace,
@@ -376,14 +627,6 @@ export class LiveSessions {
 		} finally {
 			delete this.#pendingThinkingLevels[sessionId];
 		}
-	}
-
-	/** The live session in a workspace that runs the saved Pi session, if any. */
-	#liveSessionFor(workspaceId: string, savedSessionId: string): AgentSession | undefined {
-		return Object.values(this.#sessions).find(
-			(session) =>
-				isLive(session) && session.workspace_id === workspaceId && session.native_session_id === savedSessionId
-		);
 	}
 
 	/** Prompts an idle session, or steers or queues a follow-up during a run. */
@@ -523,228 +766,5 @@ export class LiveSessions {
 	/** Closes a dialog whose timeout elapsed on screen. */
 	expire(sessionId: string, requestId: string): void {
 		this.#updateExtensionUi(sessionId, (state) => resolveDialog(state, requestId, 'timed_out'));
-	}
-
-	#updateExtensionUi(sessionId: string, update: (state: LiveExtensionUi) => LiveExtensionUi): void {
-		const current = this.#extensionUi[sessionId] ?? emptyExtensionUi;
-		const next = update(current);
-		if (next === current) return;
-		this.#extensionUi[sessionId] = next;
-		for (const notification of next.notifications) {
-			const timer = `${sessionId}:${notification.id}`;
-			if (this.#notificationTimers.has(timer)) continue;
-			this.#notificationTimers.add(timer);
-			setTimeout(() => {
-				this.#notificationTimers.delete(timer);
-				this.#updateExtensionUi(sessionId, (state) => withoutNotification(state, notification.id));
-			}, NOTIFICATION_MS);
-		}
-	}
-
-	/** Reads the messages, extension UI, and message queue of every live session. */
-	#refresh(): void {
-		for (const session of Object.values(this.#sessions)) {
-			if (!isLive(session)) continue;
-			void this.#readHistory(session.id);
-			void this.#readExtensionUi(session.id);
-			void this.#readQueue(session.id);
-			void this.#readUsage(session.id);
-		}
-	}
-
-	/** Reads a session's usage. A `session_usage` event that arrives during the read is newer. */
-	async #readUsage(sessionId: string): Promise<void> {
-		if (!this.#sessions[sessionId]?.capabilities.usage) return;
-		this.#usageUpdated.delete(sessionId);
-		try {
-			const usage = await getSessionUsage(this.#options.search, sessionId, this.#fetcher);
-			if (!this.#usageUpdated.has(sessionId)) this.#usages[sessionId] = viewUsage(usage);
-		} catch {
-			// The session exited or the backend went away. The next reconnect reads again.
-		}
-	}
-
-	/**
-	 * Rebuilds a session's transcript from its messages, then applies the output
-	 * that arrived during the read and is newer than it. When the read fails,
-	 * for example because the session exited, the held output is applied to
-	 * the transcript the store already has.
-	 */
-	async #readHistory(sessionId: string): Promise<void> {
-		if (this.#historyReplay.has(sessionId)) {
-			this.#historyStale.add(sessionId);
-			return;
-		}
-		this.#historyReplay.set(sessionId, []);
-		let transcript: PiTranscript | undefined;
-		let after = this.#historySequence.get(sessionId) ?? 0;
-		try {
-			const history = await getSessionMessages(this.#options.search, sessionId, this.#fetcher);
-			transcript = piTranscriptFromMessages(history.messages);
-			after = history.sequence;
-		} catch {
-			// Keep what streamed. The next reconnect reads again.
-		}
-		transcript ??= this.#transcripts[sessionId] ?? emptyPiTranscript;
-		for (const event of this.#historyReplay.get(sessionId) ?? []) {
-			if (event.sequence > after) transcript = reducePiEvent(transcript, JSON.parse(event.payload));
-		}
-		this.#transcripts[sessionId] = transcript;
-		this.#historySequence.set(sessionId, after);
-		this.#historyReplay.delete(sessionId);
-		if (this.#historyStale.delete(sessionId)) void this.#readHistory(sessionId);
-	}
-
-	/**
-	 * Reads a session's queue. Pi sends the whole queue with every update, so an
-	 * update that arrives during the read is newer than the read's result.
-	 */
-	async #readQueue(sessionId: string): Promise<void> {
-		if (!this.#sessions[sessionId]?.capabilities.message_queue) return;
-		this.#queueUpdated.delete(sessionId);
-		try {
-			const queue = await getSessionQueue(this.#options.search, sessionId, this.#fetcher);
-			if (this.#queueUpdated.has(sessionId)) return;
-			this.#queues[sessionId] = { steering: queue.steering, followUp: queue.follow_up };
-		} catch {
-			// The session exited or the backend went away. The next reconnect reads again.
-		}
-	}
-
-	async #readExtensionUi(sessionId: string): Promise<void> {
-		if (this.#extensionReplay.has(sessionId)) {
-			this.#extensionStale.add(sessionId);
-			return;
-		}
-		this.#extensionReplay.set(sessionId, []);
-		try {
-			const server = await getSessionExtensionUi(this.#options.search, sessionId, this.#fetcher);
-			const replay = this.#extensionReplay.get(sessionId) ?? [];
-			this.#updateExtensionUi(sessionId, (state) => {
-				let next = withServerExtensionUi(state, server);
-				for (const event of replay) next = reduceExtensionEvent(next, event);
-				return next;
-			});
-		} catch {
-			// The session exited or the backend went away. The next reconnect reads again.
-		} finally {
-			this.#extensionReplay.delete(sessionId);
-			if (this.#extensionStale.delete(sessionId)) void this.#readExtensionUi(sessionId);
-		}
-	}
-
-	async #control(request: () => Promise<void>): Promise<void> {
-		try {
-			await request();
-		} catch (cause) {
-			throw new Error(sessionErrorMessage(cause, 'control'), { cause });
-		}
-	}
-
-	async #load(): Promise<void> {
-		try {
-			const [workspaces, sessions] = await Promise.all([
-				listWorkspaces(this.#options.search, this.#fetcher),
-				listSessions(this.#options.search, this.#fetcher)
-			]);
-			this.#workspaces = workspaces;
-			for (const session of sessions) this.#sessions[session.id] ??= session;
-			this.#loadFailed = false;
-			this.#refresh();
-		} catch {
-			this.#loadFailed = true;
-		} finally {
-			this.loading = false;
-		}
-	}
-
-	#apply(state: EventStreamState, event: ServerEvent | undefined): void {
-		if (event?.kind === 'session_output' && event.session_id) {
-			const sessionId = event.session_id;
-			const payload: unknown = JSON.parse(event.payload);
-			if (isExtensionEvent(payload)) {
-				const session = this.#sessions[sessionId];
-				if (session && !isLive(session)) return;
-				if (opensDialog(payload)) {
-					void this.#readExtensionUi(sessionId);
-					return;
-				}
-				// A replayed notification is old news.
-				if (payload.method === 'notify' && Date.now() - Date.parse(event.timestamp) > NOTIFICATION_MS) return;
-				this.#extensionReplay.get(sessionId)?.push(payload);
-				this.#updateExtensionUi(sessionId, (current) => reduceExtensionEvent(current, payload));
-				return;
-			}
-			const usage = usageFromEvent(payload);
-			if (usage) {
-				this.#usageUpdated.add(sessionId);
-				this.#usages[sessionId] = usage;
-				return;
-			}
-			const queue = queueFromEvent(payload);
-			if (queue) {
-				this.#queueUpdated.add(sessionId);
-				this.#queues[sessionId] = queue;
-				return;
-			}
-			const replay = this.#historyReplay.get(sessionId);
-			if (replay) {
-				replay.push(event);
-				return;
-			}
-			if (event.sequence <= (this.#historySequence.get(sessionId) ?? 0)) return;
-			const transcript = this.#transcripts[sessionId] ?? emptyPiTranscript;
-			this.#transcripts[sessionId] = reducePiEvent(transcript, payload);
-			return;
-		}
-		for (const changed of state.events) {
-			if (changed.kind !== 'session_changed') continue;
-			const session = JSON.parse(changed.payload) as AgentSession;
-			const known = session.id in this.#sessions;
-			this.#sessions[session.id] = session;
-			if (!known && !this.loading && isLive(session)) void this.#readHistory(session.id);
-			if (!known && isLive(session)) void this.#readUsage(session.id);
-			if (!isLive(session)) this.#updateExtensionUi(session.id, exitedExtensionUi);
-		}
-	}
-
-	#viewModel(session: AgentSession): SessionViewModel {
-		const transcript = this.#transcripts[session.id] ?? emptyPiTranscript;
-		const extensionUi = this.#extensionUi[session.id] ?? emptyExtensionUi;
-		return {
-			id: session.id,
-			workspaceId: session.workspace_id,
-			title: sessionTitle(transcript),
-			agent: 'Pi',
-			status: session.status,
-			error: failureMessage(session),
-			attention: extensionUi.dialogs.length > 0 ? 'An extension is waiting for your answer.' : undefined,
-			capabilities: {
-				prompt: session.capabilities.prompt,
-				followUp: session.capabilities.follow_up,
-				steer: session.capabilities.steer,
-				interrupt: session.capabilities.interrupt,
-				stop: session.capabilities.stop,
-				branching: session.capabilities.branching,
-				retry: session.capabilities.retry,
-				modelSelection: session.capabilities.model_selection,
-				messageQueue: session.capabilities.message_queue,
-				thinkingLevel: session.capabilities.thinking_level,
-				usage: session.capabilities.usage,
-				commandDiscovery: session.capabilities.command_discovery,
-				compaction: session.capabilities.compaction
-			},
-			thinkingLevel: this.#pendingThinkingLevels[session.id] ?? session.thinking_level ?? undefined,
-			transcript: transcript.entries.map((entry) => {
-				if (entry.kind !== 'compaction' || !entry.firstKeptEntryId) return entry;
-				const tokensAfter = this.#compactionEstimates[session.id]?.[entry.firstKeptEntryId];
-				return tokensAfter === undefined ? entry : { ...entry, tokensAfter };
-			}),
-			usage: this.#usages[session.id],
-			compaction: transcript.compaction,
-			extensionUi: extensionUiView(extensionUi),
-			autoRetry: transcript.autoRetry,
-			messageQueue: this.#queues[session.id]
-		};
 	}
 }

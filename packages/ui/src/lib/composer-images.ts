@@ -46,7 +46,7 @@ export function imageRejection(file: File, attachedBytes: number): string | unde
 export async function encodeImage(file: File): Promise<PromptImage> {
 	let binary: string;
 	try {
-		binary = Array.from(new Uint8Array(await file.arrayBuffer()), (byte) => String.fromCharCode(byte)).join('');
+		binary = Array.from(new Uint8Array(await file.arrayBuffer()), (byte) => String.fromCodePoint(byte)).join('');
 	} catch (cause) {
 		throw new Error(`${file.name} could not be read.`, { cause });
 	}

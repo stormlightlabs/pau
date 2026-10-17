@@ -20,7 +20,9 @@ const fixture = readFileSync(
 	.map((line) => JSON.parse(line) as unknown);
 
 function reduce(events: unknown[], state: PiTranscript = emptyPiTranscript): PiTranscript {
-	return events.reduce<PiTranscript>(reducePiEvent, state);
+	let result = state;
+	for (const event of events) result = reducePiEvent(result, event);
+	return result;
 }
 
 const user = { role: 'user', content: 'Read the README', timestamp: 1 };
@@ -170,7 +172,7 @@ test('shows a running compaction and replaces it with a marker when it ends', ()
 			{
 				type: 'compaction_end',
 				reason: 'threshold',
-				result: { summary: 'Short summary.', firstKeptEntryId: 'e7', tokensBefore: 90000 },
+				result: { summary: 'Short summary.', firstKeptEntryId: 'e7', tokensBefore: 90_000 },
 				aborted: false,
 				willRetry: true
 			}
@@ -185,7 +187,7 @@ test('shows a running compaction and replaces it with a marker when it ends', ()
 			reason: 'threshold',
 			summary: 'Short summary.',
 			firstKeptEntryId: 'e7',
-			tokensBefore: 90000,
+			tokensBefore: 90_000,
 			willRetry: true
 		}
 	]);

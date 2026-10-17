@@ -51,7 +51,7 @@ const idleSession: AgentSession = {
 type Route = (init?: RequestInit) => Response | Promise<Response>;
 
 function json(body: unknown, status = 200): Response {
-	return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+	return Response.json(body, { status, headers: { 'Content-Type': 'application/json' } });
 }
 
 /** Serves the session API from in-memory routes keyed by method and path. */
@@ -85,8 +85,8 @@ async function startFromRail(): Promise<void> {
 	await userEvent.click(page.getByRole('button', { name: 'Start session in Pau' }));
 }
 
-let sequence = 0;
-function output(payload: unknown, at = (sequence += 1)): { type: 'event'; event: ServerEvent } {
+const counter = { sequence: 0 };
+function output(payload: unknown, at = (counter.sequence += 1)): { type: 'event'; event: ServerEvent } {
 	return {
 		type: 'event',
 		event: {
@@ -211,7 +211,12 @@ test.each([
 test('shows a started session and selects it', async () => {
 	const changes: string[] = [];
 	const { props } = setup({ 'POST /api/sessions': () => json({ ...idleSession, status: 'starting' }, 201) });
-	await render(SessionRoute, { ...props, onSessionChange: (_workspace: string, id: string) => changes.push(id) });
+	await render(SessionRoute, {
+		...props,
+		onSessionChange: (_workspace: string, id: string) => {
+			changes.push(id);
+		}
+	});
 
 	await startFromRail();
 
@@ -282,11 +287,11 @@ function liveOutput(payload: unknown): { type: 'event'; event: ServerEvent } {
 }
 
 function sessionChanged(session: AgentSession): { type: 'event'; event: ServerEvent } {
-	sequence += 1;
+	counter.sequence += 1;
 	return {
 		type: 'event',
 		event: {
-			sequence,
+			sequence: counter.sequence,
 			timestamp: new Date().toISOString(),
 			workspace_id: session.workspace_id,
 			session_id: session.id,
@@ -486,7 +491,12 @@ test('resumes a saved session from the picker and selects it', async () => {
 		'GET /api/workspaces/pau/pi-sessions': () => json(savedList),
 		'POST /api/sessions': start
 	});
-	await render(SessionRoute, { ...props, onSessionChange: (_workspace: string, id: string) => changes.push(id) });
+	await render(SessionRoute, {
+		...props,
+		onSessionChange: (_workspace: string, id: string) => {
+			changes.push(id);
+		}
+	});
 
 	await openSavedSessions();
 	await userEvent.click(page.getByRole('button', { name: 'Resume Fix the gutter' }));
@@ -546,7 +556,12 @@ test('selects the live session that already runs a saved session instead of resu
 		'GET /api/workspaces/pau/pi-sessions': () => json(savedList),
 		'POST /api/sessions': start
 	});
-	await render(SessionRoute, { ...props, onSessionChange: (_workspace: string, id: string) => changes.push(id) });
+	await render(SessionRoute, {
+		...props,
+		onSessionChange: (_workspace: string, id: string) => {
+			changes.push(id);
+		}
+	});
 
 	await openSavedSessions();
 	await expect.element(page.getByText('Running')).toBeVisible();
@@ -788,7 +803,7 @@ test('hides the context meter when the session does not report usage', async () 
 });
 
 test('shows the thinking level Pi reports, and the selected level only while the request runs', async () => {
-	let finish: () => void = () => {};
+	let finish: (() => void) | undefined;
 	const put = vi.fn(
 		() =>
 			new Promise<Response>((resolve) => {
@@ -810,7 +825,7 @@ test('shows the thinking level Pi reports, and the selected level only while the
 	await expect.element(control).toHaveValue('high');
 
 	// Pi clamps the level, and the reported level wins once the request ends.
-	finish();
+	finish?.();
 	await expect.element(control).toHaveValue('low');
 	sockets[0]?.open();
 	sockets[0]?.receive(sessionChanged({ ...idleSession, thinking_level: 'medium' }));

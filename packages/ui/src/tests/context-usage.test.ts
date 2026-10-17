@@ -19,7 +19,7 @@ test('classifies a report without a percent as unknown', () => {
 
 test('formats tokens, cost, and percent compactly', () => {
 	expect(formatTokens(950)).toBe('950');
-	expect(formatTokens(1_234)).toBe('1.2k');
+	expect(formatTokens(1234)).toBe('1.2k');
 	expect(formatTokens(164_000)).toBe('164k');
 	expect(formatTokens(1_500_000)).toBe('1.5M');
 	expect(formatCost(0)).toBe('$0.00');

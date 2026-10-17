@@ -68,7 +68,7 @@
 		try {
 			const next = await load();
 			tree = next;
-			if (initial || activeKey === undefined || !next.entries.some((entry) => entry.id === activeKey)) {
+			if (initial || activeKey === undefined || next.entries.every((entry) => entry.id !== activeKey)) {
 				activeKey = next.leafId ?? next.entries.at(-1)?.id;
 				await tick();
 				revealActive('center');
@@ -128,37 +128,47 @@
 		const at = (index: number) => rows[Math.min(rows.length - 1, Math.max(0, index))]?.key;
 		let target: string | undefined;
 		switch (event.key) {
-			case 'ArrowDown':
+			case 'ArrowDown': {
 				target = at(activeIndex + 1);
 				break;
-			case 'ArrowUp':
+			}
+			case 'ArrowUp': {
 				target = at(activeIndex - 1);
 				break;
-			case 'PageDown':
+			}
+			case 'PageDown': {
 				target = at(activeIndex + page);
 				break;
-			case 'PageUp':
+			}
+			case 'PageUp': {
 				target = at(activeIndex - page);
 				break;
-			case 'Home':
+			}
+			case 'Home': {
 				target = at(0);
 				break;
-			case 'End':
+			}
+			case 'End': {
 				target = at(rows.length - 1);
 				break;
-			case 'ArrowRight':
+			}
+			case 'ArrowRight': {
 				if (!toggle(row, true) && row.kind === 'entry' && row.expanded) target = at(activeIndex + 1);
 				break;
-			case 'ArrowLeft':
+			}
+			case 'ArrowLeft': {
 				if (!toggle(row, false)) target = row.parentKey;
 				break;
+			}
 			case 'Enter':
-			case ' ':
+			case ' ': {
 				if (row.kind === 'run') toggle(row, true);
 				else if (row.expanded !== undefined) toggle(row, !row.expanded);
 				break;
-			default:
+			}
+			default: {
 				return;
+			}
 		}
 		event.preventDefault();
 		if (target !== undefined) void focusRow(target);
@@ -242,7 +252,7 @@
 					aria-posinset={row.position}
 					aria-setsize={row.setSize}
 					aria-selected={index === activeIndex}
-					aria-expanded={row.kind === 'run' ? false : row.expanded}
+					aria-expanded={row.kind !== 'run' && row.expanded}
 					style:top={`${index * rowHeight}px`}
 					style:--depth={row.level - 1}
 					onclick={() => {

@@ -93,7 +93,7 @@ export function flattenSessionTree(tree: SessionTreeSnapshot, expansion: Session
 	const rows: (Omit<SessionTreeEntryRow, 'position' | 'setSize'> | Omit<SessionTreeRunRow, 'position' | 'setSize'>)[] =
 		[];
 	const groups: string[] = [];
-	const stack: Chain[] = roots.map((id) => ({ startId: id, level: 1, group: '' })).reverse();
+	const stack: Chain[] = roots.map((id) => ({ startId: id, level: 1, group: '' })).toReversed();
 
 	const collapsible = (item: SessionTreeItem) =>
 		item.role !== 'user' && item.id !== tree.leafId && (children.get(item.id)?.length ?? 0) <= 1;
@@ -148,12 +148,13 @@ export function flattenSessionTree(tree: SessionTreeSnapshot, expansion: Session
 					const primary = next.find((child) => path.has(child)) ?? next[0]!;
 					stack.push({ ...chain, startId: primary });
 					if (expanded) {
-						const others = next.filter((child) => child !== primary).reverse();
+						const others = next.filter((child) => child !== primary).toReversed();
 						for (const child of others) {
 							stack.push({ startId: child, level: chain.level + 1, parentKey: id, group: id });
 						}
 					}
-					break;
+					id = undefined;
+					continue;
 				}
 			}
 			id = next[0];
@@ -179,14 +180,18 @@ export function flattenSessionTree(tree: SessionTreeSnapshot, expansion: Session
 export function entryLabel(item: SessionTreeItem, agent: string): string {
 	if (item.kind === 'message') {
 		switch (item.role) {
-			case 'user':
+			case 'user': {
 				return 'You';
-			case 'assistant':
+			}
+			case 'assistant': {
 				return agent;
-			case 'toolResult':
+			}
+			case 'toolResult': {
 				return 'Tool result';
-			case 'bashExecution':
+			}
+			case 'bashExecution': {
 				return 'Shell command';
+			}
 		}
 	}
 	const words = (item.kind === 'message' && item.role ? item.role : item.kind)

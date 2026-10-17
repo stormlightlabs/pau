@@ -77,8 +77,8 @@ const compactedTranscript: SessionViewModel['transcript'] = [
 		reason: 'manual',
 		summary:
 			'The user is fixing gutter markers that drift under soft-wrap. The renderer in src/diff/gutter.ts now uses visual line offsets.',
-		tokensBefore: 84210,
-		tokensAfter: 12300
+		tokensBefore: 84_210,
+		tokensAfter: 12_300
 	},
 	transcript[0]!
 ];
@@ -88,7 +88,7 @@ const automaticCompaction: SessionViewModel['transcript'][number] = {
 	kind: 'compaction',
 	reason: 'overflow',
 	summary: 'The user is fixing gutter markers that drift under soft-wrap.',
-	tokensBefore: 201000,
+	tokensBefore: 201_000,
 	willRetry: true
 };
 

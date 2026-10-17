@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../styles/tokens.css';
 	import { onDestroy } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import ApplicationShell, { type ShellNavItem } from './ApplicationShell.svelte';
 	import {
 		historyLimit,
@@ -157,9 +158,9 @@
 	let queue = $state<PromptQueue>('steer');
 	let histories = $state<Record<string, string[]>>({});
 	let historyCursor = $state<HistoryCursor>(idleHistoryCursor);
-	const historyRequested = new Set<string>();
+	const historyRequested = new SvelteSet<string>();
 	let commands = $state<Record<string, CommandOption[]>>({});
-	const commandsRequested = new Set<string>();
+	const commandsRequested = new SvelteSet<string>();
 	let commandSelected = $state(0);
 	/** Whether the user typed the draft, so a recalled `/prompt` does not open completion. */
 	let draftTyped = $state(false);
@@ -199,7 +200,7 @@
 		activeSession && !activeSession.capabilities.steer && activeSession.capabilities.followUp ? 'follow-up' : queue
 	);
 	const sessionCommands = $derived(
-		activeSession?.capabilities.commandDiscovery && activeSession ? commands[activeSession.id] : undefined
+		activeSession?.capabilities.commandDiscovery ? commands[activeSession.id] : undefined
 	);
 	const commandMatches = $derived.by(() => {
 		const query = commandQuery(draft);
@@ -212,7 +213,7 @@
 		return sessionCommands !== undefined &&
 			name !== undefined &&
 			commandQuery(draft) === undefined &&
-			!sessionCommands.some((command) => command.name === name)
+			sessionCommands.every((command) => command.name !== name)
 			? name
 			: undefined;
 	});
@@ -226,7 +227,7 @@
 		return last?.kind === 'message' && last.failed ? last.id : undefined;
 	});
 	const queuedCount = $derived(
-		activeSession?.capabilities.messageQueue && onClearQueue
+		onClearQueue && activeSession?.capabilities.messageQueue
 			? (activeSession.messageQueue?.steering.length ?? 0) + (activeSession.messageQueue?.followUp.length ?? 0)
 			: 0
 	);
@@ -407,17 +408,29 @@
 		}
 	}
 
+	async function loadHistory(sessionId: string, load: (sessionId: string) => Promise<string[]>): Promise<void> {
+		try {
+			const loaded = await load(sessionId);
+			// Prompts sent while the request was in flight are already recorded.
+			histories[sessionId] = [...(histories[sessionId] ?? []), ...loaded].slice(0, historyLimit);
+		} catch {
+			historyRequested.delete(sessionId);
+		}
+	}
+
+	async function loadCommands(sessionId: string, load: (sessionId: string) => Promise<CommandOption[]>): Promise<void> {
+		try {
+			commands[sessionId] = await load(sessionId);
+		} catch {
+			commandsRequested.delete(sessionId);
+		}
+	}
+
 	$effect(() => {
 		const sessionId = activeSessionId;
 		if (!sessionId || !onLoadHistory || historyRequested.has(sessionId)) return;
 		historyRequested.add(sessionId);
-		onLoadHistory(sessionId).then(
-			(loaded) => {
-				// Prompts sent while the request was in flight are already recorded.
-				histories[sessionId] = [...(histories[sessionId] ?? []), ...loaded].slice(0, historyLimit);
-			},
-			() => historyRequested.delete(sessionId)
-		);
+		void loadHistory(sessionId, onLoadHistory);
 	});
 
 	$effect(() => {
@@ -432,12 +445,7 @@
 		}
 		if (commandsRequested.has(sessionId)) return;
 		commandsRequested.add(sessionId);
-		onLoadCommands(sessionId).then(
-			(loaded) => {
-				commands[sessionId] = loaded;
-			},
-			() => commandsRequested.delete(sessionId)
-		);
+		void loadCommands(sessionId, onLoadCommands);
 	});
 
 	async function stop(): Promise<void> {
@@ -488,7 +496,7 @@
 				file
 			});
 		}
-		imageError = rejected.length ? rejected.join(' ') : undefined;
+		imageError = rejected.length > 0 ? rejected.join(' ') : undefined;
 	}
 
 	function removeImage(id: string): void {
@@ -639,7 +647,7 @@
 			void interrupt();
 			return;
 		}
-		if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && activeSession) {
+		if (activeSession && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
 			const field = event.currentTarget as HTMLTextAreaElement;
 			const modified = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
 			const step =

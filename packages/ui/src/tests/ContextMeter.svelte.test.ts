@@ -43,16 +43,18 @@ test('renders nothing when unsupported or not yet reported', async () => {
 	expect(unreported.container.querySelector('button')).toBeNull();
 });
 
+function withUsage(supported: boolean) {
+	return sessionFixtures.idle.map((workspace) => ({
+		...workspace,
+		sessions: workspace.sessions.map((session) => ({
+			...session,
+			usage: usageFixtures.normal,
+			capabilities: { ...session.capabilities, usage: supported }
+		}))
+	}));
+}
+
 test('shows the meter in the session header only when the session reports usage', async () => {
-	const withUsage = (supported: boolean) =>
-		sessionFixtures.idle.map((workspace) => ({
-			...workspace,
-			sessions: workspace.sessions.map((session) => ({
-				...session,
-				usage: usageFixtures.normal,
-				capabilities: { ...session.capabilities, usage: supported }
-			}))
-		}));
 	const screen = await render(SessionView, { workspaces: withUsage(true), activeSessionId: 'session-idle' });
 	await expect.element(meter()).toBeVisible();
 	await screen.rerender({ workspaces: withUsage(false), activeSessionId: 'session-idle' });

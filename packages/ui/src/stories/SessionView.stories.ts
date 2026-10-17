@@ -367,7 +367,7 @@ export const CompactionUnsupported: Story = {
 
 const pixel = Uint8Array.from(
 	atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=='),
-	(character) => character.charCodeAt(0)
+	(character) => character.codePointAt(0) ?? 0
 );
 const screenshot = () => new File([pixel], 'screenshot.png', { type: 'image/png' });
 

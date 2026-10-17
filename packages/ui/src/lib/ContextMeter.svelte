@@ -31,10 +31,10 @@
 			: `Context ${formatTokens(context.tokens)} / ${window} · ${formatPercent(context.percent ?? 0)}`;
 	});
 	const note = $derived.by(() => {
-		if (context?.tokens === undefined && context) return 'Pi measures context again after its next reply.';
+		if (context && context.tokens === undefined) return 'Pi measures context again after its next reply.';
 		if (level === 'danger') return 'The context window is almost full.';
 		if (level === 'warning') return 'The context window is filling up.';
-		return undefined;
+		return;
 	});
 
 	function closeOutside(event: PointerEvent): void {

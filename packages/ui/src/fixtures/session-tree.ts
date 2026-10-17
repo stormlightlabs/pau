@@ -40,11 +40,13 @@ function appendTurns(
 	for (let turn = firstTurn; turn < firstTurn + turns; turn += 1) {
 		const minute = entries.length;
 		const ids = [0, 1, 2, 3, 4].map((step) => `${prefix}-${turn}-${step}`);
-		entries.push(entry(ids[0]!, parent, 'user', `${prompts[turn % prompts.length]} (${prefix} ${turn + 1})`, minute));
-		entries.push(entry(ids[1]!, ids[0], 'assistant', 'I will read the relevant files first.', minute));
-		entries.push(entry(ids[2]!, ids[1], 'toolResult', 'packages/ui/src/lib/TerminalSurface.svelte', minute));
-		entries.push(entry(ids[3]!, ids[2], 'toolResult', 'apps/desktop/src/lib/event-stream.ts', minute));
-		entries.push(entry(ids[4]!, ids[3], 'assistant', 'The resize handler runs before the socket opens.', minute));
+		entries.push(
+			entry(ids[0]!, parent, 'user', `${prompts[turn % prompts.length]} (${prefix} ${turn + 1})`, minute),
+			entry(ids[1]!, ids[0], 'assistant', 'I will read the relevant files first.', minute),
+			entry(ids[2]!, ids[1], 'toolResult', 'packages/ui/src/lib/TerminalSurface.svelte', minute),
+			entry(ids[3]!, ids[2], 'toolResult', 'apps/desktop/src/lib/event-stream.ts', minute),
+			entry(ids[4]!, ids[3], 'assistant', 'The resize handler runs before the socket opens.', minute)
+		);
 		parent = ids[4];
 	}
 	return parent;

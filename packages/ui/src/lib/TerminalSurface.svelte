@@ -112,7 +112,7 @@
 	/** Moves between tabs with the arrow, Home, and End keys. Delete closes the focused tab. */
 	function handleTabKey(event: KeyboardEvent, index: number): void {
 		const tab = tabs[index];
-		if (event.key === 'Delete' && tab) {
+		if (tab && event.key === 'Delete') {
 			event.preventDefault();
 			void closeTerminal(tab.id);
 			return;

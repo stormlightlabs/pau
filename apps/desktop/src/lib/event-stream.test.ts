@@ -55,7 +55,9 @@ test('reconnects from the last applied sequence after streamed output disconnect
 			states.push(state);
 			applied.push(applyingEvent);
 		},
-		onConnectionChange: (connected) => connection.push(connected),
+		onConnectionChange: (connected) => {
+			connection.push(connected);
+		},
 		socketFactory: (url) => {
 			const socket = new FakeEventSocket(url);
 			sockets.push(socket);

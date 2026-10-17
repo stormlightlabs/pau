@@ -76,7 +76,7 @@ function applyCompactionEnd(state: PiTranscript, event: JsonObject): PiTranscrip
 				summary: text(result.summary) ?? '',
 				firstKeptEntryId: text(result.firstKeptEntryId),
 				tokensBefore: numberField(result.tokensBefore),
-				willRetry: event.willRetry === true ? true : undefined
+				willRetry: event.willRetry === true || undefined
 			}
 		]
 	};
@@ -119,7 +119,7 @@ function updateTool(
 
 function messageKey(message: JsonObject): string | undefined {
 	const timestamp = numberField(message.timestamp);
-	return typeof message.role === 'string' && timestamp !== undefined ? `${message.role}-${timestamp}` : undefined;
+	return timestamp !== undefined && typeof message.role === 'string' ? `${message.role}-${timestamp}` : undefined;
 }
 
 /**
@@ -161,8 +161,8 @@ function projectMessage(
 	if (role !== 'assistant' || !Array.isArray(message.content)) return [];
 
 	const projected: TranscriptEntry[] = [];
-	message.content.forEach((block: unknown, index) => {
-		if (!isObject(block)) return;
+	for (const [index, block] of (message.content as unknown[]).entries()) {
+		if (!isObject(block)) continue;
 		const id = `${key}:${index}`;
 		if (block.type === 'text' && text(block.text)) {
 			projected.push({ id, kind: 'message', role: 'assistant', body: text(block.text) ?? '' });
@@ -179,9 +179,9 @@ function projectMessage(
 				detail: toolDetail(block.arguments)
 			});
 		}
-	});
+	}
 	const error = text(message.errorMessage);
-	if (complete && message.stopReason === 'error' && error) {
+	if (complete && error && message.stopReason === 'error') {
 		projected.push({
 			id: `${key}:error`,
 			kind: 'message',
@@ -198,7 +198,7 @@ function projectMessage(
 function replaceMessage(entries: TranscriptEntry[], key: string, projected: TranscriptEntry[]): TranscriptEntry[] {
 	const replaced = new Set(projected.map((entry) => entry.id));
 	const owned = (entry: TranscriptEntry) => entry.id.startsWith(`${key}:`) || replaced.has(entry.id);
-	const first = entries.findIndex(owned);
+	const first = entries.findIndex((entry) => owned(entry));
 	const kept = entries.filter((entry) => !owned(entry));
 	const at = first === -1 ? kept.length : entries.slice(0, first).filter((entry) => !owned(entry)).length;
 	return [...kept.slice(0, at), ...projected, ...kept.slice(at)];
@@ -213,7 +213,7 @@ function applyMessageUpdate(state: PiTranscript, update: JsonObject): PiTranscri
 	const body = existing && (existing.kind === 'message' || existing.kind === 'thinking') ? existing.body : '';
 
 	switch (update.type) {
-		case 'text_delta':
+		case 'text_delta': {
 			return {
 				...state,
 				entries: upsert(state.entries, {
@@ -223,12 +223,14 @@ function applyMessageUpdate(state: PiTranscript, update: JsonObject): PiTranscri
 					body: body + (text(update.delta) ?? '')
 				})
 			};
-		case 'text_end':
+		}
+		case 'text_end': {
 			return {
 				...state,
 				entries: upsert(state.entries, { id, kind: 'message', role: 'assistant', body: text(update.content) ?? body })
 			};
-		case 'thinking_delta':
+		}
+		case 'thinking_delta': {
 			return {
 				...state,
 				entries: upsert(state.entries, {
@@ -238,11 +240,13 @@ function applyMessageUpdate(state: PiTranscript, update: JsonObject): PiTranscri
 					complete: false
 				})
 			};
-		case 'thinking_end':
+		}
+		case 'thinking_end': {
 			return {
 				...state,
 				entries: upsert(state.entries, { id, kind: 'thinking', body: text(update.content) ?? body, complete: true })
 			};
+		}
 		case 'toolcall_start': {
 			const callId = text(update.id);
 			if (!callId) return state;
@@ -263,8 +267,9 @@ function applyMessageUpdate(state: PiTranscript, update: JsonObject): PiTranscri
 				)
 			};
 		}
-		default:
+		default: {
 			return state;
+		}
 	}
 }
 
@@ -277,7 +282,7 @@ function endMessage(state: PiTranscript, message: JsonObject): PiTranscript {
 	const messages = state.active === undefined ? state.messages + 1 : state.messages;
 	const callId = text(message.toolCallId);
 	const entries =
-		message.role === 'toolResult' && callId
+		callId && message.role === 'toolResult'
 			? updateTool(
 					state.entries,
 					callId,
@@ -298,10 +303,10 @@ function endMessage(state: PiTranscript, message: JsonObject): PiTranscript {
  * {@link reducePiEvent} update it in place.
  */
 export function piTranscriptFromMessages(messages: unknown[]): PiTranscript {
-	const transcript = messages.reduce<PiTranscript>(
-		(state, message) => (isObject(message) ? endMessage(state, message) : state),
-		emptyPiTranscript
-	);
+	let transcript = emptyPiTranscript;
+	for (const message of messages) {
+		if (isObject(message)) transcript = endMessage(transcript, message);
+	}
 	const loaded = new Set(messages.flatMap((message) => (isObject(message) ? (messageKey(message) ?? []) : [])));
 	return { ...transcript, loaded };
 }
@@ -325,10 +330,12 @@ export function reducePiEvent(state: PiTranscript, event: unknown): PiTranscript
 			const projected = projectMessage(key, event.message, state.entries, false);
 			return { ...next, entries: replaceMessage(state.entries, key, projected) };
 		}
-		case 'message_update':
+		case 'message_update': {
 			return isObject(event.assistantMessageEvent) ? applyMessageUpdate(state, event.assistantMessageEvent) : state;
-		case 'message_end':
+		}
+		case 'message_end': {
 			return isObject(event.message) ? endMessage(state, event.message) : state;
+		}
 		case 'tool_execution_start':
 		case 'tool_execution_update':
 		case 'tool_execution_end': {
@@ -353,12 +360,15 @@ export function reducePiEvent(state: PiTranscript, event: unknown): PiTranscript
 				)
 			};
 		}
-		case 'compaction_start':
+		case 'compaction_start': {
 			return { ...state, compaction: { status: 'running', reason: compactionReason(event.reason) } };
-		case 'compaction_end':
+		}
+		case 'compaction_end': {
 			return applyCompactionEnd(state, event);
-		case 'agent_start':
+		}
+		case 'agent_start': {
 			return state.compaction && state.compaction.status !== 'running' ? { ...state, compaction: undefined } : state;
+		}
 		case 'auto_retry_start': {
 			const attempt = numberField(event.attempt);
 			const maxAttempts = numberField(event.maxAttempts);
@@ -369,11 +379,17 @@ export function reducePiEvent(state: PiTranscript, event: unknown): PiTranscript
 				autoRetry: { attempt, maxAttempts, retryAt: Date.now() + delayMs, errorMessage: text(event.errorMessage) }
 			};
 		}
-		case 'auto_retry_end':
+		case 'auto_retry_end': {
 			return state.autoRetry ? { ...state, autoRetry: undefined } : state;
-		default:
+		}
+		default: {
 			return state;
+		}
 	}
+}
+
+function queuedMessages(value: unknown): string[] {
+	return Array.isArray(value) ? value.filter((item) => typeof item === 'string') : [];
 }
 
 /**
@@ -382,6 +398,5 @@ export function reducePiEvent(state: PiTranscript, event: unknown): PiTranscript
  */
 export function queueFromEvent(event: unknown): MessageQueue | undefined {
 	if (!isObject(event) || event.type !== 'queue_update') return undefined;
-	const messages = (value: unknown) => (Array.isArray(value) ? value.filter((item) => typeof item === 'string') : []);
-	return { steering: messages(event.steering), followUp: messages(event.followUp) };
+	return { steering: queuedMessages(event.steering), followUp: queuedMessages(event.followUp) };
 }

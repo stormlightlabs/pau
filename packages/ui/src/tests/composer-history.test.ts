@@ -41,5 +41,10 @@ test('multi-line recalled prompts only navigate from the first or last line', ()
 test('recordPrompt prepends, skips repeats, and caps the list', () => {
 	expect(recordPrompt(['a'], 'b')).toEqual(['b', 'a']);
 	expect(recordPrompt(['a'], 'a')).toEqual(['a']);
-	expect(recordPrompt(Array(historyLimit).fill('x'), 'y')).toHaveLength(historyLimit);
+	expect(
+		recordPrompt(
+			Array.from({ length: historyLimit }, () => 'x'),
+			'y'
+		)
+	).toHaveLength(historyLimit);
 });

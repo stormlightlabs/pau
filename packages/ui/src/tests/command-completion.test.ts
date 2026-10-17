@@ -12,9 +12,11 @@ test('reads the command being typed only before the first space', () => {
 	expect(commandName('/')).toBeUndefined();
 });
 
-test('ranks prefix matches before substring and fuzzy matches', () => {
-	const names = (query: string) => filterCommands(commandFixtures.populated, query).map((command) => command.name);
+function names(query: string): string[] {
+	return filterCommands(commandFixtures.populated, query).map((command) => command.name);
+}
 
+test('ranks prefix matches before substring and fuzzy matches', () => {
 	expect(names('')).toHaveLength(4);
 	expect(names('REL')).toEqual(['skill:release-notes']);
 	expect(names('re')).toEqual(['review', 'skill:release-notes']);

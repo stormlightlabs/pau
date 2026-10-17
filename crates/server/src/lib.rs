@@ -488,6 +488,14 @@ fn router_with_services(
             get(sessions::list_session_commands),
         )
         .route(
+            "/api/sessions/{session_id}/extension-ui",
+            get(sessions::get_session_extension_ui),
+        )
+        .route(
+            "/api/sessions/{session_id}/extension-ui/{request_id}",
+            post(sessions::respond_to_extension_ui),
+        )
+        .route(
             "/api/terminals",
             get(terminals::list_terminals).post(terminals::create_terminal),
         )
@@ -696,6 +704,8 @@ enum ApiError {
     Session(Box<pau_pi::PiSessionRegistryError>),
     /// The requested native session cannot be resumed.
     NativeSession(pau_pi::PiSessionFileError),
+    /// An extension UI answer was refused, with its status, code, and message.
+    ExtensionRequest(StatusCode, &'static str, String),
 }
 
 impl IntoResponse for ApiError {
@@ -727,6 +737,7 @@ impl IntoResponse for ApiError {
                 };
                 (status, code, error.to_string())
             }
+            Self::ExtensionRequest(status, code, message) => (status, code, message),
             Self::Session(error) => {
                 let (status, code) = sessions::error_status(&error);
                 (status, code, error.to_string())

@@ -892,6 +892,130 @@ exit_code: number | null,
  */
 capabilities: SessionCapabilities, };
 
+export type ExtensionDialog = { "kind": "select",
+/**
+ * Request identifier to answer.
+ */
+id: string,
+/**
+ * Dialog heading.
+ */
+title: string,
+/**
+ * Values offered by the extension.
+ */
+options: Array<string>,
+/**
+ * Milliseconds after which Pi resolves the dialog itself.
+ */
+timeout_ms: number | null, } | { "kind": "confirm",
+/**
+ * Request identifier to answer.
+ */
+id: string,
+/**
+ * Dialog heading.
+ */
+title: string,
+/**
+ * Question or consequence shown below the heading.
+ */
+message: string,
+/**
+ * Milliseconds after which Pi resolves the dialog itself.
+ */
+timeout_ms: number | null, } | { "kind": "input",
+/**
+ * Request identifier to answer.
+ */
+id: string,
+/**
+ * Dialog heading.
+ */
+title: string,
+/**
+ * Hint shown in the empty field.
+ */
+placeholder: string | null,
+/**
+ * Milliseconds after which Pi resolves the dialog itself.
+ */
+timeout_ms: number | null, } | { "kind": "editor",
+/**
+ * Request identifier to answer.
+ */
+id: string,
+/**
+ * Dialog heading.
+ */
+title: string,
+/**
+ * Initial content.
+ */
+prefill: string | null, } | { "kind": "unsupported",
+/**
+ * Request identifier to answer.
+ */
+id: string,
+/**
+ * Pi's name for the request method.
+ */
+method: string, };
+
+export type ExtensionWidgetPlacement = "above-editor" | "below-editor";
+
+export type ExtensionStatus = {
+/**
+ * Extension-owned key.
+ */
+key: string,
+/**
+ * Status text.
+ */
+text: string, };
+
+export type ExtensionWidget = {
+/**
+ * Extension-owned key.
+ */
+key: string,
+/**
+ * Widget lines.
+ */
+lines: Array<string>,
+/**
+ * Position relative to the prompt editor.
+ */
+placement: ExtensionWidgetPlacement, };
+
+export type SessionExtensionUi = {
+/**
+ * Unanswered dialogs, oldest first.
+ */
+dialogs: Array<ExtensionDialog>,
+/**
+ * Status lines in the order they were first set.
+ */
+statuses: Array<ExtensionStatus>,
+/**
+ * Widgets in the order they were first set.
+ */
+widgets: Array<ExtensionWidget>, };
+
+export type ExtensionUiResponse = {
+/**
+ * The text.
+ */
+value: string, } | {
+/**
+ * Whether the operator confirmed.
+ */
+confirmed: boolean, } | {
+/**
+ * Always `true`.
+ */
+cancelled: boolean, };
+
 export type SessionModelSelection = {
 /**
  * Provider that serves the model.

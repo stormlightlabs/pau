@@ -4,6 +4,19 @@
 //! rejects the request. Session progress arrives on `/api/events`:
 //! `session_changed` carries an [`AgentSession`] whenever the lifecycle state
 //! changes, and `session_output` carries each native Pi event.
+//!
+//! # Extension UI
+//!
+//! Pi extension requests reach clients as `session_output` events, but those
+//! events are transient: snapshots omit them, so a client that reconnects would
+//! never learn about a dialog still waiting for an answer. The API therefore
+//! also keeps each session's current extension UI (unanswered dialogs, status
+//! lines, and widgets) and serves it from `GET /api/sessions/{id}/extension-ui`.
+//! When a dialog stops waiting (answered, timed out, or cleared by an
+//! interrupt), the API publishes a synthetic `extension_ui_resolved`
+//! `session_output` event with the request `id` and a `reason`, so live clients
+//! can close it without refetching. Notifications are transient by nature and
+//! stay output-only.
 
 use std::{
     collections::HashMap,
@@ -22,16 +35,18 @@ use pau_agent::{
 use pau_core::{
     ServerEventKind,
     session::{
-        AgentSession, NativeSessionList, NativeSessionSummary, NativeSessionWarning,
+        AgentSession, ExtensionDialog, ExtensionStatus, ExtensionUiResponse, ExtensionWidget,
+        ExtensionWidgetPlacement, NativeSessionList, NativeSessionSummary, NativeSessionWarning,
         SessionAutoCompactionRequest, SessionCapabilities, SessionCommand, SessionCommandSource,
-        SessionCompactRequest, SessionCompactionResult, SessionMessageQueue, SessionMessageRequest,
-        SessionModelSelection, SessionPromptRequest, SessionQueue, SessionStatus,
-        SessionThinkingLevel, SessionThinkingLevelRequest, StartSessionRequest,
+        SessionCompactRequest, SessionCompactionResult, SessionExtensionUi, SessionMessageQueue,
+        SessionMessageRequest, SessionModelSelection, SessionPromptRequest, SessionQueue,
+        SessionStatus, SessionThinkingLevel, SessionThinkingLevelRequest, StartSessionRequest,
     },
 };
 use pau_pi::{
-    DiscoverPiOptions, PiCommand, PiCommandSource, PiProcessError, PiProcessOutput, PiSession,
-    PiSessionError, PiSessionOutput, PiSessionRegistry, PiSessionRegistryError, PiShutdownTimeouts,
+    DiscoverPiOptions, PiCommand, PiCommandSource, PiExtensionUiRequest, PiExtensionUiResponse,
+    PiExtensionWidgetPlacement, PiProcessError, PiProcessOutput, PiSession, PiSessionError,
+    PiSessionOutput, PiSessionRegistry, PiSessionRegistryError, PiShutdownTimeouts,
     StartPiProcessOptions, StartRegisteredPiSession, discover_pi, find_pi_session_file,
     list_pi_session_files, pi_configuration_paths,
 };
@@ -60,6 +75,8 @@ pub(crate) struct SessionApi {
     /// starts, so output that races the start response still has a session to
     /// describe, and is removed when the process exits.
     records: Arc<Mutex<HashMap<String, SessionRecord>>>,
+    /// Current extension UI per live session. See the module documentation.
+    extension_ui: Arc<Mutex<HashMap<String, SessionExtensionUi>>>,
     events: EventHub,
 }
 
@@ -82,6 +99,7 @@ impl SessionApi {
             registry: Arc::new(registry),
             discovery,
             records: Arc::default(),
+            extension_ui: Arc::default(),
             events,
         };
         tokio::spawn(api.clone().forward(api.registry.subscribe()));
@@ -135,6 +153,168 @@ impl SessionApi {
         Ok((record, session))
     }
 
+    fn extension_ui(&self, id: &str) -> SessionExtensionUi {
+        self.extension_ui
+            .lock()
+            .expect("extension UI lock poisoned")
+            .get(id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Tells live clients a dialog no longer waits for an answer.
+    fn publish_resolved(&self, workspace_id: &str, session_id: &str, request: &str, reason: &str) {
+        self.events.publish(
+            diagnostic_timestamp(),
+            Some(workspace_id.to_owned()),
+            Some(session_id.to_owned()),
+            ServerEventKind::SessionOutput,
+            serde_json::json!({"type": "extension_ui_resolved", "id": request, "reason": reason})
+                .to_string(),
+        );
+    }
+
+    /// Drops every unanswered dialog of a session and announces each one.
+    fn clear_dialogs(&self, session_id: &str, workspace_id: &str, reason: &str) {
+        let cleared = self
+            .extension_ui
+            .lock()
+            .expect("extension UI lock poisoned")
+            .get_mut(session_id)
+            .map(|state| std::mem::take(&mut state.dialogs))
+            .unwrap_or_default();
+        for dialog in cleared {
+            self.publish_resolved(workspace_id, session_id, dialog.id(), reason);
+        }
+    }
+
+    /// Removes one unanswered dialog, returning whether it was still waiting.
+    fn take_dialog(&self, session_id: &str, request: &str) -> bool {
+        let mut states = self
+            .extension_ui
+            .lock()
+            .expect("extension UI lock poisoned");
+        let Some(state) = states.get_mut(session_id) else {
+            return false;
+        };
+        let before = state.dialogs.len();
+        state.dialogs.retain(|dialog| dialog.id() != request);
+        state.dialogs.len() != before
+    }
+
+    /// Applies a request from Pi to the session's current extension UI.
+    fn apply_extension_request(&self, workspace_id: &str, session_id: &str, event: &Value) {
+        let Ok(request) = PiExtensionUiRequest::try_from(event) else {
+            return;
+        };
+        let mut timeout = None;
+        {
+            let mut states = self
+                .extension_ui
+                .lock()
+                .expect("extension UI lock poisoned");
+            let state = states.entry(session_id.to_owned()).or_default();
+            match request {
+                PiExtensionUiRequest::Select {
+                    id,
+                    title,
+                    options,
+                    timeout: ms,
+                } => {
+                    timeout = ms.map(|ms| (id.clone(), ms));
+                    state.dialogs.push(ExtensionDialog::Select {
+                        id,
+                        title,
+                        options,
+                        timeout_ms: ms,
+                    });
+                }
+                PiExtensionUiRequest::Confirm {
+                    id,
+                    title,
+                    message,
+                    timeout: ms,
+                } => {
+                    timeout = ms.map(|ms| (id.clone(), ms));
+                    state.dialogs.push(ExtensionDialog::Confirm {
+                        id,
+                        title,
+                        message,
+                        timeout_ms: ms,
+                    });
+                }
+                PiExtensionUiRequest::Input {
+                    id,
+                    title,
+                    placeholder,
+                    timeout: ms,
+                } => {
+                    timeout = ms.map(|ms| (id.clone(), ms));
+                    state.dialogs.push(ExtensionDialog::Input {
+                        id,
+                        title,
+                        placeholder,
+                        timeout_ms: ms,
+                    });
+                }
+                PiExtensionUiRequest::Editor { id, title, prefill } => {
+                    state
+                        .dialogs
+                        .push(ExtensionDialog::Editor { id, title, prefill });
+                }
+                PiExtensionUiRequest::Status { key, text, .. } => {
+                    state.statuses.retain(|status| status.key != key);
+                    if let Some(text) = text {
+                        state.statuses.push(ExtensionStatus { key, text });
+                    }
+                }
+                PiExtensionUiRequest::Widget {
+                    key,
+                    lines,
+                    placement,
+                    ..
+                } => {
+                    state.widgets.retain(|widget| widget.key != key);
+                    if let Some(lines) = lines {
+                        state.widgets.push(ExtensionWidget {
+                            key,
+                            lines,
+                            placement: match placement {
+                                PiExtensionWidgetPlacement::AboveEditor => {
+                                    ExtensionWidgetPlacement::AboveEditor
+                                }
+                                PiExtensionWidgetPlacement::BelowEditor => {
+                                    ExtensionWidgetPlacement::BelowEditor
+                                }
+                            },
+                        });
+                    }
+                }
+                // Pi sends these without waiting for an answer.
+                PiExtensionUiRequest::Unsupported { method, .. }
+                    if matches!(method.as_str(), "setTitle" | "set_editor_text") => {}
+                PiExtensionUiRequest::Unsupported { id, method } => {
+                    state
+                        .dialogs
+                        .push(ExtensionDialog::Unsupported { id, method });
+                }
+                PiExtensionUiRequest::Notification { .. } => {}
+            }
+        }
+        // Pi resolves a timed-out dialog itself and sends nothing, so the API
+        // expires it on the same clock.
+        if let Some((id, ms)) = timeout {
+            let api = self.clone();
+            let (workspace_id, session_id) = (workspace_id.to_owned(), session_id.to_owned());
+            tokio::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+                if api.take_dialog(&session_id, &id) {
+                    api.publish_resolved(&workspace_id, &session_id, &id, "timed_out");
+                }
+            });
+        }
+    }
+
     fn publish(&self, session: &AgentSession) {
         self.events.publish(
             diagnostic_timestamp(),
@@ -171,6 +351,13 @@ impl SessionApi {
             };
             match tagged.output {
                 PiProcessOutput::Event(event) => {
+                    if event.get("type").and_then(Value::as_str) == Some("extension_ui_request") {
+                        self.apply_extension_request(
+                            &tagged.workspace_id,
+                            &tagged.session_id,
+                            &event,
+                        );
+                    }
                     self.events.publish(
                         diagnostic_timestamp(),
                         Some(tagged.workspace_id),
@@ -189,6 +376,11 @@ impl SessionApi {
                     self.records
                         .lock()
                         .expect("session records lock poisoned")
+                        .remove(&tagged.session_id);
+                    self.clear_dialogs(&tagged.session_id, &tagged.workspace_id, "exited");
+                    self.extension_ui
+                        .lock()
+                        .expect("extension UI lock poisoned")
                         .remove(&tagged.session_id);
                     let status = if exit.requested {
                         SessionStatus::Stopped
@@ -556,8 +748,9 @@ pub(crate) async fn interrupt_session(
     AxumPath(session_id): AxumPath<String>,
 ) -> Result<StatusCode, ApiError> {
     let api = session_api(&state)?;
-    let (_, session) = api.live(&session_id).await?;
+    let (record, session) = api.live(&session_id).await?;
     session.interrupt().await?;
+    api.clear_dialogs(&session_id, &record.workspace_id, "interrupted");
     api.publish_current(&session_id).await;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -646,6 +839,81 @@ pub(crate) async fn list_session_commands(
     let (_, session) = session_api(&state)?.live(&session_id).await?;
     let commands = session.commands().await?;
     Ok(Json(commands.into_iter().map(session_command).collect()))
+}
+
+/// Returns the extension UI that is still current for the session.
+pub(crate) async fn get_session_extension_ui(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+) -> Result<Json<SessionExtensionUi>, ApiError> {
+    let api = session_api(&state)?;
+    api.live(&session_id).await?;
+    Ok(Json(api.extension_ui(&session_id)))
+}
+
+fn stale_request() -> ApiError {
+    ApiError::ExtensionRequest(
+        StatusCode::NOT_FOUND,
+        "extension_request_not_found",
+        "That request was already answered, cancelled, or expired.".to_owned(),
+    )
+}
+
+/// Answers an unanswered extension dialog.
+///
+/// A request that is unknown, already answered, timed out, or cleared is
+/// `404 extension_request_not_found`. An answer of the wrong shape for the
+/// dialog is `422 invalid_extension_response` and leaves the dialog waiting.
+pub(crate) async fn respond_to_extension_ui(
+    State(state): State<ApiState>,
+    AxumPath((session_id, request_id)): AxumPath<(String, String)>,
+    Json(response): Json<ExtensionUiResponse>,
+) -> Result<StatusCode, ApiError> {
+    let api = session_api(&state)?;
+    let (_, session) = api.live(&session_id).await?;
+    let dialog = api
+        .extension_ui(&session_id)
+        .dialogs
+        .into_iter()
+        .find(|dialog| dialog.id() == request_id)
+        .ok_or_else(stale_request)?;
+    let invalid = |message: &str| {
+        ApiError::ExtensionRequest(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "invalid_extension_response",
+            message.to_owned(),
+        )
+    };
+    let id = request_id.clone();
+    let native = match (&dialog, response) {
+        (_, ExtensionUiResponse::Cancelled { cancelled: true }) => {
+            PiExtensionUiResponse::Cancelled { id }
+        }
+        (_, ExtensionUiResponse::Cancelled { cancelled: false }) => {
+            return Err(invalid("cancelled must be true"));
+        }
+        (ExtensionDialog::Select { options, .. }, ExtensionUiResponse::Value { value }) => {
+            if !options.contains(&value) {
+                return Err(invalid("The value is not one of the offered options."));
+            }
+            PiExtensionUiResponse::Value { id, value }
+        }
+        (
+            ExtensionDialog::Input { .. } | ExtensionDialog::Editor { .. },
+            ExtensionUiResponse::Value { value },
+        ) => PiExtensionUiResponse::Value { id, value },
+        (ExtensionDialog::Confirm { .. }, ExtensionUiResponse::Confirmed { confirmed }) => {
+            PiExtensionUiResponse::Confirmed { id, confirmed }
+        }
+        _ => return Err(invalid("The response does not fit this dialog.")),
+    };
+    // Claiming the dialog first lets concurrent answers race safely: only one
+    // caller finds it still waiting.
+    if !api.take_dialog(&session_id, &request_id) {
+        return Err(stale_request());
+    }
+    session.respond_to_extension_ui(native).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[cfg(all(test, unix))]

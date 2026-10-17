@@ -261,3 +261,144 @@ pub struct SessionCommand {
     /// The file that defines the command, when the agent reports one.
     pub path: Option<String>,
 }
+
+/// A blocking request from a Pi extension that waits for the operator.
+///
+/// Clients answer it with [`ExtensionUiResponse`]. Pi resolves a dialog that
+/// has a timeout on its own when the timeout passes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[ts(tag = "kind", rename_all = "snake_case")]
+pub enum ExtensionDialog {
+    /// Choose one of the offered strings.
+    Select {
+        /// Request identifier to answer.
+        id: String,
+        /// Dialog heading.
+        title: String,
+        /// Values offered by the extension.
+        options: Vec<String>,
+        /// Milliseconds after which Pi resolves the dialog itself.
+        timeout_ms: Option<u64>,
+    },
+    /// Confirm or decline an action.
+    Confirm {
+        /// Request identifier to answer.
+        id: String,
+        /// Dialog heading.
+        title: String,
+        /// Question or consequence shown below the heading.
+        message: String,
+        /// Milliseconds after which Pi resolves the dialog itself.
+        timeout_ms: Option<u64>,
+    },
+    /// Enter one line of text.
+    Input {
+        /// Request identifier to answer.
+        id: String,
+        /// Dialog heading.
+        title: String,
+        /// Hint shown in the empty field.
+        placeholder: Option<String>,
+        /// Milliseconds after which Pi resolves the dialog itself.
+        timeout_ms: Option<u64>,
+    },
+    /// Edit multi-line text.
+    Editor {
+        /// Request identifier to answer.
+        id: String,
+        /// Dialog heading.
+        title: String,
+        /// Initial content.
+        prefill: Option<String>,
+    },
+    /// A request Pau cannot render. Only a cancellation answers it.
+    Unsupported {
+        /// Request identifier to answer.
+        id: String,
+        /// Pi's name for the request method.
+        method: String,
+    },
+}
+
+impl ExtensionDialog {
+    /// The identifier a response must carry.
+    pub fn id(&self) -> &str {
+        match self {
+            Self::Select { id, .. }
+            | Self::Confirm { id, .. }
+            | Self::Input { id, .. }
+            | Self::Editor { id, .. }
+            | Self::Unsupported { id, .. } => id,
+        }
+    }
+}
+
+/// Where a widget sits relative to the prompt editor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(rename_all = "kebab-case")]
+pub enum ExtensionWidgetPlacement {
+    /// Before the editor.
+    AboveEditor,
+    /// After the editor.
+    BelowEditor,
+}
+
+/// One keyed status line set by an extension.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ExtensionStatus {
+    /// Extension-owned key.
+    pub key: String,
+    /// Status text.
+    pub text: String,
+}
+
+/// One string-only widget set by an extension.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ExtensionWidget {
+    /// Extension-owned key.
+    pub key: String,
+    /// Widget lines.
+    pub lines: Vec<String>,
+    /// Position relative to the prompt editor.
+    pub placement: ExtensionWidgetPlacement,
+}
+
+/// Extension UI that is still current for a session.
+///
+/// Notifications are not part of this state. They are transient and arrive
+/// only as native `session_output` events.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionExtensionUi {
+    /// Unanswered dialogs, oldest first.
+    pub dialogs: Vec<ExtensionDialog>,
+    /// Status lines in the order they were first set.
+    pub statuses: Vec<ExtensionStatus>,
+    /// Widgets in the order they were first set.
+    pub widgets: Vec<ExtensionWidget>,
+}
+
+/// An operator's answer to an [`ExtensionDialog`].
+///
+/// `select`, `input`, and `editor` dialogs take a value, `confirm` takes a
+/// decision, and any dialog accepts a cancellation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(untagged)]
+pub enum ExtensionUiResponse {
+    /// The selected, entered, or edited text.
+    Value {
+        /// The text.
+        value: String,
+    },
+    /// The decision for a confirmation.
+    Confirmed {
+        /// Whether the operator confirmed.
+        confirmed: bool,
+    },
+    /// The operator dismissed the dialog.
+    Cancelled {
+        /// Always `true`.
+        cancelled: bool,
+    },
+}

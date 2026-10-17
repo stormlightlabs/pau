@@ -616,23 +616,10 @@ Verification:
   executable and confirm its tools run inside the sandbox.
 - Confirm a sandbox that cannot start fails the session start with its reason.
 
-### 2.160 Live extension UI API
-
-Status: planned
-Blocked by: none
-
-Forward Pi extension dialogs, notifications, status text, and widgets from live
-sessions, and accept dialog responses, through the desktop API.
-
-Verification:
-
-- Cover `select`, `confirm`, `input`, and `editor` requests, their responses, a
-  cancelled request, and a stale response against the fake Pi executable.
-
 ### 2.161 Live extension UI
 
 Status: planned
-Blocked by: 2.160
+Blocked by: none
 
 Show extension dialogs, notifications, status text, and widgets for live
 sessions in the session view.

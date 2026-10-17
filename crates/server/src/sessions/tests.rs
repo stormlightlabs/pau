@@ -34,6 +34,22 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"native","sessionFile":"%s/session.jsonl"}}\n' "$id" "$PWD"
             ;;
         *'"message":"exit"'*) exit 3 ;;
+        *'"message":"dialogs"'*)
+            printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
+            printf '{"type":"extension_ui_request","id":"ui-select","method":"select","title":"Pick","options":["a","b"]}\n'
+            printf '{"type":"extension_ui_request","id":"ui-confirm","method":"confirm","title":"Sure?","message":"Delete it"}\n'
+            printf '{"type":"extension_ui_request","id":"ui-input","method":"input","title":"Name","placeholder":"x"}\n'
+            printf '{"type":"extension_ui_request","id":"ui-editor","method":"editor","title":"Edit","prefill":"text"}\n'
+            printf '{"type":"extension_ui_request","id":"ui-notify","method":"notify","message":"Heads up","notifyType":"warning"}\n'
+            printf '{"type":"extension_ui_request","id":"ui-status","method":"setStatus","statusKey":"k","statusText":"busy"}\n'
+            printf '{"type":"extension_ui_request","id":"ui-widget","method":"setWidget","widgetKey":"w","widgetLines":["one"],"widgetPlacement":"belowEditor"}\n'
+            printf '{"type":"agent_start"}\n'
+            ;;
+        *'"message":"expiring"'*)
+            printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
+            printf '{"type":"extension_ui_request","id":"ui-short","method":"input","title":"Quick","timeout":100}\n'
+            ;;
+        *'"type":"extension_ui_response"'*) ;;
         *'"type":"prompt"'*)
             printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
             printf '{"type":"agent_start"}\n'
@@ -557,4 +573,186 @@ async fn lists_and_resumes_native_sessions() {
             "{id}"
         );
     }
+}
+
+/// Matches the last request the fake Pi sends for a `dialogs` prompt. The
+/// API applies a request before it publishes it, so once this event arrives
+/// every earlier request is already part of the session's extension UI.
+fn last_dialog_request(event: &ServerEvent) -> bool {
+    event.kind == ServerEventKind::SessionOutput
+        && serde_json::from_str::<Value>(&event.payload).unwrap()["id"] == "ui-widget"
+}
+
+#[tokio::test]
+async fn forwards_extension_ui_and_accepts_responses() {
+    let widget_request = last_dialog_request;
+    let fixture = Fixture::new(None).await;
+    let mut stream = fixture.events.subscribe(None);
+    let (_, session) = fixture.start(None).await;
+    let base = format!("/api/sessions/{}", session["id"].as_str().unwrap());
+    let ui = format!("{base}/extension-ui");
+
+    let (status, _) = fixture
+        .call(
+            "POST",
+            &format!("{base}/prompt"),
+            Some(json!({"message": "dialogs"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    next_event(&mut stream, widget_request).await;
+
+    // A client that connects now still finds the unanswered dialogs.
+    let (status, state) = fixture.call("GET", &ui, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        state["dialogs"],
+        json!([
+            {"kind": "select", "id": "ui-select", "title": "Pick", "options": ["a", "b"], "timeout_ms": null},
+            {"kind": "confirm", "id": "ui-confirm", "title": "Sure?", "message": "Delete it", "timeout_ms": null},
+            {"kind": "input", "id": "ui-input", "title": "Name", "placeholder": "x", "timeout_ms": null},
+            {"kind": "editor", "id": "ui-editor", "title": "Edit", "prefill": "text"},
+        ])
+    );
+    assert_eq!(state["statuses"], json!([{"key": "k", "text": "busy"}]));
+    assert_eq!(
+        state["widgets"],
+        json!([{"key": "w", "lines": ["one"], "placement": "below-editor"}])
+    );
+
+    let answer = |id: &str, body: Value| {
+        let path = format!("{ui}/{id}");
+        let fixture = &fixture;
+        async move { fixture.call("POST", &path, Some(body)).await }
+    };
+    // Answers that do not fit the dialog leave it waiting.
+    let (status, error) = answer("ui-select", json!({"value": "c"})).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(error["code"], "invalid_extension_response");
+    let (status, _) = answer("ui-input", json!({"confirmed": true})).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    for (id, body) in [
+        ("ui-select", json!({"value": "b"})),
+        ("ui-confirm", json!({"confirmed": false})),
+        ("ui-input", json!({"value": "Pau"})),
+    ] {
+        let (status, _) = answer(id, body).await;
+        assert_eq!(status, StatusCode::NO_CONTENT, "{id}");
+    }
+    let (status, _) = answer("ui-editor", json!({"cancelled": true})).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    // Answered, cancelled, and unknown requests are all stale.
+    for id in ["ui-select", "ui-editor", "never-asked"] {
+        let (status, error) = answer(id, json!({"cancelled": true})).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{id}");
+        assert_eq!(error["code"], "extension_request_not_found");
+    }
+    let (_, state) = fixture.call("GET", &ui, None).await;
+    assert_eq!(state["dialogs"], json!([]));
+
+    // The fake Pi logs each record as it reads it, so wait for the last one.
+    let mut responses: Vec<Value> = Vec::new();
+    for _ in 0..100 {
+        responses = fs::read_to_string(fixture.workspace_root.join("commands.jsonl"))
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .filter(|command: &Value| command["type"] == "extension_ui_response")
+            .collect();
+        if responses.len() == 4 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert_eq!(
+        responses,
+        [
+            json!({"type": "extension_ui_response", "id": "ui-select", "value": "b"}),
+            json!({"type": "extension_ui_response", "id": "ui-confirm", "confirmed": false}),
+            json!({"type": "extension_ui_response", "id": "ui-input", "value": "Pau"}),
+            json!({"type": "extension_ui_response", "id": "ui-editor", "cancelled": true}),
+        ]
+    );
+
+    let (status, _) = fixture
+        .call("GET", "/api/sessions/missing/extension-ui", None)
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn clears_pending_dialogs_on_interrupt_timeout_and_exit() {
+    let widget_request = last_dialog_request;
+    let fixture = Fixture::new(None).await;
+    let mut stream = fixture.events.subscribe(None);
+    let (_, session) = fixture.start(None).await;
+    let base = format!("/api/sessions/{}", session["id"].as_str().unwrap());
+    let ui = format!("{base}/extension-ui");
+    let resolved = |request: &'static str, reason: &'static str| {
+        move |event: &ServerEvent| {
+            let payload: Value = serde_json::from_str(&event.payload).unwrap();
+            event.kind == ServerEventKind::SessionOutput
+                && payload["type"] == "extension_ui_resolved"
+                && payload["id"] == request
+                && payload["reason"] == reason
+        }
+    };
+
+    // Pi times a dialog out without telling the client, so the API does.
+    fixture
+        .call(
+            "POST",
+            &format!("{base}/prompt"),
+            Some(json!({"message": "expiring"})),
+        )
+        .await;
+    next_event(&mut stream, resolved("ui-short", "timed_out")).await;
+    let (_, state) = fixture.call("GET", &ui, None).await;
+    assert_eq!(state["dialogs"], json!([]));
+
+    fixture
+        .call("POST", &format!("{base}/interrupt"), None)
+        .await;
+
+    // An interrupt abandons the dialogs of the run it stops.
+    fixture
+        .call(
+            "POST",
+            &format!("{base}/prompt"),
+            Some(json!({"message": "dialogs"})),
+        )
+        .await;
+    next_event(&mut stream, widget_request).await;
+    let (status, _) = fixture
+        .call("POST", &format!("{base}/interrupt"), None)
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    next_event(&mut stream, resolved("ui-editor", "interrupted")).await;
+    let (_, state) = fixture.call("GET", &ui, None).await;
+    assert_eq!(state["dialogs"], json!([]));
+    assert_eq!(state["statuses"], json!([{"key": "k", "text": "busy"}]));
+    let (status, _) = fixture
+        .call(
+            "POST",
+            &format!("{ui}/ui-select"),
+            Some(json!({"value": "a"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // An exit drops the session's extension UI along with the session.
+    fixture
+        .call(
+            "POST",
+            &format!("{base}/prompt"),
+            Some(json!({"message": "dialogs"})),
+        )
+        .await;
+    next_event(&mut stream, widget_request).await;
+    fixture.call("DELETE", &base, None).await;
+    next_event(&mut stream, resolved("ui-editor", "exited")).await;
+    let (status, _) = fixture.call("GET", &ui, None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }

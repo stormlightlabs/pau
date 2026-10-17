@@ -176,10 +176,10 @@ pub struct PiMcpDiscovery {
 }
 
 #[derive(Clone, Debug)]
-struct PackageDeclaration {
-    source: String,
-    settings_path: PathBuf,
-    extensions: Option<Vec<String>>,
+pub(crate) struct PackageDeclaration {
+    pub(crate) source: String,
+    pub(crate) settings_path: PathBuf,
+    pub(crate) extensions: Option<Vec<String>>,
 }
 
 /// Discovers documented adapter sources in native precedence order.
@@ -644,7 +644,7 @@ fn package_identity(source: &str) -> Option<String> {
     }
 }
 
-fn package_key(source: &str, settings_directory: &Path) -> String {
+pub(crate) fn package_key(source: &str, settings_directory: &Path) -> String {
     if let Some(identity) = package_identity(source) {
         return format!("npm:{identity}");
     }
@@ -660,7 +660,7 @@ fn package_key(source: &str, settings_directory: &Path) -> String {
     format!("local:{}", path.display())
 }
 
-fn package_root(declaration: &PackageDeclaration) -> Option<PathBuf> {
+pub(crate) fn package_root(declaration: &PackageDeclaration) -> Option<PathBuf> {
     let settings_directory = declaration.settings_path.parent()?;
     if let Some(identity) = package_identity(&declaration.source) {
         return Some(settings_directory.join("npm/node_modules").join(identity));

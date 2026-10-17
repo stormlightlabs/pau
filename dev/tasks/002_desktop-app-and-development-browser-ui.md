@@ -1110,23 +1110,10 @@ Verification:
 
 ## Pi resources
 
-### 2.33 Resource discovery
-
-Status: planned
-Blocked by: none
-
-Index user and project Pi skills, extensions, prompts, themes, and packages from
-Pi's normal locations. Preserve scope, source, and discovery warnings.
-
-Verification:
-
-- Test valid, malformed, duplicate, missing, symlinked, user, and project
-  resources against fixture directories.
-
 ### 2.34 Resource browser
 
 Status: planned
-Blocked by: 2.33
+Blocked by: none
 
 Build the Skills, Extensions, Prompts, Themes, and Packages views with source,
 scope, trust, validation, and selected-resource detail.
@@ -1149,7 +1136,7 @@ Verification:
 ### 2.35 Resource file editing API
 
 Status: planned
-Blocked by: 2.33
+Blocked by: none
 
 Create and edit skill and prompt files through file-preserving operations, then
 ask Pi to reload resources.
@@ -1184,7 +1171,7 @@ Verification:
 ### 2.36 Package installation
 
 Status: planned
-Blocked by: 2.33, 2.54
+Blocked by: 2.54
 
 Install Pi packages through Pi's supported commands or APIs. Record each
 installation in the mutation audit.

@@ -5,6 +5,7 @@ mod mcp;
 mod process;
 mod projection;
 mod registry;
+mod resources;
 mod sandbox;
 mod session;
 
@@ -29,6 +30,10 @@ pub use projection::{
 pub use registry::{
     DiscoveredPiSession, PiSessionOutput, PiSessionRegistry, PiSessionRegistryError,
     StartRegisteredPiSession,
+};
+pub use resources::{
+    DiscoverPiResourcesOptions, PiPackage, PiResource, PiResourceIndex, PiResourceKind,
+    PiResourceScope, PiResourceSource, PiResourceWarning, discover_pi_resources,
 };
 pub use sandbox::{PiSandboxLaunch, PreparePiSandbox, prepare_pi_sandbox};
 pub use session::{

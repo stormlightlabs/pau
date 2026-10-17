@@ -2629,11 +2629,13 @@ dependencies = [
 name = "pau-pi"
 version = "0.2.0"
 dependencies = [
+ "globset",
  "jsonc-parser",
  "libc",
  "pau-agent",
  "pau-core",
  "semver",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",

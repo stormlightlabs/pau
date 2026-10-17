@@ -12,9 +12,11 @@ path = "src/lib.rs"
 [dependencies]
 pau-agent = { path = "../agent" }
 pau-core = { path = "../core" }
+globset.workspace = true
 jsonc-parser.workspace = true
 libc.workspace = true
 semver.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 

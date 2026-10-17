@@ -24,6 +24,7 @@ cap-std = "4.0.3"
 dirs = "6.0.0"
 futures-util = "0.3.31"
 getrandom = "0.3.4"
+globset = "0.4.20"
 ignore = "0.4.25"
 jsonc-parser = { version = "0.33.2", features = ["cst", "serde"] }
 libc = "0.2.183"

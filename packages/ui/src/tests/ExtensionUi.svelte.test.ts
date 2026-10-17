@@ -91,3 +91,50 @@ test('explains terminal-only custom components and opens the terminal escape hat
 	await userEvent.click(page.getByRole('button', { name: 'Open Pi in terminal' }));
 	expect(onOpenTerminal).toHaveBeenCalledOnce();
 });
+
+test('cancels a dialog with Escape', async () => {
+	const onRespond = vi.fn();
+	await render(ExtensionUi, {
+		state: state({ id: 'escape', kind: 'confirm', title: 'Continue?', message: 'This updates the index.' }),
+		onRespond
+	});
+	await expect.element(page.getByRole('dialog')).toBeVisible();
+
+	await userEvent.keyboard('{Escape}');
+
+	expect(onRespond).toHaveBeenCalledWith({ id: 'escape', cancelled: true });
+});
+
+test('closes an open dialog when its session exits and shows the notice', async () => {
+	const view = await render(ExtensionUi, {
+		state: state({ id: 'exit', kind: 'select', title: 'Choose a profile', options: ['Work'] })
+	});
+	await expect.element(page.getByRole('dialog', { name: 'Choose a profile' })).toBeVisible();
+
+	await view.rerender({
+		state: {
+			notifications: [
+				{ id: 'resolved:exit', message: 'The session ended before the request was answered.', level: 'warning' }
+			],
+			statuses: [],
+			widgets: []
+		}
+	});
+
+	await expect.element(page.getByRole('dialog')).not.toBeInTheDocument();
+	await expect.element(page.getByText('The session ended before the request was answered.')).toBeVisible();
+});
+
+test('shows a rejected answer inside the dialog', async () => {
+	await render(ExtensionUi, {
+		state: state({ id: 'reject', kind: 'select', title: 'Choose a profile', options: ['Work'] }),
+		onRespond: () => Promise.reject(new Error('The extension could not use that answer.'))
+	});
+
+	await userEvent.click(page.getByRole('button', { name: 'Work' }));
+
+	await expect
+		.element(page.getByRole('dialog').getByRole('alert'))
+		.toHaveTextContent('The extension could not use that answer.');
+	await expect.element(page.getByRole('button', { name: 'Work' })).toBeEnabled();
+});

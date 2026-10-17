@@ -255,6 +255,14 @@
 		font-size: var(--pau-type-lg);
 	}
 
+	/* Extensions control these strings, and some send long unbroken text such as JSON. */
+	.extension-ui__dialog h2,
+	.extension-ui__dialog p,
+	.extension-ui__options button,
+	.extension-ui__notification {
+		overflow-wrap: anywhere;
+	}
+
 	.extension-ui__dialog > p {
 		margin-top: var(--pau-space-3);
 		color: var(--pau-text-muted);

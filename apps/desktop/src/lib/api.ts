@@ -3,6 +3,7 @@ import type {
 	DiagnosticBundle,
 	DiagnosticLevel,
 	EffectiveSandbox,
+	ExtensionUiResponse,
 	SandboxAdapter,
 	SandboxSelection,
 	FileContent,
@@ -11,6 +12,7 @@ import type {
 	GitDiff,
 	GitStatus,
 	NativeSessionList,
+	SessionExtensionUi,
 	SessionMessageRequest,
 	SessionPromptRequest,
 	SessionQueue,
@@ -382,6 +384,35 @@ export function interruptSession(search: string, sessionId: string, fetcher: typ
 /** Stops a session's process. Its final state arrives on the event stream. */
 export function stopSession(search: string, sessionId: string, fetcher: typeof fetch = fetch): Promise<void> {
 	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}`, 'DELETE', undefined, fetcher);
+}
+
+/** Reads a live session's unanswered extension dialogs, status lines, and widgets. */
+export async function getSessionExtensionUi(
+	search: string,
+	sessionId: string,
+	fetcher: typeof fetch = fetch
+): Promise<SessionExtensionUi> {
+	const response = await fetcher(sessionUrl(search, `/${encodeURIComponent(sessionId)}/extension-ui`), {
+		headers: authorization(resolveApiToken(search))
+	});
+	return responseJson<SessionExtensionUi>(response);
+}
+
+/** Answers an unanswered extension dialog. */
+export function respondToExtensionUi(
+	search: string,
+	sessionId: string,
+	requestId: string,
+	response: ExtensionUiResponse,
+	fetcher: typeof fetch = fetch
+): Promise<void> {
+	return sendSessionRequest(
+		search,
+		`/${encodeURIComponent(sessionId)}/extension-ui/${encodeURIComponent(requestId)}`,
+		'POST',
+		response,
+		fetcher
+	);
 }
 
 /** Opens the user's shell in a workspace root. */

@@ -1,4 +1,10 @@
-import type { AgentSession, ServerEvent, Workspace } from '@stormlightlabs/pau-protocol';
+import type {
+	AgentSession,
+	ExtensionDialog,
+	ServerEvent,
+	SessionExtensionUi,
+	Workspace
+} from '@stormlightlabs/pau-protocol';
 import { page, userEvent } from 'vitest/browser';
 import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
@@ -122,7 +128,9 @@ test('streams a live transcript and sends prompts to the session', async () => {
 
 	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), 'Add a test.');
 	await userEvent.click(page.getByRole('button', { name: /Send prompt/ }));
-	expect(prompt).toHaveBeenCalledWith(expect.objectContaining({ body: '{"message":"Add a test.","queue":null,"images":null}' }));
+	expect(prompt).toHaveBeenCalledWith(
+		expect.objectContaining({ body: '{"message":"Add a test.","queue":null,"images":null}' })
+	);
 });
 
 test.each([
@@ -168,6 +176,226 @@ test('reports a disconnected backend when the session list cannot load', async (
 	await render(SessionRoute, props);
 
 	await expect.element(page.getByText('Disconnected', { exact: true })).toBeVisible();
+});
+
+const wireDialogs = {
+	select: {
+		kind: 'select',
+		id: 'ask-select',
+		title: 'Choose a profile',
+		options: ['Review', 'Work'],
+		timeout_ms: null
+	},
+	confirm: {
+		kind: 'confirm',
+		id: 'ask-confirm',
+		title: 'Allow update?',
+		message: 'This edits the index.',
+		timeout_ms: null
+	},
+	input: { kind: 'input', id: 'ask-input', title: 'Name the task', placeholder: 'Task name', timeout_ms: null },
+	editor: { kind: 'editor', id: 'ask-editor', title: 'Edit instructions', prefill: 'First line' }
+} satisfies Record<string, ExtensionDialog>;
+
+function extensionUi(...dialogs: ExtensionDialog[]): SessionExtensionUi {
+	return { dialogs, statuses: [], widgets: [] };
+}
+
+/** An idle session with the given extension UI and recorders for reads and answers. */
+function setupExtensionSession(state: SessionExtensionUi, answer: Route = () => new Response(null, { status: 204 })) {
+	const respond = vi.fn(answer);
+	const read = vi.fn(() => json(state));
+	const backend = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/sessions/session-1/extension-ui': read,
+		[`POST /api/sessions/session-1/extension-ui/${state.dialogs[0]?.id ?? 'none'}`]: respond
+	});
+	return { ...backend, respond, read };
+}
+
+/** Session output stamped now, so notifications count as live rather than replayed. */
+function liveOutput(payload: unknown): { type: 'event'; event: ServerEvent } {
+	const message = output(payload);
+	return { ...message, event: { ...message.event, timestamp: new Date().toISOString() } };
+}
+
+function sessionChanged(session: AgentSession): { type: 'event'; event: ServerEvent } {
+	sequence += 1;
+	return {
+		type: 'event',
+		event: {
+			sequence,
+			timestamp: new Date().toISOString(),
+			workspace_id: session.workspace_id,
+			session_id: session.id,
+			kind: 'session_changed',
+			payload: JSON.stringify(session)
+		}
+	};
+}
+
+test.each([
+	{
+		dialog: wireDialogs.select,
+		body: { value: 'Work' },
+		answer: () => userEvent.click(page.getByRole('button', { name: 'Work' }))
+	},
+	{
+		dialog: wireDialogs.confirm,
+		body: { confirmed: true },
+		answer: () => userEvent.click(page.getByRole('button', { name: 'Yes' }))
+	},
+	{
+		dialog: wireDialogs.input,
+		body: { value: 'Review RPC' },
+		answer: async () => {
+			await userEvent.type(page.getByRole('textbox', { name: 'Response' }), 'Review RPC');
+			await userEvent.click(page.getByRole('button', { name: 'Submit' }));
+		}
+	},
+	{
+		dialog: wireDialogs.editor,
+		body: { value: 'First line' },
+		answer: () => userEvent.click(page.getByRole('button', { name: 'Submit' }))
+	}
+])('answers a waiting $dialog.kind dialog', async ({ dialog, body, answer }) => {
+	const { props, respond } = setupExtensionSession(extensionUi(dialog));
+	await render(SessionRoute, props);
+
+	await expect.element(page.getByRole('dialog', { name: dialog.title })).toBeVisible();
+	await answer();
+
+	expect(respond).toHaveBeenCalledWith(expect.objectContaining({ method: 'POST', body: JSON.stringify(body) }));
+	await expect.element(page.getByRole('dialog')).not.toBeInTheDocument();
+});
+
+test('cancels a dialog', async () => {
+	const { props, respond } = setupExtensionSession(extensionUi(wireDialogs.select));
+	await render(SessionRoute, props);
+
+	await userEvent.click(page.getByRole('button', { name: 'Cancel' }));
+
+	expect(respond).toHaveBeenCalledWith(expect.objectContaining({ body: '{"cancelled":true}' }));
+	await expect.element(page.getByRole('dialog')).not.toBeInTheDocument();
+});
+
+test('offers only dismissal for a request Pau cannot render', async () => {
+	const { props, respond } = setupExtensionSession(
+		extensionUi({ kind: 'unsupported', id: 'ask-custom', method: 'custom' })
+	);
+	await render(SessionRoute, props);
+
+	await expect.element(page.getByText(/Pau cannot render/)).toBeVisible();
+	await userEvent.click(page.getByRole('button', { name: 'Dismiss' }));
+
+	expect(respond).toHaveBeenCalledWith(expect.objectContaining({ body: '{"cancelled":true}' }));
+});
+
+test('closes an open dialog when the session exits', async () => {
+	const { props, sockets } = setupExtensionSession(extensionUi(wireDialogs.confirm));
+	await render(SessionRoute, props);
+	sockets[0]?.open();
+	await expect.element(page.getByRole('dialog', { name: 'Allow update?' })).toBeVisible();
+
+	sockets[0]?.receive(liveOutput({ type: 'extension_ui_resolved', id: 'ask-confirm', reason: 'exited' }));
+	sockets[0]?.receive(sessionChanged({ ...idleSession, status: 'failed', exit_code: 1 }));
+
+	await expect.element(page.getByRole('dialog')).not.toBeInTheDocument();
+	await expect.element(page.getByText('The session ended before the extension request was answered.')).toBeVisible();
+});
+
+test('explains an answer to a request that already stopped waiting', async () => {
+	const { props } = setupExtensionSession(extensionUi(wireDialogs.confirm), () =>
+		json({ code: 'extension_request_not_found', message: 'gone' }, 404)
+	);
+	await render(SessionRoute, props);
+
+	await userEvent.click(page.getByRole('button', { name: 'No' }));
+
+	await expect.element(page.getByRole('dialog')).not.toBeInTheDocument();
+	await expect
+		.element(page.getByText('That extension request was already answered, cancelled, or expired.'))
+		.toBeVisible();
+});
+
+test('keeps a dialog open and shows why an answer was rejected', async () => {
+	const { props } = setupExtensionSession(extensionUi(wireDialogs.select), () =>
+		json({ code: 'invalid_extension_response', message: 'The value is not one of the offered options.' }, 422)
+	);
+	await render(SessionRoute, props);
+
+	await userEvent.click(page.getByRole('button', { name: 'Review' }));
+
+	await expect
+		.element(page.getByRole('dialog').getByRole('alert'))
+		.toHaveTextContent('The extension could not use that answer. The value is not one of the offered options.');
+});
+
+test('reads new dialogs and applies notifications, status text, and widgets from the stream', async () => {
+	let state = extensionUi();
+	const read = vi.fn(() => json(state));
+	const { props, sockets } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/sessions/session-1/extension-ui': read
+	});
+	await render(SessionRoute, props);
+	sockets[0]?.open();
+	await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
+
+	state = extensionUi(wireDialogs.select);
+	sockets[0]?.receive(
+		liveOutput({ type: 'extension_ui_request', id: 'ask-select', method: 'select', title: 'Choose', options: [] })
+	);
+	sockets[0]?.receive(liveOutput({ type: 'extension_ui_request', id: 'n1', method: 'notify', message: 'Index ready' }));
+	sockets[0]?.receive(
+		liveOutput({
+			type: 'extension_ui_request',
+			id: 's1',
+			method: 'setStatus',
+			statusKey: 'mcp',
+			statusText: 'Connecting'
+		})
+	);
+	sockets[0]?.receive(
+		liveOutput({
+			type: 'extension_ui_request',
+			id: 'w1',
+			method: 'setWidget',
+			widgetKey: 'details',
+			widgetLines: ['Tools: 3'],
+			widgetPlacement: 'belowEditor'
+		})
+	);
+
+	await expect.element(page.getByRole('dialog', { name: 'Choose a profile' })).toBeVisible();
+	await expect.element(page.getByText('Index ready')).toBeInTheDocument();
+	await expect.element(page.getByText('Connecting')).toBeInTheDocument();
+	await expect.element(page.getByRole('region', { name: 'Extension widget: details' })).toHaveTextContent('Tools: 3');
+});
+
+test('ignores replayed notifications', async () => {
+	const { props, sockets } = setupExtensionSession(extensionUi());
+	await render(SessionRoute, props);
+	sockets[0]?.open();
+
+	sockets[0]?.receive(output({ type: 'extension_ui_request', id: 'old', method: 'notify', message: 'Old news' }));
+	sockets[0]?.receive(liveOutput({ type: 'extension_ui_request', id: 'new', method: 'notify', message: 'New news' }));
+
+	await expect.element(page.getByText('New news')).toBeInTheDocument();
+	await expect.element(page.getByText('Old news')).not.toBeInTheDocument();
+});
+
+test('reads the extension UI again after the stream reconnects', async () => {
+	const { props, sockets, read } = setupExtensionSession(extensionUi());
+	await render(SessionRoute, props);
+	sockets[0]?.open();
+	await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
+
+	sockets[0]?.disconnect();
+	await vi.waitFor(() => expect(sockets).toHaveLength(2), { timeout: 3000 });
+	sockets[1]?.open();
+
+	await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
 });
 
 const savedList = {

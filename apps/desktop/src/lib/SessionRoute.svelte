@@ -65,4 +65,6 @@
 	onResumeSession={resumeSession}
 	onSend={(sessionId, text, queue) => sessions.send(sessionId, text, queue)}
 	onInterrupt={(sessionId) => sessions.interrupt(sessionId)}
-	onStop={(sessionId) => sessions.stop(sessionId)} />
+	onStop={(sessionId) => sessions.stop(sessionId)}
+	onExtensionUiResponse={(sessionId, response) => sessions.respond(sessionId, response)}
+	onExtensionUiTimeout={(sessionId, requestId) => sessions.expire(sessionId, requestId)} />

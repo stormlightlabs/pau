@@ -618,20 +618,6 @@ Verification:
   executable and confirm its tools run inside the sandbox.
 - Confirm a sandbox that cannot start fails the session start with its reason.
 
-### 2.161 Live extension UI
-
-Status: planned
-Blocked by: none
-
-Show extension dialogs, notifications, status text, and widgets for live
-sessions in the session view.
-
-Verification:
-
-- Component-test each dialog type, a cancelled dialog, and a session that
-  exits while a dialog is open.
-- Answer an extension dialog in a self-hosted Pi session.
-
 ### 2.165 Live session native IDs
 
 Status: planned
@@ -857,7 +843,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.69, 2.71, 2.161, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120,
+Blocked by: 2.69, 2.71, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120,
 2.152, 2.156
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do

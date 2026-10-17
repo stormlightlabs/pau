@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- Live Pi sessions now show extension dialogs, notifications, status text, and
+  widgets. Answer dialogs in the session view. They close with an explanation
+  when they expire or the session ends.
 - Browse a workspace's saved Pi sessions and resume one from the session
   picker.
 - Pau is now tested with Pi 1.0. The permission extension runs MCP tools that

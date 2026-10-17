@@ -1,17 +1,39 @@
 import type { AgentSession, ServerEvent, Workspace } from '@stormlightlabs/pau-protocol';
-import type { PromptQueue, SavedSessionList, SessionViewModel, SessionWorkspace } from '@stormlightlabs/pau-ui';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+import type {
+	ExtensionUiResponse,
+	PromptQueue,
+	SavedSessionList,
+	SessionViewModel,
+	SessionWorkspace
+} from '@stormlightlabs/pau-ui';
 
 import {
 	PauApiError,
+	getSessionExtensionUi,
 	interruptSession,
 	listNativeSessions,
 	listSessions,
 	listWorkspaces,
 	promptSession,
 	queueSessionMessage,
+	respondToExtensionUi,
 	startSession,
 	stopSession
 } from './api';
+import {
+	emptyExtensionUi,
+	exitedExtensionUi,
+	extensionUiView,
+	isExtensionEvent,
+	opensDialog,
+	reduceExtensionEvent,
+	resolveDialog,
+	withServerExtensionUi,
+	withoutDialog,
+	withoutNotification,
+	type LiveExtensionUi
+} from './extension-ui';
 import { EventStreamClient, type EventSocketFactory, type EventStreamState } from './event-stream';
 import { emptyPiTranscript, reducePiEvent, type PiTranscript } from './pi-transcript';
 
@@ -24,6 +46,9 @@ export type LiveSessionsOptions = {
 };
 
 const TITLE_LENGTH = 60;
+
+/** How long an extension notification stays on screen. */
+const NOTIFICATION_MS = 8000;
 
 /**
  * Turns an API failure into copy for the operator. Starting and controlling a
@@ -54,6 +79,8 @@ export function sessionErrorMessage(cause: unknown, action: 'start' | 'control' 
 			return 'The session changed state before Pau could send that. Try again.';
 		case 'control_rejected':
 			return `Pi rejected the request: ${cause.message}`;
+		case 'invalid_extension_response':
+			return `The extension could not use that answer. ${cause.message}`;
 		case 'invalid_agent_response':
 			return 'Pi sent a response Pau could not read. Open Diagnostics for details.';
 		default:
@@ -72,6 +99,17 @@ function sessionTitle(transcript: PiTranscript): string {
 	return line.length > TITLE_LENGTH ? `${line.slice(0, TITLE_LENGTH - 1)}…` : line;
 }
 
+function isLive(session: AgentSession): boolean {
+	return session.status !== 'stopped' && session.status !== 'failed';
+}
+
+/** Strips the request ID, which the API takes from the path. */
+function wireResponse(response: ExtensionUiResponse) {
+	if ('value' in response) return { value: response.value };
+	if ('confirmed' in response) return { confirmed: response.confirmed };
+	return { cancelled: true };
+}
+
 function failureMessage(session: AgentSession): string | undefined {
 	if (session.status !== 'failed') return undefined;
 	const exit = session.exit_code === null ? 'Pi exited unexpectedly.' : `Pi exited with code ${session.exit_code}.`;
@@ -85,12 +123,25 @@ function failureMessage(session: AgentSession): string | undefined {
  * stream owns session state: `session_changed` replaces a session's summary
  * and `session_output` feeds its transcript. Sessions that exit stay listed
  * with their final status so their transcript remains readable.
+ *
+ * Extension UI requests are `session_output` events too, but a replayed
+ * stream cannot tell which dialogs still wait. The store therefore reads each
+ * live session's extension UI from the API after loading, after every
+ * reconnect, and whenever a dialog request arrives. Status, widget, and
+ * resolution events that arrive while a read is in flight are applied again
+ * on top of its result.
  */
 export class LiveSessions {
 	loading = $state(true);
 	#workspaces = $state<Workspace[]>([]);
 	#sessions = $state<Record<string, AgentSession>>({});
 	#transcripts = $state<Record<string, PiTranscript>>({});
+	#extensionUi = $state<Record<string, LiveExtensionUi>>({});
+	/** Extension events received while the session's extension UI read is in flight. */
+	readonly #extensionReplay = new SvelteMap<string, unknown[]>();
+	/** Sessions whose extension UI changed during the read in flight and needs another read. */
+	readonly #extensionStale = new SvelteSet<string>();
+	readonly #notificationTimers = new SvelteSet<string>();
 	#loadFailed = $state(false);
 	#socketOpen = $state(false);
 	#connectedOnce = false;
@@ -109,8 +160,10 @@ export class LiveSessions {
 			onConnectionChange: (connected) => {
 				this.#socketOpen = connected;
 				if (!connected) return;
+				const reconnected = this.#connectedOnce;
 				this.#connectedOnce = true;
 				if (this.#loadFailed) void this.#load();
+				else if (reconnected) this.#refreshExtensionUi();
 			}
 		});
 	}
@@ -212,6 +265,76 @@ export class LiveSessions {
 		return this.#control(() => stopSession(this.#options.search, sessionId, this.#fetcher));
 	}
 
+	/**
+	 * Answers an extension dialog. A request that already stopped waiting
+	 * closes with a notice instead of failing, because nothing can be retried.
+	 */
+	async respond(sessionId: string, response: ExtensionUiResponse): Promise<void> {
+		try {
+			await respondToExtensionUi(this.#options.search, sessionId, response.id, wireResponse(response), this.#fetcher);
+			this.#updateExtensionUi(sessionId, (state) => withoutDialog(state, response.id));
+		} catch (cause) {
+			if (
+				cause instanceof PauApiError &&
+				(cause.code === 'extension_request_not_found' || cause.code === 'not_found')
+			) {
+				this.#updateExtensionUi(sessionId, (state) => resolveDialog(state, response.id, 'stale'));
+				return;
+			}
+			throw new Error(sessionErrorMessage(cause, 'control'), { cause });
+		}
+	}
+
+	/** Closes a dialog whose timeout elapsed on screen. */
+	expire(sessionId: string, requestId: string): void {
+		this.#updateExtensionUi(sessionId, (state) => resolveDialog(state, requestId, 'timed_out'));
+	}
+
+	#updateExtensionUi(sessionId: string, update: (state: LiveExtensionUi) => LiveExtensionUi): void {
+		const current = this.#extensionUi[sessionId] ?? emptyExtensionUi;
+		const next = update(current);
+		if (next === current) return;
+		this.#extensionUi[sessionId] = next;
+		for (const notification of next.notifications) {
+			const timer = `${sessionId}:${notification.id}`;
+			if (this.#notificationTimers.has(timer)) continue;
+			this.#notificationTimers.add(timer);
+			setTimeout(() => {
+				this.#notificationTimers.delete(timer);
+				this.#updateExtensionUi(sessionId, (state) => withoutNotification(state, notification.id));
+			}, NOTIFICATION_MS);
+		}
+	}
+
+	/** Reads the extension UI of every live session. */
+	#refreshExtensionUi(): void {
+		for (const session of Object.values(this.#sessions)) {
+			if (isLive(session)) void this.#readExtensionUi(session.id);
+		}
+	}
+
+	async #readExtensionUi(sessionId: string): Promise<void> {
+		if (this.#extensionReplay.has(sessionId)) {
+			this.#extensionStale.add(sessionId);
+			return;
+		}
+		this.#extensionReplay.set(sessionId, []);
+		try {
+			const server = await getSessionExtensionUi(this.#options.search, sessionId, this.#fetcher);
+			const replay = this.#extensionReplay.get(sessionId) ?? [];
+			this.#updateExtensionUi(sessionId, (state) => {
+				let next = withServerExtensionUi(state, server);
+				for (const event of replay) next = reduceExtensionEvent(next, event);
+				return next;
+			});
+		} catch {
+			// The session exited or the backend went away. The next reconnect reads again.
+		} finally {
+			this.#extensionReplay.delete(sessionId);
+			if (this.#extensionStale.delete(sessionId)) void this.#readExtensionUi(sessionId);
+		}
+	}
+
 	async #control(request: () => Promise<void>): Promise<void> {
 		try {
 			await request();
@@ -229,6 +352,7 @@ export class LiveSessions {
 			this.#workspaces = workspaces;
 			for (const session of sessions) this.#sessions[session.id] ??= session;
 			this.#loadFailed = false;
+			this.#refreshExtensionUi();
 		} catch {
 			this.#loadFailed = true;
 		} finally {
@@ -238,19 +362,36 @@ export class LiveSessions {
 
 	#apply(state: EventStreamState, event: ServerEvent | undefined): void {
 		if (event?.kind === 'session_output' && event.session_id) {
-			const transcript = this.#transcripts[event.session_id] ?? emptyPiTranscript;
-			this.#transcripts[event.session_id] = reducePiEvent(transcript, JSON.parse(event.payload));
+			const sessionId = event.session_id;
+			const payload: unknown = JSON.parse(event.payload);
+			if (isExtensionEvent(payload)) {
+				const session = this.#sessions[sessionId];
+				if (session && !isLive(session)) return;
+				if (opensDialog(payload)) {
+					void this.#readExtensionUi(sessionId);
+					return;
+				}
+				// A replayed notification is old news.
+				if (payload.method === 'notify' && Date.now() - Date.parse(event.timestamp) > NOTIFICATION_MS) return;
+				this.#extensionReplay.get(sessionId)?.push(payload);
+				this.#updateExtensionUi(sessionId, (current) => reduceExtensionEvent(current, payload));
+				return;
+			}
+			const transcript = this.#transcripts[sessionId] ?? emptyPiTranscript;
+			this.#transcripts[sessionId] = reducePiEvent(transcript, payload);
 			return;
 		}
 		for (const changed of state.events) {
 			if (changed.kind !== 'session_changed') continue;
 			const session = JSON.parse(changed.payload) as AgentSession;
 			this.#sessions[session.id] = session;
+			if (!isLive(session)) this.#updateExtensionUi(session.id, exitedExtensionUi);
 		}
 	}
 
 	#viewModel(session: AgentSession): SessionViewModel {
 		const transcript = this.#transcripts[session.id] ?? emptyPiTranscript;
+		const extensionUi = this.#extensionUi[session.id] ?? emptyExtensionUi;
 		return {
 			id: session.id,
 			workspaceId: session.workspace_id,
@@ -258,6 +399,7 @@ export class LiveSessions {
 			agent: 'Pi',
 			status: session.status,
 			error: failureMessage(session),
+			attention: extensionUi.dialogs.length > 0 ? 'An extension is waiting for your answer.' : undefined,
 			capabilities: {
 				prompt: session.capabilities.prompt,
 				followUp: session.capabilities.follow_up,
@@ -265,7 +407,8 @@ export class LiveSessions {
 				interrupt: session.capabilities.interrupt,
 				stop: session.capabilities.stop
 			},
-			transcript: transcript.entries
+			transcript: transcript.entries,
+			extensionUi: extensionUiView(extensionUi)
 		};
 	}
 }

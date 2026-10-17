@@ -33,4 +33,4 @@ const result = spawnSync('tauri', tauriArgs, {
 	shell: process.platform === 'win32',
 	env: { ...process.env, PAU_BUILD_CHANNEL: release ? 'release' : 'dev' }
 });
-process.exit(result.status ?? 1);
+process.exitCode = result.status ?? 1;

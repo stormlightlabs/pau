@@ -97,6 +97,8 @@ pub enum ThinkingLevel {
     High,
     /// Extra-high reasoning, available on some models.
     ExtraHigh,
+    /// The highest reasoning level a model offers.
+    Max,
 }
 
 impl ThinkingLevel {
@@ -109,6 +111,7 @@ impl ThinkingLevel {
             Self::Medium => "medium",
             Self::High => "high",
             Self::ExtraHigh => "xhigh",
+            Self::Max => "max",
         }
     }
 }

@@ -1,0 +1,21 @@
+{
+	"compilerOptions": {
+		"allowImportingTsExtensions": true,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"noEmit": true,
+		"paths": {
+			"#src/*": ["./src/vendor/pi-permission-system/src/*", "./src/vendor-types/*"],
+			"#test/*": ["./src/vendor/pi-permission-system/test/*"]
+		},
+		"resolveJsonModule": true,
+		"rootDirs": ["./src/vendor/pi-permission-system/src", "./src/vendor-types"],
+		"skipLibCheck": true,
+		"strict": true,
+		"target": "ES2025",
+		"types": ["node", "vitest/globals"]
+	},
+	"include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts", "vitest.config.ts"]
+}

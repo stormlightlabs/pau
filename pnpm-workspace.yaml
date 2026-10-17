@@ -5,5 +5,6 @@ allowBuilds:
   '@google/genai': false
   esbuild: true
   protobufjs: false
+  tree-sitter-bash: false
 minimumReleaseAgeExclude:
   - prettier@3.9.9

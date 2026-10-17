@@ -11,9 +11,11 @@ export default defineConfig(
 		ignores: [
 			'**/.svelte-kit/**',
 			'**/build/**',
+			'**/dist/**',
 			'**/node_modules/**',
 			'**/storybook-static/**',
 			'packages/claude-bridge/**',
+			'packages/pi-permissions/src/vendor/**',
 			'packages/protocol/src/generated.ts'
 		]
 	},

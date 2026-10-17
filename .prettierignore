@@ -9,5 +9,6 @@ apps/desktop/src-tauri/gen
 **/test-results
 pnpm-lock.yaml
 flake.lock
+packages/pi-permissions/src/vendor
 packages/protocol/src/generated.ts
 packages/ui/src/styles/icons.css

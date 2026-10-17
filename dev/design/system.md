@@ -74,7 +74,7 @@ Do not scale the desktop composition down. Recompose it.
 
 ## Spatial system
 
-The prototype uses a 4px base through `--space-1` to `--space-6`. Use tight
+The spacing scale uses a 4px base from `space/1` to `space/6`. Use tight
 intervals within controls and rows, medium intervals within a section, and larger
 intervals between distinct tasks.
 

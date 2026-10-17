@@ -42,7 +42,6 @@ apps/
   website/             SvelteKit website and product documentation
 packages/
   claude-bridge/       independently usable Pi package and bridge tests
-  prototype/           static design sandbox, screen fixtures, and screenshots
   ui/                  shared Svelte components, feature views, stores, and tests
   protocol/            generated or checked TypeScript wire types
   sandbox/             sandbox launcher, Pi tool host, and containment fixtures
@@ -81,10 +80,9 @@ constructs the runnable process.
 
 Keep package boundaries similarly concrete: reusable UI and its component tests
 belong in `packages/ui`, while routing, transport wiring, and integration tests
-belong to the app that performs them. `packages/prototype` is an independent
-static SvelteKit sandbox for screen-level design work. It owns copies of the
-design tokens, fonts, icons, fixed fixtures, and screenshot scripts it needs and
-does not import product applications or `packages/ui`.
+belong to the app that performs them. Screen-level design work lives in the
+OpenPencil file `pau.fig` and its PNG exports in `dev/prototype`, outside the
+code workspaces.
 
 ## Project conventions
 

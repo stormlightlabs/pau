@@ -1,31 +1,32 @@
 # Surface briefs
 
-These briefs keep the static prototype and product direction aligned. Every
-prototype route maps to one brief below. Update the brief and fixture together
-when purpose, hierarchy, responsive behavior, or a durable interaction changes.
+These briefs keep the prototype design file and product direction aligned.
+Every page in `pau.fig` maps to one brief below, and each frame on a page is one
+state of that surface. Update the brief, the frames, and their PNG exports
+together when purpose, hierarchy, responsive behavior, or a durable interaction
+changes. [`dev/prototype`](../prototype/README.md) describes the file and how to
+export frames.
 
 ## Surface index
 
-| Surface               | Prototype route          | Source                                          | Primary task                                       |
-| --------------------- | ------------------------ | ----------------------------------------------- | -------------------------------------------------- |
-| Prototype hub         | `/`                      | `src/routes/+page.svelte`                       | Choose a design fixture                            |
-| Dashboard             | `/screens/dashboard`     | `src/routes/screens/dashboard/+page.svelte`     | Find active work or a blocking decision            |
-| Session               | `/screens/session`       | `src/routes/screens/session/+page.svelte`       | Direct one agent session and inspect its work      |
-| Harness control       | `/screens/orchestration` | `src/routes/screens/orchestration/+page.svelte` | Supervise concurrent native sessions               |
-| Scratchpad            | `/screens/scratchpad`    | `src/routes/screens/scratchpad/+page.svelte`    | Capture notes and send selected context            |
-| Editor and review     | `/screens/editor`        | `src/routes/screens/editor/+page.svelte`        | Edit a file and review changes                     |
-| Embedded editor study | `/screens/neovim`        | `src/routes/screens/neovim/+page.svelte`        | Record a deferred deep-integration direction       |
-| Terminal              | `/screens/terminal`      | `src/routes/screens/terminal/+page.svelte`      | Use persistent PTY sessions                        |
-| Processes             | `/screens/processes`     | `src/routes/screens/processes/+page.svelte`     | Inspect workspace and session machine resource use |
-| Diagnostics           | `/screens/diagnostics`   | `src/routes/screens/diagnostics/+page.svelte`   | Inspect and export redacted support data           |
-| Resources             | `/screens/resources`     | `src/routes/screens/resources/+page.svelte`     | Inspect scope, trust, and capability               |
-| Agent sandbox         | `/screens/sandbox`       | `src/routes/screens/sandbox/+page.svelte`       | Choose containment and review access before launch |
-| Settings              | `/screens/settings`      | `src/routes/screens/settings/+page.svelte`      | Change product and editor preferences              |
-| Website and docs      | `/docs`                  | `src/routes/docs/+page.svelte`                  | Evaluate Pau, learn a task, or check its status    |
-| Launch                | `/splash/launch`         | `src/routes/splash/launch/+page.svelte`         | Understand current startup work                    |
-| Reconnect             | `/splash/reconnect`      | `src/routes/splash/reconnect/+page.svelte`      | Recover UI connectivity without implying lost work |
-
-Source paths in this table are relative to `packages/prototype`.
+| Surface               | Page                    | Frames                                                                                                                                                                                                         | Primary task                                       |
+| --------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Prototype hub         | `index`                 | [default](../prototype/index-default.png)                                                                                                                                                                      | Choose a design fixture                            |
+| Dashboard             | `screens/dashboard`     | [default](../prototype/screens-dashboard-default.png), [activity](../prototype/screens-dashboard-activity.png)                                                                                                 | Find active work or a blocking decision            |
+| Session               | `screens/session`       | [default](../prototype/screens-session-default.png), [focused](../prototype/screens-session-focused.png)                                                                                                       | Direct one agent session and inspect its work      |
+| Harness control       | `screens/orchestration` | [default](../prototype/screens-orchestration-default.png), [details](../prototype/screens-orchestration-details.png)                                                                                           | Supervise concurrent native sessions               |
+| Scratchpad            | `screens/scratchpad`    | [default](../prototype/screens-scratchpad-default.png)                                                                                                                                                         | Capture notes and send selected context            |
+| Editor and review     | `screens/editor`        | [default](../prototype/screens-editor-default.png)                                                                                                                                                             | Edit a file and review changes                     |
+| Embedded editor study | `screens/neovim`        | [default](../prototype/screens-neovim-default.png)                                                                                                                                                             | Record a deferred deep-integration direction       |
+| Terminal              | `screens/terminal`      | [default](../prototype/screens-terminal-default.png)                                                                                                                                                           | Use persistent PTY sessions                        |
+| Processes             | `screens/processes`     | [default](../prototype/screens-processes-default.png)                                                                                                                                                          | Inspect workspace and session machine resource use |
+| Diagnostics           | `screens/diagnostics`   | [default](../prototype/screens-diagnostics-default.png)                                                                                                                                                        | Inspect and export redacted support data           |
+| Resources             | `screens/resources`     | [default](../prototype/screens-resources-default.png)                                                                                                                                                          | Inspect scope, trust, and capability               |
+| Agent sandbox         | `screens/sandbox`       | [sandboxed](../prototype/screens-sandbox-sandboxed.png), [unsandboxed](../prototype/screens-sandbox-unsandboxed.png)                                                                                           | Choose containment and review access before launch |
+| Settings              | `screens/settings`      | [default](../prototype/screens-settings-default.png)                                                                                                                                                           | Change product and editor preferences              |
+| Website and docs      | `docs`                  | [overview](../prototype/docs-overview.png), [guide](../prototype/docs-guide.png), [reference-dark](../prototype/docs-reference-dark.png)                                                                       | Evaluate Pau, learn a task, or check its status    |
+| Launch                | `splash/launch`         | [starting](../prototype/splash-launch-starting.png), [restoring](../prototype/splash-launch-restoring.png), [checking](../prototype/splash-launch-checking.png), [ready](../prototype/splash-launch-ready.png) | Understand current startup work                    |
+| Reconnect             | `splash/reconnect`      | [offline](../prototype/splash-reconnect-offline.png), [trying](../prototype/splash-reconnect-trying.png), [restored](../prototype/splash-reconnect-restored.png)                                               | Recover UI connectivity without implying lost work |
 
 ## Prototype hub
 
@@ -257,9 +258,10 @@ collapses before controls lose their labels or descriptions.
 ## Website and documentation
 
 The public site combines **Persuade** and **Read** modes without importing the
-desktop application's dense shell. A single prototype route switches among the
-landing page, a documentation reading view, and the capability reference. The
-switcher is part of the workbench fixture, not proposed public navigation.
+desktop application's dense shell. The `docs` page holds one frame each for
+the landing page, a documentation reading view, and the capability reference.
+Their shared view switcher belongs to the design study, not proposed public
+navigation.
 
 The landing page presents Pau as a local IDE and session orchestrator for
 developers using Pi and other coding agents. It explains that position through

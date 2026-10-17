@@ -107,13 +107,14 @@ sentence. Leave sentence fragments unpunctuated.
 Prefer TypeScript type aliases for data shapes and unions. Use interfaces only
 for method-only contracts or types that classes implement.
 
-Keep `dev/design` and `packages/prototype` synchronized. When a durable visual,
-interaction, or responsive decision changes, update the owning design document
-and prototype fixture together. Screenshot-only polish needs a document change
-only when it changes the recorded system or surface contract.
+Keep `dev/design`, the `pau.fig` design file, and its PNG exports in
+`dev/prototype` synchronized. When a durable visual, interaction, or responsive
+decision changes, update the owning design document, the affected frames, and
+their exported PNGs together. Visual-only polish needs a document change only
+when it changes the recorded system or surface contract.
 
-In `packages/prototype`, use UnoCSS utilities by default. Keep component CSS for
-keyframes, complex selectors, and styles that utilities cannot express clearly.
+In `pau.fig`, build screens from the shared components and bind colors, type
+sizes, spacing, and radii to the token variables instead of raw values.
 
 Use kebab-case for TypeScript filenames, including `.svelte.ts` modules. Keep
 Svelte component filenames in PascalCase, and preserve that component name in

@@ -1183,11 +1183,11 @@ Verification:
 
 ## Release surfaces
 
-Website units apply the approved public-site direction from
-`packages/prototype` to `apps/website`. Keep available behavior distinct from
-planned work, and keep the prototype's view switcher out of the public
-navigation. Review each website unit at desktop and narrow widths in light and
-dark themes.
+Website units apply the approved public-site direction from the `docs` page of
+the `pau.fig` design file and its exports in `dev/prototype` to
+`apps/website`. Keep available behavior distinct from planned work, and keep
+the prototype's view switcher out of the public navigation. Review each website
+unit at desktop and narrow widths in light and dark themes.
 
 ### 2.49 Website landing page
 

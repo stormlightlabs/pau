@@ -70,6 +70,7 @@
 	onLoadHistory={(sessionId) => sessions.history(sessionId)}
 	onInterrupt={(sessionId) => sessions.interrupt(sessionId)}
 	onRetry={(sessionId) => sessions.retry(sessionId)}
+	onClearQueue={(sessionId) => sessions.clearQueue(sessionId)}
 	onCancelRetry={(sessionId) => sessions.cancelRetry(sessionId)}
 	onStop={(sessionId) => sessions.stop(sessionId)}
 	onExtensionUiResponse={(sessionId, response) => sessions.respond(sessionId, response)}

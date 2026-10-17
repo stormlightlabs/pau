@@ -237,3 +237,54 @@ test('recalls a prompt sent in this view', async () => {
 	await userEvent.keyboard('{ArrowUp}');
 	await expect.element(prompt).toHaveValue('ship it');
 });
+
+test('lists queued messages by kind and hides an empty or unsupported queue', async () => {
+	const view = await render(SessionView, {
+		workspaces: sessionFixtures.queued,
+		activeSessionId: 'session-running',
+		onClearQueue: vi.fn()
+	});
+	await expect.element(page.getByText('Keep the public API unchanged.')).toBeVisible();
+	await expect.element(page.getByText('Follow up').first()).toBeVisible();
+
+	const queued = sessionFixtures.queued[0]!.sessions[0]!;
+	const withQueue = (overrides: Partial<typeof queued>) => [
+		{ id: 'pau', name: 'Pau', sessions: [{ ...queued, ...overrides }] }
+	];
+	await view.rerender({
+		workspaces: withQueue({ messageQueue: { steering: [], followUp: [] } }),
+		activeSessionId: 'session-running',
+		onClearQueue: vi.fn()
+	});
+	await expect.element(page.getByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument();
+
+	await view.rerender({
+		workspaces: withQueue({ capabilities: { ...queued.capabilities, messageQueue: false } }),
+		activeSessionId: 'session-running',
+		onClearQueue: vi.fn()
+	});
+	await expect.element(page.getByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument();
+});
+
+test('restores cleared messages after an existing draft', async () => {
+	const onClearQueue = vi.fn().mockResolvedValue({ steering: ['Keep the API.'], followUp: ['Add a test.'] });
+	await render(SessionView, { workspaces: sessionFixtures.queued, activeSessionId: 'session-running', onClearQueue });
+
+	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), 'Draft.');
+	await userEvent.click(page.getByRole('button', { name: 'Clear queue' }));
+
+	expect(onClearQueue).toHaveBeenCalledWith('session-running');
+	await expect
+		.element(page.getByRole('textbox', { name: 'Prompt' }))
+		.toHaveValue('Draft.\n\nKeep the API.\n\nAdd a test.');
+});
+
+test('keeps the queue and shows the reason when clearing fails', async () => {
+	const onClearQueue = vi.fn().mockRejectedValue(new Error('This session does not support that action.'));
+	await render(SessionView, { workspaces: sessionFixtures.queued, activeSessionId: 'session-running', onClearQueue });
+
+	await userEvent.click(page.getByRole('button', { name: 'Clear queue' }));
+
+	await expect.element(page.getByRole('alert')).toHaveTextContent('does not support that action');
+	await expect.element(page.getByText('Keep the public API unchanged.')).toBeVisible();
+});

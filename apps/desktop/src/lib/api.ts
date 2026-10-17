@@ -15,6 +15,7 @@ import type {
 	SessionExtensionUi,
 	SessionModel,
 	SessionModelSelection,
+	SessionMessageQueue,
 	SessionMessageRequest,
 	SessionPromptRequest,
 	SessionQueue,
@@ -377,6 +378,31 @@ export async function getSessionHistory(
 		headers: authorization(resolveApiToken(search))
 	});
 	return responseJson<string[]>(response);
+}
+
+/** Reads the steering and follow-up messages waiting to be delivered. */
+export async function getSessionQueue(
+	search: string,
+	sessionId: string,
+	fetcher: typeof fetch = fetch
+): Promise<SessionMessageQueue> {
+	const response = await fetcher(sessionUrl(search, `/${encodeURIComponent(sessionId)}/queue`), {
+		headers: authorization(resolveApiToken(search))
+	});
+	return responseJson<SessionMessageQueue>(response);
+}
+
+/** Clears the queued messages and returns what the queue held. */
+export async function clearSessionQueue(
+	search: string,
+	sessionId: string,
+	fetcher: typeof fetch = fetch
+): Promise<SessionMessageQueue> {
+	const response = await fetcher(sessionUrl(search, `/${encodeURIComponent(sessionId)}/queue`), {
+		method: 'DELETE',
+		headers: authorization(resolveApiToken(search))
+	});
+	return responseJson<SessionMessageQueue>(response);
 }
 
 /** Steers the active run or queues a follow-up for after it settles. */

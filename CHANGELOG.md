@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Queued steering and follow-up messages appear above the composer, and
+  "Clear queue" puts them back in the composer for editing.
 - Choose how hard the model thinks from the session header, with levels from
   off to max.
 - Retry a failed turn from the session view, and see or cancel Pi's automatic

@@ -2,6 +2,7 @@ import type { AgentSession, ServerEvent, Workspace } from '@stormlightlabs/pau-p
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import type {
 	ExtensionUiResponse,
+	MessageQueue,
 	ModelOption,
 	PromptQueue,
 	SavedSessionList,
@@ -13,8 +14,10 @@ import type {
 import {
 	PauApiError,
 	cancelSessionRetry,
+	clearSessionQueue,
 	getSessionExtensionUi,
 	getSessionHistory,
+	getSessionQueue,
 	interruptSession,
 	listNativeSessions,
 	listSessionModels,
@@ -43,7 +46,7 @@ import {
 	type LiveExtensionUi
 } from './extension-ui';
 import { EventStreamClient, type EventSocketFactory, type EventStreamState } from './event-stream';
-import { emptyPiTranscript, reducePiEvent, type PiTranscript } from './pi-transcript';
+import { emptyPiTranscript, queueFromEvent, reducePiEvent, type PiTranscript } from './pi-transcript';
 
 /** Transport hooks for {@link LiveSessions}. Tests replace both. */
 export type LiveSessionsOptions = {
@@ -146,6 +149,9 @@ export class LiveSessions {
 	#sessions = $state<Record<string, AgentSession>>({});
 	#transcripts = $state<Record<string, PiTranscript>>({});
 	#extensionUi = $state<Record<string, LiveExtensionUi>>({});
+	#queues = $state<Record<string, MessageQueue>>({});
+	/** Sessions whose queue an event updated while its read was in flight, so the read is stale. */
+	readonly #queueUpdated = new SvelteSet<string>();
 	#thinkingLevels = $state<Record<string, ThinkingLevel>>({});
 	/** Extension events received while the session's extension UI read is in flight. */
 	readonly #extensionReplay = new SvelteMap<string, unknown[]>();
@@ -173,7 +179,7 @@ export class LiveSessions {
 				const reconnected = this.#connectedOnce;
 				this.#connectedOnce = true;
 				if (this.#loadFailed) void this.#load();
-				else if (reconnected) this.#refreshExtensionUi();
+				else if (reconnected) this.#refresh();
 			}
 		});
 	}
@@ -321,6 +327,18 @@ export class LiveSessions {
 		}
 	}
 
+	/** Clears the queued messages and returns what the queue held. */
+	async clearQueue(sessionId: string): Promise<MessageQueue> {
+		try {
+			const cleared = await clearSessionQueue(this.#options.search, sessionId, this.#fetcher);
+			this.#queueUpdated.add(sessionId);
+			this.#queues[sessionId] = { steering: [], followUp: [] };
+			return { steering: cleared.steering, followUp: cleared.follow_up };
+		} catch (cause) {
+			throw new Error(sessionErrorMessage(cause, 'control'), { cause });
+		}
+	}
+
 	/** Cancels an automatic retry that is waiting to run. */
 	cancelRetry(sessionId: string): Promise<void> {
 		return this.#control(() => cancelSessionRetry(this.#options.search, sessionId, this.#fetcher));
@@ -372,10 +390,28 @@ export class LiveSessions {
 		}
 	}
 
-	/** Reads the extension UI of every live session. */
-	#refreshExtensionUi(): void {
+	/** Reads the extension UI and message queue of every live session. */
+	#refresh(): void {
 		for (const session of Object.values(this.#sessions)) {
-			if (isLive(session)) void this.#readExtensionUi(session.id);
+			if (!isLive(session)) continue;
+			void this.#readExtensionUi(session.id);
+			void this.#readQueue(session.id);
+		}
+	}
+
+	/**
+	 * Reads a session's queue. Pi sends the whole queue with every update, so an
+	 * update that arrives during the read is newer than the read's result.
+	 */
+	async #readQueue(sessionId: string): Promise<void> {
+		if (!this.#sessions[sessionId]?.capabilities.message_queue) return;
+		this.#queueUpdated.delete(sessionId);
+		try {
+			const queue = await getSessionQueue(this.#options.search, sessionId, this.#fetcher);
+			if (this.#queueUpdated.has(sessionId)) return;
+			this.#queues[sessionId] = { steering: queue.steering, followUp: queue.follow_up };
+		} catch {
+			// The session exited or the backend went away. The next reconnect reads again.
 		}
 	}
 
@@ -418,7 +454,7 @@ export class LiveSessions {
 			this.#workspaces = workspaces;
 			for (const session of sessions) this.#sessions[session.id] ??= session;
 			this.#loadFailed = false;
-			this.#refreshExtensionUi();
+			this.#refresh();
 		} catch {
 			this.#loadFailed = true;
 		} finally {
@@ -441,6 +477,12 @@ export class LiveSessions {
 				if (payload.method === 'notify' && Date.now() - Date.parse(event.timestamp) > NOTIFICATION_MS) return;
 				this.#extensionReplay.get(sessionId)?.push(payload);
 				this.#updateExtensionUi(sessionId, (current) => reduceExtensionEvent(current, payload));
+				return;
+			}
+			const queue = queueFromEvent(payload);
+			if (queue) {
+				this.#queueUpdated.add(sessionId);
+				this.#queues[sessionId] = queue;
 				return;
 			}
 			const transcript = this.#transcripts[sessionId] ?? emptyPiTranscript;
@@ -474,12 +516,14 @@ export class LiveSessions {
 				stop: session.capabilities.stop,
 				retry: session.capabilities.retry,
 				modelSelection: session.capabilities.model_selection,
+				messageQueue: session.capabilities.message_queue,
 				thinkingLevel: session.capabilities.thinking_level
 			},
 			thinkingLevel: this.#thinkingLevels[session.id],
 			transcript: transcript.entries,
 			extensionUi: extensionUiView(extensionUi),
-			autoRetry: transcript.autoRetry
+			autoRetry: transcript.autoRetry,
+			messageQueue: this.#queues[session.id]
 		};
 	}
 }

@@ -159,6 +159,40 @@ export const AutomaticRetryPending: Story = {
 		await expect(canvas.getByText('session-running: cancel retry')).toBeInTheDocument();
 	}
 };
+export const QueueEmpty: Story = {
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument();
+	}
+};
+export const QueuedMessages: Story = {
+	args: { workspaces: sessionFixtures.queued, initialSessionId: 'session-running' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const queue = within(canvas.getByRole('region', { name: 'Queued messages' }));
+		await expect(queue.getByText('Steer')).toBeInTheDocument();
+		await expect(queue.getByText('Keep the public API unchanged.')).toBeInTheDocument();
+		await expect(queue.getAllByText('Follow up')).toHaveLength(2);
+		await expect(queue.getByText('Add a regression test for soft-wrap.')).toBeInTheDocument();
+	}
+};
+export const QueueCleared: Story = {
+	args: {
+		workspaces: sessionFixtures.queued,
+		initialSessionId: 'session-running',
+		clearedQueue: { steering: ['Keep the public API unchanged.'], followUp: ['Add a regression test for soft-wrap.'] }
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const prompt = canvas.getByRole('textbox', { name: 'Prompt' });
+		await userEvent.type(prompt, 'Draft in progress.');
+		await userEvent.click(canvas.getByRole('button', { name: 'Clear queue' }));
+		await expect(canvas.getByText('session-running: clear queue')).toBeInTheDocument();
+		await expect(prompt).toHaveValue(
+			'Draft in progress.\n\nKeep the public API unchanged.\n\nAdd a regression test for soft-wrap.'
+		);
+	}
+};
 export const Stopped: Story = { args: { workspaces: sessionFixtures.stopped, initialSessionId: 'session-stopped' } };
 export const ExtensionConfirmation: Story = {
 	args: { workspaces: sessionFixtures.extensionConfirm, initialSessionId: 'extension-confirm' },

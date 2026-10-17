@@ -73,6 +73,7 @@ export type {
 	ExtensionNotification,
 	ExtensionStatus,
 	ExtensionUiResponse,
+	MessageQueue,
 	ModelOption,
 	ExtensionUiState,
 	ExtensionWidget,

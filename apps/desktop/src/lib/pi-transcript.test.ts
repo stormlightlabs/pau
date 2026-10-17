@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { expect, test } from 'vitest';
 
-import { emptyPiTranscript, reducePiEvent, type PiTranscript } from './pi-transcript';
+import { emptyPiTranscript, queueFromEvent, reducePiEvent, type PiTranscript } from './pi-transcript';
 
 /** Native Pi events shared with the Rust projection tests. */
 const fixture = readFileSync(
@@ -85,4 +85,13 @@ test('tracks a scheduled automatic retry until it ends', () => {
 	expect(scheduled.autoRetry!.retryAt).toBeGreaterThanOrEqual(before + 2000);
 	expect(reduce([{ type: 'auto_retry_end', success: true, attempt: 2 }], scheduled).autoRetry).toBeUndefined();
 	expect(reduce([{ type: 'auto_retry_start', attempt: 1 }]).autoRetry).toBeUndefined();
+});
+
+test('reads the whole queue from a queue update and ignores other events', () => {
+	expect(queueFromEvent({ type: 'queue_update', steering: ['a', 2], followUp: ['b'] })).toEqual({
+		steering: ['a'],
+		followUp: ['b']
+	});
+	expect(queueFromEvent({ type: 'queue_update' })).toEqual({ steering: [], followUp: [] });
+	expect(queueFromEvent({ type: 'agent_end' })).toBeUndefined();
 });

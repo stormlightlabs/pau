@@ -1,4 +1,4 @@
-import type { AutoRetry, TranscriptEntry, TranscriptTool } from '@stormlightlabs/pau-ui';
+import type { AutoRetry, MessageQueue, TranscriptEntry, TranscriptTool } from '@stormlightlabs/pau-ui';
 
 /**
  * Display transcript rebuilt from native Pi events.
@@ -264,4 +264,14 @@ export function reducePiEvent(state: PiTranscript, event: unknown): PiTranscript
 		default:
 			return state;
 	}
+}
+
+/**
+ * Reads a `queue_update` event, which carries the whole queue each time.
+ * Returns undefined for any other event.
+ */
+export function queueFromEvent(event: unknown): MessageQueue | undefined {
+	if (!isObject(event) || event.type !== 'queue_update') return undefined;
+	const messages = (value: unknown) => (Array.isArray(value) ? value.filter((item) => typeof item === 'string') : []);
+	return { steering: messages(event.steering), followUp: messages(event.followUp) };
 }

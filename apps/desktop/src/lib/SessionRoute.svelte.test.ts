@@ -519,6 +519,45 @@ test('disables the picker when the session cannot select models', async () => {
 	await expect.element(page.getByRole('button', { name: /^Model:/ })).toBeDisabled();
 });
 
+test('shows the queued messages, follows queue updates, and restores them when cleared', async () => {
+	const clear = vi.fn(() => json({ steering: ['Keep the API.'], follow_up: ['Add a test.'] }));
+	const { props, sockets } = setup({
+		'GET /api/sessions': () => json([{ ...idleSession, status: 'running' }]),
+		'GET /api/sessions/session-1/queue': () => json({ steering: ['Keep the API.'], follow_up: [] }),
+		'DELETE /api/sessions/session-1/queue': clear
+	});
+	await render(SessionRoute, props);
+	sockets[0]?.open();
+	await expect.element(page.getByText('Keep the API.')).toBeVisible();
+
+	sockets[0]?.receive(output({ type: 'queue_update', steering: ['Keep the API.'], followUp: ['Add a test.'] }));
+	await expect.element(page.getByText('Add a test.')).toBeVisible();
+
+	await userEvent.click(page.getByRole('button', { name: 'Clear queue' }));
+
+	expect(clear).toHaveBeenCalled();
+	await expect.element(page.getByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument();
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toHaveValue('Keep the API.\n\nAdd a test.');
+});
+
+test('hides the queue when the session cannot expose it', async () => {
+	const read = vi.fn(() => json({ steering: ['Hidden.'], follow_up: [] }));
+	const { props, sockets } = setup({
+		'GET /api/sessions': () =>
+			json([
+				{ ...idleSession, status: 'running', capabilities: { ...idleSession.capabilities, message_queue: false } }
+			]),
+		'GET /api/sessions/session-1/queue': read
+	});
+	await render(SessionRoute, props);
+	sockets[0]?.open();
+	sockets[0]?.receive(output({ type: 'queue_update', steering: ['Hidden.'], followUp: [] }));
+
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeVisible();
+	await expect.element(page.getByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument();
+	expect(read).not.toHaveBeenCalled();
+});
+
 test('sets the thinking level and shows the level it sent', async () => {
 	const put = vi.fn(() => new Response(null, { status: 204 }));
 	const { props } = setup({

@@ -6,7 +6,8 @@ const fullCapabilities = {
 	steer: true,
 	interrupt: true,
 	stop: true,
-	retry: true
+	retry: true,
+	messageQueue: true
 } satisfies SessionCapabilities;
 
 const claudeCapabilities = {
@@ -98,6 +99,20 @@ export const sessionFixtures = {
 					title: 'Fix diff gutter',
 					transcript: failedTurn,
 					capabilities: { ...claudeCapabilities, retry: false }
+				})
+			]
+		}
+	],
+	queued: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [
+				session('running', {
+					messageQueue: {
+						steering: ['Keep the public API unchanged.'],
+						followUp: ['Add a regression test for soft-wrap.', 'Summarize the change for the changelog.']
+					}
 				})
 			]
 		}

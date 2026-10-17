@@ -19,6 +19,7 @@
 		ExtensionUiResponse,
 		ExtensionUiState,
 		ModelOption,
+		MessageQueue,
 		ThinkingLevel,
 		PromptQueue,
 		SandboxDenial,
@@ -47,6 +48,12 @@
 		onRetry?: (sessionId: string) => void | Promise<void>;
 		/** Cancels an automatic retry that is waiting to run. */
 		onCancelRetry?: (sessionId: string) => void | Promise<void>;
+		/**
+		 * Clears the session's queued messages and returns what the queue held.
+		 * The view puts the returned text back in the composer. A rejected
+		 * promise shows its message beside the queue.
+		 */
+		onClearQueue?: (sessionId: string) => Promise<MessageQueue>;
 		/**
 		 * Starts a session in a workspace. When set, the rail offers a start
 		 * control for each workspace. A rejected promise shows its message as a
@@ -89,6 +96,7 @@
 		onInterrupt = () => {},
 		onStop = () => {},
 		onRetry = () => {},
+		onClearQueue,
 		onCancelRetry = () => {},
 		onStartSession,
 		onLoadSavedSessions,
@@ -121,6 +129,7 @@
 	let pickerWorkspaceId = $state<string>();
 	let retryingSessionId = $state<string>();
 	let retryError = $state<string>();
+	let queueError = $state<string>();
 	let now = $state(Date.now());
 
 	const pickerWorkspace = $derived(workspaces.find((workspace) => workspace.id === pickerWorkspaceId));
@@ -143,6 +152,11 @@
 		const last = activeSession?.transcript.at(-1);
 		return last?.kind === 'message' && last.failed ? last.id : undefined;
 	});
+	const queuedCount = $derived(
+		activeSession?.capabilities.messageQueue && onClearQueue
+			? (activeSession.messageQueue?.steering.length ?? 0) + (activeSession.messageQueue?.followUp.length ?? 0)
+			: 0
+	);
 	const retrying = $derived(retryingSessionId !== undefined && retryingSessionId === activeSession?.id);
 	const autoRetry = $derived(activeSession?.autoRetry);
 	const autoRetrySeconds = $derived(autoRetry ? Math.max(0, Math.ceil((autoRetry.retryAt - now) / 1000)) : 0);
@@ -270,6 +284,7 @@
 		pickerWorkspaceId = undefined;
 		startFailure = undefined;
 		controlError = undefined;
+		queueError = undefined;
 		error = undefined;
 		draft = '';
 		historyCursor = idleHistoryCursor;
@@ -330,6 +345,21 @@
 			await onCancelRetry(activeSession.id);
 		} catch (cause) {
 			retryError = cause instanceof Error ? cause.message : 'The automatic retry could not be cancelled. Try again.';
+		}
+	}
+
+	/** Empties the queue and restores its text to the composer for editing. */
+	async function clearQueue(): Promise<void> {
+		if (!activeSession || !onClearQueue || disconnected) return;
+		const sessionId = activeSession.id;
+		queueError = undefined;
+		try {
+			const cleared = await onClearQueue(sessionId);
+			if (activeSessionId !== sessionId) return;
+			draft = [draft.trim() ? draft : '', ...cleared.steering, ...cleared.followUp].filter(Boolean).join('\n\n');
+			composer?.focus();
+		} catch (cause) {
+			queueError = cause instanceof Error ? cause.message : 'The queue could not be cleared. Try again.';
 		}
 	}
 
@@ -657,6 +687,29 @@
 			</div>
 
 			<div class="session-view__composer-stack">
+				{#if queuedCount > 0 && activeSession.messageQueue}
+					<section class="session-queue" aria-label="Queued messages">
+						<header>
+							<h2>Queued <span>{queuedCount}</span></h2>
+							<button
+								type="button"
+								class="session-queue__clear"
+								disabled={disconnected}
+								onclick={() => void clearQueue()}>
+								Clear queue
+							</button>
+						</header>
+						<ul>
+							{#each activeSession.messageQueue.steering as message, index (`steer-${index}`)}
+								<li><strong>Steer</strong><span>{message}</span></li>
+							{/each}
+							{#each activeSession.messageQueue.followUp as message, index (`follow-up-${index}`)}
+								<li><strong>Follow up</strong><span>{message}</span></li>
+							{/each}
+						</ul>
+						{#if queueError}<p class="session-composer__error" role="alert">{queueError}</p>{/if}
+					</section>
+				{/if}
 				<ExtensionUi
 					state={activeSession.extensionUi ?? emptyExtensionUi}
 					onRespond={(response) => onExtensionUiResponse(activeSession.id, response)}
@@ -1149,6 +1202,77 @@
 		bottom: 0;
 		display: grid;
 		gap: var(--pau-space-2);
+	}
+
+	.session-queue {
+		display: grid;
+		gap: var(--pau-space-2);
+		padding: var(--pau-space-2) var(--pau-space-3);
+		background: var(--pau-surface);
+		border: 1px solid var(--pau-border);
+	}
+
+	.session-queue header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--pau-space-3);
+	}
+
+	.session-queue h2 {
+		margin: 0;
+		color: var(--pau-text-muted);
+		font-size: var(--pau-type-xs);
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	.session-queue h2 span {
+		color: var(--pau-text);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.session-queue ul {
+		display: grid;
+		gap: var(--pau-space-1);
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.session-queue li {
+		display: grid;
+		grid-template-columns: 5rem minmax(0, 1fr);
+		gap: var(--pau-space-2);
+		font-size: var(--pau-type-sm);
+	}
+
+	.session-queue li strong {
+		color: var(--pau-text-muted);
+		font-size: var(--pau-type-xs);
+		font-weight: 600;
+	}
+
+	.session-queue li span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.session-queue__clear {
+		min-height: var(--pau-size-row-md);
+		padding-inline: var(--pau-space-3);
+		border-radius: var(--pau-radius-control);
+		color: var(--pau-text);
+		background: transparent;
+		border: 1px solid var(--pau-border);
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.session-queue__clear:disabled {
+		cursor: not-allowed;
+		opacity: 0.5;
 	}
 
 	.session-composer {

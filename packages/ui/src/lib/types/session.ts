@@ -12,6 +12,8 @@ export type SessionCapabilities = {
 	retry?: boolean;
 	/** Whether the agent can switch models. Absent means the surface offers no picker. */
 	modelSelection?: boolean;
+	/** Whether the agent exposes its queued messages and can clear them. */
+	messageQueue?: boolean;
 	/** Whether the agent can change the thinking level. Absent means the surface offers no control. */
 	thinkingLevel?: boolean;
 };
@@ -113,6 +115,14 @@ export type AutoRetry = {
 	errorMessage?: string;
 };
 
+/** Messages waiting to be delivered to a running session. */
+export type MessageQueue = {
+	/** Delivered after the current assistant turn and its tool calls. */
+	steering: string[];
+	/** Delivered after all current work finishes. */
+	followUp: string[];
+};
+
 /** Session data consumed by the shared session surface. */
 export type SessionViewModel = {
 	id: string;
@@ -129,6 +139,8 @@ export type SessionViewModel = {
 	transcript: TranscriptEntry[];
 	extensionUi?: ExtensionUiState;
 	autoRetry?: AutoRetry;
+	/** Queued steering and follow-up messages. Absent or empty hides the queue. */
+	messageQueue?: MessageQueue;
 };
 
 /** Workspace and its sessions as shown in the contextual rail. */

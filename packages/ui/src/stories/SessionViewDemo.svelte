@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { ProcessResourceSnapshot } from '../lib/types/resource-monitoring';
-	import type { ExtensionUiResponse, PromptQueue, SessionWorkspace } from '../lib/types/session';
+	import type { ExtensionUiResponse, MessageQueue, PromptQueue, SessionWorkspace } from '../lib/types/session';
 	import SessionView from '../lib/SessionView.svelte';
 
 	let {
@@ -11,7 +11,8 @@
 		disconnected = false,
 		startFailure,
 		retryFailure,
-		history = []
+		history = [],
+		clearedQueue = { steering: [], followUp: [] }
 	}: {
 		workspaces: SessionWorkspace[];
 		initialSessionId?: string;
@@ -24,6 +25,8 @@
 		retryFailure?: string;
 		/** Earlier prompts the composer can recall, newest first. */
 		history?: string[];
+		/** What clearing the queue returns. */
+		clearedQueue?: MessageQueue;
 	} = $props();
 
 	let activeSessionId = $state<string>();
@@ -63,6 +66,10 @@
 	onRetry={(sessionId) => {
 		if (retryFailure) throw new Error(retryFailure);
 		lastAction = `${sessionId}: retry`;
+	}}
+	onClearQueue={async (sessionId) => {
+		lastAction = `${sessionId}: clear queue`;
+		return clearedQueue;
 	}}
 	onCancelRetry={(sessionId) => {
 		lastAction = `${sessionId}: cancel retry`;

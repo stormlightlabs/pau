@@ -48,12 +48,20 @@ use tokio::{
 use tower_http::cors::CorsLayer;
 use tracing::instrument::WithSubscriber;
 
+mod build_info;
 mod sessions;
 
+use build_info::Channel;
 use sessions::SessionApi;
 
-/// Version returned by every Pau backend implementation.
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Version returned by every Pau backend implementation: the workspace version
+/// for tagged releases, `<version>-dev+<commit>` otherwise.
+pub const VERSION: &str = env!("PAU_BUILD_VERSION");
+
+/// Channel selected by `build.rs`.
+fn build_channel() -> Channel {
+    Channel::parse(env!("PAU_BUILD_CHANNEL")).expect("build.rs emits a valid channel")
+}
 
 const TOKEN_BYTES: usize = 32;
 const MIN_CONFIGURED_TOKEN_BYTES: usize = 32;
@@ -531,7 +539,7 @@ async fn version() -> Json<VersionResponse> {
 
 fn default_diagnostics() -> Diagnostics {
     Diagnostics::new(
-        env!("CARGO_PKG_VERSION"),
+        VERSION,
         VERSION,
         BTreeMap::from([
             ("axum".to_owned(), "0.8.9".to_owned()),
@@ -1300,7 +1308,11 @@ fn database_path() -> io::Result<PathBuf> {
         return Ok(PathBuf::from(path));
     }
     dirs::data_local_dir()
-        .map(|directory| directory.join("pau/pau.sqlite3"))
+        .map(|directory| {
+            directory
+                .join(build_channel().data_dir_name())
+                .join("pau.sqlite3")
+        })
         .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,

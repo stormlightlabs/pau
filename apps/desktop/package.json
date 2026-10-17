@@ -1,13 +1,12 @@
 {
 	"name": "@stormlightlabs/pau-desktop",
 	"private": true,
-	"version": "0.2.0",
 	"type": "module",
 	"scripts": {
-		"build": "tauri build",
+		"build": "node scripts/tauri.mjs build",
 		"build:frontend": "vite build",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"dev": "tauri dev",
+		"dev": "node scripts/tauri.mjs dev",
 		"dev:frontend": "vite dev",
 		"test": "svelte-kit sync && vitest run"
 	},

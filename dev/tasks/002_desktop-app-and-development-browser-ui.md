@@ -1348,25 +1348,10 @@ Verification:
 - Confirm the canonical URL, redirects, sitemap, search index, raw Markdown,
   `llms.txt`, and cache headers on the deployed site.
 
-### 2.154 Release version source
-
-Status: planned
-Blocked by: none
-
-Read the desktop app's version from the Cargo workspace only, and give
-untagged builds a development version, bundle identifier, product name, and
-data directory.
-
-Verification:
-
-- Confirm a tagged build reports the tag's version and identifier.
-- Confirm an untagged build reports a `-dev` version with the commit, uses
-  `org.stormlightlabs.pau.dev`, and does not open the release database.
-
 ### 2.156 macOS dogfood build
 
 Status: planned
-Blocked by: 2.154
+Blocked by: none
 
 Build a signed and notarized Apple Silicon app from a release tag and install
 it in `/Applications`.

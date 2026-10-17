@@ -677,17 +677,6 @@ Verification:
 
 - Component-test shell context and its unsupported state.
 
-### 2.120 Context usage view
-
-Status: planned
-Blocked by: none
-
-Show context use and cost in the session view.
-
-Verification:
-
-- Component-test normal and near-context-limit states.
-
 ### 2.166 Live transcript history
 
 Status: in progress
@@ -751,7 +740,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.166, 2.114, 2.120, 2.156
+Blocked by: 2.166, 2.114, 2.156
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

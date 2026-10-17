@@ -9,6 +9,7 @@ import type {
 	SavedSessionList,
 	SessionBranchOutcome,
 	SessionTreeSnapshot,
+	SessionUsage,
 	SessionViewModel,
 	SessionWorkspace,
 	ThinkingLevel
@@ -24,6 +25,7 @@ import {
 	getSessionTree,
 	getSessionHistory,
 	getSessionQueue,
+	getSessionUsage,
 	interruptSession,
 	listNativeSessions,
 	listSessionCommands,
@@ -60,6 +62,7 @@ import {
 	reducePiEvent,
 	type PiTranscript
 } from './pi-transcript';
+import { usageFromEvent, viewUsage } from './session-usage';
 
 /** Transport hooks for {@link LiveSessions}. Tests replace both. */
 export type LiveSessionsOptions = {
@@ -198,6 +201,9 @@ export class LiveSessions {
 	#pendingThinkingLevels = $state<Record<string, ThinkingLevel>>({});
 	/** Estimated context size after each manual compaction, by session and first kept entry. Compaction events omit it. */
 	#compactionEstimates = $state<Record<string, Record<string, number>>>({});
+	#usages = $state<Record<string, SessionUsage>>({});
+	/** Sessions whose usage an event updated while its read was in flight, so the read is stale. */
+	readonly #usageUpdated = new SvelteSet<string>();
 	/** Extension events received while the session's extension UI read is in flight. */
 	readonly #extensionReplay = new SvelteMap<string, unknown[]>();
 	/** Sessions whose extension UI changed during the read in flight and needs another read. */
@@ -537,6 +543,19 @@ export class LiveSessions {
 			if (!isLive(session)) continue;
 			void this.#readExtensionUi(session.id);
 			void this.#readQueue(session.id);
+			void this.#readUsage(session.id);
+		}
+	}
+
+	/** Reads a session's usage. A `session_usage` event that arrives during the read is newer. */
+	async #readUsage(sessionId: string): Promise<void> {
+		if (!this.#sessions[sessionId]?.capabilities.usage) return;
+		this.#usageUpdated.delete(sessionId);
+		try {
+			const usage = await getSessionUsage(this.#options.search, sessionId, this.#fetcher);
+			if (!this.#usageUpdated.has(sessionId)) this.#usages[sessionId] = viewUsage(usage);
+		} catch {
+			// The session exited or the backend went away. The next reconnect reads again.
 		}
 	}
 
@@ -620,6 +639,12 @@ export class LiveSessions {
 				this.#updateExtensionUi(sessionId, (current) => reduceExtensionEvent(current, payload));
 				return;
 			}
+			const usage = usageFromEvent(payload);
+			if (usage) {
+				this.#usageUpdated.add(sessionId);
+				this.#usages[sessionId] = usage;
+				return;
+			}
 			const queue = queueFromEvent(payload);
 			if (queue) {
 				this.#queueUpdated.add(sessionId);
@@ -633,7 +658,9 @@ export class LiveSessions {
 		for (const changed of state.events) {
 			if (changed.kind !== 'session_changed') continue;
 			const session = JSON.parse(changed.payload) as AgentSession;
+			const known = session.id in this.#sessions;
 			this.#sessions[session.id] = session;
+			if (!known && isLive(session)) void this.#readUsage(session.id);
 			if (!isLive(session)) this.#updateExtensionUi(session.id, exitedExtensionUi);
 		}
 	}
@@ -660,6 +687,7 @@ export class LiveSessions {
 				modelSelection: session.capabilities.model_selection,
 				messageQueue: session.capabilities.message_queue,
 				thinkingLevel: session.capabilities.thinking_level,
+				usage: session.capabilities.usage,
 				commandDiscovery: session.capabilities.command_discovery,
 				compaction: session.capabilities.compaction
 			},
@@ -669,6 +697,7 @@ export class LiveSessions {
 				const tokensAfter = this.#compactionEstimates[session.id]?.[entry.firstKeptEntryId];
 				return tokensAfter === undefined ? entry : { ...entry, tokensAfter };
 			}),
+			usage: this.#usages[session.id],
 			compaction: transcript.compaction,
 			extensionUi: extensionUiView(extensionUi),
 			autoRetry: transcript.autoRetry,

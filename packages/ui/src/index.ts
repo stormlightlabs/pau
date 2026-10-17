@@ -9,6 +9,7 @@ export type { EditorFileContent, FileEditorSource } from './lib/types/file-edito
 export { default as Icon, type IconProps } from './lib/Icon.svelte';
 export { default as McpConfigurationView } from './lib/McpConfigurationView.svelte';
 export { default as ModelPicker } from './lib/ModelPicker.svelte';
+export { default as ContextMeter } from './lib/ContextMeter.svelte';
 export { default as ThinkingLevelPicker } from './lib/ThinkingLevelPicker.svelte';
 export { default as ProcessesView } from './lib/ProcessesView.svelte';
 export { default as SandboxSettingsView } from './lib/SandboxSettingsView.svelte';
@@ -83,7 +84,9 @@ export type {
 	ExtensionWidget,
 	PromptQueue,
 	SandboxDenial,
+	ContextUsage,
 	SessionCapabilities,
+	SessionUsage,
 	SessionStatus,
 	SessionViewModel,
 	SavedSession,

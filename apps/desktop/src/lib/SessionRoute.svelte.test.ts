@@ -655,6 +655,46 @@ test('hides the queue when the session cannot expose it', async () => {
 	expect(read).not.toHaveBeenCalled();
 });
 
+const apiUsage = {
+	context: { tokens: 84_000, context_window: 200_000, percent: 42 },
+	tokens: { input: 84_210, output: 12_480, cache_read: 410_000, cache_write: 31_250, total: 537_940 },
+	cost: 1.2345
+};
+
+test('shows context use read on open and follows session usage events', async () => {
+	const { props, sockets } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/sessions/session-1/usage': () => json(apiUsage)
+	});
+	await render(SessionRoute, props);
+	sockets[0]?.open();
+	await expect.element(page.getByRole('button', { name: /Context 84k \/ 200k · 42%/ })).toBeVisible();
+
+	sockets[0]?.receive(
+		output({
+			type: 'session_usage',
+			usage: { ...apiUsage, context: { tokens: null, context_window: 200_000, percent: null } }
+		})
+	);
+	await expect.element(page.getByRole('button', { name: /Context unknown \/ 200k/ })).toBeVisible();
+	await expect.element(page.getByText('session_usage')).not.toBeInTheDocument();
+});
+
+test('hides the context meter when the session does not report usage', async () => {
+	const read = vi.fn(() => json(apiUsage));
+	const { props, sockets } = setup({
+		'GET /api/sessions': () => json([{ ...idleSession, capabilities: { ...idleSession.capabilities, usage: false } }]),
+		'GET /api/sessions/session-1/usage': read
+	});
+	await render(SessionRoute, props);
+	sockets[0]?.open();
+	sockets[0]?.receive(output({ type: 'session_usage', usage: apiUsage }));
+
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeVisible();
+	await expect.element(page.getByRole('button', { name: /Context/ })).not.toBeInTheDocument();
+	expect(read).not.toHaveBeenCalled();
+});
+
 test('shows the thinking level Pi reports, and the selected level only while the request runs', async () => {
 	let finish: () => void = () => {};
 	const put = vi.fn(

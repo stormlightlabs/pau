@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- The session header shows how much of the model's context window a session
+  uses, with a warning near the limit and token and cost details on click.
 - Compact a session's context from the session header, with optional
   instructions, and see manual and automatic compactions as expandable markers
   in the transcript.

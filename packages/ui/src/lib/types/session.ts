@@ -20,8 +20,29 @@ export type SessionCapabilities = {
 	thinkingLevel?: boolean;
 	/** Whether the agent can list its slash commands. Absent means the composer offers no completion. */
 	commandDiscovery?: boolean;
+	/** Whether the agent reports context and cost usage. Absent hides the context meter. */
+	usage?: boolean;
 	/** Whether the agent can compact its context on request. Absent means the surface offers no control. */
 	compaction?: boolean;
+};
+
+/** How much of the model's context window a session fills. */
+export type ContextUsage = {
+	/** Tokens in the window. Absent until the agent reports usage again after a compaction. */
+	tokens?: number;
+	/** The model's context window size in tokens. */
+	contextWindow: number;
+	/** Percent of the window in use, from 0 to 100. Absent when `tokens` is. */
+	percent?: number;
+};
+
+/** Model token use and cost for a session, separate from machine resource use. */
+export type SessionUsage = {
+	/** Absent when the agent has no model or window size to report. */
+	context?: ContextUsage;
+	tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+	/** Cumulative cost in US dollars. */
+	cost: number;
 };
 
 /** One slash command the agent accepts in a prompt. */
@@ -171,6 +192,8 @@ export type SessionViewModel = {
 	model?: string;
 	/** Level last selected in this session, when known. */
 	thinkingLevel?: ThinkingLevel;
+	/** Context and cost use, when the agent has reported it. */
+	usage?: SessionUsage;
 	status: SessionStatus;
 	attention?: string;
 	error?: string;

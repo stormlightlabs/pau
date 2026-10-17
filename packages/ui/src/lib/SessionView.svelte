@@ -13,6 +13,7 @@
 	import ExtensionUi from './ExtensionUi.svelte';
 	import Icon from './Icon.svelte';
 	import ModelPicker from './ModelPicker.svelte';
+	import ContextMeter from './ContextMeter.svelte';
 	import ThinkingLevelPicker from './ThinkingLevelPicker.svelte';
 	import SessionPicker from './SessionPicker.svelte';
 	import SessionResourceSummary from './SessionResourceSummary.svelte';
@@ -783,6 +784,7 @@
 							{/if}
 						{/key}
 					{/if}
+					<ContextMeter usage={activeSession.usage} supported={activeSession.capabilities.usage ?? false} />
 					{#if canCompact}
 						{@const compactReason = compactUnavailableReason(activeSession, disconnected, compacting)}
 						<div class="session-compact">

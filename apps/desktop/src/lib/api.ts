@@ -27,6 +27,7 @@ import type {
 	SessionTree,
 	SessionThinkingLevel,
 	SessionThinkingLevelRequest,
+	SessionUsage,
 	StartSessionRequest,
 	TerminalInfo,
 	TerminalSize,
@@ -485,6 +486,18 @@ export async function listSessionModels(
 		headers: authorization(resolveApiToken(search))
 	});
 	return responseJson<SessionModel[]>(response);
+}
+
+/** Reads a session's context use, token use, and cost. */
+export async function getSessionUsage(
+	search: string,
+	sessionId: string,
+	fetcher: typeof fetch = fetch
+): Promise<SessionUsage> {
+	const response = await fetcher(sessionUrl(search, `/${encodeURIComponent(sessionId)}/usage`), {
+		headers: authorization(resolveApiToken(search))
+	});
+	return responseJson<SessionUsage>(response);
 }
 
 /** Lists the slash commands a live session accepts in a prompt. */

@@ -428,6 +428,10 @@ fn router_with_services(
         .route("/api/workspaces/{workspace_id}/git/status", get(git_status))
         .route("/api/workspaces/{workspace_id}/git/diff", get(git_diff))
         .route(
+            "/api/workspaces/{workspace_id}/pi-sessions",
+            get(sessions::list_native_sessions),
+        )
+        .route(
             "/api/workspaces/{workspace_id}/sandbox",
             get(get_workspace_sandbox).put(update_workspace_sandbox),
         )
@@ -690,6 +694,8 @@ enum ApiError {
     SandboxedSessionUnsupported,
     /// A session control or lifecycle operation failed.
     Session(Box<pau_pi::PiSessionRegistryError>),
+    /// The requested native session cannot be resumed.
+    NativeSession(pau_pi::PiSessionFileError),
 }
 
 impl IntoResponse for ApiError {
@@ -710,6 +716,17 @@ impl IntoResponse for ApiError {
                 "sandboxed_session_unsupported",
                 "Sandboxed sessions cannot start from the desktop yet. Turn off the sandbox for this workspace to start a session.".to_owned(),
             ),
+            Self::NativeSession(error) => {
+                let (status, code) = match error {
+                    pau_pi::PiSessionFileError::NotFound(_) => {
+                        (StatusCode::NOT_FOUND, "native_session_not_found")
+                    }
+                    pau_pi::PiSessionFileError::Malformed(_) => {
+                        (StatusCode::UNPROCESSABLE_ENTITY, "invalid_native_session")
+                    }
+                };
+                (status, code, error.to_string())
+            }
             Self::Session(error) => {
                 let (status, code) = sessions::error_status(&error);
                 (status, code, error.to_string())

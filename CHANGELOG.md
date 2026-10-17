@@ -4,6 +4,7 @@
 
 ### Desktop
 
+- The local API can list a workspace's saved Pi sessions and resume one.
 - The local API can open workspace terminals with live input, output, resize,
   signals, and close.
 - Development builds now report a `-dev` version with the commit, install as

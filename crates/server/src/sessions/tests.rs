@@ -25,6 +25,7 @@ const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 const FAKE_PI: &str = r#"#!/bin/sh
 if [ "$1" = '--version' ]; then echo 0.87.1; exit 0; fi
 [ "$1" = '--mode' ] && [ "$2" = 'rpc' ] || exit 64
+printf '%s\n' "$*" > "$PWD/args.txt"
 while IFS= read -r command; do
     printf '%s\n' "$command" >> "$PWD/commands.jsonl"
     id=$(printf '%s' "$command" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
@@ -463,4 +464,97 @@ async fn refuses_to_start_without_a_usable_launch() {
     let (status, error) = fixture.start(None).await;
     assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
     assert_eq!(error["code"], "sandboxed_session_unsupported");
+}
+
+/// Writes a Pi session file into the fixture workspace's session directory.
+fn write_native_session(fixture: &Fixture, file: &str, contents: &str) {
+    let root = fixture.workspace_root.canonicalize().unwrap();
+    let encoded = root
+        .to_str()
+        .unwrap()
+        .trim_start_matches('/')
+        .replace('/', "-");
+    let directory = fixture
+        ._directory
+        .path()
+        .join(".pi/agent/sessions")
+        .join(format!("--{encoded}--"));
+    fs::create_dir_all(&directory).unwrap();
+    fs::write(directory.join(file), contents).unwrap();
+}
+
+/// A session header for the fixture workspace, or for `cwd` when given.
+fn native_header(fixture: &Fixture, id: &str, cwd: Option<&str>) -> String {
+    let root = fixture.workspace_root.canonicalize().unwrap();
+    let cwd = cwd.unwrap_or_else(|| root.to_str().unwrap());
+    json!({"type": "session", "version": 3, "id": id, "timestamp": "2026-01-02T03:04:05.000Z", "cwd": cwd}).to_string()
+}
+
+#[tokio::test]
+async fn lists_and_resumes_native_sessions() {
+    let fixture = Fixture::new(None).await;
+    let list_path = format!("/api/workspaces/{}/pi-sessions", fixture.workspace_id);
+    let (status, list) = fixture.call("GET", &list_path, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list, json!({"sessions": [], "warnings": []}));
+
+    let user = r#"{"type":"message","message":{"role":"user","content":"Fix the login bug"}}"#;
+    let good = format!("{}\n{user}", native_header(&fixture, "good", None));
+    write_native_session(&fixture, "2026_good.jsonl", &good);
+    write_native_session(&fixture, "2026_broken.jsonl", "not json");
+    let foreign = native_header(&fixture, "foreign", Some("/elsewhere"));
+    write_native_session(&fixture, "2026_foreign.jsonl", &foreign);
+
+    let (_, list) = fixture.call("GET", &list_path, None).await;
+    let sessions = list["sessions"].as_array().unwrap();
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0]["id"], "good");
+    assert_eq!(sessions[0]["first_message"], "Fix the login bug");
+    assert!(sessions[0]["modified_at"].is_string());
+    assert_eq!(list["warnings"].as_array().unwrap().len(), 2);
+
+    let (status, started) = fixture
+        .call(
+            "POST",
+            "/api/sessions",
+            Some(json!({"workspace_id": fixture.workspace_id, "native_session_id": "good"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(started["status"], "idle");
+    let args = fs::read_to_string(fixture.workspace_root.join("args.txt")).unwrap();
+    assert!(args.starts_with("--mode rpc --session "));
+    assert!(args.trim_end().ends_with("2026_good.jsonl"));
+
+    for (id, status, code) in [
+        ("missing", StatusCode::NOT_FOUND, "native_session_not_found"),
+        (
+            "broken",
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "invalid_native_session",
+        ),
+        (
+            "foreign",
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "invalid_native_session",
+        ),
+        (
+            "../../etc/passwd",
+            StatusCode::NOT_FOUND,
+            "native_session_not_found",
+        ),
+    ] {
+        let (got, error) = fixture
+            .call(
+                "POST",
+                "/api/sessions",
+                Some(json!({"workspace_id": fixture.workspace_id, "native_session_id": id})),
+            )
+            .await;
+        assert_eq!(
+            (got, error["code"].as_str().unwrap()),
+            (status, code),
+            "{id}"
+        );
+    }
 }

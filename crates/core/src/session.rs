@@ -94,6 +94,46 @@ pub struct StartSessionRequest {
     /// Model to select before the session accepts work. The agent's configured
     /// default applies when this is absent.
     pub model: Option<SessionModelSelection>,
+    /// Native session to resume, from the workspace's native session list.
+    /// A new native session starts when this is absent.
+    #[serde(default)]
+    pub native_session_id: Option<String>,
+}
+
+/// A session the agent stored on disk for a workspace, which a new live
+/// session can resume.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct NativeSessionSummary {
+    /// Identifier to pass as `native_session_id` when starting a session.
+    pub id: String,
+    /// Name the user gave the session.
+    pub name: Option<String>,
+    /// Start of the first user message, for sessions without a name.
+    pub first_message: Option<String>,
+    /// RFC 3339 timestamp at which the agent created the session.
+    pub created_at: String,
+    /// RFC 3339 timestamp of the last change to the session file.
+    pub modified_at: Option<String>,
+    /// Absolute path of the session file.
+    pub path: String,
+}
+
+/// A stored session file that could not be listed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct NativeSessionWarning {
+    /// Absolute path of the skipped file.
+    pub path: String,
+    /// Why the file was skipped.
+    pub message: String,
+}
+
+/// The sessions the agent stored for a workspace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct NativeSessionList {
+    /// Readable sessions, most recently changed first.
+    pub sessions: Vec<NativeSessionSummary>,
+    /// Files that were skipped because they could not be read.
+    pub warnings: Vec<NativeSessionWarning>,
 }
 
 /// Where a prompt sent during an active run waits.

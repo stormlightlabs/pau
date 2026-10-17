@@ -22,18 +22,21 @@ use pau_agent::{
 use pau_core::{
     ServerEventKind,
     session::{
-        AgentSession, SessionAutoCompactionRequest, SessionCapabilities, SessionCommand,
-        SessionCommandSource, SessionCompactRequest, SessionCompactionResult, SessionMessageQueue,
-        SessionMessageRequest, SessionModelSelection, SessionPromptRequest, SessionQueue,
-        SessionStatus, SessionThinkingLevel, SessionThinkingLevelRequest, StartSessionRequest,
+        AgentSession, NativeSessionList, NativeSessionSummary, NativeSessionWarning,
+        SessionAutoCompactionRequest, SessionCapabilities, SessionCommand, SessionCommandSource,
+        SessionCompactRequest, SessionCompactionResult, SessionMessageQueue, SessionMessageRequest,
+        SessionModelSelection, SessionPromptRequest, SessionQueue, SessionStatus,
+        SessionThinkingLevel, SessionThinkingLevelRequest, StartSessionRequest,
     },
 };
 use pau_pi::{
     DiscoverPiOptions, PiCommand, PiCommandSource, PiProcessError, PiProcessOutput, PiSession,
     PiSessionError, PiSessionOutput, PiSessionRegistry, PiSessionRegistryError, PiShutdownTimeouts,
-    StartPiProcessOptions, StartRegisteredPiSession, discover_pi,
+    StartPiProcessOptions, StartRegisteredPiSession, discover_pi, find_pi_session_file,
+    list_pi_session_files, pi_configuration_paths,
 };
 use serde_json::Value;
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::sync::broadcast;
 
 use crate::{ApiError, ApiState, EventHub, diagnostic_timestamp, workspace_service};
@@ -97,6 +100,15 @@ impl SessionApi {
                 );
             }
         }
+    }
+
+    /// Pi's session storage for `root`, resolved without starting Pi.
+    fn sessions_directory(&self, root: &std::path::Path) -> Result<std::path::PathBuf, ApiError> {
+        let mut discovery = self.discovery.clone();
+        discovery.working_directory = root.to_path_buf();
+        pi_configuration_paths(&discovery)
+            .map(|paths| paths.sessions_directory)
+            .map_err(|error| ApiError::PiUnavailable(error.to_string()))
     }
 
     fn record(&self, id: &str) -> Option<SessionRecord> {
@@ -330,7 +342,57 @@ pub(crate) async fn list_sessions(
     Ok(Json(sessions))
 }
 
-/// Starts an unsandboxed Pi session in a registered workspace.
+/// Lists the sessions Pi stored on disk for a workspace, newest first.
+///
+/// Unreadable and malformed files are reported as warnings so one bad file
+/// never hides the others.
+pub(crate) async fn list_native_sessions(
+    State(state): State<ApiState>,
+    AxumPath(workspace_id): AxumPath<String>,
+) -> Result<Json<NativeSessionList>, ApiError> {
+    let api = session_api(&state)?;
+    let root = workspace_service(&state)?.root(&workspace_id).await?;
+    let sessions_directory = api.sessions_directory(&root)?;
+    let files =
+        tokio::task::spawn_blocking(move || list_pi_session_files(&sessions_directory, &root))
+            .await
+            .map_err(|error| ApiError::PiUnavailable(error.to_string()))?;
+    for warning in &files.warnings {
+        tracing::warn!(
+            event = "session.native_file_skipped",
+            path = %warning.path.display(),
+            message = %warning.message,
+            "skipped a Pi session file"
+        );
+    }
+    Ok(Json(NativeSessionList {
+        sessions: files
+            .sessions
+            .into_iter()
+            .map(|session| NativeSessionSummary {
+                id: session.id,
+                name: session.name,
+                first_message: session.first_message,
+                created_at: session.created_at,
+                modified_at: session
+                    .modified_at
+                    .and_then(|time| OffsetDateTime::from(time).format(&Rfc3339).ok()),
+                path: session.path.to_string_lossy().into_owned(),
+            })
+            .collect(),
+        warnings: files
+            .warnings
+            .into_iter()
+            .map(|warning| NativeSessionWarning {
+                path: warning.path.to_string_lossy().into_owned(),
+                message: warning.message,
+            })
+            .collect(),
+    }))
+}
+
+/// Starts an unsandboxed Pi session in a registered workspace, resuming a
+/// stored Pi session when the request names one.
 pub(crate) async fn start_session(
     State(state): State<ApiState>,
     Json(request): Json<StartSessionRequest>,
@@ -350,6 +412,22 @@ pub(crate) async fn start_session(
         if selection.effective().settings().is_some() {
             return Err(ApiError::SandboxedSessionUnsupported);
         }
+    }
+
+    // Resolve the stored session before launching Pi. Only the workspace's own
+    // session files can match.
+    let mut arguments = Vec::new();
+    if let Some(native_id) = &request.native_session_id {
+        let sessions_directory = api.sessions_directory(&root)?;
+        let (lookup_root, lookup_id) = (root.clone(), native_id.clone());
+        let file = tokio::task::spawn_blocking(move || {
+            find_pi_session_file(&sessions_directory, &lookup_root, &lookup_id)
+        })
+        .await
+        .map_err(|error| ApiError::PiUnavailable(error.to_string()))?
+        .map_err(ApiError::NativeSession)?;
+        arguments.push("--session".into());
+        arguments.push(file.into_os_string());
     }
 
     let mut discovery = api.discovery.clone();
@@ -378,7 +456,7 @@ pub(crate) async fn start_session(
             process: StartPiProcessOptions {
                 executable_path: pi.executable_path,
                 working_directory: root,
-                arguments: Vec::new(),
+                arguments,
                 environment: Vec::new(),
                 shutdown_timeouts: PiShutdownTimeouts::default(),
             },

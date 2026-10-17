@@ -628,23 +628,10 @@ Verification:
 - Component-test loading, failed start, and disconnected states.
 - Prompt a self-hosted Pi session from the desktop app.
 
-### 2.147 Pi session discovery API
-
-Status: planned
-Blocked by: none
-
-List a workspace's native Pi sessions from disk and resume one or start a new
-session through the desktop API.
-
-Verification:
-
-- Cover listing, resuming, and starting sessions against fixture Pi session
-  files, including a missing and a malformed session file.
-
 ### 2.148 Session picker
 
 Status: planned
-Blocked by: 2.146, 2.147
+Blocked by: 2.146
 
 Let the operator browse, resume, and start Pi sessions from the desktop app.
 

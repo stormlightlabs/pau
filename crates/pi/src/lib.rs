@@ -2,6 +2,7 @@
 
 mod extension_ui;
 mod mcp;
+mod native_sessions;
 mod process;
 mod projection;
 mod registry;
@@ -17,6 +18,10 @@ pub use mcp::{
     DiscoverPiMcpOptions, LATEST_VERIFIED_PI_MCP_ADAPTER_VERSION, PINNED_PI_MCP_ADAPTER_VERSION,
     PiMcpAdapterAvailability, PiMcpAdapterCompatibility, PiMcpAdapterState, PiMcpDiscovery,
     PiMcpOperation, discover_pi_mcp, pi_mcp_capabilities, run_pi_mcp_operation,
+};
+pub use native_sessions::{
+    PiSessionFile, PiSessionFileError, PiSessionFileWarning, PiSessionFiles, find_pi_session_file,
+    list_pi_session_files,
 };
 pub use process::{
     PiDiagnostic, PiDiagnosticSource, PiProcess, PiProcessError, PiProcessExit, PiProcessOutput,
@@ -253,7 +258,7 @@ pub fn discover_pi(options: &DiscoverPiOptions) -> Result<PiDiscovery, PiDiscove
             )),
         )
     };
-    let configuration = configuration_paths(options)?;
+    let configuration = pi_configuration_paths(options)?;
 
     Ok(PiDiscovery {
         executable_path,
@@ -429,7 +434,8 @@ fn verify_rpc_capability(
     Ok(())
 }
 
-fn configuration_paths(
+/// Resolves Pi's configuration locations without looking for an executable.
+pub fn pi_configuration_paths(
     options: &DiscoverPiOptions,
 ) -> Result<PiConfigurationPaths, PiDiscoveryError> {
     let agent_directory = match &options.agent_directory {

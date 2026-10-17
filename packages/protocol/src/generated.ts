@@ -911,7 +911,58 @@ workspace_id: string,
  * Model to select before the session accepts work. The agent's configured
  * default applies when this is absent.
  */
-model: SessionModelSelection | null, };
+model: SessionModelSelection | null,
+/**
+ * Native session to resume, from the workspace's native session list.
+ * A new native session starts when this is absent.
+ */
+native_session_id: string | null, };
+
+export type NativeSessionList = {
+/**
+ * Readable sessions, most recently changed first.
+ */
+sessions: Array<NativeSessionSummary>,
+/**
+ * Files that were skipped because they could not be read.
+ */
+warnings: Array<NativeSessionWarning>, };
+
+export type NativeSessionSummary = {
+/**
+ * Identifier to pass as `native_session_id` when starting a session.
+ */
+id: string,
+/**
+ * Name the user gave the session.
+ */
+name: string | null,
+/**
+ * Start of the first user message, for sessions without a name.
+ */
+first_message: string | null,
+/**
+ * RFC 3339 timestamp at which the agent created the session.
+ */
+created_at: string,
+/**
+ * RFC 3339 timestamp of the last change to the session file.
+ */
+modified_at: string | null,
+/**
+ * Absolute path of the session file.
+ */
+path: string, };
+
+export type NativeSessionWarning = {
+/**
+ * Absolute path of the skipped file.
+ */
+path: string,
+/**
+ * Why the file was skipped.
+ */
+message: string, };
 
 export type SessionQueue = "steer" | "follow_up";
 

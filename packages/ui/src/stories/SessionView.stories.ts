@@ -364,3 +364,61 @@ export const CompactionUnsupported: Story = {
 		await expect(canvas.queryByRole('button', { name: 'Compact' })).not.toBeInTheDocument();
 	}
 };
+
+const pixel = Uint8Array.from(
+	atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=='),
+	(character) => character.charCodeAt(0)
+);
+const screenshot = () => new File([pixel], 'screenshot.png', { type: 'image/png' });
+
+export const ImagesAttached: Story = {
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.upload(canvas.getByLabelText('Image files'), screenshot());
+		await expect(canvas.getByRole('img', { name: 'screenshot.png' })).toBeVisible();
+		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), 'What is in this image?');
+		await userEvent.click(canvas.getByRole('button', { name: /Send prompt/ }));
+		await expect(canvas.getByText(/session-running: steer: What is in this image\? \(1 image\)/)).toBeInTheDocument();
+		await expect(canvas.queryByRole('img', { name: 'screenshot.png' })).not.toBeInTheDocument();
+	}
+};
+export const ImageRemoved: Story = {
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.upload(canvas.getByLabelText('Image files'), screenshot());
+		await userEvent.click(canvas.getByRole('button', { name: 'Remove screenshot.png' }));
+		await expect(canvas.queryByRole('img', { name: 'screenshot.png' })).not.toBeInTheDocument();
+	}
+};
+export const ImageTypeRejected: Story = {
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		// The picker filters by type, so bypass its accept check to reach the validation.
+		const input = canvas.getByLabelText<HTMLInputElement>('Image files');
+		await userEvent.upload(input, new File(['%PDF'], 'notes.pdf', { type: 'application/pdf' }), { applyAccept: false });
+		await expect(canvas.getByRole('alert')).toHaveTextContent('notes.pdf is not a supported image');
+		await expect(canvas.queryByRole('list', { name: 'Attached images' })).not.toBeInTheDocument();
+	}
+};
+export const ImageTooLarge: Story = {
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const large = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'huge.png', { type: 'image/png' });
+		await userEvent.upload(canvas.getByLabelText('Image files'), large);
+		await expect(canvas.getByRole('alert')).toHaveTextContent('huge.png is larger than 5 MiB');
+	}
+};
+export const ModelWithoutImageInput: Story = {
+	args: {
+		sendFailure:
+			'The current model cannot read images. Switch to a model with image input, or remove the images and send again.'
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.upload(canvas.getByLabelText('Image files'), screenshot());
+		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), 'Describe this.');
+		await userEvent.click(canvas.getByRole('button', { name: /Send prompt/ }));
+		await expect(canvas.getByRole('alert')).toHaveTextContent('The current model cannot read images');
+		await expect(canvas.getByRole('img', { name: 'screenshot.png' })).toBeVisible();
+	}
+};

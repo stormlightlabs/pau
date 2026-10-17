@@ -5,6 +5,7 @@ import type {
 	CommandOption,
 	MessageQueue,
 	ModelOption,
+	PromptImage,
 	PromptQueue,
 	SavedSessionList,
 	SessionBranchOutcome,
@@ -119,6 +120,16 @@ export function sessionErrorMessage(
 			return `Pi rejected the request: ${cause.message}`;
 		case 'invalid_extension_response':
 			return `The extension could not use that answer. ${cause.message}`;
+		case 'unsupported_image_type':
+			return 'Pi accepts PNG, JPEG, GIF, and WebP images. Remove the other files and send again.';
+		case 'invalid_image_data':
+			return 'Pau could not read one of the attached images. Remove it and attach it again.';
+		case 'image_too_large':
+			return 'An attached image is larger than 5 MiB. Remove it or attach a smaller one.';
+		case 'request_images_too_large':
+			return 'The attached images add up to more than 10 MiB. Remove some and send again.';
+		case 'image_input_unsupported':
+			return 'The current model cannot read images. Switch to a model with image input, or remove the images and send again.';
 		case 'invalid_agent_response':
 			return 'Pi sent a response Pau could not read. Open Diagnostics for details.';
 		default:
@@ -380,15 +391,17 @@ export class LiveSessions {
 	}
 
 	/** Prompts an idle session, or steers or queues a follow-up during a run. */
-	send(sessionId: string, text: string, queue?: PromptQueue): Promise<void> {
+	send(sessionId: string, text: string, queue?: PromptQueue, images: PromptImage[] = []): Promise<void> {
+		const attachments = images.map((image) => ({ mime_type: image.mimeType, data: image.data }));
 		return this.#control(() =>
 			queue === undefined
-				? promptSession(this.#options.search, sessionId, text, this.#fetcher)
+				? promptSession(this.#options.search, sessionId, text, attachments, this.#fetcher)
 				: queueSessionMessage(
 						this.#options.search,
 						sessionId,
 						queue === 'follow-up' ? 'follow_up' : 'steer',
 						text,
+						attachments,
 						this.#fetcher
 					)
 		);

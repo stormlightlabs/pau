@@ -21,6 +21,7 @@ import type {
 	SessionModel,
 	SessionModelSelection,
 	SessionMessageQueue,
+	SessionImage,
 	SessionMessageRequest,
 	SessionPromptRequest,
 	SessionQueue,
@@ -369,9 +370,10 @@ export function promptSession(
 	search: string,
 	sessionId: string,
 	message: string,
+	images: SessionImage[] = [],
 	fetcher: typeof fetch = fetch
 ): Promise<void> {
-	const request: SessionPromptRequest = { message, queue: null, images: null };
+	const request: SessionPromptRequest = { message, queue: null, images: images.length > 0 ? images : null };
 	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}/prompt`, 'POST', request, fetcher);
 }
 
@@ -418,9 +420,10 @@ export function queueSessionMessage(
 	sessionId: string,
 	queue: SessionQueue,
 	message: string,
+	images: SessionImage[] = [],
 	fetcher: typeof fetch = fetch
 ): Promise<void> {
-	const request: SessionMessageRequest = { message, images: null };
+	const request: SessionMessageRequest = { message, images: images.length > 0 ? images : null };
 	const endpoint = queue === 'steer' ? 'steer' : 'follow-up';
 	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}/${endpoint}`, 'POST', request, fetcher);
 }

@@ -69,7 +69,7 @@
 	onLoadModels={(sessionId) => sessions.listModels(sessionId)}
 	onSelectModel={(sessionId, model) => sessions.selectModel(sessionId, model)}
 	onSelectThinkingLevel={(sessionId, level) => sessions.selectThinkingLevel(sessionId, level)}
-	onSend={(sessionId, text, queue) => sessions.send(sessionId, text, queue)}
+	onSend={(sessionId, text, queue, images) => sessions.send(sessionId, text, queue, images)}
 	onLoadHistory={(sessionId) => sessions.history(sessionId)}
 	onInterrupt={(sessionId) => sessions.interrupt(sessionId)}
 	onRetry={(sessionId) => sessions.retry(sessionId)}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import '../styles/tokens.css';
+	import { onDestroy } from 'svelte';
 	import ApplicationShell, { type ShellNavItem } from './ApplicationShell.svelte';
 	import {
 		historyLimit,
@@ -8,6 +9,7 @@
 		recordPrompt,
 		type HistoryCursor
 	} from './composer-history';
+	import { encodeImage, imageAccept, imageRejection, type ComposerImage, type PromptImage } from './composer-images';
 	import CommandCompletion from './CommandCompletion.svelte';
 	import { commandName, commandQuery, filterCommands } from './command-completion';
 	import ExtensionUi from './ExtensionUi.svelte';
@@ -45,7 +47,8 @@
 		/** Shows the loading state until the first session list arrives. */
 		loading?: boolean;
 		onSelectSession?: (sessionId: string) => void;
-		onSend?: (sessionId: string, text: string, queue?: PromptQueue) => void | Promise<void>;
+		/** Called with the attached images only when there are any. */
+		onSend?: (sessionId: string, text: string, queue?: PromptQueue, images?: PromptImage[]) => void | Promise<void>;
 		/**
 		 * Loads a session's earlier prompts, newest first, for recall with the
 		 * Up and Down keys in the composer. A rejection leaves the history empty.
@@ -166,6 +169,10 @@
 	let sending = $state(false);
 	let error = $state<string>();
 	let composer = $state<HTMLTextAreaElement>();
+	let imagePicker = $state<HTMLInputElement>();
+	let images = $state<ComposerImage[]>([]);
+	let imageError = $state<string>();
+	let draggingImages = $state(false);
 	let startingWorkspaceId = $state<string>();
 	let startFailure = $state<{ workspaceId: string; workspaceName: string; message: string }>();
 	let controlError = $state<string>();
@@ -462,13 +469,83 @@
 		if (next) selectSession(next.id);
 	}
 
+	/** Attaches the supported files and reports each rejected one by name. */
+	function attachImages(files: Iterable<File>): void {
+		const rejected: string[] = [];
+		let bytes = images.reduce((total, image) => total + image.size, 0);
+		for (const file of files) {
+			const reason = imageRejection(file, bytes);
+			if (reason) {
+				rejected.push(reason);
+				continue;
+			}
+			bytes += file.size;
+			images.push({
+				id: crypto.randomUUID(),
+				name: file.name,
+				size: file.size,
+				previewUrl: URL.createObjectURL(file),
+				file
+			});
+		}
+		imageError = rejected.length ? rejected.join(' ') : undefined;
+	}
+
+	function removeImage(id: string): void {
+		const image = images.find((candidate) => candidate.id === id);
+		if (!image) return;
+		URL.revokeObjectURL(image.previewUrl);
+		images = images.filter((candidate) => candidate.id !== id);
+		imageError = undefined;
+		composer?.focus();
+	}
+
+	function clearImages(): void {
+		for (const image of images) URL.revokeObjectURL(image.previewUrl);
+		images = [];
+		imageError = undefined;
+	}
+
+	onDestroy(() => {
+		for (const image of images) URL.revokeObjectURL(image.previewUrl);
+	});
+
+	function hasFiles(event: DragEvent): boolean {
+		return event.dataTransfer?.types.includes('Files') ?? false;
+	}
+
+	function handleImageDrop(event: DragEvent): void {
+		if (!hasFiles(event)) return;
+		event.preventDefault();
+		draggingImages = false;
+		if (composerUnavailable === undefined) attachImages(event.dataTransfer?.files ?? []);
+	}
+
+	function handleComposerPaste(event: ClipboardEvent): void {
+		const files = [...(event.clipboardData?.files ?? [])].filter((file) => file.type.startsWith('image/'));
+		if (files.length === 0) return;
+		event.preventDefault();
+		attachImages(files);
+	}
+
 	async function submitPrompt(): Promise<void> {
 		if (sending || !activeSession || !draft.trim()) return;
 		const text = draft.trim();
+		const queueTarget = activeSession.status === 'running' ? activeQueue : undefined;
 		sending = true;
 		error = undefined;
 		try {
-			await onSend(activeSession.id, text, activeSession.status === 'running' ? activeQueue : undefined);
+			if (images.length > 0) {
+				await onSend(
+					activeSession.id,
+					text,
+					queueTarget,
+					await Promise.all(images.map((image) => encodeImage(image.file)))
+				);
+				clearImages();
+			} else {
+				await onSend(activeSession.id, text, queueTarget);
+			}
 			histories[activeSession.id] = recordPrompt(histories[activeSession.id] ?? [], text);
 			historyCursor = idleHistoryCursor;
 			draft = '';
@@ -989,7 +1066,15 @@
 					onOpenTerminal={onOpenPiTerminal ? () => onOpenPiTerminal(activeSession.id) : undefined}>
 					<form
 						class="session-composer"
+						class:session-composer--dragging={draggingImages}
 						aria-label="Prompt composer"
+						ondragover={(event) => {
+							if (!hasFiles(event)) return;
+							event.preventDefault();
+							draggingImages = true;
+						}}
+						ondragleave={() => (draggingImages = false)}
+						ondrop={handleImageDrop}
 						onsubmit={(event) => {
 							event.preventDefault();
 							void submitPrompt();
@@ -1002,6 +1087,18 @@
 									{#if activeSession.capabilities.followUp}<option value="follow-up">Follow up</option>{/if}
 								</select>
 							</label>
+						{/if}
+						{#if images.length > 0}
+							<ul class="session-composer__images" aria-label="Attached images">
+								{#each images as image (image.id)}
+									<li>
+										<img src={image.previewUrl} alt={image.name} />
+										<button type="button" aria-label={`Remove ${image.name}`} onclick={() => removeImage(image.id)}>
+											Remove
+										</button>
+									</li>
+								{/each}
+							</ul>
 						{/if}
 						{#if commandMatches}
 							<div class="session-composer__commands">
@@ -1019,6 +1116,7 @@
 								bind:this={composer}
 								bind:value={draft}
 								onkeydown={handleComposerKeydown}
+								onpaste={handleComposerPaste}
 								oninput={() => {
 									draftTyped = true;
 									commandSelected = 0;
@@ -1035,6 +1133,25 @@
 								disabled={composerUnavailable !== undefined}></textarea>
 						</label>
 						<div class="session-composer__actions">
+							<input
+								bind:this={imagePicker}
+								class="session-view__sr-only"
+								type="file"
+								accept={imageAccept}
+								multiple
+								tabindex="-1"
+								aria-label="Image files"
+								onchange={(event) => {
+									attachImages(event.currentTarget.files ?? []);
+									event.currentTarget.value = '';
+								}} />
+							<button
+								type="button"
+								class="session-composer__attach"
+								disabled={composerUnavailable !== undefined}
+								onclick={() => imagePicker?.click()}>
+								Attach image
+							</button>
 							{#if activeSession.status === 'running' && activeSession.capabilities.interrupt}
 								<button
 									type="button"
@@ -1059,7 +1176,9 @@
 						{#if composerUnavailable}
 							<p id="composer-unavailable" class="session-composer__hint">{composerUnavailable}</p>
 						{/if}
-						{#if error}<p class="session-composer__error" role="alert">{error}</p>{/if}
+						{#if imageError || error}
+							<p class="session-composer__error" role="alert">{[imageError, error].filter(Boolean).join(' ')}</p>
+						{/if}
 					</form>
 				</ExtensionUi>
 			</div>
@@ -1645,6 +1764,7 @@
 		display: grid;
 		grid-template-areas:
 			'queue queue'
+			'images images'
 			'commands commands'
 			'field actions'
 			'error error';
@@ -1656,6 +1776,47 @@
 
 	.session-composer:focus-within {
 		border-color: var(--pau-focus);
+	}
+
+	.session-composer--dragging {
+		border-color: var(--pau-focus);
+		border-style: dashed;
+	}
+
+	.session-composer__images {
+		grid-area: images;
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--pau-space-2);
+		margin: 0;
+		padding: var(--pau-space-2) var(--pau-space-3);
+		list-style: none;
+		border-bottom: 1px solid var(--pau-border);
+	}
+
+	.session-composer__images li {
+		display: grid;
+		gap: var(--pau-space-1);
+		justify-items: start;
+	}
+
+	.session-composer__images img {
+		width: 4rem;
+		height: 4rem;
+		object-fit: cover;
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-control);
+	}
+
+	.session-composer__images button {
+		padding: 0;
+		color: var(--pau-text-muted);
+		background: none;
+		border: 0;
+		font: inherit;
+		font-size: var(--pau-type-xs);
+		text-decoration: underline;
+		cursor: pointer;
 	}
 
 	.session-composer__queue {
@@ -1746,6 +1907,12 @@
 		color: var(--pau-text-muted);
 		background: var(--pau-surface-raised);
 		cursor: not-allowed;
+	}
+
+	.session-composer__actions .session-composer__attach {
+		color: var(--pau-text);
+		background: var(--pau-surface-raised);
+		border: 1px solid var(--pau-border);
 	}
 
 	.session-composer__actions .session-composer__interrupt {

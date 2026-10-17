@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { PromptImage } from '../lib/composer-images';
 	import type { ProcessResourceSnapshot } from '../lib/types/resource-monitoring';
 	import type {
 		CommandOption,
@@ -20,7 +21,8 @@
 		compactFailure,
 		history = [],
 		clearedQueue = { steering: [], followUp: [] },
-		commands = []
+		commands = [],
+		sendFailure
 	}: {
 		workspaces: SessionWorkspace[];
 		initialSessionId?: string;
@@ -37,6 +39,8 @@
 		history?: string[];
 		/** Slash commands the composer can complete. */
 		commands?: CommandOption[];
+		/** When set, sending a prompt fails with this message. */
+		sendFailure?: string;
 		/** What clearing the queue returns. */
 		clearedQueue?: MessageQueue;
 	} = $props();
@@ -48,8 +52,10 @@
 		activeSessionId ??= initialSessionId;
 	});
 
-	function send(sessionId: string, text: string, queue?: PromptQueue): void {
-		lastAction = `${sessionId}: ${queue ?? 'prompt'}: ${text}`;
+	function send(sessionId: string, text: string, queue?: PromptQueue, images: PromptImage[] = []): void {
+		if (sendFailure) throw new Error(sendFailure);
+		const attached = images.length > 0 ? ` (${images.length} image${images.length === 1 ? '' : 's'})` : '';
+		lastAction = `${sessionId}: ${queue ?? 'prompt'}: ${text}${attached}`;
 	}
 
 	function startSession(workspaceId: string): void {

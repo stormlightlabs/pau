@@ -137,6 +137,50 @@ test('streams a live transcript and sends prompts to the session', async () => {
 	);
 });
 
+const pngFile = () => new File([new Uint8Array([1, 2, 3])], 'a.png', { type: 'image/png' });
+
+test('sends attached images with the prompt', async () => {
+	const prompt = vi.fn(() => new Response(null, { status: 202 }));
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'POST /api/sessions/session-1/prompt': prompt
+	});
+	await render(SessionRoute, props);
+
+	await page.getByLabelText('Image files').upload([pngFile()]);
+	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), 'Describe this.');
+	await userEvent.click(page.getByRole('button', { name: /Send prompt/ }));
+
+	await vi.waitFor(() =>
+		expect(prompt).toHaveBeenCalledWith(
+			expect.objectContaining({
+				body: '{"message":"Describe this.","queue":null,"images":[{"mime_type":"image/png","data":"AQID"}]}'
+			})
+		)
+	);
+});
+
+test.each([
+	['image_input_unsupported', 'The current model cannot read images.'],
+	['image_too_large', 'larger than 5 MiB'],
+	['request_images_too_large', 'more than 10 MiB'],
+	['unsupported_image_type', 'PNG, JPEG, GIF, and WebP'],
+	['invalid_image_data', 'could not read one of the attached images']
+])('explains a %s rejection and keeps the images', async (code, expected) => {
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'POST /api/sessions/session-1/prompt': () => json({ code, message: 'backend detail' }, 422)
+	});
+	await render(SessionRoute, props);
+
+	await page.getByLabelText('Image files').upload([pngFile()]);
+	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), 'Describe this.');
+	await userEvent.click(page.getByRole('button', { name: /Send prompt/ }));
+
+	await expect.element(page.getByRole('alert')).toHaveTextContent(expected);
+	await expect.element(page.getByRole('img', { name: 'a.png' })).toBeVisible();
+});
+
 test('recalls earlier prompts fetched when the session opens', async () => {
 	const { props } = setup({
 		'GET /api/sessions': () => json([idleSession]),

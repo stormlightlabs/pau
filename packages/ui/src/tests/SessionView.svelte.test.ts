@@ -352,3 +352,70 @@ test('keeps the queue and shows the reason when clearing fails', async () => {
 	await expect.element(page.getByRole('alert')).toHaveTextContent('does not support that action');
 	await expect.element(page.getByText('Keep the public API unchanged.')).toBeVisible();
 });
+
+const pngFile = (name = 'shot.png') => new File([new Uint8Array([1, 2, 3])], name, { type: 'image/png' });
+
+async function renderRunning(onSend = vi.fn()) {
+	await render(SessionView, { workspaces: sessionFixtures.running, activeSessionId: 'session-running', onSend });
+	return onSend;
+}
+
+test('attaches, removes, and sends images with the prompt', async () => {
+	const onSend = await renderRunning();
+	const picker = page.getByLabelText('Image files');
+
+	await picker.upload([pngFile('first.png'), pngFile('second.png')]);
+	await expect.element(page.getByRole('img', { name: 'second.png' })).toBeVisible();
+	await page.getByRole('button', { name: 'Remove second.png' }).click();
+	await expect.element(page.getByRole('img', { name: 'second.png' })).not.toBeInTheDocument();
+
+	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), 'Look at this.');
+	await userEvent.keyboard('{Control>}{Enter}{/Control}');
+
+	await vi.waitFor(() =>
+		expect(onSend).toHaveBeenCalledWith('session-running', 'Look at this.', 'steer', [
+			{ mimeType: 'image/png', data: 'AQID' }
+		])
+	);
+	await expect.element(page.getByRole('img', { name: 'first.png' })).not.toBeInTheDocument();
+});
+
+test('rejects unsupported and oversized files by name', async () => {
+	await renderRunning();
+	const picker = page.getByLabelText('Image files');
+
+	await picker.upload([new File(['x'], 'notes.pdf', { type: 'application/pdf' })]);
+	await expect.element(page.getByRole('alert')).toHaveTextContent('notes.pdf is not a supported image');
+
+	await picker.upload([new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'huge.png', { type: 'image/png' })]);
+	await expect.element(page.getByRole('alert')).toHaveTextContent('huge.png is larger than 5 MiB');
+	await expect.element(page.getByRole('list', { name: 'Attached images' })).not.toBeInTheDocument();
+});
+
+test('keeps images after a failed send', async () => {
+	await renderRunning(vi.fn().mockRejectedValue(new Error('The current model cannot read images.')));
+
+	await page.getByLabelText('Image files').upload([pngFile()]);
+	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), 'Describe this.');
+	await userEvent.keyboard('{Control>}{Enter}{/Control}');
+
+	await expect.element(page.getByRole('alert')).toHaveTextContent('The current model cannot read images.');
+	await expect.element(page.getByRole('img', { name: 'shot.png' })).toBeVisible();
+});
+
+test('attaches images dropped on the composer and pasted into it', async () => {
+	await renderRunning();
+	const composer = page.getByRole('form', { name: 'Prompt composer' }).element();
+	const dropped = new DataTransfer();
+	dropped.items.add(pngFile('dropped.png'));
+	composer.dispatchEvent(new DragEvent('drop', { dataTransfer: dropped, bubbles: true, cancelable: true }));
+	await expect.element(page.getByRole('img', { name: 'dropped.png' })).toBeVisible();
+
+	const pasted = new DataTransfer();
+	pasted.items.add(pngFile('pasted.png'));
+	page
+		.getByRole('textbox', { name: 'Prompt' })
+		.element()
+		.dispatchEvent(new ClipboardEvent('paste', { clipboardData: pasted, bubbles: true, cancelable: true }));
+	await expect.element(page.getByRole('img', { name: 'pasted.png' })).toBeVisible();
+});

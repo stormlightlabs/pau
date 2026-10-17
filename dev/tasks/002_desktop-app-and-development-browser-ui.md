@@ -643,18 +643,6 @@ Verification:
   not.
 - Trigger a notification from a self-hosted Pi session.
 
-### 2.114 Composer image input
-
-Status: planned
-Blocked by: none
-
-Add image input to the session composer.
-
-Verification:
-
-- Component-test adding, removing, and rejecting images.
-- Send a prompt with an image in a self-hosted Pi session.
-
 ### 2.115 Pi shell context API
 
 Status: planned
@@ -740,7 +728,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.166, 2.114, 2.156
+Blocked by: 2.166, 2.156
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

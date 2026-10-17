@@ -5,6 +5,7 @@ export { default as ExtensionUi } from './lib/ExtensionUi.svelte';
 export { default as DiagnosticsView } from './lib/DiagnosticsView.svelte';
 export { default as DiffReview } from './lib/DiffReview.svelte';
 export { default as FileEditor } from './lib/FileEditor.svelte';
+export type { PromptImage } from './lib/composer-images';
 export type { EditorFileContent, FileEditorSource } from './lib/types/file-editor';
 export { default as Icon, type IconProps } from './lib/Icon.svelte';
 export { default as McpConfigurationView } from './lib/McpConfigurationView.svelte';

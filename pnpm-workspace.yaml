@@ -8,3 +8,13 @@ allowBuilds:
   tree-sitter-bash: false
 minimumReleaseAgeExclude:
   - prettier@3.9.9
+# Pi's release pins its own packages in npm-shrinkwrap.json, which pnpm
+# ignores. Match those pins so tests run the same Pi that operators install.
+overrides:
+  '@earendil-works/chord': 1.0.0
+  '@earendil-works/pi-agent-core': 1.0.0
+  '@earendil-works/pi-ai': 1.0.0
+  '@earendil-works/pi-codemode': 1.0.0
+  '@earendil-works/pi-mcp': 1.0.0
+  '@earendil-works/pi-telemetry': 1.0.0
+  '@earendil-works/pi-tui': 1.0.0

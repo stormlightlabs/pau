@@ -23,7 +23,7 @@ import {
 	createReadToolDefinition,
 	createWriteToolDefinition,
 	type AgentToolResult,
-	type ExtensionContext
+	type ExtensionToolContext
 } from '@earendil-works/pi-coding-agent';
 import type { SandboxedMcpServer } from '@stormlightlabs/pau-protocol';
 import { PreloadDenialLog } from './preload.ts';
@@ -181,7 +181,7 @@ async function handle(request: ToolHostRequest): Promise<void> {
 				sessionManager: { getSessionId: () => session.id, getSessionFile: () => session.file },
 				model: session.model,
 				thinkingLevel: session.thinkingLevel
-			} as unknown as ExtensionContext;
+			} as unknown as ExtensionToolContext;
 			const execute = (): Promise<AgentToolResult<unknown>> =>
 				tool.execute(
 					request.toolCallId,

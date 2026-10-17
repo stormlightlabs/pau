@@ -12,10 +12,10 @@ import type { ToolAnnotations } from './gate.ts';
 import { loadPolicy } from './policy.ts';
 
 export default function pauPermissions(pi: ExtensionAPI): void {
-	// Pi 0.87.1 reports no annotations. Later releases add them to each tool's
-	// info, so the gate reads them when present and otherwise asks.
+	// Pi reports the annotations an MCP server declares for each tool. Before
+	// Pi 0.99 there are none, so every MCP tool asks.
 	const annotationsOf = (name: string): ToolAnnotations | undefined =>
-		(pi.getAllTools().find((tool) => tool.name === name) as { annotations?: ToolAnnotations } | undefined)?.annotations;
+		pi.getAllTools().find((tool) => tool.name === name)?.annotations;
 	const controller = new PermissionController(() => loadPolicy(), annotationsOf);
 
 	pi.on('session_start', (event) => {

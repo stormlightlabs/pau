@@ -15,8 +15,16 @@ import { analyzeBash, type BashUnit } from './bash.ts';
 import type { Action, Policy, Rule, RuleSource, Surface } from './policy.ts';
 import type { Grant, SessionApprovals } from './session-approvals.ts';
 
-/** A tool call as Pi passes it to the `tool_call` handler. */
-export type ToolCall = { toolName: string; toolCallId: string; input: Record<string, unknown> };
+/**
+ * A tool call as Pi passes it to the `tool_call` handler. A call made from a
+ * codemode script names the codemode call in `parentToolCallId`.
+ */
+export type ToolCall = {
+	toolName: string;
+	toolCallId: string;
+	parentToolCallId?: string;
+	input: Record<string, unknown>;
+};
 
 /** The MCP annotations the gate trusts. Servers declare them; nobody verifies them. */
 export type ToolAnnotations = { readOnlyHint?: boolean; openWorldHint?: boolean };

@@ -7,7 +7,7 @@
  * both only in sessions it launched with this extension.
  */
 import * as v from 'valibot';
-import type { Evaluation } from './gate.ts';
+import type { Evaluation, ToolCall } from './gate.ts';
 
 /** The `select` options of every request, in order. */
 export const DECISIONS = ['allow_once', 'allow_session', 'deny'] as const;
@@ -25,8 +25,8 @@ export type RequestEnvelope = {
 	requestId: string;
 	toolCallId: string;
 	/**
-	 * The codemode call that started this one. Pi 0.87.1 does not report it,
-	 * so the field is absent until Pi does.
+	 * The codemode call that started this one. Absent for direct calls and on
+	 * Pi releases before 0.99, which do not report it.
 	 */
 	parentToolCallId?: string;
 } & Pick<
@@ -35,13 +35,18 @@ export type RequestEnvelope = {
 >;
 
 /** Build the dialog title for a request. */
-export function requestTitle(requestId: string, toolCallId: string, evaluation: Evaluation): string {
+export function requestTitle(
+	requestId: string,
+	{ toolCallId, parentToolCallId }: Pick<ToolCall, 'toolCallId' | 'parentToolCallId'>,
+	evaluation: Evaluation
+): string {
 	const { tool, operation, command, paths, destination, matchedRule, reason, sessionScope } = evaluation;
 	const envelope: RequestEnvelope = {
 		pau: 'permission',
 		version: 1,
 		requestId,
 		toolCallId,
+		...(parentToolCallId && { parentToolCallId }),
 		tool,
 		operation,
 		...(command !== undefined && { command }),

@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Pau is now tested with Pi 1.0. The permission extension runs MCP tools that
+  declare themselves read-only and closed-world without asking.
 - Text across the app is now at least 12px with consistent spacing and corner
   rounding. Code uses IBM Plex Mono, and IBM Plex Sans is the default interface
   font.

@@ -23,7 +23,7 @@ const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 /// controls the session API sends, and exits with status 3 without answering
 /// a prompt whose text is `exit`.
 const FAKE_PI: &str = r#"#!/bin/sh
-if [ "$1" = '--version' ]; then echo 0.87.1; exit 0; fi
+if [ "$1" = '--version' ]; then echo 1.0.0; exit 0; fi
 [ "$1" = '--mode' ] && [ "$2" = 'rpc' ] || exit 64
 printf '%s\n' "$*" > "$PWD/args.txt"
 current=model-one

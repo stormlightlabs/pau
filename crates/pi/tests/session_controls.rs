@@ -23,6 +23,10 @@ async fn exercises_every_session_control_against_fake_rpc() {
     let session = PiSession::start(fixture.options()).unwrap();
 
     assert_eq!(session.capabilities(), PI_RPC_CAPABILITIES);
+    // A prompt that an extension command consumes starts no run.
+    session.prompt("/handled", Vec::new(), None).await.unwrap();
+    assert_eq!(session.status().await, AgentSessionStatus::Idle);
+
     session.prompt("start", Vec::new(), None).await.unwrap();
     assert_eq!(session.status().await, AgentSessionStatus::Running);
 
@@ -76,7 +80,9 @@ async fn exercises_every_session_control_against_fake_rpc() {
     assert_eq!(session.status().await, AgentSessionStatus::Stopped);
 
     let commands = fixture.commands();
-    assert_eq!(commands.len(), 7);
+    assert_eq!(commands.len(), 8);
+    assert_eq!(commands[0]["message"], "/handled");
+    let commands = &commands[1..];
     assert_command(&commands[0], "prompt");
     assert_eq!(commands[0]["message"], "start");
     assert_eq!(commands[1]["streamingBehavior"], "followUp");
@@ -627,16 +633,22 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
             printf '{"type":"agent_start"}\n'
             ;;
+        *'"message":"/handled"'*)
+            printf '{"id":"%s","type":"response","command":"prompt","success":true,"data":{"disposition":"handled"}}\n' "$id"
+            ;;
+        *'"streamingBehavior"'*)
+            printf '{"id":"%s","type":"response","command":"prompt","success":true,"data":{"disposition":"queued"}}\n' "$id"
+            ;;
         *'"type":"prompt"'*)
-            printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
+            printf '{"id":"%s","type":"response","command":"prompt","success":true,"data":{"disposition":"started"}}\n' "$id"
             printf '{"type":"agent_start"}\n'
             ;;
         *'"type":"follow_up"'*)
-            printf '{"id":"%s","type":"response","command":"follow_up","success":true}\n' "$id"
+            printf '{"id":"%s","type":"response","command":"follow_up","success":true,"data":{"disposition":"queued"}}\n' "$id"
             printf '{"type":"queue_update","steering":["change course"],"followUp":["later"]}\n'
             ;;
         *'"type":"steer"'*)
-            printf '{"id":"%s","type":"response","command":"steer","success":true}\n' "$id"
+            printf '{"id":"%s","type":"response","command":"steer","success":true,"data":{"disposition":"queued"}}\n' "$id"
             ;;
         *'"type":"clear_queue"'*)
             printf '{"id":"%s","type":"response","command":"clear_queue","success":true,"data":{"steering":["change course"],"followUp":["later"]}}\n' "$id"

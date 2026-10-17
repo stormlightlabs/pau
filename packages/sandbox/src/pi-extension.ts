@@ -74,23 +74,33 @@ export default function pauSandbox(pi: ExtensionAPI): void {
 					}
 				};
 				let observed: PreloadDenial[] = [];
+				// Tell the model what the sandbox blocked so it does not retry blindly.
+				const explain = (message: string): string | undefined =>
+					explainFailure(session.policy, name, params, message, observed).note;
 				try {
-					return (await session.run(async (client) => {
+					const result = await session.run(async (client) => {
 						// Native reports belong to the session rather than a tool request.
 						// Discard reports completed before this call to avoid stale attribution.
 						await client.takeDenials();
 						try {
-							return await client.executeTool(call, signal, onUpdate as never);
-						} catch (error) {
+							const result = await client.executeTool(call, signal, onUpdate as never);
 							// Unified logging is asynchronous. Wait only after a failed call.
+							if (result.isError) observed = await client.takeDenials(500);
+							return result;
+						} catch (error) {
 							observed = await client.takeDenials(500);
 							throw error;
 						}
-					})) as never;
+					});
+					// A tool fails either by throwing or, like bash on a non-zero exit, by
+					// returning an error result.
+					if (!result.isError) return result as never;
+					const text = result.content.map((part) => (part.type === 'text' ? part.text : '')).join('\n');
+					const note = explain(text);
+					return (note ? { ...result, content: [...result.content, { type: 'text', text: note }] } : result) as never;
 				} catch (error) {
-					// Tell the model what the sandbox blocked so it does not retry blindly.
 					const message = error instanceof Error ? error.message : String(error);
-					const { note } = explainFailure(session.policy, name, params, message, observed);
+					const note = explain(message);
 					if (!note) throw error;
 					throw new Error(`${message}\n\n${note}`, { cause: error });
 				}

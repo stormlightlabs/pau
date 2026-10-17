@@ -215,6 +215,40 @@ report(
 );
 if (failures.length > 0) console.log(`\nPi stderr:\n${main.stderr.trim()}`);
 
+// Pi's built-in MCP client reports each server tool's annotations. The
+// confirm-writes profile runs a read-only, closed-world tool without a dialog
+// and asks for one that declares neither.
+const mcpConfig = path.join(home, '.pi/agent/mcp.json');
+const mcpServer = fileURLToPath(new URL('mcp-server.ts', import.meta.url));
+writeFileSync(
+	mcpConfig,
+	JSON.stringify({ mcpServers: { fixture: { command: process.execPath, args: [mcpServer], exposure: 'direct' } } })
+);
+const lookupMarker = marker('lookup.txt');
+const publishMarker = marker('publish.txt');
+const mcp = await runPi(
+	[
+		{ tool: 'mcp__fixture__lookup', args: { path: lookupMarker } },
+		{ tool: 'mcp__fixture__publish', args: { path: publishMarker } }
+	],
+	{ PAU_PERMISSION_POLICY_FILE: writePolicy(fixture, { profile: 'confirm-writes' }) },
+	() => ({ cancelled: true })
+);
+rmSync(mcpConfig);
+report(
+	mcp.ends.get('call-0')?.isError === false &&
+		!dialogFor(mcp, 0) &&
+		recordFor(mcp, 0)?.outcome === 'allowed' &&
+		existsSync(lookupMarker),
+	'mcp: a read-only, closed-world MCP server tool runs without a dialog',
+	mcp.ends.get('call-0')?.text.slice(0, 100)
+);
+report(
+	dialogFor(mcp, 1)?.request.reason === 'mcp_unannotated' && !existsSync(publishMarker),
+	'mcp: an MCP server tool without those annotations asks'
+);
+if (!mcp.ends.has('call-0')) console.log(`\nPi stderr:\n${mcp.stderr.trim()}`);
+
 // Abort drops the pending dialog, and Pi ignores a later answer.
 const aborted = await runPi(
 	[{ tool: 'bash', args: { command: `touch ${marker('aborted.txt')}` } }],

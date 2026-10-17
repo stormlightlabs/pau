@@ -73,8 +73,8 @@ Both profiles start from the same rules, which file rules then override:
 - `read`, `grep`, `find`, and `ls` pass inside the workspace and ask outside it.
 - `write` and `edit` ask for every path.
 - Every other tool asks, except an MCP tool that declares
-  `readOnlyHint: true` and `openWorldHint: false`. Pi 0.87.1 reports no
-  annotations, so every MCP tool asks there.
+  `readOnlyHint: true` and `openWorldHint: false`. Pi releases before 0.99
+  report no annotations, so every MCP tool asks there.
 - Every `bash` command asks.
 
 `confirm-mutating` also runs `bash` commands that the vendored analysis proves

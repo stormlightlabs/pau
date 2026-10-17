@@ -94,7 +94,7 @@ pub const CRATE_NAME: &str = "pau-pi";
 pub const MIN_SUPPORTED_PI_VERSION: &str = "0.87.1";
 
 /// The newest Pi release verified with this adapter.
-pub const LATEST_VERIFIED_PI_VERSION: &str = "0.87.1";
+pub const LATEST_VERIFIED_PI_VERSION: &str = "1.0.0";
 
 const REQUIRED_HELP_MARKERS: [&str; 2] = ["--mode", "rpc"];
 
@@ -550,7 +550,7 @@ mod tests {
 
     #[test]
     fn uses_a_configured_path_and_reports_configuration() {
-        let fixture = PiFixture::new("0.87.1", true);
+        let fixture = PiFixture::new("1.0.0", true);
         let workspace = fixture.root.path().join("workspace");
         let home = fixture.root.path().join("home");
         let agent = PathBuf::from("~/custom-pi");
@@ -566,7 +566,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.executable_path, fixture.executable);
-        assert_eq!(result.version, Version::new(0, 87, 1));
+        assert_eq!(result.version, Version::new(1, 0, 0));
         assert_eq!(result.compatibility, PiCompatibility::Verified);
         assert_eq!(result.configuration.agent_directory, home.join("custom-pi"));
         assert_eq!(
@@ -593,7 +593,7 @@ mod tests {
 
     #[test]
     fn finds_pi_on_path() {
-        let fixture = PiFixture::new("0.87.1", true);
+        let fixture = PiFixture::new("1.0.0", true);
         let result = discover_pi(&fixture.options(None)).unwrap();
 
         assert_eq!(result.executable_path, fixture.executable);
@@ -605,7 +605,7 @@ mod tests {
 
     #[test]
     fn reports_a_missing_configured_executable() {
-        let fixture = PiFixture::new("0.87.1", true);
+        let fixture = PiFixture::new("1.0.0", true);
         let missing = fixture.root.path().join("missing-pi");
         let error = discover_pi(&fixture.options(Some(missing.clone()))).unwrap_err();
 
@@ -616,7 +616,7 @@ mod tests {
 
     #[test]
     fn reports_a_missing_path_executable() {
-        let fixture = PiFixture::new("0.87.1", true);
+        let fixture = PiFixture::new("1.0.0", true);
         let mut options = fixture.options(None);
         options.path = OsString::new();
         let error = discover_pi(&options).unwrap_err();
@@ -628,7 +628,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn rejects_a_non_executable_file() {
-        let fixture = PiFixture::new("0.87.1", true);
+        let fixture = PiFixture::new("1.0.0", true);
         fs::set_permissions(&fixture.executable, fs::Permissions::from_mode(0o644)).unwrap();
         let error = discover_pi(&fixture.options(None)).unwrap_err();
 
@@ -649,7 +649,7 @@ mod tests {
 
     #[test]
     fn accepts_a_newer_version_after_an_rpc_capability_check() {
-        let fixture = PiFixture::new("0.88.0", true);
+        let fixture = PiFixture::new("1.1.0", true);
         let result = discover_pi(&fixture.options(None)).unwrap();
 
         assert_eq!(result.compatibility, PiCompatibility::NewerUnverified);
@@ -658,7 +658,7 @@ mod tests {
 
     #[test]
     fn rejects_a_newer_version_without_rpc_capability() {
-        let fixture = PiFixture::new("0.88.0", false);
+        let fixture = PiFixture::new("1.1.0", false);
         let error = discover_pi(&fixture.options(None)).unwrap_err();
 
         assert_eq!(error.code(), PiDiscoveryErrorCode::UnsupportedVersion);

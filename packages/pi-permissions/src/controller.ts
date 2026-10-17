@@ -81,7 +81,7 @@ export class PermissionController {
 				return deny('rule', evaluation.ruleReason ?? `Blocked by the Pau permission policy (${evaluation.reason}).`);
 			}
 			const started = performance.now();
-			const value = await ui.select(requestTitle(requestId, call.toolCallId, evaluation), [...DECISIONS], {
+			const value = await ui.select(requestTitle(requestId, call, evaluation), [...DECISIONS], {
 				...(signal && { signal }),
 				timeout: state.timeout
 			});

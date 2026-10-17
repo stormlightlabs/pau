@@ -7,6 +7,7 @@ import type {
 	ExtensionAPI,
 	ExtensionCommandContext,
 	ExtensionContext,
+	ExtensionToolContext,
 	RegisteredCommand,
 	ToolDefinition
 } from '@earendil-works/pi-coding-agent';
@@ -248,7 +249,7 @@ function createHarness(cwd: string, environment: NodeJS.ProcessEnv, branch: Sess
 				return branch;
 			}
 		}
-	} as unknown as ExtensionCommandContext;
+	} as unknown as ExtensionCommandContext & ExtensionToolContext;
 
 	createClaudePiExtension({
 		executablePath: fakeClaude,

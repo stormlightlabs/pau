@@ -90,6 +90,13 @@ describe('PermissionController', () => {
 		expect(JSON.stringify(records)).not.toContain('notes.txt');
 	});
 
+	it('names the codemode call that made a nested call', async () => {
+		const { ui, dialogs } = fakeUi(() => 'deny');
+		const request = { ...call('mcp__docs__search', {}), parentToolCallId: 'codemode-1' };
+		await controller().handle(request, ui, undefined);
+		expect(dialogs[0]?.request).toMatchObject({ toolCallId: request.toolCallId, parentToolCallId: 'codemode-1' });
+	});
+
 	it('asks again after allow_once', async () => {
 		const { ui, dialogs } = fakeUi(() => 'allow_once');
 		const gate = controller();

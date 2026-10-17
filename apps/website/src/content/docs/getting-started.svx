@@ -27,8 +27,9 @@ pnpm generate:protocol
 
 ## Install Pi
 
-Pau requires Pi 0.87.1 or newer. Install Pi globally if `pi --version` does not
-report a supported release:
+Pau requires Pi 0.87.1 or newer and is tested with Pi 1.0.0. A newer Pi release
+runs with a warning that Pau has not been tested with it. Install Pi globally if
+`pi --version` does not report a supported release:
 
 ```bash
 npm install --global @earendil-works/pi-coding-agent

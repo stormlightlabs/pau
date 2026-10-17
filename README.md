@@ -78,9 +78,10 @@ pnpm generate:protocol
 
 ## Pi installation
 
-Pau discovers Pi from a configured executable path or `PATH`. The current
-compatibility floor is Pi 0.87.1. Install it globally with npm if `pi --version`
-does not report a supported release:
+Pau discovers Pi from a configured executable path or `PATH`. It supports Pi
+0.87.1 and later, is tested with Pi 1.0.0, and warns when it runs a newer
+release. Install Pi globally with npm if `pi --version` does not report a
+supported release:
 
 ```sh
 npm install --global @earendil-works/pi-coding-agent

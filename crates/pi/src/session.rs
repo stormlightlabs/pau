@@ -428,8 +428,17 @@ impl PiSession {
             _ => return Err(not_ready(control, *status)),
         };
         PiImage::attach(&mut command, images);
-        self.command(control, command).await?;
-        *status = AgentSessionStatus::Running;
+        let response = self.command(control, command).await?;
+        // An extension command or input handler can consume the prompt, and
+        // then no run starts. Pi releases before 0.99 do not report a
+        // disposition, so treat a missing one as a started run.
+        let disposition = response
+            .get("data")
+            .and_then(|data| data.get("disposition"))
+            .and_then(Value::as_str);
+        if disposition != Some("handled") {
+            *status = AgentSessionStatus::Running;
+        }
         Ok(())
     }
 

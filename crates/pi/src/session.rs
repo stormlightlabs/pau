@@ -3,8 +3,8 @@ use crate::{
     StartPiProcessOptions,
 };
 use pau_agent::{
-    AgentCapabilities, AgentControl, AgentControlError, AgentSessionStatus, PromptQueueChoice,
-    ThinkingLevel,
+    AgentCapabilities, AgentControl, AgentControlError, AgentMessageQueue, AgentSessionStatus,
+    PromptQueueChoice, ThinkingLevel,
 };
 use serde_json::{Value, json};
 use std::error::Error;
@@ -18,6 +18,7 @@ pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     follow_up: true,
     steer: true,
     interrupt: true,
+    message_queue: true,
     model_selection: true,
     thinking_level: true,
     stop: true,
@@ -74,6 +75,7 @@ pub struct PiSession {
     process: Arc<PiProcess>,
     capabilities: AgentCapabilities,
     status: Arc<Mutex<AgentSessionStatus>>,
+    queue: Arc<Mutex<AgentMessageQueue>>,
 }
 
 impl PiSession {
@@ -87,11 +89,13 @@ impl PiSession {
     pub fn from_process(process: PiProcess, capabilities: AgentCapabilities) -> Self {
         let process = Arc::new(process);
         let status = Arc::new(Mutex::new(AgentSessionStatus::Idle));
-        observe_lifecycle(process.subscribe(), Arc::clone(&status));
+        let queue = Arc::new(Mutex::new(AgentMessageQueue::default()));
+        observe_lifecycle(process.subscribe(), Arc::clone(&status), Arc::clone(&queue));
         Self {
             process,
             capabilities,
             status,
+            queue,
         }
     }
 
@@ -189,6 +193,35 @@ impl PiSession {
     pub async fn steer(&self, message: impl Into<String>) -> Result<(), PiSessionError> {
         self.running_message_control(AgentControl::Steer, "steer", message.into())
             .await
+    }
+
+    /// Returns the steer and follow-up messages Pi last reported as pending.
+    ///
+    /// Pi has no command that reads the queue. This snapshot follows its
+    /// `queue_update` events, each of which carries the complete queue.
+    pub async fn message_queue(&self) -> Result<AgentMessageQueue, PiSessionError> {
+        self.require_capability(AgentControl::MessageQueue)?;
+        Ok(self.queue.lock().await.clone())
+    }
+
+    /// Removes every pending steer and follow-up message and returns their text.
+    pub async fn clear_message_queue(&self) -> Result<AgentMessageQueue, PiSessionError> {
+        let control = AgentControl::MessageQueue;
+        self.require_capability(control)?;
+        let response = self
+            .command(control, json!({"type": "clear_queue"}))
+            .await?;
+        let cleared = response
+            .get("data")
+            .and_then(queue_from_value)
+            .ok_or_else(|| {
+                PiSessionError::Control(AgentControlError::Rejected {
+                    control,
+                    message: "Pi returned an invalid queue response".to_owned(),
+                })
+            })?;
+        *self.queue.lock().await = AgentMessageQueue::default();
+        Ok(cleared)
     }
 
     /// Aborts active work while leaving the Pi process available for another prompt.
@@ -369,14 +402,35 @@ fn not_ready(control: AgentControl, status: AgentSessionStatus) -> PiSessionErro
     invalid_state(control, status, "wait for the session to become idle")
 }
 
+fn queue_from_value(value: &Value) -> Option<AgentMessageQueue> {
+    let messages = |key: &str| -> Option<Vec<String>> {
+        value
+            .get(key)?
+            .as_array()?
+            .iter()
+            .map(|message| message.as_str().map(str::to_owned))
+            .collect()
+    };
+    Some(AgentMessageQueue {
+        steering: messages("steering")?,
+        follow_up: messages("followUp")?,
+    })
+}
+
 fn observe_lifecycle(
     mut output: broadcast::Receiver<PiProcessOutput>,
     status: Arc<Mutex<AgentSessionStatus>>,
+    queue: Arc<Mutex<AgentMessageQueue>>,
 ) {
     tokio::spawn(async move {
         loop {
             match output.recv().await {
                 Ok(PiProcessOutput::Event(event)) => {
+                    if event.get("type").and_then(Value::as_str) == Some("queue_update")
+                        && let Some(update) = queue_from_value(&event)
+                    {
+                        *queue.lock().await = update;
+                    }
                     let next = match event.get("type").and_then(Value::as_str) {
                         Some("agent_start") => Some(AgentSessionStatus::Running),
                         Some("agent_settled") => Some(AgentSessionStatus::Idle),

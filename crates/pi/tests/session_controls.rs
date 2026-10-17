@@ -1,8 +1,8 @@
 #![cfg(unix)]
 
 use pau_agent::{
-    AgentCapabilities, AgentControl, AgentControlError, AgentSessionStatus, PromptQueueChoice,
-    ThinkingLevel,
+    AgentCapabilities, AgentControl, AgentControlError, AgentMessageQueue, AgentSessionStatus,
+    PromptQueueChoice, ThinkingLevel,
 };
 use pau_pi::{
     PI_RPC_CAPABILITIES, PiExtensionUiResponse, PiProcess, PiSession, PiSessionError,
@@ -79,6 +79,59 @@ async fn exercises_every_session_control_against_fake_rpc() {
     assert_eq!(commands[5]["modelId"], "model-one");
     assert_command(&commands[6], "set_thinking_level");
     assert_eq!(commands[6]["level"], "xhigh");
+}
+
+#[tokio::test]
+async fn reads_and_clears_the_message_queue() {
+    let fixture = FakePi::new(CONTROL_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+    assert_eq!(
+        session.message_queue().await.unwrap(),
+        AgentMessageQueue::default()
+    );
+
+    session.prompt("start", None).await.unwrap();
+    session.steer("change course").await.unwrap();
+    session.follow_up("later").await.unwrap();
+    let queued = AgentMessageQueue {
+        steering: vec!["change course".to_owned()],
+        follow_up: vec!["later".to_owned()],
+    };
+    wait_for_queue(&session, &queued).await;
+
+    let cleared = session.clear_message_queue().await.unwrap();
+    assert_eq!(cleared, queued);
+    assert_eq!(
+        session.message_queue().await.unwrap(),
+        AgentMessageQueue::default()
+    );
+
+    let unsupported = PiSession::from_process(
+        PiProcess::start(fixture.options()).unwrap(),
+        AgentCapabilities {
+            message_queue: false,
+            ..PI_RPC_CAPABILITIES
+        },
+    );
+    assert!(matches!(
+        unsupported.clear_message_queue().await.unwrap_err(),
+        PiSessionError::Control(AgentControlError::Unsupported {
+            control: AgentControl::MessageQueue,
+        })
+    ));
+    unsupported.stop().await.unwrap();
+    session.stop().await.unwrap();
+    assert_command(fixture.commands().last().unwrap(), "clear_queue");
+}
+
+async fn wait_for_queue(session: &PiSession, expected: &AgentMessageQueue) {
+    for _ in 0..100 {
+        if session.message_queue().await.unwrap() == *expected {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("queue never reached {expected:?}");
 }
 
 #[tokio::test]
@@ -170,9 +223,13 @@ while IFS= read -r command; do
             ;;
         *'"type":"follow_up"'*)
             printf '{"id":"%s","type":"response","command":"follow_up","success":true}\n' "$id"
+            printf '{"type":"queue_update","steering":["change course"],"followUp":["later"]}\n'
             ;;
         *'"type":"steer"'*)
             printf '{"id":"%s","type":"response","command":"steer","success":true}\n' "$id"
+            ;;
+        *'"type":"clear_queue"'*)
+            printf '{"id":"%s","type":"response","command":"clear_queue","success":true,"data":{"steering":["change course"],"followUp":["later"]}}\n' "$id"
             ;;
         *'"type":"abort"'*)
             printf '{"id":"%s","type":"response","command":"abort","success":true}\n' "$id"

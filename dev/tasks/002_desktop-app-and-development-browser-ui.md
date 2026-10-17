@@ -755,21 +755,10 @@ Verification:
 
 - Component-test shell context and its unsupported state.
 
-### 2.70 Pi message queue API
-
-Status: planned
-Blocked by: none
-
-Expose queued messages through the desktop API.
-
-Verification:
-
-- Cover queueing and dequeueing against the Pi fixture.
-
 ### 2.71 Message queue view
 
 Status: planned
-Blocked by: 2.70, 2.146
+Blocked by: 2.146
 
 Show queued messages in the session view.
 

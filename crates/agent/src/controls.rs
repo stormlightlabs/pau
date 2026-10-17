@@ -13,6 +13,8 @@ pub enum AgentControl {
     Steer,
     /// Abort the active run without stopping the session process.
     Interrupt,
+    /// Read or clear the queued steer and follow-up messages.
+    MessageQueue,
     /// Select a provider model.
     SelectModel,
     /// Select how much reasoning the model applies.
@@ -28,6 +30,7 @@ impl fmt::Display for AgentControl {
             Self::FollowUp => "follow-up",
             Self::Steer => "steer",
             Self::Interrupt => "interrupt",
+            Self::MessageQueue => "message queue",
             Self::SelectModel => "model selection",
             Self::SetThinkingLevel => "thinking-level selection",
             Self::Stop => "stop",
@@ -47,6 +50,8 @@ pub struct AgentCapabilities {
     pub steer: bool,
     /// Whether the adapter can interrupt an active run.
     pub interrupt: bool,
+    /// Whether the adapter exposes and can clear its queued messages.
+    pub message_queue: bool,
     /// Whether the adapter can select a model.
     pub model_selection: bool,
     /// Whether the adapter can change the thinking level.
@@ -63,11 +68,21 @@ impl AgentCapabilities {
             AgentControl::FollowUp => self.follow_up,
             AgentControl::Steer => self.steer,
             AgentControl::Interrupt => self.interrupt,
+            AgentControl::MessageQueue => self.message_queue,
             AgentControl::SelectModel => self.model_selection,
             AgentControl::SetThinkingLevel => self.thinking_level,
             AgentControl::Stop => self.stop,
         }
     }
+}
+
+/// Messages waiting in an agent's steer and follow-up queues.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct AgentMessageQueue {
+    /// Messages delivered after the current assistant turn and its tool calls.
+    pub steering: Vec<String>,
+    /// Messages delivered after all current work finishes.
+    pub follow_up: Vec<String>,
 }
 
 /// How a prompt sent during an active run enters Pi's queues.

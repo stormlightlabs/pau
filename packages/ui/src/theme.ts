@@ -1,3 +1,5 @@
+import type { ITheme } from '@xterm/xterm';
+
 /** Names of the color themes bundled with Pau. */
 export type ThemeName = 'eldritch' | 'nord' | 'iceberg' | 'catppuccin-mocha' | 'vitesse-dark';
 
@@ -416,4 +418,35 @@ export function themeCssProperties(themeName: ThemeName, fontName: UiFontName): 
 		'--pau-syntax-invalid': syntax.invalid,
 		'--pau-font-ui': `${UI_FONTS[fontName].family}, ui-sans-serif, system-ui, sans-serif`
 	};
+}
+
+const ANSI_NAMES = [
+	'black',
+	'red',
+	'green',
+	'yellow',
+	'blue',
+	'magenta',
+	'cyan',
+	'white',
+	'brightBlack',
+	'brightRed',
+	'brightGreen',
+	'brightYellow',
+	'brightBlue',
+	'brightMagenta',
+	'brightCyan',
+	'brightWhite'
+] as const satisfies readonly (keyof ITheme)[];
+
+/**
+ * Converts a bundled theme's terminal palette into xterm.js colors. The cursor
+ * accent uses the terminal background so the character under a block cursor
+ * stays readable.
+ */
+export function terminalTheme(themeName: ThemeName): ITheme {
+	const { background, foreground, cursor, selection, ansi } = THEMES[themeName].terminal;
+	const colors: ITheme = { background, foreground, cursor, cursorAccent: background, selectionBackground: selection };
+	for (const [index, name] of ANSI_NAMES.entries()) colors[name] = ansi[index];
+	return colors;
 }

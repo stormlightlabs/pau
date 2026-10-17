@@ -83,3 +83,19 @@ set.
 content. Search follows the same hidden and ignored-file controls, skips known
 credential files and files larger than 2 MiB, and returns at most 200 matches
 by default. Set `limit` to request up to 1,000 matches.
+
+## Use a terminal
+
+The workspace terminal runs the shell named by `$SHELL` in the workspace root.
+Choose **Open a terminal** to start the first one and **New terminal** to add
+more tabs. Use the arrow keys to move between tabs and Delete to close the
+focused tab. Closing a tab stops its shell.
+
+Select output with the mouse, then use the copy button or the platform copy
+shortcut. On macOS that is Command-C and Command-V. On Linux and Windows, use
+Ctrl+Shift+C and Ctrl+Shift+V so Ctrl+C still interrupts the running program.
+Pasting needs clipboard permission.
+
+The terminal follows the active theme's ANSI colors and refits its grid when
+the window changes size. When the shell exits, the tab keeps its output and
+shows the exit code or the signal that ended it.

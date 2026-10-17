@@ -64,6 +64,10 @@ assertions.
 Axum API with fake agent executables. These tests cover local route composition,
 reconnect, concurrent sessions, files, terminal, external editor launch,
 resources, and desktop capability boundaries from the operator's point of view.
+They live in `*.integration.test.ts` files and run with
+`pnpm --filter @stormlightlabs/pau-desktop test:integration`, which builds
+`pau-server` and starts it with a temporary database and workspace. The default
+`test` script excludes them so it does not need a Cargo build.
 Tauri smoke coverage adds startup, native capability wiring, backend lifecycle,
 asset loading, and shutdown.
 

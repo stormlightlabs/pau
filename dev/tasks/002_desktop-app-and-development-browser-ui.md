@@ -177,20 +177,6 @@ Verification:
 
 ## Terminal and shell
 
-### 2.25 Terminal view
-
-Status: planned
-Blocked by: none
-
-Integrate xterm.js with terminal tabs, fit, copy and paste, exit state, and the
-active ANSI theme.
-
-Verification:
-
-- Run shell, Unicode, selection, copy and paste, and resize scenarios in
-  Playwright.
-- Confirm exit state and theme changes in each theme.
-
 ### 2.57 Terminal detach and replay
 
 Status: planned
@@ -206,7 +192,7 @@ Verification:
 ### 2.58 Terminal reattach
 
 Status: planned
-Blocked by: 2.25, 2.57
+Blocked by: 2.57
 
 Reattach terminal tabs with their replayed scrollback after a route change.
 
@@ -229,7 +215,7 @@ Verification:
 ### 2.96 Terminal layouts
 
 Status: planned
-Blocked by: 2.25
+Blocked by: none
 
 Add main-surface and bottom-dock terminal layouts.
 
@@ -240,7 +226,7 @@ Verification:
 ### 2.97 Terminal search
 
 Status: planned
-Blocked by: 2.25
+Blocked by: none
 
 Add search within terminal output.
 
@@ -251,7 +237,7 @@ Verification:
 ### 2.98 Terminal links
 
 Status: planned
-Blocked by: 2.25
+Blocked by: none
 
 Detect conservative links in terminal output and open them on request.
 
@@ -262,7 +248,7 @@ Verification:
 ### 2.99 Terminal activity
 
 Status: planned
-Blocked by: 2.25
+Blocked by: none
 
 Mark terminal tabs that have new output while they are in the background.
 
@@ -273,7 +259,7 @@ Verification:
 ### 2.100 Full-screen terminal programs
 
 Status: planned
-Blocked by: 2.25
+Blocked by: none
 
 Support alternate-screen output and mouse input in the terminal view.
 
@@ -306,7 +292,7 @@ Verification:
 ### 2.101 Sandboxed terminal selection
 
 Status: planned
-Blocked by: 2.25, 2.56
+Blocked by: 2.56
 
 Let the operator open a terminal with a sandbox profile and show which profile
 each terminal uses.
@@ -343,7 +329,7 @@ Verification:
 ### 2.103 Shell environment selector
 
 Status: planned
-Blocked by: 2.25, 2.102
+Blocked by: 2.102
 
 Let the operator choose a workspace's shell environment and report the active
 mode in each terminal.
@@ -931,7 +917,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.25, 2.69, 2.71, 2.161, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120, 2.148,
+Blocked by: 2.69, 2.71, 2.161, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120, 2.148,
 2.152, 2.156
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
@@ -1299,7 +1285,7 @@ Verification:
 ### 2.38 Website deployment
 
 Status: planned
-Blocked by: 2.25, 2.140, 2.141, 2.142, 2.143
+Blocked by: 2.140, 2.141, 2.142, 2.143
 
 Deploy `apps/website` to Cloudflare Pages at `https://pau.stormlightlabs.org`
 with preview deployments for pull requests.
@@ -1329,7 +1315,7 @@ Verification:
 ### 2.39 AppImage packaging
 
 Status: planned
-Blocked by: 2.25, 2.40, 2.45, 2.51
+Blocked by: 2.40, 2.45, 2.51
 
 Package the first Linux desktop release as an AppImage. Leave `.deb`, RPM,
 Intel macOS, signing, and notarization until release demand or available signing

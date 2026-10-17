@@ -12,6 +12,15 @@ export { default as ProcessesView } from './lib/ProcessesView.svelte';
 export { default as SandboxSettingsView } from './lib/SandboxSettingsView.svelte';
 export { default as SessionResourceSummary } from './lib/SessionResourceSummary.svelte';
 export { default as SessionView } from './lib/SessionView.svelte';
+export { default as TerminalSurface } from './lib/TerminalSurface.svelte';
+export { default as TerminalView } from './lib/TerminalView.svelte';
+export type {
+	TerminalConnection,
+	TerminalConnectionEvents,
+	TerminalExit,
+	TerminalSource,
+	TerminalTab
+} from './lib/types/terminal';
 export { default as WorkspaceFiles } from './lib/WorkspaceFiles.svelte';
 export type {
 	AdapterDiagnostic,
@@ -72,7 +81,15 @@ export type {
 	TranscriptTool
 } from './lib/types/session';
 export { ICONS, type IconKind } from './icons';
-export { THEMES, UI_FONTS, themeCssProperties, type PauTheme, type ThemeName, type UiFontName } from './theme';
+export {
+	THEMES,
+	UI_FONTS,
+	terminalTheme,
+	themeCssProperties,
+	type PauTheme,
+	type ThemeName,
+	type UiFontName
+} from './theme';
 export { shellNavigationFixtures } from './fixtures/application-shell';
 export { capabilityFixtures, type CapabilityFixture } from './fixtures/capabilities';
 export { diagnosticFixtures } from './fixtures/diagnostics';

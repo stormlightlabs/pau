@@ -12,7 +12,14 @@ export default defineConfig(({ mode }) => {
 		server: { proxy: { '/api': { target: 'http://127.0.0.1:3001', headers, ws: true } } },
 		test: {
 			projects: [
-				{ extends: true, test: { name: 'unit', include: ['src/**/*.test.ts'], exclude: ['src/**/*.svelte.test.ts'] } },
+				{
+					extends: true,
+					test: {
+						name: 'unit',
+						include: ['src/**/*.test.ts'],
+						exclude: ['src/**/*.svelte.test.ts', 'src/**/*.integration.test.ts']
+					}
+				},
 				{
 					extends: true,
 					test: {
@@ -20,6 +27,21 @@ export default defineConfig(({ mode }) => {
 						include: ['src/**/*.svelte.test.ts'],
 						setupFiles: ['vitest-browser-svelte'],
 						browser: { enabled: true, headless: true, provider: playwright(), instances: [{ browser: 'chromium' }] }
+					}
+				},
+				{
+					extends: true,
+					test: {
+						name: 'integration',
+						include: ['src/**/*.integration.test.ts'],
+						globalSetup: ['scripts/loopback-server.ts'],
+						setupFiles: ['vitest-browser-svelte'],
+						browser: {
+							enabled: true,
+							headless: true,
+							provider: playwright({ contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }),
+							instances: [{ browser: 'chromium' }]
+						}
 					}
 				}
 			]

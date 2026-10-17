@@ -14,6 +14,8 @@ import type {
 	SessionPromptRequest,
 	SessionQueue,
 	StartSessionRequest,
+	TerminalInfo,
+	TerminalSize,
 	VersionResponse,
 	Workspace,
 	WorkspaceSandbox
@@ -366,16 +368,63 @@ export function stopSession(search: string, sessionId: string, fetcher: typeof f
 	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}`, 'DELETE', undefined, fetcher);
 }
 
+/** Opens the user's shell in a workspace root. */
+export async function createTerminal(
+	search: string,
+	workspaceId: string,
+	size: TerminalSize,
+	fetcher: typeof fetch = fetch
+): Promise<TerminalInfo> {
+	const response = await fetcher(`${resolveApiOrigin(search)}/api/terminals`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', ...authorization(resolveApiToken(search)) },
+		body: JSON.stringify({ workspace_id: workspaceId, command: null, size })
+	});
+	return responseJson<TerminalInfo>(response);
+}
+
+/** Stops a terminal and waits for its process to exit. */
+export async function closeTerminal(
+	search: string,
+	terminalId: string,
+	fetcher: typeof fetch = fetch
+): Promise<TerminalInfo> {
+	const response = await fetcher(`${resolveApiOrigin(search)}/api/terminals/${encodeURIComponent(terminalId)}`, {
+		method: 'DELETE',
+		headers: authorization(resolveApiToken(search))
+	});
+	return responseJson<TerminalInfo>(response);
+}
+
+/**
+ * Builds an authenticated WebSocket handshake. Browsers cannot set WebSocket
+ * headers, so the launch token travels as a `pau.bearer.<token>` subprotocol.
+ */
+function socketHandshake(search: string, browserOrigin: string, path: string): { url: URL; protocols: string[] } {
+	const token = resolveApiToken(search);
+	const url = new URL(path, resolveApiOrigin(search) || browserOrigin);
+	url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+	return { url, protocols: token === undefined ? ['pau'] : ['pau', `pau.bearer.${token}`] };
+}
+
 /** Builds an authenticated browser WebSocket handshake for the event stream. */
 export function resolveEventSocket(
 	search: string,
 	browserOrigin: string,
 	after?: number
 ): { url: string; protocols: string[] } {
-	const token = resolveApiToken(search);
-	const apiOrigin = resolveApiOrigin(search) || browserOrigin;
-	const url = new URL('/api/events', apiOrigin);
-	url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+	const { url, protocols } = socketHandshake(search, browserOrigin, '/api/events');
 	if (after !== undefined) url.searchParams.set('after', String(after));
-	return { url: url.href, protocols: token === undefined ? ['pau'] : ['pau', `pau.bearer.${token}`] };
+	return { url: url.href, protocols };
+}
+
+/** Builds an authenticated browser WebSocket handshake for one terminal's byte stream. */
+export function resolveTerminalSocket(
+	search: string,
+	browserOrigin: string,
+	terminalId: string
+): { url: string; protocols: string[] } {
+	const path = `/api/terminals/${encodeURIComponent(terminalId)}/stream`;
+	const { url, protocols } = socketHandshake(search, browserOrigin, path);
+	return { url: url.href, protocols };
 }

@@ -2,6 +2,10 @@
 export const ICONS = {
 	agents: 'i-tabler-stack-2',
 	close: 'i-tabler-x',
+	copy: 'i-tabler-copy',
+	paste: 'i-tabler-clipboard',
+	plus: 'i-tabler-plus',
+	terminal: 'i-tabler-terminal-2',
 	chevronDown: 'i-tabler-chevron-down',
 	chevronRight: 'i-tabler-chevron-right',
 	file: 'i-tabler-file',

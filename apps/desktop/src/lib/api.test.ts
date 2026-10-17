@@ -14,6 +14,7 @@ import {
 	resolveApiOrigin,
 	resolveApiToken,
 	resolveEventSocket,
+	resolveTerminalSocket,
 	searchWorkspaceFiles,
 	startPayloadTracing,
 	updateDiagnosticSettings,
@@ -202,6 +203,10 @@ test('configures browser and desktop WebSocket handshakes', () => {
 	expect(resolveEventSocket('', 'http://localhost:5173', 42)).toEqual({
 		url: 'ws://localhost:5173/api/events?after=42',
 		protocols: ['pau']
+	});
+	expect(resolveTerminalSocket(DESKTOP_SEARCH, 'http://localhost:5173', 'a/b')).toEqual({
+		url: 'ws://127.0.0.1:43127/api/terminals/a%2Fb/stream',
+		protocols: ['pau', `pau.bearer.${TOKEN}`]
 	});
 });
 

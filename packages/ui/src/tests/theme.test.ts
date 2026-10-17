@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { THEMES, themeCssProperties, UI_FONTS } from '../theme';
+import { terminalTheme, THEMES, themeCssProperties, UI_FONTS } from '../theme';
 
 const hexColor = /^#[\da-f]{6}$/i;
 
@@ -70,5 +70,20 @@ test('maps every bundled font to the component CSS contract', () => {
 	for (const fontName of Object.keys(UI_FONTS) as (keyof typeof UI_FONTS)[]) {
 		const properties = themeCssProperties('eldritch', fontName);
 		expect(properties['--pau-font-ui']).toContain(UI_FONTS[fontName].family);
+	}
+});
+
+test('maps each terminal palette to xterm.js colors in ANSI order', () => {
+	for (const theme of Object.values(THEMES)) {
+		const colors = terminalTheme(theme.name);
+		expect(colors.background).toBe(theme.terminal.background);
+		expect(colors.cursorAccent).toBe(theme.terminal.background);
+		expect(colors.selectionBackground).toBe(theme.terminal.selection);
+		expect([colors.black, colors.red, colors.blue, colors.brightWhite]).toEqual([
+			theme.terminal.ansi[0],
+			theme.terminal.ansi[1],
+			theme.terminal.ansi[4],
+			theme.terminal.ansi[15]
+		]);
 	}
 });

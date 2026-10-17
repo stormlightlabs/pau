@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Workspaces now have shell terminals in tabs, with copy and paste, resizing,
+  exit status, and the active theme's colors.
 - The session view now shows live Pi sessions. Start a session in a workspace,
   follow its streaming transcript, prompt, steer, queue follow-ups, interrupt,
   and stop.

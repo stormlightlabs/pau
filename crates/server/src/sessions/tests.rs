@@ -900,6 +900,14 @@ async fn forwards_extension_ui_and_accepts_responses() {
     ] {
         let (status, _) = answer(id, body).await;
         assert_eq!(status, StatusCode::NO_CONTENT, "{id}");
+        // Other clients learn that the dialog was answered.
+        next_event(&mut stream, |event| {
+            let payload: Value = serde_json::from_str(&event.payload).unwrap();
+            payload["type"] == "extension_ui_resolved"
+                && payload["id"] == id
+                && payload["reason"] == "answered"
+        })
+        .await;
     }
     let (status, _) = answer("ui-editor", json!({"cancelled": true})).await;
     assert_eq!(status, StatusCode::NO_CONTENT);

@@ -26,7 +26,7 @@
 //! also keeps each session's current extension UI (unanswered dialogs, status
 //! lines, and widgets) and serves it from `GET /api/sessions/{id}/extension-ui`.
 //! When a dialog stops waiting (answered, timed out, or cleared by an
-//! interrupt), the API publishes a synthetic `extension_ui_resolved`
+//! interrupt or exit), the API publishes a synthetic `extension_ui_resolved`
 //! `session_output` event with the request `id` and a `reason`, so live clients
 //! can close it without refetching. Notifications are transient by nature and
 //! stay output-only.
@@ -1144,7 +1144,7 @@ pub(crate) async fn respond_to_extension_ui(
     Json(response): Json<ExtensionUiResponse>,
 ) -> Result<StatusCode, ApiError> {
     let api = session_api(&state)?;
-    let (_, session) = api.live(&session_id).await?;
+    let (record, session) = api.live(&session_id).await?;
     let dialog = api
         .extension_ui(&session_id)
         .dialogs
@@ -1187,6 +1187,8 @@ pub(crate) async fn respond_to_extension_ui(
         return Err(stale_request());
     }
     session.respond_to_extension_ui(native).await?;
+    // Other clients showing the same dialog close it without a notice.
+    api.publish_resolved(&record.workspace_id, &session_id, &request_id, "answered");
     Ok(StatusCode::NO_CONTENT)
 }
 

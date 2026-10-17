@@ -145,7 +145,11 @@ export function reduceExtensionEvent(state: LiveExtensionUi, event: unknown): Li
 	if (!isExtensionEvent(event)) return state;
 	const id = optionalString(event.id);
 	if (!id) return state;
-	if (event.type === 'extension_ui_resolved') return resolveDialog(state, id, resolution(event.reason));
+	if (event.type === 'extension_ui_resolved') {
+		// A dialog answered in another window needs no explanation here.
+		if (event.reason === 'answered') return withoutDialog(state, id);
+		return resolveDialog(state, id, resolution(event.reason));
+	}
 
 	switch (event.method) {
 		case 'notify': {

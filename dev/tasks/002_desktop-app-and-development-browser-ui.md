@@ -638,10 +638,37 @@ Verification:
 
 ## Pi desktop parity
 
+### 2.145 Live Pi session API
+
+Status: in progress
+Blocked by: none
+
+Start, list, control, and stop Pi sessions through the desktop API, and stream
+their events to clients.
+
+Verification:
+
+- Start a session, then prompt, steer, follow up, interrupt, select a model and
+  thinking level, and stop it over HTTP and the event stream against the fake
+  Pi executable.
+- Cover a missing Pi executable and a session that exits during a request.
+
+### 2.146 Live session view
+
+Status: planned
+Blocked by: 2.145
+
+Replace the desktop session route's fixtures with live Pi sessions.
+
+Verification:
+
+- Component-test loading, failed start, and disconnected states.
+- Prompt a self-hosted Pi session from the desktop app.
+
 ### 2.68 Pi input history API
 
 Status: planned
-Blocked by: none
+Blocked by: 2.145
 
 Expose Pi input history through the desktop API.
 
@@ -652,7 +679,7 @@ Verification:
 ### 2.69 Composer input history
 
 Status: planned
-Blocked by: 2.68
+Blocked by: 2.68, 2.146
 
 Add input history to the session composer.
 
@@ -663,7 +690,7 @@ Verification:
 ### 2.113 Pi image attachment API
 
 Status: planned
-Blocked by: none
+Blocked by: 2.145
 
 Accept image attachments with Pi prompts through the desktop API.
 
@@ -674,7 +701,7 @@ Verification:
 ### 2.114 Composer image input
 
 Status: planned
-Blocked by: 2.113
+Blocked by: 2.113, 2.146
 
 Add image input to the session composer.
 
@@ -697,7 +724,7 @@ Verification:
 ### 2.75 Composer command completion
 
 Status: planned
-Blocked by: 2.74
+Blocked by: 2.74, 2.146
 
 Add command completion to the session composer.
 
@@ -709,7 +736,7 @@ Verification:
 ### 2.115 Pi shell context API
 
 Status: planned
-Blocked by: none
+Blocked by: 2.145
 
 Expose Pi shell context through the desktop API.
 
@@ -720,7 +747,7 @@ Verification:
 ### 2.116 Composer shell context
 
 Status: planned
-Blocked by: 2.115
+Blocked by: 2.115, 2.146
 
 Add shell context to the session composer.
 
@@ -742,7 +769,7 @@ Verification:
 ### 2.71 Message queue view
 
 Status: planned
-Blocked by: 2.70
+Blocked by: 2.70, 2.146
 
 Show queued messages in the session view.
 
@@ -754,7 +781,7 @@ Verification:
 ### 2.117 Pi retry API
 
 Status: planned
-Blocked by: none
+Blocked by: 2.145
 
 Expose retry after failure through the desktop API.
 
@@ -765,7 +792,7 @@ Verification:
 ### 2.118 Retry control
 
 Status: planned
-Blocked by: 2.117
+Blocked by: 2.117, 2.146
 
 Add a retry control to failed turns in the session view.
 
@@ -773,21 +800,10 @@ Verification:
 
 - Component-test failed and retrying states.
 
-### 2.76 Pi thinking level API
-
-Status: planned
-Blocked by: none
-
-Expose thinking-level selection through the desktop API.
-
-Verification:
-
-- Cover thinking-level changes against the Pi fixture.
-
 ### 2.77 Thinking level control
 
 Status: planned
-Blocked by: 2.76
+Blocked by: 2.146
 
 Add a thinking-level control to the session view.
 
@@ -798,7 +814,7 @@ Verification:
 ### 2.119 Pi context usage API
 
 Status: planned
-Blocked by: none
+Blocked by: 2.145
 
 Expose context and cost updates through the desktop API.
 
@@ -809,7 +825,7 @@ Verification:
 ### 2.120 Context usage view
 
 Status: planned
-Blocked by: 2.119
+Blocked by: 2.119, 2.146
 
 Show context use and cost in the session view.
 
@@ -832,7 +848,7 @@ Verification:
 ### 2.79 Compaction controls
 
 Status: planned
-Blocked by: 2.78
+Blocked by: 2.78, 2.146
 
 Add a compaction control and compaction states to the session view.
 
@@ -844,7 +860,7 @@ Verification:
 ### 2.72 Pi session tree API
 
 Status: planned
-Blocked by: none
+Blocked by: 2.145
 
 Expose Pi session trees and branch creation through the desktop API.
 
@@ -855,7 +871,7 @@ Verification:
 ### 2.73 Session tree view
 
 Status: planned
-Blocked by: 2.72
+Blocked by: 2.72, 2.146
 
 Add session tree navigation and branching to the session view.
 
@@ -867,7 +883,7 @@ Verification:
 ### 2.80 Pi transcript search API
 
 Status: planned
-Blocked by: none
+Blocked by: 2.145
 
 Expose transcript search through the desktop API.
 
@@ -878,7 +894,7 @@ Verification:
 ### 2.81 Transcript search
 
 Status: planned
-Blocked by: 2.80
+Blocked by: 2.80, 2.146
 
 Add transcript search to the session view.
 
@@ -889,7 +905,7 @@ Verification:
 ### 2.121 Pi transcript export API
 
 Status: planned
-Blocked by: none
+Blocked by: 2.145
 
 Expose transcript export through the desktop API.
 
@@ -900,7 +916,7 @@ Verification:
 ### 2.122 Transcript copy and export
 
 Status: planned
-Blocked by: 2.121
+Blocked by: 2.121, 2.146
 
 Add transcript copy and export to the session view.
 

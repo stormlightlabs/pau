@@ -616,19 +616,6 @@ Verification:
 
 ## Pi desktop parity
 
-### 2.157 Live compaction API
-
-Status: planned
-Blocked by: none
-
-Expose manual compaction and the automatic compaction setting for live Pi
-sessions through the desktop API.
-
-Verification:
-
-- Cover manual compaction, a failed compaction, and toggling automatic
-  compaction over HTTP and the event stream against the fake Pi executable.
-
 ### 2.158 Sandboxed live Pi sessions
 
 Status: planned
@@ -889,7 +876,7 @@ Verification:
 ### 2.79 Compaction controls
 
 Status: planned
-Blocked by: 2.146, 2.157
+Blocked by: 2.146
 
 Add a compaction control and compaction states to the session view.
 

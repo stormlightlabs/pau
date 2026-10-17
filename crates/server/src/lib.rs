@@ -466,6 +466,14 @@ fn router_with_services(
             put(sessions::set_session_thinking_level),
         )
         .route(
+            "/api/sessions/{session_id}/compact",
+            post(sessions::compact_session),
+        )
+        .route(
+            "/api/sessions/{session_id}/auto-compaction",
+            put(sessions::set_session_auto_compaction),
+        )
+        .route(
             "/api/sessions/{session_id}/queue",
             get(sessions::get_session_queue).delete(sessions::clear_session_queue),
         )

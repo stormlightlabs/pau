@@ -60,6 +60,18 @@ while IFS= read -r command; do
         *'"type":"set_thinking_level"'*)
             printf '{"id":"%s","type":"response","command":"set_thinking_level","success":true}\n' "$id"
             ;;
+        *'"customInstructions":"fail"'*)
+            printf '{"id":"%s","type":"response","command":"compact","success":false,"error":"Nothing to compact"}\n' "$id"
+            printf '{"type":"compaction_end","reason":"manual","aborted":false,"willRetry":false,"errorMessage":"Nothing to compact"}\n'
+            ;;
+        *'"type":"compact"'*)
+            printf '{"type":"compaction_start","reason":"manual"}\n'
+            printf '{"id":"%s","type":"response","command":"compact","success":true,"data":{"summary":"Short summary","firstKeptEntryId":"entry-2","tokensBefore":9000}}\n' "$id"
+            printf '{"type":"compaction_end","reason":"manual","aborted":false,"willRetry":false,"result":{"summary":"Short summary","firstKeptEntryId":"entry-2","tokensBefore":9000}}\n'
+            ;;
+        *'"type":"set_auto_compaction"'*)
+            printf '{"id":"%s","type":"response","command":"set_auto_compaction","success":true}\n' "$id"
+            ;;
         *'"type":"get_commands"'*)
             printf '{"id":"%s","type":"response","command":"get_commands","success":true,"data":{"commands":[{"name":"review","description":"Review the changes","source":"prompt","sourceInfo":{"path":"/prompts/review.md"}},{"name":"skill:lint","source":"skill"}]}}\n' "$id"
             ;;
@@ -246,6 +258,33 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
         .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
 
+    let (status, compacted) = fixture
+        .call("POST", &format!("{base}/compact"), Some(json!({})))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(compacted["summary"], "Short summary");
+    assert_eq!(compacted["first_kept_entry_id"], "entry-2");
+    assert_eq!(compacted["tokens_before"], 9000);
+    next_event(&mut stream, output("compaction_start")).await;
+    next_event(&mut stream, output("compaction_end")).await;
+    let failing = json!({"custom_instructions": "fail"});
+    let (status, failed) = fixture
+        .call("POST", &format!("{base}/compact"), Some(failing))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(failed["code"], "control_rejected");
+    next_event(&mut stream, output("compaction_end")).await;
+    for enabled in [false, true] {
+        let (status, _) = fixture
+            .call(
+                "PUT",
+                &format!("{base}/auto-compaction"),
+                Some(json!({"enabled": enabled})),
+            )
+            .await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+    }
+
     let prompt_path = format!("{base}/prompt");
     let prompt = |body: Value| fixture.call("POST", &prompt_path, Some(body));
     assert_eq!(
@@ -329,6 +368,10 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
             "set_model",
             "set_model",
             "set_thinking_level",
+            "compact",
+            "compact",
+            "set_auto_compaction",
+            "set_auto_compaction",
             "prompt",
             "prompt",
             "steer",

@@ -22,10 +22,10 @@ use pau_agent::{
 use pau_core::{
     ServerEventKind,
     session::{
-        AgentSession, SessionCapabilities, SessionCommand, SessionCommandSource,
-        SessionMessageQueue, SessionMessageRequest, SessionModelSelection, SessionPromptRequest,
-        SessionQueue, SessionStatus, SessionThinkingLevel, SessionThinkingLevelRequest,
-        StartSessionRequest,
+        AgentSession, SessionAutoCompactionRequest, SessionCapabilities, SessionCommand,
+        SessionCommandSource, SessionCompactRequest, SessionCompactionResult, SessionMessageQueue,
+        SessionMessageRequest, SessionModelSelection, SessionPromptRequest, SessionQueue,
+        SessionStatus, SessionThinkingLevel, SessionThinkingLevelRequest, StartSessionRequest,
     },
 };
 use pau_pi::{
@@ -237,6 +237,7 @@ fn session_capabilities(capabilities: AgentCapabilities) -> SessionCapabilities 
         model_selection: capabilities.model_selection,
         thinking_level: capabilities.thinking_level,
         command_discovery: capabilities.command_discovery,
+        compaction: capabilities.compaction,
         stop: capabilities.stop,
     }
 }
@@ -526,6 +527,37 @@ pub(crate) async fn clear_session_queue(
 ) -> Result<Json<SessionMessageQueue>, ApiError> {
     let (_, session) = session_api(&state)?.live(&session_id).await?;
     Ok(Json(message_queue(session.clear_message_queue().await?)))
+}
+
+/// Summarizes older context and returns the summary Pi wrote.
+pub(crate) async fn compact_session(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+    Json(request): Json<SessionCompactRequest>,
+) -> Result<Json<SessionCompactionResult>, ApiError> {
+    let api = session_api(&state)?;
+    let (_, session) = api.live(&session_id).await?;
+    let result = session.compact(request.custom_instructions).await;
+    api.publish_current(&session_id).await;
+    let result = result?;
+    Ok(Json(SessionCompactionResult {
+        summary: result.summary,
+        first_kept_entry_id: result.first_kept_entry_id,
+        tokens_before: result.tokens_before,
+        estimated_tokens_after: result.estimated_tokens_after,
+        native: result.native,
+    }))
+}
+
+/// Turns automatic compaction on or off.
+pub(crate) async fn set_session_auto_compaction(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+    Json(request): Json<SessionAutoCompactionRequest>,
+) -> Result<StatusCode, ApiError> {
+    let (_, session) = session_api(&state)?.live(&session_id).await?;
+    session.set_auto_compaction(request.enabled).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Lists the slash commands the session offers.

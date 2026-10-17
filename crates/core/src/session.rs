@@ -49,6 +49,9 @@ pub struct SessionCapabilities {
     pub thinking_level: bool,
     /// Whether the session can list its slash commands.
     pub command_discovery: bool,
+    /// Whether the session can compact its context and toggle automatic
+    /// compaction.
+    pub compaction: bool,
     /// Whether the session can stop its process.
     pub stop: bool,
 }
@@ -152,6 +155,36 @@ pub enum SessionThinkingLevel {
 pub struct SessionThinkingLevelRequest {
     /// Level for later model turns.
     pub level: SessionThinkingLevel,
+}
+
+/// Compacts a session's context.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionCompactRequest {
+    /// Guidance for what the summary should preserve.
+    pub custom_instructions: Option<String>,
+}
+
+/// The summary that replaced a session's older context.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionCompactionResult {
+    /// The summary that replaces older context.
+    pub summary: String,
+    /// The first session entry kept verbatim after the summary.
+    pub first_kept_entry_id: Option<String>,
+    /// Context tokens before compaction.
+    pub tokens_before: Option<u64>,
+    /// Estimated context tokens after compaction.
+    pub estimated_tokens_after: Option<u64>,
+    /// The agent's complete native result.
+    #[ts(type = "unknown")]
+    pub native: serde_json::Value,
+}
+
+/// Turns automatic compaction on or off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionAutoCompactionRequest {
+    /// Whether the session compacts when its context is nearly full.
+    pub enabled: bool,
 }
 
 /// Messages waiting in a session's steer and follow-up queues.

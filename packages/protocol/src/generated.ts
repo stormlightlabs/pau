@@ -853,6 +853,11 @@ thinking_level: boolean,
  */
 command_discovery: boolean,
 /**
+ * Whether the session can compact its context and toggle automatic
+ * compaction.
+ */
+compaction: boolean,
+/**
  * Whether the session can stop its process.
  */
 stop: boolean, };
@@ -964,3 +969,37 @@ source: SessionCommandSource,
  * The file that defines the command, when the agent reports one.
  */
 path: string | null, };
+
+export type SessionCompactRequest = {
+/**
+ * Guidance for what the summary should preserve.
+ */
+custom_instructions: string | null, };
+
+export type SessionCompactionResult = {
+/**
+ * The summary that replaces older context.
+ */
+summary: string,
+/**
+ * The first session entry kept verbatim after the summary.
+ */
+first_kept_entry_id: string | null,
+/**
+ * Context tokens before compaction.
+ */
+tokens_before: number | null,
+/**
+ * Estimated context tokens after compaction.
+ */
+estimated_tokens_after: number | null,
+/**
+ * The agent's complete native result.
+ */
+native: unknown, };
+
+export type SessionAutoCompactionRequest = {
+/**
+ * Whether the session compacts when its context is nearly full.
+ */
+enabled: boolean, };

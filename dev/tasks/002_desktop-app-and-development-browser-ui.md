@@ -57,10 +57,26 @@ Verification:
 - Confirm observation does not change authorization, execution order, retries,
   or process ownership.
 
+### 2.159 Pau permission extension research
+
+Status: in progress
+Blocked by: none
+
+Decide whether Pau forks `@gotgenes/pi-permission-system` into the repository
+or writes its own Pi permission extension based on it.
+
+Verification:
+
+- Compare both options against the gaps recorded in `dev/plan/backend.md`,
+  including per-session policy, abort cancellation, structured RPC fields, MCP
+  annotations, and the protected-path list.
+- Record a recommendation, the extension's RPC contract, and the expected
+  maintenance cost.
+
 ### 2.45 Pi permission requests
 
 Status: planned
-Blocked by: 2.54
+Blocked by: 2.54, 2.159
 
 Implement the selected permission profiles for Pi through the reviewed package.
 Queue requests per session, apply allow-once and deny decisions, and write

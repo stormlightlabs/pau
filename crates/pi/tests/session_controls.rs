@@ -618,6 +618,53 @@ async fn refuses_to_retry_when_the_last_turn_succeeded() {
     session.stop().await.unwrap();
 }
 
+#[tokio::test]
+async fn renames_and_clones_the_session() {
+    let fixture = FakePi::new(NAMING_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+
+    session.rename("release prep").await.unwrap();
+    let rejected = session.rename("").await.unwrap_err();
+    assert!(matches!(
+        rejected,
+        PiSessionError::Control(AgentControlError::Rejected {
+            control: AgentControl::Rename,
+            message,
+        }) if message == "Session name cannot be empty"
+    ));
+
+    let cloned = session.clone_session().await.unwrap();
+    assert_eq!(cloned.id, "native-clone");
+    assert_eq!(cloned.file, "/sessions/clone.jsonl");
+    let cancelled = session.clone_session().await.unwrap_err();
+    assert!(matches!(
+        cancelled,
+        PiSessionError::Control(AgentControlError::Rejected {
+            control: AgentControl::CloneSession,
+            message,
+        }) if message == "An extension cancelled the clone"
+    ));
+
+    session.prompt("start", Vec::new(), None).await.unwrap();
+    let busy = session.clone_session().await.unwrap_err();
+    assert!(matches!(
+        busy,
+        PiSessionError::Control(AgentControlError::InvalidState {
+            control: AgentControl::CloneSession,
+            status: AgentSessionStatus::Running,
+            ..
+        })
+    ));
+    session.stop().await.unwrap();
+
+    let commands = fixture.commands();
+    assert_command(&commands[0], "set_session_name");
+    assert_eq!(commands[0]["name"], "release prep");
+    assert_command(&commands[1], "set_session_name");
+    assert_command(&commands[2], "clone");
+    assert_command(&commands[3], "get_state");
+}
+
 fn assert_command(command: &Value, expected: &str) {
     assert_eq!(command["type"], expected);
     assert!(command["id"].as_str().unwrap().starts_with("pau-"));
@@ -724,6 +771,37 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"set_auto_compaction","success":true}\n' "$id"
             ;;
         *'"type":"extension_ui_response"'*) ;;
+        *) exit 65 ;;
+    esac
+done
+"#;
+
+const NAMING_FIXTURE: &str = r#"
+while IFS= read -r command; do
+    printf '%s\n' "$command" >> "$PWD/commands.jsonl"
+    id=$(printf '%s' "$command" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+    case "$command" in
+        *'"name":""'*)
+            printf '{"id":"%s","type":"response","command":"set_session_name","success":false,"error":"Session name cannot be empty"}\n' "$id"
+            ;;
+        *'"type":"set_session_name"'*)
+            printf '{"id":"%s","type":"response","command":"set_session_name","success":true}\n' "$id"
+            ;;
+        *'"type":"clone"'*)
+            if [ -f "$PWD/cloned" ]; then
+                printf '{"id":"%s","type":"response","command":"clone","success":true,"data":{"cancelled":true}}\n' "$id"
+            else
+                : > "$PWD/cloned"
+                printf '{"id":"%s","type":"response","command":"clone","success":true,"data":{"cancelled":false}}\n' "$id"
+            fi
+            ;;
+        *'"type":"get_state"'*)
+            printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"native-clone","sessionFile":"/sessions/clone.jsonl"}}\n' "$id"
+            ;;
+        *'"type":"prompt"'*)
+            printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
+            printf '{"type":"agent_start"}\n'
+            ;;
         *) exit 65 ;;
     esac
 done

@@ -481,6 +481,14 @@ fn router_with_services(
             put(sessions::set_session_auto_compaction),
         )
         .route(
+            "/api/sessions/{session_id}/name",
+            put(sessions::rename_session),
+        )
+        .route(
+            "/api/sessions/{session_id}/clone",
+            post(sessions::clone_session),
+        )
+        .route(
             "/api/sessions/{session_id}/retry",
             post(sessions::retry_session).delete(sessions::abort_session_retry),
         )

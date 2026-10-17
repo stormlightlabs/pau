@@ -35,6 +35,11 @@ pub enum AgentControl {
     AutoRetry,
     /// Cancel an automatic retry that is waiting to run.
     AbortRetry,
+    /// Set the display name stored with the session.
+    Rename,
+    /// Continue the conversation in a new stored session that copies the
+    /// current one.
+    CloneSession,
     /// Stop the session process.
     Stop,
 }
@@ -57,6 +62,8 @@ impl fmt::Display for AgentControl {
             Self::Retry => "retry",
             Self::AutoRetry => "change automatic retry",
             Self::AbortRetry => "abort retry",
+            Self::Rename => "rename",
+            Self::CloneSession => "clone",
             Self::Stop => "stop",
         };
         formatter.write_str(name)
@@ -92,6 +99,10 @@ pub struct AgentCapabilities {
     /// Whether the adapter can retry a failed turn, configure automatic retry,
     /// and cancel a pending automatic retry.
     pub retry: bool,
+    /// Whether the adapter can rename the session.
+    pub rename: bool,
+    /// Whether the adapter can clone the session into a new stored session.
+    pub clone_session: bool,
     /// Whether the adapter can stop its session process.
     pub stop: bool,
 }
@@ -112,6 +123,8 @@ impl AgentCapabilities {
             AgentControl::Compact | AgentControl::AutoCompaction => self.compaction,
             AgentControl::Branching => self.branching,
             AgentControl::Retry | AgentControl::AutoRetry | AgentControl::AbortRetry => self.retry,
+            AgentControl::Rename => self.rename,
+            AgentControl::CloneSession => self.clone_session,
             AgentControl::Stop => self.stop,
         }
     }

@@ -870,6 +870,14 @@ branching: boolean,
  */
 retry: boolean,
 /**
+ * Whether the session can be renamed.
+ */
+rename: boolean,
+/**
+ * Whether the session can be cloned into a new stored session.
+ */
+clone_session: boolean,
+/**
  * Whether the session can stop its process.
  */
 stop: boolean, };
@@ -1252,6 +1260,19 @@ source: SessionCommandSource,
  * The file that defines the command, when the agent reports one.
  */
 path: string | null, };
+
+export type SessionCloneResult = {
+/**
+ * Identifier of the new native session. The live session now continues
+ * it, and the original stays in the workspace's native session list.
+ */
+native_session_id: string, };
+
+export type SessionRenameRequest = {
+/**
+ * The display name stored with the session.
+ */
+name: string, };
 
 export type SessionCompactRequest = {
 /**

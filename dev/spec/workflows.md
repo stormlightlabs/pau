@@ -115,13 +115,16 @@
 
 - Keep permission prompting off by default. Offer profiles for no prompts,
   confirming writes and commands, and confirming mutating or open-network
-  operations.
+  operations. A session without a confirming profile behaves like vanilla Pi
+  and loads no permission extension.
 - Show permission controls only when the adapter can allow or deny an operation
   before it executes. Never present observation after execution as approval.
-- Allow workspace reads except for protected sensitive paths. Ask before reads
-  outside the workspace and deny high-confidence credential and authentication
-  paths by default. Only a user-scoped rule may relax a default sensitive-path
-  restriction; project configuration may only narrow access.
+- Under a confirming profile, allow workspace reads except for protected
+  sensitive paths, ask before reads outside the workspace, and deny
+  high-confidence credential and authentication paths by default. Without one,
+  only a selected sandbox restricts reads. Only a user-scoped rule may relax a
+  default sensitive-path restriction. Project configuration may only narrow
+  access.
 - Offer deny, allow once, and allow for this session. Do not persist an approval
   across sessions in the first release.
 - Keep permission policy separate from sandbox policy. Approval permits an

@@ -386,17 +386,16 @@ releases and 40 major versions between May and October 2026, so every update
 needs the compatibility run below. Releases from 37.0.0 require Pi 1.0.0 or
 later. The 36.x line is the last one for older Pi.
 
-Pau loads the package only when the operator selects a permission profile or has
-already configured it as a normal Pi resource. Pi's `-e` option can load the
+Pau loads the package only when the operator selects a confirming profile or
+has already configured it as a normal Pi resource. Pi's `-e` option can load the
 pinned copy for one session without installing it. Pau owns the cross-agent
 profile names and maps them to package policy. It does not fork the package or
 reimplement its Pi parser and gate logic. The package has no built-in secret
 list, so Pau supplies the protected paths as `path` deny rules, followed by
 allow rules for `.env.example`-style samples:
 
-- No prompts: allow tools, `bash`, `mcp`, and `external_directory`, and keep
-  the protected-path denials. Outside-workspace reads are allowed because
-  this profile cannot ask. The sandbox still limits them.
+- No prompts: Pau does not load the package, so the session behaves like
+  vanilla Pi. Protected paths are denied only when a sandbox is selected.
 - Confirm writes and commands: allow `read`, `grep`, `find`, and `ls`. Ask for
   every other tool, every `bash` command, every MCP tool, and outside-workspace
   access.

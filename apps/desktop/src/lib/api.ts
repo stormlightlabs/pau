@@ -395,6 +395,16 @@ export function interruptSession(search: string, sessionId: string, fetcher: typ
 	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}/interrupt`, 'POST', undefined, fetcher);
 }
 
+/** Re-sends the last prompt after an assistant turn that ended in an error. */
+export function retrySession(search: string, sessionId: string, fetcher: typeof fetch = fetch): Promise<void> {
+	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}/retry`, 'POST', undefined, fetcher);
+}
+
+/** Cancels an automatic retry that is waiting to run. */
+export function cancelSessionRetry(search: string, sessionId: string, fetcher: typeof fetch = fetch): Promise<void> {
+	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}/retry`, 'DELETE', undefined, fetcher);
+}
+
 /** Stops a session's process. Its final state arrives on the event stream. */
 export function stopSession(search: string, sessionId: string, fetcher: typeof fetch = fetch): Promise<void> {
 	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}`, 'DELETE', undefined, fetcher);

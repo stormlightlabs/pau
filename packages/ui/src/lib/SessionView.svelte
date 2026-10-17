@@ -41,6 +41,10 @@
 		onLoadHistory?: (sessionId: string) => Promise<string[]>;
 		onInterrupt?: (sessionId: string) => void | Promise<void>;
 		onStop?: (sessionId: string) => void | Promise<void>;
+		/** Re-sends the last prompt after a failed turn. A rejected promise shows its message beside the control. */
+		onRetry?: (sessionId: string) => void | Promise<void>;
+		/** Cancels an automatic retry that is waiting to run. */
+		onCancelRetry?: (sessionId: string) => void | Promise<void>;
 		/**
 		 * Starts a session in a workspace. When set, the rail offers a start
 		 * control for each workspace. A rejected promise shows its message as a
@@ -77,6 +81,8 @@
 		onLoadHistory,
 		onInterrupt = () => {},
 		onStop = () => {},
+		onRetry = () => {},
+		onCancelRetry = () => {},
 		onStartSession,
 		onLoadSavedSessions,
 		onResumeSession,
@@ -102,6 +108,9 @@
 	let startFailure = $state<{ workspaceId: string; workspaceName: string; message: string }>();
 	let controlError = $state<string>();
 	let pickerWorkspaceId = $state<string>();
+	let retryingSessionId = $state<string>();
+	let retryError = $state<string>();
+	let now = $state(Date.now());
 
 	const pickerWorkspace = $derived(workspaces.find((workspace) => workspace.id === pickerWorkspaceId));
 	const sessions = $derived(workspaces.flatMap((workspace) => workspace.sessions));
@@ -114,6 +123,22 @@
 	);
 	const activeQueue = $derived<PromptQueue>(
 		activeSession && !activeSession.capabilities.steer && activeSession.capabilities.followUp ? 'follow-up' : queue
+	);
+	const canRetry = $derived(
+		Boolean(activeSession?.capabilities.retry) && activeSession?.status === 'idle' && !disconnected
+	);
+	/** Only the failure that ended the transcript can be retried. */
+	const retryableEntryId = $derived.by(() => {
+		const last = activeSession?.transcript.at(-1);
+		return last?.kind === 'message' && last.failed ? last.id : undefined;
+	});
+	const retrying = $derived(retryingSessionId !== undefined && retryingSessionId === activeSession?.id);
+	const autoRetry = $derived(activeSession?.autoRetry);
+	const autoRetrySeconds = $derived(autoRetry ? Math.max(0, Math.ceil((autoRetry.retryAt - now) / 1000)) : 0);
+	const autoRetryLabel = $derived(
+		autoRetry
+			? `${autoRetrySeconds > 0 ? `Retrying in ${autoRetrySeconds}s` : 'Retrying now'}, attempt ${autoRetry.attempt} of ${autoRetry.maxAttempts}.`
+			: ''
 	);
 	const composerUnavailable = $derived(composerUnavailableReason(activeSession, disconnected));
 	const productItems = $derived([
@@ -129,6 +154,22 @@
 		{ id: 'resources', label: 'Resources', icon: 'resources' },
 		{ id: 'settings', label: 'Settings', icon: 'settings' }
 	] satisfies ShellNavItem[]);
+
+	$effect(() => {
+		if (activeSession?.status === 'running' || activeSession?.id !== retryingSessionId) retryingSessionId = undefined;
+	});
+
+	$effect(() => {
+		if (!autoRetry) return;
+		now = Date.now();
+		const timer = setInterval(() => (now = Date.now()), 250);
+		return () => clearInterval(timer);
+	});
+
+	$effect(() => {
+		void activeSession?.id;
+		retryError = undefined;
+	});
 
 	function hasAttention(session: SessionViewModel): boolean {
 		return session.status === 'waiting' || Boolean(session.attention) || session.status === 'failed';
@@ -248,6 +289,28 @@
 			await onInterrupt(activeSession.id);
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'The session could not be interrupted. Try again.';
+		}
+	}
+
+	async function retry(): Promise<void> {
+		if (!canRetry || !activeSession || retrying) return;
+		retryError = undefined;
+		retryingSessionId = activeSession.id;
+		try {
+			await onRetry(activeSession.id);
+		} catch (cause) {
+			retryingSessionId = undefined;
+			retryError = cause instanceof Error ? cause.message : 'The turn could not be retried. Try again.';
+		}
+	}
+
+	async function cancelRetry(): Promise<void> {
+		if (disconnected || !activeSession) return;
+		retryError = undefined;
+		try {
+			await onCancelRetry(activeSession.id);
+		} catch (cause) {
+			retryError = cause instanceof Error ? cause.message : 'The automatic retry could not be cancelled. Try again.';
 		}
 	}
 
@@ -493,6 +556,24 @@
 				{:else if activeSession.status === 'stopped'}
 					<p class="session-view__notice" role="status">This session has stopped. Its transcript remains available.</p>
 				{/if}
+				{#if autoRetry}
+					<div class="session-view__notice session-view__notice--attention session-view__auto-retry" role="status">
+						<p>
+							<strong>{autoRetryLabel}</strong>
+							{#if autoRetry.errorMessage}{autoRetry.errorMessage}{/if}
+						</p>
+						{#if activeSession.capabilities.retry}
+							<button
+								type="button"
+								class="session-view__retry"
+								disabled={disconnected}
+								onclick={() => void cancelRetry()}>
+								Cancel retry
+							</button>
+						{/if}
+					</div>
+				{/if}
+				{#if retryError}<p class="session-view__notice session-view__notice--failed" role="alert">{retryError}</p>{/if}
 			</div>
 
 			<div class="session-view__transcript" aria-label="Transcript" aria-live="polite">
@@ -507,6 +588,15 @@
 							<article class={`session-message session-message--${entry.role}`} aria-label={`${entry.role} message`}>
 								<h2>{entry.label ?? (entry.role === 'user' ? 'You' : activeSession.agent)}</h2>
 								<p>{entry.body}</p>
+								{#if canRetry && entry.id === retryableEntryId}
+									<button
+										type="button"
+										class="session-view__retry session-message__retry"
+										disabled={retrying}
+										onclick={() => void retry()}>
+										{retrying ? 'Retrying…' : 'Retry'}
+									</button>
+								{/if}
 							</article>
 						{:else if entry.kind === 'thinking'}
 							<details class="session-thinking" open={!entry.complete}>
@@ -817,6 +907,26 @@
 
 	.session-view__retry {
 		margin-top: var(--pau-space-4);
+	}
+
+	.session-message__retry {
+		margin-top: var(--pau-space-3);
+	}
+
+	.session-view__auto-retry {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--pau-space-3);
+	}
+
+	.session-view__auto-retry p {
+		margin: 0;
+	}
+
+	.session-view__auto-retry .session-view__retry {
+		margin-top: 0;
+		flex: none;
 	}
 
 	.session-view__status {

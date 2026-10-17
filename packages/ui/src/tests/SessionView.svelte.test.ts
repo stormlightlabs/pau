@@ -150,6 +150,56 @@ test('stops the active session from its header', async () => {
 	expect(onStop).toHaveBeenCalledWith('session-idle');
 });
 
+test('retries only the latest failed turn of an idle session', async () => {
+	const onRetry = vi.fn();
+	await render(SessionView, { workspaces: sessionFixtures.failedTurn, activeSessionId: 'session-idle', onRetry });
+
+	await userEvent.click(page.getByRole('button', { name: 'Retry' }));
+
+	expect(onRetry).toHaveBeenCalledWith('session-idle');
+	await expect.element(page.getByRole('button', { name: 'Retrying…' })).toBeDisabled();
+});
+
+test('offers no retry while running, without the capability, or when disconnected', async () => {
+	const failed = sessionFixtures.failedTurn[0]!.sessions[0]!;
+	const running = [{ id: 'pau', name: 'Pau', sessions: [{ ...failed, status: 'running' as const }] }];
+	const view = await render(SessionView, { workspaces: running, activeSessionId: 'session-idle' });
+	await expect.element(page.getByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+
+	await view.rerender({ workspaces: sessionFixtures.failedTurnWithoutRetry, activeSessionId: 'session-idle' });
+	await expect.element(page.getByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+
+	await view.rerender({ workspaces: sessionFixtures.failedTurn, activeSessionId: 'session-idle', disconnected: true });
+	await expect.element(page.getByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+});
+
+test('shows why a retry was rejected and allows another attempt', async () => {
+	await render(SessionView, {
+		workspaces: sessionFixtures.failedTurn,
+		activeSessionId: 'session-idle',
+		onRetry: () => Promise.reject(new Error('That turn did not fail, so there is nothing to retry.'))
+	});
+
+	await userEvent.click(page.getByRole('button', { name: 'Retry' }));
+
+	await expect.element(page.getByRole('alert').filter({ hasText: 'nothing to retry' })).toBeVisible();
+	await expect.element(page.getByRole('button', { name: 'Retry' })).toBeEnabled();
+});
+
+test('counts down an automatic retry and cancels it', async () => {
+	const onCancelRetry = vi.fn();
+	await render(SessionView, {
+		workspaces: sessionFixtures.autoRetryPending,
+		activeSessionId: 'session-running',
+		onCancelRetry
+	});
+
+	await expect.element(page.getByText(/Retrying in \d+s, attempt 2 of 3/)).toBeVisible();
+	await userEvent.click(page.getByRole('button', { name: 'Cancel retry' }));
+
+	expect(onCancelRetry).toHaveBeenCalledWith('session-running');
+});
+
 test('recalls earlier prompts and restores the draft', async () => {
 	await render(SessionViewDemo, {
 		workspaces: sessionFixtures.running,

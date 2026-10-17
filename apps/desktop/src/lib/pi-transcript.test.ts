@@ -64,6 +64,25 @@ test('shows user prompts, failed tools, and provider errors', () => {
 	expect(transcript.entries).toEqual([
 		{ id: 'm0:0', kind: 'message', role: 'user', body: 'Fix the build' },
 		{ id: 'tool:call-2', kind: 'tool', name: 'bash', detail: 'pnpm build', result: 'exit 1', status: 'failed' },
-		{ id: 'm1:error', kind: 'message', role: 'assistant', label: 'Pi · error', body: 'Rate limit reached.' }
+		{
+			id: 'm1:error',
+			kind: 'message',
+			role: 'assistant',
+			label: 'Pi · error',
+			body: 'Rate limit reached.',
+			failed: true
+		}
 	]);
+});
+
+test('tracks a scheduled automatic retry until it ends', () => {
+	const before = Date.now();
+	const scheduled = reduce([
+		{ type: 'auto_retry_start', attempt: 1, maxAttempts: 3, delayMs: 2000, errorMessage: '529 overloaded' }
+	]);
+
+	expect(scheduled.autoRetry).toMatchObject({ attempt: 1, maxAttempts: 3, errorMessage: '529 overloaded' });
+	expect(scheduled.autoRetry!.retryAt).toBeGreaterThanOrEqual(before + 2000);
+	expect(reduce([{ type: 'auto_retry_end', success: true, attempt: 2 }], scheduled).autoRetry).toBeUndefined();
+	expect(reduce([{ type: 'auto_retry_start', attempt: 1 }]).autoRetry).toBeUndefined();
 });

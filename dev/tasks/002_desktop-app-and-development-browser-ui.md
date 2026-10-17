@@ -714,17 +714,6 @@ Verification:
 - Component-test empty and queued states.
 - Queue a message in a self-hosted Pi session.
 
-### 2.118 Retry control
-
-Status: planned
-Blocked by: none
-
-Add a retry control to failed turns in the session view.
-
-Verification:
-
-- Component-test failed and retrying states.
-
 ### 2.77 Thinking level control
 
 Status: planned
@@ -819,7 +808,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.71, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120, 2.156
+Blocked by: 2.71, 2.73, 2.75, 2.77, 2.79, 2.114, 2.120, 2.156
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

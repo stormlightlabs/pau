@@ -113,6 +113,52 @@ export const SandboxDenials: Story = {
 		await expect(canvas.getByText('Sandbox may have blocked this call')).toBeVisible();
 	}
 };
+export const FailedTurn: Story = {
+	args: { workspaces: sessionFixtures.failedTurn, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByRole('button', { name: 'Retry' })).toBeEnabled();
+	}
+};
+export const FailedTurnWithoutRetry: Story = {
+	args: { workspaces: sessionFixtures.failedTurnWithoutRetry, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByText(/529 overloaded/)).toBeInTheDocument();
+		await expect(canvas.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+	}
+};
+export const Retrying: Story = {
+	args: { workspaces: sessionFixtures.failedTurn, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(canvas.getByRole('button', { name: 'Retry' }));
+		await expect(canvas.getByText('session-idle: retry')).toBeInTheDocument();
+		await expect(canvas.getByRole('button', { name: 'Retrying…' })).toBeDisabled();
+	}
+};
+export const RetryRejected: Story = {
+	args: {
+		workspaces: sessionFixtures.failedTurn,
+		initialSessionId: 'session-idle',
+		retryFailure: 'That turn did not fail, so there is nothing to retry.'
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(canvas.getByRole('button', { name: 'Retry' }));
+		await expect(await canvas.findByRole('alert')).toHaveTextContent('nothing to retry');
+		await expect(canvas.getByRole('button', { name: 'Retry' })).toBeEnabled();
+	}
+};
+export const AutomaticRetryPending: Story = {
+	args: { workspaces: sessionFixtures.autoRetryPending, initialSessionId: 'session-running' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByText(/Retrying in \d+s, attempt 2 of 3/)).toBeInTheDocument();
+		await userEvent.click(canvas.getByRole('button', { name: 'Cancel retry' }));
+		await expect(canvas.getByText('session-running: cancel retry')).toBeInTheDocument();
+	}
+};
 export const Stopped: Story = { args: { workspaces: sessionFixtures.stopped, initialSessionId: 'session-stopped' } };
 export const ExtensionConfirmation: Story = {
 	args: { workspaces: sessionFixtures.extensionConfirm, initialSessionId: 'extension-confirm' },

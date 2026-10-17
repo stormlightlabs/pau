@@ -10,6 +10,7 @@
 		loading = false,
 		disconnected = false,
 		startFailure,
+		retryFailure,
 		history = []
 	}: {
 		workspaces: SessionWorkspace[];
@@ -19,6 +20,8 @@
 		disconnected?: boolean;
 		/** When set, starting a session fails with this message. */
 		startFailure?: string;
+		/** When set, retrying a failed turn fails with this message. */
+		retryFailure?: string;
 		/** Earlier prompts the composer can recall, newest first. */
 		history?: string[];
 	} = $props();
@@ -56,6 +59,13 @@
 	onLoadHistory={async () => history}
 	onInterrupt={(sessionId) => {
 		lastAction = `${sessionId}: interrupt`;
+	}}
+	onRetry={(sessionId) => {
+		if (retryFailure) throw new Error(retryFailure);
+		lastAction = `${sessionId}: retry`;
+	}}
+	onCancelRetry={(sessionId) => {
+		lastAction = `${sessionId}: cancel retry`;
 	}}
 	onStop={(sessionId) => {
 		lastAction = `${sessionId}: stop`;

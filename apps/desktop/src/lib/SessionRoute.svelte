@@ -68,6 +68,8 @@
 	onSend={(sessionId, text, queue) => sessions.send(sessionId, text, queue)}
 	onLoadHistory={(sessionId) => sessions.history(sessionId)}
 	onInterrupt={(sessionId) => sessions.interrupt(sessionId)}
+	onRetry={(sessionId) => sessions.retry(sessionId)}
+	onCancelRetry={(sessionId) => sessions.cancelRetry(sessionId)}
 	onStop={(sessionId) => sessions.stop(sessionId)}
 	onExtensionUiResponse={(sessionId, response) => sessions.respond(sessionId, response)}
 	onExtensionUiTimeout={(sessionId, requestId) => sessions.expire(sessionId, requestId)} />

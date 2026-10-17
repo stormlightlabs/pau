@@ -8,6 +8,8 @@ export type SessionCapabilities = {
 	steer: boolean;
 	interrupt: boolean;
 	stop: boolean;
+	/** Retries a failed turn and cancels a pending automatic retry. */
+	retry?: boolean;
 	/** Whether the agent can switch models. Absent means the surface offers no picker. */
 	modelSelection?: boolean;
 };
@@ -28,6 +30,8 @@ export type TranscriptMessage = {
 	role: 'user' | 'assistant';
 	body: string;
 	label?: string;
+	/** Marks the error that ended an assistant turn. Only the latest one offers a retry. */
+	failed?: boolean;
 };
 
 export type TranscriptThinking = { id: string; kind: 'thinking'; body: string; complete: boolean };
@@ -92,6 +96,16 @@ export type ExtensionUiState = {
 export type ExtensionUiResponse =
 	{ id: string; value: string } | { id: string; confirmed: boolean } | { id: string; cancelled: true };
 
+/** An automatic retry that Pi has scheduled after a transient provider error. */
+export type AutoRetry = {
+	/** One-based number of the attempt that will run next. */
+	attempt: number;
+	maxAttempts: number;
+	/** Epoch milliseconds when the attempt starts. */
+	retryAt: number;
+	errorMessage?: string;
+};
+
 /** Session data consumed by the shared session surface. */
 export type SessionViewModel = {
 	id: string;
@@ -105,6 +119,7 @@ export type SessionViewModel = {
 	capabilities: SessionCapabilities;
 	transcript: TranscriptEntry[];
 	extensionUi?: ExtensionUiState;
+	autoRetry?: AutoRetry;
 };
 
 /** Workspace and its sessions as shown in the contextual rail. */

@@ -11,6 +11,7 @@ import type {
 
 import {
 	PauApiError,
+	cancelSessionRetry,
 	getSessionExtensionUi,
 	getSessionHistory,
 	interruptSession,
@@ -21,6 +22,7 @@ import {
 	promptSession,
 	queueSessionMessage,
 	respondToExtensionUi,
+	retrySession,
 	selectSessionModel,
 	startSession,
 	stopSession
@@ -58,7 +60,7 @@ const NOTIFICATION_MS = 8000;
  * Turns an API failure into copy for the operator. Starting and controlling a
  * session share most codes, but `not_found` names a different missing thing.
  */
-export function sessionErrorMessage(cause: unknown, action: 'start' | 'control' | 'resume'): string {
+export function sessionErrorMessage(cause: unknown, action: 'start' | 'control' | 'resume' | 'retry'): string {
 	if (!(cause instanceof PauApiError)) {
 		return 'Pau could not reach its backend. Check that the desktop app is still running, then try again.';
 	}
@@ -82,6 +84,7 @@ export function sessionErrorMessage(cause: unknown, action: 'start' | 'control' 
 		case 'invalid_session_state':
 			return 'The session changed state before Pau could send that. If it is running, wait for the run to finish, then try again.';
 		case 'control_rejected':
+			if (action === 'retry') return 'That turn did not fail, so there is nothing to retry.';
 			return `Pi rejected the request: ${cause.message}`;
 		case 'invalid_extension_response':
 			return `The extension could not use that answer. ${cause.message}`;
@@ -297,6 +300,20 @@ export class LiveSessions {
 		return this.#control(() => interruptSession(this.#options.search, sessionId, this.#fetcher));
 	}
 
+	/** Re-sends the last prompt after a failed turn. */
+	async retry(sessionId: string): Promise<void> {
+		try {
+			await retrySession(this.#options.search, sessionId, this.#fetcher);
+		} catch (cause) {
+			throw new Error(sessionErrorMessage(cause, 'retry'), { cause });
+		}
+	}
+
+	/** Cancels an automatic retry that is waiting to run. */
+	cancelRetry(sessionId: string): Promise<void> {
+		return this.#control(() => cancelSessionRetry(this.#options.search, sessionId, this.#fetcher));
+	}
+
 	/** Stops the session's process. */
 	stop(sessionId: string): Promise<void> {
 		return this.#control(() => stopSession(this.#options.search, sessionId, this.#fetcher));
@@ -443,10 +460,12 @@ export class LiveSessions {
 				steer: session.capabilities.steer,
 				interrupt: session.capabilities.interrupt,
 				stop: session.capabilities.stop,
+				retry: session.capabilities.retry,
 				modelSelection: session.capabilities.model_selection
 			},
 			transcript: transcript.entries,
-			extensionUi: extensionUiView(extensionUi)
+			extensionUi: extensionUiView(extensionUi),
+			autoRetry: transcript.autoRetry
 		};
 	}
 }

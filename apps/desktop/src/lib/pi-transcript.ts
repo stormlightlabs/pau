@@ -1,4 +1,4 @@
-import type { TranscriptEntry, TranscriptTool } from '@stormlightlabs/pau-ui';
+import type { AutoRetry, TranscriptEntry, TranscriptTool } from '@stormlightlabs/pau-ui';
 
 /**
  * Display transcript rebuilt from native Pi events.
@@ -13,6 +13,8 @@ export type PiTranscript = {
 	active?: string;
 	/** Number of messages started so far, used to key the next one. */
 	messages: number;
+	/** Automatic retry that Pi has scheduled and not yet started or abandoned. */
+	autoRetry?: AutoRetry;
 };
 
 /** A transcript with no events applied. */
@@ -26,6 +28,10 @@ function isObject(value: unknown): value is JsonObject {
 
 function text(value: unknown): string | undefined {
 	return typeof value === 'string' ? value : undefined;
+}
+
+function numberField(value: unknown): number | undefined {
+	return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 function toolEntryId(callId: string): string {
@@ -106,7 +112,14 @@ function projectMessage(
 	});
 	const error = text(message.errorMessage);
 	if (complete && message.stopReason === 'error' && error) {
-		projected.push({ id: `${key}:error`, kind: 'message', role: 'assistant', label: 'Pi · error', body: error });
+		projected.push({
+			id: `${key}:error`,
+			kind: 'message',
+			role: 'assistant',
+			label: 'Pi · error',
+			body: error,
+			failed: true
+		});
 	}
 	return projected;
 }
@@ -210,7 +223,7 @@ export function reducePiEvent(state: PiTranscript, event: unknown): PiTranscript
 			const key = state.active ?? `m${state.messages}`;
 			const messages = state.active === undefined ? state.messages + 1 : state.messages;
 			const projected = projectMessage(key, event.message, state.entries, true);
-			return { entries: replaceMessage(state.entries, key, projected), messages };
+			return { ...state, active: undefined, entries: replaceMessage(state.entries, key, projected), messages };
 		}
 		case 'tool_execution_start':
 		case 'tool_execution_update':
@@ -236,6 +249,18 @@ export function reducePiEvent(state: PiTranscript, event: unknown): PiTranscript
 				)
 			};
 		}
+		case 'auto_retry_start': {
+			const attempt = numberField(event.attempt);
+			const maxAttempts = numberField(event.maxAttempts);
+			const delayMs = numberField(event.delayMs);
+			if (attempt === undefined || maxAttempts === undefined || delayMs === undefined) return state;
+			return {
+				...state,
+				autoRetry: { attempt, maxAttempts, retryAt: Date.now() + delayMs, errorMessage: text(event.errorMessage) }
+			};
+		}
+		case 'auto_retry_end':
+			return state.autoRetry ? { ...state, autoRetry: undefined } : state;
 		default:
 			return state;
 	}

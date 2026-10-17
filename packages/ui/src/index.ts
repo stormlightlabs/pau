@@ -67,6 +67,7 @@ export type {
 	ProcessResourceSnapshot
 } from './lib/types/resource-monitoring';
 export type {
+	AutoRetry,
 	ExtensionDialog,
 	ExtensionNotification,
 	ExtensionStatus,

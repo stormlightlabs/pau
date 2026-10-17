@@ -5,7 +5,8 @@ const fullCapabilities = {
 	followUp: true,
 	steer: true,
 	interrupt: true,
-	stop: true
+	stop: true,
+	retry: true
 } satisfies SessionCapabilities;
 
 const claudeCapabilities = {
@@ -53,6 +54,18 @@ const session = (status: SessionViewModel['status'], overrides: Partial<SessionV
 	...overrides
 });
 
+const failedTurn: SessionViewModel['transcript'] = [
+	transcript[0]!,
+	{
+		id: 'error-1',
+		kind: 'message',
+		role: 'assistant',
+		label: 'Pi · error',
+		body: '529 overloaded: the provider could not take the request.',
+		failed: true
+	}
+];
+
 const extensionUi = {
 	notifications: [{ id: 'notification-fixture', message: 'The extension is ready.', level: 'info' as const }],
 	statuses: [{ key: 'fixture', text: 'Waiting for your response' }],
@@ -73,6 +86,35 @@ export const sessionFixtures = {
 	],
 	idle: [{ id: 'pau', name: 'Pau', sessions: [session('idle', { title: 'Fix diff gutter', transcript: [] })] }],
 	running: [{ id: 'pau', name: 'Pau', sessions: [session('running', { title: 'Fix diff gutter' })] }],
+	failedTurn: [
+		{ id: 'pau', name: 'Pau', sessions: [session('idle', { title: 'Fix diff gutter', transcript: failedTurn })] }
+	],
+	failedTurnWithoutRetry: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [
+				session('idle', {
+					title: 'Fix diff gutter',
+					transcript: failedTurn,
+					capabilities: { ...claudeCapabilities, retry: false }
+				})
+			]
+		}
+	],
+	autoRetryPending: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [
+				session('running', {
+					title: 'Fix diff gutter',
+					transcript: [transcript[0]!],
+					autoRetry: { attempt: 2, maxAttempts: 3, retryAt: Date.now() + 600_000, errorMessage: '529 overloaded' }
+				})
+			]
+		}
+	],
 	runningWithoutQueue: [
 		{
 			id: 'pau',

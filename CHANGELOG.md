@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Retry a failed turn from the session view, and see or cancel Pi's automatic
+  retries while they count down.
 - Switch a Pi session's model from the session header. The picker is
   disabled while a run is in progress.
 - Press Up and Down in the prompt box to recall earlier prompts from the

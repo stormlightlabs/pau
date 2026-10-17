@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- The local API can open workspace terminals with live input, output, resize,
+  signals, and close.
 - Development builds now report a `-dev` version with the commit, install as
   "Pau Dev", and keep their data separate from the released app.
 - Pau now refuses to open a database created by a newer version and names the

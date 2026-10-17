@@ -5,6 +5,8 @@
 Run the resource-monitoring sampler smoke test on macOS when a runner is
 available.
 
+Run the `pau-term` PTY tests on Linux.
+
 Run the `packages/sandbox` boundary and Pi fixture runs on macOS before Pau
 offers a sandbox profile there. Run the boundary fixtures on an Ubuntu 24.04
 host with AppArmor's unprivileged user-namespace restriction enabled to confirm

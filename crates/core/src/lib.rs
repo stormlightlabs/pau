@@ -8,6 +8,7 @@ pub mod persistence;
 pub mod resource_monitor;
 pub mod sandbox;
 pub mod session;
+pub mod terminal;
 pub mod workspace;
 
 /// Response returned by the backend health endpoint.
@@ -40,6 +41,8 @@ pub enum ServerEventKind {
     /// Output is transient: replay delivers it, but snapshots omit it because
     /// it does not describe current state.
     SessionOutput,
+    /// A terminal was opened, exited, or closed.
+    TerminalChanged,
 }
 
 impl ServerEventKind {

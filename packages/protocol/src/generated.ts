@@ -460,7 +460,7 @@ disk_read_bytes: number | null,
  */
 disk_write_bytes: number | null, };
 
-export type ServerEventKind = "workspace_changed" | "session_changed" | "session_output";
+export type ServerEventKind = "workspace_changed" | "session_changed" | "session_output" | "terminal_changed";
 
 export type ServerEvent = {
 /**
@@ -1003,3 +1003,83 @@ export type SessionAutoCompactionRequest = {
  * Whether the session compacts when its context is nearly full.
  */
 enabled: boolean, };
+
+export type TerminalSize = {
+/**
+ * Number of columns. Must be positive.
+ */
+cols: number,
+/**
+ * Number of rows. Must be positive.
+ */
+rows: number, };
+
+export type TerminalSignal = "interrupt" | "quit" | "suspend" | "continue" | "hangup" | "terminate" | "kill";
+
+export type TerminalStatus = { "state": "running" } | { "state": "exited",
+/**
+ * Exit code reported by the platform. A signal exit reports `1`.
+ */
+exit_code: number,
+/**
+ * Name of the signal that ended the process, when one did.
+ */
+signal: string | null, };
+
+export type TerminalInfo = {
+/**
+ * Stable terminal identifier.
+ */
+id: string,
+/**
+ * Workspace whose root is the terminal's working directory.
+ */
+workspace_id: string,
+/**
+ * Program and arguments that started the terminal.
+ */
+command: Array<string>,
+/**
+ * Current dimensions.
+ */
+size: TerminalSize,
+/**
+ * Running or exit state.
+ */
+status: TerminalStatus, };
+
+export type CreateTerminalRequest = {
+/**
+ * Workspace whose root becomes the working directory.
+ */
+workspace_id: string,
+/**
+ * Program and arguments. The user's `$SHELL` runs when this is absent.
+ */
+command: Array<string> | null,
+/**
+ * Initial dimensions.
+ */
+size: TerminalSize, };
+
+export type TerminalSignalRequest = {
+/**
+ * Signal to deliver.
+ */
+signal: TerminalSignal, };
+
+export type TerminalClientMessage = { "type": "resize",
+/**
+ * New dimensions.
+ */
+size: TerminalSize, } | { "type": "signal",
+/**
+ * Signal to deliver.
+ */
+signal: TerminalSignal, };
+
+export type TerminalServerMessage = { "type": "exited",
+/**
+ * Final status.
+ */
+status: TerminalStatus, };

@@ -10,7 +10,10 @@ repository.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+libc.workspace = true
+pau-core = { path = "../core" }
 portable-pty.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
@@ -19,5 +22,5 @@ futures-util.workspace = true
 nvim-rs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
 tracing-subscriber.workspace = true

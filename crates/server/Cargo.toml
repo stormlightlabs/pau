@@ -13,6 +13,7 @@ getrandom.workspace = true
 pau-agent = { path = "../agent" }
 pau-core = { path = "../core" }
 pau-pi = { path = "../pi" }
+pau-term = { path = "../term" }
 serde.workspace = true
 serde_json.workspace = true
 subtle.workspace = true
@@ -24,7 +25,9 @@ tracing-subscriber.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+futures-util.workspace = true
 tempfile = "3.27.0"
+tokio-tungstenite = "0.29.0"
 tower.workspace = true
 
 [[bin]]

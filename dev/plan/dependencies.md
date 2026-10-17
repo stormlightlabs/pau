@@ -33,8 +33,7 @@ Use `portable-pty` 0.9.0 for PTY ownership. The crate is MIT-licensed and is
 maintained in the WezTerm repository. Its native Unix backend supports Linux
 and macOS through the same API. PTY reads, writes, child waits, and process
 control are blocking, so `pau-term` must keep them off Tokio worker threads.
-The spike exercised Linux. A macOS run is still required before this selection
-is final.
+The spike exercised Linux, and the `pau-term` PTY tests pass on macOS.
 
 Use `@xterm/xterm` 6.0.0 with these official MIT-licensed addons from the
 xterm.js repository:

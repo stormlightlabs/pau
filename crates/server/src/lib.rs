@@ -50,6 +50,7 @@ use tracing::instrument::WithSubscriber;
 
 mod build_info;
 mod sessions;
+mod terminals;
 
 use build_info::Channel;
 use sessions::SessionApi;
@@ -135,6 +136,7 @@ struct ApiState {
     settings: Option<ApplicationSettingsRepository>,
     sandbox: Option<SandboxApi>,
     sessions: Option<SessionApi>,
+    terminals: terminals::TerminalRegistry,
 }
 
 /// Sandbox selections and the host facts needed to describe a profile.
@@ -481,6 +483,26 @@ fn router_with_services(
             "/api/sessions/{session_id}/commands",
             get(sessions::list_session_commands),
         )
+        .route(
+            "/api/terminals",
+            get(terminals::list_terminals).post(terminals::create_terminal),
+        )
+        .route(
+            "/api/terminals/{terminal_id}",
+            get(terminals::get_terminal).delete(terminals::close_terminal),
+        )
+        .route(
+            "/api/terminals/{terminal_id}/size",
+            put(terminals::resize_terminal),
+        )
+        .route(
+            "/api/terminals/{terminal_id}/signal",
+            post(terminals::signal_terminal),
+        )
+        .route(
+            "/api/terminals/{terminal_id}/stream",
+            get(terminals::stream_terminal),
+        )
         .layer(middleware::from_fn_with_state(token, authenticate))
         .layer(CorsLayer::permissive())
         .with_state(ApiState {
@@ -490,6 +512,7 @@ fn router_with_services(
             settings,
             sandbox,
             sessions,
+            terminals: terminals::TerminalRegistry::default(),
         })
 }
 
@@ -503,7 +526,8 @@ async fn authenticate(
         .get(header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.strip_prefix("Bearer "));
-    let websocket_token = (request.uri().path() == "/api/events")
+    let path = request.uri().path();
+    let websocket_token = (path == "/api/events" || terminals::is_stream_path(path))
         .then(|| request.headers().get(header::SEC_WEBSOCKET_PROTOCOL))
         .flatten()
         .and_then(|value| value.to_str().ok())
@@ -519,7 +543,8 @@ async fn authenticate(
         .any(|candidate| token.matches(candidate));
 
     if !authenticated {
-        let transport = if request.uri().path() == "/api/events" {
+        let path = request.uri().path();
+        let transport = if path == "/api/events" || terminals::is_stream_path(path) {
             "websocket"
         } else {
             "http"
@@ -1507,6 +1532,14 @@ mod tests {
             .with_max_level(tracing::Level::TRACE)
             .with_writer(logs.clone())
             .finish();
+        let subscriber = tracing::Dispatch::new(subscriber);
+        // While only one subscriber is registered, tracing caches a new
+        // callsite's interest from the default subscriber of whichever thread
+        // reaches it first. A parallel test thread without a subscriber would
+        // then disable `api.authentication_failed` for this test as well. A
+        // second registered subscriber makes tracing check each event against
+        // the current thread's subscriber instead.
+        let _second_subscriber = tracing::Dispatch::new(tracing::subscriber::NoSubscriber::new());
         let configured_secret = "configured-secret-that-must-not-appear";
 
         async {
@@ -1522,7 +1555,7 @@ mod tests {
         .await;
 
         let logs = logs.contents();
-        assert!(logs.contains("api.authentication_failed"));
+        assert!(logs.contains("api.authentication_failed"), "{logs}");
         assert!(!logs.contains(TEST_TOKEN));
         assert!(!logs.contains(configured_secret));
         assert_eq!(format!("{:?}", test_token()), "ApiToken([REDACTED])");

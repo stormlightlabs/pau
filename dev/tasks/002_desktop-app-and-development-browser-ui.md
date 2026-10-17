@@ -177,24 +177,10 @@ Verification:
 
 ## Terminal and shell
 
-### 2.24 PTY sessions
-
-Status: planned
-Blocked by: none
-
-Implement terminal create, input, output, resize, signal, close, and cleanup in
-`pau-term`, and stream terminal input and output through the desktop API.
-
-Verification:
-
-- Cover input and output, rapid resize, process exit, noisy output, and forced
-  cleanup.
-- Run focused tests on Linux and macOS.
-
 ### 2.25 Terminal view
 
 Status: planned
-Blocked by: 2.24
+Blocked by: none
 
 Integrate xterm.js with terminal tabs, fit, copy and paste, exit state, and the
 active ANSI theme.
@@ -208,7 +194,7 @@ Verification:
 ### 2.57 Terminal detach and replay
 
 Status: planned
-Blocked by: 2.24
+Blocked by: none
 
 Add attach, detach, bounded scrollback, and replay on attach to `pau-term`.
 
@@ -299,7 +285,7 @@ Verification:
 ### 2.56 Sandboxed terminal relay
 
 Status: planned
-Blocked by: 2.24
+Blocked by: none
 
 Add the sandboxed terminal profile. Start a `pau-term` relay inside the sandbox
 that opens its own PTY, runs the shell on it, forwards bytes to the operator's
@@ -333,7 +319,7 @@ Verification:
 ### 2.26 Login shell environment
 
 Status: planned
-Blocked by: 2.24
+Blocked by: none
 
 Add a login-shell launch profile beside the inherited environment.
 

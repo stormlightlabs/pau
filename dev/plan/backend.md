@@ -445,8 +445,10 @@ Review events stay inside the Pi process. `permissions:ui_prompt` and
 value, matched rule, and resolution, and the review log at
 `<agent dir>/extensions/pi-permission-system/logs/` adds the tool call ID. RPC
 receives only the dialog text and option labels. To show the session,
-operation, and affected paths as structured fields, Pau needs a small Pau-owned
-extension that forwards the bus events. It must not parse the dialog text.
+operation, and affected paths as structured fields, Pau loads a small
+Pau-owned extension that forwards the bus events. It loads with `-e` only in
+sessions that use a confirming profile, beside the pinned package, and holds no
+policy of its own. It must not parse the dialog text.
 
 Known gaps:
 

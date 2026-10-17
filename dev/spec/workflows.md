@@ -20,8 +20,8 @@
 - Reproduce vanilla Pi's interactive workflows with desktop controls for input,
   queues, interruption, models, thinking levels, context use, compaction,
   retries, session navigation, commands, transcript search, and export.
-- Load the operator's normal Pi resources and extensions. Do not inject a Pau
-  helper extension into ordinary sessions.
+- Load the operator's normal Pi resources and extensions. Load a Pau helper
+  extension only in sessions that use a confirming permission profile.
 - Support extension dialogs, notifications, status text, and string widgets
   exposed through Pi RPC. Explain when an arbitrary terminal-only extension
   component requires vanilla Pi in a terminal.

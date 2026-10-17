@@ -14,7 +14,9 @@ pub use claude::{
     ClaudeSessionError, StartClaudeBridgeOptions, decode_claude_bridge_diagnostic,
     decode_claude_bridge_frame, project_claude_event,
 };
-pub use controls::{AgentCapabilities, AgentControl, AgentControlError, PromptQueueChoice};
+pub use controls::{
+    AgentCapabilities, AgentControl, AgentControlError, PromptQueueChoice, ThinkingLevel,
+};
 pub use events::{AgentEvent, AgentEventKind, AgentSessionStatus};
 pub use mcp::{
     ClaudeMcpOperation, ClaudeMcpOptions, DiscoverClaudeMcpOptions, DiscoveredMcpServer,

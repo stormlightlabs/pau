@@ -60,6 +60,8 @@ built artifact.
   changes user-facing behavior, remove it from every blocker list, and delete
   the unit from its deliverable file. Delete a subsection or deliverable when
   it has no units left.
+- Write commit messages and pull request descriptions without agent
+  attribution. Omit `Co-Authored-By` trailers and generated-by lines.
 
 ## Dogfood Pau
 

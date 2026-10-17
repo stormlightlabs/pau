@@ -2,6 +2,7 @@
 
 use pau_agent::{
     AgentCapabilities, AgentControl, AgentControlError, AgentSessionStatus, PromptQueueChoice,
+    ThinkingLevel,
 };
 use pau_pi::{
     PI_RPC_CAPABILITIES, PiExtensionUiResponse, PiProcess, PiSession, PiSessionError,
@@ -45,6 +46,11 @@ async fn exercises_every_session_control_against_fake_rpc() {
     let model = session.select_model("fixture", "model-one").await.unwrap();
     assert_eq!(model["id"], "model-one");
 
+    session
+        .set_thinking_level(ThinkingLevel::ExtraHigh)
+        .await
+        .unwrap();
+
     let invalid_follow_up = session.follow_up("too late").await.unwrap_err();
     assert!(matches!(
         invalid_follow_up,
@@ -61,7 +67,7 @@ async fn exercises_every_session_control_against_fake_rpc() {
     assert_eq!(session.status().await, AgentSessionStatus::Stopped);
 
     let commands = fixture.commands();
-    assert_eq!(commands.len(), 6);
+    assert_eq!(commands.len(), 7);
     assert_command(&commands[0], "prompt");
     assert_eq!(commands[0]["message"], "start");
     assert_eq!(commands[1]["streamingBehavior"], "followUp");
@@ -71,6 +77,8 @@ async fn exercises_every_session_control_against_fake_rpc() {
     assert_command(&commands[5], "set_model");
     assert_eq!(commands[5]["provider"], "fixture");
     assert_eq!(commands[5]["modelId"], "model-one");
+    assert_command(&commands[6], "set_thinking_level");
+    assert_eq!(commands[6]["level"], "xhigh");
 }
 
 #[tokio::test]
@@ -130,8 +138,20 @@ async fn returns_capability_and_native_rejection_errors() {
         }) if message == "Model not found: fixture/missing"
     ));
 
+    let rejected_level = session
+        .set_thinking_level(ThinkingLevel::Off)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        rejected_level,
+        PiSessionError::Control(AgentControlError::Rejected {
+            control: AgentControl::SetThinkingLevel,
+            message,
+        }) if message == "Unsupported thinking level"
+    ));
+
     session.stop().await.unwrap();
-    assert_eq!(fixture.commands().len(), 1);
+    assert_eq!(fixture.commands().len(), 2);
 }
 
 fn assert_command(command: &Value, expected: &str) {
@@ -163,6 +183,12 @@ while IFS= read -r command; do
             ;;
         *'"type":"set_model"'*)
             printf '{"id":"%s","type":"response","command":"set_model","success":true,"data":{"provider":"fixture","id":"model-one"}}\n' "$id"
+            ;;
+        *'"level":"off"'*)
+            printf '{"id":"%s","type":"response","command":"set_thinking_level","success":false,"error":"Unsupported thinking level"}\n' "$id"
+            ;;
+        *'"type":"set_thinking_level"'*)
+            printf '{"id":"%s","type":"response","command":"set_thinking_level","success":true}\n' "$id"
             ;;
         *'"type":"extension_ui_response"'*) ;;
         *) exit 65 ;;

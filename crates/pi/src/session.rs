@@ -4,6 +4,7 @@ use crate::{
 };
 use pau_agent::{
     AgentCapabilities, AgentControl, AgentControlError, AgentSessionStatus, PromptQueueChoice,
+    ThinkingLevel,
 };
 use serde_json::{Value, json};
 use std::error::Error;
@@ -18,6 +19,7 @@ pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     steer: true,
     interrupt: true,
     model_selection: true,
+    thinking_level: true,
     stop: true,
 };
 
@@ -233,6 +235,28 @@ impl PiSession {
             )
             .await?;
         Ok(response.get("data").cloned().unwrap_or(Value::Null))
+    }
+
+    /// Sets the thinking level for later turns while the session is idle.
+    ///
+    /// Pi clamps the level to what the current model supports.
+    pub async fn set_thinking_level(&self, level: ThinkingLevel) -> Result<(), PiSessionError> {
+        let control = AgentControl::SetThinkingLevel;
+        self.require_capability(control)?;
+        let status = self.status.lock().await;
+        if *status != AgentSessionStatus::Idle {
+            return Err(invalid_state(
+                control,
+                *status,
+                "wait for the session to become idle",
+            ));
+        }
+        self.command(
+            control,
+            json!({"type": "set_thinking_level", "level": level.as_str()}),
+        )
+        .await?;
+        Ok(())
     }
 
     /// Responds to a blocking request from a configured Pi extension.

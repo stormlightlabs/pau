@@ -28,6 +28,7 @@ pub const CLAUDE_BRIDGE_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     steer: false,
     interrupt: true,
     model_selection: false,
+    thinking_level: false,
     stop: true,
 };
 

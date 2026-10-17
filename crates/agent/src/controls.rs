@@ -15,6 +15,8 @@ pub enum AgentControl {
     Interrupt,
     /// Select a provider model.
     SelectModel,
+    /// Select how much reasoning the model applies.
+    SetThinkingLevel,
     /// Stop the session process.
     Stop,
 }
@@ -27,6 +29,7 @@ impl fmt::Display for AgentControl {
             Self::Steer => "steer",
             Self::Interrupt => "interrupt",
             Self::SelectModel => "model selection",
+            Self::SetThinkingLevel => "thinking-level selection",
             Self::Stop => "stop",
         };
         formatter.write_str(name)
@@ -46,6 +49,8 @@ pub struct AgentCapabilities {
     pub interrupt: bool,
     /// Whether the adapter can select a model.
     pub model_selection: bool,
+    /// Whether the adapter can change the thinking level.
+    pub thinking_level: bool,
     /// Whether the adapter can stop its session process.
     pub stop: bool,
 }
@@ -59,6 +64,7 @@ impl AgentCapabilities {
             AgentControl::Steer => self.steer,
             AgentControl::Interrupt => self.interrupt,
             AgentControl::SelectModel => self.model_selection,
+            AgentControl::SetThinkingLevel => self.thinking_level,
             AgentControl::Stop => self.stop,
         }
     }
@@ -71,6 +77,40 @@ pub enum PromptQueueChoice {
     Steer,
     /// Deliver the prompt after all current work finishes.
     FollowUp,
+}
+
+/// A reasoning effort level an agent may apply to model turns.
+///
+/// A model that cannot reason, or that lacks a requested level, may clamp the
+/// level to the nearest one it supports.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ThinkingLevel {
+    /// No reasoning.
+    Off,
+    /// Minimal reasoning.
+    Minimal,
+    /// Low reasoning.
+    Low,
+    /// Medium reasoning.
+    Medium,
+    /// High reasoning.
+    High,
+    /// Extra-high reasoning, available on some models.
+    ExtraHigh,
+}
+
+impl ThinkingLevel {
+    /// The level name used by Pi's RPC protocol.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Minimal => "minimal",
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+            Self::ExtraHigh => "xhigh",
+        }
+    }
 }
 
 /// A control rejected before or by an agent adapter.

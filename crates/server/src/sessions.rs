@@ -50,11 +50,12 @@ use pau_core::{
     session::{
         AgentSession, ExtensionDialog, ExtensionStatus, ExtensionUiResponse, ExtensionWidget,
         ExtensionWidgetPlacement, NativeSessionList, NativeSessionSummary, NativeSessionWarning,
-        SessionAutoCompactionRequest, SessionCapabilities, SessionCommand, SessionCommandSource,
-        SessionCompactRequest, SessionCompactionResult, SessionContextUsage, SessionExtensionUi,
-        SessionMessageQueue, SessionMessageRequest, SessionModel, SessionModelSelection,
-        SessionPromptRequest, SessionQueue, SessionStatus, SessionThinkingLevel,
-        SessionThinkingLevelRequest, SessionTokenUsage, SessionUsage, StartSessionRequest,
+        SessionAutoCompactionRequest, SessionAutoRetryRequest, SessionCapabilities, SessionCommand,
+        SessionCommandSource, SessionCompactRequest, SessionCompactionResult, SessionContextUsage,
+        SessionExtensionUi, SessionMessageQueue, SessionMessageRequest, SessionModel,
+        SessionModelSelection, SessionPromptRequest, SessionQueue, SessionStatus,
+        SessionThinkingLevel, SessionThinkingLevelRequest, SessionTokenUsage, SessionUsage,
+        StartSessionRequest,
     },
 };
 use pau_pi::{
@@ -518,6 +519,7 @@ fn session_capabilities(capabilities: AgentCapabilities) -> SessionCapabilities 
         command_discovery: capabilities.command_discovery,
         usage: capabilities.usage,
         compaction: capabilities.compaction,
+        retry: capabilities.retry,
         stop: capabilities.stop,
     }
 }
@@ -924,6 +926,39 @@ pub(crate) async fn get_session_history(
 ) -> Result<Json<Vec<String>>, ApiError> {
     let (_, session) = session_api(&state)?.live(&session_id).await?;
     Ok(Json(session.input_history().await?))
+}
+
+/// Runs the last prompt again after a failed assistant turn.
+pub(crate) async fn retry_session(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+) -> Result<StatusCode, ApiError> {
+    let api = session_api(&state)?;
+    let (_, session) = api.live(&session_id).await?;
+    session.retry().await?;
+    api.publish_current(&session_id).await;
+    Ok(StatusCode::ACCEPTED)
+}
+
+/// Turns automatic retry of transient provider errors on or off.
+pub(crate) async fn set_session_auto_retry(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+    Json(request): Json<SessionAutoRetryRequest>,
+) -> Result<StatusCode, ApiError> {
+    let (_, session) = session_api(&state)?.live(&session_id).await?;
+    session.set_auto_retry(request.enabled).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Cancels an automatic retry that is waiting to run.
+pub(crate) async fn abort_session_retry(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+) -> Result<StatusCode, ApiError> {
+    let (_, session) = session_api(&state)?.live(&session_id).await?;
+    session.abort_retry().await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Returns the session's context fill and cumulative token and cost usage.

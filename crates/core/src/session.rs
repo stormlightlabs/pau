@@ -54,6 +54,8 @@ pub struct SessionCapabilities {
     /// Whether the session can compact its context and toggle automatic
     /// compaction.
     pub compaction: bool,
+    /// Whether the session can retry a failed turn and manage automatic retry.
+    pub retry: bool,
     /// Whether the session can stop its process.
     pub stop: bool,
 }
@@ -270,6 +272,13 @@ pub struct SessionUsage {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct SessionAutoCompactionRequest {
     /// Whether the session compacts when its context is nearly full.
+    pub enabled: bool,
+}
+
+/// Turns automatic retry of transient provider errors on or off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionAutoRetryRequest {
+    /// Whether the session retries overloaded, rate-limited, and 5xx failures.
     pub enabled: bool,
 }
 

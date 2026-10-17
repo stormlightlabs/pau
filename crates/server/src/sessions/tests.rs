@@ -92,6 +92,15 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"compact","success":true,"data":{"summary":"Short summary","firstKeptEntryId":"entry-2","tokensBefore":9000}}\n' "$id"
             printf '{"type":"compaction_end","reason":"manual","aborted":false,"willRetry":false,"result":{"summary":"Short summary","firstKeptEntryId":"entry-2","tokensBefore":9000}}\n'
             ;;
+        *'"type":"get_messages"'*)
+            printf '{"id":"%s","type":"response","command":"get_messages","success":true,"data":{"messages":[{"role":"user","content":"failing prompt"},{"role":"assistant","content":[],"stopReason":"error","errorMessage":"529 overloaded"}]}}\n' "$id"
+            ;;
+        *'"type":"set_auto_retry"'*)
+            printf '{"id":"%s","type":"response","command":"set_auto_retry","success":true}\n' "$id"
+            ;;
+        *'"type":"abort_retry"'*)
+            printf '{"id":"%s","type":"response","command":"abort_retry","success":true}\n' "$id"
+            ;;
         *'"type":"set_auto_compaction"'*)
             printf '{"id":"%s","type":"response","command":"set_auto_compaction","success":true}\n' "$id"
             ;;
@@ -382,6 +391,30 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
     assert_eq!(fixture.call("GET", &base, None).await.1["status"], "idle");
     next_event(&mut stream, output("session_usage")).await;
 
+    let (status, idle) = fixture.call("DELETE", &format!("{base}/retry"), None).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(idle["code"], "invalid_session_state");
+    let (status, _) = fixture.call("POST", &format!("{base}/retry"), None).await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    next_event(&mut stream, session_changed("running")).await;
+    let (status, busy) = fixture.call("POST", &format!("{base}/retry"), None).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(busy["code"], "invalid_session_state");
+    let (status, _) = fixture
+        .call(
+            "PUT",
+            &format!("{base}/auto-retry"),
+            Some(json!({"enabled": false})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = fixture.call("DELETE", &format!("{base}/retry"), None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = fixture
+        .call("POST", &format!("{base}/interrupt"), None)
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
     let reconnected = fixture.events.subscribe(None);
     let [ServerStreamMessage::Snapshot { snapshot }] = &reconnected.initial[..] else {
         panic!("a new subscriber starts from a snapshot");
@@ -427,6 +460,12 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
             "steer",
             "follow_up",
             "clear_queue",
+            "abort",
+            "get_session_stats",
+            "get_messages",
+            "prompt",
+            "set_auto_retry",
+            "abort_retry",
             "abort",
             "get_session_stats",
         ]

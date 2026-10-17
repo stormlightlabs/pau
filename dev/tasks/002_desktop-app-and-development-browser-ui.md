@@ -757,21 +757,10 @@ Verification:
 - Component-test empty and queued states.
 - Queue a message in a self-hosted Pi session.
 
-### 2.117 Pi retry API
-
-Status: planned
-Blocked by: none
-
-Expose retry after failure through the desktop API.
-
-Verification:
-
-- Cover retry after failure against the Pi fixture.
-
 ### 2.118 Retry control
 
 Status: planned
-Blocked by: 2.117
+Blocked by: none
 
 Add a retry control to failed turns in the session view.
 

@@ -480,6 +480,14 @@ fn router_with_services(
             put(sessions::set_session_auto_compaction),
         )
         .route(
+            "/api/sessions/{session_id}/retry",
+            post(sessions::retry_session).delete(sessions::abort_session_retry),
+        )
+        .route(
+            "/api/sessions/{session_id}/auto-retry",
+            put(sessions::set_session_auto_retry),
+        )
+        .route(
             "/api/sessions/{session_id}/queue",
             get(sessions::get_session_queue).delete(sessions::clear_session_queue),
         )

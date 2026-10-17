@@ -862,6 +862,10 @@ usage: boolean,
  */
 compaction: boolean,
 /**
+ * Whether the session can retry a failed turn and manage automatic retry.
+ */
+retry: boolean,
+/**
  * Whether the session can stop its process.
  */
 stop: boolean, };
@@ -1256,6 +1260,12 @@ cost: number, };
 export type SessionAutoCompactionRequest = {
 /**
  * Whether the session compacts when its context is nearly full.
+ */
+enabled: boolean, };
+
+export type SessionAutoRetryRequest = {
+/**
+ * Whether the session retries overloaded, rate-limited, and 5xx failures.
  */
 enabled: boolean, };
 

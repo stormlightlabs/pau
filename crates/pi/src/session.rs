@@ -24,6 +24,7 @@ pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     command_discovery: true,
     usage: true,
     compaction: true,
+    retry: true,
     stop: true,
 };
 
@@ -512,6 +513,70 @@ impl PiSession {
         Ok(())
     }
 
+    /// Runs the last user prompt again after the assistant turn failed.
+    ///
+    /// Pi's RPC protocol has no retry command, so this reads the conversation
+    /// with `get_messages`, requires the last message to be an assistant turn
+    /// that ended with an error, and sends the user prompt before it as a new
+    /// prompt. The retry therefore adds a second copy of that prompt to the
+    /// session history. Use [`Self::set_auto_retry`] for transient provider
+    /// errors that Pi can retry in place.
+    pub async fn retry(&self) -> Result<(), PiSessionError> {
+        let control = AgentControl::Retry;
+        self.require_capability(control)?;
+        let mut status = self.status.lock().await;
+        if *status != AgentSessionStatus::Idle {
+            return Err(not_ready(control, *status));
+        }
+        let response = self
+            .command(control, json!({"type": "get_messages"}))
+            .await?;
+        let messages = response
+            .pointer("/data/messages")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let message = failed_turn_prompt(messages).map_err(|message| {
+            PiSessionError::Control(AgentControlError::Rejected { control, message })
+        })?;
+        self.command(control, json!({"type": "prompt", "message": message}))
+            .await?;
+        *status = AgentSessionStatus::Running;
+        Ok(())
+    }
+
+    /// Enables or disables Pi's automatic retry of transient provider errors.
+    ///
+    /// Pi reports each attempt through `auto_retry_start` and `auto_retry_end`
+    /// events.
+    pub async fn set_auto_retry(&self, enabled: bool) -> Result<(), PiSessionError> {
+        let control = AgentControl::AutoRetry;
+        self.require_capability(control)?;
+        self.command(
+            control,
+            json!({"type": "set_auto_retry", "enabled": enabled}),
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Cancels the delay before an automatic retry and stops retrying.
+    pub async fn abort_retry(&self) -> Result<(), PiSessionError> {
+        let control = AgentControl::AbortRetry;
+        self.require_capability(control)?;
+        let status = self.status.lock().await;
+        if *status != AgentSessionStatus::Running {
+            return Err(invalid_state(
+                control,
+                *status,
+                "only a running session can have a pending retry",
+            ));
+        }
+        self.command(control, json!({"type": "abort_retry"}))
+            .await?;
+        Ok(())
+    }
+
     /// Responds to a blocking request from a configured Pi extension.
     ///
     /// Pi correlates this record with the extension request directly. It does not
@@ -701,6 +766,40 @@ fn parse_model(entry: &Value, current: Option<&ModelKey<'_>>) -> Result<PiModel,
         reasoning: entry.get("reasoning").and_then(Value::as_bool) == Some(true),
         current: current == Some(&key),
     })
+}
+
+/// Returns the user prompt that preceded a failed final assistant turn, or why
+/// there is nothing to retry.
+fn failed_turn_prompt(messages: &[Value]) -> Result<String, String> {
+    fn role(message: &Value) -> Option<&str> {
+        message.get("role").and_then(Value::as_str)
+    }
+    let failed = messages.last().is_some_and(|message| {
+        role(message) == Some("assistant")
+            && message.get("stopReason").and_then(Value::as_str) == Some("error")
+    });
+    if !failed {
+        return Err("the last assistant turn did not fail".to_owned());
+    }
+    let user = messages
+        .iter()
+        .rev()
+        .find(|message| role(message) == Some("user"))
+        .ok_or_else(|| "the failed turn has no user prompt to retry".to_owned())?;
+    let text = match user.get("content") {
+        Some(Value::String(text)) => text.clone(),
+        Some(Value::Array(blocks)) => blocks
+            .iter()
+            .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
+            .filter_map(|block| block.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => String::new(),
+    };
+    if text.is_empty() {
+        return Err("the failed prompt has no text to retry".to_owned());
+    }
+    Ok(text)
 }
 
 fn invalid_state(

@@ -44,6 +44,7 @@ export type {
 	ServerSnapshot,
 	ServerStreamMessage,
 	SessionAutoCompactionRequest,
+	SessionAutoRetryRequest,
 	SessionCapabilities,
 	SessionCommand,
 	SessionCommandSource,

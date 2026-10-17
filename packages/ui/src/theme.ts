@@ -93,35 +93,35 @@ export const THEMES = {
 		name: 'eldritch',
 		label: 'Eldritch',
 		colors: {
-			canvas: '#171928',
-			surface: '#212337',
-			surfaceRaised: '#323449',
-			border: '#454759',
-			text: '#ebfafa',
-			textMuted: '#aeb9d8',
-			accent: '#37f499',
+			canvas: '#12151d',
+			surface: '#171b27',
+			surfaceRaised: '#202536',
+			border: '#293044',
+			text: '#e6e9f2',
+			textMuted: '#9aa3bd',
+			accent: '#38ef9d',
 			focus: '#04d1f9',
-			success: '#37f499',
-			warning: '#f1fc79',
-			danger: '#ff8e9e',
-			info: '#04d1f9',
-			selection: '#323449'
+			success: '#57e69a',
+			warning: '#f5bf69',
+			danger: '#ee7180',
+			info: '#43c7e8',
+			selection: '#2a3045'
 		},
 		syntax: {
-			comment: '#7081d0',
+			comment: '#6b7089',
 			keyword: '#a48cf2',
-			string: '#f1fc79',
-			number: '#f7c67f',
-			function: '#37f499',
-			type: '#04d1f9',
+			string: '#37f499',
+			number: '#f1fc79',
+			function: '#04d1f9',
+			type: '#f16c75',
 			variable: '#ebfafa',
 			invalid: '#f16c75'
 		},
 		terminal: {
-			background: '#171928',
-			foreground: '#ebfafa',
-			cursor: '#37f499',
-			selection: '#454759',
+			background: '#12151d',
+			foreground: '#e6e9f2',
+			cursor: '#38ef9d',
+			selection: '#22423a',
 			ansi: [
 				'#171928',
 				'#f16c75',
@@ -142,10 +142,10 @@ export const THEMES = {
 			]
 		},
 		neovim: {
-			normal: { background: '#171928', foreground: '#ebfafa' },
-			comment: '#7081d0',
-			cursorLine: '#252738',
-			visual: '#323449',
+			normal: { background: '#12151d', foreground: '#e6e9f2' },
+			comment: '#6b7089',
+			cursorLine: '#1c1f28',
+			visual: '#22423a',
 			search: '#454759'
 		}
 	}),
@@ -153,22 +153,22 @@ export const THEMES = {
 		name: 'nord',
 		label: 'Nord',
 		colors: {
-			canvas: '#2e3440',
-			surface: '#3b4252',
-			surfaceRaised: '#434c5e',
-			border: '#4c566a',
+			canvas: '#242933',
+			surface: '#2e3440',
+			surfaceRaised: '#3b4252',
+			border: '#414a5b',
 			text: '#eceff4',
-			textMuted: '#d8dee9',
+			textMuted: '#b5bfce',
 			accent: '#88c0d0',
 			focus: '#88c0d0',
-			success: '#b5d0a0',
+			success: '#a3be8c',
 			warning: '#ebcb8b',
 			danger: '#f5aab0',
 			info: '#a8c9e5',
 			selection: '#434c5e'
 		},
 		syntax: {
-			comment: '#8b96aa',
+			comment: '#616e88',
 			keyword: '#81a1c1',
 			string: '#a3be8c',
 			number: '#b48ead',
@@ -178,10 +178,10 @@ export const THEMES = {
 			invalid: '#bf616a'
 		},
 		terminal: {
-			background: '#2e3440',
+			background: '#242933',
 			foreground: '#d8dee9',
 			cursor: '#d8dee9',
-			selection: '#434c5e',
+			selection: '#3a4a55',
 			ansi: [
 				'#3b4252',
 				'#bf616a',
@@ -202,10 +202,10 @@ export const THEMES = {
 			]
 		},
 		neovim: {
-			normal: { background: '#2e3440', foreground: '#d8dee9' },
-			comment: '#8b96aa',
-			cursorLine: '#3b4252',
-			visual: '#434c5e',
+			normal: { background: '#242933', foreground: '#d8dee9' },
+			comment: '#616e88',
+			cursorLine: '#2e333d',
+			visual: '#3a4a55',
 			search: '#5e81ac'
 		}
 	}),
@@ -213,10 +213,10 @@ export const THEMES = {
 		name: 'iceberg',
 		label: 'Iceberg',
 		colors: {
-			canvas: '#161821',
-			surface: '#1e2132',
-			surfaceRaised: '#272c42',
-			border: '#3e445e',
+			canvas: '#11131d',
+			surface: '#161923',
+			surfaceRaised: '#1e2230',
+			border: '#2b3044',
 			text: '#c6c8d1',
 			textMuted: '#a3adcb',
 			accent: '#84a0c6',
@@ -225,23 +225,23 @@ export const THEMES = {
 			warning: '#e2a478',
 			danger: '#e27878',
 			info: '#89b8c2',
-			selection: '#272c42'
+			selection: '#252a3b'
 		},
 		syntax: {
 			comment: '#8389a3',
-			keyword: '#84a0c6',
-			string: '#89b8c2',
-			number: '#a093c7',
-			function: '#e2a478',
-			type: '#b4be82',
+			keyword: '#a093c7',
+			string: '#b4be82',
+			number: '#e2a478',
+			function: '#84a0c6',
+			type: '#89b8c2',
 			variable: '#c6c8d1',
 			invalid: '#e27878'
 		},
 		terminal: {
-			background: '#161821',
+			background: '#11131d',
 			foreground: '#c6c8d1',
 			cursor: '#c6c8d1',
-			selection: '#272c42',
+			selection: '#293141',
 			ansi: [
 				'#1e2132',
 				'#e27878',
@@ -262,10 +262,10 @@ export const THEMES = {
 			]
 		},
 		neovim: {
-			normal: { background: '#161821', foreground: '#c6c8d1' },
+			normal: { background: '#11131d', foreground: '#c6c8d1' },
 			comment: '#6b7089',
-			cursorLine: '#1e2132',
-			visual: '#272c42',
+			cursorLine: '#1a1c26',
+			visual: '#293141',
 			search: '#e4aa80'
 		}
 	}),
@@ -274,21 +274,21 @@ export const THEMES = {
 		label: 'Catppuccin Mocha',
 		colors: {
 			canvas: '#11111b',
-			surface: '#1e1e2e',
-			surfaceRaised: '#313244',
-			border: '#45475a',
+			surface: '#181825',
+			surfaceRaised: '#1e1e2e',
+			border: '#393b4b',
 			text: '#cdd6f4',
-			textMuted: '#bac2de',
+			textMuted: '#a6adc8',
 			accent: '#cba6f7',
 			focus: '#89dceb',
 			success: '#a6e3a1',
 			warning: '#f9e2af',
 			danger: '#f38ba8',
-			info: '#89b4fa',
-			selection: '#45475a'
+			info: '#89dceb',
+			selection: '#313244'
 		},
 		syntax: {
-			comment: '#9399b2',
+			comment: '#6c7086',
 			keyword: '#cba6f7',
 			string: '#a6e3a1',
 			number: '#fab387',
@@ -301,7 +301,7 @@ export const THEMES = {
 			background: '#1e1e2e',
 			foreground: '#cdd6f4',
 			cursor: '#f5e0dc',
-			selection: '#45475a',
+			selection: '#373048',
 			ansi: [
 				'#45475a',
 				'#f38ba8',
@@ -323,9 +323,9 @@ export const THEMES = {
 		},
 		neovim: {
 			normal: { background: '#1e1e2e', foreground: '#cdd6f4' },
-			comment: '#9399b2',
-			cursorLine: '#313244',
-			visual: '#45475a',
+			comment: '#6c7086',
+			cursorLine: '#1a1a26',
+			visual: '#373048',
 			search: '#585b70'
 		}
 	}),
@@ -334,26 +334,26 @@ export const THEMES = {
 		label: 'Vitesse Dark',
 		colors: {
 			canvas: '#121212',
-			surface: '#181818',
-			surfaceRaised: '#2f363d',
-			border: '#3f3f3f',
+			surface: '#171717',
+			surfaceRaised: '#222222',
+			border: '#303030',
 			text: '#dbd7ca',
-			textMuted: '#bfbaaa',
+			textMuted: '#a3a3a3',
 			accent: '#4d9375',
 			focus: '#5eaab5',
-			success: '#91b879',
+			success: '#80a665',
 			warning: '#e6cc77',
-			danger: '#df8d8d',
-			info: '#7aaed8',
-			selection: '#2f363d'
+			danger: '#cb7676',
+			info: '#5da994',
+			selection: '#2a2a2a'
 		},
 		syntax: {
-			comment: '#8b9b8b',
+			comment: '#758575',
 			keyword: '#4d9375',
 			string: '#c98a7d',
-			number: '#5eaab5',
+			number: '#4c9a91',
 			function: '#80a665',
-			type: '#5d99a9',
+			type: '#5da994',
 			variable: '#bd976a',
 			invalid: '#cb7676'
 		},
@@ -361,7 +361,7 @@ export const THEMES = {
 			background: '#121212',
 			foreground: '#dbd7ca',
 			cursor: '#dbd7ca',
-			selection: '#2f363d',
+			selection: '#212d27',
 			ansi: [
 				'#393a34',
 				'#cb7676',
@@ -383,9 +383,9 @@ export const THEMES = {
 		},
 		neovim: {
 			normal: { background: '#121212', foreground: '#dbd7ca' },
-			comment: '#8b9b8b',
-			cursorLine: '#181818',
-			visual: '#2f363d',
+			comment: '#758575',
+			cursorLine: '#1c1b1b',
+			visual: '#212d27',
 			search: '#e6cc77'
 		}
 	})

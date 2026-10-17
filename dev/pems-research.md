@@ -33,22 +33,22 @@ The 40.3.0 source has 31,522 lines of TypeScript in 172 files. Its tests have
 this research did not install or run it. Its `measure:*` scripts measure policy
 outcomes against the author's review log, not test coverage.
 
-| Area | Source lines | Test lines | Pau needs it |
-|---|---:|---:|---|
-| `access-intent/bash` (tree-sitter bash analysis) | 8,043 | 11,718 | Yes, vendored |
-| `access-intent` other (tool kinds, MCP names, path facts) | 1,431 | 2,348 | Partly, vendored |
-| `path` (normalization, containment, approval patterns) | 967 | 2,380 | Yes, vendored |
-| `policy` (rules, wildcards, merge, resolver) | 1,781 | 8,145 | Ideas only |
-| `session` (session approvals) | 651 | 1,343 | Ideas only |
-| `authority` dialog queue and decision chain | 2,830 | | Ideas only |
-| `authority` subagent forwarding | 3,134 | | No |
-| `authority` terminal prompt component | 588 | | No |
-| `handlers` (gate pipeline, skill gates, prompt edits) | 3,096 | 12,731 | Ideas only |
-| `config` (user and project config files, modal) | 2,854 | 4,672 | No |
-| `presentation` (dialog and agent text) | 2,298 | 3,280 | No |
-| `logging` (review log, redaction) | 1,000 | 1,563 | No |
-| `exposure` (hide denied tools from the system prompt) | 717 | 1,152 | No |
-| `service`, root, `tool-input` | 2,132 | | No |
+| Area                                                      | Source lines | Test lines | Pau needs it     |
+| --------------------------------------------------------- | -----------: | ---------: | ---------------- |
+| `access-intent/bash` (tree-sitter bash analysis)          |        8,043 |     11,718 | Yes, vendored    |
+| `access-intent` other (tool kinds, MCP names, path facts) |        1,431 |      2,348 | Partly, vendored |
+| `path` (normalization, containment, approval patterns)    |          967 |      2,380 | Yes, vendored    |
+| `policy` (rules, wildcards, merge, resolver)              |        1,781 |      8,145 | Ideas only       |
+| `session` (session approvals)                             |          651 |      1,343 | Ideas only       |
+| `authority` dialog queue and decision chain               |        2,830 |            | Ideas only       |
+| `authority` subagent forwarding                           |        3,134 |            | No               |
+| `authority` terminal prompt component                     |          588 |            | No               |
+| `handlers` (gate pipeline, skill gates, prompt edits)     |        3,096 |     12,731 | Ideas only       |
+| `config` (user and project config files, modal)           |        2,854 |      4,672 | No               |
+| `presentation` (dialog and agent text)                    |        2,298 |      3,280 | No               |
+| `logging` (review log, redaction)                         |        1,000 |      1,563 | No               |
+| `exposure` (hide denied tools from the system prompt)     |          717 |      1,152 | No               |
+| `service`, root, `tool-input`                             |        2,132 |            | No               |
 
 The `authority` tests total 12,022 lines and are not split by file group.
 
@@ -63,11 +63,11 @@ path-normalization,tool-kind}`, `types.ts`, and two type-only imports from
 
 ### Dependencies
 
-| Package | Version | License | Notes |
-|---|---|---|---|
-| `web-tree-sitter` | 0.26.9 | MIT | 4.6 MB unpacked, WASM runtime |
-| `tree-sitter-bash` | 0.25.1 | MIT | 20.3 MB unpacked, runs `node-gyp-build` on install |
-| `zod` | 4.4.3 | MIT | Config schema only |
+| Package            | Version | License | Notes                                              |
+| ------------------ | ------- | ------- | -------------------------------------------------- |
+| `web-tree-sitter`  | 0.26.9  | MIT     | 4.6 MB unpacked, WASM runtime                      |
+| `tree-sitter-bash` | 0.25.1  | MIT     | 20.3 MB unpacked, runs `node-gyp-build` on install |
+| `zod`              | 4.4.3   | MIT     | Config schema only                                 |
 
 The vendored code loads `tree-sitter-bash/tree-sitter-bash.wasm` through
 `createRequire`. It never uses the native addon, so Pau's build should copy
@@ -83,14 +83,14 @@ on 2026-10-17, between 24 and 48 releases a month. One author wrote 2,617 of
 the commits touching the package. Three other people contributed one commit
 each.
 
-| Range | Dates | Source change | Test change |
-|---|---|---|---|
+| Range            | Dates          | Source change            | Test change              |
+| ---------------- | -------------- | ------------------------ | ------------------------ |
 | 30.0.0 to 33.0.0 | 09-02 to 09-18 | 142 files, +3,546 −1,193 | 137 files, +7,497 −1,174 |
-| 36.0.0 to 37.0.0 | 09-29 to 10-02 | 20 files, +809 −717 | 22 files, +1,514 −1,392 |
-| 37.0.0 to 38.0.0 | 10-02 | 15 files, +409 −85 | 12 files, +812 −1 |
-| 38.0.0 to 39.0.0 | 10-02 to 10-03 | 16 files, +436 −93 | 22 files, +1,306 −111 |
-| 39.0.0 to 40.0.0 | 10-03 to 10-06 | 49 files, +1,411 −315 | 51 files, +3,340 −548 |
-| 40.0.0 to 40.3.0 | 10-06 to 10-17 | 45 files, +2,183 −318 | 51 files, +3,860 −90 |
+| 36.0.0 to 37.0.0 | 09-29 to 10-02 | 20 files, +809 −717      | 22 files, +1,514 −1,392  |
+| 37.0.0 to 38.0.0 | 10-02          | 15 files, +409 −85       | 12 files, +812 −1        |
+| 38.0.0 to 39.0.0 | 10-02 to 10-03 | 16 files, +436 −93       | 22 files, +1,306 −111    |
+| 39.0.0 to 40.0.0 | 10-03 to 10-06 | 49 files, +1,411 −315    | 51 files, +3,340 −548    |
+| 40.0.0 to 40.3.0 | 10-06 to 10-17 | 45 files, +2,183 −318    | 51 files, +3,860 −90     |
 
 Since 37.0.0, 49 commits touched `access-intent`, 28 touched `policy` and
 `path`, and 11 touched `authority`. The 40.x bug fixes are almost all bash
@@ -169,25 +169,30 @@ The extension calls
 ctx.signal, timeout })`, which Pi sends as:
 
 ```json
-{"type":"extension_ui_request","id":"<pi dialog id>","method":"select",
- "title":"{\"pau\":\"permission\",\"version\":1,...}",
- "options":["allow_once","allow_session","deny"],"timeout":300000}
+{
+	"type": "extension_ui_request",
+	"id": "<pi dialog id>",
+	"method": "select",
+	"title": "{\"pau\":\"permission\",\"version\":1,...}",
+	"options": ["allow_once", "allow_session", "deny"],
+	"timeout": 300000
+}
 ```
 
 Envelope fields:
 
-| Field | Meaning |
-|---|---|
-| `requestId` | Extension-generated ID, also used in decision records |
-| `toolCallId`, `parentToolCallId` | Correlate with Pi tool events and codemode nested calls |
-| `tool` | Pi tool name, such as `bash`, `write`, or `mcp__server__tool` |
-| `operation` | `read`, `write`, `command`, `mcp`, `network`, or `tool` |
-| `command` | The bash command text, when present |
-| `paths` | Canonical paths, each with `access` (`read` or `write`) and `outsideWorkspace` |
-| `destination` | Host for a recognized network command, when known |
-| `matchedRule` | `source` (`profile`, `user`, `project`, `protected`), `pattern`, and `action` |
-| `reason` | Why the call asks, such as `wrapper`, `unparsed`, `outside_workspace`, or `mcp_unannotated` |
-| `sessionScope` | The pattern an `allow_session` answer grants, such as `touch *` |
+| Field                            | Meaning                                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------------------------- |
+| `requestId`                      | Extension-generated ID, also used in decision records                                       |
+| `toolCallId`, `parentToolCallId` | Correlate with Pi tool events and codemode nested calls                                     |
+| `tool`                           | Pi tool name, such as `bash`, `write`, or `mcp__server__tool`                               |
+| `operation`                      | `read`, `write`, `command`, `mcp`, `network`, or `tool`                                     |
+| `command`                        | The bash command text, when present                                                         |
+| `paths`                          | Canonical paths, each with `access` (`read` or `write`) and `outsideWorkspace`              |
+| `destination`                    | Host for a recognized network command, when known                                           |
+| `matchedRule`                    | `source` (`profile`, `user`, `project`, `protected`), `pattern`, and `action`               |
+| `reason`                         | Why the call asks, such as `wrapper`, `unparsed`, `outside_workspace`, or `mcp_unannotated` |
+| `sessionScope`                   | The pattern an `allow_session` answer grants, such as `touch *`                             |
 
 Pau adds the session ID and session generation itself because it knows which
 process sent the request.
@@ -197,8 +202,11 @@ process sent the request.
 Pau answers with a normal dialog response:
 
 ```json
-{"type":"extension_ui_response","id":"<pi dialog id>",
- "value":"{\"decision\":\"deny\",\"reason\":\"Use the build script\"}"}
+{
+	"type": "extension_ui_response",
+	"id": "<pi dialog id>",
+	"value": "{\"decision\":\"deny\",\"reason\":\"Use the build script\"}"
+}
 ```
 
 `decision` is `allow_once`, `allow_session`, or `deny`, with an optional
@@ -212,8 +220,7 @@ allows and rule denials, the extension sends a fire-and-forget `setStatus`
 with `statusKey` `pau.permission` and a JSON `statusText`:
 
 ```json
-{"version":1,"requestId":"...","toolCallId":"...",
- "outcome":"allowed","source":"rule"}
+{ "version": 1, "requestId": "...", "toolCallId": "...", "outcome": "allowed", "source": "rule" }
 ```
 
 `outcome` is `allowed` or `denied`. `source` is `rule`, `session`, `operator`,
@@ -259,15 +266,15 @@ decision record, not failed.
 
 ## Known gaps
 
-| Gap | How the Pau extension closes it |
-|---|---|
-| Per-session policy | Policy file named by an environment variable, written per session by Pau. No Pi config is read or written. |
-| Abort leaves a dialog answerable | Dialogs use `ctx.signal`. Pi drops the pending answer and the extension sends an `abort` record. Pau rejects stale generations. |
-| No structured fields over RPC | The dialog envelope and decision records replace the forwarder. |
-| MCP annotations ignored | The extension reads `pi.getAllTools()` annotations. See below. |
-| Protected-path list | Pau's Rust code owns one list, now `HOME_CREDENTIAL_PATHS` and `WORKSPACE_SECRET_PATTERNS` in `crates/core/src/sandbox/policy.rs`, and writes it into the policy file. Sample files such as `.env.example` follow as allows. |
-| `bash -c` and other wrappers | The vendored analysis floors `bash -c`, `eval`, `sudo`, `env`, `xargs`, and `find -exec` to ask and limits session approvals to the inner command. Pau keeps that floor in both profiles. An empty parse for a non-empty command also asks. |
-| Review log copies commands | There is no review log. Decision records carry no arguments. |
+| Gap                              | How the Pau extension closes it                                                                                                                                                                                                             |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Per-session policy               | Policy file named by an environment variable, written per session by Pau. No Pi config is read or written.                                                                                                                                  |
+| Abort leaves a dialog answerable | Dialogs use `ctx.signal`. Pi drops the pending answer and the extension sends an `abort` record. Pau rejects stale generations.                                                                                                             |
+| No structured fields over RPC    | The dialog envelope and decision records replace the forwarder.                                                                                                                                                                             |
+| MCP annotations ignored          | The extension reads `pi.getAllTools()` annotations. See below.                                                                                                                                                                              |
+| Protected-path list              | Pau's Rust code owns one list, now `HOME_CREDENTIAL_PATHS` and `WORKSPACE_SECRET_PATTERNS` in `crates/core/src/sandbox/policy.rs`, and writes it into the policy file. Sample files such as `.env.example` follow as allows.                |
+| `bash -c` and other wrappers     | The vendored analysis floors `bash -c`, `eval`, `sudo`, `env`, `xargs`, and `find -exec` to ask and limits session approvals to the inner command. Pau keeps that floor in both profiles. An empty parse for a non-empty command also asks. |
+| Review log copies commands       | There is no review log. Decision records carry no arguments.                                                                                                                                                                                |
 
 For MCP tools, the confirm-mutating profile allows a call when the tool
 declares `readOnlyHint: true` and `openWorldHint: false`. The confirm-writes
@@ -278,17 +285,17 @@ permission dialog should say when an allow came from a hint. The
 
 ## Estimated size
 
-| Part | Lines |
-|---|---:|
-| Gate, queue, envelope, and decision records | 350 |
-| Policy schema, loading, and rule matching | 400 |
-| Session approvals | 150 |
-| MCP annotations and tool classification | 100 |
-| Reload command and lifecycle | 100 |
-| Pau-owned code | about 1,100 |
-| Pau tests, including an RPC fixture run | about 1,500 |
-| Vendored bash and path analysis | about 10,500, 41% comments |
-| Vendored tests | about 16,000 |
+| Part                                        |                      Lines |
+| ------------------------------------------- | -------------------------: |
+| Gate, queue, envelope, and decision records |                        350 |
+| Policy schema, loading, and rule matching   |                        400 |
+| Session approvals                           |                        150 |
+| MCP annotations and tool classification     |                        100 |
+| Reload command and lifecycle                |                        100 |
+| Pau-owned code                              |                about 1,100 |
+| Pau tests, including an RPC fixture run     |                about 1,500 |
+| Vendored bash and path analysis             | about 10,500, 41% comments |
+| Vendored tests                              |               about 16,000 |
 
 ## Maintenance cost
 

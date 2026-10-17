@@ -1265,7 +1265,9 @@ Verification:
 
 ### 2.156 macOS dogfood build
 
-Status: planned
+Status: blocked
+Status note: The release script and unsigned build work. Signing needs a
+Developer ID Application certificate, which the development Mac lacks.
 Blocked by: none
 
 Build a signed and notarized Apple Silicon app from a release tag and install

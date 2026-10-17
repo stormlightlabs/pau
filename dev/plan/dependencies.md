@@ -17,6 +17,13 @@ The initial choices to validate are:
   diff launch
 - Iconify through UnoCSS or unplugin for the selected icon sets
 
+## Desktop dialog dependency selection
+
+Use `tauri-plugin-dialog` 2.7.3 to show startup failures in a native message
+dialog. The plugin is MIT or Apache-2.0 licensed and maintained in the Tauri
+plugins workspace. Later 2.8 releases require Tauri 2.12. Only the Rust shell
+calls it, so the webview gets no dialog permissions.
+
 ## Pi permission extension dependencies
 
 The vendored bash analysis in `packages/pi-permissions` uses `web-tree-sitter`

@@ -862,6 +862,10 @@ usage: boolean,
  */
 compaction: boolean,
 /**
+ * Whether the session exposes its entry tree and can branch from it.
+ */
+branching: boolean,
+/**
  * Whether the session can retry a failed turn and manage automatic retry.
  */
 retry: boolean,
@@ -1045,6 +1049,62 @@ reasoning: boolean,
  * Whether the session currently uses this model.
  */
 current: boolean, };
+
+export type SessionTreeEntry = {
+/**
+ * The agent's entry identifier, usable as a branch point.
+ */
+id: string,
+/**
+ * The entry this one continues, or none for a root.
+ */
+parent_id: string | null,
+/**
+ * The agent's entry type, such as `message` or `compaction`.
+ */
+kind: string,
+/**
+ * The message role, for message entries.
+ */
+role: string | null,
+/**
+ * The start of the entry's text, empty when it has none.
+ */
+preview: string,
+/**
+ * The entry's ISO 8601 time, when recorded.
+ */
+timestamp: string | null, };
+
+export type SessionTree = {
+/**
+ * Entries, oldest first. Follow `parent_id` to rebuild branches.
+ */
+entries: Array<SessionTreeEntry>,
+/**
+ * The entry the session currently continues from.
+ */
+leaf_id: string | null,
+/**
+ * Whether older entries were left out to bound the response.
+ */
+truncated: boolean, };
+
+export type SessionBranchRequest = {
+/**
+ * The user message entry to branch from.
+ */
+entry_id: string, };
+
+export type SessionBranchResult = {
+/**
+ * The text of the message branched from, for the prompt editor.
+ */
+text: string | null,
+/**
+ * Whether an extension cancelled the branch.
+ */
+cancelled: boolean, };
 
 export type SessionModelSelection = {
 /**

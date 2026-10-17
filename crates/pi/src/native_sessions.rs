@@ -4,6 +4,7 @@
 //! rewrites, or deletes a session file, and a resumed session is opened by Pi
 //! itself.
 
+use std::collections::VecDeque;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -13,6 +14,13 @@ use serde_json::Value;
 
 /// How much of the first user message a summary keeps.
 const FIRST_MESSAGE_LIMIT: usize = 200;
+
+/// How much of an entry a tree node previews.
+const PREVIEW_LIMIT: usize = 120;
+
+/// The most entries a tree read keeps. Larger sessions keep their newest
+/// entries, which include the current leaf.
+pub const MAX_TREE_ENTRIES: usize = 5000;
 
 /// A Pi session file that belongs to a workspace.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -201,7 +209,7 @@ fn read_session_file(path: &Path) -> Result<PiSessionFile, String> {
                     .map(str::to_owned);
             }
             Some("message") if entry["message"]["role"] == "user" => {
-                first_message = user_text(&entry["message"]["content"]);
+                first_message = message_text(&entry["message"]["content"], FIRST_MESSAGE_LIMIT);
             }
             _ => {}
         }
@@ -218,8 +226,8 @@ fn read_session_file(path: &Path) -> Result<PiSessionFile, String> {
     })
 }
 
-/// The leading text of a user message, whose content is a string or blocks.
-fn user_text(content: &Value) -> Option<String> {
+/// The leading text of a message, whose content is a string or blocks.
+fn message_text(content: &Value, limit: usize) -> Option<String> {
     let text = match content {
         Value::String(text) => text.clone(),
         Value::Array(blocks) => blocks
@@ -230,5 +238,87 @@ fn user_text(content: &Value) -> Option<String> {
         _ => return None,
     };
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    (!text.is_empty()).then(|| text.chars().take(FIRST_MESSAGE_LIMIT).collect())
+    (!text.is_empty()).then(|| text.chars().take(limit).collect())
+}
+
+/// One entry of a session's tree.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PiTreeEntry {
+    /// Pi's entry identifier.
+    pub id: String,
+    /// The entry this one continues, or `None` for a root.
+    pub parent_id: Option<String>,
+    /// Pi's entry type, such as `message` or `compaction`.
+    pub kind: String,
+    /// The message role, for message entries.
+    pub role: Option<String>,
+    /// The start of the entry's text, empty when it has none.
+    pub preview: String,
+    /// The entry's ISO 8601 time, when recorded.
+    pub timestamp: Option<String>,
+}
+
+/// A session's entries in file order.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct PiSessionTree {
+    /// The entries kept, oldest first.
+    pub entries: Vec<PiTreeEntry>,
+    /// The current leaf. Pi appends at the leaf, so it is the last entry.
+    pub leaf_id: Option<String>,
+    /// Whether older entries were dropped to stay within the bound.
+    pub truncated: bool,
+}
+
+/// Reads the entry tree from a session file.
+///
+/// Lines that are not JSON or lack an entry id are skipped. A file with an
+/// unusable header is an error.
+pub fn read_pi_session_tree(path: &Path) -> Result<PiSessionTree, String> {
+    let mut lines = BufReader::new(File::open(path).map_err(|error| error.to_string())?).lines();
+    let header: Value = serde_json::from_str(
+        &lines
+            .next()
+            .ok_or("the file is empty")?
+            .map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| format!("the header is not JSON: {error}"))?;
+    if header["type"] != "session" {
+        return Err("the first line is not a session header".to_owned());
+    }
+    let mut entries = VecDeque::new();
+    let mut truncated = false;
+    for line in lines {
+        let Ok(line) = line else { break };
+        let Ok(entry) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        let Some(id) = entry["id"].as_str().filter(|id| !id.is_empty()) else {
+            continue;
+        };
+        let text = |key: &str| entry[key].as_str().map(str::to_owned);
+        let preview = match entry["type"].as_str() {
+            Some("message") => message_text(&entry["message"]["content"], PREVIEW_LIMIT),
+            Some("compaction" | "branch_summary") => message_text(&entry["summary"], PREVIEW_LIMIT),
+            Some("session_info") => message_text(&entry["name"], PREVIEW_LIMIT),
+            Some("label") => message_text(&entry["label"], PREVIEW_LIMIT),
+            _ => None,
+        };
+        if entries.len() == MAX_TREE_ENTRIES {
+            entries.pop_front();
+            truncated = true;
+        }
+        entries.push_back(PiTreeEntry {
+            id: id.to_owned(),
+            parent_id: text("parentId"),
+            kind: text("type").unwrap_or_default(),
+            role: entry["message"]["role"].as_str().map(str::to_owned),
+            preview: preview.unwrap_or_default(),
+            timestamp: text("timestamp"),
+        });
+    }
+    Ok(PiSessionTree {
+        leaf_id: entries.back().map(|entry| entry.id.clone()),
+        entries: entries.into(),
+        truncated,
+    })
 }

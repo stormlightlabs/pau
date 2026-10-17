@@ -251,6 +251,34 @@ async fn reports_context_token_and_cost_usage() {
 }
 
 #[tokio::test]
+async fn branches_through_pi_fork_only_while_idle() {
+    let fixture = FakePi::new(CONTROL_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+
+    let outcome = session.branch("entry-1".to_owned()).await.unwrap();
+    assert_eq!(outcome.text.as_deref(), Some("First prompt"));
+    assert!(!outcome.cancelled);
+    let vetoed = session.branch("vetoed".to_owned()).await.unwrap();
+    assert_eq!(vetoed.text, None);
+    assert!(vetoed.cancelled);
+    assert_eq!(
+        fixture.commands()[0],
+        serde_json::json!({"id": fixture.commands()[0]["id"], "type": "fork", "entryId": "entry-1"})
+    );
+
+    session.prompt("start", None).await.unwrap();
+    let error = session.branch("entry-1".to_owned()).await.unwrap_err();
+    assert!(matches!(
+        error,
+        PiSessionError::Control(AgentControlError::InvalidState {
+            control: AgentControl::Branching,
+            ..
+        })
+    ));
+    session.stop().await.unwrap();
+}
+
+#[tokio::test]
 async fn lists_available_models_and_marks_the_current_one() {
     let fixture = FakePi::new(CONTROL_FIXTURE);
     let session = PiSession::start(fixture.options()).unwrap();
@@ -610,6 +638,12 @@ while IFS= read -r command; do
             ;;
         *'"type":"get_available_models"'*)
             printf '{"id":"%s","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"model-one","name":"Model One","provider":"fixture","reasoning":true},{"id":"model-two","provider":"fixture","reasoning":false}]}}\n' "$id"
+            ;;
+        *'"entryId":"vetoed"'*)
+            printf '{"id":"%s","type":"response","command":"fork","success":true,"data":{"cancelled":true}}\n' "$id"
+            ;;
+        *'"type":"fork"'*)
+            printf '{"id":"%s","type":"response","command":"fork","success":true,"data":{"text":"First prompt","cancelled":false}}\n' "$id"
             ;;
         *'"type":"get_entries"'*)
             printf '{"id":"%s","type":"response","command":"get_entries","success":true,"data":{"entries":[{"type":"message","id":"a","message":{"role":"user","content":"first"}},{"type":"message","id":"b","message":{"role":"assistant","content":[{"type":"text","text":"reply"}]}},{"type":"message","id":"c","message":{"role":"user","content":[{"type":"text","text":"second"},{"type":"image","data":"x"}]}},{"type":"compaction","id":"d"},{"type":"message","id":"e","message":{"role":"user","content":"second\\nline"}},{"type":"message","id":"f","message":{"role":"user","content":"second\\nline"}},{"type":"message","id":"g","message":{"role":"user","content":[{"type":"image","data":"x"}]}}]}}\n' "$id"

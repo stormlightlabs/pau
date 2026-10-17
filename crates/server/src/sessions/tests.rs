@@ -107,6 +107,12 @@ while IFS= read -r command; do
         *'"type":"get_session_stats"'*)
             printf '{"id":"%s","type":"response","command":"get_session_stats","success":true,"data":{"tokens":{"input":50000,"output":10000,"cacheRead":40000,"cacheWrite":5000,"total":105000},"cost":0.45,"contextUsage":{"tokens":60000,"contextWindow":200000,"percent":30}}}\n' "$id"
             ;;
+        *'"entryId":"missing"'*)
+            printf '{"id":"%s","type":"response","command":"fork","success":false,"error":"Entry missing not found"}\n' "$id"
+            ;;
+        *'"type":"fork"'*)
+            printf '{"id":"%s","type":"response","command":"fork","success":true,"data":{"text":"Fix the login bug","cancelled":false}}\n' "$id"
+            ;;
         *'"type":"get_available_models"'*)
             printf '{"id":"%s","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"model-one","name":"Model One","provider":"fixture","reasoning":true},{"id":"model-two","provider":"fixture","reasoning":false}]}}\n' "$id"
             ;;
@@ -621,6 +627,66 @@ fn native_header(fixture: &Fixture, id: &str, cwd: Option<&str>) -> String {
     let root = fixture.workspace_root.canonicalize().unwrap();
     let cwd = cwd.unwrap_or_else(|| root.to_str().unwrap());
     json!({"type": "session", "version": 3, "id": id, "timestamp": "2026-01-02T03:04:05.000Z", "cwd": cwd}).to_string()
+}
+
+#[tokio::test]
+async fn reads_the_session_tree_and_branches_through_pi() {
+    let fixture = Fixture::new(None).await;
+    let (_, started) = fixture
+        .call(
+            "POST",
+            "/api/sessions",
+            Some(json!({"workspace_id": fixture.workspace_id})),
+        )
+        .await;
+    let base = format!("/api/sessions/{}", started["id"].as_str().unwrap());
+
+    // The fake Pi reports `session.jsonl` in its working directory.
+    let lines = [
+        native_header(&fixture, "native", None),
+        r#"{"type":"message","id":"a1","parentId":null,"timestamp":"t1","message":{"role":"user","content":"Fix the login bug"}}"#.to_owned(),
+        "not json".to_owned(),
+        r#"{"type":"message","id":"b2","parentId":"a1","timestamp":"t2","message":{"role":"assistant","content":[{"type":"text","text":"Done"}]}}"#.to_owned(),
+        r#"{"type":"message","id":"c3","parentId":"a1","timestamp":"t3","message":{"role":"user","content":"Try again"}}"#.to_owned(),
+    ];
+    fs::write(
+        fixture.workspace_root.join("session.jsonl"),
+        lines.join("\n"),
+    )
+    .unwrap();
+
+    let (status, tree) = fixture.call("GET", &format!("{base}/tree"), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(tree["leaf_id"], "c3");
+    assert_eq!(tree["truncated"], false);
+    assert_eq!(
+        tree["entries"][1],
+        json!({"id": "b2", "parent_id": "a1", "kind": "message", "role": "assistant", "preview": "Done", "timestamp": "t2"})
+    );
+    assert_eq!(tree["entries"].as_array().unwrap().len(), 3);
+
+    let (status, branch) = fixture
+        .call(
+            "POST",
+            &format!("{base}/branch"),
+            Some(json!({"entry_id": "a1"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        branch,
+        json!({"text": "Fix the login bug", "cancelled": false})
+    );
+
+    let (status, rejected) = fixture
+        .call(
+            "POST",
+            &format!("{base}/branch"),
+            Some(json!({"entry_id": "missing"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(rejected["code"], "control_rejected");
 }
 
 #[tokio::test]

@@ -835,21 +835,10 @@ Verification:
 - Component-test compacting, compacted, and failed states.
 - Compact a self-hosted Pi session.
 
-### 2.72 Pi session tree API
-
-Status: planned
-Blocked by: none
-
-Expose Pi session trees and branch creation through the desktop API.
-
-Verification:
-
-- Cover tree navigation and branch creation against fixture Pi session files.
-
 ### 2.73 Session tree view
 
 Status: planned
-Blocked by: 2.72
+Blocked by: none
 
 Add session tree navigation and branching to the session view.
 

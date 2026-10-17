@@ -1,6 +1,6 @@
 use crate::{
     PiCompactionResult, PiExtensionUiResponse, PiProcess, PiProcessError, PiProcessExit,
-    PiProcessOutput, StartPiProcessOptions,
+    PiProcessOutput, PiSessionTree, StartPiProcessOptions, read_pi_session_tree,
 };
 use pau_agent::{
     AgentCapabilities, AgentControl, AgentControlError, AgentMessageQueue, AgentSessionStatus,
@@ -24,6 +24,7 @@ pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     command_discovery: true,
     usage: true,
     compaction: true,
+    branching: true,
     retry: true,
     stop: true,
 };
@@ -152,6 +153,15 @@ pub struct PiModel {
     pub reasoning: bool,
     /// Whether this is the model the session currently uses.
     pub current: bool,
+}
+
+/// What Pi did with a branch request.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PiBranchOutcome {
+    /// The text of the message branched from.
+    pub text: Option<String>,
+    /// Whether an extension cancelled the branch.
+    pub cancelled: bool,
 }
 
 /// Owns the controls and observed lifecycle state for one Pi RPC process.
@@ -283,6 +293,47 @@ impl PiSession {
             .iter()
             .map(|entry| parse_model(entry, current.as_ref()))
             .collect()
+    }
+
+    /// Reads the entry tree from the session file Pi persists.
+    pub async fn tree(&self) -> Result<PiSessionTree, PiSessionError> {
+        self.require_capability(AgentControl::Branching)?;
+        let file = self.native_session().await?.file;
+        tokio::task::spawn_blocking(move || read_pi_session_tree(std::path::Path::new(&file)))
+            .await
+            .map_err(|error| PiSessionError::NativeSession(error.to_string()))?
+            .map_err(PiSessionError::NativeSession)
+    }
+
+    /// Continues from the user message `entry_id` in a new session file.
+    ///
+    /// Pi does the branching; the session file is never edited here. The
+    /// session must be idle. After a branch Pi runs against the new file.
+    pub async fn branch(&self, entry_id: String) -> Result<PiBranchOutcome, PiSessionError> {
+        let control = AgentControl::Branching;
+        self.require_capability(control)?;
+        let status = self.status.lock().await;
+        if *status != AgentSessionStatus::Idle {
+            return Err(invalid_state(
+                control,
+                *status,
+                "wait for the session to become idle",
+            ));
+        }
+        let response = self
+            .command(control, json!({"type": "fork", "entryId": entry_id}))
+            .await?;
+        let data = response.get("data");
+        Ok(PiBranchOutcome {
+            text: data
+                .and_then(|data| data.get("text"))
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+            cancelled: data
+                .and_then(|data| data.get("cancelled"))
+                .and_then(Value::as_bool)
+                == Some(true),
+        })
     }
 
     /// Lists the prompts the user sent, newest first, as Pi's editor recalls them.

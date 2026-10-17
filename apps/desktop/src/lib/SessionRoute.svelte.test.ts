@@ -32,6 +32,7 @@ const idleSession: AgentSession = {
 		command_discovery: true,
 		usage: true,
 		compaction: true,
+		branching: true,
 		retry: true,
 		stop: true
 	}

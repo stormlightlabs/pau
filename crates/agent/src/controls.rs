@@ -27,6 +27,8 @@ pub enum AgentControl {
     Compact,
     /// Enable or disable compaction when context is nearly full.
     AutoCompaction,
+    /// Read the session tree and continue from an earlier user message.
+    Branching,
     /// Run the last user prompt again after a failed assistant turn.
     Retry,
     /// Enable or disable automatic retry of transient provider errors.
@@ -51,6 +53,7 @@ impl fmt::Display for AgentControl {
             Self::ReadUsage => "usage reporting",
             Self::Compact => "compact",
             Self::AutoCompaction => "change automatic compaction",
+            Self::Branching => "branching",
             Self::Retry => "retry",
             Self::AutoRetry => "change automatic retry",
             Self::AbortRetry => "abort retry",
@@ -84,6 +87,8 @@ pub struct AgentCapabilities {
     /// Whether the adapter can compact context manually and configure
     /// automatic compaction.
     pub compaction: bool,
+    /// Whether the adapter exposes the session tree and can branch it.
+    pub branching: bool,
     /// Whether the adapter can retry a failed turn, configure automatic retry,
     /// and cancel a pending automatic retry.
     pub retry: bool,
@@ -105,6 +110,7 @@ impl AgentCapabilities {
             AgentControl::ListCommands => self.command_discovery,
             AgentControl::ReadUsage => self.usage,
             AgentControl::Compact | AgentControl::AutoCompaction => self.compaction,
+            AgentControl::Branching => self.branching,
             AgentControl::Retry | AgentControl::AutoRetry | AgentControl::AbortRetry => self.retry,
             AgentControl::Stop => self.stop,
         }

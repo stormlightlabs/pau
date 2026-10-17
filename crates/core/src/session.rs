@@ -54,6 +54,8 @@ pub struct SessionCapabilities {
     /// Whether the session can compact its context and toggle automatic
     /// compaction.
     pub compaction: bool,
+    /// Whether the session exposes its entry tree and can branch from it.
+    pub branching: bool,
     /// Whether the session can retry a failed turn and manage automatic retry.
     pub retry: bool,
     /// Whether the session can stop its process.
@@ -289,6 +291,50 @@ pub struct SessionMessageQueue {
     pub steering: Vec<String>,
     /// Messages delivered after all current work finishes.
     pub follow_up: Vec<String>,
+}
+
+/// One entry in a session's tree.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionTreeEntry {
+    /// The agent's entry identifier, usable as a branch point.
+    pub id: String,
+    /// The entry this one continues, or none for a root.
+    pub parent_id: Option<String>,
+    /// The agent's entry type, such as `message` or `compaction`.
+    pub kind: String,
+    /// The message role, for message entries.
+    pub role: Option<String>,
+    /// The start of the entry's text, empty when it has none.
+    pub preview: String,
+    /// The entry's ISO 8601 time, when recorded.
+    pub timestamp: Option<String>,
+}
+
+/// A session's entry tree in the order the agent recorded it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionTree {
+    /// Entries, oldest first. Follow `parent_id` to rebuild branches.
+    pub entries: Vec<SessionTreeEntry>,
+    /// The entry the session currently continues from.
+    pub leaf_id: Option<String>,
+    /// Whether older entries were left out to bound the response.
+    pub truncated: bool,
+}
+
+/// Continues a session from an earlier user message in a new branch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionBranchRequest {
+    /// The user message entry to branch from.
+    pub entry_id: String,
+}
+
+/// The outcome of a branch request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionBranchResult {
+    /// The text of the message branched from, for the prompt editor.
+    pub text: Option<String>,
+    /// Whether an extension cancelled the branch.
+    pub cancelled: bool,
 }
 
 /// A model a session can use.

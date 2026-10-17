@@ -50,12 +50,13 @@ use pau_core::{
     session::{
         AgentSession, ExtensionDialog, ExtensionStatus, ExtensionUiResponse, ExtensionWidget,
         ExtensionWidgetPlacement, NativeSessionList, NativeSessionSummary, NativeSessionWarning,
-        SessionAutoCompactionRequest, SessionAutoRetryRequest, SessionCapabilities, SessionCommand,
-        SessionCommandSource, SessionCompactRequest, SessionCompactionResult, SessionContextUsage,
-        SessionExtensionUi, SessionMessageQueue, SessionMessageRequest, SessionModel,
-        SessionModelSelection, SessionPromptRequest, SessionQueue, SessionStatus,
-        SessionThinkingLevel, SessionThinkingLevelRequest, SessionTokenUsage, SessionUsage,
-        StartSessionRequest,
+        SessionAutoCompactionRequest, SessionAutoRetryRequest, SessionBranchRequest,
+        SessionBranchResult, SessionCapabilities, SessionCommand, SessionCommandSource,
+        SessionCompactRequest, SessionCompactionResult, SessionContextUsage, SessionExtensionUi,
+        SessionMessageQueue, SessionMessageRequest, SessionModel, SessionModelSelection,
+        SessionPromptRequest, SessionQueue, SessionStatus, SessionThinkingLevel,
+        SessionThinkingLevelRequest, SessionTokenUsage, SessionTree, SessionTreeEntry,
+        SessionUsage, StartSessionRequest,
     },
 };
 use pau_pi::{
@@ -519,6 +520,7 @@ fn session_capabilities(capabilities: AgentCapabilities) -> SessionCapabilities 
         command_discovery: capabilities.command_discovery,
         usage: capabilities.usage,
         compaction: capabilities.compaction,
+        branching: capabilities.branching,
         retry: capabilities.retry,
         stop: capabilities.stop,
     }
@@ -978,6 +980,45 @@ pub(crate) async fn list_session_models(
     let (_, session) = session_api(&state)?.live(&session_id).await?;
     let models = session.models().await?;
     Ok(Json(models.into_iter().map(session_model).collect()))
+}
+
+/// Returns the entry tree of the session's persisted file.
+pub(crate) async fn get_session_tree(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+) -> Result<Json<SessionTree>, ApiError> {
+    let (_, session) = session_api(&state)?.live(&session_id).await?;
+    let tree = session.tree().await?;
+    Ok(Json(SessionTree {
+        entries: tree
+            .entries
+            .into_iter()
+            .map(|entry| SessionTreeEntry {
+                id: entry.id,
+                parent_id: entry.parent_id,
+                kind: entry.kind,
+                role: entry.role,
+                preview: entry.preview,
+                timestamp: entry.timestamp,
+            })
+            .collect(),
+        leaf_id: tree.leaf_id,
+        truncated: tree.truncated,
+    }))
+}
+
+/// Branches the session from an earlier user message through Pi.
+pub(crate) async fn branch_session(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+    Json(request): Json<SessionBranchRequest>,
+) -> Result<Json<SessionBranchResult>, ApiError> {
+    let (_, session) = session_api(&state)?.live(&session_id).await?;
+    let outcome = session.branch(request.entry_id).await?;
+    Ok(Json(SessionBranchResult {
+        text: outcome.text,
+        cancelled: outcome.cancelled,
+    }))
 }
 
 /// Lists the slash commands the session offers.

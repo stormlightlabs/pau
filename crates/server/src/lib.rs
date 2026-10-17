@@ -504,6 +504,14 @@ fn router_with_services(
             get(sessions::list_session_models),
         )
         .route(
+            "/api/sessions/{session_id}/tree",
+            get(sessions::get_session_tree),
+        )
+        .route(
+            "/api/sessions/{session_id}/branch",
+            post(sessions::branch_session),
+        )
+        .route(
             "/api/sessions/{session_id}/commands",
             get(sessions::list_session_commands),
         )

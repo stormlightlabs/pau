@@ -22,6 +22,7 @@ pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     model_selection: true,
     thinking_level: true,
     command_discovery: true,
+    usage: true,
     compaction: true,
     stop: true,
 };
@@ -94,6 +95,44 @@ pub struct PiCommand {
     pub source: PiCommandSource,
     /// The path Pi reports in the command's source info, when present.
     pub path: Option<String>,
+}
+
+/// How full the model's context window is.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PiContextUsage {
+    /// Estimated tokens in the window. Pi reports none right after a
+    /// compaction, until a fresh response provides usage data.
+    pub tokens: Option<u64>,
+    /// The model's context window size in tokens.
+    pub context_window: u64,
+    /// Percent of the window in use, from 0 to 100.
+    pub percent: Option<f64>,
+}
+
+/// Cumulative tokens across a Pi session.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct PiTokenUsage {
+    /// Input tokens.
+    pub input: u64,
+    /// Output tokens.
+    pub output: u64,
+    /// Tokens read from the prompt cache.
+    pub cache_read: u64,
+    /// Tokens written to the prompt cache.
+    pub cache_write: u64,
+    /// All tokens Pi counted.
+    pub total: u64,
+}
+
+/// Context, token, and cost usage from Pi's `get_session_stats`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PiSessionUsage {
+    /// Context-window fill. Pi omits it when no model or window size is known.
+    pub context: Option<PiContextUsage>,
+    /// Tokens across the session, including tools and summarization.
+    pub tokens: PiTokenUsage,
+    /// Cumulative cost in US dollars.
+    pub cost: f64,
 }
 
 /// A model Pi can run, as configured for the session.
@@ -203,6 +242,18 @@ impl PiSession {
                 PiSessionError::NativeSession("Pi did not report a command list".to_owned())
             })?;
         entries.iter().map(parse_command).collect()
+    }
+
+    /// Reads Pi's context-window fill and cumulative token and cost usage.
+    pub async fn usage(&self) -> Result<PiSessionUsage, PiSessionError> {
+        let control = AgentControl::ReadUsage;
+        self.require_capability(control)?;
+        let response = self
+            .command(control, json!({"type": "get_session_stats"}))
+            .await?;
+        response.get("data").and_then(parse_usage).ok_or_else(|| {
+            PiSessionError::NativeSession("Pi did not report session usage".to_owned())
+        })
     }
 
     /// Lists the models Pi has configured and marks the one the session uses.
@@ -545,6 +596,31 @@ fn parse_command(entry: &Value) -> Result<PiCommand, PiSessionError> {
             .and_then(|info| info.get("path"))
             .and_then(Value::as_str)
             .map(str::to_owned),
+    })
+}
+
+fn parse_usage(data: &Value) -> Option<PiSessionUsage> {
+    let tokens = data.get("tokens")?;
+    let count = |key: &str| tokens.get(key).and_then(Value::as_u64);
+    // Pi omits `contextUsage` without a model; its tokens and percent are
+    // null after a compaction.
+    let context = data.get("contextUsage").and_then(|usage| {
+        Some(PiContextUsage {
+            tokens: usage.get("tokens").and_then(Value::as_u64),
+            context_window: usage.get("contextWindow")?.as_u64()?,
+            percent: usage.get("percent").and_then(Value::as_f64),
+        })
+    });
+    Some(PiSessionUsage {
+        context,
+        tokens: PiTokenUsage {
+            input: count("input")?,
+            output: count("output")?,
+            cache_read: count("cacheRead")?,
+            cache_write: count("cacheWrite")?,
+            total: count("total")?,
+        },
+        cost: data.get("cost")?.as_f64()?,
     })
 }
 

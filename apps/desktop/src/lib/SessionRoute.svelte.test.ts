@@ -30,6 +30,8 @@ const idleSession: AgentSession = {
 		model_selection: true,
 		thinking_level: true,
 		command_discovery: true,
+		usage: true,
+		compaction: true,
 		stop: true
 	}
 };

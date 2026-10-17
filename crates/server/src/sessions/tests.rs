@@ -50,6 +50,12 @@ while IFS= read -r command; do
             printf '{"type":"extension_ui_request","id":"ui-short","method":"input","title":"Quick","timeout":100}\n'
             ;;
         *'"type":"extension_ui_response"'*) ;;
+        *'"message":"usage"'*)
+            printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
+            printf '{"type":"agent_start"}\n'
+            printf '{"type":"message_end","message":{"role":"user"}}\n'
+            printf '{"type":"message_end","message":{"role":"assistant"}}\n'
+            ;;
         *'"type":"prompt"'*)
             printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
             printf '{"type":"agent_start"}\n'
@@ -88,6 +94,9 @@ while IFS= read -r command; do
             ;;
         *'"type":"set_auto_compaction"'*)
             printf '{"id":"%s","type":"response","command":"set_auto_compaction","success":true}\n' "$id"
+            ;;
+        *'"type":"get_session_stats"'*)
+            printf '{"id":"%s","type":"response","command":"get_session_stats","success":true,"data":{"tokens":{"input":50000,"output":10000,"cacheRead":40000,"cacheWrite":5000,"total":105000},"cost":0.45,"contextUsage":{"tokens":60000,"contextWindow":200000,"percent":30}}}\n' "$id"
             ;;
         *'"type":"get_available_models"'*)
             printf '{"id":"%s","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"model-one","name":"Model One","provider":"fixture","reasoning":true},{"id":"model-two","provider":"fixture","reasoning":false}]}}\n' "$id"
@@ -364,6 +373,7 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
     assert_eq!(status, StatusCode::NO_CONTENT);
     next_event(&mut stream, session_changed("idle")).await;
     assert_eq!(fixture.call("GET", &base, None).await.1["status"], "idle");
+    next_event(&mut stream, output("session_usage")).await;
 
     let reconnected = fixture.events.subscribe(None);
     let [ServerStreamMessage::Snapshot { snapshot }] = &reconnected.initial[..] else {
@@ -410,8 +420,53 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
             "follow_up",
             "clear_queue",
             "abort",
+            "get_session_stats",
         ]
     );
+}
+
+#[tokio::test]
+async fn reports_usage_on_request_and_after_assistant_messages() {
+    let fixture = Fixture::new(None).await;
+    let mut stream = fixture.events.subscribe(None);
+    let (_, session) = fixture.start(None).await;
+    assert_eq!(session["capabilities"]["usage"], true);
+    let base = format!("/api/sessions/{}", session["id"].as_str().unwrap());
+    let expected = json!({
+        "context": {"tokens": 60000, "context_window": 200000, "percent": 30.0},
+        "tokens": {"input": 50000, "output": 10000, "cache_read": 40000, "cache_write": 5000, "total": 105000},
+        "cost": 0.45,
+    });
+
+    let (status, usage) = fixture.call("GET", &format!("{base}/usage"), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(usage, expected);
+
+    let prompt = json!({"message": "usage"});
+    let (status, _) = fixture
+        .call("POST", &format!("{base}/prompt"), Some(prompt))
+        .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let event = next_event(&mut stream, output("session_usage")).await;
+    let event: Value = serde_json::from_str(&event.payload).unwrap();
+    assert_eq!(event["usage"], expected);
+    // Only the assistant message ends a refresh: one read from the route and
+    // one from the event.
+    assert_eq!(
+        fixture.commands(),
+        [
+            "get_state",
+            "get_session_stats",
+            "prompt",
+            "get_session_stats"
+        ]
+    );
+
+    let (status, missing) = fixture
+        .call("GET", "/api/sessions/missing/usage", None)
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(missing["code"], "not_found");
 }
 
 #[tokio::test]

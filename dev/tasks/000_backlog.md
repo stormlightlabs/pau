@@ -7,6 +7,10 @@ available.
 
 Run the `pau-term` PTY tests on Linux.
 
+Make the `pau-pi` tests `escalates_shutdown_from_interrupt_to_terminate` and
+`sends_extension_ui_responses_without_command_ids` reliable under build load.
+Both pass alone but fail occasionally while other Cargo builds run.
+
 Run the `packages/sandbox` boundary and Pi fixture runs on macOS before Pau
 offers a sandbox profile there. Run the boundary fixtures on an Ubuntu 24.04
 host with AppArmor's unprivileged user-namespace restriction enabled to confirm

@@ -49,6 +49,8 @@ pub struct SessionCapabilities {
     pub thinking_level: bool,
     /// Whether the session can list its slash commands.
     pub command_discovery: bool,
+    /// Whether the session reports context-window, token, and cost usage.
+    pub usage: bool,
     /// Whether the session can compact its context and toggle automatic
     /// compaction.
     pub compaction: bool,
@@ -218,6 +220,50 @@ pub struct SessionCompactionResult {
     /// The agent's complete native result.
     #[ts(type = "unknown")]
     pub native: serde_json::Value,
+}
+
+/// How full the model's context window is.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+pub struct SessionContextUsage {
+    /// Estimated tokens in the context window, or `null` until the agent has
+    /// a usage report for the current context (for example right after a
+    /// compaction).
+    pub tokens: Option<u64>,
+    /// The model's context window size in tokens.
+    pub context_window: u64,
+    /// Percent of the window in use, from 0 to 100, or `null` when `tokens`
+    /// is unknown.
+    pub percent: Option<f64>,
+}
+
+/// Cumulative model tokens a session has used.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionTokenUsage {
+    /// Input tokens.
+    pub input: u64,
+    /// Output tokens.
+    pub output: u64,
+    /// Tokens read from the provider's prompt cache.
+    pub cache_read: u64,
+    /// Tokens written to the provider's prompt cache.
+    pub cache_write: u64,
+    /// All tokens the agent counted.
+    pub total: u64,
+}
+
+/// Model context, token, and cost usage for a session.
+///
+/// This is model usage only. Machine resource use (CPU, memory) is reported
+/// separately by the resource monitor.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+pub struct SessionUsage {
+    /// Current context-window fill, or `null` when the agent has no model or
+    /// window size to report.
+    pub context: Option<SessionContextUsage>,
+    /// Tokens used across the whole session.
+    pub tokens: SessionTokenUsage,
+    /// Cumulative cost in US dollars as the agent computes it.
+    pub cost: f64,
 }
 
 /// Turns automatic compaction on or off.

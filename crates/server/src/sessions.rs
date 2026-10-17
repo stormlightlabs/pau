@@ -5,6 +5,19 @@
 //! `session_changed` carries an [`AgentSession`] whenever the lifecycle state
 //! changes, and `session_output` carries each native Pi event.
 //!
+//! # Usage
+//!
+//! `GET /api/sessions/{id}/usage` returns the session's model context fill and
+//! cumulative token and cost usage. Usage changes far more often than
+//! lifecycle state and is not part of [`AgentSession`], so `session_changed`
+//! stays small and needs no agent round trip. Instead, after each assistant
+//! `message_end` and each `agent_settled` the API reads the usage once and
+//! publishes a synthetic `session_usage` `session_output` event whose `usage`
+//! field has the same shape as the route's response. Clients fetch the route
+//! when they open a session, then apply those events instead of polling.
+//! Model usage is separate from the machine resource use that the resource
+//! monitor reports.
+//!
 //! # Extension UI
 //!
 //! Pi extension requests reach clients as `session_output` events, but those
@@ -38,18 +51,18 @@ use pau_core::{
         AgentSession, ExtensionDialog, ExtensionStatus, ExtensionUiResponse, ExtensionWidget,
         ExtensionWidgetPlacement, NativeSessionList, NativeSessionSummary, NativeSessionWarning,
         SessionAutoCompactionRequest, SessionCapabilities, SessionCommand, SessionCommandSource,
-        SessionCompactRequest, SessionCompactionResult, SessionExtensionUi, SessionMessageQueue,
-        SessionMessageRequest, SessionModel, SessionModelSelection, SessionPromptRequest,
-        SessionQueue, SessionStatus, SessionThinkingLevel, SessionThinkingLevelRequest,
-        StartSessionRequest,
+        SessionCompactRequest, SessionCompactionResult, SessionContextUsage, SessionExtensionUi,
+        SessionMessageQueue, SessionMessageRequest, SessionModel, SessionModelSelection,
+        SessionPromptRequest, SessionQueue, SessionStatus, SessionThinkingLevel,
+        SessionThinkingLevelRequest, SessionTokenUsage, SessionUsage, StartSessionRequest,
     },
 };
 use pau_pi::{
     DiscoverPiOptions, PiCommand, PiCommandSource, PiExtensionUiRequest, PiExtensionUiResponse,
     PiExtensionWidgetPlacement, PiModel, PiProcessError, PiProcessOutput, PiSession,
-    PiSessionError, PiSessionOutput, PiSessionRegistry, PiSessionRegistryError, PiShutdownTimeouts,
-    StartPiProcessOptions, StartRegisteredPiSession, discover_pi, find_pi_session_file,
-    list_pi_session_files, pi_configuration_paths,
+    PiSessionError, PiSessionOutput, PiSessionRegistry, PiSessionRegistryError, PiSessionUsage,
+    PiShutdownTimeouts, StartPiProcessOptions, StartRegisteredPiSession, discover_pi,
+    find_pi_session_file, list_pi_session_files, pi_configuration_paths,
 };
 use serde_json::Value;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -173,6 +186,34 @@ impl SessionApi {
             serde_json::json!({"type": "extension_ui_resolved", "id": request, "reason": reason})
                 .to_string(),
         );
+    }
+
+    /// Reads the session's usage in the background and publishes it.
+    ///
+    /// The read is a round trip to Pi, so it must not hold up output
+    /// forwarding. A session that cannot report usage, or has already exited,
+    /// publishes nothing.
+    fn publish_usage(&self, workspace_id: String, session_id: String) {
+        let api = self.clone();
+        tokio::spawn(async move {
+            let Ok((record, session)) = api.live(&session_id).await else {
+                return;
+            };
+            if !record.capabilities.usage {
+                return;
+            }
+            let Ok(usage) = session.usage().await else {
+                return;
+            };
+            api.events.publish(
+                diagnostic_timestamp(),
+                Some(workspace_id),
+                Some(session_id),
+                ServerEventKind::SessionOutput,
+                serde_json::json!({"type": "session_usage", "usage": session_usage(usage)})
+                    .to_string(),
+            );
+        });
     }
 
     /// Drops every unanswered dialog of a session and announces each one.
@@ -361,11 +402,14 @@ impl SessionApi {
                     }
                     self.events.publish(
                         diagnostic_timestamp(),
-                        Some(tagged.workspace_id),
+                        Some(tagged.workspace_id.clone()),
                         Some(tagged.session_id.clone()),
                         ServerEventKind::SessionOutput,
                         event.to_string(),
                     );
+                    if reports_usage(&event) {
+                        self.publish_usage(tagged.workspace_id, tagged.session_id.clone());
+                    }
                     if let Some(status) = lifecycle_status(&event) {
                         self.publish(&describe(&tagged.session_id, &record, status));
                     }
@@ -408,6 +452,36 @@ fn lifecycle_status(event: &Value) -> Option<SessionStatus> {
     }
 }
 
+/// Whether the event is the end of an assistant message or run, the points
+/// where Pi's usage totals change.
+fn reports_usage(event: &Value) -> bool {
+    match event.get("type").and_then(Value::as_str) {
+        Some("agent_settled") => true,
+        Some("message_end") => {
+            event.pointer("/message/role").and_then(Value::as_str) == Some("assistant")
+        }
+        _ => false,
+    }
+}
+
+fn session_usage(usage: PiSessionUsage) -> SessionUsage {
+    SessionUsage {
+        context: usage.context.map(|context| SessionContextUsage {
+            tokens: context.tokens,
+            context_window: context.context_window,
+            percent: context.percent,
+        }),
+        tokens: SessionTokenUsage {
+            input: usage.tokens.input,
+            output: usage.tokens.output,
+            cache_read: usage.tokens.cache_read,
+            cache_write: usage.tokens.cache_write,
+            total: usage.tokens.total,
+        },
+        cost: usage.cost,
+    }
+}
+
 fn describe(id: &str, record: &SessionRecord, status: SessionStatus) -> AgentSession {
     AgentSession {
         id: id.to_owned(),
@@ -442,6 +516,7 @@ fn session_capabilities(capabilities: AgentCapabilities) -> SessionCapabilities 
         model_selection: capabilities.model_selection,
         thinking_level: capabilities.thinking_level,
         command_discovery: capabilities.command_discovery,
+        usage: capabilities.usage,
         compaction: capabilities.compaction,
         stop: capabilities.stop,
     }
@@ -840,6 +915,15 @@ pub(crate) async fn set_session_auto_compaction(
     let (_, session) = session_api(&state)?.live(&session_id).await?;
     session.set_auto_compaction(request.enabled).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Returns the session's context fill and cumulative token and cost usage.
+pub(crate) async fn get_session_usage(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+) -> Result<Json<SessionUsage>, ApiError> {
+    let (_, session) = session_api(&state)?.live(&session_id).await?;
+    Ok(Json(session_usage(session.usage().await?)))
 }
 
 /// Lists the models the session can use and marks the current one.

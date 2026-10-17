@@ -484,6 +484,10 @@ fn router_with_services(
             get(sessions::get_session_queue).delete(sessions::clear_session_queue),
         )
         .route(
+            "/api/sessions/{session_id}/usage",
+            get(sessions::get_session_usage),
+        )
+        .route(
             "/api/sessions/{session_id}/models",
             get(sessions::list_session_models),
         )

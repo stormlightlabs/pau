@@ -853,6 +853,10 @@ thinking_level: boolean,
  */
 command_discovery: boolean,
 /**
+ * Whether the session reports context-window, token, and cost usage.
+ */
+usage: boolean,
+/**
  * Whether the session can compact its context and toggle automatic
  * compaction.
  */
@@ -1194,6 +1198,60 @@ estimated_tokens_after: number | null,
  * The agent's complete native result.
  */
 native: unknown, };
+
+export type SessionContextUsage = {
+/**
+ * Estimated tokens in the context window, or `null` until the agent has
+ * a usage report for the current context (for example right after a
+ * compaction).
+ */
+tokens: number | null,
+/**
+ * The model's context window size in tokens.
+ */
+context_window: number,
+/**
+ * Percent of the window in use, from 0 to 100, or `null` when `tokens`
+ * is unknown.
+ */
+percent: number | null, };
+
+export type SessionTokenUsage = {
+/**
+ * Input tokens.
+ */
+input: number,
+/**
+ * Output tokens.
+ */
+output: number,
+/**
+ * Tokens read from the provider's prompt cache.
+ */
+cache_read: number,
+/**
+ * Tokens written to the provider's prompt cache.
+ */
+cache_write: number,
+/**
+ * All tokens the agent counted.
+ */
+total: number, };
+
+export type SessionUsage = {
+/**
+ * Current context-window fill, or `null` when the agent has no model or
+ * window size to report.
+ */
+context: SessionContextUsage | null,
+/**
+ * Tokens used across the whole session.
+ */
+tokens: SessionTokenUsage,
+/**
+ * Cumulative cost in US dollars as the agent computes it.
+ */
+cost: number, };
 
 export type SessionAutoCompactionRequest = {
 /**

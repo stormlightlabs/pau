@@ -6,8 +6,9 @@ use pau_agent::{
 };
 use pau_pi::{
     PI_RPC_CAPABILITIES, PiCommand, PiCommandSource, PiCompactionOutcome, PiCompactionReason,
-    PiEventPayload, PiEventReducer, PiExtensionUiResponse, PiModel, PiProcess, PiProcessOutput,
-    PiSession, PiSessionError, PiShutdownTimeouts, StartPiProcessOptions,
+    PiContextUsage, PiEventPayload, PiEventReducer, PiExtensionUiResponse, PiModel, PiProcess,
+    PiProcessOutput, PiSession, PiSessionError, PiSessionUsage, PiShutdownTimeouts, PiTokenUsage,
+    StartPiProcessOptions,
 };
 use serde_json::Value;
 use std::fs;
@@ -181,6 +182,61 @@ async fn lists_prompt_skill_and_extension_commands() {
     session.stop().await.unwrap();
     unsupported.stop().await.unwrap();
     assert_command(&fixture.commands()[0], "get_commands");
+}
+
+#[tokio::test]
+async fn reports_context_token_and_cost_usage() {
+    let fixture = FakePi::new(CONTROL_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+
+    let tokens = PiTokenUsage {
+        input: 50000,
+        output: 10000,
+        cache_read: 40000,
+        cache_write: 5000,
+        total: 105000,
+    };
+    assert_eq!(
+        session.usage().await.unwrap(),
+        PiSessionUsage {
+            context: Some(PiContextUsage {
+                tokens: Some(60000),
+                context_window: 200000,
+                percent: Some(30.0),
+            }),
+            tokens,
+            cost: 0.45,
+        }
+    );
+
+    // Pi has no context estimate between a compaction and the next response.
+    session.compact(Some("keep code".to_owned())).await.unwrap();
+    let compacted = session.usage().await.unwrap();
+    assert_eq!(
+        compacted.context,
+        Some(PiContextUsage {
+            tokens: None,
+            context_window: 200000,
+            percent: None,
+        })
+    );
+    assert_eq!(compacted.tokens, tokens);
+
+    let unsupported = PiSession::from_process(
+        PiProcess::start(fixture.options()).unwrap(),
+        AgentCapabilities {
+            usage: false,
+            ..PI_RPC_CAPABILITIES
+        },
+    );
+    assert!(matches!(
+        unsupported.usage().await.unwrap_err(),
+        PiSessionError::Control(AgentControlError::Unsupported {
+            control: AgentControl::ReadUsage,
+        })
+    ));
+    session.stop().await.unwrap();
+    unsupported.stop().await.unwrap();
 }
 
 #[tokio::test]
@@ -412,6 +468,14 @@ while IFS= read -r command; do
             ;;
         *'"type":"set_thinking_level"'*)
             printf '{"id":"%s","type":"response","command":"set_thinking_level","success":true}\n' "$id"
+            ;;
+        *'"type":"get_session_stats"'*)
+            if grep -q '"type":"compact"' "$PWD/commands.jsonl"; then
+                context='{"tokens":null,"contextWindow":200000,"percent":null}'
+            else
+                context='{"tokens":60000,"contextWindow":200000,"percent":30}'
+            fi
+            printf '{"id":"%s","type":"response","command":"get_session_stats","success":true,"data":{"tokens":{"input":50000,"output":10000,"cacheRead":40000,"cacheWrite":5000,"total":105000},"cost":0.45,"contextUsage":%s}}\n' "$id" "$context"
             ;;
         *'"type":"get_state"'*)
             printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"model":{"provider":"fixture","id":"model-two"}}}\n' "$id"

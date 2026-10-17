@@ -801,21 +801,10 @@ Verification:
 
 - Component-test each thinking level and a model without thinking levels.
 
-### 2.119 Pi context usage API
-
-Status: planned
-Blocked by: none
-
-Expose context and cost updates through the desktop API.
-
-Verification:
-
-- Cover context and cost updates against the Pi fixture.
-
 ### 2.120 Context usage view
 
 Status: planned
-Blocked by: 2.119
+Blocked by: none
 
 Show context use and cost in the session view.
 

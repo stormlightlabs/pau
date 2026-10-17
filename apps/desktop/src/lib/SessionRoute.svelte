@@ -6,14 +6,11 @@
 	import { LiveSessions } from './live-sessions.svelte';
 
 	let {
-		search,
 		initialSessionId,
 		onSessionChange,
 		fetcher,
 		socketFactory
 	}: {
-		/** Query string carrying the desktop API port and token. */
-		search: string;
 		initialSessionId?: string;
 		onSessionChange?: (workspaceId: string, sessionId: string) => void;
 		fetcher?: typeof fetch;
@@ -23,7 +20,7 @@
 	// The route mounts once per navigation, so the transport options are fixed
 	// for the life of the store.
 	// svelte-ignore state_referenced_locally
-	const sessions = new LiveSessions({ search, browserOrigin: location.origin, fetcher, socketFactory });
+	const sessions = new LiveSessions({ browserOrigin: location.origin, fetcher, socketFactory });
 	// svelte-ignore state_referenced_locally
 	let selectedSessionId = $state(initialSessionId);
 

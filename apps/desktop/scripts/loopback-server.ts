@@ -77,6 +77,6 @@ export default async function setup(project: TestProject): Promise<() => Promise
 		throw new Error(`Opening the integration workspace failed with HTTP ${response.status}.`);
 	}
 	const workspace = (await response.json()) as { id: string };
-	project.provide('pauApi', { search: `?pau-api-port=${port}&pau-api-token=${token}`, workspaceId: workspace.id });
+	project.provide('pauApi', { connection: { apiOrigin: origin, token }, workspaceId: workspace.id });
 	return stop;
 }

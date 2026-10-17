@@ -9,6 +9,7 @@ import { page, userEvent } from 'vitest/browser';
 import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
+import { DESKTOP_CONNECTION_GLOBAL } from './api';
 import { FakeEventSocket } from './fake-event-socket';
 import SessionRoute from './SessionRoute.svelte';
 
@@ -76,7 +77,7 @@ function setup(routes: Record<string, Route>) {
 		sockets.push(socket);
 		return socket;
 	};
-	return { fetcher, sockets, props: { search: '', fetcher, socketFactory } };
+	return { fetcher, sockets, props: { fetcher, socketFactory } };
 }
 
 /** The test viewport is narrow, so the session rail starts collapsed. */
@@ -844,4 +845,25 @@ test('explains a rejected thinking level', async () => {
 	await userEvent.selectOptions(page.getByRole('combobox', { name: 'Thinking level' }), 'max');
 
 	await expect.element(page.getByRole('alert')).toHaveTextContent('Pi rejected the request: Level not supported');
+});
+
+test('connects to the backend the desktop shell injects', async () => {
+	const token = '0123456789abcdef0123456789abcdef';
+	vi.stubGlobal(DESKTOP_CONNECTION_GLOBAL, Object.freeze({ apiOrigin: 'http://127.0.0.1:43127', token }));
+	try {
+		const { props, sockets, fetcher } = setup({
+			'GET http://127.0.0.1:43127/api/workspaces': () => json([workspace]),
+			'GET http://127.0.0.1:43127/api/sessions': () => json([idleSession])
+		});
+		await render(SessionRoute, props);
+
+		await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeVisible();
+		expect(sockets[0]?.url).toBe('ws://127.0.0.1:43127/api/events?after=0');
+		expect(fetcher).toHaveBeenCalledWith('http://127.0.0.1:43127/api/sessions', expect.anything());
+		for (const [, init] of fetcher.mock.calls) {
+			expect(new Headers(init?.headers).get('Authorization')).toBe(`Bearer ${token}`);
+		}
+	} finally {
+		vi.unstubAllGlobals();
+	}
 });

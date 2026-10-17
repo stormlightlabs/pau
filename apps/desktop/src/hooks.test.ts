@@ -6,7 +6,7 @@ const route = (href: string) => reroute({ url: new URL(href), fetch });
 
 describe('reroute', () => {
 	test('serves the bundled index.html as the root route', () => {
-		expect(route('tauri://localhost/index.html?pau-api-port=1&pau-api-token=t')).toBe('/');
+		expect(route('tauri://localhost/index.html')).toBe('/');
 	});
 
 	test('leaves other routes alone', () => {

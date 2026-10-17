@@ -1,6 +1,8 @@
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import {
+	apiConnection,
+	DESKTOP_CONNECTION_GLOBAL,
 	exportDiagnostics,
 	getBackendVersion,
 	getDiagnostics,
@@ -11,8 +13,6 @@ import {
 	PauApiError,
 	previewSandbox,
 	readWorkspaceFile,
-	resolveApiOrigin,
-	resolveApiToken,
 	resolveEventSocket,
 	resolveTerminalSocket,
 	searchWorkspaceFiles,
@@ -23,29 +23,52 @@ import {
 } from './api';
 
 const TOKEN = '0123456789abcdef0123456789abcdef';
-const DESKTOP_SEARCH = `?pau-api-port=43127&pau-api-token=${TOKEN}`;
+const DESKTOP_CONNECTION = { apiOrigin: 'http://127.0.0.1:43127', token: TOKEN };
 
-describe('desktop API configuration', () => {
-	test('uses relative API paths in a development browser', () => {
-		expect(resolveApiOrigin('')).toBe('');
-		expect(resolveApiToken('')).toBeUndefined();
+/** Defines the connection the way the desktop shell's launch script does. */
+function launchDesktop(connection: unknown = DESKTOP_CONNECTION) {
+	vi.stubGlobal(DESKTOP_CONNECTION_GLOBAL, Object.freeze(connection));
+}
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
+
+describe('API connection', () => {
+	test('uses same-origin paths without a token in a development browser', () => {
+		expect(apiConnection()).toEqual({ origin: '', token: undefined });
 	});
 
-	test('uses the ephemeral desktop backend port and launch token', () => {
-		expect(resolveApiOrigin(DESKTOP_SEARCH)).toBe('http://127.0.0.1:43127');
-		expect(resolveApiToken(DESKTOP_SEARCH)).toBe(TOKEN);
+	test('uses the backend origin and launch token the desktop shell injects', () => {
+		launchDesktop();
+		expect(apiConnection()).toEqual({ origin: 'http://127.0.0.1:43127', token: TOKEN });
 	});
 
-	test.each(['abc', '0', '0x20', '65536'])('rejects an invalid desktop port: %s', (port) => {
-		expect(() => resolveApiOrigin(`?pau-api-port=${port}`)).toThrow('desktop API port is invalid');
+	test.each([
+		'http://127.0.0.1:0',
+		'http://127.0.0.1:65536',
+		'http://127.0.0.1:0x20',
+		'http://localhost:43127',
+		'https://127.0.0.1:43127',
+		'http://127.0.0.1:43127/api',
+		43_127
+	])('rejects an invalid desktop origin: %s', (apiOrigin) => {
+		launchDesktop({ apiOrigin, token: TOKEN });
+		expect(() => apiConnection()).toThrow('desktop API origin is invalid');
 	});
 
-	test.each(['short', 'token with spaces', '0123456789abcdef0123456789abcde!'])(
+	test.each(['short', 'token with spaces', '0123456789abcdef0123456789abcde!', undefined])(
 		'rejects an invalid desktop token: %s',
 		(token) => {
-			expect(() => resolveApiToken(`?pau-api-token=${token}`)).toThrow('desktop API token is invalid');
+			launchDesktop({ apiOrigin: 'http://127.0.0.1:43127', token });
+			expect(() => apiConnection()).toThrow('desktop API token is invalid');
 		}
 	);
+
+	test('rejects a connection that is not an object', () => {
+		launchDesktop(null);
+		expect(() => apiConnection()).toThrow('desktop API origin is invalid');
+	});
 });
 
 test('authenticates desktop HTTP requests with the launch token', async () => {
@@ -53,8 +76,9 @@ test('authenticates desktop HTTP requests with the launch token', async () => {
 		.fn<typeof fetch>()
 		.mockImplementation(async () => Response.json({ version: '0.1.0' }, { status: 200 }));
 
-	await expect(getBackendVersion('', fetcher)).resolves.toEqual({ version: '0.1.0' });
-	await expect(getBackendVersion(DESKTOP_SEARCH, fetcher)).resolves.toEqual({ version: '0.1.0' });
+	await expect(getBackendVersion(fetcher)).resolves.toEqual({ version: '0.1.0' });
+	launchDesktop();
+	await expect(getBackendVersion(fetcher)).resolves.toEqual({ version: '0.1.0' });
 	expect(fetcher).toHaveBeenNthCalledWith(1, '/api/version', { headers: undefined });
 	expect(fetcher).toHaveBeenNthCalledWith(2, 'http://127.0.0.1:43127/api/version', {
 		headers: { Authorization: `Bearer ${TOKEN}` }
@@ -81,10 +105,11 @@ test('controls and exports release diagnostics through authenticated requests', 
 		.mockResolvedValueOnce(Response.json(bundle))
 		.mockResolvedValueOnce(Response.json({ written: true }));
 
-	await expect(getDiagnostics(DESKTOP_SEARCH, fetcher)).resolves.toEqual(bundle);
-	await updateDiagnosticSettings(DESKTOP_SEARCH, true, 'warn', fetcher);
-	await startPayloadTracing(DESKTOP_SEARCH, 300, fetcher);
-	await exportDiagnostics(DESKTOP_SEARCH, '/tmp/pau diagnostics.json', 7, fetcher);
+	launchDesktop();
+	await expect(getDiagnostics(fetcher)).resolves.toEqual(bundle);
+	await updateDiagnosticSettings(true, 'warn', fetcher);
+	await startPayloadTracing(300, fetcher);
+	await exportDiagnostics('/tmp/pau diagnostics.json', 7, fetcher);
 
 	expect(fetcher).toHaveBeenNthCalledWith(2, 'http://127.0.0.1:43127/api/diagnostics/settings', {
 		method: 'PUT',
@@ -106,9 +131,9 @@ test('controls and exports release diagnostics through authenticated requests', 
 test('lists and searches workspace files with traversal options', async () => {
 	const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json([]));
 
-	await listWorkspaceFiles('', 'workspace / one', 'src/lib', { includeHidden: true, includeIgnored: false }, fetcher);
+	await listWorkspaceFiles('workspace / one', 'src/lib', { includeHidden: true, includeIgnored: false }, fetcher);
+	launchDesktop();
 	await searchWorkspaceFiles(
-		DESKTOP_SEARCH,
 		'workspace / one',
 		'needle & thread',
 		{ includeHidden: false, includeIgnored: true },
@@ -135,8 +160,8 @@ test('reads and writes workspace editor files with revision checks', async () =>
 		.mockResolvedValueOnce(Response.json(opened))
 		.mockResolvedValueOnce(Response.json(saved));
 
-	await expect(readWorkspaceFile('', 'workspace / one', 'src/example.ts', fetcher)).resolves.toEqual(opened);
-	await expect(writeWorkspaceFile('', 'workspace / one', 'src/example.ts', 'after', 'one', fetcher)).resolves.toEqual(
+	await expect(readWorkspaceFile('workspace / one', 'src/example.ts', fetcher)).resolves.toEqual(opened);
+	await expect(writeWorkspaceFile('workspace / one', 'src/example.ts', 'after', 'one', fetcher)).resolves.toEqual(
 		saved
 	);
 	expect(fetcher).toHaveBeenNthCalledWith(1, '/api/workspaces/workspace%20%2F%20one/file?path=src%2Fexample.ts', {
@@ -153,7 +178,7 @@ test('reads workspace Git status and changed-file content', async () => {
 	const status = { repository: true, branch: 'main', head: 'abc', detached: false, files: [] };
 	const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json(status));
 
-	await expect(getWorkspaceGitStatus('', 'workspace / one', fetcher)).resolves.toEqual(status);
+	await expect(getWorkspaceGitStatus('workspace / one', fetcher)).resolves.toEqual(status);
 	expect(fetcher).toHaveBeenCalledWith('/api/workspaces/workspace%20%2F%20one/git/status', { headers: undefined });
 
 	const diff = {
@@ -165,7 +190,7 @@ test('reads workspace Git status and changed-file content', async () => {
 		too_large: false
 	};
 	fetcher.mockImplementationOnce(async () => Response.json(diff));
-	await expect(getWorkspaceGitDiff('', 'workspace / one', 'src/example.ts', fetcher)).resolves.toEqual(diff);
+	await expect(getWorkspaceGitDiff('workspace / one', 'src/example.ts', fetcher)).resolves.toEqual(diff);
 	expect(fetcher).toHaveBeenLastCalledWith('/api/workspaces/workspace%20%2F%20one/git/diff?path=src%2Fexample.ts', {
 		headers: undefined
 	});
@@ -180,7 +205,7 @@ test('preserves workspace API error codes for user-facing states', async () => {
 
 	let error: unknown;
 	try {
-		await listWorkspaceFiles('', 'workspace', '', { includeHidden: false, includeIgnored: false }, fetcher);
+		await listWorkspaceFiles('workspace', '', { includeHidden: false, includeIgnored: false }, fetcher);
 	} catch (caught) {
 		error = caught;
 	}
@@ -192,19 +217,20 @@ test('preserves workspace API error codes for user-facing states', async () => {
 });
 
 test('configures browser and desktop WebSocket handshakes', () => {
-	expect(resolveEventSocket('', 'http://localhost:5173')).toEqual({
+	expect(resolveEventSocket('http://localhost:5173')).toEqual({
 		url: 'ws://localhost:5173/api/events',
 		protocols: ['pau']
 	});
-	expect(resolveEventSocket(DESKTOP_SEARCH, 'http://localhost:5173')).toEqual({
-		url: 'ws://127.0.0.1:43127/api/events',
-		protocols: ['pau', `pau.bearer.${TOKEN}`]
-	});
-	expect(resolveEventSocket('', 'http://localhost:5173', 42)).toEqual({
+	expect(resolveEventSocket('http://localhost:5173', 42)).toEqual({
 		url: 'ws://localhost:5173/api/events?after=42',
 		protocols: ['pau']
 	});
-	expect(resolveTerminalSocket(DESKTOP_SEARCH, 'http://localhost:5173', 'a/b')).toEqual({
+	launchDesktop();
+	expect(resolveEventSocket('http://localhost:5173')).toEqual({
+		url: 'ws://127.0.0.1:43127/api/events',
+		protocols: ['pau', `pau.bearer.${TOKEN}`]
+	});
+	expect(resolveTerminalSocket('http://localhost:5173', 'a/b')).toEqual({
 		url: 'ws://127.0.0.1:43127/api/terminals/a%2Fb/stream',
 		protocols: ['pau', `pau.bearer.${TOKEN}`]
 	});
@@ -214,9 +240,10 @@ describe('workspace sandbox API', () => {
 	test('reads, stores, and previews the workspace selection with the launch token', async () => {
 		const selection = { mode: 'unsandboxed' } as const;
 		const fetcher = vi.fn<typeof fetch>(async () => Response.json({ selection, unavailable: null }, { status: 200 }));
-		await getWorkspaceSandbox(DESKTOP_SEARCH, 'work space', fetcher);
-		await updateWorkspaceSandbox(DESKTOP_SEARCH, 'work space', selection, fetcher);
-		await previewSandbox(DESKTOP_SEARCH, 'work space', 'claude', selection, fetcher);
+		launchDesktop();
+		await getWorkspaceSandbox('work space', fetcher);
+		await updateWorkspaceSandbox('work space', selection, fetcher);
+		await previewSandbox('work space', 'claude', selection, fetcher);
 
 		const calls = fetcher.mock.calls.map(([url, init]) => [String(url), init?.method ?? 'GET', init?.body]);
 		expect(calls).toEqual([
@@ -237,7 +264,8 @@ describe('workspace sandbox API', () => {
 		const fetcher = vi.fn<typeof fetch>(async () =>
 			Response.json({ code: 'invalid_sandbox', message: '"x" is not a host or host:port' }, { status: 400 })
 		);
-		await expect(updateWorkspaceSandbox(DESKTOP_SEARCH, 'w', { mode: 'unsandboxed' }, fetcher)).rejects.toMatchObject({
+		launchDesktop();
+		await expect(updateWorkspaceSandbox('w', { mode: 'unsandboxed' }, fetcher)).rejects.toMatchObject({
 			status: 400,
 			code: 'invalid_sandbox'
 		});

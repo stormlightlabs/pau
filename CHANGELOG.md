@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- The desktop app no longer puts its local API token in the window URL, and
+  moving between pages keeps the backend connection.
 - Fixed the installed app opening to a "404 Not Found" page.
 - The app icon now follows the macOS icon shape instead of sitting on a plate.
 - `scripts/install.sh` builds a release tag on your Mac and installs it,

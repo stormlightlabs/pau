@@ -2627,6 +2627,7 @@ name = "pau-desktop"
 version = "0.7.1"
 dependencies = [
  "pau-server",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

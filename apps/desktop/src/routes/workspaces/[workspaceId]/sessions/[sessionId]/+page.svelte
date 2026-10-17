@@ -4,10 +4,10 @@
 	import SessionRoute from '$lib/SessionRoute.svelte';
 
 	function updateSessionRoute(workspaceId: string, sessionId: string): void {
-		history.replaceState({}, '', `/workspaces/${workspaceId}/sessions/${sessionId}${location.search}`);
+		history.replaceState({}, '', `/workspaces/${workspaceId}/sessions/${sessionId}`);
 	}
 </script>
 
 <svelte:head><title>Session · Pau</title></svelte:head>
 
-<SessionRoute search={location.search} initialSessionId={page.params.sessionId} onSessionChange={updateSessionRoute} />
+<SessionRoute initialSessionId={page.params.sessionId} onSessionChange={updateSessionRoute} />

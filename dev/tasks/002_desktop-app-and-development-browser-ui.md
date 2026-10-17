@@ -723,22 +723,6 @@ Verification:
 - Component-test copying and export failure.
 - Export a self-hosted Pi session.
 
-### 2.168 Desktop launch connection
-
-Status: in progress
-Blocked by: none
-
-Pass the local API port and launch token to the desktop frontend without
-putting them in the page URL, and read them from one connection setting in the
-API client.
-
-Verification:
-
-- Confirm the token never appears in the window URL or history, and that
-  navigation keeps the backend connection.
-- Cover the desktop launch configuration and browser development mode in the
-  API client tests.
-
 ### 2.169 Workspace opening and app navigation
 
 Status: in progress
@@ -757,7 +741,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.168, 2.169
+Blocked by: 2.156, 2.169
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

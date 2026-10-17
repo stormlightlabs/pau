@@ -52,7 +52,6 @@ type RetryScheduler = (retry: () => void) => void;
 
 /** Callbacks and transport hooks for {@link EventStreamClient}. */
 export type EventStreamOptions = {
-	search: string;
 	browserOrigin: string;
 	/**
 	 * Receives each new state. `event` is the event just applied, or absent
@@ -93,7 +92,7 @@ export class EventStreamClient {
 	/** Opens the stream or resumes it after a disconnect. */
 	connect(): void {
 		this.#stopped = false;
-		const configuration = resolveEventSocket(this.#options.search, this.#options.browserOrigin, this.#state.sequence);
+		const configuration = resolveEventSocket(this.#options.browserOrigin, this.#state.sequence);
 		const socket = this.#socketFactory(configuration.url, configuration.protocols);
 		this.#socket = socket;
 		socket.addEventListener('open', () => {

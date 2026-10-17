@@ -24,17 +24,32 @@ fn start(app: &mut App, diagnostics: bool) -> Result<(), Box<dyn Error>> {
         (Ipv4Addr::LOCALHOST, 0).into(),
         ServerOptions { diagnostics },
     ))?;
-    let frontend_url = format!(
-        "index.html?pau-api-port={}&pau-api-token={}",
-        server.local_addr().port(),
-        server.token().expose()
-    );
+    let script = connection_script(server.local_addr().port(), server.token().expose());
 
-    WebviewWindowBuilder::new(app, "main", WebviewUrl::App(frontend_url.into()))
+    WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
+        .initialization_script(script)
         .title("Pau")
         .build()?;
     app.manage(DesktopBackend(Mutex::new(server)));
     Ok(())
+}
+
+/// Builds the script that hands the backend connection to the frontend.
+///
+/// The webview runs it before any page script on every load of the main frame,
+/// so the API client finds `window.__PAU_DESKTOP__` after reloads and
+/// navigation without the token appearing in the URL or history. The property
+/// is read-only and its value is frozen, so later page code cannot point the
+/// client at another origin. `serde_json` escapes both values as JavaScript
+/// literals.
+fn connection_script(port: u16, token: &str) -> String {
+    let connection = serde_json::json!({
+        "apiOrigin": format!("http://127.0.0.1:{port}"),
+        "token": token,
+    });
+    format!(
+        "Object.defineProperty(window, '__PAU_DESKTOP__', {{ value: Object.freeze({connection}) }});"
+    )
 }
 
 /// Turns a startup error into dialog text that starts with a capital letter.
@@ -86,7 +101,16 @@ fn main() {
 mod tests {
     use std::io;
 
-    use super::startup_failure_message;
+    use super::{connection_script, startup_failure_message};
+
+    #[test]
+    fn connection_script_defines_a_frozen_loopback_connection() {
+        assert_eq!(
+            connection_script(43127, "token-\"quoted\""),
+            "Object.defineProperty(window, '__PAU_DESKTOP__', { value: Object.freeze(\
+             {\"apiOrigin\":\"http://127.0.0.1:43127\",\"token\":\"token-\\\"quoted\\\"\"}) });"
+        );
+    }
 
     #[test]
     fn startup_failure_message_capitalizes_the_backend_error() {

@@ -67,12 +67,7 @@ import {
 import { usageFromEvent, viewUsage } from './session-usage';
 
 /** Transport hooks for {@link LiveSessions}. Tests replace both. */
-export type LiveSessionsOptions = {
-	search: string;
-	browserOrigin: string;
-	fetcher?: typeof fetch;
-	socketFactory?: EventSocketFactory;
-};
+export type LiveSessionsOptions = { browserOrigin: string; fetcher?: typeof fetch; socketFactory?: EventSocketFactory };
 
 const TITLE_LENGTH = 60;
 
@@ -235,16 +230,13 @@ export class LiveSessions {
 	#loadFailed = $state(false);
 	#socketOpen = $state(false);
 	#connectedOnce = false;
-	readonly #options: LiveSessionsOptions;
 	readonly #fetcher: typeof fetch;
 	readonly #stream: EventStreamClient;
 	loading = $state(true);
 
 	constructor(options: LiveSessionsOptions) {
-		this.#options = options;
 		this.#fetcher = options.fetcher ?? ((input, init) => fetch(input, init));
 		this.#stream = new EventStreamClient({
-			search: options.search,
 			browserOrigin: options.browserOrigin,
 			socketFactory: options.socketFactory,
 			onState: (state, event) => this.#apply(state, event),
@@ -299,7 +291,7 @@ export class LiveSessions {
 		if (!this.#sessions[sessionId]?.capabilities.usage) return;
 		this.#usageUpdated.delete(sessionId);
 		try {
-			const usage = await getSessionUsage(this.#options.search, sessionId, this.#fetcher);
+			const usage = await getSessionUsage(sessionId, this.#fetcher);
 			if (!this.#usageUpdated.has(sessionId)) this.#usages[sessionId] = viewUsage(usage);
 		} catch {
 			// The session exited or the backend went away. The next reconnect reads again.
@@ -321,7 +313,7 @@ export class LiveSessions {
 		let transcript: PiTranscript | undefined;
 		let after = this.#historySequence.get(sessionId) ?? 0;
 		try {
-			const history = await getSessionMessages(this.#options.search, sessionId, this.#fetcher);
+			const history = await getSessionMessages(sessionId, this.#fetcher);
 			transcript = piTranscriptFromMessages(history.messages);
 			after = history.sequence;
 		} catch {
@@ -346,7 +338,7 @@ export class LiveSessions {
 		if (!this.#sessions[sessionId]?.capabilities.message_queue) return;
 		this.#queueUpdated.delete(sessionId);
 		try {
-			const queue = await getSessionQueue(this.#options.search, sessionId, this.#fetcher);
+			const queue = await getSessionQueue(sessionId, this.#fetcher);
 			if (this.#queueUpdated.has(sessionId)) return;
 			this.#queues[sessionId] = { steering: queue.steering, followUp: queue.follow_up };
 		} catch {
@@ -361,7 +353,7 @@ export class LiveSessions {
 		}
 		this.#extensionReplay.set(sessionId, []);
 		try {
-			const server = await getSessionExtensionUi(this.#options.search, sessionId, this.#fetcher);
+			const server = await getSessionExtensionUi(sessionId, this.#fetcher);
 			const replay = this.#extensionReplay.get(sessionId) ?? [];
 			this.#updateExtensionUi(sessionId, (state) => {
 				let next = withServerExtensionUi(state, server);
@@ -386,10 +378,7 @@ export class LiveSessions {
 
 	async #load(): Promise<void> {
 		try {
-			const [workspaces, sessions] = await Promise.all([
-				listWorkspaces(this.#options.search, this.#fetcher),
-				listSessions(this.#options.search, this.#fetcher)
-			]);
+			const [workspaces, sessions] = await Promise.all([listWorkspaces(this.#fetcher), listSessions(this.#fetcher)]);
 			this.#workspaces = workspaces;
 			for (const session of sessions) this.#sessions[session.id] ??= session;
 			this.#loadFailed = false;
@@ -529,7 +518,7 @@ export class LiveSessions {
 	/** Starts a session and returns its ID. Rejects with operator-facing copy. */
 	async start(workspaceId: string): Promise<string> {
 		try {
-			const session = await startSession(this.#options.search, workspaceId, this.#fetcher);
+			const session = await startSession(workspaceId, this.#fetcher);
 			this.#sessions[session.id] = session;
 			void this.#readHistory(session.id);
 			return session.id;
@@ -541,7 +530,7 @@ export class LiveSessions {
 	/** Lists a workspace's saved Pi sessions. Rejects with operator-facing copy. */
 	async listSaved(workspaceId: string): Promise<SavedSessionList> {
 		try {
-			const list = await listNativeSessions(this.#options.search, workspaceId, this.#fetcher);
+			const list = await listNativeSessions(workspaceId, this.#fetcher);
 			return {
 				sessions: list.sessions.map((saved) => ({
 					id: saved.id,
@@ -564,7 +553,7 @@ export class LiveSessions {
 		const running = this.#liveSessionFor(workspaceId, savedSessionId);
 		if (running) return running.id;
 		try {
-			const session = await startSession(this.#options.search, workspaceId, this.#fetcher, savedSessionId);
+			const session = await startSession(workspaceId, this.#fetcher, savedSessionId);
 			this.#sessions[session.id] = session;
 			void this.#readHistory(session.id);
 			return session.id;
@@ -576,7 +565,7 @@ export class LiveSessions {
 	/** Lists the models a session can select. Rejects with operator-facing copy. */
 	async listModels(sessionId: string): Promise<ModelOption[]> {
 		try {
-			const models = await listSessionModels(this.#options.search, sessionId, this.#fetcher);
+			const models = await listSessionModels(sessionId, this.#fetcher);
 			return models.map((model) => ({
 				provider: model.provider,
 				id: model.id,
@@ -592,7 +581,7 @@ export class LiveSessions {
 	/** Lists the slash commands a session accepts. Rejects with operator-facing copy. */
 	async listCommands(sessionId: string): Promise<CommandOption[]> {
 		try {
-			const commands = await listSessionCommands(this.#options.search, sessionId, this.#fetcher);
+			const commands = await listSessionCommands(sessionId, this.#fetcher);
 			return commands.map((command) => ({
 				name: command.name,
 				description: command.description ?? undefined,
@@ -606,12 +595,7 @@ export class LiveSessions {
 	/** Switches a session's model. */
 	selectModel(sessionId: string, model: ModelOption): Promise<void> {
 		return this.#control(() =>
-			selectSessionModel(
-				this.#options.search,
-				sessionId,
-				{ provider: model.provider, model_id: model.id },
-				this.#fetcher
-			)
+			selectSessionModel(sessionId, { provider: model.provider, model_id: model.id }, this.#fetcher)
 		);
 	}
 
@@ -623,7 +607,7 @@ export class LiveSessions {
 	async selectThinkingLevel(sessionId: string, level: ThinkingLevel): Promise<void> {
 		this.#pendingThinkingLevels[sessionId] = level;
 		try {
-			await this.#control(() => setSessionThinkingLevel(this.#options.search, sessionId, level, this.#fetcher));
+			await this.#control(() => setSessionThinkingLevel(sessionId, level, this.#fetcher));
 		} finally {
 			delete this.#pendingThinkingLevels[sessionId];
 		}
@@ -634,9 +618,8 @@ export class LiveSessions {
 		const attachments = images.map((image) => ({ mime_type: image.mimeType, data: image.data }));
 		return this.#control(() =>
 			queue === undefined
-				? promptSession(this.#options.search, sessionId, text, attachments, this.#fetcher)
+				? promptSession(sessionId, text, attachments, this.#fetcher)
 				: queueSessionMessage(
-						this.#options.search,
 						sessionId,
 						queue === 'follow-up' ? 'follow_up' : 'steer',
 						text,
@@ -649,7 +632,7 @@ export class LiveSessions {
 	/** Reads a session's entry tree. Rejects with operator-facing copy. */
 	async tree(sessionId: string): Promise<SessionTreeSnapshot> {
 		try {
-			const tree = await getSessionTree(this.#options.search, sessionId, this.#fetcher);
+			const tree = await getSessionTree(sessionId, this.#fetcher);
 			const snapshot: SessionTreeSnapshot = {
 				entries: tree.entries.map((entry) => ({
 					id: entry.id,
@@ -676,7 +659,7 @@ export class LiveSessions {
 	async branch(sessionId: string, entryId: string): Promise<SessionBranchOutcome> {
 		let result;
 		try {
-			result = await branchSession(this.#options.search, sessionId, entryId, this.#fetcher);
+			result = await branchSession(sessionId, entryId, this.#fetcher);
 		} catch (cause) {
 			throw new Error(sessionErrorMessage(cause, 'branch'), { cause });
 		}
@@ -686,18 +669,18 @@ export class LiveSessions {
 
 	/** Reads a session's earlier prompts for composer recall, newest first. */
 	history(sessionId: string): Promise<string[]> {
-		return getSessionHistory(this.#options.search, sessionId, this.#fetcher);
+		return getSessionHistory(sessionId, this.#fetcher);
 	}
 
 	/** Interrupts the active run. */
 	interrupt(sessionId: string): Promise<void> {
-		return this.#control(() => interruptSession(this.#options.search, sessionId, this.#fetcher));
+		return this.#control(() => interruptSession(sessionId, this.#fetcher));
 	}
 
 	/** Re-sends the last prompt after a failed turn. */
 	async retry(sessionId: string): Promise<void> {
 		try {
-			await retrySession(this.#options.search, sessionId, this.#fetcher);
+			await retrySession(sessionId, this.#fetcher);
 		} catch (cause) {
 			throw new Error(sessionErrorMessage(cause, 'retry'), { cause });
 		}
@@ -709,7 +692,7 @@ export class LiveSessions {
 	 */
 	async compact(sessionId: string, customInstructions?: string): Promise<void> {
 		try {
-			const result = await compactSession(this.#options.search, sessionId, customInstructions || null, this.#fetcher);
+			const result = await compactSession(sessionId, customInstructions || null, this.#fetcher);
 			if (result.first_kept_entry_id !== null && result.estimated_tokens_after !== null) {
 				this.#compactionEstimates[sessionId] = {
 					...this.#compactionEstimates[sessionId],
@@ -724,7 +707,7 @@ export class LiveSessions {
 	/** Clears the queued messages and returns what the queue held. */
 	async clearQueue(sessionId: string): Promise<MessageQueue> {
 		try {
-			const cleared = await clearSessionQueue(this.#options.search, sessionId, this.#fetcher);
+			const cleared = await clearSessionQueue(sessionId, this.#fetcher);
 			this.#queueUpdated.add(sessionId);
 			this.#queues[sessionId] = { steering: [], followUp: [] };
 			return { steering: cleared.steering, followUp: cleared.follow_up };
@@ -735,12 +718,12 @@ export class LiveSessions {
 
 	/** Cancels an automatic retry that is waiting to run. */
 	cancelRetry(sessionId: string): Promise<void> {
-		return this.#control(() => cancelSessionRetry(this.#options.search, sessionId, this.#fetcher));
+		return this.#control(() => cancelSessionRetry(sessionId, this.#fetcher));
 	}
 
 	/** Stops the session's process. */
 	stop(sessionId: string): Promise<void> {
-		return this.#control(() => stopSession(this.#options.search, sessionId, this.#fetcher));
+		return this.#control(() => stopSession(sessionId, this.#fetcher));
 	}
 
 	/**
@@ -749,7 +732,7 @@ export class LiveSessions {
 	 */
 	async respond(sessionId: string, response: ExtensionUiResponse): Promise<void> {
 		try {
-			await respondToExtensionUi(this.#options.search, sessionId, response.id, wireResponse(response), this.#fetcher);
+			await respondToExtensionUi(sessionId, response.id, wireResponse(response), this.#fetcher);
 			this.#updateExtensionUi(sessionId, (state) => withoutDialog(state, response.id));
 		} catch (cause) {
 			if (

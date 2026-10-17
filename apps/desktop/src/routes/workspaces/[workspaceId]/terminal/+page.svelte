@@ -7,13 +7,13 @@
 	import { createTerminalSource } from '$lib/terminal-source';
 
 	const workspaceId = page.params.workspaceId ?? '';
-	const source = createTerminalSource(location.search, location.origin, workspaceId);
+	const source = createTerminalSource(location.origin, workspaceId);
 
 	let workspaceName = $state(workspaceId);
 	let disconnected = $state(false);
 
 	onMount(() => {
-		void listWorkspaces(location.search)
+		void listWorkspaces()
 			.then((workspaces) => {
 				const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
 				workspaceName = workspace?.name || workspace?.path.split(/[\\/]/).at(-1) || workspaceId;

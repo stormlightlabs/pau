@@ -49,7 +49,6 @@ test('reconnects from the last applied sequence after streamed output disconnect
 	const applied: Array<ServerEvent | undefined> = [];
 	const connection: boolean[] = [];
 	const client = new EventStreamClient({
-		search: '',
 		browserOrigin: 'http://localhost:5173',
 		onState: (state, applyingEvent) => {
 			states.push(state);

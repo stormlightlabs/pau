@@ -51,7 +51,7 @@
 	}
 
 	onMount(() => {
-		void getDiagnostics(location.search)
+		void getDiagnostics()
 			.then((value) => (bundle = viewModel(value)))
 			.catch((caught: unknown) => (error = caught instanceof Error ? caught.message : String(caught)));
 	});
@@ -59,7 +59,7 @@
 	async function changeSettings(enabled: boolean, level: typeof bundle.settings.minLevel): Promise<void> {
 		error = undefined;
 		try {
-			bundle = viewModel(await updateDiagnosticSettings(location.search, enabled, level));
+			bundle = viewModel(await updateDiagnosticSettings(enabled, level));
 		} catch (caught) {
 			error = caught instanceof Error ? caught.message : String(caught);
 		}
@@ -68,7 +68,7 @@
 	async function tracePayloads(durationSeconds: number): Promise<void> {
 		error = undefined;
 		try {
-			bundle = viewModel(await startPayloadTracing(location.search, durationSeconds));
+			bundle = viewModel(await startPayloadTracing(durationSeconds));
 		} catch (caught) {
 			error = caught instanceof Error ? caught.message : String(caught);
 		}
@@ -78,7 +78,7 @@
 		error = undefined;
 		notice = undefined;
 		try {
-			await exportDiagnostics(location.search, destination, revision);
+			await exportDiagnostics(destination, revision);
 			notice = 'Diagnostic bundle exported.';
 		} catch (caught) {
 			error = caught instanceof Error ? caught.message : String(caught);

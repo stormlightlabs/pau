@@ -10,19 +10,19 @@ const INITIAL_SIZE = { cols: 80, rows: 24 };
  * Connects the terminal surface to the loopback API for one workspace. Binary
  * WebSocket frames carry PTY bytes; text frames carry typed control messages.
  */
-export function createTerminalSource(search: string, browserOrigin: string, workspaceId: string): TerminalSource {
+export function createTerminalSource(browserOrigin: string, workspaceId: string): TerminalSource {
 	const opened = new Map<string, number>();
 
 	return {
 		create: async () => {
-			const info = await createTerminal(search, workspaceId, INITIAL_SIZE);
+			const info = await createTerminal(workspaceId, INITIAL_SIZE);
 			const program = info.command[0]?.split('/').at(-1) || 'shell';
 			const count = (opened.get(program) ?? 0) + 1;
 			opened.set(program, count);
 			return { id: info.id, title: count === 1 ? program : `${program} ${count}` };
 		},
 		connect: (id, events) => {
-			const { url, protocols } = resolveTerminalSocket(search, browserOrigin, id);
+			const { url, protocols } = resolveTerminalSocket(browserOrigin, id);
 			const socket = new WebSocket(url, protocols);
 			socket.binaryType = 'arraybuffer';
 			let size = INITIAL_SIZE;
@@ -63,7 +63,7 @@ export function createTerminalSource(search: string, browserOrigin: string, work
 			};
 		},
 		close: async (id) => {
-			await closeTerminal(search, id);
+			await closeTerminal(id);
 		}
 	};
 }

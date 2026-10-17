@@ -3,20 +3,25 @@ import { expect, inject, test } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 
+import { DESKTOP_CONNECTION_GLOBAL } from './api';
 import { createTerminalSource } from './terminal-source';
 
 declare module 'vitest' {
 	export interface ProvidedContext {
-		pauApi: { search: string; workspaceId: string };
+		pauApi: { connection: { apiOrigin: string; token: string }; workspaceId: string };
 	}
 }
 
-const { search, workspaceId } = inject('pauApi');
+const { connection, workspaceId } = inject('pauApi');
+
+// Connect the way the desktop shell does, through a frozen global that exists
+// before the client reads it.
+Object.defineProperty(globalThis, DESKTOP_CONNECTION_GLOBAL, { value: Object.freeze(connection) });
 
 function renderSurface(theme: ThemeName = 'eldritch') {
 	return render(TerminalSurface, {
 		workspaceName: 'integration',
-		source: createTerminalSource(search, location.origin, workspaceId),
+		source: createTerminalSource(location.origin, workspaceId),
 		theme
 	});
 }

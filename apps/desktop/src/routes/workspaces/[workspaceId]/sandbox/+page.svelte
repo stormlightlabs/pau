@@ -27,7 +27,7 @@
 	let previewTimer: ReturnType<typeof setTimeout> | undefined;
 
 	onMount(() => {
-		void getWorkspaceSandbox(location.search, workspaceId)
+		void getWorkspaceSandbox(workspaceId)
 			.then((stored) => {
 				selection = selectionView(stored.selection);
 				draft = selection;
@@ -47,7 +47,7 @@
 		if (!draft) return;
 		const requested = draft;
 		try {
-			const described = await previewSandbox(location.search, workspaceId, adapter, selectionWire(requested));
+			const described = await previewSandbox(workspaceId, adapter, selectionWire(requested));
 			if (requested !== draft) return;
 			effective = described ? effectiveView(described) : undefined;
 			error = undefined;
@@ -69,7 +69,7 @@
 		error = undefined;
 		notice = undefined;
 		try {
-			const stored = await updateWorkspaceSandbox(location.search, workspaceId, selectionWire(next));
+			const stored = await updateWorkspaceSandbox(workspaceId, selectionWire(next));
 			draft = selectionView(stored.selection);
 			notice = 'New agent sessions in this workspace use this setting.';
 		} catch (caught) {

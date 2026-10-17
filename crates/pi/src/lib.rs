@@ -30,7 +30,9 @@ pub use registry::{
     StartRegisteredPiSession,
 };
 pub use sandbox::{PiSandboxLaunch, PreparePiSandbox, prepare_pi_sandbox};
-pub use session::{PI_RPC_CAPABILITIES, PiNativeSession, PiSession, PiSessionError};
+pub use session::{
+    PI_RPC_CAPABILITIES, PiCommand, PiCommandSource, PiNativeSession, PiSession, PiSessionError,
+};
 
 use semver::Version;
 use std::env;

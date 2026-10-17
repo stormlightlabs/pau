@@ -21,6 +21,7 @@ pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     message_queue: true,
     model_selection: true,
     thinking_level: true,
+    command_discovery: true,
     stop: true,
 };
 
@@ -68,6 +69,30 @@ pub struct PiNativeSession {
     pub id: String,
     /// Pi's authoritative JSONL session file.
     pub file: String,
+}
+
+/// Where Pi loaded a slash command from.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PiCommandSource {
+    /// A command registered by an extension.
+    Extension,
+    /// A prompt template.
+    Prompt,
+    /// A skill.
+    Skill,
+}
+
+/// A slash command Pi offers in a session.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PiCommand {
+    /// The name typed after the slash, without the leading `/`.
+    pub name: String,
+    /// Pi's description, when the command has one.
+    pub description: Option<String>,
+    /// The kind of resource that provides the command.
+    pub source: PiCommandSource,
+    /// The path Pi reports in the command's source info, when present.
+    pub path: Option<String>,
 }
 
 /// Owns the controls and observed lifecycle state for one Pi RPC process.
@@ -145,6 +170,23 @@ impl PiSession {
                 "Pi did not report a persisted native session".to_owned(),
             )),
         }
+    }
+
+    /// Lists the prompt templates, skills, and extension commands Pi offers.
+    pub async fn commands(&self) -> Result<Vec<PiCommand>, PiSessionError> {
+        let control = AgentControl::ListCommands;
+        self.require_capability(control)?;
+        let response = self
+            .command(control, json!({"type": "get_commands"}))
+            .await?;
+        let entries = response
+            .get("data")
+            .and_then(|data| data.get("commands"))
+            .and_then(Value::as_array)
+            .ok_or_else(|| {
+                PiSessionError::NativeSession("Pi did not report a command list".to_owned())
+            })?;
+        entries.iter().map(parse_command).collect()
     }
 
     /// Starts work, or queues it during a run when the caller chooses a queue.
@@ -384,6 +426,33 @@ impl PiSession {
             message,
         }))
     }
+}
+
+fn parse_command(entry: &Value) -> Result<PiCommand, PiSessionError> {
+    let text = |key| entry.get(key).and_then(Value::as_str).map(str::to_owned);
+    let source = match entry.get("source").and_then(Value::as_str) {
+        Some("extension") => PiCommandSource::Extension,
+        Some("prompt") => PiCommandSource::Prompt,
+        Some("skill") => PiCommandSource::Skill,
+        _ => {
+            return Err(PiSessionError::NativeSession(
+                "Pi reported a command with an unknown source".to_owned(),
+            ));
+        }
+    };
+    let name = text("name").ok_or_else(|| {
+        PiSessionError::NativeSession("Pi reported a command without a name".to_owned())
+    })?;
+    Ok(PiCommand {
+        name,
+        description: text("description"),
+        source,
+        path: entry
+            .get("sourceInfo")
+            .and_then(|info| info.get("path"))
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+    })
 }
 
 fn invalid_state(

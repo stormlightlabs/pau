@@ -5,8 +5,8 @@ use pau_agent::{
     PromptQueueChoice, ThinkingLevel,
 };
 use pau_pi::{
-    PI_RPC_CAPABILITIES, PiExtensionUiResponse, PiProcess, PiSession, PiSessionError,
-    PiShutdownTimeouts, StartPiProcessOptions,
+    PI_RPC_CAPABILITIES, PiCommand, PiCommandSource, PiExtensionUiResponse, PiProcess, PiSession,
+    PiSessionError, PiShutdownTimeouts, StartPiProcessOptions,
 };
 use serde_json::Value;
 use std::fs;
@@ -135,6 +135,54 @@ async fn wait_for_queue(session: &PiSession, expected: &AgentMessageQueue) {
 }
 
 #[tokio::test]
+async fn lists_prompt_skill_and_extension_commands() {
+    let fixture = FakePi::new(CONTROL_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+
+    let commands = session.commands().await.unwrap();
+    assert_eq!(
+        commands,
+        vec![
+            PiCommand {
+                name: "review".to_owned(),
+                description: Some("Review the changes".to_owned()),
+                source: PiCommandSource::Prompt,
+                path: Some("/prompts/review.md".to_owned()),
+            },
+            PiCommand {
+                name: "skill:lint".to_owned(),
+                description: None,
+                source: PiCommandSource::Skill,
+                path: None,
+            },
+            PiCommand {
+                name: "ping".to_owned(),
+                description: Some("Ping".to_owned()),
+                source: PiCommandSource::Extension,
+                path: None,
+            },
+        ]
+    );
+
+    let unsupported = PiSession::from_process(
+        PiProcess::start(fixture.options()).unwrap(),
+        AgentCapabilities {
+            command_discovery: false,
+            ..PI_RPC_CAPABILITIES
+        },
+    );
+    assert!(matches!(
+        unsupported.commands().await.unwrap_err(),
+        PiSessionError::Control(AgentControlError::Unsupported {
+            control: AgentControl::ListCommands,
+        })
+    ));
+    session.stop().await.unwrap();
+    unsupported.stop().await.unwrap();
+    assert_command(&fixture.commands()[0], "get_commands");
+}
+
+#[tokio::test]
 async fn sends_extension_ui_responses_without_command_ids() {
     let fixture = FakePi::new(CONTROL_FIXTURE);
     let session = PiSession::start(fixture.options()).unwrap();
@@ -246,6 +294,9 @@ while IFS= read -r command; do
             ;;
         *'"type":"set_thinking_level"'*)
             printf '{"id":"%s","type":"response","command":"set_thinking_level","success":true}\n' "$id"
+            ;;
+        *'"type":"get_commands"'*)
+            printf '{"id":"%s","type":"response","command":"get_commands","success":true,"data":{"commands":[{"name":"review","description":"Review the changes","source":"prompt","sourceInfo":{"path":"/prompts/review.md","source":"local","scope":"project","origin":"top-level"}},{"name":"skill:lint","source":"skill"},{"name":"ping","description":"Ping","source":"extension"}]}}\n' "$id"
             ;;
         *'"type":"extension_ui_response"'*) ;;
         *) exit 65 ;;

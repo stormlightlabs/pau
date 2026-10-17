@@ -19,6 +19,8 @@ pub enum AgentControl {
     SelectModel,
     /// Select how much reasoning the model applies.
     SetThinkingLevel,
+    /// List the slash commands the session offers.
+    ListCommands,
     /// Stop the session process.
     Stop,
 }
@@ -33,6 +35,7 @@ impl fmt::Display for AgentControl {
             Self::MessageQueue => "message queue",
             Self::SelectModel => "model selection",
             Self::SetThinkingLevel => "thinking-level selection",
+            Self::ListCommands => "command discovery",
             Self::Stop => "stop",
         };
         formatter.write_str(name)
@@ -56,6 +59,8 @@ pub struct AgentCapabilities {
     pub model_selection: bool,
     /// Whether the adapter can change the thinking level.
     pub thinking_level: bool,
+    /// Whether the adapter can list the session's slash commands.
+    pub command_discovery: bool,
     /// Whether the adapter can stop its session process.
     pub stop: bool,
 }
@@ -71,6 +76,7 @@ impl AgentCapabilities {
             AgentControl::MessageQueue => self.message_queue,
             AgentControl::SelectModel => self.model_selection,
             AgentControl::SetThinkingLevel => self.thinking_level,
+            AgentControl::ListCommands => self.command_discovery,
             AgentControl::Stop => self.stop,
         }
     }

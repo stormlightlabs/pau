@@ -649,8 +649,8 @@ their events to clients.
 Verification:
 
 - Start a session, then prompt, steer, follow up, interrupt, select a model and
-  thinking level, and stop it over HTTP and the event stream against the fake
-  Pi executable.
+  thinking level, read and clear queued messages, list commands, and stop it
+  over HTTP and the event stream against the fake Pi executable.
 - Cover a missing Pi executable and a session that exits during a request.
 
 ### 2.146 Live session view
@@ -710,21 +710,10 @@ Verification:
 - Component-test adding, removing, and rejecting images.
 - Send a prompt with an image in a self-hosted Pi session.
 
-### 2.74 Pi command discovery API
-
-Status: planned
-Blocked by: none
-
-Expose Pi command discovery through the desktop API.
-
-Verification:
-
-- Cover command listing against the Pi fixture.
-
 ### 2.75 Composer command completion
 
 Status: planned
-Blocked by: 2.74, 2.146
+Blocked by: 2.146
 
 Add command completion to the session composer.
 

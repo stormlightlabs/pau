@@ -1,3 +1,5 @@
+<p align="center"><img src=".github/assets/banner.png" alt="Pau: a desktop workspace for running Pi and other coding agents" width="880"></p>
+
 # Pau
 
 Pau is a local-first desktop and web application for running coding-agent

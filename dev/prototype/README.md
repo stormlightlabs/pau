@@ -21,6 +21,7 @@ the `openpencil` CLI.
 The file has these pages:
 
 - Foundations holds the token reference table.
+- Brand holds the README banner, exported to `.github/assets/banner.png`.
 - Components holds the reusable pieces: the workbench sidebar and page header,
   the application top bar and product rail, buttons, chips, fields, tabs,
   section labels, the Pau mark, and agent marks.

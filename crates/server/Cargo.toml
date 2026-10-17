@@ -10,6 +10,7 @@ repository.workspace = true
 axum.workspace = true
 base64 = "0.22.1"
 dirs.workspace = true
+dotenvy = "0.15.7"
 getrandom.workspace = true
 pau-agent = { path = "../agent" }
 pau-core = { path = "../core" }

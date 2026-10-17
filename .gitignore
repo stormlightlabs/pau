@@ -11,6 +11,9 @@
 !/.claude/commands/*.md
 !/.claude/skills
 .direnv/
+.env
+.env.*
+!.env.example
 result
 result-*
 

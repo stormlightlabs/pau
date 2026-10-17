@@ -1,10 +1,13 @@
 import { playwright } from '@vitest/browser-playwright';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { fileURLToPath } from 'node:url';
 import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig(({ mode }) => {
-	const token = loadEnv(mode, process.cwd(), '').PAU_API_TOKEN;
+	// Development settings live in the repository's .env file.
+	const root = fileURLToPath(new URL('../../', import.meta.url));
+	const token = loadEnv(mode, root, '').PAU_API_TOKEN;
 	const headers = token === undefined ? undefined : { Authorization: `Bearer ${token}` };
 
 	return {

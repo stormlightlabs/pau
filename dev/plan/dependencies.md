@@ -24,6 +24,13 @@ dialog. The plugin is MIT or Apache-2.0 licensed and maintained in the Tauri
 plugins workspace. Later 2.8 releases require Tauri 2.12. Only the Rust shell
 calls it, so the webview gets no dialog permissions.
 
+## Development settings
+
+The browser development server loads the repository's `.env` with `dotenvy`
+0.15.7, which is MIT-licensed and maintained. Node entry points use the
+built-in `process.loadEnvFile`, and Vite uses its own `loadEnv`, so they add no
+dependency.
+
 ## Pi permission extension dependencies
 
 The vendored bash analysis in `packages/pi-permissions` uses `web-tree-sitter`

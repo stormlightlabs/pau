@@ -25,22 +25,40 @@ scaffold, documentation site, shared packages, and Rust services. See
 
 ## Development environment
 
-The Nix flake supports x86-64 and ARM64 Linux plus Apple Silicon macOS. Enter it
-directly:
+### macOS
+
+Install the toolchain from vendor installers and Homebrew. The project does not
+use the Nix shell or direnv on macOS.
+
+- Xcode Command Line Tools: `xcode-select --install`
+- Rust stable through [rustup](https://rustup.rs)
+- Node.js 24 and pnpm: `brew install node@24 pnpm`. pnpm switches to the
+  version pinned in `package.json` on its own.
+- Optional: `brew install lychee` for the website link check
+
+Keep local settings in a `.env` file at the repository root. Start from the
+example:
+
+```sh
+cp .env.example .env
+```
+
+The desktop app, the browser development servers, and the macOS release script
+read `.env`. Variables already set in your shell take precedence.
+
+### NixOS
+
+The Nix flake provides Rust, Node.js, pnpm, SQLite, Neovim, and the native
+libraries Tauri needs on x86-64 and ARM64 Linux. Enter it directly:
 
 ```sh
 nix develop
 ```
 
-For automatic activation with direnv:
+For automatic activation, run `direnv allow`. The `.envrc` loads the flake and
+then `.env` if it exists. On macOS it only loads `.env`.
 
-```sh
-direnv allow
-```
-
-The shell provides Rust, Node.js, pnpm, SQLite, Neovim, and the native Linux
-libraries required by Tauri. macOS builds still require Xcode Command Line
-Tools.
+### Checks
 
 Install dependencies and run the workspace checks from the repository root:
 
@@ -95,13 +113,13 @@ configuration under `<workspace>/.pi`, and session storage under
 
 ## Run the local application
 
-For browser development, generate a token with `openssl rand -hex 32`. Set
-`PAU_API_TOKEN` to that value in both terminals, then start the local API and
-web app:
+For browser development, set `PAU_API_TOKEN` in `.env` to the output of
+`openssl rand -hex 32`. Then start the local API and the web app in separate
+terminals:
 
 ```sh
-PAU_API_TOKEN="$TOKEN" cargo run -p pau-server
-PAU_API_TOKEN="$TOKEN" pnpm dev:desktop:browser
+cargo run -p pau-server
+pnpm dev:desktop:browser
 ```
 
 The development server authenticates and forwards `/api` requests to the local

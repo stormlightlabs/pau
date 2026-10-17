@@ -7,6 +7,13 @@ const DEFAULT_ADDRESS: &str = "127.0.0.1:3001";
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
+    // Development settings live in the repository's .env file. Variables
+    // already set in the environment win.
+    if let Err(error) = dotenvy::dotenv()
+        && !error.not_found()
+    {
+        return Err(io::Error::other(format!("could not read .env: {error}")));
+    }
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .json()

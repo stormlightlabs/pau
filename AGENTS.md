@@ -20,6 +20,10 @@ changes.
 
 `cargo clean` regularly to keep the disk clean.
 
+On macOS, do not enter the Nix shell or use direnv. Use the Homebrew and rustup
+toolchain described in `README.md`, and keep local settings in `.env`. The flake
+and `.envrc` serve NixOS only.
+
 Run JavaScript tools through pnpm with `pnpm exec`, `pnpm --filter`, or a
 package script. Do not use `npx`.
 

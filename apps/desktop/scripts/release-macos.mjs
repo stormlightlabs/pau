@@ -16,6 +16,14 @@ const identifier = 'org.stormlightlabs.pau';
 const installPath = '/Applications/Pau.app';
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const desktop = fileURLToPath(new URL('../', import.meta.url));
+
+// Signing and notarization credentials may live in the repository's .env file.
+// Variables already set in the environment win.
+try {
+	process.loadEnvFile(path.join(root, '.env'));
+} catch (error) {
+	if (error.code !== 'ENOENT') throw error;
+}
 const notarizationCredentials = [
 	['APPLE_API_KEY', 'APPLE_API_ISSUER', 'APPLE_API_KEY_PATH'],
 	['APPLE_ID', 'APPLE_PASSWORD', 'APPLE_TEAM_ID']

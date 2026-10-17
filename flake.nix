@@ -9,7 +9,6 @@
       systems = [
         "x86_64-linux"
         "aarch64-linux"
-        "aarch64-darwin"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
     in
@@ -53,9 +52,6 @@
             libxcb
             zlib
           ];
-          darwinPackages = with pkgs; [
-            libiconv
-          ];
           linuxSandboxTools = with pkgs; [
             bubblewrap
             ripgrep
@@ -75,19 +71,16 @@
               rust-analyzer
               rustc
               rustfmt
-            ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux linuxSandboxTools;
+            ] ++ linuxSandboxTools;
 
             buildInputs = with pkgs; [
               neovim
               openssl
               sqlite
-            ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux linuxPackages
-              ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin darwinPackages;
+            ] ++ linuxPackages;
 
             shellHook = ''
-              ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
-                export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath linuxPackages}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-              ''}
+              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath linuxPackages}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
               echo "Pau shell: Rust $(rustc --version | cut -d' ' -f2), Node $(node --version), pnpm $(pnpm --version)"
             '';
           };

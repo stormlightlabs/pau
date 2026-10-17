@@ -11,6 +11,14 @@ import { readFileSync } from 'node:fs';
 const [command, ...args] = process.argv.slice(2);
 const root = new URL('../../../', import.meta.url);
 
+// Development settings live in the repository's .env file. Variables already
+// set in the environment win.
+try {
+	process.loadEnvFile(new URL('.env', root));
+} catch (error) {
+	if (error.code !== 'ENOENT') throw error;
+}
+
 function git(...gitArgs) {
 	try {
 		return execFileSync('git', gitArgs, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();

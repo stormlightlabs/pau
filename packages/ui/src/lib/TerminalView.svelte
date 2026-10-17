@@ -1,6 +1,5 @@
 <script lang="ts">
 	import '@xterm/xterm/css/xterm.css';
-	import { ClipboardAddon } from '@xterm/addon-clipboard';
 	import { FitAddon } from '@xterm/addon-fit';
 	import { Unicode11Addon } from '@xterm/addon-unicode11';
 	import { Terminal } from '@xterm/xterm';
@@ -63,7 +62,11 @@
 		instance.loadAddon(fitter);
 		instance.loadAddon(new Unicode11Addon());
 		instance.unicode.activeVersion = '11';
-		instance.loadAddon(new ClipboardAddon());
+		// The clipboard addon's bundle reads `self` when it loads, so importing it
+		// at module scope breaks Node consumers of the package index.
+		void import('@xterm/addon-clipboard').then(({ ClipboardAddon }) => {
+			if (terminal === instance) instance.loadAddon(new ClipboardAddon());
+		});
 		// macOS copy and paste shortcuts reach xterm.js as native clipboard events.
 		// Elsewhere Ctrl+C belongs to the shell, so use the Ctrl+Shift convention.
 		instance.attachCustomKeyEventHandler((event) => {

@@ -325,7 +325,7 @@ export async function startSession(
 	workspaceId: string,
 	fetcher: typeof fetch = fetch
 ): Promise<AgentSession> {
-	const request: StartSessionRequest = { workspace_id: workspaceId, model: null };
+	const request: StartSessionRequest = { workspace_id: workspaceId, model: null, native_session_id: null };
 	const response = await fetcher(sessionUrl(search, ''), {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', ...authorization(resolveApiToken(search)) },

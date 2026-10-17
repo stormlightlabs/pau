@@ -665,6 +665,91 @@ Verification:
 - Component-test loading, failed start, and disconnected states.
 - Prompt a self-hosted Pi session from the desktop app.
 
+### 2.147 Pi session discovery API
+
+Status: planned
+Blocked by: 2.145
+
+List a workspace's native Pi sessions from disk and resume one or start a new
+session through the desktop API.
+
+Verification:
+
+- Cover listing, resuming, and starting sessions against fixture Pi session
+  files, including a missing and a malformed session file.
+
+### 2.148 Session picker
+
+Status: planned
+Blocked by: 2.146, 2.147
+
+Let the operator browse, resume, and start Pi sessions from the desktop app.
+
+Verification:
+
+- Component-test empty, populated, and failed-resume states.
+- Resume a self-hosted Pi session from the picker.
+
+### 2.149 Pi session rename and clone API
+
+Status: planned
+Blocked by: 2.145
+
+Rename and clone Pi sessions through the desktop API.
+
+Verification:
+
+- Cover renaming, cloning, and a rejected rename against the Pi fixture.
+
+### 2.150 Session rename and clone controls
+
+Status: planned
+Blocked by: 2.146, 2.149
+
+Add rename and clone controls to the session view.
+
+Verification:
+
+- Component-test renaming, cloning, and a failed rename.
+
+### 2.151 Pi model list API
+
+Status: planned
+Blocked by: 2.145
+
+Expose the models a Pi session can use through the desktop API.
+
+Verification:
+
+- Cover the model list and an empty list against the Pi fixture.
+
+### 2.152 Model picker
+
+Status: planned
+Blocked by: 2.146, 2.151
+
+Add a model picker to the session view.
+
+Verification:
+
+- Component-test model selection, a rejected selection, and no available
+  models.
+- Switch models in a self-hosted Pi session.
+
+### 2.153 Attention notifications
+
+Status: planned
+Blocked by: 2.146
+
+Send a native notification and badge the app icon when a session waits for
+input or fails while its view is not focused.
+
+Verification:
+
+- Component-test which session states notify and that a focused session does
+  not.
+- Trigger a notification from a self-hosted Pi session.
+
 ### 2.68 Pi input history API
 
 Status: planned
@@ -894,9 +979,8 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.61, 2.67, 2.69, 2.71, 2.73, 2.75, 2.77, 2.79, 2.81, 2.83, 2.93,
-2.94, 2.95, 2.96, 2.97, 2.98, 2.99, 2.100, 2.107, 2.110, 2.112, 2.114, 2.116, 2.118,
-2.120, 2.122
+Blocked by: 2.25, 2.69, 2.71, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120, 2.148,
+2.152, 2.156
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only
@@ -908,14 +992,14 @@ Verification:
   controls, recording unsupported native capabilities with an explanation.
 - Complete normal project work through Pau using configured skills, prompts,
   extensions, MCP tools when installed, queued messages, compaction, session
-  branching, review, CodeMirror, preferred-editor handoff, and the persistent
-  terminal.
+  branching, review, CodeMirror, and the persistent terminal in the installed
+  macOS build.
 
 **Primary dogfood replacement point:** When 2.40 is complete, Pau replaces
 vanilla Pi with `pi-mcp-adapter` in a terminal for routine Pi work, including
 MCP. Vanilla Pi remains available in Pau's persistent terminal for terminal-only
 extension components. Pau is also the primary dogfood interface for routine
-Claude work. Deep editor embedding and release packaging remain later
+Claude work. Deep editor embedding and Linux release packaging remain later
 milestones.
 
 ## Agent adapters
@@ -1286,6 +1370,47 @@ Verification:
 - Build and deploy from a clean checkout.
 - Confirm the canonical URL, redirects, sitemap, search index, raw Markdown,
   `llms.txt`, and cache headers on the deployed site.
+
+### 2.154 Release version source
+
+Status: planned
+Blocked by: none
+
+Read the desktop app's version from the Cargo workspace only, and give
+untagged builds a development version, bundle identifier, product name, and
+data directory.
+
+Verification:
+
+- Confirm a tagged build reports the tag's version and identifier.
+- Confirm an untagged build reports a `-dev` version with the commit, uses
+  `org.stormlightlabs.pau.dev`, and does not open the release database.
+
+### 2.155 Database downgrade refusal
+
+Status: planned
+Blocked by: none
+
+Refuse to open a database whose schema is newer than the running app, and
+explain which version created it.
+
+Verification:
+
+- Cover current, older, and newer schema versions.
+
+### 2.156 macOS dogfood build
+
+Status: planned
+Blocked by: 2.154, 2.155
+
+Build a signed and notarized Apple Silicon app from a release tag and install
+it in `/Applications`.
+
+Verification:
+
+- Build, sign, notarize, and install a tagged release on the development Mac.
+- Launch it and confirm Gatekeeper accepts it and the reported version matches
+  the tag.
 
 ### 2.39 AppImage packaging
 

@@ -20,8 +20,8 @@ pub use mcp::{
     PiMcpOperation, discover_pi_mcp, pi_mcp_capabilities, run_pi_mcp_operation,
 };
 pub use native_sessions::{
-    PiSessionFile, PiSessionFileError, PiSessionFileWarning, PiSessionFiles, find_pi_session_file,
-    list_pi_session_files,
+    MAX_TREE_ENTRIES, PiSessionFile, PiSessionFileError, PiSessionFileWarning, PiSessionFiles,
+    PiSessionTree, PiTreeEntry, find_pi_session_file, list_pi_session_files, read_pi_session_tree,
 };
 pub use process::{
     PiDiagnostic, PiDiagnosticSource, PiProcess, PiProcessError, PiProcessExit, PiProcessOutput,
@@ -42,8 +42,9 @@ pub use resources::{
 };
 pub use sandbox::{PiSandboxLaunch, PreparePiSandbox, prepare_pi_sandbox};
 pub use session::{
-    PI_RPC_CAPABILITIES, PiCommand, PiCommandSource, PiContextUsage, PiModel, PiNativeSession,
-    PiSession, PiSessionError, PiSessionUsage, PiTokenUsage,
+    PI_INPUT_HISTORY_LIMIT, PI_RPC_CAPABILITIES, PiBranchOutcome, PiCommand, PiCommandSource,
+    PiContextUsage, PiImage, PiModel, PiNativeSession, PiSession, PiSessionError, PiSessionUsage,
+    PiTokenUsage,
 };
 
 use semver::Version;

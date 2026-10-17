@@ -7,6 +7,8 @@
 - Text across the app is now at least 12px with consistent spacing and corner
   rounding. Code uses IBM Plex Mono, and IBM Plex Sans is the default interface
   font.
+- Pau now shows a dialog explaining why it could not start, such as a
+  database from a newer version, instead of quitting silently.
 - Workspaces now have shell terminals in tabs, with copy and paste, resizing,
   exit status, and the active theme's colors.
 - The session view now shows live Pi sessions. Start a session in a workspace,

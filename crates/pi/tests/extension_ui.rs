@@ -33,7 +33,7 @@ async fn exercises_the_fixture_extension_through_pi_rpc() {
     let prompt_session = Arc::clone(&session);
     let prompt = tokio::spawn(async move {
         prompt_session
-            .prompt("/pau-extension-ui-fixture", None)
+            .prompt("/pau-extension-ui-fixture", Vec::new(), None)
             .await
     });
 

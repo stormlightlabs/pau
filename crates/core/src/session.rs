@@ -54,6 +54,10 @@ pub struct SessionCapabilities {
     /// Whether the session can compact its context and toggle automatic
     /// compaction.
     pub compaction: bool,
+    /// Whether the session exposes its entry tree and can branch from it.
+    pub branching: bool,
+    /// Whether the session can retry a failed turn and manage automatic retry.
+    pub retry: bool,
     /// Whether the session can stop its process.
     pub stop: bool,
 }
@@ -149,6 +153,19 @@ pub enum SessionQueue {
     FollowUp,
 }
 
+/// An image attached to a prompt, steer, or follow-up message.
+///
+/// The server accepts PNG, JPEG, GIF, and WebP images of up to 5 MiB each and
+/// 10 MiB per request, measured after decoding, and only for a model that
+/// accepts image input.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionImage {
+    /// The image's MIME type, such as `image/png`.
+    pub mime_type: String,
+    /// The image bytes, base64-encoded.
+    pub data: String,
+}
+
 /// Sends a prompt to a session.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct SessionPromptRequest {
@@ -157,6 +174,8 @@ pub struct SessionPromptRequest {
     /// Queue for a prompt sent during an active run. A running session rejects
     /// a prompt without one.
     pub queue: Option<SessionQueue>,
+    /// Images sent with the prompt.
+    pub images: Option<Vec<SessionImage>>,
 }
 
 /// Sends a steer or follow-up message during an active run.
@@ -164,6 +183,8 @@ pub struct SessionPromptRequest {
 pub struct SessionMessageRequest {
     /// Message text.
     pub message: String,
+    /// Images sent with the message.
+    pub images: Option<Vec<SessionImage>>,
 }
 
 /// A reasoning effort level for model turns.
@@ -273,6 +294,13 @@ pub struct SessionAutoCompactionRequest {
     pub enabled: bool,
 }
 
+/// Turns automatic retry of transient provider errors on or off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionAutoRetryRequest {
+    /// Whether the session retries overloaded, rate-limited, and 5xx failures.
+    pub enabled: bool,
+}
+
 /// Messages waiting in a session's steer and follow-up queues.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct SessionMessageQueue {
@@ -280,6 +308,50 @@ pub struct SessionMessageQueue {
     pub steering: Vec<String>,
     /// Messages delivered after all current work finishes.
     pub follow_up: Vec<String>,
+}
+
+/// One entry in a session's tree.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionTreeEntry {
+    /// The agent's entry identifier, usable as a branch point.
+    pub id: String,
+    /// The entry this one continues, or none for a root.
+    pub parent_id: Option<String>,
+    /// The agent's entry type, such as `message` or `compaction`.
+    pub kind: String,
+    /// The message role, for message entries.
+    pub role: Option<String>,
+    /// The start of the entry's text, empty when it has none.
+    pub preview: String,
+    /// The entry's ISO 8601 time, when recorded.
+    pub timestamp: Option<String>,
+}
+
+/// A session's entry tree in the order the agent recorded it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionTree {
+    /// Entries, oldest first. Follow `parent_id` to rebuild branches.
+    pub entries: Vec<SessionTreeEntry>,
+    /// The entry the session currently continues from.
+    pub leaf_id: Option<String>,
+    /// Whether older entries were left out to bound the response.
+    pub truncated: bool,
+}
+
+/// Continues a session from an earlier user message in a new branch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionBranchRequest {
+    /// The user message entry to branch from.
+    pub entry_id: String,
+}
+
+/// The outcome of a branch request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionBranchResult {
+    /// The text of the message branched from, for the prompt editor.
+    pub text: Option<String>,
+    /// Whether an extension cancelled the branch.
+    pub cancelled: bool,
 }
 
 /// A model a session can use.

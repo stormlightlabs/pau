@@ -391,6 +391,25 @@ impl PiSession {
         })
     }
 
+    /// Reads the conversation Pi continues, oldest message first.
+    ///
+    /// The messages come from `get_messages` in Pi's native JSON. They cover
+    /// the current branch only, and after a compaction they start with Pi's
+    /// `compactionSummary` message instead of the older turns.
+    pub async fn messages(&self) -> Result<Vec<Value>, PiSessionError> {
+        let control = AgentControl::Prompt;
+        self.require_capability(control)?;
+        let mut response = self
+            .command(control, json!({"type": "get_messages"}))
+            .await?;
+        match response.pointer_mut("/data/messages").map(Value::take) {
+            Some(Value::Array(messages)) => Ok(messages),
+            _ => Err(PiSessionError::NativeSession(
+                "Pi did not report session messages".to_owned(),
+            )),
+        }
+    }
+
     /// Lists the prompts the user sent, newest first, as Pi's editor recalls them.
     ///
     /// Pi keeps recall history only in its terminal editor and rebuilds it from

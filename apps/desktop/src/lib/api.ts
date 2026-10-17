@@ -23,6 +23,7 @@ import type {
 	SessionMessageQueue,
 	SessionImage,
 	SessionMessageRequest,
+	SessionMessages,
 	SessionPromptRequest,
 	SessionQueue,
 	SessionTree,
@@ -446,6 +447,21 @@ export function cancelSessionRetry(search: string, sessionId: string, fetcher: t
 /** Stops a session's process. Its final state arrives on the event stream. */
 export function stopSession(search: string, sessionId: string, fetcher: typeof fetch = fetch): Promise<void> {
 	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}`, 'DELETE', undefined, fetcher);
+}
+
+/**
+ * Reads the conversation a live session continues, with the event sequence
+ * after which its `session_output` events are newer than the messages.
+ */
+export async function getSessionMessages(
+	search: string,
+	sessionId: string,
+	fetcher: typeof fetch = fetch
+): Promise<SessionMessages> {
+	const response = await fetcher(sessionUrl(search, `/${encodeURIComponent(sessionId)}/messages`), {
+		headers: authorization(resolveApiToken(search))
+	});
+	return responseJson<SessionMessages>(response);
 }
 
 /** Reads the entry tree of a live session's persisted file, newest entries kept. */

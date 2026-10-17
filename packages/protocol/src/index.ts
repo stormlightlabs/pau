@@ -54,6 +54,7 @@ export type {
 	SessionContextUsage,
 	SessionExtensionUi,
 	SessionMessageQueue,
+	SessionMessages,
 	SessionImage,
 	SessionMessageRequest,
 	SessionModel,

@@ -21,12 +21,16 @@ const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 
 /// A Pi RPC stand-in. It records every command in the workspace, answers the
 /// controls the session API sends, and exits with status 3 without answering
-/// a prompt whose text is `exit`.
+/// a prompt whose text is `exit`. A resumed session answers `get_messages`
+/// with the messages of its file, after a summary once it has compacted.
 const FAKE_PI: &str = r#"#!/bin/sh
 if [ "$1" = '--version' ]; then echo 1.0.0; exit 0; fi
 [ "$1" = '--mode' ] && [ "$2" = 'rpc' ] || exit 64
 printf '%s\n' "$*" > "$PWD/args.txt"
 current=model-one
+session_file=
+[ "$3" = '--session' ] && session_file=$4
+summary=
 level=medium
 native=native
 while IFS= read -r command; do
@@ -108,12 +112,18 @@ while IFS= read -r command; do
             printf '{"type":"compaction_end","reason":"manual","aborted":false,"willRetry":false,"errorMessage":"Nothing to compact"}\n'
             ;;
         *'"type":"compact"'*)
+            summary='{"role":"compactionSummary","summary":"Short summary","tokensBefore":9000,"timestamp":1},'
             printf '{"type":"compaction_start","reason":"manual"}\n'
             printf '{"id":"%s","type":"response","command":"compact","success":true,"data":{"summary":"Short summary","firstKeptEntryId":"entry-2","tokensBefore":9000}}\n' "$id"
             printf '{"type":"compaction_end","reason":"manual","aborted":false,"willRetry":false,"result":{"summary":"Short summary","firstKeptEntryId":"entry-2","tokensBefore":9000}}\n'
             ;;
         *'"type":"get_messages"'*)
-            printf '{"id":"%s","type":"response","command":"get_messages","success":true,"data":{"messages":[{"role":"user","content":"failing prompt"},{"role":"assistant","content":[],"stopReason":"error","errorMessage":"529 overloaded"}]}}\n' "$id"
+            if [ -n "$session_file" ]; then
+                messages=$(sed -n 's/^{"type":"message","message":\(.*\)}$/\1/p' "$session_file" | paste -sd , -)
+            else
+                messages='{"role":"user","content":"failing prompt"},{"role":"assistant","content":[],"stopReason":"error","errorMessage":"529 overloaded"}'
+            fi
+            printf '{"id":"%s","type":"response","command":"get_messages","success":true,"data":{"messages":[%s%s]}}\n' "$id" "$summary" "$messages"
             ;;
         *'"type":"set_auto_retry"'*)
             printf '{"id":"%s","type":"response","command":"set_auto_retry","success":true}\n' "$id"
@@ -906,6 +916,60 @@ async fn lists_and_resumes_native_sessions() {
             "{id}"
         );
     }
+}
+
+#[tokio::test]
+async fn returns_the_conversation_of_a_resumed_and_compacted_session() {
+    let fixture = Fixture::new(None).await;
+    let user = json!({"role": "user", "content": "Fix the login bug", "timestamp": 10});
+    let reply = json!({"role": "assistant", "content": [{"type": "text", "text": "Done"}], "timestamp": 11});
+    let file = [
+        native_header(&fixture, "resumed", None),
+        // The fake Pi reads messages from lines that start with the type.
+        format!(r#"{{"type":"message","message":{user}}}"#),
+        format!(r#"{{"type":"message","message":{reply}}}"#),
+    ]
+    .join("\n");
+    write_native_session(&fixture, "2026_resumed.jsonl", &file);
+    let (status, started) = fixture
+        .call(
+            "POST",
+            "/api/sessions",
+            Some(json!({"workspace_id": fixture.workspace_id, "native_session_id": "resumed"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let base = format!("/api/sessions/{}", started["id"].as_str().unwrap());
+
+    let sequence = fixture.events.last_sequence();
+    let (status, history) = fixture.call("GET", &format!("{base}/messages"), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        history,
+        json!({"sequence": sequence, "messages": [user, reply], "truncated": false})
+    );
+
+    let mut stream = fixture.events.subscribe(None);
+    let (status, _) = fixture
+        .call("POST", &format!("{base}/compact"), Some(json!({})))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    next_event(&mut stream, output("compaction_end")).await;
+    let sequence = fixture.events.last_sequence();
+    let (_, history) = fixture.call("GET", &format!("{base}/messages"), None).await;
+    assert_eq!(history["sequence"], sequence);
+    let messages = history["messages"].as_array().unwrap();
+    assert_eq!(messages[0]["role"], "compactionSummary");
+    assert_eq!(messages[0]["summary"], "Short summary");
+    assert_eq!(messages[1..], [user, reply]);
+
+    let (status, error) = fixture
+        .call("GET", "/api/sessions/missing/messages", None)
+        .await;
+    assert_eq!(
+        (status, error["code"].as_str()),
+        (StatusCode::NOT_FOUND, Some("not_found"))
+    );
 }
 
 fn session_field(field: &'static str, value: &'static str) -> impl FnMut(&ServerEvent) -> bool {

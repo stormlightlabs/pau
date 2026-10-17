@@ -288,6 +288,15 @@ impl EventHub {
         event
     }
 
+    /// The sequence of the last published event, or 0 before the first.
+    pub fn last_sequence(&self) -> u64 {
+        self.state
+            .lock()
+            .expect("event hub lock poisoned")
+            .next_sequence
+            .saturating_sub(1)
+    }
+
     fn subscribe(&self, after: Option<u64>) -> EventSubscription {
         // Subscribe before capturing the boundary. A publish racing with this
         // method is then present in either the initial batch or the live queue.
@@ -499,6 +508,10 @@ fn router_with_services(
         .route(
             "/api/sessions/{session_id}/queue",
             get(sessions::get_session_queue).delete(sessions::clear_session_queue),
+        )
+        .route(
+            "/api/sessions/{session_id}/messages",
+            get(sessions::get_session_messages),
         )
         .route(
             "/api/sessions/{session_id}/history",

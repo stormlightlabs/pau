@@ -665,20 +665,18 @@ Verification:
 
 - Component-test shell context and its unsupported state.
 
-### 2.166 Live transcript history
+### 2.167 Transcript history details
 
-Status: in progress
+Status: planned
 Blocked by: none
 
-Load a live Pi session's existing conversation from Pi when the session opens,
-resumes, branches, or reconnects, then apply streamed events on top.
+Show compaction summaries loaded from Pi's history as compaction markers, and
+show images attached to user prompts in the transcript.
 
 Verification:
 
-- Cover the transcript route against the fake Pi executable, including a
-  resumed session and a session after compaction.
-- Component-test a resumed session that shows its earlier turns, a page reload
-  that keeps them, and a branch that drops the turns after the fork point.
+- Component-test a history with a compaction summary and a user prompt with an
+  image, both from history and from live events.
 
 ### 2.80 Pi transcript search API
 
@@ -728,7 +726,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.166, 2.156
+Blocked by: 2.156
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

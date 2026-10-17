@@ -25,6 +25,7 @@ import {
 	getSessionExtensionUi,
 	getSessionTree,
 	getSessionHistory,
+	getSessionMessages,
 	getSessionQueue,
 	getSessionUsage,
 	interruptSession,
@@ -57,8 +58,8 @@ import {
 } from './extension-ui';
 import { EventStreamClient, type EventSocketFactory, type EventStreamState } from './event-stream';
 import {
-	branchPiTranscript,
 	emptyPiTranscript,
+	piTranscriptFromMessages,
 	queueFromEvent,
 	reducePiEvent,
 	type PiTranscript
@@ -159,25 +160,6 @@ function wireResponse(response: ExtensionUiResponse) {
 	return { cancelled: true };
 }
 
-/**
- * Counts the user messages from `entryId` to the tree's leaf, inclusive.
- * Returns 0 when the entry is not on the current path, so nothing is trimmed.
- */
-function userMessagesFrom(tree: SessionTreeSnapshot | undefined, entryId: string): number {
-	if (!tree) return 0;
-	const byId = new Map(tree.entries.map((entry) => [entry.id, entry]));
-	let count = 0;
-	let id = tree.leafId;
-	// The step limit stops a malformed file with a parent cycle from looping forever.
-	for (let step = 0; id !== undefined && step < tree.entries.length; step += 1, id = byId.get(id)?.parentId) {
-		const entry = byId.get(id);
-		if (!entry) return 0;
-		if (entry.role === 'user') count += 1;
-		if (id === entryId) return count;
-	}
-	return 0;
-}
-
 function failureMessage(session: AgentSession): string | undefined {
 	if (session.status !== 'failed') return undefined;
 	const exit = session.exit_code === null ? 'Pi exited unexpectedly.' : `Pi exited with code ${session.exit_code}.`;
@@ -191,6 +173,14 @@ function failureMessage(session: AgentSession): string | undefined {
  * stream owns session state: `session_changed` replaces a session's summary
  * and `session_output` feeds its transcript. Sessions that exit stay listed
  * with their final status so their transcript remains readable.
+ *
+ * The event stream holds recent output only, and a resumed or branched session
+ * starts with turns that never streamed. The store therefore reads each live
+ * session's messages from the API when it loads, starts, resumes, branches,
+ * or reconnects, and rebuilds the transcript from them. Output that arrives
+ * while a read is in flight waits, and only output newer than the sequence
+ * the read returns is applied on top. A message streaming when the read
+ * started shows once it completes.
  *
  * Extension UI requests are `session_output` events too, but a replayed
  * stream cannot tell which dialogs still wait. The store therefore reads each
@@ -220,8 +210,12 @@ export class LiveSessions {
 	/** Sessions whose extension UI changed during the read in flight and needs another read. */
 	readonly #extensionStale = new SvelteSet<string>();
 	readonly #notificationTimers = new SvelteSet<string>();
-	/** The last tree read for each session, used to trim the transcript after a branch. */
-	readonly #trees = new SvelteMap<string, SessionTreeSnapshot>();
+	/** Transcript output received while the session's message read is in flight. */
+	readonly #historyReplay = new SvelteMap<string, ServerEvent[]>();
+	/** Sessions that need another message read once the one in flight ends. */
+	readonly #historyStale = new SvelteSet<string>();
+	/** The event sequence each session's transcript was loaded at. Older output is already in it. */
+	readonly #historySequence = new Map<string, number>();
 	#loadFailed = $state(false);
 	#socketOpen = $state(false);
 	#connectedOnce = false;
@@ -286,6 +280,7 @@ export class LiveSessions {
 		try {
 			const session = await startSession(this.#options.search, workspaceId, this.#fetcher);
 			this.#sessions[session.id] = session;
+			void this.#readHistory(session.id);
 			return session.id;
 		} catch (cause) {
 			throw new Error(sessionErrorMessage(cause, 'start'), { cause });
@@ -320,6 +315,7 @@ export class LiveSessions {
 		try {
 			const session = await startSession(this.#options.search, workspaceId, this.#fetcher, savedSessionId);
 			this.#sessions[session.id] = session;
+			void this.#readHistory(session.id);
 			return session.id;
 		} catch (cause) {
 			throw new Error(sessionErrorMessage(cause, 'resume'), { cause });
@@ -423,7 +419,6 @@ export class LiveSessions {
 				leafId: tree.leaf_id ?? undefined,
 				truncated: tree.truncated
 			};
-			this.#trees.set(sessionId, snapshot);
 			return snapshot;
 		} catch (cause) {
 			throw new Error(sessionErrorMessage(cause, 'control'), { cause });
@@ -432,8 +427,8 @@ export class LiveSessions {
 
 	/**
 	 * Branches an idle session from an earlier user message. Pi continues
-	 * without that message and the ones after it, so the transcript drops them
-	 * too. The last tree read tells how many user messages that removes.
+	 * without that message and the ones after it, so the transcript reloads
+	 * from the branch Pi now continues.
 	 */
 	async branch(sessionId: string, entryId: string): Promise<SessionBranchOutcome> {
 		let result;
@@ -442,11 +437,7 @@ export class LiveSessions {
 		} catch (cause) {
 			throw new Error(sessionErrorMessage(cause, 'branch'), { cause });
 		}
-		if (!result.cancelled) {
-			const removed = userMessagesFrom(this.#trees.get(sessionId), entryId);
-			const transcript = this.#transcripts[sessionId] ?? emptyPiTranscript;
-			this.#transcripts[sessionId] = branchPiTranscript(transcript, removed);
-		}
+		if (!result.cancelled) await this.#readHistory(sessionId);
 		return { text: result.text ?? undefined, cancelled: result.cancelled };
 	}
 
@@ -550,10 +541,11 @@ export class LiveSessions {
 		}
 	}
 
-	/** Reads the extension UI and message queue of every live session. */
+	/** Reads the messages, extension UI, and message queue of every live session. */
 	#refresh(): void {
 		for (const session of Object.values(this.#sessions)) {
 			if (!isLive(session)) continue;
+			void this.#readHistory(session.id);
 			void this.#readExtensionUi(session.id);
 			void this.#readQueue(session.id);
 			void this.#readUsage(session.id);
@@ -570,6 +562,37 @@ export class LiveSessions {
 		} catch {
 			// The session exited or the backend went away. The next reconnect reads again.
 		}
+	}
+
+	/**
+	 * Rebuilds a session's transcript from its messages, then applies the output
+	 * that arrived during the read and is newer than it. When the read fails,
+	 * for example because the session exited, the held output is applied to
+	 * the transcript the store already has.
+	 */
+	async #readHistory(sessionId: string): Promise<void> {
+		if (this.#historyReplay.has(sessionId)) {
+			this.#historyStale.add(sessionId);
+			return;
+		}
+		this.#historyReplay.set(sessionId, []);
+		let transcript: PiTranscript | undefined;
+		let after = this.#historySequence.get(sessionId) ?? 0;
+		try {
+			const history = await getSessionMessages(this.#options.search, sessionId, this.#fetcher);
+			transcript = piTranscriptFromMessages(history.messages);
+			after = history.sequence;
+		} catch {
+			// Keep what streamed. The next reconnect reads again.
+		}
+		transcript ??= this.#transcripts[sessionId] ?? emptyPiTranscript;
+		for (const event of this.#historyReplay.get(sessionId) ?? []) {
+			if (event.sequence > after) transcript = reducePiEvent(transcript, JSON.parse(event.payload));
+		}
+		this.#transcripts[sessionId] = transcript;
+		this.#historySequence.set(sessionId, after);
+		this.#historyReplay.delete(sessionId);
+		if (this.#historyStale.delete(sessionId)) void this.#readHistory(sessionId);
 	}
 
 	/**
@@ -664,6 +687,12 @@ export class LiveSessions {
 				this.#queues[sessionId] = queue;
 				return;
 			}
+			const replay = this.#historyReplay.get(sessionId);
+			if (replay) {
+				replay.push(event);
+				return;
+			}
+			if (event.sequence <= (this.#historySequence.get(sessionId) ?? 0)) return;
 			const transcript = this.#transcripts[sessionId] ?? emptyPiTranscript;
 			this.#transcripts[sessionId] = reducePiEvent(transcript, payload);
 			return;
@@ -673,6 +702,7 @@ export class LiveSessions {
 			const session = JSON.parse(changed.payload) as AgentSession;
 			const known = session.id in this.#sessions;
 			this.#sessions[session.id] = session;
+			if (!known && !this.loading && isLive(session)) void this.#readHistory(session.id);
 			if (!known && isLive(session)) void this.#readUsage(session.id);
 			if (!isLive(session)) this.#updateExtensionUi(session.id, exitedExtensionUi);
 		}

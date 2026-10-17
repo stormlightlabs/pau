@@ -366,6 +366,27 @@ pub struct SessionTree {
     pub truncated: bool,
 }
 
+/// The conversation a live session continues, as the agent reports it.
+///
+/// Messages stay in the agent's native JSON, the same shapes its
+/// `message_end` events carry, just as `session_output` passes native events
+/// through. Clients then project history and live output with one reducer, and
+/// newer agent fields reach them unchanged.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct SessionMessages {
+    /// The last event sequence published before the agent was asked. Clients
+    /// apply only `session_output` events after it on top of `messages`.
+    /// Output published while the agent answered can also appear in
+    /// `messages`, so clients must apply those events idempotently.
+    pub sequence: u64,
+    /// Native messages, oldest first. After a compaction the first message is
+    /// the agent's summary of the older context.
+    #[ts(type = "unknown[]")]
+    pub messages: Vec<serde_json::Value>,
+    /// Whether older messages were left out to bound the response.
+    pub truncated: bool,
+}
+
 /// Continues a session from an earlier user message in a new branch.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct SessionBranchRequest {

@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 
 import {
-	branchPiTranscript,
 	emptyPiTranscript,
+	piTranscriptFromMessages,
 	queueFromEvent,
 	reducePiEvent,
 	type PiTranscript
@@ -23,37 +23,78 @@ function reduce(events: unknown[], state: PiTranscript = emptyPiTranscript): PiT
 	return events.reduce<PiTranscript>(reducePiEvent, state);
 }
 
-test('drops the branched user message and everything after it', () => {
-	const turn = (role: string, text: string) => [
-		{ type: 'message_start', message: { role, content: text } },
-		{ type: 'message_end', message: { role, content: [{ type: 'text', text }] } }
-	];
-	const state = reduce([
-		...turn('user', 'one'),
-		...turn('assistant', 'first answer'),
-		...turn('user', 'two'),
-		...turn('assistant', 'second answer')
-	]);
+const user = { role: 'user', content: 'Read the README', timestamp: 1 };
+const reply = {
+	role: 'assistant',
+	content: [
+		{ type: 'text', text: 'Reading it.' },
+		{ type: 'toolCall', id: 'call-1', name: 'read', arguments: { path: 'README.md' } }
+	],
+	stopReason: 'toolUse',
+	timestamp: 2
+};
+const result = {
+	role: 'toolResult',
+	toolCallId: 'call-1',
+	toolName: 'read',
+	content: [{ type: 'text', text: '# Pau' }],
+	isError: false,
+	timestamp: 3
+};
 
-	expect(branchPiTranscript(state, 1).entries.map((entry) => entry.id)).toEqual(['m0:0', 'm1:0']);
-	expect(branchPiTranscript(state, 1).messages).toBe(4);
-	expect(branchPiTranscript(state, 3).entries).toEqual([]);
-	expect(branchPiTranscript(state, 0)).toBe(state);
+test('builds a transcript from history, with tool outcomes and a compaction summary', () => {
+	const summary = { role: 'compactionSummary', summary: 'Fixed the gutter.', tokensBefore: 9000, timestamp: 0 };
+
+	expect(piTranscriptFromMessages([summary, user, reply, result, { role: 'custom' }]).entries).toEqual([
+		{
+			id: 'compactionSummary-0:0',
+			kind: 'message',
+			role: 'assistant',
+			label: 'Earlier conversation, summarized',
+			body: 'Fixed the gutter.'
+		},
+		{ id: 'user-1:0', kind: 'message', role: 'user', body: 'Read the README' },
+		{ id: 'assistant-2:0', kind: 'message', role: 'assistant', body: 'Reading it.' },
+		{ id: 'tool:call-1', kind: 'tool', name: 'read', detail: 'README.md', result: '# Pau', status: 'complete' }
+	]);
+});
+
+test('applies a replayed message from history once, without partial text', () => {
+	const history = piTranscriptFromMessages([user, reply]);
+	const replayed = reduce(
+		[
+			{ type: 'message_start', message: { ...reply, content: [] } },
+			{ type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'Read' } }
+		],
+		history
+	);
+	expect(replayed.entries).toEqual(history.entries.map((entry) => ({ ...entry })));
+
+	const finished = reduce(
+		[
+			{ type: 'message_end', message: reply },
+			{ type: 'message_start', message: result },
+			{ type: 'message_end', message: result }
+		],
+		replayed
+	);
+	expect(finished.entries.map((entry) => entry.id)).toEqual(['user-1:0', 'assistant-2:0', 'tool:call-1']);
+	expect(finished.entries.at(-1)).toMatchObject({ status: 'complete', result: '# Pau' });
 });
 
 test('shows streamed text before the message completes', () => {
 	const streaming = reduce(fixture.slice(0, 7));
 
 	expect(streaming.entries).toEqual([
-		{ id: 'm0:0', kind: 'message', role: 'assistant', body: 'streamed text' },
-		{ id: 'm0:1', kind: 'thinking', body: 'check', complete: false }
+		{ id: 'assistant-1773651600000:0', kind: 'message', role: 'assistant', body: 'streamed text' },
+		{ id: 'assistant-1773651600000:1', kind: 'thinking', body: 'check', complete: false }
 	]);
 });
 
 test('replaces streamed blocks with the authoritative message and tracks tool output', () => {
 	expect(reduce(fixture).entries).toEqual([
-		{ id: 'm0:0', kind: 'message', role: 'assistant', body: 'authoritative text' },
-		{ id: 'm0:1', kind: 'thinking', body: 'authoritative thought', complete: true },
+		{ id: 'assistant-1773651600000:0', kind: 'message', role: 'assistant', body: 'authoritative text' },
+		{ id: 'assistant-1773651600000:1', kind: 'thinking', body: 'authoritative thought', complete: true },
 		{
 			id: 'tool:call-1',
 			kind: 'tool',

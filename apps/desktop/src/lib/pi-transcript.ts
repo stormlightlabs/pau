@@ -8,18 +8,28 @@ import type {
 } from '@stormlightlabs/pau-ui';
 
 /**
- * Display transcript rebuilt from native Pi events.
+ * Display transcript rebuilt from native Pi messages and events.
  *
- * Entry IDs encode their owner: `m<n>:<contentIndex>` for message blocks and
- * `tool:<toolCallId>` for tool calls, so later events can find the entry they
- * update without a separate index.
+ * Entry IDs encode their owner: `<messageKey>:<contentIndex>` for message
+ * blocks and `tool:<toolCallId>` for tool calls, so later events can find the
+ * entry they update without a separate index. A message key comes from the
+ * message's role and timestamp, which Pi keeps from `message_start` through
+ * `get_messages`, so a message that arrives both in loaded history and as a
+ * live event lands on the same entries. Messages without a timestamp fall
+ * back to a counter.
  */
 export type PiTranscript = {
 	entries: TranscriptEntry[];
 	/** Key of the message that is receiving streamed updates. */
 	active?: string;
-	/** Number of messages started so far, used to key the next one. */
+	/** Number of messages started so far, used to key untimed messages. */
 	messages: number;
+	/**
+	 * Keys of messages loaded complete from history. Their replayed start and
+	 * streamed updates are skipped, so the finished text never flickers back
+	 * to a partial one.
+	 */
+	loaded?: ReadonlySet<string>;
 	/** Automatic retry that Pi has scheduled and not yet started or abandoned. */
 	autoRetry?: AutoRetry;
 	/** Compaction that is running, or the last one that failed or was aborted. */
@@ -107,6 +117,23 @@ function updateTool(
 	return upsert(entries, update(existing ?? { id, kind: 'tool', name: fallbackName, detail: '', status: 'running' }));
 }
 
+function messageKey(message: JsonObject): string | undefined {
+	const timestamp = numberField(message.timestamp);
+	return typeof message.role === 'string' && timestamp !== undefined ? `${message.role}-${timestamp}` : undefined;
+}
+
+/**
+ * Labels for Pi's context summaries. A compaction summary stands in for the
+ * turns it replaced, and a branch summary for the branch left behind.
+ *
+ * Both render as labelled messages until the transcript has a dedicated
+ * compaction marker.
+ */
+const SUMMARY_LABELS: Record<string, string> = {
+	compactionSummary: 'Earlier conversation, summarized',
+	branchSummary: 'Previous branch, summarized'
+};
+
 /** Projects one authoritative or starting message into transcript entries. */
 function projectMessage(
 	key: string,
@@ -115,6 +142,11 @@ function projectMessage(
 	complete: boolean
 ): TranscriptEntry[] {
 	const role = message.role;
+	const summaryLabel = typeof role === 'string' ? SUMMARY_LABELS[role] : undefined;
+	if (summaryLabel) {
+		const body = text(message.summary);
+		return body ? [{ id: `${key}:0`, kind: 'message', role: 'assistant', label: summaryLabel, body }] : [];
+	}
 	if (role === 'user') {
 		const content = message.content;
 		const body =
@@ -175,7 +207,7 @@ function replaceMessage(entries: TranscriptEntry[], key: string, projected: Tran
 function applyMessageUpdate(state: PiTranscript, update: JsonObject): PiTranscript {
 	const key = state.active;
 	const index = update.contentIndex;
-	if (key === undefined || typeof index !== 'number') return state;
+	if (key === undefined || typeof index !== 'number' || state.loaded?.has(key)) return state;
 	const id = `${key}:${index}`;
 	const existing = state.entries.find((entry) => entry.id === id);
 	const body = existing && (existing.kind === 'message' || existing.kind === 'thinking') ? existing.body : '';
@@ -237,6 +269,44 @@ function applyMessageUpdate(state: PiTranscript, update: JsonObject): PiTranscri
 }
 
 /**
+ * Applies a complete message. A tool result also settles its tool call, so
+ * history that holds no tool execution events still shows each outcome.
+ */
+function endMessage(state: PiTranscript, message: JsonObject): PiTranscript {
+	const key = state.active ?? messageKey(message) ?? `m${state.messages}`;
+	const messages = state.active === undefined ? state.messages + 1 : state.messages;
+	const callId = text(message.toolCallId);
+	const entries =
+		message.role === 'toolResult' && callId
+			? updateTool(
+					state.entries,
+					callId,
+					(tool) => ({
+						...tool,
+						result: toolOutput(message) ?? tool.result,
+						status: message.isError === true ? 'failed' : 'complete'
+					}),
+					text(message.toolName) ?? 'tool'
+				)
+			: replaceMessage(state.entries, key, projectMessage(key, message, state.entries, true));
+	return { ...state, active: undefined, entries, messages };
+}
+
+/**
+ * Builds a transcript from the native messages Pi reports for a session, the
+ * same shapes `message_end` events carry. Live events applied afterwards with
+ * {@link reducePiEvent} update it in place.
+ */
+export function piTranscriptFromMessages(messages: unknown[]): PiTranscript {
+	const transcript = messages.reduce<PiTranscript>(
+		(state, message) => (isObject(message) ? endMessage(state, message) : state),
+		emptyPiTranscript
+	);
+	const loaded = new Set(messages.flatMap((message) => (isObject(message) ? (messageKey(message) ?? []) : [])));
+	return { ...transcript, loaded };
+}
+
+/**
  * Applies one native Pi event to a display transcript.
  *
  * Streamed deltas build provisional entries. `message_end` replaces them with
@@ -249,20 +319,16 @@ export function reducePiEvent(state: PiTranscript, event: unknown): PiTranscript
 	switch (event.type) {
 		case 'message_start': {
 			if (!isObject(event.message)) return state;
-			const key = `m${state.messages}`;
+			const key = messageKey(event.message) ?? `m${state.messages}`;
 			const next = { ...state, active: key, messages: state.messages + 1 };
+			if (state.loaded?.has(key)) return next;
 			const projected = projectMessage(key, event.message, state.entries, false);
 			return { ...next, entries: replaceMessage(state.entries, key, projected) };
 		}
 		case 'message_update':
 			return isObject(event.assistantMessageEvent) ? applyMessageUpdate(state, event.assistantMessageEvent) : state;
-		case 'message_end': {
-			if (!isObject(event.message)) return state;
-			const key = state.active ?? `m${state.messages}`;
-			const messages = state.active === undefined ? state.messages + 1 : state.messages;
-			const projected = projectMessage(key, event.message, state.entries, true);
-			return { ...state, active: undefined, entries: replaceMessage(state.entries, key, projected), messages };
-		}
+		case 'message_end':
+			return isObject(event.message) ? endMessage(state, event.message) : state;
 		case 'tool_execution_start':
 		case 'tool_execution_update':
 		case 'tool_execution_end': {
@@ -308,29 +374,6 @@ export function reducePiEvent(state: PiTranscript, event: unknown): PiTranscript
 		default:
 			return state;
 	}
-}
-
-/**
- * Drops the newest `count` user messages and everything after them, which is
- * what remains on screen after Pi branches from the oldest of those messages.
- *
- * The transcript holds only the tail of the session that Pau saw stream, so
- * counting from the end works even when older messages are missing. When the
- * transcript holds fewer user messages than `count`, every entry is newer
- * than the branch point and the transcript empties. The message counter keeps
- * counting so later entry keys stay unique.
- */
-export function branchPiTranscript(state: PiTranscript, count: number): PiTranscript {
-	if (count <= 0) return state;
-	const owner = (entry: TranscriptEntry) => entry.id.split(':')[0];
-	const userMessages = [
-		...new Set(
-			state.entries.flatMap((entry) => (entry.kind === 'message' && entry.role === 'user' ? [owner(entry)] : []))
-		)
-	];
-	const first = userMessages.at(-count);
-	const cut = first === undefined ? 0 : state.entries.findIndex((entry) => owner(entry) === first);
-	return { ...state, entries: state.entries.slice(0, cut) };
 }
 
 /**

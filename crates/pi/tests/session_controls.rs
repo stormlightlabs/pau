@@ -367,6 +367,17 @@ async fn recalls_user_prompts_newest_first() {
 }
 
 #[tokio::test]
+async fn reads_the_conversation_as_native_messages() {
+    let fixture = FakePi::new(CONTROL_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+    let messages = session.messages().await.unwrap();
+    session.stop().await.unwrap();
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[1]["errorMessage"], "529 overloaded");
+    assert_command(&fixture.commands()[0], "get_messages");
+}
+
+#[tokio::test]
 async fn sends_extension_ui_responses_without_command_ids() {
     let fixture = FakePi::new(CONTROL_FIXTURE);
     let session = PiSession::start(fixture.options()).unwrap();

@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Resumed, branched, and reloaded sessions show their full conversation from
+  Pi, including a summary of compacted turns.
 - Attach images to a prompt by pasting, dragging them onto the composer, or
   using the Attach image button.
 - The session header shows how much of the model's context window a session

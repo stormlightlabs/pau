@@ -1109,6 +1109,24 @@ leaf_id: string | null,
  */
 truncated: boolean, };
 
+export type SessionMessages = {
+/**
+ * The last event sequence published before the agent was asked. Clients
+ * apply only `session_output` events after it on top of `messages`.
+ * Output published while the agent answered can also appear in
+ * `messages`, so clients must apply those events idempotently.
+ */
+sequence: number,
+/**
+ * Native messages, oldest first. After a compaction the first message is
+ * the agent's summary of the older context.
+ */
+messages: unknown[],
+/**
+ * Whether older messages were left out to bound the response.
+ */
+truncated: boolean, };
+
 export type SessionBranchRequest = {
 /**
  * The user message entry to branch from.

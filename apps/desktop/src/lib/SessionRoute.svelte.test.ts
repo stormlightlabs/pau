@@ -86,12 +86,11 @@ async function startFromRail(): Promise<void> {
 }
 
 let sequence = 0;
-function output(payload: unknown): { type: 'event'; event: ServerEvent } {
-	sequence += 1;
+function output(payload: unknown, at = (sequence += 1)): { type: 'event'; event: ServerEvent } {
 	return {
 		type: 'event',
 		event: {
-			sequence,
+			sequence: at,
 			timestamp: '2026-04-01T12:00:01Z',
 			workspace_id: 'pau',
 			session_id: 'session-1',
@@ -499,6 +498,46 @@ test('resumes a saved session from the picker and selects it', async () => {
 	expect(changes).toEqual(['session-1']);
 });
 
+/** A two-turn conversation as Pi's `get_messages` reports it. */
+const earlierTurns = [
+	{ role: 'user', content: 'Fix the gutter', timestamp: 1 },
+	{ role: 'assistant', content: [{ type: 'text', text: 'Gutter fixed.' }], timestamp: 2 }
+];
+
+test('shows the earlier turns of a resumed session', async () => {
+	const { props } = setup({
+		'GET /api/workspaces/pau/pi-sessions': () => json(savedList),
+		'POST /api/sessions': () => json(idleSession, 201),
+		'GET /api/sessions/session-1/messages': () => json({ sequence: 0, messages: earlierTurns, truncated: false })
+	});
+	await render(SessionRoute, props);
+
+	await openSavedSessions();
+	await userEvent.click(page.getByRole('button', { name: 'Resume Fix the gutter' }));
+
+	await expect.element(page.getByRole('heading', { name: 'Fix the gutter' })).toBeVisible();
+	await expect.element(page.getByText('Gutter fixed.')).toBeVisible();
+});
+
+test('reloads earlier turns and applies only newer output on top', async () => {
+	const { props, sockets } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/sessions/session-1/messages': () => json({ sequence: 2, messages: earlierTurns, truncated: false })
+	});
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+	await expect.element(page.getByText('Gutter fixed.')).toBeVisible();
+	sockets[0]?.open();
+
+	// The first event repeats a message the history already holds.
+	sockets[0]?.receive(output({ type: 'message_end', message: earlierTurns[1] }, 2));
+	sockets[0]?.receive(output({ type: 'message_end', message: { role: 'user', content: 'Add a test.' } }, 3));
+	sockets[0]?.receive(output({ type: 'message_end', message: { ...earlierTurns[1], timestamp: 4 } }, 4));
+
+	const transcript = page.getByLabelText('Transcript');
+	await expect.element(transcript.getByText('Add a test.')).toBeVisible();
+	await expect.poll(() => transcript.getByText('Gutter fixed.').all()).toHaveLength(2);
+});
+
 test('selects the live session that already runs a saved session instead of resuming it', async () => {
 	const start = vi.fn(() => json(idleSession, 201));
 	const changes: string[] = [];
@@ -567,9 +606,18 @@ async function openTree(routes: Record<string, Route>): Promise<void> {
 	await userEvent.click(page.getByRole('tree').getByText('Add a test.'));
 }
 
-test('branches from a user message, trims the transcript, and refills the composer', async () => {
-	const branch = vi.fn(() => json({ text: 'Add a test.', cancelled: false }));
-	await openTree({ 'POST /api/sessions/session-1/branch': branch });
+test('branches from a user message, reloads the transcript, and refills the composer', async () => {
+	let branched = false;
+	const branch = vi.fn(() => {
+		branched = true;
+		return json({ text: 'Add a test.', cancelled: false });
+	});
+	await openTree({
+		'POST /api/sessions/session-1/branch': branch,
+		// Before the branch, the transcript comes from streamed output.
+		'GET /api/sessions/session-1/messages': () =>
+			branched ? json({ sequence: 99, messages: earlierTurns, truncated: false }) : json({ code: 'not_found' }, 404)
+	});
 
 	await userEvent.click(page.getByRole('button', { name: 'Branch from here' }));
 

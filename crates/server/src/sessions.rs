@@ -30,6 +30,19 @@
 //! `session_output` event with the request `id` and a `reason`, so live clients
 //! can close it without refetching. Notifications are transient by nature and
 //! stay output-only.
+//!
+//! # Conversation history
+//!
+//! The event buffer holds recent output only, and a resumed or branched
+//! session starts with turns that never streamed. `GET
+//! /api/sessions/{id}/messages` therefore returns Pi's own `get_messages`
+//! answer for the current branch, passed through as native JSON like
+//! `session_output`, with the last event sequence published before Pi was
+//! asked. A client builds its transcript from the messages and then applies
+//! only `session_output` events after that sequence. Pi can stream a message
+//! while it answers, so that message may arrive in both; clients key messages
+//! by their native identity to apply it once. At most
+//! [`MAX_SESSION_MESSAGES`] of the newest messages return.
 
 use std::{
     collections::HashMap,
@@ -54,10 +67,10 @@ use pau_core::{
         SessionAutoCompactionRequest, SessionAutoRetryRequest, SessionBranchRequest,
         SessionBranchResult, SessionCapabilities, SessionCloneResult, SessionCommand,
         SessionCommandSource, SessionCompactRequest, SessionCompactionResult, SessionContextUsage,
-        SessionExtensionUi, SessionImage, SessionMessageQueue, SessionMessageRequest, SessionModel,
-        SessionModelSelection, SessionPromptRequest, SessionQueue, SessionRenameRequest,
-        SessionStatus, SessionThinkingLevel, SessionThinkingLevelRequest, SessionTokenUsage,
-        SessionTree, SessionTreeEntry, SessionUsage, StartSessionRequest,
+        SessionExtensionUi, SessionImage, SessionMessageQueue, SessionMessageRequest,
+        SessionMessages, SessionModel, SessionModelSelection, SessionPromptRequest, SessionQueue,
+        SessionRenameRequest, SessionStatus, SessionThinkingLevel, SessionThinkingLevelRequest,
+        SessionTokenUsage, SessionTree, SessionTreeEntry, SessionUsage, StartSessionRequest,
     },
 };
 use pau_pi::{
@@ -72,6 +85,10 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::sync::broadcast;
 
 use crate::{ApiError, ApiState, EventHub, diagnostic_timestamp, workspace_service};
+
+/// Most messages the history route returns. A long session keeps its newest
+/// turns, and the response stays small enough to parse on every reconnect.
+pub(crate) const MAX_SESSION_MESSAGES: usize = 2000;
 
 /// What the API needs to describe a live session beyond the Pi process.
 #[derive(Clone)]
@@ -1071,6 +1088,28 @@ pub(crate) async fn set_session_auto_compaction(
     let (_, session) = session_api(&state)?.live(&session_id).await?;
     session.set_auto_compaction(request.enabled).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Returns the conversation Pi continues, newest [`MAX_SESSION_MESSAGES`] kept.
+///
+/// The sequence is read before Pi is asked, so no output after it is missing
+/// from the response or from the events after it. Output that Pi produced
+/// while answering can appear in both. See the module documentation.
+pub(crate) async fn get_session_messages(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+) -> Result<Json<SessionMessages>, ApiError> {
+    let api = session_api(&state)?;
+    let (_, session) = api.live(&session_id).await?;
+    let sequence = api.events.last_sequence();
+    let mut messages = session.messages().await?;
+    let excess = messages.len().saturating_sub(MAX_SESSION_MESSAGES);
+    messages.drain(..excess);
+    Ok(Json(SessionMessages {
+        sequence,
+        messages,
+        truncated: excess > 0,
+    }))
 }
 
 /// Sets the session's display name and publishes the updated session.

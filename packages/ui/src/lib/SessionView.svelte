@@ -11,6 +11,7 @@
 	import ExtensionUi from './ExtensionUi.svelte';
 	import Icon from './Icon.svelte';
 	import ModelPicker from './ModelPicker.svelte';
+	import ThinkingLevelPicker from './ThinkingLevelPicker.svelte';
 	import SessionPicker from './SessionPicker.svelte';
 	import SessionResourceSummary from './SessionResourceSummary.svelte';
 	import type { ProcessResourceSnapshot } from './types/resource-monitoring';
@@ -18,6 +19,7 @@
 		ExtensionUiResponse,
 		ExtensionUiState,
 		ModelOption,
+		ThinkingLevel,
 		PromptQueue,
 		SandboxDenial,
 		SavedSessionList,
@@ -65,6 +67,11 @@
 		onLoadModels?: (sessionId: string) => Promise<ModelOption[]>;
 		/** Switches a session's model. A rejected promise shows its message in the picker. */
 		onSelectModel?: (sessionId: string, model: ModelOption) => void | Promise<void>;
+		/**
+		 * Sets a session's thinking level. With the model picker, the session header
+		 * offers a level control. A rejected promise shows its message beside it.
+		 */
+		onSelectThinkingLevel?: (sessionId: string, level: ThinkingLevel) => void | Promise<void>;
 		resourceSnapshot?: ProcessResourceSnapshot;
 		onExtensionUiResponse?: (sessionId: string, response: ExtensionUiResponse) => void | Promise<void>;
 		onExtensionUiTimeout?: (sessionId: string, requestId: string) => void;
@@ -88,11 +95,15 @@
 		onResumeSession,
 		onLoadModels,
 		onSelectModel,
+		onSelectThinkingLevel,
 		resourceSnapshot,
 		onExtensionUiResponse = () => {},
 		onExtensionUiTimeout = () => {},
 		onOpenPiTerminal
 	}: Props = $props();
+
+	/** Whether the active session's current model reasons, as last reported by the model picker. */
+	let currentModelReasoning = $state<boolean>();
 
 	const emptyExtensionUi: ExtensionUiState = { notifications: [], statuses: [], widgets: [] };
 
@@ -204,6 +215,14 @@
 		if (offline) return 'Pau is reconnecting to the backend. You can switch models once it reconnects.';
 		if (session.status === 'running') return 'Wait for this run to finish before switching models.';
 		if (session.status !== 'idle') return 'This session cannot switch models right now.';
+		return undefined;
+	}
+
+	/** Explains why the thinking level is read-only, or returns `undefined` when it accepts a change. */
+	function thinkingUnavailableReason(session: SessionViewModel, offline: boolean): string | undefined {
+		if (offline) return 'Pau is reconnecting to the backend. You can change the thinking level once it reconnects.';
+		if (session.status === 'running') return 'Wait for this run to finish before changing the thinking level.';
+		if (session.status !== 'idle') return 'This session cannot change its thinking level right now.';
 		return undefined;
 	}
 
@@ -516,7 +535,16 @@
 								onSelect={(model) => onSelectModel(activeSession.id, model)}
 								supported={activeSession.capabilities.modelSelection ?? false}
 								unavailableReason={modelUnavailableReason(activeSession, disconnected)}
-								fallbackLabel={activeSession.model} />
+								fallbackLabel={activeSession.model}
+								onLoaded={(models) => (currentModelReasoning = models.find((model) => model.current)?.reasoning)} />
+							{#if onSelectThinkingLevel}
+								<ThinkingLevelPicker
+									level={activeSession.thinkingLevel}
+									onSelect={(level) => onSelectThinkingLevel(activeSession.id, level)}
+									supported={activeSession.capabilities.thinkingLevel ?? false}
+									reasoning={currentModelReasoning}
+									unavailableReason={thinkingUnavailableReason(activeSession, disconnected)} />
+							{/if}
 						{/key}
 					{/if}
 					<div class={`session-view__status session-view__status--${activeSession.status}`} role="status">

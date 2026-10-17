@@ -10,11 +10,13 @@
 		supported?: boolean;
 		/** Explains why the picker is read-only right now, such as during a run. */
 		unavailableReason?: string;
+		/** Receives each fetched model list, so neighbours can read the current model. */
+		onLoaded?: (models: ModelOption[]) => void;
 		/** Model shown until the list arrives. */
 		fallbackLabel?: string;
 	};
 
-	let { load, onSelect, supported = true, unavailableReason, fallbackLabel }: Props = $props();
+	let { load, onSelect, supported = true, unavailableReason, fallbackLabel, onLoaded }: Props = $props();
 
 	let models = $state<ModelOption[]>();
 	let loadError = $state<string>();
@@ -37,6 +39,7 @@
 		loadError = undefined;
 		try {
 			models = await load();
+			onLoaded?.(models);
 		} catch (cause) {
 			loadError = cause instanceof Error ? cause.message : 'Pau could not list the available models.';
 		}

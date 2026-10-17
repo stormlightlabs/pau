@@ -618,18 +618,21 @@ Verification:
   executable and confirm its tools run inside the sandbox.
 - Confirm a sandbox that cannot start fails the session start with its reason.
 
-### 2.165 Live session native IDs
+### 2.165 Live session native state
 
 Status: planned
 Blocked by: none
 
-Report each live Pi session's native session ID so the session picker selects
-a session that is already running instead of resuming it a second time.
+Report each live Pi session's native session ID and current thinking level, so
+the session picker selects a session that is already running instead of
+resuming it again and the thinking-level control shows Pi's actual level.
 
 Verification:
 
-- Cover the native ID on start, resume, clone, and branch against the fake Pi
-  executable, and component-test selecting an already-live saved session.
+- Cover the native ID and thinking level on start, resume, clone, branch, and
+  after a level change against the fake Pi executable.
+- Component-test selecting an already-live saved session and showing the
+  reported thinking level.
 
 ### 2.150 Session rename and clone controls
 
@@ -714,17 +717,6 @@ Verification:
 - Component-test empty and queued states.
 - Queue a message in a self-hosted Pi session.
 
-### 2.77 Thinking level control
-
-Status: planned
-Blocked by: none
-
-Add a thinking-level control to the session view.
-
-Verification:
-
-- Component-test each thinking level and a model without thinking levels.
-
 ### 2.120 Context usage view
 
 Status: planned
@@ -808,7 +800,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.71, 2.73, 2.75, 2.77, 2.79, 2.114, 2.120, 2.156
+Blocked by: 2.71, 2.165, 2.73, 2.75, 2.79, 2.114, 2.120, 2.156
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

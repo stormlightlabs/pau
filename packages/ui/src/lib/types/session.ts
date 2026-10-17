@@ -12,7 +12,14 @@ export type SessionCapabilities = {
 	retry?: boolean;
 	/** Whether the agent can switch models. Absent means the surface offers no picker. */
 	modelSelection?: boolean;
+	/** Whether the agent can change the thinking level. Absent means the surface offers no control. */
+	thinkingLevel?: boolean;
 };
+
+/** Thinking levels in the order the control lists them. The model may clamp a level it does not support. */
+export const thinkingLevels = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+
+export type ThinkingLevel = (typeof thinkingLevels)[number];
 
 /** One model the agent can switch to. */
 export type ModelOption = {
@@ -113,6 +120,8 @@ export type SessionViewModel = {
 	title: string;
 	agent: string;
 	model?: string;
+	/** Level last selected in this session, when known. */
+	thinkingLevel?: ThinkingLevel;
 	status: SessionStatus;
 	attention?: string;
 	error?: string;

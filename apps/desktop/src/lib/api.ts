@@ -18,6 +18,8 @@ import type {
 	SessionMessageRequest,
 	SessionPromptRequest,
 	SessionQueue,
+	SessionThinkingLevel,
+	SessionThinkingLevelRequest,
 	StartSessionRequest,
 	TerminalInfo,
 	TerminalSize,
@@ -430,6 +432,17 @@ export function selectSessionModel(
 	fetcher: typeof fetch = fetch
 ): Promise<void> {
 	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}/model`, 'PUT', model, fetcher);
+}
+
+/** Sets the thinking level an idle session uses for later turns. */
+export function setSessionThinkingLevel(
+	search: string,
+	sessionId: string,
+	level: SessionThinkingLevel,
+	fetcher: typeof fetch = fetch
+): Promise<void> {
+	const request: SessionThinkingLevelRequest = { level };
+	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}/thinking-level`, 'PUT', request, fetcher);
 }
 
 /** Reads a live session's unanswered extension dialogs, status lines, and widgets. */

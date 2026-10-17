@@ -1,0 +1,100 @@
+import { page, userEvent } from 'vitest/browser';
+import { expect, test, vi } from 'vitest';
+import { render } from 'vitest-browser-svelte';
+
+import { modelFixtures } from '../fixtures/models';
+import { sessionFixtures } from '../fixtures/sessions';
+import SessionView from '../lib/SessionView.svelte';
+import ThinkingLevelPicker from '../lib/ThinkingLevelPicker.svelte';
+import { thinkingLevels, type ModelOption, type SessionWorkspace } from '../lib/types/session';
+
+const picker = () => page.getByRole('combobox', { name: 'Thinking level' });
+
+function withThinking(workspaces: SessionWorkspace[]): SessionWorkspace[] {
+	return workspaces.map((workspace) => ({
+		...workspace,
+		sessions: workspace.sessions.map((session) => ({
+			...session,
+			thinkingLevel: 'medium' as const,
+			capabilities: { ...session.capabilities, modelSelection: true, thinkingLevel: true }
+		}))
+	}));
+}
+
+function headerProps(models: ModelOption[] = modelFixtures.populated) {
+	return { onLoadModels: async () => models, onSelectModel: vi.fn(), onSelectThinkingLevel: vi.fn() };
+}
+
+test.each(thinkingLevels)('shows %s as the current level', async (level) => {
+	await render(ThinkingLevelPicker, { level, reasoning: true, onSelect: vi.fn() });
+
+	await expect.element(picker()).toHaveValue(level);
+	await expect.element(picker()).toBeEnabled();
+});
+
+test.each(thinkingLevels)('selects %s', async (level) => {
+	const onSelect = vi.fn();
+	await render(ThinkingLevelPicker, { level: level === 'off' ? 'low' : 'off', reasoning: true, onSelect });
+
+	await userEvent.selectOptions(picker(), level);
+
+	expect(onSelect).toHaveBeenCalledWith(level);
+});
+
+test('keeps the previous level and explains a rejection', async () => {
+	const onSelect = vi.fn().mockRejectedValue(new Error('Pi rejected the request: Level not supported'));
+	await render(ThinkingLevelPicker, { level: 'low', reasoning: true, onSelect });
+
+	await userEvent.selectOptions(picker(), 'max');
+
+	await expect.element(page.getByRole('alert')).toHaveTextContent('Pi rejected the request: Level not supported');
+	await expect.element(picker()).toHaveValue('low');
+});
+
+test('is disabled and explained for a model without thinking levels', async () => {
+	await render(ThinkingLevelPicker, { reasoning: false, onSelect: vi.fn() });
+
+	await expect.element(picker()).toBeDisabled();
+	await expect.element(picker()).toHaveAccessibleDescription(/does not offer thinking levels/);
+});
+
+test('is disabled and explained when the agent cannot change the level', async () => {
+	await render(ThinkingLevelPicker, { supported: false, onSelect: vi.fn() });
+
+	await expect.element(picker()).toBeDisabled();
+	await expect.element(picker()).toHaveAccessibleDescription(/does not support changing the thinking level/);
+});
+
+test('the session header enables the control for an idle session on a reasoning model', async () => {
+	await render(SessionView, {
+		workspaces: withThinking(sessionFixtures.idle),
+		activeSessionId: 'session-idle',
+		...headerProps()
+	});
+
+	await expect.element(picker()).toHaveValue('medium');
+	await expect.element(picker()).toBeEnabled();
+});
+
+test('the session header disables the control for a model without reasoning', async () => {
+	const models = modelFixtures.populated.map((model) => ({ ...model, current: model.id === 'claude-haiku-4-5' }));
+	await render(SessionView, {
+		workspaces: withThinking(sessionFixtures.idle),
+		activeSessionId: 'session-idle',
+		...headerProps(models)
+	});
+
+	await expect.element(picker()).toBeDisabled();
+	await expect.element(picker()).toHaveAccessibleDescription(/does not offer thinking levels/);
+});
+
+test('the session header disables the control while a run is in progress', async () => {
+	await render(SessionView, {
+		workspaces: withThinking(sessionFixtures.running),
+		activeSessionId: 'session-running',
+		...headerProps()
+	});
+
+	await expect.element(picker()).toBeDisabled();
+	await expect.element(picker()).toHaveAccessibleDescription(/Wait for this run/);
+});

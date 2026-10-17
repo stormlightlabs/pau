@@ -518,3 +518,34 @@ test('disables the picker when the session cannot select models', async () => {
 
 	await expect.element(page.getByRole('button', { name: /^Model:/ })).toBeDisabled();
 });
+
+test('sets the thinking level and shows the level it sent', async () => {
+	const put = vi.fn(() => new Response(null, { status: 204 }));
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/sessions/session-1/models': () => json(modelList('sonnet')),
+		'PUT /api/sessions/session-1/thinking-level': put
+	});
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+
+	const control = page.getByRole('combobox', { name: 'Thinking level' });
+	await expect.element(control).toBeEnabled();
+	await userEvent.selectOptions(control, 'high');
+
+	expect(put).toHaveBeenCalledWith(expect.objectContaining({ body: '{"level":"high"}' }));
+	await expect.element(control).toHaveValue('high');
+});
+
+test('explains a rejected thinking level', async () => {
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/sessions/session-1/models': () => json(modelList('sonnet')),
+		'PUT /api/sessions/session-1/thinking-level': () =>
+			json({ code: 'control_rejected', message: 'Level not supported' }, 422)
+	});
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+
+	await userEvent.selectOptions(page.getByRole('combobox', { name: 'Thinking level' }), 'max');
+
+	await expect.element(page.getByRole('alert')).toHaveTextContent('Pi rejected the request: Level not supported');
+});

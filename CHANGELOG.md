@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Choose how hard the model thinks from the session header, with levels from
+  off to max.
 - Retry a failed turn from the session view, and see or cancel Pi's automatic
   retries while they count down.
 - Switch a Pi session's model from the session header. The picker is

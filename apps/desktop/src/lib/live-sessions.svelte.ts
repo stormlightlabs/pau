@@ -6,7 +6,8 @@ import type {
 	PromptQueue,
 	SavedSessionList,
 	SessionViewModel,
-	SessionWorkspace
+	SessionWorkspace,
+	ThinkingLevel
 } from '@stormlightlabs/pau-ui';
 
 import {
@@ -24,6 +25,7 @@ import {
 	respondToExtensionUi,
 	retrySession,
 	selectSessionModel,
+	setSessionThinkingLevel,
 	startSession,
 	stopSession
 } from './api';
@@ -144,6 +146,7 @@ export class LiveSessions {
 	#sessions = $state<Record<string, AgentSession>>({});
 	#transcripts = $state<Record<string, PiTranscript>>({});
 	#extensionUi = $state<Record<string, LiveExtensionUi>>({});
+	#thinkingLevels = $state<Record<string, ThinkingLevel>>({});
 	/** Extension events received while the session's extension UI read is in flight. */
 	readonly #extensionReplay = new SvelteMap<string, unknown[]>();
 	/** Sessions whose extension UI changed during the read in flight and needs another read. */
@@ -273,6 +276,15 @@ export class LiveSessions {
 				this.#fetcher
 			)
 		);
+	}
+
+	/**
+	 * Sets a session's thinking level. Pi does not report the level back, so the
+	 * store remembers the last one it sent. Pi may clamp it to what the model supports.
+	 */
+	async selectThinkingLevel(sessionId: string, level: ThinkingLevel): Promise<void> {
+		await this.#control(() => setSessionThinkingLevel(this.#options.search, sessionId, level, this.#fetcher));
+		this.#thinkingLevels[sessionId] = level;
 	}
 
 	/** Prompts an idle session, or steers or queues a follow-up during a run. */
@@ -461,8 +473,10 @@ export class LiveSessions {
 				interrupt: session.capabilities.interrupt,
 				stop: session.capabilities.stop,
 				retry: session.capabilities.retry,
-				modelSelection: session.capabilities.model_selection
+				modelSelection: session.capabilities.model_selection,
+				thinkingLevel: session.capabilities.thinking_level
 			},
+			thinkingLevel: this.#thinkingLevels[session.id],
 			transcript: transcript.entries,
 			extensionUi: extensionUiView(extensionUi),
 			autoRetry: transcript.autoRetry

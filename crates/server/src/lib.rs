@@ -10,7 +10,7 @@ use std::{
 use axum::{
     Json, Router,
     extract::{
-        Path as AxumPath, Query, Request, State, WebSocketUpgrade,
+        DefaultBodyLimit, Path as AxumPath, Query, Request, State, WebSocketUpgrade,
         ws::{Message, WebSocket},
     },
     http::{StatusCode, header},
@@ -449,15 +449,16 @@ fn router_with_services(
         )
         .route(
             "/api/sessions/{session_id}/prompt",
-            post(sessions::prompt_session),
+            post(sessions::prompt_session).layer(DefaultBodyLimit::max(sessions::IMAGE_BODY_LIMIT)),
         )
         .route(
             "/api/sessions/{session_id}/steer",
-            post(sessions::steer_session),
+            post(sessions::steer_session).layer(DefaultBodyLimit::max(sessions::IMAGE_BODY_LIMIT)),
         )
         .route(
             "/api/sessions/{session_id}/follow-up",
-            post(sessions::follow_up_session),
+            post(sessions::follow_up_session)
+                .layer(DefaultBodyLimit::max(sessions::IMAGE_BODY_LIMIT)),
         )
         .route(
             "/api/sessions/{session_id}/interrupt",
@@ -478,14 +479,6 @@ fn router_with_services(
         .route(
             "/api/sessions/{session_id}/auto-compaction",
             put(sessions::set_session_auto_compaction),
-        )
-        .route(
-            "/api/sessions/{session_id}/name",
-            put(sessions::rename_session),
-        )
-        .route(
-            "/api/sessions/{session_id}/clone",
-            post(sessions::clone_session),
         )
         .route(
             "/api/sessions/{session_id}/retry",
@@ -742,6 +735,8 @@ enum ApiError {
     NativeSession(pau_pi::PiSessionFileError),
     /// An extension UI answer was refused, with its status, code, and message.
     ExtensionRequest(StatusCode, &'static str, String),
+    /// A prompt image was refused, with its code and message.
+    InvalidImage(&'static str, String),
 }
 
 impl IntoResponse for ApiError {
@@ -774,6 +769,7 @@ impl IntoResponse for ApiError {
                 (status, code, error.to_string())
             }
             Self::ExtensionRequest(status, code, message) => (status, code, message),
+            Self::InvalidImage(code, message) => (StatusCode::UNPROCESSABLE_ENTITY, code, message),
             Self::Session(error) => {
                 let (status, code) = sessions::error_status(&error);
                 (status, code, error.to_string())

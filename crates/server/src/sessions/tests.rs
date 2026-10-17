@@ -26,12 +26,13 @@ const FAKE_PI: &str = r#"#!/bin/sh
 if [ "$1" = '--version' ]; then echo 0.87.1; exit 0; fi
 [ "$1" = '--mode' ] && [ "$2" = 'rpc' ] || exit 64
 printf '%s\n' "$*" > "$PWD/args.txt"
+current=model-one
 while IFS= read -r command; do
     printf '%s\n' "$command" >> "$PWD/commands.jsonl"
     id=$(printf '%s' "$command" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
     case "$command" in
         *'"type":"get_state"'*)
-            printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"native","sessionFile":"%s/session.jsonl","model":{"provider":"fixture","id":"model-one"}}}\n' "$id" "$PWD"
+            printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"native","sessionFile":"%s/session.jsonl","model":{"provider":"fixture","id":"%s"}}}\n' "$id" "$PWD" "$current"
             ;;
         *'"message":"exit"'*) exit 3 ;;
         *'"message":"dialogs"'*)
@@ -77,20 +78,16 @@ while IFS= read -r command; do
         *'"modelId":"missing"'*)
             printf '{"id":"%s","type":"response","command":"set_model","success":false,"error":"Model not found: fixture/missing"}\n' "$id"
             ;;
+        *'"modelId":"model-two"'*)
+            current=model-two
+            printf '{"id":"%s","type":"response","command":"set_model","success":true,"data":{"provider":"fixture","id":"model-two"}}\n' "$id"
+            ;;
         *'"type":"set_model"'*)
+            current=model-one
             printf '{"id":"%s","type":"response","command":"set_model","success":true,"data":{"provider":"fixture","id":"model-one"}}\n' "$id"
             ;;
         *'"type":"set_thinking_level"'*)
             printf '{"id":"%s","type":"response","command":"set_thinking_level","success":true}\n' "$id"
-            ;;
-        *'"name":""'*)
-            printf '{"id":"%s","type":"response","command":"set_session_name","success":false,"error":"Session name cannot be empty"}\n' "$id"
-            ;;
-        *'"type":"set_session_name"'*)
-            printf '{"id":"%s","type":"response","command":"set_session_name","success":true}\n' "$id"
-            ;;
-        *'"type":"clone"'*)
-            printf '{"id":"%s","type":"response","command":"clone","success":true,"data":{"cancelled":false}}\n' "$id"
             ;;
         *'"customInstructions":"fail"'*)
             printf '{"id":"%s","type":"response","command":"compact","success":false,"error":"Nothing to compact"}\n' "$id"
@@ -123,7 +120,7 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"fork","success":true,"data":{"text":"Fix the login bug","cancelled":false}}\n' "$id"
             ;;
         *'"type":"get_available_models"'*)
-            printf '{"id":"%s","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"model-one","name":"Model One","provider":"fixture","reasoning":true},{"id":"model-two","provider":"fixture","reasoning":false}]}}\n' "$id"
+            printf '{"id":"%s","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"model-one","name":"Model One","provider":"fixture","reasoning":true,"input":["text","image"]},{"id":"model-two","provider":"fixture","reasoning":false,"input":["text"]}]}}\n' "$id"
             ;;
         *'"type":"get_entries"'*)
             printf '{"id":"%s","type":"response","command":"get_entries","success":true,"data":{"entries":[{"type":"message","id":"a","message":{"role":"user","content":"first"}},{"type":"message","id":"b","message":{"role":"assistant","content":"reply"}},{"type":"message","id":"c","message":{"role":"user","content":[{"type":"text","text":"second"}]}}]}}\n' "$id"
@@ -488,6 +485,78 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
 }
 
 #[tokio::test]
+async fn validates_prompt_images_and_the_model_that_receives_them() {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    let fixture = Fixture::new(None).await;
+    let (_, session) = fixture
+        .start(Some(
+            json!({"provider": "fixture", "model_id": "model-one"}),
+        ))
+        .await;
+    let base = format!("/api/sessions/{}", session["id"].as_str().unwrap());
+    let prompt_path = format!("{base}/prompt");
+    let image =
+        |bytes: usize| json!({"mime_type": "image/png", "data": STANDARD.encode(vec![0u8; bytes])});
+    let send = |images: Value| {
+        fixture.call(
+            "POST",
+            &prompt_path,
+            Some(json!({"message": "look", "images": images})),
+        )
+    };
+    let mib = 1024 * 1024;
+
+    let cases = [
+        (
+            json!([{"mime_type": "image/svg+xml", "data": "AAAA"}]),
+            "unsupported_image_type",
+        ),
+        (
+            json!([{"mime_type": "image/png", "data": "not base64!"}]),
+            "invalid_image_data",
+        ),
+        (json!([image(5 * mib + 1)]), "image_too_large"),
+        (
+            json!([image(7 * mib / 2), image(7 * mib / 2), image(7 * mib / 2)]),
+            "request_images_too_large",
+        ),
+    ];
+    for (images, code) in cases {
+        let (status, error) = send(images).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{code}");
+        assert_eq!(error["code"], code);
+    }
+
+    let text_only = json!({"provider": "fixture", "model_id": "model-two"});
+    fixture
+        .call("PUT", &format!("{base}/model"), Some(text_only))
+        .await;
+    let (status, error) = send(json!([image(8)])).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(error["code"], "image_input_unsupported");
+    assert!(
+        !fixture.commands().contains(&"prompt".to_owned()),
+        "a refused prompt must not reach Pi"
+    );
+
+    let capable = json!({"provider": "fixture", "model_id": "model-one"});
+    fixture
+        .call("PUT", &format!("{base}/model"), Some(capable))
+        .await;
+    assert_eq!(send(json!([image(8)])).await.0, StatusCode::ACCEPTED);
+    let recorded = fs::read_to_string(fixture.workspace_root.join("commands.jsonl")).unwrap();
+    let prompt: Value = recorded
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .find(|command| command["type"] == "prompt")
+        .unwrap();
+    assert_eq!(
+        prompt["images"],
+        json!([{"type": "image", "data": STANDARD.encode([0u8; 8]), "mimeType": "image/png"}])
+    );
+}
+
+#[tokio::test]
 async fn reports_usage_on_request_and_after_assistant_messages() {
     let fixture = Fixture::new(None).await;
     let mut stream = fixture.events.subscribe(None);
@@ -529,53 +598,6 @@ async fn reports_usage_on_request_and_after_assistant_messages() {
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(missing["code"], "not_found");
-}
-
-#[tokio::test]
-async fn renames_and_clones_a_session() {
-    let fixture = Fixture::new(None).await;
-    let mut stream = fixture.events.subscribe(None);
-    let (_, session) = fixture.start(None).await;
-    assert_eq!(session["capabilities"]["rename"], true);
-    assert_eq!(session["capabilities"]["clone_session"], true);
-    let base = format!("/api/sessions/{}", session["id"].as_str().unwrap());
-
-    let (status, _) = fixture
-        .call(
-            "PUT",
-            &format!("{base}/name"),
-            Some(json!({"name": "release prep"})),
-        )
-        .await;
-    assert_eq!(status, StatusCode::NO_CONTENT);
-    next_event(&mut stream, session_changed("idle")).await;
-
-    let (status, rejected) = fixture
-        .call("PUT", &format!("{base}/name"), Some(json!({"name": ""})))
-        .await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(rejected["code"], "control_rejected");
-
-    let (status, cloned) = fixture.call("POST", &format!("{base}/clone"), None).await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(cloned, json!({"native_session_id": "native"}));
-    next_event(&mut stream, session_changed("idle")).await;
-
-    let (status, missing) = fixture
-        .call("POST", "/api/sessions/missing/clone", None)
-        .await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
-    assert_eq!(missing["code"], "not_found");
-    assert_eq!(
-        fixture.commands(),
-        [
-            "get_state",
-            "set_session_name",
-            "set_session_name",
-            "clone",
-            "get_state"
-        ]
-    );
 }
 
 #[tokio::test]

@@ -661,10 +661,21 @@ Verification:
 - Component-test empty, populated, and failed-resume states.
 - Resume a self-hosted Pi session from the picker.
 
-### 2.150 Session rename and clone controls
+### 2.149 Pi session rename and clone API
 
 Status: planned
 Blocked by: none
+
+Rename and clone Pi sessions through the desktop API.
+
+Verification:
+
+- Cover renaming, cloning, and a rejected rename against the Pi fixture.
+
+### 2.150 Session rename and clone controls
+
+Status: planned
+Blocked by: 2.149
 
 Add rename and clone controls to the session view.
 
@@ -710,21 +721,10 @@ Verification:
 
 - Component-test history navigation and an empty history.
 
-### 2.113 Pi image attachment API
-
-Status: planned
-Blocked by: none
-
-Accept image attachments with Pi prompts through the desktop API.
-
-Verification:
-
-- Cover prompts with images and unsupported image types against the Pi fixture.
-
 ### 2.114 Composer image input
 
 Status: planned
-Blocked by: 2.113
+Blocked by: none
 
 Add image input to the session composer.
 

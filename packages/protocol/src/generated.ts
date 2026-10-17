@@ -870,14 +870,6 @@ branching: boolean,
  */
 retry: boolean,
 /**
- * Whether the session can be renamed.
- */
-rename: boolean,
-/**
- * Whether the session can be cloned into a new stored session.
- */
-clone_session: boolean,
-/**
  * Whether the session can stop its process.
  */
 stop: boolean, };
@@ -1188,6 +1180,16 @@ message: string, };
 
 export type SessionQueue = "steer" | "follow_up";
 
+export type SessionImage = {
+/**
+ * The image's MIME type, such as `image/png`.
+ */
+mime_type: string,
+/**
+ * The image bytes, base64-encoded.
+ */
+data: string, };
+
 export type SessionPromptRequest = {
 /**
  * Prompt text.
@@ -1197,13 +1199,21 @@ message: string,
  * Queue for a prompt sent during an active run. A running session rejects
  * a prompt without one.
  */
-queue: SessionQueue | null, };
+queue: SessionQueue | null,
+/**
+ * Images sent with the prompt.
+ */
+images: Array<SessionImage> | null, };
 
 export type SessionMessageRequest = {
 /**
  * Message text.
  */
-message: string, };
+message: string,
+/**
+ * Images sent with the message.
+ */
+images: Array<SessionImage> | null, };
 
 export type SessionThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -1242,19 +1252,6 @@ source: SessionCommandSource,
  * The file that defines the command, when the agent reports one.
  */
 path: string | null, };
-
-export type SessionCloneResult = {
-/**
- * Identifier of the new native session. The live session now continues
- * it, and the original stays in the workspace's native session list.
- */
-native_session_id: string, };
-
-export type SessionRenameRequest = {
-/**
- * The display name stored with the session.
- */
-name: string, };
 
 export type SessionCompactRequest = {
 /**

@@ -325,7 +325,7 @@ export async function startSession(
 	workspaceId: string,
 	fetcher: typeof fetch = fetch
 ): Promise<AgentSession> {
-	const request: StartSessionRequest = { workspace_id: workspaceId, model: null };
+	const request: StartSessionRequest = { workspace_id: workspaceId, model: null, native_session_id: null };
 	const response = await fetcher(sessionUrl(search, ''), {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', ...authorization(resolveApiToken(search)) },
@@ -341,7 +341,7 @@ export function promptSession(
 	message: string,
 	fetcher: typeof fetch = fetch
 ): Promise<void> {
-	const request: SessionPromptRequest = { message, queue: null };
+	const request: SessionPromptRequest = { message, queue: null, images: null };
 	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}/prompt`, 'POST', request, fetcher);
 }
 
@@ -353,7 +353,7 @@ export function queueSessionMessage(
 	message: string,
 	fetcher: typeof fetch = fetch
 ): Promise<void> {
-	const request: SessionMessageRequest = { message };
+	const request: SessionMessageRequest = { message, images: null };
 	const endpoint = queue === 'steer' ? 'steer' : 'follow-up';
 	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}/${endpoint}`, 'POST', request, fetcher);
 }

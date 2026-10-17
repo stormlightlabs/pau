@@ -41,6 +41,7 @@ use axum::{
     extract::{Path as AxumPath, State},
     http::StatusCode,
 };
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use pau_agent::{
     AgentCapabilities, AgentControlError, AgentMessageQueue, AgentSessionStatus, PromptQueueChoice,
     ThinkingLevel,
@@ -51,17 +52,17 @@ use pau_core::{
         AgentSession, ExtensionDialog, ExtensionStatus, ExtensionUiResponse, ExtensionWidget,
         ExtensionWidgetPlacement, NativeSessionList, NativeSessionSummary, NativeSessionWarning,
         SessionAutoCompactionRequest, SessionAutoRetryRequest, SessionBranchRequest,
-        SessionBranchResult, SessionCapabilities, SessionCloneResult, SessionCommand,
-        SessionCommandSource, SessionCompactRequest, SessionCompactionResult, SessionContextUsage,
-        SessionExtensionUi, SessionMessageQueue, SessionMessageRequest, SessionModel,
-        SessionModelSelection, SessionPromptRequest, SessionQueue, SessionRenameRequest,
-        SessionStatus, SessionThinkingLevel, SessionThinkingLevelRequest, SessionTokenUsage,
-        SessionTree, SessionTreeEntry, SessionUsage, StartSessionRequest,
+        SessionBranchResult, SessionCapabilities, SessionCommand, SessionCommandSource,
+        SessionCompactRequest, SessionCompactionResult, SessionContextUsage, SessionExtensionUi,
+        SessionImage, SessionMessageQueue, SessionMessageRequest, SessionModel,
+        SessionModelSelection, SessionPromptRequest, SessionQueue, SessionStatus,
+        SessionThinkingLevel, SessionThinkingLevelRequest, SessionTokenUsage, SessionTree,
+        SessionTreeEntry, SessionUsage, StartSessionRequest,
     },
 };
 use pau_pi::{
     DiscoverPiOptions, PiCommand, PiCommandSource, PiExtensionUiRequest, PiExtensionUiResponse,
-    PiExtensionWidgetPlacement, PiModel, PiProcessError, PiProcessOutput, PiSession,
+    PiExtensionWidgetPlacement, PiImage, PiModel, PiProcessError, PiProcessOutput, PiSession,
     PiSessionError, PiSessionOutput, PiSessionRegistry, PiSessionRegistryError, PiSessionUsage,
     PiShutdownTimeouts, StartPiProcessOptions, StartRegisteredPiSession, discover_pi,
     find_pi_session_file, list_pi_session_files, pi_configuration_paths,
@@ -522,8 +523,6 @@ fn session_capabilities(capabilities: AgentCapabilities) -> SessionCapabilities 
         compaction: capabilities.compaction,
         branching: capabilities.branching,
         retry: capabilities.retry,
-        rename: capabilities.rename,
-        clone_session: capabilities.clone_session,
         stop: capabilities.stop,
     }
 }
@@ -795,6 +794,86 @@ pub(crate) async fn stop_session(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Largest decoded size of one prompt image.
+const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
+/// Largest combined decoded size of the images in one request.
+const MAX_REQUEST_IMAGE_BYTES: usize = 10 * 1024 * 1024;
+/// Request body limit for routes that accept images. Base64 inflates the
+/// request cap by a third, and the rest covers the message and JSON framing.
+pub(crate) const IMAGE_BODY_LIMIT: usize = 16 * 1024 * 1024;
+/// MIME types Pi forwards to models.
+const IMAGE_MIME_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+/// Validates prompt images and converts them for Pi.
+///
+/// Every failure is `422` with one of `unsupported_image_type`,
+/// `invalid_image_data`, `image_too_large`, `request_images_too_large`, or
+/// `image_input_unsupported`. Pi does not check the model's image support, so
+/// the current model is checked here.
+async fn prepare_images(
+    session: &PiSession,
+    images: Option<Vec<SessionImage>>,
+) -> Result<Vec<PiImage>, ApiError> {
+    let images = images.unwrap_or_default();
+    if images.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut total = 0;
+    for (index, image) in images.iter().enumerate() {
+        let number = index + 1;
+        if !IMAGE_MIME_TYPES.contains(&image.mime_type.as_str()) {
+            return Err(ApiError::InvalidImage(
+                "unsupported_image_type",
+                format!(
+                    "Image {number} is {}. Attach a PNG, JPEG, GIF, or WebP image.",
+                    image.mime_type
+                ),
+            ));
+        }
+        let size = BASE64
+            .decode(&image.data)
+            .map_err(|_| {
+                ApiError::InvalidImage(
+                    "invalid_image_data",
+                    format!("Image {number} is not valid base64."),
+                )
+            })?
+            .len();
+        if size > MAX_IMAGE_BYTES {
+            return Err(ApiError::InvalidImage(
+                "image_too_large",
+                format!("Image {number} is larger than 5 MiB."),
+            ));
+        }
+        total += size;
+    }
+    if total > MAX_REQUEST_IMAGE_BYTES {
+        return Err(ApiError::InvalidImage(
+            "request_images_too_large",
+            "Attached images total more than 10 MiB.".to_owned(),
+        ));
+    }
+    let accepts_images = session
+        .models()
+        .await?
+        .iter()
+        .any(|model| model.current && model.image_input);
+    if !accepts_images {
+        return Err(ApiError::InvalidImage(
+            "image_input_unsupported",
+            "The selected model does not accept images. Choose a model with image input."
+                .to_owned(),
+        ));
+    }
+    Ok(images
+        .into_iter()
+        .map(|image| PiImage {
+            mime_type: image.mime_type,
+            data: image.data,
+        })
+        .collect())
+}
+
 /// Starts work, or queues it during a run when the request names a queue.
 pub(crate) async fn prompt_session(
     State(state): State<ApiState>,
@@ -807,7 +886,8 @@ pub(crate) async fn prompt_session(
         SessionQueue::Steer => PromptQueueChoice::Steer,
         SessionQueue::FollowUp => PromptQueueChoice::FollowUp,
     });
-    session.prompt(request.message, queue).await?;
+    let images = prepare_images(&session, request.images).await?;
+    session.prompt(request.message, images, queue).await?;
     api.publish_current(&session_id).await;
     Ok(StatusCode::ACCEPTED)
 }
@@ -819,7 +899,8 @@ pub(crate) async fn steer_session(
     Json(request): Json<SessionMessageRequest>,
 ) -> Result<StatusCode, ApiError> {
     let (_, session) = session_api(&state)?.live(&session_id).await?;
-    session.steer(request.message).await?;
+    let images = prepare_images(&session, request.images).await?;
+    session.steer(request.message, images).await?;
     Ok(StatusCode::ACCEPTED)
 }
 
@@ -830,7 +911,8 @@ pub(crate) async fn follow_up_session(
     Json(request): Json<SessionMessageRequest>,
 ) -> Result<StatusCode, ApiError> {
     let (_, session) = session_api(&state)?.live(&session_id).await?;
-    session.follow_up(request.message).await?;
+    let images = prepare_images(&session, request.images).await?;
+    session.follow_up(request.message, images).await?;
     Ok(StatusCode::ACCEPTED)
 }
 
@@ -921,39 +1003,6 @@ pub(crate) async fn set_session_auto_compaction(
     let (_, session) = session_api(&state)?.live(&session_id).await?;
     session.set_auto_compaction(request.enabled).await?;
     Ok(StatusCode::NO_CONTENT)
-}
-
-/// Sets the session's display name and publishes the updated session.
-pub(crate) async fn rename_session(
-    State(state): State<ApiState>,
-    AxumPath(session_id): AxumPath<String>,
-    Json(request): Json<SessionRenameRequest>,
-) -> Result<StatusCode, ApiError> {
-    let api = session_api(&state)?;
-    let (_, session) = api.live(&session_id).await?;
-    session.rename(request.name).await?;
-    api.publish_current(&session_id).await;
-    Ok(StatusCode::NO_CONTENT)
-}
-
-/// Copies the session into a new stored session and continues in the copy.
-///
-/// Pi's RPC `clone` switches the running process to the copy rather than
-/// starting a second process, so the live session keeps its Pau id and the
-/// response names the new native session it now continues. The original stays
-/// in the workspace's native session list and can be resumed from there. A
-/// client that wants both open starts another live session on the original.
-pub(crate) async fn clone_session(
-    State(state): State<ApiState>,
-    AxumPath(session_id): AxumPath<String>,
-) -> Result<Json<SessionCloneResult>, ApiError> {
-    let api = session_api(&state)?;
-    let (_, session) = api.live(&session_id).await?;
-    let native = session.clone_session().await?;
-    api.publish_current(&session_id).await;
-    Ok(Json(SessionCloneResult {
-        native_session_id: native.id,
-    }))
 }
 
 /// Returns the prompts the user sent, newest first, for input recall.

@@ -6,9 +6,9 @@ use pau_agent::{
 };
 use pau_pi::{
     PI_RPC_CAPABILITIES, PiCommand, PiCommandSource, PiCompactionOutcome, PiCompactionReason,
-    PiContextUsage, PiEventPayload, PiEventReducer, PiExtensionUiResponse, PiModel, PiProcess,
-    PiProcessOutput, PiSession, PiSessionError, PiSessionUsage, PiShutdownTimeouts, PiTokenUsage,
-    StartPiProcessOptions,
+    PiContextUsage, PiEventPayload, PiEventReducer, PiExtensionUiResponse, PiImage, PiModel,
+    PiProcess, PiProcessOutput, PiSession, PiSessionError, PiSessionUsage, PiShutdownTimeouts,
+    PiTokenUsage, StartPiProcessOptions,
 };
 use serde_json::Value;
 use std::fs;
@@ -23,10 +23,13 @@ async fn exercises_every_session_control_against_fake_rpc() {
     let session = PiSession::start(fixture.options()).unwrap();
 
     assert_eq!(session.capabilities(), PI_RPC_CAPABILITIES);
-    session.prompt("start", None).await.unwrap();
+    session.prompt("start", Vec::new(), None).await.unwrap();
     assert_eq!(session.status().await, AgentSessionStatus::Running);
 
-    let error = session.prompt("ambiguous", None).await.unwrap_err();
+    let error = session
+        .prompt("ambiguous", Vec::new(), None)
+        .await
+        .unwrap_err();
     assert!(matches!(
         error,
         PiSessionError::Control(AgentControlError::InvalidState {
@@ -37,11 +40,15 @@ async fn exercises_every_session_control_against_fake_rpc() {
     ));
 
     session
-        .prompt("queued prompt", Some(PromptQueueChoice::FollowUp))
+        .prompt(
+            "queued prompt",
+            Vec::new(),
+            Some(PromptQueueChoice::FollowUp),
+        )
         .await
         .unwrap();
-    session.follow_up("later").await.unwrap();
-    session.steer("change course").await.unwrap();
+    session.follow_up("later", Vec::new()).await.unwrap();
+    session.steer("change course", Vec::new()).await.unwrap();
     session.interrupt().await.unwrap();
     assert_eq!(session.status().await, AgentSessionStatus::Idle);
 
@@ -53,7 +60,7 @@ async fn exercises_every_session_control_against_fake_rpc() {
         .await
         .unwrap();
 
-    let invalid_follow_up = session.follow_up("too late").await.unwrap_err();
+    let invalid_follow_up = session.follow_up("too late", Vec::new()).await.unwrap_err();
     assert!(matches!(
         invalid_follow_up,
         PiSessionError::Control(AgentControlError::InvalidState {
@@ -84,6 +91,27 @@ async fn exercises_every_session_control_against_fake_rpc() {
 }
 
 #[tokio::test]
+async fn sends_images_with_prompts_and_queued_messages() {
+    let fixture = FakePi::new(CONTROL_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+    let image = || PiImage {
+        mime_type: "image/png".to_owned(),
+        data: "AAAA".to_owned(),
+    };
+
+    session.prompt("start", vec![image()], None).await.unwrap();
+    session.steer("change course", vec![image()]).await.unwrap();
+    session.follow_up("later", Vec::new()).await.unwrap();
+
+    let commands = fixture.commands();
+    let expected = serde_json::json!([{"type": "image", "data": "AAAA", "mimeType": "image/png"}]);
+    assert_eq!(commands[0]["images"], expected);
+    assert_eq!(commands[1]["images"], expected);
+    assert!(commands[2].get("images").is_none());
+    session.stop().await.unwrap();
+}
+
+#[tokio::test]
 async fn reads_and_clears_the_message_queue() {
     let fixture = FakePi::new(CONTROL_FIXTURE);
     let session = PiSession::start(fixture.options()).unwrap();
@@ -92,9 +120,9 @@ async fn reads_and_clears_the_message_queue() {
         AgentMessageQueue::default()
     );
 
-    session.prompt("start", None).await.unwrap();
-    session.steer("change course").await.unwrap();
-    session.follow_up("later").await.unwrap();
+    session.prompt("start", Vec::new(), None).await.unwrap();
+    session.steer("change course", Vec::new()).await.unwrap();
+    session.follow_up("later", Vec::new()).await.unwrap();
     let queued = AgentMessageQueue {
         steering: vec!["change course".to_owned()],
         follow_up: vec!["later".to_owned()],
@@ -266,7 +294,7 @@ async fn branches_through_pi_fork_only_while_idle() {
         serde_json::json!({"id": fixture.commands()[0]["id"], "type": "fork", "entryId": "entry-1"})
     );
 
-    session.prompt("start", None).await.unwrap();
+    session.prompt("start", Vec::new(), None).await.unwrap();
     let error = session.branch("entry-1".to_owned()).await.unwrap_err();
     assert!(matches!(
         error,
@@ -282,18 +310,19 @@ async fn branches_through_pi_fork_only_while_idle() {
 async fn lists_available_models_and_marks_the_current_one() {
     let fixture = FakePi::new(CONTROL_FIXTURE);
     let session = PiSession::start(fixture.options()).unwrap();
-    let model = |id: &str, name: Option<&str>, reasoning, current| PiModel {
+    let model = |id: &str, name: Option<&str>, reasoning, image_input, current| PiModel {
         provider: "fixture".to_owned(),
         id: id.to_owned(),
         name: name.map(str::to_owned),
         reasoning,
+        image_input,
         current,
     };
     assert_eq!(
         session.models().await.unwrap(),
         vec![
-            model("model-one", Some("Model One"), true, false),
-            model("model-two", None, false, true),
+            model("model-one", Some("Model One"), true, true, false),
+            model("model-two", None, false, false, true),
         ]
     );
     session.stop().await.unwrap();
@@ -370,7 +399,10 @@ async fn returns_capability_and_native_rejection_errors() {
     };
     let session = PiSession::from_process(process, capabilities);
 
-    let unsupported = session.prompt("not sent", None).await.unwrap_err();
+    let unsupported = session
+        .prompt("not sent", Vec::new(), None)
+        .await
+        .unwrap_err();
     assert!(matches!(
         unsupported,
         PiSessionError::Control(AgentControlError::Unsupported {
@@ -435,7 +467,7 @@ async fn compacts_manually_and_reports_failed_compaction() {
 
     session.set_auto_compaction(false).await.unwrap();
 
-    session.prompt("start", None).await.unwrap();
+    session.prompt("start", Vec::new(), None).await.unwrap();
     let busy = session.compact(None).await.unwrap_err();
     assert!(matches!(
         busy,
@@ -564,7 +596,7 @@ async fn retries_a_failed_turn_and_manages_automatic_retry() {
 async fn refuses_to_retry_when_the_last_turn_succeeded() {
     let fixture = FakePi::new(CONTROL_FIXTURE);
     let session = PiSession::start(fixture.options()).unwrap();
-    session.prompt("healthy", None).await.unwrap();
+    session.prompt("healthy", Vec::new(), None).await.unwrap();
     session.interrupt().await.unwrap();
     // Pi answers `get_messages` with a failed turn until a prompt named
     // "healthy" has been sent, after which the last turn succeeded.
@@ -578,53 +610,6 @@ async fn refuses_to_retry_when_the_last_turn_succeeded() {
     ));
     assert_eq!(session.status().await, AgentSessionStatus::Idle);
     session.stop().await.unwrap();
-}
-
-#[tokio::test]
-async fn renames_and_clones_the_session() {
-    let fixture = FakePi::new(NAMING_FIXTURE);
-    let session = PiSession::start(fixture.options()).unwrap();
-
-    session.rename("release prep").await.unwrap();
-    let rejected = session.rename("").await.unwrap_err();
-    assert!(matches!(
-        rejected,
-        PiSessionError::Control(AgentControlError::Rejected {
-            control: AgentControl::Rename,
-            message,
-        }) if message == "Session name cannot be empty"
-    ));
-
-    let cloned = session.clone_session().await.unwrap();
-    assert_eq!(cloned.id, "native-clone");
-    assert_eq!(cloned.file, "/sessions/clone.jsonl");
-    let cancelled = session.clone_session().await.unwrap_err();
-    assert!(matches!(
-        cancelled,
-        PiSessionError::Control(AgentControlError::Rejected {
-            control: AgentControl::CloneSession,
-            message,
-        }) if message == "An extension cancelled the clone"
-    ));
-
-    session.prompt("start", None).await.unwrap();
-    let busy = session.clone_session().await.unwrap_err();
-    assert!(matches!(
-        busy,
-        PiSessionError::Control(AgentControlError::InvalidState {
-            control: AgentControl::CloneSession,
-            status: AgentSessionStatus::Running,
-            ..
-        })
-    ));
-    session.stop().await.unwrap();
-
-    let commands = fixture.commands();
-    assert_command(&commands[0], "set_session_name");
-    assert_eq!(commands[0]["name"], "release prep");
-    assert_command(&commands[1], "set_session_name");
-    assert_command(&commands[2], "clone");
-    assert_command(&commands[3], "get_state");
 }
 
 fn assert_command(command: &Value, expected: &str) {
@@ -684,7 +669,7 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"model":{"provider":"fixture","id":"model-two"}}}\n' "$id"
             ;;
         *'"type":"get_available_models"'*)
-            printf '{"id":"%s","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"model-one","name":"Model One","provider":"fixture","reasoning":true},{"id":"model-two","provider":"fixture","reasoning":false}]}}\n' "$id"
+            printf '{"id":"%s","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"model-one","name":"Model One","provider":"fixture","reasoning":true,"input":["text","image"]},{"id":"model-two","provider":"fixture","reasoning":false,"input":["text"]}]}}\n' "$id"
             ;;
         *'"entryId":"vetoed"'*)
             printf '{"id":"%s","type":"response","command":"fork","success":true,"data":{"cancelled":true}}\n' "$id"
@@ -727,37 +712,6 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"set_auto_compaction","success":true}\n' "$id"
             ;;
         *'"type":"extension_ui_response"'*) ;;
-        *) exit 65 ;;
-    esac
-done
-"#;
-
-const NAMING_FIXTURE: &str = r#"
-while IFS= read -r command; do
-    printf '%s\n' "$command" >> "$PWD/commands.jsonl"
-    id=$(printf '%s' "$command" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
-    case "$command" in
-        *'"name":""'*)
-            printf '{"id":"%s","type":"response","command":"set_session_name","success":false,"error":"Session name cannot be empty"}\n' "$id"
-            ;;
-        *'"type":"set_session_name"'*)
-            printf '{"id":"%s","type":"response","command":"set_session_name","success":true}\n' "$id"
-            ;;
-        *'"type":"clone"'*)
-            if [ -f "$PWD/cloned" ]; then
-                printf '{"id":"%s","type":"response","command":"clone","success":true,"data":{"cancelled":true}}\n' "$id"
-            else
-                : > "$PWD/cloned"
-                printf '{"id":"%s","type":"response","command":"clone","success":true,"data":{"cancelled":false}}\n' "$id"
-            fi
-            ;;
-        *'"type":"get_state"'*)
-            printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"native-clone","sessionFile":"/sessions/clone.jsonl"}}\n' "$id"
-            ;;
-        *'"type":"prompt"'*)
-            printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
-            printf '{"type":"agent_start"}\n'
-            ;;
         *) exit 65 ;;
     esac
 done

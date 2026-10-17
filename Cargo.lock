@@ -2656,6 +2656,7 @@ name = "pau-server"
 version = "0.4.0"
 dependencies = [
  "axum",
+ "base64 0.22.1",
  "dirs",
  "futures-util",
  "getrandom 0.3.4",

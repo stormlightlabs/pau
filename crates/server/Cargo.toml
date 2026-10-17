@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 axum.workspace = true
+base64 = "0.22.1"
 dirs.workspace = true
 getrandom.workspace = true
 pau-agent = { path = "../agent" }

@@ -58,10 +58,6 @@ pub struct SessionCapabilities {
     pub branching: bool,
     /// Whether the session can retry a failed turn and manage automatic retry.
     pub retry: bool,
-    /// Whether the session can be renamed.
-    pub rename: bool,
-    /// Whether the session can be cloned into a new stored session.
-    pub clone_session: bool,
     /// Whether the session can stop its process.
     pub stop: bool,
 }
@@ -157,6 +153,19 @@ pub enum SessionQueue {
     FollowUp,
 }
 
+/// An image attached to a prompt, steer, or follow-up message.
+///
+/// The server accepts PNG, JPEG, GIF, and WebP images of up to 5 MiB each and
+/// 10 MiB per request, measured after decoding, and only for a model that
+/// accepts image input.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionImage {
+    /// The image's MIME type, such as `image/png`.
+    pub mime_type: String,
+    /// The image bytes, base64-encoded.
+    pub data: String,
+}
+
 /// Sends a prompt to a session.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct SessionPromptRequest {
@@ -165,6 +174,8 @@ pub struct SessionPromptRequest {
     /// Queue for a prompt sent during an active run. A running session rejects
     /// a prompt without one.
     pub queue: Option<SessionQueue>,
+    /// Images sent with the prompt.
+    pub images: Option<Vec<SessionImage>>,
 }
 
 /// Sends a steer or follow-up message during an active run.
@@ -172,6 +183,8 @@ pub struct SessionPromptRequest {
 pub struct SessionMessageRequest {
     /// Message text.
     pub message: String,
+    /// Images sent with the message.
+    pub images: Option<Vec<SessionImage>>,
 }
 
 /// A reasoning effort level for model turns.
@@ -286,21 +299,6 @@ pub struct SessionAutoCompactionRequest {
 pub struct SessionAutoRetryRequest {
     /// Whether the session retries overloaded, rate-limited, and 5xx failures.
     pub enabled: bool,
-}
-
-/// Renames a session.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct SessionRenameRequest {
-    /// The display name stored with the session.
-    pub name: String,
-}
-
-/// The stored session a clone continues in.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct SessionCloneResult {
-    /// Identifier of the new native session. The live session now continues
-    /// it, and the original stays in the workspace's native session list.
-    pub native_session_id: String,
 }
 
 /// Messages waiting in a session's steer and follow-up queues.

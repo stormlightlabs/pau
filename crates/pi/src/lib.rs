@@ -43,7 +43,7 @@ pub use resources::{
 pub use sandbox::{PiSandboxLaunch, PreparePiSandbox, prepare_pi_sandbox};
 pub use session::{
     PI_INPUT_HISTORY_LIMIT, PI_RPC_CAPABILITIES, PiBranchOutcome, PiCommand, PiCommandSource,
-    PiContextUsage, PiModel, PiNativeSession, PiSession, PiSessionError, PiSessionUsage,
+    PiContextUsage, PiImage, PiModel, PiNativeSession, PiSession, PiSessionError, PiSessionUsage,
     PiTokenUsage,
 };
 

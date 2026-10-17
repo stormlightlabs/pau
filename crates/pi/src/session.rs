@@ -26,8 +26,6 @@ pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     compaction: true,
     branching: true,
     retry: true,
-    rename: true,
-    clone_session: true,
     stop: true,
 };
 
@@ -142,6 +140,29 @@ pub struct PiSessionUsage {
     pub cost: f64,
 }
 
+/// An image sent with a prompt, as Pi's `ImageContent`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PiImage {
+    /// The image's MIME type, such as `image/png`.
+    pub mime_type: String,
+    /// The base64-encoded image bytes.
+    pub data: String,
+}
+
+impl PiImage {
+    /// Adds `images` to a prompt, steer, or follow-up command. Pi's `images`
+    /// field is optional, so an empty list leaves the command unchanged.
+    fn attach(command: &mut Value, images: Vec<Self>) {
+        if images.is_empty() {
+            return;
+        }
+        command["images"] = images
+            .into_iter()
+            .map(|image| json!({"type": "image", "data": image.data, "mimeType": image.mime_type}))
+            .collect();
+    }
+}
+
 /// A model Pi can run, as configured for the session.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PiModel {
@@ -153,6 +174,8 @@ pub struct PiModel {
     pub name: Option<String>,
     /// Whether the model supports reasoning.
     pub reasoning: bool,
+    /// Whether the model accepts image input.
+    pub image_input: bool,
     /// Whether this is the model the session currently uses.
     pub current: bool,
 }
@@ -370,15 +393,19 @@ impl PiSession {
     }
 
     /// Starts work, or queues it during a run when the caller chooses a queue.
+    ///
+    /// Pi forwards `images` to the model without checking its image support, so
+    /// callers check [`PiModel::image_input`] first.
     pub async fn prompt(
         &self,
         message: impl Into<String>,
+        images: Vec<PiImage>,
         queue: Option<PromptQueueChoice>,
     ) -> Result<(), PiSessionError> {
         let control = AgentControl::Prompt;
         self.require_capability(control)?;
         let mut status = self.status.lock().await;
-        let command = match (*status, queue) {
+        let mut command = match (*status, queue) {
             (AgentSessionStatus::Idle, _) => json!({
                 "type": "prompt",
                 "message": message.into(),
@@ -400,20 +427,29 @@ impl PiSession {
             }
             _ => return Err(not_ready(control, *status)),
         };
+        PiImage::attach(&mut command, images);
         self.command(control, command).await?;
         *status = AgentSessionStatus::Running;
         Ok(())
     }
 
     /// Queues work to run after Pi finishes its current work.
-    pub async fn follow_up(&self, message: impl Into<String>) -> Result<(), PiSessionError> {
-        self.running_message_control(AgentControl::FollowUp, "follow_up", message.into())
+    pub async fn follow_up(
+        &self,
+        message: impl Into<String>,
+        images: Vec<PiImage>,
+    ) -> Result<(), PiSessionError> {
+        self.running_message_control(AgentControl::FollowUp, "follow_up", message.into(), images)
             .await
     }
 
     /// Queues an instruction after the current assistant turn and tool calls.
-    pub async fn steer(&self, message: impl Into<String>) -> Result<(), PiSessionError> {
-        self.running_message_control(AgentControl::Steer, "steer", message.into())
+    pub async fn steer(
+        &self,
+        message: impl Into<String>,
+        images: Vec<PiImage>,
+    ) -> Result<(), PiSessionError> {
+        self.running_message_control(AgentControl::Steer, "steer", message.into(), images)
             .await
     }
 
@@ -566,53 +602,6 @@ impl PiSession {
         Ok(())
     }
 
-    /// Sets the display name Pi stores with the session.
-    ///
-    /// Pi rejects an empty name. The name shows in Pi's session listings.
-    pub async fn rename(&self, name: impl Into<String>) -> Result<(), PiSessionError> {
-        let control = AgentControl::Rename;
-        self.require_capability(control)?;
-        self.command(
-            control,
-            json!({"type": "set_session_name", "name": name.into()}),
-        )
-        .await?;
-        Ok(())
-    }
-
-    /// Copies the active branch into a new stored session and continues in it.
-    ///
-    /// Pi's `clone` command switches the running process to the copy, so this
-    /// session keeps its process and Pau identity while the original stays on
-    /// disk to be resumed later. Returns the native session the process now
-    /// uses. An extension that cancels the clone makes this return
-    /// [`AgentControlError::Rejected`]. The session must be idle.
-    pub async fn clone_session(&self) -> Result<PiNativeSession, PiSessionError> {
-        let control = AgentControl::CloneSession;
-        self.require_capability(control)?;
-        let status = self.status.lock().await;
-        if *status != AgentSessionStatus::Idle {
-            return Err(invalid_state(
-                control,
-                *status,
-                "wait for the session to become idle",
-            ));
-        }
-        let response = self.command(control, json!({"type": "clone"})).await?;
-        if response
-            .get("data")
-            .and_then(|data| data.get("cancelled"))
-            .and_then(Value::as_bool)
-            == Some(true)
-        {
-            return Err(PiSessionError::Control(AgentControlError::Rejected {
-                control,
-                message: "An extension cancelled the clone".to_owned(),
-            }));
-        }
-        self.native_session().await
-    }
-
     /// Runs the last user prompt again after the assistant turn failed.
     ///
     /// Pi's RPC protocol has no retry command, so this reads the conversation
@@ -725,6 +714,7 @@ impl PiSession {
         control: AgentControl,
         command_type: &'static str,
         message: String,
+        images: Vec<PiImage>,
     ) -> Result<(), PiSessionError> {
         self.require_capability(control)?;
         let status = self.status.lock().await;
@@ -735,8 +725,9 @@ impl PiSession {
                 "this queue accepts messages only during an active run",
             ));
         }
-        self.command(control, json!({"type": command_type, "message": message}))
-            .await?;
+        let mut command = json!({"type": command_type, "message": message});
+        PiImage::attach(&mut command, images);
+        self.command(control, command).await?;
         Ok(())
     }
 
@@ -864,6 +855,10 @@ fn parse_model(entry: &Value, current: Option<&ModelKey<'_>>) -> Result<PiModel,
         id: id.to_owned(),
         name: entry.get("name").and_then(Value::as_str).map(str::to_owned),
         reasoning: entry.get("reasoning").and_then(Value::as_bool) == Some(true),
+        image_input: entry
+            .get("input")
+            .and_then(Value::as_array)
+            .is_some_and(|input| input.iter().any(|kind| kind.as_str() == Some("image"))),
         current: current == Some(&key),
     })
 }

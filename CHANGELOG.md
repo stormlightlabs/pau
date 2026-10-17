@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- `scripts/install.sh` builds a release tag on your Mac and installs it,
+  prompting for the version or taking it as an argument.
 - Resumed, branched, and reloaded sessions show their full conversation from
   Pi, including a summary of compacted turns.
 - Attach images to a prompt by pasting, dragging them onto the composer, or

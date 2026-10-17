@@ -1016,6 +1016,28 @@ confirmed: boolean, } | {
  */
 cancelled: boolean, };
 
+export type SessionModel = {
+/**
+ * The provider the model is routed through.
+ */
+provider: string,
+/**
+ * The model identifier within the provider.
+ */
+id: string,
+/**
+ * The model's display name, when the agent reports one.
+ */
+name: string | null,
+/**
+ * Whether the model supports reasoning.
+ */
+reasoning: boolean,
+/**
+ * Whether the session currently uses this model.
+ */
+current: boolean, };
+
 export type SessionModelSelection = {
 /**
  * Provider that serves the model.

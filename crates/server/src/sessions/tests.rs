@@ -31,7 +31,7 @@ while IFS= read -r command; do
     id=$(printf '%s' "$command" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
     case "$command" in
         *'"type":"get_state"'*)
-            printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"native","sessionFile":"%s/session.jsonl"}}\n' "$id" "$PWD"
+            printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"native","sessionFile":"%s/session.jsonl","model":{"provider":"fixture","id":"model-one"}}}\n' "$id" "$PWD"
             ;;
         *'"message":"exit"'*) exit 3 ;;
         *'"message":"dialogs"'*)
@@ -88,6 +88,9 @@ while IFS= read -r command; do
             ;;
         *'"type":"set_auto_compaction"'*)
             printf '{"id":"%s","type":"response","command":"set_auto_compaction","success":true}\n' "$id"
+            ;;
+        *'"type":"get_available_models"'*)
+            printf '{"id":"%s","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"model-one","name":"Model One","provider":"fixture","reasoning":true},{"id":"model-two","provider":"fixture","reasoning":false}]}}\n' "$id"
             ;;
         *'"type":"get_commands"'*)
             printf '{"id":"%s","type":"response","command":"get_commands","success":true,"data":{"commands":[{"name":"review","description":"Review the changes","source":"prompt","sourceInfo":{"path":"/prompts/review.md"}},{"name":"skill:lint","source":"skill"}]}}\n' "$id"
@@ -256,6 +259,16 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
         ])
     );
 
+    let (status, models) = fixture.call("GET", &format!("{base}/models"), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        models,
+        json!([
+            {"provider": "fixture", "id": "model-one", "name": "Model One", "reasoning": true, "current": true},
+            {"provider": "fixture", "id": "model-two", "name": null, "reasoning": false, "current": false},
+        ])
+    );
+
     let model = json!({"provider": "fixture", "model_id": "model-one"});
     let (status, selected) = fixture
         .call("PUT", &format!("{base}/model"), Some(model))
@@ -382,6 +395,8 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
             "get_state",
             "set_model",
             "get_commands",
+            "get_state",
+            "get_available_models",
             "set_model",
             "set_model",
             "set_thinking_level",

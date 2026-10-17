@@ -52,6 +52,7 @@ export type {
 	SessionExtensionUi,
 	SessionMessageQueue,
 	SessionMessageRequest,
+	SessionModel,
 	SessionModelSelection,
 	SessionPromptRequest,
 	SessionQueue,

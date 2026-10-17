@@ -236,6 +236,21 @@ pub struct SessionMessageQueue {
     pub follow_up: Vec<String>,
 }
 
+/// A model a session can use.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionModel {
+    /// The provider the model is routed through.
+    pub provider: String,
+    /// The model identifier within the provider.
+    pub id: String,
+    /// The model's display name, when the agent reports one.
+    pub name: Option<String>,
+    /// Whether the model supports reasoning.
+    pub reasoning: bool,
+    /// Whether the session currently uses this model.
+    pub current: bool,
+}
+
 /// The kind of resource that provides a slash command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]

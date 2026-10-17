@@ -6,8 +6,8 @@ use pau_agent::{
 };
 use pau_pi::{
     PI_RPC_CAPABILITIES, PiCommand, PiCommandSource, PiCompactionOutcome, PiCompactionReason,
-    PiEventPayload, PiEventReducer, PiExtensionUiResponse, PiProcess, PiProcessOutput, PiSession,
-    PiSessionError, PiShutdownTimeouts, StartPiProcessOptions,
+    PiEventPayload, PiEventReducer, PiExtensionUiResponse, PiModel, PiProcess, PiProcessOutput,
+    PiSession, PiSessionError, PiShutdownTimeouts, StartPiProcessOptions,
 };
 use serde_json::Value;
 use std::fs;
@@ -181,6 +181,47 @@ async fn lists_prompt_skill_and_extension_commands() {
     session.stop().await.unwrap();
     unsupported.stop().await.unwrap();
     assert_command(&fixture.commands()[0], "get_commands");
+}
+
+#[tokio::test]
+async fn lists_available_models_and_marks_the_current_one() {
+    let fixture = FakePi::new(CONTROL_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+    let model = |id: &str, name: Option<&str>, reasoning, current| PiModel {
+        provider: "fixture".to_owned(),
+        id: id.to_owned(),
+        name: name.map(str::to_owned),
+        reasoning,
+        current,
+    };
+    assert_eq!(
+        session.models().await.unwrap(),
+        vec![
+            model("model-one", Some("Model One"), true, false),
+            model("model-two", None, false, true),
+        ]
+    );
+    session.stop().await.unwrap();
+
+    let empty = FakePi::new(
+        r#"
+while IFS= read -r command; do
+    id=$(printf '%s' "$command" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+    case "$command" in
+        *'"type":"get_state"'*)
+            printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{}}\n' "$id"
+            ;;
+        *'"type":"get_available_models"'*)
+            printf '{"id":"%s","type":"response","command":"get_available_models","success":true,"data":{"models":[]}}\n' "$id"
+            ;;
+        *) exit 65 ;;
+    esac
+done
+"#,
+    );
+    let session = PiSession::start(empty.options()).unwrap();
+    assert_eq!(session.models().await.unwrap(), Vec::new());
+    session.stop().await.unwrap();
 }
 
 #[tokio::test]
@@ -371,6 +412,12 @@ while IFS= read -r command; do
             ;;
         *'"type":"set_thinking_level"'*)
             printf '{"id":"%s","type":"response","command":"set_thinking_level","success":true}\n' "$id"
+            ;;
+        *'"type":"get_state"'*)
+            printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"model":{"provider":"fixture","id":"model-two"}}}\n' "$id"
+            ;;
+        *'"type":"get_available_models"'*)
+            printf '{"id":"%s","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"model-one","name":"Model One","provider":"fixture","reasoning":true},{"id":"model-two","provider":"fixture","reasoning":false}]}}\n' "$id"
             ;;
         *'"type":"get_commands"'*)
             printf '{"id":"%s","type":"response","command":"get_commands","success":true,"data":{"commands":[{"name":"review","description":"Review the changes","source":"prompt","sourceInfo":{"path":"/prompts/review.md","source":"local","scope":"project","origin":"top-level"}},{"name":"skill:lint","source":"skill"},{"name":"ping","description":"Ping","source":"extension"}]}}\n' "$id"

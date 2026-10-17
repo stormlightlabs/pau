@@ -96,6 +96,21 @@ pub struct PiCommand {
     pub path: Option<String>,
 }
 
+/// A model Pi can run, as configured for the session.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PiModel {
+    /// The provider Pi routes the model through.
+    pub provider: String,
+    /// The model identifier within the provider.
+    pub id: String,
+    /// Pi's display name, when it has one.
+    pub name: Option<String>,
+    /// Whether the model supports reasoning.
+    pub reasoning: bool,
+    /// Whether this is the model the session currently uses.
+    pub current: bool,
+}
+
 /// Owns the controls and observed lifecycle state for one Pi RPC process.
 pub struct PiSession {
     process: Arc<PiProcess>,
@@ -188,6 +203,31 @@ impl PiSession {
                 PiSessionError::NativeSession("Pi did not report a command list".to_owned())
             })?;
         entries.iter().map(parse_command).collect()
+    }
+
+    /// Lists the models Pi has configured and marks the one the session uses.
+    pub async fn models(&self) -> Result<Vec<PiModel>, PiSessionError> {
+        let control = AgentControl::SelectModel;
+        self.require_capability(control)?;
+        let state = self.command(control, json!({"type": "get_state"})).await?;
+        let current = state
+            .get("data")
+            .and_then(|data| data.get("model"))
+            .map(model_key);
+        let response = self
+            .command(control, json!({"type": "get_available_models"}))
+            .await?;
+        let entries = response
+            .get("data")
+            .and_then(|data| data.get("models"))
+            .and_then(Value::as_array)
+            .ok_or_else(|| {
+                PiSessionError::NativeSession("Pi did not report a model list".to_owned())
+            })?;
+        entries
+            .iter()
+            .map(|entry| parse_model(entry, current.as_ref()))
+            .collect()
     }
 
     /// Starts work, or queues it during a run when the caller chooses a queue.
@@ -505,6 +545,29 @@ fn parse_command(entry: &Value) -> Result<PiCommand, PiSessionError> {
             .and_then(|info| info.get("path"))
             .and_then(Value::as_str)
             .map(str::to_owned),
+    })
+}
+
+type ModelKey<'a> = (Option<&'a str>, Option<&'a str>);
+
+fn model_key(model: &Value) -> ModelKey<'_> {
+    let text = |key| model.get(key).and_then(Value::as_str);
+    (text("provider"), text("id"))
+}
+
+fn parse_model(entry: &Value, current: Option<&ModelKey<'_>>) -> Result<PiModel, PiSessionError> {
+    let key = model_key(entry);
+    let (Some(provider), Some(id)) = key else {
+        return Err(PiSessionError::NativeSession(
+            "Pi reported a model without a provider and id".to_owned(),
+        ));
+    };
+    Ok(PiModel {
+        provider: provider.to_owned(),
+        id: id.to_owned(),
+        name: entry.get("name").and_then(Value::as_str).map(str::to_owned),
+        reasoning: entry.get("reasoning").and_then(Value::as_bool) == Some(true),
+        current: current == Some(&key),
     })
 }
 

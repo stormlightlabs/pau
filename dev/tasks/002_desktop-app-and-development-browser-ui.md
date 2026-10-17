@@ -650,21 +650,10 @@ Verification:
 
 - Component-test renaming, cloning, and a failed rename.
 
-### 2.151 Pi model list API
-
-Status: planned
-Blocked by: none
-
-Expose the models a Pi session can use through the desktop API.
-
-Verification:
-
-- Cover the model list and an empty list against the Pi fixture.
-
 ### 2.152 Model picker
 
 Status: planned
-Blocked by: 2.151
+Blocked by: none
 
 Add a model picker to the session view.
 

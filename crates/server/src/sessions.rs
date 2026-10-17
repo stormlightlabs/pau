@@ -39,14 +39,15 @@ use pau_core::{
         ExtensionWidgetPlacement, NativeSessionList, NativeSessionSummary, NativeSessionWarning,
         SessionAutoCompactionRequest, SessionCapabilities, SessionCommand, SessionCommandSource,
         SessionCompactRequest, SessionCompactionResult, SessionExtensionUi, SessionMessageQueue,
-        SessionMessageRequest, SessionModelSelection, SessionPromptRequest, SessionQueue,
-        SessionStatus, SessionThinkingLevel, SessionThinkingLevelRequest, StartSessionRequest,
+        SessionMessageRequest, SessionModel, SessionModelSelection, SessionPromptRequest,
+        SessionQueue, SessionStatus, SessionThinkingLevel, SessionThinkingLevelRequest,
+        StartSessionRequest,
     },
 };
 use pau_pi::{
     DiscoverPiOptions, PiCommand, PiCommandSource, PiExtensionUiRequest, PiExtensionUiResponse,
-    PiExtensionWidgetPlacement, PiProcessError, PiProcessOutput, PiSession, PiSessionError,
-    PiSessionOutput, PiSessionRegistry, PiSessionRegistryError, PiShutdownTimeouts,
+    PiExtensionWidgetPlacement, PiModel, PiProcessError, PiProcessOutput, PiSession,
+    PiSessionError, PiSessionOutput, PiSessionRegistry, PiSessionRegistryError, PiShutdownTimeouts,
     StartPiProcessOptions, StartRegisteredPiSession, discover_pi, find_pi_session_file,
     list_pi_session_files, pi_configuration_paths,
 };
@@ -466,6 +467,16 @@ fn session_command(command: PiCommand) -> SessionCommand {
     }
 }
 
+fn session_model(model: PiModel) -> SessionModel {
+    SessionModel {
+        provider: model.provider,
+        id: model.id,
+        name: model.name,
+        reasoning: model.reasoning,
+        current: model.current,
+    }
+}
+
 fn thinking_level(level: SessionThinkingLevel) -> ThinkingLevel {
     match level {
         SessionThinkingLevel::Off => ThinkingLevel::Off,
@@ -829,6 +840,16 @@ pub(crate) async fn set_session_auto_compaction(
     let (_, session) = session_api(&state)?.live(&session_id).await?;
     session.set_auto_compaction(request.enabled).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Lists the models the session can use and marks the current one.
+pub(crate) async fn list_session_models(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+) -> Result<Json<Vec<SessionModel>>, ApiError> {
+    let (_, session) = session_api(&state)?.live(&session_id).await?;
+    let models = session.models().await?;
+    Ok(Json(models.into_iter().map(session_model).collect()))
 }
 
 /// Lists the slash commands the session offers.

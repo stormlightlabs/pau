@@ -2,7 +2,13 @@ import { readFileSync } from 'node:fs';
 
 import { expect, test } from 'vitest';
 
-import { emptyPiTranscript, queueFromEvent, reducePiEvent, type PiTranscript } from './pi-transcript';
+import {
+	branchPiTranscript,
+	emptyPiTranscript,
+	queueFromEvent,
+	reducePiEvent,
+	type PiTranscript
+} from './pi-transcript';
 
 /** Native Pi events shared with the Rust projection tests. */
 const fixture = readFileSync(
@@ -16,6 +22,24 @@ const fixture = readFileSync(
 function reduce(events: unknown[], state: PiTranscript = emptyPiTranscript): PiTranscript {
 	return events.reduce<PiTranscript>(reducePiEvent, state);
 }
+
+test('drops the branched user message and everything after it', () => {
+	const turn = (role: string, text: string) => [
+		{ type: 'message_start', message: { role, content: text } },
+		{ type: 'message_end', message: { role, content: [{ type: 'text', text }] } }
+	];
+	const state = reduce([
+		...turn('user', 'one'),
+		...turn('assistant', 'first answer'),
+		...turn('user', 'two'),
+		...turn('assistant', 'second answer')
+	]);
+
+	expect(branchPiTranscript(state, 1).entries.map((entry) => entry.id)).toEqual(['m0:0', 'm1:0']);
+	expect(branchPiTranscript(state, 1).messages).toBe(4);
+	expect(branchPiTranscript(state, 3).entries).toEqual([]);
+	expect(branchPiTranscript(state, 0)).toBe(state);
+});
 
 test('shows streamed text before the message completes', () => {
 	const streaming = reduce(fixture.slice(0, 7));

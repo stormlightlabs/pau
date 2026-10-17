@@ -16,6 +16,7 @@
 	import ThinkingLevelPicker from './ThinkingLevelPicker.svelte';
 	import SessionPicker from './SessionPicker.svelte';
 	import SessionResourceSummary from './SessionResourceSummary.svelte';
+	import SessionTree from './SessionTree.svelte';
 	import type { ProcessResourceSnapshot } from './types/resource-monitoring';
 	import type {
 		CommandOption,
@@ -27,6 +28,8 @@
 		PromptQueue,
 		SandboxDenial,
 		SavedSessionList,
+		SessionBranchOutcome,
+		SessionTreeSnapshot,
 		SessionViewModel,
 		SessionWorkspace,
 		TranscriptTool
@@ -77,6 +80,16 @@
 		/** Resumes a saved session. A rejected promise shows its message in the picker. */
 		onResumeSession?: (workspaceId: string, savedSessionId: string) => void | Promise<void>;
 		/**
+		 * Reads a session's entry tree. With `onBranchSession`, the inspector
+		 * shows the tree of the active session.
+		 */
+		onLoadSessionTree?: (sessionId: string) => Promise<SessionTreeSnapshot>;
+		/**
+		 * Branches a session from an earlier user message. The returned text
+		 * replaces the composer draft. A rejection shows its message in the tree.
+		 */
+		onBranchSession?: (sessionId: string, entryId: string) => Promise<SessionBranchOutcome>;
+		/**
 		 * Lists the models a session can use. With `onSelectModel`, the session
 		 * header offers a model picker. A rejected promise shows its message.
 		 */
@@ -111,6 +124,8 @@
 		onStartSession,
 		onLoadSavedSessions,
 		onResumeSession,
+		onLoadSessionTree,
+		onBranchSession,
 		onLoadModels,
 		onSelectModel,
 		onSelectThinkingLevel,
@@ -259,6 +274,22 @@
 			return `${session.agent} cannot take new direction during a run. Send your prompt when this run finishes.`;
 		}
 		return undefined;
+	}
+
+	/** Explains why branching must wait, or returns `undefined` when the session can branch now. */
+	function branchUnavailableReason(session: SessionViewModel, offline: boolean): string | undefined {
+		if (offline) return 'Pau is reconnecting to the backend. You can branch again once it reconnects.';
+		if (session.status === 'idle') return undefined;
+		if (['stopped', 'failed', 'stopping'].includes(session.status)) {
+			return 'This session has ended, so it cannot branch.';
+		}
+		return `Wait for ${session.agent} to finish before branching.`;
+	}
+
+	function branched(text: string): void {
+		draft = text;
+		error = undefined;
+		composer?.focus();
 	}
 
 	/** Explains why the model picker is read-only, or returns `undefined` when it accepts a change. */
@@ -590,6 +621,19 @@
 			}}
 			onInterrupt={(sessionId) => onInterrupt(sessionId)}
 			onStop={(sessionId) => onStop(sessionId)} />
+		{#if activeSession && onLoadSessionTree && onBranchSession}
+			{@const session = activeSession}
+			{#key session.id}
+				<SessionTree
+					agent={session.agent}
+					supported={session.capabilities.branching === true}
+					load={() => onLoadSessionTree(session.id)}
+					onBranch={(entryId) => onBranchSession(session.id, entryId)}
+					onBranched={branched}
+					branchUnavailable={branchUnavailableReason(session, disconnected)}
+					revision={session.status === 'idle' ? session.transcript.length : null} />
+			{/key}
+		{/if}
 	{/snippet}
 
 	{#if pickerWorkspace && onLoadSavedSessions && onResumeSession}

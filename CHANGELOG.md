@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Browse a session's tree in the inspector and branch from an earlier prompt.
+  Pau puts that prompt back in the composer so you can edit and resend it.
 - Type `/` in the composer to browse and complete Pi's extension commands,
   prompt templates, and skills.
 - Queued steering and follow-up messages appear above the composer, and

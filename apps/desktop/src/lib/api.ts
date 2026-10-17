@@ -12,6 +12,8 @@ import type {
 	GitDiff,
 	GitStatus,
 	NativeSessionList,
+	SessionBranchRequest,
+	SessionBranchResult,
 	SessionExtensionUi,
 	SessionCommand,
 	SessionModel,
@@ -20,6 +22,7 @@ import type {
 	SessionMessageRequest,
 	SessionPromptRequest,
 	SessionQueue,
+	SessionTree,
 	SessionThinkingLevel,
 	SessionThinkingLevelRequest,
 	StartSessionRequest,
@@ -437,6 +440,37 @@ export function cancelSessionRetry(search: string, sessionId: string, fetcher: t
 /** Stops a session's process. Its final state arrives on the event stream. */
 export function stopSession(search: string, sessionId: string, fetcher: typeof fetch = fetch): Promise<void> {
 	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}`, 'DELETE', undefined, fetcher);
+}
+
+/** Reads the entry tree of a live session's persisted file, newest entries kept. */
+export async function getSessionTree(
+	search: string,
+	sessionId: string,
+	fetcher: typeof fetch = fetch
+): Promise<SessionTree> {
+	const response = await fetcher(sessionUrl(search, `/${encodeURIComponent(sessionId)}/tree`), {
+		headers: authorization(resolveApiToken(search))
+	});
+	return responseJson<SessionTree>(response);
+}
+
+/**
+ * Branches an idle session from an earlier user message. The agent continues
+ * in a new session file, and the result carries that message's text.
+ */
+export async function branchSession(
+	search: string,
+	sessionId: string,
+	entryId: string,
+	fetcher: typeof fetch = fetch
+): Promise<SessionBranchResult> {
+	const request: SessionBranchRequest = { entry_id: entryId };
+	const response = await fetcher(sessionUrl(search, `/${encodeURIComponent(sessionId)}/branch`), {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', ...authorization(resolveApiToken(search)) },
+		body: JSON.stringify(request)
+	});
+	return responseJson<SessionBranchResult>(response);
 }
 
 /** Lists the models a live session can select. */

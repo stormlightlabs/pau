@@ -7,6 +7,8 @@ import type {
 	ModelOption,
 	PromptQueue,
 	SavedSessionList,
+	SessionBranchOutcome,
+	SessionTreeSnapshot,
 	SessionViewModel,
 	SessionWorkspace,
 	ThinkingLevel
@@ -14,9 +16,11 @@ import type {
 
 import {
 	PauApiError,
+	branchSession,
 	cancelSessionRetry,
 	clearSessionQueue,
 	getSessionExtensionUi,
+	getSessionTree,
 	getSessionHistory,
 	getSessionQueue,
 	interruptSession,
@@ -48,7 +52,13 @@ import {
 	type LiveExtensionUi
 } from './extension-ui';
 import { EventStreamClient, type EventSocketFactory, type EventStreamState } from './event-stream';
-import { emptyPiTranscript, queueFromEvent, reducePiEvent, type PiTranscript } from './pi-transcript';
+import {
+	branchPiTranscript,
+	emptyPiTranscript,
+	queueFromEvent,
+	reducePiEvent,
+	type PiTranscript
+} from './pi-transcript';
 
 /** Transport hooks for {@link LiveSessions}. Tests replace both. */
 export type LiveSessionsOptions = {
@@ -67,9 +77,18 @@ const NOTIFICATION_MS = 8000;
  * Turns an API failure into copy for the operator. Starting and controlling a
  * session share most codes, but `not_found` names a different missing thing.
  */
-export function sessionErrorMessage(cause: unknown, action: 'start' | 'control' | 'resume' | 'retry'): string {
+export function sessionErrorMessage(
+	cause: unknown,
+	action: 'start' | 'control' | 'resume' | 'retry' | 'branch'
+): string {
 	if (!(cause instanceof PauApiError)) {
 		return 'Pau could not reach its backend. Check that the desktop app is still running, then try again.';
+	}
+	if (action === 'branch' && cause.code === 'invalid_session_state') {
+		return 'Pi is busy. Wait for the current run to finish, then branch again.';
+	}
+	if (action === 'branch' && cause.code === 'control_rejected') {
+		return `Pi could not branch from that message: ${cause.message}`;
 	}
 	switch (cause.code) {
 		case 'pi_unavailable':
@@ -124,6 +143,25 @@ function wireResponse(response: ExtensionUiResponse) {
 	return { cancelled: true };
 }
 
+/**
+ * Counts the user messages from `entryId` to the tree's leaf, inclusive.
+ * Returns 0 when the entry is not on the current path, so nothing is trimmed.
+ */
+function userMessagesFrom(tree: SessionTreeSnapshot | undefined, entryId: string): number {
+	if (!tree) return 0;
+	const byId = new Map(tree.entries.map((entry) => [entry.id, entry]));
+	let count = 0;
+	let id = tree.leafId;
+	// The step limit stops a malformed file with a parent cycle from looping forever.
+	for (let step = 0; id !== undefined && step < tree.entries.length; step += 1, id = byId.get(id)?.parentId) {
+		const entry = byId.get(id);
+		if (!entry) return 0;
+		if (entry.role === 'user') count += 1;
+		if (id === entryId) return count;
+	}
+	return 0;
+}
+
 function failureMessage(session: AgentSession): string | undefined {
 	if (session.status !== 'failed') return undefined;
 	const exit = session.exit_code === null ? 'Pi exited unexpectedly.' : `Pi exited with code ${session.exit_code}.`;
@@ -160,6 +198,8 @@ export class LiveSessions {
 	/** Sessions whose extension UI changed during the read in flight and needs another read. */
 	readonly #extensionStale = new SvelteSet<string>();
 	readonly #notificationTimers = new SvelteSet<string>();
+	/** The last tree read for each session, used to trim the transcript after a branch. */
+	readonly #trees = new SvelteMap<string, SessionTreeSnapshot>();
 	#loadFailed = $state(false);
 	#socketOpen = $state(false);
 	#connectedOnce = false;
@@ -322,6 +362,49 @@ export class LiveSessions {
 						this.#fetcher
 					)
 		);
+	}
+
+	/** Reads a session's entry tree. Rejects with operator-facing copy. */
+	async tree(sessionId: string): Promise<SessionTreeSnapshot> {
+		try {
+			const tree = await getSessionTree(this.#options.search, sessionId, this.#fetcher);
+			const snapshot: SessionTreeSnapshot = {
+				entries: tree.entries.map((entry) => ({
+					id: entry.id,
+					parentId: entry.parent_id ?? undefined,
+					kind: entry.kind,
+					role: entry.role ?? undefined,
+					preview: entry.preview,
+					timestamp: entry.timestamp ?? undefined
+				})),
+				leafId: tree.leaf_id ?? undefined,
+				truncated: tree.truncated
+			};
+			this.#trees.set(sessionId, snapshot);
+			return snapshot;
+		} catch (cause) {
+			throw new Error(sessionErrorMessage(cause, 'control'), { cause });
+		}
+	}
+
+	/**
+	 * Branches an idle session from an earlier user message. Pi continues
+	 * without that message and the ones after it, so the transcript drops them
+	 * too. The last tree read tells how many user messages that removes.
+	 */
+	async branch(sessionId: string, entryId: string): Promise<SessionBranchOutcome> {
+		let result;
+		try {
+			result = await branchSession(this.#options.search, sessionId, entryId, this.#fetcher);
+		} catch (cause) {
+			throw new Error(sessionErrorMessage(cause, 'branch'), { cause });
+		}
+		if (!result.cancelled) {
+			const removed = userMessagesFrom(this.#trees.get(sessionId), entryId);
+			const transcript = this.#transcripts[sessionId] ?? emptyPiTranscript;
+			this.#transcripts[sessionId] = branchPiTranscript(transcript, removed);
+		}
+		return { text: result.text ?? undefined, cancelled: result.cancelled };
 	}
 
 	/** Reads a session's earlier prompts for composer recall, newest first. */
@@ -530,6 +613,7 @@ export class LiveSessions {
 				steer: session.capabilities.steer,
 				interrupt: session.capabilities.interrupt,
 				stop: session.capabilities.stop,
+				branching: session.capabilities.branching,
 				retry: session.capabilities.retry,
 				modelSelection: session.capabilities.model_selection,
 				messageQueue: session.capabilities.message_queue,

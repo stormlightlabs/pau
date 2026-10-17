@@ -8,6 +8,8 @@ export type SessionCapabilities = {
 	steer: boolean;
 	interrupt: boolean;
 	stop: boolean;
+	/** Whether the session exposes its entry tree and can branch from it. Absent means it cannot. */
+	branching?: boolean;
 	/** Retries a failed turn and cancels a pending automatic retry. */
 	retry?: boolean;
 	/** Whether the agent can switch models. Absent means the surface offers no picker. */
@@ -170,3 +172,34 @@ export type SavedSession = {
 
 /** Saved sessions for one workspace, newest first, with files that could not be read. */
 export type SavedSessionList = { sessions: SavedSession[]; warnings: { path: string; message: string }[] };
+
+/** One entry in a session's persisted tree, such as a message or a compaction. */
+export type SessionTreeItem = {
+	id: string;
+	/** The entry this one continues. Absent for a root or when the parent was left out. */
+	parentId?: string;
+	/** The agent's entry type, such as `message` or `compaction`. */
+	kind: string;
+	/** The message role, such as `user` or `assistant`, for message entries. */
+	role?: string;
+	/** The start of the entry's text, empty when it has none. */
+	preview: string;
+	/** ISO 8601 time the entry was recorded, when known. */
+	timestamp?: string;
+};
+
+/** A session's entry tree, oldest entry first. */
+export type SessionTreeSnapshot = {
+	entries: SessionTreeItem[];
+	/** The entry the session currently continues from. */
+	leafId?: string;
+	/** Whether older entries were left out to bound the response. */
+	truncated: boolean;
+};
+
+/**
+ * Result of branching from an earlier user message. `text` is that message's
+ * prompt, which the composer offers for editing. `cancelled` reports that an
+ * extension stopped the branch.
+ */
+export type SessionBranchOutcome = { text?: string; cancelled: boolean };

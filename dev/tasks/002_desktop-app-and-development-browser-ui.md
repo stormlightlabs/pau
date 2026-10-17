@@ -716,17 +716,20 @@ Verification:
 - Component-test compacting, compacted, and failed states.
 - Compact a self-hosted Pi session.
 
-### 2.73 Session tree view
+### 2.166 Live transcript history
 
-Status: planned
+Status: in progress
 Blocked by: none
 
-Add session tree navigation and branching to the session view.
+Load a live Pi session's existing conversation from Pi when the session opens,
+resumes, branches, or reconnects, then apply streamed events on top.
 
 Verification:
 
-- Component-test a large branched session.
-- Branch a self-hosted Pi session.
+- Cover the transcript route against the fake Pi executable, including a
+  resumed session and a session after compaction.
+- Component-test a resumed session that shows its earlier turns, a page reload
+  that keeps them, and a branch that drops the turns after the fork point.
 
 ### 2.80 Pi transcript search API
 
@@ -776,7 +779,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.165, 2.73, 2.79, 2.114, 2.120, 2.156
+Blocked by: 2.165, 2.166, 2.79, 2.114, 2.120, 2.156
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

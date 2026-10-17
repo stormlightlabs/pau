@@ -63,6 +63,8 @@
 	onStartSession={startSession}
 	onLoadSavedSessions={(workspaceId) => sessions.listSaved(workspaceId)}
 	onResumeSession={resumeSession}
+	onLoadSessionTree={(sessionId) => sessions.tree(sessionId)}
+	onBranchSession={(sessionId, entryId) => sessions.branch(sessionId, entryId)}
 	onLoadCommands={(sessionId) => sessions.listCommands(sessionId)}
 	onLoadModels={(sessionId) => sessions.listModels(sessionId)}
 	onSelectModel={(sessionId, model) => sessions.selectModel(sessionId, model)}

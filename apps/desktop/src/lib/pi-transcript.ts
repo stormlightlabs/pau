@@ -267,6 +267,29 @@ export function reducePiEvent(state: PiTranscript, event: unknown): PiTranscript
 }
 
 /**
+ * Drops the newest `count` user messages and everything after them, which is
+ * what remains on screen after Pi branches from the oldest of those messages.
+ *
+ * The transcript holds only the tail of the session that Pau saw stream, so
+ * counting from the end works even when older messages are missing. When the
+ * transcript holds fewer user messages than `count`, every entry is newer
+ * than the branch point and the transcript empties. The message counter keeps
+ * counting so later entry keys stay unique.
+ */
+export function branchPiTranscript(state: PiTranscript, count: number): PiTranscript {
+	if (count <= 0) return state;
+	const owner = (entry: TranscriptEntry) => entry.id.split(':')[0];
+	const userMessages = [
+		...new Set(
+			state.entries.flatMap((entry) => (entry.kind === 'message' && entry.role === 'user' ? [owner(entry)] : []))
+		)
+	];
+	const first = userMessages.at(-count);
+	const cut = first === undefined ? 0 : state.entries.findIndex((entry) => owner(entry) === first);
+	return { ...state, entries: state.entries.slice(0, cut) };
+}
+
+/**
  * Reads a `queue_update` event, which carries the whole queue each time.
  * Returns undefined for any other event.
  */

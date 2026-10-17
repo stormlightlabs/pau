@@ -467,6 +467,64 @@ test.each([
 	await expect.element(page.getByRole('alert')).toHaveTextContent(expected);
 });
 
+const sessionTree = {
+	entries: [
+		{ id: 'u1', parent_id: null, kind: 'message', role: 'user', preview: 'Fix the gutter', timestamp: null },
+		{ id: 'a1', parent_id: 'u1', kind: 'message', role: 'assistant', preview: 'Gutter fixed.', timestamp: null },
+		{ id: 'u2', parent_id: 'a1', kind: 'message', role: 'user', preview: 'Add a test.', timestamp: null },
+		{ id: 'a2', parent_id: 'u2', kind: 'message', role: 'assistant', preview: 'Test added.', timestamp: null }
+	],
+	leaf_id: 'a2',
+	truncated: false
+};
+
+/** Streams two prompt turns, then opens the session tree in the inspector. */
+async function openTree(routes: Record<string, Route>): Promise<void> {
+	const { props, sockets } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/sessions/session-1/tree': () => json(sessionTree),
+		...routes
+	});
+	await render(SessionRoute, props);
+	sockets[0]?.open();
+	for (const [role, text] of [
+		['user', 'Fix the gutter'],
+		['assistant', 'Gutter fixed.'],
+		['user', 'Add a test.'],
+		['assistant', 'Test added.']
+	]) {
+		sockets[0]?.receive(output({ type: 'message_start', message: { role, content: text } }));
+		sockets[0]?.receive(output({ type: 'message_end', message: { role, content: [{ type: 'text', text }] } }));
+	}
+	await expect.element(page.getByText('Test added.')).toBeVisible();
+	await userEvent.click(page.getByRole('button', { name: 'Show inspector' }));
+	await userEvent.click(page.getByRole('tree').getByText('Add a test.'));
+}
+
+test('branches from a user message, trims the transcript, and refills the composer', async () => {
+	const branch = vi.fn(() => json({ text: 'Add a test.', cancelled: false }));
+	await openTree({ 'POST /api/sessions/session-1/branch': branch });
+
+	await userEvent.click(page.getByRole('button', { name: 'Branch from here' }));
+
+	expect(branch).toHaveBeenCalledWith(expect.objectContaining({ body: '{"entry_id":"u2"}' }));
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toHaveValue('Add a test.');
+	const transcript = page.getByLabelText('Transcript');
+	await expect.element(transcript.getByText('Gutter fixed.')).toBeVisible();
+	await expect.element(transcript.getByText('Test added.')).not.toBeInTheDocument();
+});
+
+test.each([
+	['invalid_session_state', 409, 'Pi is busy. Wait for the current run to finish'],
+	['control_rejected', 422, 'Pi could not branch from that message: entry not found']
+])('explains a %s branch failure', async (code, status, expected) => {
+	await openTree({ 'POST /api/sessions/session-1/branch': () => json({ code, message: 'entry not found' }, status) });
+
+	await userEvent.click(page.getByRole('button', { name: 'Branch from here' }));
+
+	await expect.element(page.getByRole('alert')).toHaveTextContent(expected);
+});
+
 const modelList = (current: string) => [
 	{ provider: 'anthropic', id: 'sonnet', name: 'Sonnet', reasoning: true, current: current === 'sonnet' },
 	{ provider: 'openai', id: 'gpt-5', name: null, reasoning: false, current: current === 'gpt-5' }

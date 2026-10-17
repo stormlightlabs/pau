@@ -6,6 +6,7 @@ const fullCapabilities = {
 	steer: true,
 	interrupt: true,
 	stop: true,
+	branching: true,
 	retry: true,
 	messageQueue: true,
 	commandDiscovery: true

@@ -26,6 +26,8 @@ pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     compaction: true,
     branching: true,
     retry: true,
+    rename: true,
+    clone_session: true,
     stop: true,
 };
 
@@ -562,6 +564,53 @@ impl PiSession {
         )
         .await?;
         Ok(())
+    }
+
+    /// Sets the display name Pi stores with the session.
+    ///
+    /// Pi rejects an empty name. The name shows in Pi's session listings.
+    pub async fn rename(&self, name: impl Into<String>) -> Result<(), PiSessionError> {
+        let control = AgentControl::Rename;
+        self.require_capability(control)?;
+        self.command(
+            control,
+            json!({"type": "set_session_name", "name": name.into()}),
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Copies the active branch into a new stored session and continues in it.
+    ///
+    /// Pi's `clone` command switches the running process to the copy, so this
+    /// session keeps its process and Pau identity while the original stays on
+    /// disk to be resumed later. Returns the native session the process now
+    /// uses. An extension that cancels the clone makes this return
+    /// [`AgentControlError::Rejected`]. The session must be idle.
+    pub async fn clone_session(&self) -> Result<PiNativeSession, PiSessionError> {
+        let control = AgentControl::CloneSession;
+        self.require_capability(control)?;
+        let status = self.status.lock().await;
+        if *status != AgentSessionStatus::Idle {
+            return Err(invalid_state(
+                control,
+                *status,
+                "wait for the session to become idle",
+            ));
+        }
+        let response = self.command(control, json!({"type": "clone"})).await?;
+        if response
+            .get("data")
+            .and_then(|data| data.get("cancelled"))
+            .and_then(Value::as_bool)
+            == Some(true)
+        {
+            return Err(PiSessionError::Control(AgentControlError::Rejected {
+                control,
+                message: "An extension cancelled the clone".to_owned(),
+            }));
+        }
+        self.native_session().await
     }
 
     /// Runs the last user prompt again after the assistant turn failed.

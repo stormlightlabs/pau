@@ -35,6 +35,8 @@ pub const CLAUDE_BRIDGE_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     compaction: false,
     branching: false,
     retry: false,
+    rename: false,
+    clone_session: false,
     stop: true,
 };
 

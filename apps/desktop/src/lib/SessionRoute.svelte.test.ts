@@ -34,6 +34,8 @@ const idleSession: AgentSession = {
 		compaction: true,
 		branching: true,
 		retry: true,
+		rename: true,
+		clone_session: true,
 		stop: true
 	}
 };

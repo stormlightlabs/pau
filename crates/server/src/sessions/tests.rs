@@ -83,6 +83,15 @@ while IFS= read -r command; do
         *'"type":"set_thinking_level"'*)
             printf '{"id":"%s","type":"response","command":"set_thinking_level","success":true}\n' "$id"
             ;;
+        *'"name":""'*)
+            printf '{"id":"%s","type":"response","command":"set_session_name","success":false,"error":"Session name cannot be empty"}\n' "$id"
+            ;;
+        *'"type":"set_session_name"'*)
+            printf '{"id":"%s","type":"response","command":"set_session_name","success":true}\n' "$id"
+            ;;
+        *'"type":"clone"'*)
+            printf '{"id":"%s","type":"response","command":"clone","success":true,"data":{"cancelled":false}}\n' "$id"
+            ;;
         *'"customInstructions":"fail"'*)
             printf '{"id":"%s","type":"response","command":"compact","success":false,"error":"Nothing to compact"}\n' "$id"
             printf '{"type":"compaction_end","reason":"manual","aborted":false,"willRetry":false,"errorMessage":"Nothing to compact"}\n'
@@ -520,6 +529,53 @@ async fn reports_usage_on_request_and_after_assistant_messages() {
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(missing["code"], "not_found");
+}
+
+#[tokio::test]
+async fn renames_and_clones_a_session() {
+    let fixture = Fixture::new(None).await;
+    let mut stream = fixture.events.subscribe(None);
+    let (_, session) = fixture.start(None).await;
+    assert_eq!(session["capabilities"]["rename"], true);
+    assert_eq!(session["capabilities"]["clone_session"], true);
+    let base = format!("/api/sessions/{}", session["id"].as_str().unwrap());
+
+    let (status, _) = fixture
+        .call(
+            "PUT",
+            &format!("{base}/name"),
+            Some(json!({"name": "release prep"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    next_event(&mut stream, session_changed("idle")).await;
+
+    let (status, rejected) = fixture
+        .call("PUT", &format!("{base}/name"), Some(json!({"name": ""})))
+        .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(rejected["code"], "control_rejected");
+
+    let (status, cloned) = fixture.call("POST", &format!("{base}/clone"), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(cloned, json!({"native_session_id": "native"}));
+    next_event(&mut stream, session_changed("idle")).await;
+
+    let (status, missing) = fixture
+        .call("POST", "/api/sessions/missing/clone", None)
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(missing["code"], "not_found");
+    assert_eq!(
+        fixture.commands(),
+        [
+            "get_state",
+            "set_session_name",
+            "set_session_name",
+            "clone",
+            "get_state"
+        ]
+    );
 }
 
 #[tokio::test]

@@ -51,12 +51,12 @@ use pau_core::{
         AgentSession, ExtensionDialog, ExtensionStatus, ExtensionUiResponse, ExtensionWidget,
         ExtensionWidgetPlacement, NativeSessionList, NativeSessionSummary, NativeSessionWarning,
         SessionAutoCompactionRequest, SessionAutoRetryRequest, SessionBranchRequest,
-        SessionBranchResult, SessionCapabilities, SessionCommand, SessionCommandSource,
-        SessionCompactRequest, SessionCompactionResult, SessionContextUsage, SessionExtensionUi,
-        SessionMessageQueue, SessionMessageRequest, SessionModel, SessionModelSelection,
-        SessionPromptRequest, SessionQueue, SessionStatus, SessionThinkingLevel,
-        SessionThinkingLevelRequest, SessionTokenUsage, SessionTree, SessionTreeEntry,
-        SessionUsage, StartSessionRequest,
+        SessionBranchResult, SessionCapabilities, SessionCloneResult, SessionCommand,
+        SessionCommandSource, SessionCompactRequest, SessionCompactionResult, SessionContextUsage,
+        SessionExtensionUi, SessionMessageQueue, SessionMessageRequest, SessionModel,
+        SessionModelSelection, SessionPromptRequest, SessionQueue, SessionRenameRequest,
+        SessionStatus, SessionThinkingLevel, SessionThinkingLevelRequest, SessionTokenUsage,
+        SessionTree, SessionTreeEntry, SessionUsage, StartSessionRequest,
     },
 };
 use pau_pi::{
@@ -522,6 +522,8 @@ fn session_capabilities(capabilities: AgentCapabilities) -> SessionCapabilities 
         compaction: capabilities.compaction,
         branching: capabilities.branching,
         retry: capabilities.retry,
+        rename: capabilities.rename,
+        clone_session: capabilities.clone_session,
         stop: capabilities.stop,
     }
 }
@@ -919,6 +921,39 @@ pub(crate) async fn set_session_auto_compaction(
     let (_, session) = session_api(&state)?.live(&session_id).await?;
     session.set_auto_compaction(request.enabled).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Sets the session's display name and publishes the updated session.
+pub(crate) async fn rename_session(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+    Json(request): Json<SessionRenameRequest>,
+) -> Result<StatusCode, ApiError> {
+    let api = session_api(&state)?;
+    let (_, session) = api.live(&session_id).await?;
+    session.rename(request.name).await?;
+    api.publish_current(&session_id).await;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Copies the session into a new stored session and continues in the copy.
+///
+/// Pi's RPC `clone` switches the running process to the copy rather than
+/// starting a second process, so the live session keeps its Pau id and the
+/// response names the new native session it now continues. The original stays
+/// in the workspace's native session list and can be resumed from there. A
+/// client that wants both open starts another live session on the original.
+pub(crate) async fn clone_session(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+) -> Result<Json<SessionCloneResult>, ApiError> {
+    let api = session_api(&state)?;
+    let (_, session) = api.live(&session_id).await?;
+    let native = session.clone_session().await?;
+    api.publish_current(&session_id).await;
+    Ok(Json(SessionCloneResult {
+        native_session_id: native.id,
+    }))
 }
 
 /// Returns the prompts the user sent, newest first, for input recall.

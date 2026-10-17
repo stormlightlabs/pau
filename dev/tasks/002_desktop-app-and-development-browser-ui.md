@@ -661,21 +661,10 @@ Verification:
 - Component-test empty, populated, and failed-resume states.
 - Resume a self-hosted Pi session from the picker.
 
-### 2.149 Pi session rename and clone API
-
-Status: planned
-Blocked by: none
-
-Rename and clone Pi sessions through the desktop API.
-
-Verification:
-
-- Cover renaming, cloning, and a rejected rename against the Pi fixture.
-
 ### 2.150 Session rename and clone controls
 
 Status: planned
-Blocked by: 2.149
+Blocked by: none
 
 Add rename and clone controls to the session view.
 

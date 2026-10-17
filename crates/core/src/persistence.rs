@@ -3,7 +3,7 @@
 //! Native agent session files are intentionally outside this database and are
 //! never read, changed, or removed by these repositories.
 
-use std::{path::Path, time::Duration};
+use std::{error::Error as StdError, fmt, path::Path, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use tokio_rusqlite::{Connection, OptionalExtension, params, rusqlite};
@@ -24,6 +24,62 @@ const MIGRATIONS: &[&str] = &[
 /// Result returned by persistence operations.
 pub type Result<T> = tokio_rusqlite::Result<T>;
 
+/// Failure to open the application database.
+#[derive(Debug)]
+pub enum OpenError {
+    /// The database was written by a newer Pau than this one. Migrations only
+    /// move forward before 1.0.0, so the file is left untouched.
+    NewerSchema {
+        /// Schema version stored in the database.
+        database_version: usize,
+        /// Highest schema version this build understands.
+        supported_version: usize,
+        /// Pau version that last migrated the database, when recorded.
+        created_by: Option<String>,
+    },
+    /// SQLite failed to open or migrate the database.
+    Sqlite(tokio_rusqlite::Error),
+}
+
+impl fmt::Display for OpenError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NewerSchema {
+                database_version,
+                supported_version,
+                created_by,
+            } => {
+                let creator = created_by.as_deref().map_or_else(
+                    || "a newer version of Pau".to_owned(),
+                    |version| format!("Pau {version}"),
+                );
+                write!(
+                    formatter,
+                    "the Pau database uses schema version {database_version}, last migrated by \
+                     {creator}, but this version of Pau only supports up to schema version \
+                     {supported_version}. Update Pau to open it."
+                )
+            }
+            Self::Sqlite(error) => write!(formatter, "could not open the Pau database: {error}"),
+        }
+    }
+}
+
+impl StdError for OpenError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            Self::NewerSchema { .. } => None,
+            Self::Sqlite(error) => Some(error),
+        }
+    }
+}
+
+impl From<rusqlite::Error> for OpenError {
+    fn from(error: rusqlite::Error) -> Self {
+        Self::Sqlite(tokio_rusqlite::Error::Error(error))
+    }
+}
+
 /// One application database backed by one serialized SQLite connection.
 ///
 /// Repository handles clone the asynchronous handle, but all work remains
@@ -35,17 +91,37 @@ pub struct Database {
 
 impl Database {
     /// Opens a database, configures the connection, and applies pending
-    /// migrations.
-    pub async fn open(path: impl AsRef<Path>) -> Result<Self> {
-        let connection = Connection::open(path).await?;
+    /// migrations, recording this crate's version as the migrating app.
+    ///
+    /// Returns [`OpenError::NewerSchema`] without modifying the database when
+    /// it was migrated by a newer Pau.
+    pub async fn open(path: impl AsRef<Path>) -> std::result::Result<Self, OpenError> {
+        Self::open_as(path, env!("CARGO_PKG_VERSION")).await
+    }
+
+    /// Opens a database like [`Database::open`], recording `app_version` as the
+    /// version that migrated it.
+    pub async fn open_as(
+        path: impl AsRef<Path>,
+        app_version: &str,
+    ) -> std::result::Result<Self, OpenError> {
+        let connection = Connection::open(path).await.map_err(OpenError::from)?;
+        let app_version = app_version.to_owned();
         connection
-            .call(|connection| {
+            .call(move |connection| {
                 connection.pragma_update(None, "foreign_keys", true)?;
                 connection.pragma_update(None, "journal_mode", "WAL")?;
                 connection.busy_timeout(BUSY_TIMEOUT)?;
-                apply_migrations(connection)
+                apply_migrations(connection, &app_version)
             })
-            .await?;
+            .await
+            .map_err(|error| match error {
+                tokio_rusqlite::Error::Error(error) => error,
+                tokio_rusqlite::Error::Close(error) => {
+                    OpenError::Sqlite(tokio_rusqlite::Error::Close(error))
+                }
+                _ => OpenError::Sqlite(tokio_rusqlite::Error::ConnectionClosed),
+            })?;
 
         Ok(Self { connection })
     }
@@ -81,14 +157,45 @@ impl Database {
     }
 }
 
-fn apply_migrations(connection: &mut rusqlite::Connection) -> rusqlite::Result<()> {
+/// Applies pending migrations and records which app version ran them.
+///
+/// `app_metadata` lives outside the numbered migrations so a newer schema can
+/// still be explained to the operator without running anything against it.
+fn apply_migrations(
+    connection: &mut rusqlite::Connection,
+    app_version: &str,
+) -> std::result::Result<(), OpenError> {
     let current_version: i64 =
         connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
     let current_version = usize::try_from(current_version)
         .map_err(|_| rusqlite::Error::IntegralValueOutOfRange(0, current_version))?;
 
     if current_version > MIGRATIONS.len() {
-        return Err(rusqlite::Error::InvalidQuery);
+        let has_metadata: bool = connection.query_row(
+            "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'app_metadata')",
+            [],
+            |row| row.get(0),
+        )?;
+        let created_by = if has_metadata {
+            connection
+                .query_row(
+                    "SELECT value FROM app_metadata WHERE key = 'migrated_by'",
+                    [],
+                    |row| row.get(0),
+                )
+                .optional()?
+        } else {
+            None
+        };
+        return Err(OpenError::NewerSchema {
+            database_version: current_version,
+            supported_version: MIGRATIONS.len(),
+            created_by,
+        });
+    }
+
+    if current_version == MIGRATIONS.len() {
+        return Ok(());
     }
 
     for (index, migration) in MIGRATIONS.iter().enumerate().skip(current_version) {
@@ -97,6 +204,15 @@ fn apply_migrations(connection: &mut rusqlite::Connection) -> rusqlite::Result<(
         transaction.pragma_update(None, "user_version", (index + 1) as i64)?;
         transaction.commit()?;
     }
+
+    connection.execute_batch(
+        "CREATE TABLE IF NOT EXISTS app_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+    )?;
+    connection.execute(
+        "INSERT INTO app_metadata (key, value) VALUES ('migrated_by', ?1)
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+        [app_version],
+    )?;
 
     Ok(())
 }
@@ -794,6 +910,81 @@ mod tests {
             name: Some("Pau".to_owned()),
             created_at: CREATED_AT.to_owned(),
             updated_at: UPDATED_AT.to_owned(),
+        }
+    }
+
+    #[tokio::test]
+    async fn refuses_newer_schema_and_names_the_recording_app() {
+        let newer = MIGRATIONS.len() + 1;
+        let cases: [(&str, usize, Option<&str>); 3] = [
+            ("current", MIGRATIONS.len(), None),
+            ("older", MIGRATIONS.len() - 1, None),
+            ("newer", newer, Some("9.9.9")),
+        ];
+
+        for (name, version, recorded) in cases {
+            let directory = tempdir().unwrap();
+            let path = directory.path().join("pau.sqlite3");
+            {
+                let connection = rusqlite::Connection::open(&path).unwrap();
+                for migration in MIGRATIONS.iter().take(version.min(MIGRATIONS.len())) {
+                    connection.execute_batch(migration).unwrap();
+                }
+                connection
+                    .pragma_update(None, "user_version", version as i64)
+                    .unwrap();
+                if let Some(recorded) = recorded {
+                    connection
+                        .execute_batch(&format!(
+                            "CREATE TABLE app_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                             INSERT INTO app_metadata VALUES ('migrated_by', '{recorded}');"
+                        ))
+                        .unwrap();
+                }
+            }
+
+            let result = Database::open_as(&path, "1.2.3").await;
+            if version > MIGRATIONS.len() {
+                let error = result.err().unwrap_or_else(|| panic!("{name} opened"));
+                let message = error.to_string();
+                assert!(
+                    matches!(
+                        &error,
+                        OpenError::NewerSchema {
+                            database_version,
+                            supported_version,
+                            created_by: Some(created_by),
+                        } if *database_version == newer
+                            && *supported_version == MIGRATIONS.len()
+                            && created_by == "9.9.9"
+                    ),
+                    "{name}: {error:?}"
+                );
+                assert!(message.contains("Pau 9.9.9"), "{message}");
+                let connection = rusqlite::Connection::open(&path).unwrap();
+                let stored: i64 = connection
+                    .pragma_query_value(None, "user_version", |row| row.get(0))
+                    .unwrap();
+                assert_eq!(stored, newer as i64, "{name}: database was modified");
+            } else {
+                let database = result.unwrap_or_else(|error| panic!("{name}: {error}"));
+                let recorded_version = database
+                    .connection
+                    .call(|connection| {
+                        connection.query_row(
+                            "SELECT value FROM app_metadata WHERE key = 'migrated_by'",
+                            [],
+                            |row| row.get::<_, Option<String>>(0),
+                        )
+                    })
+                    .await;
+                // The current-schema case needs no migration, so nothing is recorded.
+                if version == MIGRATIONS.len() {
+                    assert!(recorded_version.is_err(), "{name}");
+                } else {
+                    assert_eq!(recorded_version.unwrap().as_deref(), Some("1.2.3"));
+                }
+            }
         }
     }
 

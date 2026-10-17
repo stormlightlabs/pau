@@ -1351,22 +1351,10 @@ Verification:
 - Confirm an untagged build reports a `-dev` version with the commit, uses
   `org.stormlightlabs.pau.dev`, and does not open the release database.
 
-### 2.155 Database downgrade refusal
-
-Status: planned
-Blocked by: none
-
-Refuse to open a database whose schema is newer than the running app, and
-explain which version created it.
-
-Verification:
-
-- Cover current, older, and newer schema versions.
-
 ### 2.156 macOS dogfood build
 
 Status: planned
-Blocked by: 2.154, 2.155
+Blocked by: 2.154
 
 Build a signed and notarized Apple Silicon app from a release tag and install
 it in `/Applications`.
@@ -1376,6 +1364,8 @@ Verification:
 - Build, sign, notarize, and install a tagged release on the development Mac.
 - Launch it and confirm Gatekeeper accepts it and the reported version matches
   the tag.
+- Confirm a startup failure, such as a database from a newer version, shows its
+  message in a native dialog instead of quitting silently.
 
 ### 2.39 AppImage packaging
 

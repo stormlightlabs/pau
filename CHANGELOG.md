@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-17
+
+### Desktop
+
+- Pau now refuses to open a database created by a newer version and names the
+  version that created it.
+
 ## 2026-10-01
 
 ### Claude bridge package

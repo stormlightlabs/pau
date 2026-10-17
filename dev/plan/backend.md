@@ -376,20 +376,91 @@ this list detects every secret.
 Pi RPC reports tool execution but does not provide a pre-tool approval command.
 Use the selected optional Pi package
 [`@gotgenes/pi-permission-system`](https://pi.dev/packages/@gotgenes/pi-permission-system)
-instead of building a second policy engine.
-The evaluated 34.0.1 release is MIT-licensed, targets current
-`@earendil-works` Pi packages, fails closed, canonicalizes protected paths,
-gates shell, file, MCP, skill, and extension operations, queues prompts, and
-uses Pi's supported `select` and `input` requests outside TUI mode. Pin the
-exercised version and recheck its compatibility and security behavior when
-updating it.
+instead of building a second policy engine. Pin release 40.3.0, the version
+exercised under Pi 1.0.0 RPC. It is MIT-licensed, published from
+[`gotgenes/pi-packages`](https://github.com/gotgenes/pi-packages/tree/main/packages/pi-permission-system),
+and maintained by one author. The package changes quickly: it shipped 260
+releases and 40 major versions between May and October 2026, so every update
+needs the compatibility run below. Releases from 37.0.0 require Pi 1.0.0 or
+later. The 36.x line is the last one for older Pi.
 
 Pau loads the package only when the operator selects a permission profile or has
-already configured it as a normal Pi resource. Pau owns the cross-agent profile
-names and maps them to adapter-native policies; it does not fork the package or
-reimplement its Pi parser and gate logic. A compatibility spike must verify the
-mapping, RPC dialogs, package configuration scope, and review events before the
-selection becomes a release dependency.
+already configured it as a normal Pi resource. Pi's `-e` option can load the
+pinned copy for one session without installing it. Pau owns the cross-agent
+profile names and maps them to package policy. It does not fork the package or
+reimplement its Pi parser and gate logic. The package has no built-in secret
+list, so Pau supplies the protected paths as `path` deny rules, followed by
+allow rules for `.env.example`-style samples:
+
+- No prompts: allow tools, `bash`, `mcp`, and `external_directory`, and keep
+  the protected-path denials. Outside-workspace reads are allowed because
+  this profile cannot ask. The sandbox still limits them.
+- Confirm writes and commands: allow `read`, `grep`, `find`, and `ls`. Ask for
+  every other tool, every `bash` command, every MCP tool, and outside-workspace
+  access.
+- Confirm mutating or open-network operations: the previous profile, plus
+  `allow` rules for read-only `bash` commands such as `cat`, `ls`, `grep`, and
+  `git status`. Network commands, `bash -c` and other wrappers, and unknown
+  commands still ask.
+
+A Pi RPC run with a local scripted model confirmed these behaviors:
+
+- The `tool_call` gate decides before execution for an extension tool, a
+  `bash` command, a `write`, a Pi MCP tool (`mcp__<server>__<tool>`), and a
+  `curl` request. No marker file or network request existed when the prompt
+  appeared. A denial left none afterward, and an approval produced one.
+- Protected reads through `read` and through `cat` in `bash` are denied without
+  a prompt, and the denial result does not contain the file. Workspace reads
+  pass silently. Reads outside the workspace ask.
+- Outside TUI mode, the dialog is an RPC `select` titled
+  `Permission Required` with `Yes`, a session approval, `No`, and
+  `No, provide reason`. The last option sends an `input` request, and its text
+  reaches the agent as the denial reason. The session option text names the
+  granted pattern, such as `touch *`, so Pau must answer with the exact option
+  string. A later matching command in the same process runs without a prompt.
+- Cancelling a dialog, answering with an unknown option, closing Pi's stdin,
+  and letting `promptTimeoutMs` expire each deny the request. An invalid global
+  configuration file asks for everything, including operations the file meant
+  to allow. With no configuration, every gated operation asks.
+- Two tool calls in one turn produce one dialog at a time, in order.
+- Session approvals live only in the Pi process. The package has no durable
+  approval storage.
+
+Configuration is read from
+`<agent dir>/extensions/pi-permission-system/config.json` and from
+`<cwd>/.pi/extensions/pi-permission-system/config.json`. Pi loads the project
+file only when the project is trusted, and in RPC mode trust comes from
+`--approve`, a saved decision, or `defaultProjectTrust`. Neither file is
+scoped to one session. Writing the user file changes every personal Pi
+session, and `--approve` also loads the project's other Pi resources. A
+project file replaces matching user rules, so a trusted repository can relax a
+user's protected-path rule. The package has no API for setting policy from
+another extension. A per-session profile without these side effects remains
+open upstream in
+[issue #799](https://github.com/gotgenes/pi-packages/issues/799).
+
+Review events stay inside the Pi process. `permissions:ui_prompt` and
+`permissions:decision` on the extension event bus carry a request ID, surface,
+value, matched rule, and resolution, and the review log at
+`<agent dir>/extensions/pi-permission-system/logs/` adds the tool call ID. RPC
+receives only the dialog text and option labels. To show the session,
+operation, and affected paths as structured fields, Pau needs a small Pau-owned
+extension that forwards the bus events. It must not parse the dialog text.
+
+Known gaps:
+
+- Pi emits `tool_execution_start` before the gate runs, including for denied
+  calls. Pau must not present that event as execution or approval.
+- Pi does not dismiss a pending dialog when a run is aborted, and the package
+  accepts a later answer. The tool still does not run, but the decision event
+  reports `user_approved`. Pau must cancel its pending requests on abort and
+  reject stale answers itself.
+- The package does not read MCP tool annotations, so read-only MCP tools ask
+  under both confirming profiles. The `mcp` proxy tool from `pi-mcp-adapter`
+  was not exercised. The run used Pi's built-in MCP client.
+- The review log records `bash` commands and tool input previews. Pau's audit
+  records must not copy them.
+- Only Pi 1.0.0 was exercised.
 
 A denial stops the operation. An approval permits the agent to attempt it inside
 the selected sandbox, whose operating-system restrictions still win. MCP tools

@@ -23,28 +23,6 @@ Verification:
 
 ## Permissions
 
-### 2.44 Pi permission package spike
-
-Status: planned
-Blocked by: none
-
-Validate Pau's permission model against the selected
-`@gotgenes/pi-permission-system` release. Map Pau's no-prompts,
-confirm-writes-and-commands, and confirm-mutating-or-network profiles without
-forking the package. Verify workspace reads, protected sensitive paths,
-outside-workspace reads, session-only approvals, and concurrent request
-behavior.
-
-Verification:
-
-- Prove allow and deny happen before a fixture tool, shell command, file write,
-  sensitive read, network action, and MCP call executes.
-- Run the pinned Pi package under RPC and verify its non-TUI `select` and `input`
-  fallback, fail-closed behavior, configuration scope, review events, and
-  compatibility with the selected Pi versions.
-- Recheck and record its source, license, maintenance state, protocol boundary,
-  and known gaps in `dev/plan/backend.md`.
-
 ### 2.92 Native permission callback spike
 
 Status: planned
@@ -82,7 +60,7 @@ Verification:
 ### 2.45 Pi permission requests
 
 Status: planned
-Blocked by: 2.44, 2.54
+Blocked by: 2.54
 
 Implement the selected permission profiles for Pi through the reviewed package.
 Queue requests per session, apply allow-once and deny decisions, and write

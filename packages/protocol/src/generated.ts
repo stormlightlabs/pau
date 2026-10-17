@@ -460,7 +460,7 @@ disk_read_bytes: number | null,
  */
 disk_write_bytes: number | null, };
 
-export type ServerEventKind = "workspace_changed" | "session_changed";
+export type ServerEventKind = "workspace_changed" | "session_changed" | "session_output";
 
 export type ServerEvent = {
 /**
@@ -816,3 +816,151 @@ adapter: SandboxAdapter,
  * Selection to describe.
  */
 selection: SandboxSelection, };
+
+export type SessionStatus = "starting" | "idle" | "running" | "waiting" | "stopping" | "stopped" | "failed";
+
+export type SessionCapabilities = {
+/**
+ * Whether the session accepts prompts.
+ */
+prompt: boolean,
+/**
+ * Whether the session can queue follow-up work during a run.
+ */
+follow_up: boolean,
+/**
+ * Whether the session can steer an active run.
+ */
+steer: boolean,
+/**
+ * Whether the session can interrupt an active run.
+ */
+interrupt: boolean,
+/**
+ * Whether the session exposes and can clear its queued messages.
+ */
+message_queue: boolean,
+/**
+ * Whether the session can select a model.
+ */
+model_selection: boolean,
+/**
+ * Whether the session can change the thinking level.
+ */
+thinking_level: boolean,
+/**
+ * Whether the session can list its slash commands.
+ */
+command_discovery: boolean,
+/**
+ * Whether the session can stop its process.
+ */
+stop: boolean, };
+
+export type AgentSession = {
+/**
+ * Stable Pau session identifier.
+ */
+id: string,
+/**
+ * Workspace in which the agent runs.
+ */
+workspace_id: string,
+/**
+ * Latest observed lifecycle state.
+ */
+status: SessionStatus,
+/**
+ * RFC 3339 timestamp at which Pau started the process.
+ */
+started_at: string,
+/**
+ * RFC 3339 timestamp at which the process exited, once it has.
+ */
+ended_at: string | null,
+/**
+ * Process exit code, when the process exited with one.
+ */
+exit_code: number | null,
+/**
+ * Controls this session accepts.
+ */
+capabilities: SessionCapabilities, };
+
+export type SessionModelSelection = {
+/**
+ * Provider that serves the model.
+ */
+provider: string,
+/**
+ * The provider's model identifier.
+ */
+model_id: string, };
+
+export type StartSessionRequest = {
+/**
+ * Workspace in which the agent runs.
+ */
+workspace_id: string,
+/**
+ * Model to select before the session accepts work. The agent's configured
+ * default applies when this is absent.
+ */
+model: SessionModelSelection | null, };
+
+export type SessionQueue = "steer" | "follow_up";
+
+export type SessionPromptRequest = {
+/**
+ * Prompt text.
+ */
+message: string,
+/**
+ * Queue for a prompt sent during an active run. A running session rejects
+ * a prompt without one.
+ */
+queue: SessionQueue | null, };
+
+export type SessionMessageRequest = {
+/**
+ * Message text.
+ */
+message: string, };
+
+export type SessionThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+export type SessionThinkingLevelRequest = {
+/**
+ * Level for later model turns.
+ */
+level: SessionThinkingLevel, };
+
+export type SessionMessageQueue = {
+/**
+ * Messages delivered after the current assistant turn and its tool calls.
+ */
+steering: Array<string>,
+/**
+ * Messages delivered after all current work finishes.
+ */
+follow_up: Array<string>, };
+
+export type SessionCommandSource = "extension" | "prompt" | "skill";
+
+export type SessionCommand = {
+/**
+ * The name typed after the slash, without the leading `/`.
+ */
+name: string,
+/**
+ * The command's description, when it has one.
+ */
+description: string | null,
+/**
+ * The kind of resource that provides the command.
+ */
+source: SessionCommandSource,
+/**
+ * The file that defines the command, when the agent reports one.
+ */
+path: string | null, };

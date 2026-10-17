@@ -7,6 +7,7 @@ pub mod diagnostics;
 pub mod persistence;
 pub mod resource_monitor;
 pub mod sandbox;
+pub mod session;
 pub mod workspace;
 
 /// Response returned by the backend health endpoint.
@@ -30,8 +31,23 @@ pub struct VersionResponse {
 pub enum ServerEventKind {
     /// A workspace was registered or changed.
     WorkspaceChanged,
-    /// An agent session was registered or changed.
+    /// An agent session was registered or changed. The payload is a
+    /// [`session::AgentSession`].
     SessionChanged,
+    /// An agent session produced a native protocol event. The payload is the
+    /// adapter's JSON record.
+    ///
+    /// Output is transient: replay delivers it, but snapshots omit it because
+    /// it does not describe current state.
+    SessionOutput,
+}
+
+impl ServerEventKind {
+    /// Whether the latest event of this kind describes current state and so
+    /// belongs in a snapshot.
+    pub fn is_state(self) -> bool {
+        !matches!(self, Self::SessionOutput)
+    }
 }
 
 /// Stable envelope sent to browser and desktop clients.

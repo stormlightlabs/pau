@@ -616,25 +616,37 @@ Verification:
 
 ## Pi desktop parity
 
-### 2.145 Live Pi session API
+### 2.157 Live compaction API
 
-Status: in progress
+Status: planned
 Blocked by: none
 
-Start, list, control, and stop Pi sessions through the desktop API, and stream
-their events to clients.
+Expose manual compaction and the automatic compaction setting for live Pi
+sessions through the desktop API.
 
 Verification:
 
-- Start a session, then prompt, steer, follow up, interrupt, select a model and
-  thinking level, read and clear queued messages, list commands, and stop it
-  over HTTP and the event stream against the fake Pi executable.
-- Cover a missing Pi executable and a session that exits during a request.
+- Cover manual compaction, a failed compaction, and toggling automatic
+  compaction over HTTP and the event stream against the fake Pi executable.
+
+### 2.158 Sandboxed live Pi sessions
+
+Status: planned
+Blocked by: none
+
+Start live Pi sessions inside the workspace's selected sandbox instead of
+refusing them.
+
+Verification:
+
+- Start a sandboxed session through the desktop API against the fake Pi
+  executable and confirm its tools run inside the sandbox.
+- Confirm a sandbox that cannot start fails the session start with its reason.
 
 ### 2.146 Live session view
 
 Status: planned
-Blocked by: 2.145
+Blocked by: none
 
 Replace the desktop session route's fixtures with live Pi sessions.
 
@@ -646,7 +658,7 @@ Verification:
 ### 2.147 Pi session discovery API
 
 Status: planned
-Blocked by: 2.145
+Blocked by: none
 
 List a workspace's native Pi sessions from disk and resume one or start a new
 session through the desktop API.
@@ -671,7 +683,7 @@ Verification:
 ### 2.149 Pi session rename and clone API
 
 Status: planned
-Blocked by: 2.145
+Blocked by: none
 
 Rename and clone Pi sessions through the desktop API.
 
@@ -693,7 +705,7 @@ Verification:
 ### 2.151 Pi model list API
 
 Status: planned
-Blocked by: 2.145
+Blocked by: none
 
 Expose the models a Pi session can use through the desktop API.
 
@@ -731,7 +743,7 @@ Verification:
 ### 2.68 Pi input history API
 
 Status: planned
-Blocked by: 2.145
+Blocked by: none
 
 Expose Pi input history through the desktop API.
 
@@ -753,7 +765,7 @@ Verification:
 ### 2.113 Pi image attachment API
 
 Status: planned
-Blocked by: 2.145
+Blocked by: none
 
 Accept image attachments with Pi prompts through the desktop API.
 
@@ -788,7 +800,7 @@ Verification:
 ### 2.115 Pi shell context API
 
 Status: planned
-Blocked by: 2.145
+Blocked by: none
 
 Expose Pi shell context through the desktop API.
 
@@ -822,7 +834,7 @@ Verification:
 ### 2.117 Pi retry API
 
 Status: planned
-Blocked by: 2.145
+Blocked by: none
 
 Expose retry after failure through the desktop API.
 
@@ -855,7 +867,7 @@ Verification:
 ### 2.119 Pi context usage API
 
 Status: planned
-Blocked by: 2.145
+Blocked by: none
 
 Expose context and cost updates through the desktop API.
 
@@ -877,7 +889,7 @@ Verification:
 ### 2.79 Compaction controls
 
 Status: planned
-Blocked by: 2.146
+Blocked by: 2.146, 2.157
 
 Add a compaction control and compaction states to the session view.
 
@@ -889,7 +901,7 @@ Verification:
 ### 2.72 Pi session tree API
 
 Status: planned
-Blocked by: 2.145
+Blocked by: none
 
 Expose Pi session trees and branch creation through the desktop API.
 
@@ -912,7 +924,7 @@ Verification:
 ### 2.80 Pi transcript search API
 
 Status: planned
-Blocked by: 2.145
+Blocked by: none
 
 Expose transcript search through the desktop API.
 
@@ -934,7 +946,7 @@ Verification:
 ### 2.121 Pi transcript export API
 
 Status: planned
-Blocked by: 2.145
+Blocked by: none
 
 Expose transcript export through the desktop API.
 

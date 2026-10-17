@@ -48,6 +48,10 @@ use tokio::{
 use tower_http::cors::CorsLayer;
 use tracing::instrument::WithSubscriber;
 
+mod sessions;
+
+use sessions::SessionApi;
+
 /// Version returned by every Pau backend implementation.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -122,6 +126,7 @@ struct ApiState {
     diagnostics: Diagnostics,
     settings: Option<ApplicationSettingsRepository>,
     sandbox: Option<SandboxApi>,
+    sessions: Option<SessionApi>,
 }
 
 /// Sandbox selections and the host facts needed to describe a profile.
@@ -227,14 +232,16 @@ impl EventHub {
             payload: payload.into(),
         };
         state.next_sequence = state.next_sequence.saturating_add(1);
-        state.snapshot.insert(
-            SnapshotKey {
-                workspace_id: event.workspace_id.clone(),
-                session_id: event.session_id.clone(),
-                kind,
-            },
-            event.clone(),
-        );
+        if kind.is_state() {
+            state.snapshot.insert(
+                SnapshotKey {
+                    workspace_id: event.workspace_id.clone(),
+                    session_id: event.session_id.clone(),
+                    kind,
+                },
+                event.clone(),
+            );
+        }
         state.replay.push_back(event.clone());
         if state.replay.len() > self.replay_capacity {
             state.replay.pop_front();
@@ -357,19 +364,27 @@ struct EventSubscription {
 /// Builds the authenticated API used by desktop and browser clients.
 pub fn router(token: ApiToken) -> Router {
     let diagnostics = default_diagnostics();
-    router_with_services(token, EventHub::default(), None, diagnostics, None, None)
+    router_with_services(
+        token,
+        EventHub::default(),
+        None,
+        diagnostics,
+        None,
+        None,
+        None,
+    )
 }
 
 /// Builds the API around an event hub supplied by the application owner.
 pub fn router_with_events(token: ApiToken, events: EventHub) -> Router {
     let diagnostics = default_diagnostics();
-    router_with_services(token, events, None, diagnostics, None, None)
+    router_with_services(token, events, None, diagnostics, None, None, None)
 }
 
 /// Builds the API with an explicit diagnostics collector.
 pub fn router_with_diagnostics(token: ApiToken, diagnostics: Diagnostics) -> Router {
     let events = EventHub::default().with_diagnostics(diagnostics.clone());
-    router_with_services(token, events, None, diagnostics, None, None)
+    router_with_services(token, events, None, diagnostics, None, None, None)
 }
 
 fn router_with_services(
@@ -379,6 +394,7 @@ fn router_with_services(
     diagnostics: Diagnostics,
     settings: Option<ApplicationSettingsRepository>,
     sandbox: Option<SandboxApi>,
+    sessions: Option<SessionApi>,
 ) -> Router {
     diagnostics.register_sensitive_value(token.expose());
     Router::new()
@@ -409,6 +425,46 @@ fn router_with_services(
             "/api/workspaces/{workspace_id}/sandbox/preview",
             post(preview_sandbox),
         )
+        .route(
+            "/api/sessions",
+            get(sessions::list_sessions).post(sessions::start_session),
+        )
+        .route(
+            "/api/sessions/{session_id}",
+            get(sessions::get_session).delete(sessions::stop_session),
+        )
+        .route(
+            "/api/sessions/{session_id}/prompt",
+            post(sessions::prompt_session),
+        )
+        .route(
+            "/api/sessions/{session_id}/steer",
+            post(sessions::steer_session),
+        )
+        .route(
+            "/api/sessions/{session_id}/follow-up",
+            post(sessions::follow_up_session),
+        )
+        .route(
+            "/api/sessions/{session_id}/interrupt",
+            post(sessions::interrupt_session),
+        )
+        .route(
+            "/api/sessions/{session_id}/model",
+            put(sessions::select_session_model),
+        )
+        .route(
+            "/api/sessions/{session_id}/thinking-level",
+            put(sessions::set_session_thinking_level),
+        )
+        .route(
+            "/api/sessions/{session_id}/queue",
+            get(sessions::get_session_queue).delete(sessions::clear_session_queue),
+        )
+        .route(
+            "/api/sessions/{session_id}/commands",
+            get(sessions::list_session_commands),
+        )
         .layer(middleware::from_fn_with_state(token, authenticate))
         .layer(CorsLayer::permissive())
         .with_state(ApiState {
@@ -417,6 +473,7 @@ fn router_with_services(
             diagnostics,
             settings,
             sandbox,
+            sessions,
         })
 }
 
@@ -586,6 +643,12 @@ enum ApiError {
     InvalidSandbox(String),
     /// No sandbox can start on this host.
     SandboxUnavailable(String),
+    /// Pi is missing or unusable, with discovery's corrective message.
+    PiUnavailable(String),
+    /// The workspace selects a sandbox, which session launches cannot apply.
+    SandboxedSessionUnsupported,
+    /// A session control or lifecycle operation failed.
+    Session(Box<pau_pi::PiSessionRegistryError>),
 }
 
 impl IntoResponse for ApiError {
@@ -598,6 +661,18 @@ impl IntoResponse for ApiError {
                 "sandbox_unavailable",
                 message,
             ),
+            Self::PiUnavailable(message) => {
+                (StatusCode::SERVICE_UNAVAILABLE, "pi_unavailable", message)
+            }
+            Self::SandboxedSessionUnsupported => (
+                StatusCode::NOT_IMPLEMENTED,
+                "sandboxed_session_unsupported",
+                "Sandboxed sessions cannot start from the desktop yet. Turn off the sandbox for this workspace to start a session.".to_owned(),
+            ),
+            Self::Session(error) => {
+                let (status, code) = sessions::error_status(&error);
+                (status, code, error.to_string())
+            }
             Self::ServiceUnavailable => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "workspace_service_unavailable",
@@ -641,6 +716,18 @@ impl IntoResponse for ApiError {
 impl From<WorkspaceError> for ApiError {
     fn from(error: WorkspaceError) -> Self {
         Self::Workspace(Box::new(error))
+    }
+}
+
+impl From<pau_pi::PiSessionRegistryError> for ApiError {
+    fn from(error: pau_pi::PiSessionRegistryError) -> Self {
+        Self::Session(Box::new(error))
+    }
+}
+
+impl From<pau_pi::PiSessionError> for ApiError {
+    fn from(error: pau_pi::PiSessionError) -> Self {
+        pau_pi::PiSessionRegistryError::Session(error).into()
     }
 }
 
@@ -992,6 +1079,7 @@ pub struct ServerHandle {
     token: ApiToken,
     events: EventHub,
     diagnostics: Diagnostics,
+    sessions: SessionApi,
     shutdown: Option<oneshot::Sender<()>>,
     task: Option<JoinHandle<io::Result<()>>>,
 }
@@ -1037,6 +1125,7 @@ impl ServerHandle {
             .expect("server task is present until shutdown")
             .await
             .map_err(io::Error::other)?;
+        self.sessions.stop_all().await;
         self.diagnostics.record(DiagnosticRecordInput {
             timestamp: diagnostic_timestamp(),
             component: "pau-server".to_owned(),
@@ -1128,6 +1217,7 @@ pub async fn start_with_token_and_options(
         database.sandbox_selection(),
         state_directory()?.join("sandbox"),
     );
+    let processes = database.processes();
     let diagnostics = default_diagnostics();
     diagnostics.register_sensitive_value(token.expose());
     diagnostics.set_enabled(options.diagnostics || persisted_diagnostics);
@@ -1137,6 +1227,12 @@ pub async fn start_with_token_and_options(
     let (shutdown, shutdown_receiver) = oneshot::channel();
     let server_token = token.clone();
     let events = EventHub::default().with_diagnostics(diagnostics.clone());
+    let sessions = SessionApi::new(
+        pau_pi::PiSessionRegistry::new(processes),
+        pau_pi::DiscoverPiOptions::default(),
+        events.clone(),
+    );
+    let server_sessions = sessions.clone();
     let server_events = events.clone();
     let server_diagnostics = diagnostics.clone();
     let server_settings = settings.clone();
@@ -1152,6 +1248,7 @@ pub async fn start_with_token_and_options(
                     server_diagnostics,
                     Some(server_settings),
                     Some(sandbox),
+                    Some(server_sessions),
                 ),
             )
             .with_graceful_shutdown(async move {
@@ -1182,6 +1279,7 @@ pub async fn start_with_token_and_options(
         token,
         events,
         diagnostics,
+        sessions,
         shutdown: Some(shutdown),
         task: Some(task),
     })
@@ -1547,6 +1645,7 @@ mod tests {
             default_diagnostics(),
             None,
             Some(sandbox),
+            None,
         );
         let call = |method: &str, path: &str, body: Option<serde_json::Value>| {
             let builder = Request::builder()
@@ -1644,6 +1743,7 @@ mod tests {
             EventHub::default(),
             Some(WorkspaceService::new(database.workspaces())),
             default_diagnostics(),
+            None,
             None,
             None,
         );

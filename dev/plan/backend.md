@@ -18,6 +18,8 @@ The event hub keeps a bounded in-memory replay window and persists only events
 needed for recovery or indexing. On connection, the frontend requests a state
 snapshot and then subscribes after the snapshot's sequence number. Slow clients
 are disconnected and recover through replay rather than blocking agent output.
+Native agent output is transient: replay delivers it, but snapshots hold only
+the latest state-bearing event for each workspace, session, and kind.
 
 Do not force native events into one large enum too early. Use a small stable
 envelope plus adapter-owned typed payloads. Promote fields into common events

@@ -133,6 +133,21 @@ test('streams a live transcript and sends prompts to the session', async () => {
 	);
 });
 
+test('recalls earlier prompts fetched when the session opens', async () => {
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/sessions/session-1/history': () => json(['Fix the gutter', 'Read the spec'])
+	});
+	await render(SessionRoute, props);
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+
+	await userEvent.click(prompt);
+	await vi.waitFor(async () => {
+		await userEvent.keyboard('{ArrowUp}');
+		await expect.element(prompt).toHaveValue('Fix the gutter');
+	});
+});
+
 test.each([
 	['pi_unavailable', 503, 'Pau could not find a working Pi installation.'],
 	['sandboxed_session_unsupported', 501, 'This workspace uses a sandbox']

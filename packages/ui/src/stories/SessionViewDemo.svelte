@@ -9,7 +9,8 @@
 		resourceSnapshot,
 		loading = false,
 		disconnected = false,
-		startFailure
+		startFailure,
+		history = []
 	}: {
 		workspaces: SessionWorkspace[];
 		initialSessionId?: string;
@@ -18,6 +19,8 @@
 		disconnected?: boolean;
 		/** When set, starting a session fails with this message. */
 		startFailure?: string;
+		/** Earlier prompts the composer can recall, newest first. */
+		history?: string[];
 	} = $props();
 
 	let activeSessionId = $state<string>();
@@ -50,6 +53,7 @@
 	onStartSession={startSession}
 	onSelectSession={(sessionId) => (activeSessionId = sessionId)}
 	onSend={send}
+	onLoadHistory={async () => history}
 	onInterrupt={(sessionId) => {
 		lastAction = `${sessionId}: interrupt`;
 	}}

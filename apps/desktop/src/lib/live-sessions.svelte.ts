@@ -11,6 +11,7 @@ import type {
 import {
 	PauApiError,
 	getSessionExtensionUi,
+	getSessionHistory,
 	interruptSession,
 	listNativeSessions,
 	listSessions,
@@ -253,6 +254,11 @@ export class LiveSessions {
 						this.#fetcher
 					)
 		);
+	}
+
+	/** Reads a session's earlier prompts for composer recall, newest first. */
+	history(sessionId: string): Promise<string[]> {
+		return getSessionHistory(this.#options.search, sessionId, this.#fetcher);
 	}
 
 	/** Interrupts the active run. */

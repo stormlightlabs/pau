@@ -62,6 +62,29 @@ export const Running: Story = {
 		await expect(canvas.getByText(/session-running: steer/)).toBeInTheDocument();
 	}
 };
+export const PromptHistory: Story = {
+	args: { history: ['Explain the failing build.', 'Add tests for the parser.'] },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const prompt = canvas.getByRole('textbox', { name: 'Prompt' });
+		await userEvent.click(prompt);
+		await userEvent.keyboard('{ArrowUp}');
+		await expect(prompt).toHaveValue('Explain the failing build.');
+		await userEvent.keyboard('{ArrowUp}');
+		await expect(prompt).toHaveValue('Add tests for the parser.');
+		await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+		await expect(prompt).toHaveValue('');
+	}
+};
+export const EmptyPromptHistory: Story = {
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const prompt = canvas.getByRole('textbox', { name: 'Prompt' });
+		await userEvent.click(prompt);
+		await userEvent.keyboard('{ArrowUp}{ArrowDown}');
+		await expect(prompt).toHaveValue('');
+	}
+};
 export const ResourcePressure: Story = {
 	args: {
 		workspaces: sessionFixtures.running,

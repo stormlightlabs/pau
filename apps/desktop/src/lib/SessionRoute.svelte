@@ -64,6 +64,7 @@
 	onLoadSavedSessions={(workspaceId) => sessions.listSaved(workspaceId)}
 	onResumeSession={resumeSession}
 	onSend={(sessionId, text, queue) => sessions.send(sessionId, text, queue)}
+	onLoadHistory={(sessionId) => sessions.history(sessionId)}
 	onInterrupt={(sessionId) => sessions.interrupt(sessionId)}
 	onStop={(sessionId) => sessions.stop(sessionId)}
 	onExtensionUiResponse={(sessionId, response) => sessions.respond(sessionId, response)}

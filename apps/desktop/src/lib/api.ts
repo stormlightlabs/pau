@@ -363,6 +363,18 @@ export function promptSession(
 	return sendSessionRequest(search, `/${encodeURIComponent(sessionId)}/prompt`, 'POST', request, fetcher);
 }
 
+/** Reads the session's earlier prompts for composer recall, newest first. */
+export async function getSessionHistory(
+	search: string,
+	sessionId: string,
+	fetcher: typeof fetch = fetch
+): Promise<string[]> {
+	const response = await fetcher(sessionUrl(search, `/${encodeURIComponent(sessionId)}/history`), {
+		headers: authorization(resolveApiToken(search))
+	});
+	return responseJson<string[]>(response);
+}
+
 /** Steers the active run or queues a follow-up for after it settles. */
 export function queueSessionMessage(
 	search: string,

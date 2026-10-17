@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Press Up and Down in the prompt box to recall earlier prompts from the
+  session, then return to what you were typing.
 - Live Pi sessions now show extension dialogs, notifications, status text, and
   widgets. Answer dialogs in the session view. They close with an explanation
   when they expire or the session ends.

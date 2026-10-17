@@ -149,3 +149,41 @@ test('stops the active session from its header', async () => {
 	await userEvent.click(page.getByRole('button', { name: 'Stop', exact: true }));
 	expect(onStop).toHaveBeenCalledWith('session-idle');
 });
+
+test('recalls earlier prompts and restores the draft', async () => {
+	await render(SessionViewDemo, {
+		workspaces: sessionFixtures.running,
+		initialSessionId: 'session-running',
+		history: ['second', 'first']
+	});
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.click(prompt);
+	await userEvent.keyboard('{ArrowUp}');
+	await expect.element(prompt).toHaveValue('second');
+	await userEvent.keyboard('{ArrowUp}{ArrowUp}');
+	await expect.element(prompt).toHaveValue('first');
+	await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+	await expect.element(prompt).toHaveValue('');
+});
+
+test('keeps a written draft when Up is pressed', async () => {
+	await render(SessionViewDemo, {
+		workspaces: sessionFixtures.running,
+		initialSessionId: 'session-running',
+		history: ['earlier']
+	});
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.type(prompt, 'my draft');
+	await userEvent.keyboard('{ArrowUp}');
+	await expect.element(prompt).toHaveValue('my draft');
+});
+
+test('recalls a prompt sent in this view', async () => {
+	await render(SessionViewDemo, { workspaces: sessionFixtures.running, initialSessionId: 'session-running' });
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.type(prompt, 'ship it');
+	await userEvent.keyboard('{Control>}{Enter}{/Control}');
+	await expect.element(prompt).toHaveValue('');
+	await userEvent.keyboard('{ArrowUp}');
+	await expect.element(prompt).toHaveValue('ship it');
+});

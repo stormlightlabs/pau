@@ -669,17 +669,6 @@ Verification:
   not.
 - Trigger a notification from a self-hosted Pi session.
 
-### 2.69 Composer input history
-
-Status: planned
-Blocked by: none
-
-Add input history to the session composer.
-
-Verification:
-
-- Component-test history navigation and an empty history.
-
 ### 2.114 Composer image input
 
 Status: planned
@@ -843,7 +832,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.69, 2.71, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120,
+Blocked by: 2.71, 2.73, 2.75, 2.77, 2.79, 2.114, 2.118, 2.120,
 2.152, 2.156
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do

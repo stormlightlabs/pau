@@ -1,6 +1,13 @@
 <script lang="ts">
 	import '../styles/tokens.css';
 	import ApplicationShell, { type ShellNavItem } from './ApplicationShell.svelte';
+	import {
+		historyLimit,
+		idleHistoryCursor,
+		navigateHistory,
+		recordPrompt,
+		type HistoryCursor
+	} from './composer-history';
 	import ExtensionUi from './ExtensionUi.svelte';
 	import Icon from './Icon.svelte';
 	import SessionPicker from './SessionPicker.svelte';
@@ -25,6 +32,11 @@
 		loading?: boolean;
 		onSelectSession?: (sessionId: string) => void;
 		onSend?: (sessionId: string, text: string, queue?: PromptQueue) => void | Promise<void>;
+		/**
+		 * Loads a session's earlier prompts, newest first, for recall with the
+		 * Up and Down keys in the composer. A rejection leaves the history empty.
+		 */
+		onLoadHistory?: (sessionId: string) => Promise<string[]>;
 		onInterrupt?: (sessionId: string) => void | Promise<void>;
 		onStop?: (sessionId: string) => void | Promise<void>;
 		/**
@@ -53,6 +65,7 @@
 		loading = false,
 		onSelectSession = () => {},
 		onSend = () => {},
+		onLoadHistory,
 		onInterrupt = () => {},
 		onStop = () => {},
 		onStartSession,
@@ -68,6 +81,9 @@
 
 	let draft = $state('');
 	let queue = $state<PromptQueue>('steer');
+	let histories = $state<Record<string, string[]>>({});
+	let historyCursor = $state<HistoryCursor>(idleHistoryCursor);
+	const historyRequested = new Set<string>();
 	let sending = $state(false);
 	let error = $state<string>();
 	let composer = $state<HTMLTextAreaElement>();
@@ -148,6 +164,19 @@
 		}
 	}
 
+	$effect(() => {
+		const sessionId = activeSessionId;
+		if (!sessionId || !onLoadHistory || historyRequested.has(sessionId)) return;
+		historyRequested.add(sessionId);
+		onLoadHistory(sessionId).then(
+			(loaded) => {
+				// Prompts sent while the request was in flight are already recorded.
+				histories[sessionId] = [...(histories[sessionId] ?? []), ...loaded].slice(0, historyLimit);
+			},
+			() => historyRequested.delete(sessionId)
+		);
+	});
+
 	async function stop(): Promise<void> {
 		if (!activeSession) return;
 		controlError = undefined;
@@ -164,6 +193,7 @@
 		controlError = undefined;
 		error = undefined;
 		draft = '';
+		historyCursor = idleHistoryCursor;
 		onSelectSession(sessionId);
 	}
 
@@ -181,6 +211,8 @@
 		error = undefined;
 		try {
 			await onSend(activeSession.id, text, activeSession.status === 'running' ? activeQueue : undefined);
+			histories[activeSession.id] = recordPrompt(histories[activeSession.id] ?? [], text);
+			historyCursor = idleHistoryCursor;
 			draft = '';
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'The prompt could not be sent. Try again.';
@@ -204,6 +236,26 @@
 		if (event.key === 'Escape' && activeSession?.status === 'running') {
 			event.preventDefault();
 			void interrupt();
+			return;
+		}
+		if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && activeSession) {
+			const field = event.currentTarget as HTMLTextAreaElement;
+			const modified = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
+			const step =
+				modified || field.selectionStart !== field.selectionEnd
+					? undefined
+					: navigateHistory(
+							histories[activeSession.id] ?? [],
+							historyCursor,
+							draft,
+							field.selectionStart,
+							event.key === 'ArrowUp' ? 'previous' : 'next'
+						);
+			if (step) {
+				event.preventDefault();
+				historyCursor = step.cursor;
+				draft = step.draft;
+			}
 			return;
 		}
 		if (event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) return;

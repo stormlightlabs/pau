@@ -7,6 +7,10 @@ available.
 
 Run the `pau-term` PTY tests on Linux.
 
+Re-export the `dev/prototype` screen PNGs once OpenPencil exports IBM Plex Sans
+text correctly. The app currently shapes it into the wrong glyphs even with the
+font installed locally, so the committed PNGs still show the old Pau mark.
+
 Make the `pau-pi` test `escalates_shutdown_from_interrupt_to_terminate`
 reliable under build load. It passes alone but fails occasionally while other
 Cargo builds run.

@@ -64,6 +64,8 @@ export type {
 	SessionModel,
 	SessionTree,
 	SessionTreeEntry,
+	SessionSearchMatch,
+	SessionSearchResult,
 	SessionBranchRequest,
 	SessionBranchResult,
 	SessionModelSelection,

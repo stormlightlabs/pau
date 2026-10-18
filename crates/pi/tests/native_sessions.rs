@@ -5,7 +5,7 @@ use std::path::Path;
 
 use pau_pi::{
     MAX_TREE_ENTRIES, PiSessionFileError, find_pi_session_file, list_pi_session_files,
-    read_pi_session_tree,
+    read_pi_session_tree, search_pi_session_file,
 };
 
 fn header(id: &str, cwd: &str) -> String {
@@ -177,4 +177,87 @@ fn bounds_the_tree_to_the_newest_entries() {
     assert_eq!(tree.entries[0].id, "e3");
     assert_eq!(tree.leaf_id, Some(format!("e{}", MAX_TREE_ENTRIES + 2)));
     assert!(tree.truncated);
+}
+
+#[test]
+fn searches_the_whole_session_newest_first_without_case() {
+    let sessions = tempfile::tempdir().unwrap();
+    let mut lines = vec![
+        header("find", "/work/app"),
+        r#"{"type":"message","id":"a1","parentId":null,"timestamp":"t1","message":{"role":"user","content":"Fix the  Login\nbug"}}"#.to_owned(),
+        "not json".to_owned(),
+        r#"{"type":"message","id":"b2","parentId":"a1","timestamp":"t2","message":{"role":"assistant","content":[{"type":"text","text":"Nothing here"},{"type":"toolCall","name":"login"}]}}"#.to_owned(),
+        r#"{"type":"compaction","id":"c3","parentId":"b2","timestamp":"t3","summary":"The LOGIN flow was fixed"}"#.to_owned(),
+        r#"{"type":"message","id":"d4","parentId":"c3","message":{"role":"user","content":"Ünïcode LÖGIN? login ÜBER"}}"#.to_owned(),
+    ];
+    write(sessions.path(), "2026_find.jsonl", &lines);
+    let path = sessions.path().join("--work-app--/2026_find.jsonl");
+
+    let found = search_pi_session_file(&path, "  login ", 10).unwrap();
+    assert!(!found.truncated);
+    let ids: Vec<_> = found.matches.iter().map(|m| m.entry_id.as_str()).collect();
+    assert_eq!(ids, ["d4", "c3", "a1"]);
+    let first = &found.matches[2];
+    assert_eq!(first.role.as_deref(), Some("user"));
+    assert_eq!(first.timestamp.as_deref(), Some("t1"));
+    assert_eq!(first.snippet, "Fix the Login bug");
+    assert_eq!(first.match_start..first.match_end, 8..13);
+    assert_eq!(found.matches[1].role, None);
+
+    let unicode = search_pi_session_file(&path, "lögin", 10).unwrap();
+    assert_eq!(unicode.matches.len(), 1);
+    assert_eq!(unicode.matches[0].entry_id, "d4");
+    assert_eq!(unicode.matches[0].snippet, "Ünïcode LÖGIN? login ÜBER");
+    assert_eq!(
+        unicode.matches[0].match_start..unicode.matches[0].match_end,
+        8..13
+    );
+
+    assert!(
+        search_pi_session_file(&path, "  ", 10)
+            .unwrap()
+            .matches
+            .is_empty()
+    );
+    assert!(
+        search_pi_session_file(&path, "absent", 10)
+            .unwrap()
+            .matches
+            .is_empty()
+    );
+
+    let limited = search_pi_session_file(&path, "login", 1).unwrap();
+    assert_eq!(limited.matches.len(), 1);
+    assert_eq!(limited.matches[0].entry_id, "d4");
+    assert!(limited.truncated);
+
+    lines[0] = "{}".to_owned();
+    write(sessions.path(), "2026_find.jsonl", &lines);
+    assert!(search_pi_session_file(&path, "login", 10).is_err());
+}
+
+#[test]
+fn searches_entries_beyond_the_tree_window_and_bounds_snippets() {
+    let sessions = tempfile::tempdir().unwrap();
+    let long = format!("{} needle {}", "a".repeat(300), "b".repeat(300));
+    let mut lines = vec![
+        header("deep", "/work/app"),
+        format!(
+            r#"{{"type":"message","id":"old","parentId":null,"message":{{"role":"user","content":"{long}"}}}}"#
+        ),
+    ];
+    for index in 0..MAX_TREE_ENTRIES + 1 {
+        lines.push(format!(
+            r#"{{"type":"message","id":"e{index}","parentId":null,"message":{{"role":"user","content":"m"}}}}"#
+        ));
+    }
+    write(sessions.path(), "2026_deep.jsonl", &lines);
+    let path = sessions.path().join("--work-app--/2026_deep.jsonl");
+
+    let found = search_pi_session_file(&path, "NEEDLE", 5).unwrap();
+    assert_eq!(found.matches.len(), 1);
+    let hit = &found.matches[0];
+    assert_eq!(hit.entry_id, "old");
+    assert_eq!(hit.snippet.chars().count(), 40 + 6 + 80);
+    assert_eq!(&hit.snippet[hit.match_start..hit.match_end], "needle");
 }

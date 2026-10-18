@@ -366,6 +366,34 @@ pub struct SessionTree {
     pub truncated: bool,
 }
 
+/// One entry of a session's conversation that contains a search query.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionSearchMatch {
+    /// The agent's entry identifier.
+    pub entry_id: String,
+    /// The message role, or none for summaries.
+    pub role: Option<String>,
+    /// Whitespace-collapsed text around the first occurrence.
+    pub snippet: String,
+    /// Start of the occurrence in `snippet`, in UTF-16 code units.
+    #[ts(type = "number")]
+    pub match_start: usize,
+    /// End of the occurrence in `snippet`, in UTF-16 code units.
+    #[ts(type = "number")]
+    pub match_end: usize,
+    /// The entry's ISO 8601 time, when recorded.
+    pub timestamp: Option<String>,
+}
+
+/// The matches of a transcript search over the whole persisted conversation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionSearchResult {
+    /// Matching entries, newest first, one per entry.
+    pub matches: Vec<SessionSearchMatch>,
+    /// Whether older matches were left out to honour the limit.
+    pub truncated: bool,
+}
+
 /// The conversation a live session continues, as the agent reports it.
 ///
 /// Messages stay in the agent's native JSON, the same shapes its

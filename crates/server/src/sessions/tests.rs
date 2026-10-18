@@ -1248,3 +1248,47 @@ async fn clears_pending_dialogs_on_interrupt_timeout_and_exit() {
     let (status, _) = fixture.call("GET", &ui, None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn searches_the_persisted_conversation() {
+    let fixture = Fixture::new(None).await;
+    let (_, started) = fixture
+        .call(
+            "POST",
+            "/api/sessions",
+            Some(json!({"workspace_id": fixture.workspace_id})),
+        )
+        .await;
+    let base = format!("/api/sessions/{}", started["id"].as_str().unwrap());
+    let lines = [
+        native_header(&fixture, "native", None),
+        r#"{"type":"message","id":"a1","parentId":null,"timestamp":"t1","message":{"role":"user","content":"Fix the Login bug"}}"#.to_owned(),
+        r#"{"type":"message","id":"b2","parentId":"a1","timestamp":"t2","message":{"role":"assistant","content":[{"type":"text","text":"login fixed"}]}}"#.to_owned(),
+    ];
+    fs::write(
+        fixture.workspace_root.join("session.jsonl"),
+        lines.join("\n"),
+    )
+    .unwrap();
+
+    let (status, found) = fixture
+        .call("GET", &format!("{base}/search?q=LOGIN"), None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(found["truncated"], false);
+    assert_eq!(
+        found["matches"][0],
+        json!({"entry_id": "b2", "role": "assistant", "snippet": "login fixed", "match_start": 0, "match_end": 5, "timestamp": "t2"})
+    );
+    assert_eq!(found["matches"][1]["entry_id"], "a1");
+
+    let (_, limited) = fixture
+        .call("GET", &format!("{base}/search?q=login&limit=1"), None)
+        .await;
+    assert_eq!(limited["matches"].as_array().unwrap().len(), 1);
+    assert_eq!(limited["truncated"], true);
+
+    let (status, blank) = fixture.call("GET", &format!("{base}/search"), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(blank["matches"], json!([]));
+}

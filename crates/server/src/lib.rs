@@ -531,6 +531,10 @@ fn router_with_services(
             get(sessions::get_session_tree),
         )
         .route(
+            "/api/sessions/{session_id}/search",
+            get(sessions::search_session),
+        )
+        .route(
             "/api/sessions/{session_id}/branch",
             post(sessions::branch_session),
         )

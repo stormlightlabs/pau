@@ -1,6 +1,7 @@
 use crate::{
     PiCompactionResult, PiExtensionUiResponse, PiProcess, PiProcessError, PiProcessExit,
-    PiProcessOutput, PiSessionTree, StartPiProcessOptions, read_pi_session_tree,
+    PiProcessOutput, PiSearchResult, PiSessionTree, StartPiProcessOptions, read_pi_session_tree,
+    search_pi_session_file,
 };
 use pau_agent::{
     AgentCapabilities, AgentControl, AgentControlError, AgentMessageQueue, AgentSessionStatus,
@@ -358,6 +359,22 @@ impl PiSession {
             .await
             .map_err(|error| PiSessionError::NativeSession(error.to_string()))?
             .map_err(PiSessionError::NativeSession)
+    }
+
+    /// Searches the persisted conversation. See [`search_pi_session_file`].
+    pub async fn search(
+        &self,
+        query: String,
+        limit: usize,
+    ) -> Result<PiSearchResult, PiSessionError> {
+        self.require_capability(AgentControl::Branching)?;
+        let file = self.native_session().await?.file;
+        tokio::task::spawn_blocking(move || {
+            search_pi_session_file(std::path::Path::new(&file), &query, limit)
+        })
+        .await
+        .map_err(|error| PiSessionError::NativeSession(error.to_string()))?
+        .map_err(PiSessionError::NativeSession)
     }
 
     /// Continues from the user message `entry_id` in a new session file.

@@ -51,7 +51,7 @@ use std::{
 
 use axum::{
     Json,
-    extract::{Path as AxumPath, State},
+    extract::{Path as AxumPath, Query, State},
     http::StatusCode,
 };
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
@@ -72,8 +72,9 @@ use pau_core::{
         SessionCommandSource, SessionCompactRequest, SessionCompactionResult, SessionContextUsage,
         SessionExtensionUi, SessionImage, SessionMessageQueue, SessionMessageRequest,
         SessionMessages, SessionModel, SessionModelSelection, SessionPromptRequest, SessionQueue,
-        SessionRenameRequest, SessionStatus, SessionThinkingLevel, SessionThinkingLevelRequest,
-        SessionTokenUsage, SessionTree, SessionTreeEntry, SessionUsage, StartSessionRequest,
+        SessionRenameRequest, SessionSearchMatch, SessionSearchResult, SessionStatus,
+        SessionThinkingLevel, SessionThinkingLevelRequest, SessionTokenUsage, SessionTree,
+        SessionTreeEntry, SessionUsage, StartSessionRequest,
     },
 };
 use pau_pi::{
@@ -84,11 +85,15 @@ use pau_pi::{
     StartRegisteredPiSession, discover_pi, find_pi_session_file, list_pi_session_files,
     pi_configuration_paths, read_pi_keybindings,
 };
+use serde::Deserialize;
 use serde_json::Value;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::sync::broadcast;
 
 use crate::{ApiError, ApiState, EventHub, diagnostic_timestamp, workspace_service};
+
+/// Matches a search returns when the request sets no limit.
+const DEFAULT_SEARCH_MATCHES: usize = 50;
 
 /// Most messages the history route returns. A long session keeps its newest
 /// turns, and the response stays small enough to parse on every reconnect.
@@ -1282,6 +1287,46 @@ pub(crate) async fn get_session_tree(
             .collect(),
         leaf_id: tree.leaf_id,
         truncated: tree.truncated,
+    }))
+}
+
+/// Query of the transcript search route.
+#[derive(Deserialize)]
+pub(crate) struct SessionSearchQuery {
+    /// The text to find, ignoring case. A blank query matches nothing.
+    #[serde(default)]
+    q: String,
+    /// Most matches to return, capped by the search itself.
+    limit: Option<usize>,
+}
+
+/// Searches the whole persisted conversation, newest matches first.
+///
+/// Unlike the messages route this is not limited to the newest messages. See
+/// [`pau_pi::search_pi_session_file`] for what is searched and why.
+pub(crate) async fn search_session(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+    Query(query): Query<SessionSearchQuery>,
+) -> Result<Json<SessionSearchResult>, ApiError> {
+    let (_, session) = session_api(&state)?.live(&session_id).await?;
+    let result = session
+        .search(query.q, query.limit.unwrap_or(DEFAULT_SEARCH_MATCHES))
+        .await?;
+    Ok(Json(SessionSearchResult {
+        matches: result
+            .matches
+            .into_iter()
+            .map(|found| SessionSearchMatch {
+                entry_id: found.entry_id,
+                role: found.role,
+                snippet: found.snippet,
+                match_start: found.match_start,
+                match_end: found.match_end,
+                timestamp: found.timestamp,
+            })
+            .collect(),
+        truncated: result.truncated,
     }))
 }
 

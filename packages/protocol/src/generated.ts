@@ -1095,6 +1095,42 @@ preview: string,
  */
 timestamp: string | null, };
 
+export type SessionSearchMatch = {
+/**
+ * The agent's entry identifier.
+ */
+entry_id: string,
+/**
+ * The message role, or none for summaries.
+ */
+role: string | null,
+/**
+ * Whitespace-collapsed text around the first occurrence.
+ */
+snippet: string,
+/**
+ * Start of the occurrence in `snippet`, in UTF-16 code units.
+ */
+match_start: number,
+/**
+ * End of the occurrence in `snippet`, in UTF-16 code units.
+ */
+match_end: number,
+/**
+ * The entry's ISO 8601 time, when recorded.
+ */
+timestamp: string | null, };
+
+export type SessionSearchResult = {
+/**
+ * Matching entries, newest first, one per entry.
+ */
+matches: Array<SessionSearchMatch>,
+/**
+ * Whether older matches were left out to honour the limit.
+ */
+truncated: boolean, };
+
 export type SessionTree = {
 /**
  * Entries, oldest first. Follow `parent_id` to rebuild branches.

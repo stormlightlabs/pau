@@ -322,3 +322,149 @@ pub fn read_pi_session_tree(path: &Path) -> Result<PiSessionTree, String> {
         truncated,
     })
 }
+
+/// The most matches one search returns.
+pub const MAX_SEARCH_MATCHES: usize = 200;
+
+/// Characters of context a snippet keeps before the match.
+const SNIPPET_BEFORE: usize = 40;
+
+/// Characters of context a snippet keeps after the match.
+const SNIPPET_AFTER: usize = 80;
+
+/// The longest query a search honours, in characters.
+const MAX_QUERY_CHARS: usize = 200;
+
+/// One entry whose text contains a search query.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PiSearchMatch {
+    /// Pi's entry identifier.
+    pub entry_id: String,
+    /// The message role, or `None` for summaries.
+    pub role: Option<String>,
+    /// Whitespace-collapsed text around the first occurrence.
+    pub snippet: String,
+    /// Start of the occurrence in the snippet, in UTF-16 code units so a
+    /// JavaScript client can slice the snippet with it.
+    pub match_start: usize,
+    /// End of the occurrence in the snippet, in UTF-16 code units.
+    pub match_end: usize,
+    /// The entry's ISO 8601 time, when recorded.
+    pub timestamp: Option<String>,
+}
+
+/// The matches of one search.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct PiSearchResult {
+    /// Matching entries, newest first.
+    pub matches: Vec<PiSearchMatch>,
+    /// Whether older matches were left out to honour the limit.
+    pub truncated: bool,
+}
+
+/// Searches the whole persisted conversation for `query`, ignoring case.
+///
+/// Pi's session file is the source rather than the live `get_messages`
+/// response: the file keeps every entry with its identifier and timestamp,
+/// including entries the messages route leaves out of its newest-messages
+/// window, and it can be read while the agent is busy. Entries on every branch
+/// are searched, so a match can sit on a branch other than the current one.
+/// Message text and compaction or branch summaries are searched, but tool
+/// calls and images are not. Malformed lines are skipped.
+///
+/// Matches come newest first, so a session with more than `limit` matches
+/// keeps the most recent ones and reports `truncated`. Each entry yields at
+/// most one match, snippeted around its first occurrence. A blank query
+/// matches nothing.
+pub fn search_pi_session_file(
+    path: &Path,
+    query: &str,
+    limit: usize,
+) -> Result<PiSearchResult, String> {
+    let limit = limit.clamp(1, MAX_SEARCH_MATCHES);
+    let query = query.split_whitespace().collect::<Vec<_>>().join(" ");
+    let needle: Vec<char> = fold(&query).into_iter().take(MAX_QUERY_CHARS).collect();
+    let mut lines = BufReader::new(File::open(path).map_err(|error| error.to_string())?).lines();
+    let header: Value = serde_json::from_str(
+        &lines
+            .next()
+            .ok_or("the file is empty")?
+            .map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| format!("the header is not JSON: {error}"))?;
+    if header["type"] != "session" {
+        return Err("the first line is not a session header".to_owned());
+    }
+    let mut result = PiSearchResult::default();
+    if needle.is_empty() {
+        return Ok(result);
+    }
+    let mut found = VecDeque::new();
+    for line in lines {
+        let Ok(line) = line else { break };
+        let Ok(entry) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        let Some(id) = entry["id"].as_str().filter(|id| !id.is_empty()) else {
+            continue;
+        };
+        let content = match entry["type"].as_str() {
+            Some("message") => &entry["message"]["content"],
+            Some("compaction" | "branch_summary") => &entry["summary"],
+            _ => continue,
+        };
+        let Some(text) = message_text(content, usize::MAX) else {
+            continue;
+        };
+        let Some((snippet, match_start, match_end)) = snippet_around(&text, &needle) else {
+            continue;
+        };
+        if found.len() == limit {
+            found.pop_front();
+            result.truncated = true;
+        }
+        found.push_back(PiSearchMatch {
+            entry_id: id.to_owned(),
+            role: entry["message"]["role"].as_str().map(str::to_owned),
+            snippet,
+            match_start,
+            match_end,
+            timestamp: entry["timestamp"].as_str().map(str::to_owned),
+        });
+    }
+    result.matches = found.into_iter().rev().collect();
+    Ok(result)
+}
+
+/// Lowercases per character, keeping the character count so folded indexes
+/// address the original text. A character whose lowercase form is several
+/// characters stays as it is.
+fn fold(text: &str) -> Vec<char> {
+    text.chars()
+        .map(|character| {
+            let mut lower = character.to_lowercase();
+            match (lower.next(), lower.next()) {
+                (Some(single), None) => single,
+                _ => character,
+            }
+        })
+        .collect()
+}
+
+/// Cuts a snippet around the first occurrence of `needle` in `text` and
+/// returns it with the occurrence's UTF-16 offsets inside the snippet.
+fn snippet_around(text: &str, needle: &[char]) -> Option<(String, usize, usize)> {
+    let chars: Vec<char> = text.chars().collect();
+    let start = fold(text)
+        .windows(needle.len())
+        .position(|window| window == needle)?;
+    let end = start + needle.len();
+    let from = start.saturating_sub(SNIPPET_BEFORE);
+    let to = (end + SNIPPET_AFTER).min(chars.len());
+    let utf16 = |slice: &[char]| slice.iter().map(|character| character.len_utf16()).sum();
+    Some((
+        chars[from..to].iter().collect(),
+        utf16(&chars[from..start]),
+        utf16(&chars[from..end]),
+    ))
+}

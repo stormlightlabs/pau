@@ -1495,21 +1495,10 @@ Verification:
 - Component-test a history with a compaction summary and a user prompt with an
   image, both from history and from live events.
 
-### 2.80 Pi transcript search API
-
-Status: planned
-Blocked by: none
-
-Expose transcript search through the desktop API.
-
-Verification:
-
-- Cover search against fixture Pi session files.
-
 ### 2.81 Transcript search
 
 Status: planned
-Blocked by: 2.80
+Blocked by: none
 
 Add transcript search to the session view.
 

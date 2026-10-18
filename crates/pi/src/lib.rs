@@ -24,8 +24,9 @@ pub use mcp::{
     PiMcpOperation, discover_pi_mcp, pi_mcp_capabilities, run_pi_mcp_operation,
 };
 pub use native_sessions::{
-    MAX_TREE_ENTRIES, PiSessionFile, PiSessionFileError, PiSessionFileWarning, PiSessionFiles,
-    PiSessionTree, PiTreeEntry, find_pi_session_file, list_pi_session_files, read_pi_session_tree,
+    MAX_SEARCH_MATCHES, MAX_TREE_ENTRIES, PiSearchMatch, PiSearchResult, PiSessionFile,
+    PiSessionFileError, PiSessionFileWarning, PiSessionFiles, PiSessionTree, PiTreeEntry,
+    find_pi_session_file, list_pi_session_files, read_pi_session_tree, search_pi_session_file,
 };
 pub use process::{
     PiDiagnostic, PiDiagnosticSource, PiProcess, PiProcessError, PiProcessExit, PiProcessOutput,

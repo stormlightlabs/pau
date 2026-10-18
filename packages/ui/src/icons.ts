@@ -12,6 +12,7 @@ export const ICONS = {
 	file: 'i-tabler-file',
 	files: 'i-tabler-folder',
 	folderPlus: 'i-tabler-folder-plus',
+	history: 'i-tabler-history',
 	folderOpen: 'i-catppuccin-folder-open',
 	fileCss: 'i-catppuccin-css',
 	fileHtml: 'i-catppuccin-html',

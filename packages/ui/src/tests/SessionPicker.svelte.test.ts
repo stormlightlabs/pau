@@ -22,7 +22,7 @@ function renderPicker(list: SavedSessionList | Promise<SavedSessionList>, props:
 test('shows the empty state and still offers a new session', async () => {
 	await renderPicker(savedSessionFixtures.empty);
 
-	await expect.element(page.getByText(/No saved Pi sessions/)).toBeVisible();
+	await expect.element(page.getByText(/Saved Pi sessions in this workspace appear here/)).toBeVisible();
 	await expect.element(page.getByRole('button', { name: 'New session' })).toBeEnabled();
 });
 
@@ -107,7 +107,7 @@ test('opens from the rail and closes after a resume', async () => {
 	});
 
 	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await userEvent.click(page.getByRole('button', { name: 'Browse saved sessions in Pau' }));
+	await userEvent.click(page.getByRole('button', { name: 'Saved sessions in Pau' }));
 	await userEvent.click(page.getByRole('button', { name: 'Resume Review the sandbox policy' }));
 
 	expect(onResumeSession).toHaveBeenCalledWith('pau', 'native-3');

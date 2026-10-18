@@ -366,6 +366,9 @@ Copy names the real object, operation, and consequence. A lost UI connection is
 not a stopped native process. A queued prompt is not running work. A capability
 that an adapter does not report is unavailable, not broken.
 
+The shell shows the backend connection only while it is down. A healthy
+connection shows no label, because "Connected" reads as a claim that Pi works.
+
 Representative surfaces should cover:
 
 - starting, idle, running, waiting, stopping, stopped, and failed sessions;

@@ -7,6 +7,7 @@
 		FileMention,
 		MessageQueue,
 		PromptQueue,
+		SavedSessionList,
 		SessionWorkspace,
 		TranscriptEntry
 	} from '../lib/types/session';
@@ -33,6 +34,7 @@
 		pickedFolder,
 		openFailure,
 		replyOnSend = false,
+		savedSessions,
 		productItems
 	}: {
 		workspaces: SessionWorkspace[];
@@ -71,6 +73,8 @@
 		openFailure?: string;
 		/** Whether sending a prompt appends an assistant reply to the transcript. */
 		replyOnSend?: boolean;
+		/** Saved sessions each workspace lists. When set, the rail offers the saved-session picker. */
+		savedSessions?: SavedSessionList;
 		productItems?: ShellNavItem[];
 	} = $props();
 
@@ -138,6 +142,12 @@
 	{resourceSnapshot}
 	{loading}
 	{disconnected}
+	onLoadSavedSessions={savedSessions ? async () => savedSessions : undefined}
+	onResumeSession={savedSessions
+		? (workspaceId, savedSessionId) => {
+				lastAction = `${workspaceId}: resume ${savedSessionId}`;
+			}
+		: undefined}
 	onStartSession={startSession}
 	onSelectSession={(sessionId) => (activeSessionId = sessionId)}
 	onSend={send}

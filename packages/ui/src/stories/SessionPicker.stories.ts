@@ -24,7 +24,7 @@ export const Empty: Story = {
 	args: { load: async () => savedSessionFixtures.empty },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await expect(await canvas.findByText(/No saved Pi sessions/)).toBeInTheDocument();
+		await expect(await canvas.findByText(/Saved Pi sessions in this workspace appear here/)).toBeInTheDocument();
 		await expect(canvas.getByRole('button', { name: 'New session' })).toBeEnabled();
 	}
 };

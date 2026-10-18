@@ -4,6 +4,10 @@
 
 ### Desktop
 
+- The session sidebar keeps each workspace's name and its new-session and
+  saved-sessions buttons on one row, empty screens sit at the top of the
+  window, and the app no longer shows "Connected" while the connection is
+  fine.
 - The file tree lists folders first in natural order, and the editor fills its
   pane, aligns its header, and highlights Markdown.
 - Pau opened from Finder, the Dock, or Spotlight now finds Pi and other tools

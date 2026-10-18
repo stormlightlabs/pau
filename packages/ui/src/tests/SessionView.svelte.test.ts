@@ -117,7 +117,7 @@ test('explains a failed start and retries it', async () => {
 	await render(SessionView, { workspaces: sessionFixtures.workspaceWithoutSessions, onStartSession });
 	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 
-	await userEvent.click(page.getByRole('button', { name: 'Start session in Pau' }));
+	await userEvent.click(page.getByRole('button', { name: 'New session in Pau' }));
 	await expect.element(page.getByRole('alert')).toHaveTextContent('Pau could not find a working Pi installation.');
 
 	await userEvent.click(page.getByRole('button', { name: 'Close navigation' }));
@@ -451,7 +451,7 @@ test('asks for a folder on first run and opens it from a typed path', async () =
 
 	await expect.element(page.getByRole('heading', { name: 'pau is open' })).toBeVisible();
 	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await expect.element(page.getByRole('button', { name: 'Start session in pau' })).toBeEnabled();
+	await expect.element(page.getByRole('button', { name: 'New session in pau' })).toBeEnabled();
 	await userEvent.click(page.getByRole('button', { name: 'Close navigation' }));
 	await userEvent.click(page.getByRole('button', { name: 'Start session', exact: true }));
 	await expect.element(page.getByText('workspace-pau: start session')).toBeVisible();

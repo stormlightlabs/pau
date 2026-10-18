@@ -4,6 +4,7 @@ import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { commandFixtures } from '../fixtures/commands';
 import { fileMentionFixtures } from '../fixtures/file-mentions';
 import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
+import { savedSessionFixtures } from '../fixtures/saved-sessions';
 import { sessionFixtures } from '../fixtures/sessions';
 import { BUILTIN_COMMANDS, TERMINAL_ONLY_REASON } from '../lib/builtin-commands';
 import SessionViewDemo from './SessionViewDemo.svelte';
@@ -35,7 +36,7 @@ export const OpenWorkspace: Story = {
 		await userEvent.type(canvas.getByRole('textbox', { name: 'Folder path' }), '/Users/operator/projects/pau');
 		await userEvent.click(canvas.getByRole('button', { name: 'Open' }));
 		await expect(await canvas.findByRole('heading', { name: 'pau is open' })).toBeInTheDocument();
-		await expect(canvas.getByRole('button', { name: 'Start session in pau' })).toBeEnabled();
+		await expect(canvas.getByRole('button', { name: 'New session in pau' })).toBeEnabled();
 	}
 };
 export const OpenWorkspaceWithPicker: Story = {
@@ -72,6 +73,38 @@ export const Loading: Story = {
 		await expect(canvas.getByRole('heading', { name: 'Loading sessions…' })).toBeInTheDocument();
 	}
 };
+export const WorkspaceWithoutSessions: Story = {
+	args: {
+		workspaces: [{ id: 'ankify', name: 'ankify', path: '/Users/operator/projects/ankify', sessions: [] }],
+		initialSessionId: undefined,
+		openable: true,
+		pickedFolder: null,
+		savedSessions: savedSessionFixtures.empty
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByText('No sessions yet')).toBeInTheDocument();
+		await expect(canvas.getByRole('button', { name: 'New session in ankify' })).toBeEnabled();
+		await expect(canvas.getByRole('button', { name: 'Saved sessions in ankify' })).toBeEnabled();
+	}
+};
+export const SavedSessionPicker: Story = {
+	args: {
+		workspaces: [{ id: 'ankify', name: 'ankify', path: '/Users/operator/projects/ankify', sessions: [] }],
+		initialSessionId: undefined,
+		savedSessions: savedSessionFixtures.empty
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(canvas.getByRole('button', { name: 'Saved sessions in ankify' }));
+		await expect(await canvas.findByRole('heading', { name: 'Sessions in ankify' })).toBeInTheDocument();
+		await expect(await canvas.findByText(/^Start a new session to begin\./)).toBeInTheDocument();
+		await expect(canvas.getByRole('button', { name: 'Saved sessions in ankify' })).toHaveAttribute(
+			'aria-pressed',
+			'true'
+		);
+	}
+};
 export const FailedStart: Story = {
 	args: {
 		workspaces: sessionFixtures.workspaceWithoutSessions,
@@ -80,7 +113,7 @@ export const FailedStart: Story = {
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await userEvent.click(canvas.getByRole('button', { name: 'Start session in Pau' }));
+		await userEvent.click(canvas.getByRole('button', { name: 'New session in Pau' }));
 		await expect(canvas.getByRole('heading', { name: 'Could not start a session in Pau' })).toBeInTheDocument();
 		await expect(canvas.getByRole('button', { name: 'Try again' })).toBeEnabled();
 	}

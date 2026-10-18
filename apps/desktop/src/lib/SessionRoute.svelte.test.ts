@@ -86,7 +86,7 @@ function setup(routes: Record<string, Route>) {
 /** The test viewport is narrow, so the session rail starts collapsed. */
 async function startFromRail(): Promise<void> {
 	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await userEvent.click(page.getByRole('button', { name: 'Start session in Pau' }));
+	await userEvent.click(page.getByRole('button', { name: 'New session in Pau' }));
 }
 
 const counter = { sequence: 0 };
@@ -260,7 +260,7 @@ test('shows the disconnected state when the event stream drops', async () => {
 	await expect.element(page.getByText('Pau lost its connection to the backend', { exact: false })).toBeVisible();
 	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeDisabled();
 	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await expect.element(page.getByRole('button', { name: 'Start session in Pau' })).toBeDisabled();
+	await expect.element(page.getByRole('button', { name: 'New session in Pau' })).toBeDisabled();
 });
 
 test('reports a disconnected backend when the session list cannot load', async () => {
@@ -506,7 +506,7 @@ const savedList = {
 
 async function openSavedSessions(): Promise<void> {
 	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await userEvent.click(page.getByRole('button', { name: 'Browse saved sessions in Pau' }));
+	await userEvent.click(page.getByRole('button', { name: 'Saved sessions in Pau' }));
 }
 
 test('resumes a saved session from the picker and selects it', async () => {

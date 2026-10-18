@@ -1728,23 +1728,25 @@
 							{#if onStartSession}
 								<button
 									type="button"
-									class="session-rail__start"
-									aria-label={`Start session in ${workspace.name}`}
-									title="Start session"
+									class="session-rail__icon-button"
+									aria-label={`New session in ${workspace.name}`}
+									title={`New session in ${workspace.name}`}
 									disabled={disconnected || startingWorkspaceId !== undefined}
 									onclick={() => void startSession(workspace)}>
-									<span aria-hidden="true">+</span>
+									<Icon name="plus" size={14} />
 								</button>
 							{/if}
 							{#if onLoadSavedSessions && onResumeSession}
 								<button
 									type="button"
-									class="session-rail__saved"
-									aria-label={`Browse saved sessions in ${workspace.name}`}
+									class="session-rail__icon-button"
+									aria-label={`Saved sessions in ${workspace.name}`}
 									aria-pressed={pickerWorkspaceId === workspace.id}
-									title="Saved sessions"
+									title={`Saved sessions in ${workspace.name}`}
 									disabled={disconnected}
-									onclick={() => (pickerWorkspaceId = workspace.id)}>Saved</button>
+									onclick={() => (pickerWorkspaceId = workspace.id)}>
+									<Icon name="history" size={14} />
+								</button>
 							{/if}
 						</div>
 						{#if workspace.sessions.length === 0}
@@ -2444,34 +2446,32 @@
 		padding: 0 var(--pau-space-2) var(--pau-space-4);
 	}
 
+	/* The workspace name gives way to its controls, which never shrink or clip. */
 	.session-rail__heading {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		gap: var(--pau-space-1);
+		min-width: 0;
 	}
 
-	.session-rail .session-rail__start {
-		display: grid;
-		place-items: center;
-		width: 2rem;
-		min-height: var(--pau-size-row-md);
-		grid-template-columns: 1fr;
+	.session-rail .session-rail__icon-button {
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		justify-content: center;
+		width: var(--pau-size-row-sm);
+		min-height: 0;
+		height: var(--pau-size-row-sm);
 		padding: 0;
-		color: var(--pau-text-muted);
-		font-size: var(--pau-type-lg);
-		text-align: center;
+		border-radius: var(--pau-radius-control);
 	}
 
-	.session-rail .session-rail__saved {
-		width: auto;
-		min-height: var(--pau-size-row-md);
-		padding: 0 var(--pau-space-2);
-		color: var(--pau-text-muted);
-		font-size: var(--pau-type-xs);
+	.session-rail .session-rail__icon-button[aria-pressed='true'] {
+		color: var(--pau-accent);
+		background: var(--pau-surface-raised);
 	}
 
-	.session-rail .session-rail__start:disabled,
-	.session-rail .session-rail__saved:disabled {
+	.session-rail .session-rail__icon-button:disabled {
 		cursor: not-allowed;
 		opacity: 0.5;
 	}
@@ -2481,11 +2481,17 @@
 	}
 
 	.session-rail h2 {
+		flex: 1;
+		min-width: 0;
 		margin: 0;
-		padding: var(--pau-space-2) var(--pau-space-3);
+		padding: var(--pau-space-2);
+		overflow: hidden;
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-sm);
 		font-weight: var(--pau-weight-medium);
+		text-overflow: ellipsis;
+		text-transform: none;
+		white-space: nowrap;
 	}
 
 	.session-rail ul {
@@ -2503,7 +2509,7 @@
 		gap: var(--pau-space-2);
 		width: 100%;
 		min-height: var(--pau-size-target-touch);
-		padding: var(--pau-space-2) var(--pau-space-3);
+		padding: var(--pau-space-2) var(--pau-space-3) var(--pau-space-2) var(--pau-space-2);
 		color: var(--pau-text-muted);
 		background: transparent;
 		border: 0;
@@ -2571,10 +2577,19 @@
 
 	.session-rail .session-rail__open {
 		grid-template-columns: auto minmax(0, 1fr);
-		margin-bottom: var(--pau-space-2);
+		min-height: var(--pau-size-row-md);
+		margin-bottom: var(--pau-space-3);
+		padding-block: 0;
+		font-size: var(--pau-type-sm);
 		color: var(--pau-text);
 		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
+	}
+
+	.session-rail .session-rail__open span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.session-rail .session-rail__open:disabled {
@@ -2586,7 +2601,6 @@
 		display: grid;
 		gap: var(--pau-space-3);
 		margin-top: var(--pau-space-4);
-		text-align: left;
 	}
 
 	.session-open label {
@@ -2621,16 +2635,18 @@
 		color: var(--pau-danger);
 	}
 
+	/* The inset matches a session row's title: row padding, marker column, and gap. */
 	.session-rail__empty {
 		margin: 0;
-		padding: var(--pau-space-2) var(--pau-space-3);
+		padding: var(--pau-space-2) var(--pau-space-3) var(--pau-space-2)
+			calc(var(--pau-space-2) + 0.5rem + var(--pau-space-2));
 		color: var(--pau-text-muted);
 	}
 
 	.session-rail__rename {
 		width: 100%;
 		min-height: var(--pau-size-target-touch);
-		padding: var(--pau-space-2) var(--pau-space-3);
+		padding: var(--pau-space-2) var(--pau-space-3) var(--pau-space-2) var(--pau-space-2);
 		color: var(--pau-text);
 		font: inherit;
 		background: var(--pau-canvas);
@@ -2640,7 +2656,7 @@
 
 	.session-rail__error {
 		margin: var(--pau-space-2) 0 0;
-		padding: var(--pau-space-2) var(--pau-space-3);
+		padding: var(--pau-space-2);
 		color: var(--pau-danger);
 		font-size: var(--pau-type-sm);
 	}
@@ -2665,8 +2681,13 @@
 		margin-inline: auto;
 	}
 
+	/*
+	 * Empty states and the saved-session picker read as a top-aligned panel.
+	 * Centering them vertically left a lone heading floating in a tall pane,
+	 * far from the rail and the actions it describes.
+	 */
 	.session-view--empty {
-		place-items: center;
+		align-items: start;
 	}
 
 	.session-view__header {
@@ -3311,11 +3332,9 @@
 
 	.session-view__empty {
 		grid-area: transcript;
-		align-self: center;
-		max-width: 30rem;
-		margin: auto;
-		padding: 3rem var(--pau-space-4);
-		text-align: center;
+		width: min(100%, 40rem);
+		margin-inline: auto;
+		padding: var(--pau-space-5) var(--pau-space-4);
 	}
 
 	.session-view__empty h1,

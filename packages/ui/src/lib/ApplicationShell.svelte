@@ -390,10 +390,9 @@
 					<Icon name="sidebar" size={18} />
 				</button>
 			{/if}
+			<!-- A healthy connection stays silent so the bar never implies Pi itself works. -->
 			{#if disconnected}
 				<p class="app-shell__connection" role="status"><span></span>Disconnected</p>
-			{:else}
-				<p class="app-shell__connection app-shell__connection--online"><span></span>Connected</p>
 			{/if}
 			{#if inspector}
 				<button
@@ -703,8 +702,15 @@
 		color: var(--shell-muted);
 		font-size: var(--pau-type-label);
 		font-weight: var(--pau-weight-semibold);
-		letter-spacing: 0.08em;
+		letter-spacing: 0.055em;
 		text-transform: uppercase;
+	}
+
+	.app-shell__rail-heading span {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.app-shell__rail-heading button {
@@ -806,10 +812,6 @@
 		height: 0.45rem;
 		background: currentColor;
 		border-radius: 50%;
-	}
-
-	.app-shell__connection--online {
-		color: var(--shell-accent);
 	}
 
 	.app-shell__main-content {

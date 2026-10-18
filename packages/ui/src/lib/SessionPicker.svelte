@@ -75,7 +75,7 @@
 	{:else if !list}
 		<p class="session-picker__note" role="status">Loading saved sessions…</p>
 	{:else if list.sessions.length === 0}
-		<p class="session-picker__note">No saved Pi sessions in this workspace yet. Start a new session to begin one.</p>
+		<p class="session-picker__note">Start a new session to begin. Saved Pi sessions in this workspace appear here.</p>
 	{:else}
 		<ul class="session-picker__list" aria-label="Saved sessions">
 			{#each list.sessions as saved (saved.id)}
@@ -121,12 +121,12 @@
 <style>
 	.session-picker {
 		grid-area: transcript;
-		width: min(100%, 44rem);
-		margin: 0 auto;
+		width: min(100%, 40rem);
+		margin-inline: auto;
 		padding: var(--pau-space-5) var(--pau-space-4);
-		overflow-y: auto;
 	}
 
+	/* The title and its actions share one row, wrapping only in a narrow pane. */
 	header {
 		display: flex;
 		align-items: center;

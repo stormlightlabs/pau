@@ -11,6 +11,7 @@ pub mod readiness;
 pub mod resource_monitor;
 pub mod sandbox;
 pub mod session;
+pub mod startup;
 pub mod terminal;
 pub mod workspace;
 

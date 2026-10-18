@@ -2,7 +2,7 @@ use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     env, fmt, fs, io,
     net::SocketAddr,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::{Duration, SystemTime},
 };
@@ -1287,6 +1287,19 @@ impl ServerHandle {
         &self.token
     }
 
+    /// Reports whether each supported agent can start a session.
+    ///
+    /// Shares the cached report behind `GET /api/agents/readiness`, so a
+    /// startup check spares the first view from launching Pi again. The
+    /// returned future does not borrow the handle, so the caller can keep the
+    /// handle available for shutdown while the check runs.
+    pub fn agent_readiness(
+        &self,
+    ) -> impl Future<Output = pau_core::readiness::AgentReadinessReport> + Send + 'static {
+        let sessions = self.sessions.clone();
+        async move { sessions.readiness(false).await }
+    }
+
     /// Returns the event hub used by this server.
     pub fn events(&self) -> &EventHub {
         &self.events
@@ -1380,23 +1393,69 @@ pub async fn start_with_token_and_options(
     token: ApiToken,
     options: ServerOptions,
 ) -> io::Result<ServerHandle> {
-    if !address.ip().is_loopback() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "the local Pau server must bind to a loopback address",
-        ));
-    }
+    require_loopback(address)?;
+    let database = open_database().await?;
+    start_with_database(address, token, options, database).await
+}
 
-    let database = if cfg!(test) {
-        Database::open(":memory:").await
-    } else {
-        let path = database_path()?;
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        Database::open(path).await
+/// The Pau database, opened and migrated, waiting for
+/// [`start_with_database`].
+pub struct ServerDatabase(Database);
+
+/// Opens and migrates the Pau database at its default location.
+///
+/// The location is `PAU_DATABASE_PATH` when set, or `pau.sqlite3` in the build
+/// channel's local data directory.
+///
+/// # Errors
+///
+/// Fails when the data directory cannot be created or the database cannot be
+/// opened. A database from a newer Pau fails with a wrapped
+/// [`pau_core::persistence::OpenError::NewerSchema`] and is left unchanged.
+pub async fn open_database() -> io::Result<ServerDatabase> {
+    if cfg!(test) {
+        return open_database_at(Path::new(":memory:")).await;
     }
-    .map_err(io::Error::other)?;
+    let path = database_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    open_database_at(&path).await
+}
+
+/// Opens and migrates the Pau database at `path`.
+///
+/// # Errors
+///
+/// Fails as [`open_database`] does, without creating parent directories.
+pub async fn open_database_at(path: &Path) -> io::Result<ServerDatabase> {
+    Database::open(path)
+        .await
+        .map(ServerDatabase)
+        .map_err(io::Error::other)
+}
+
+fn require_loopback(address: SocketAddr) -> io::Result<()> {
+    if address.ip().is_loopback() {
+        return Ok(());
+    }
+    Err(io::Error::new(
+        io::ErrorKind::InvalidInput,
+        "the local Pau server must bind to a loopback address",
+    ))
+}
+
+/// Starts the shared API on a database that is already open.
+///
+/// The desktop shell opens the database and starts the server as separate
+/// steps so it can report each one.
+pub async fn start_with_database(
+    address: SocketAddr,
+    token: ApiToken,
+    options: ServerOptions,
+    ServerDatabase(database): ServerDatabase,
+) -> io::Result<ServerHandle> {
+    require_loopback(address)?;
     let settings = database.settings();
     let persisted_diagnostics = settings
         .get(DIAGNOSTICS_SETTING_KEY)

@@ -58,7 +58,7 @@ pub(crate) async fn get_agent_readiness(
 
 impl SessionApi {
     /// Returns the cached report, or checks every agent when it is stale.
-    async fn readiness(&self, refresh: bool) -> AgentReadinessReport {
+    pub(crate) async fn readiness(&self, refresh: bool) -> AgentReadinessReport {
         let mut cache = self.readiness.lock().await;
         if !refresh
             && let Some((checked_at, report)) = cache.as_ref()

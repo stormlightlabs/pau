@@ -18,6 +18,7 @@ import {
 	resolveTerminalSocket,
 	searchSession,
 	searchWorkspaceFiles,
+	setDesktopConnection,
 	startPayloadTracing,
 	updateDiagnosticSettings,
 	updateWorkspaceSandbox,
@@ -27,7 +28,7 @@ import {
 const TOKEN = '0123456789abcdef0123456789abcdef';
 const DESKTOP_CONNECTION = { apiOrigin: 'http://127.0.0.1:43127', token: TOKEN };
 
-/** Defines the connection the way the desktop shell's launch script does. */
+/** Stands in for the connection that desktop startup stores. */
 function launchDesktop(connection: unknown = DESKTOP_CONNECTION) {
 	vi.stubGlobal(DESKTOP_CONNECTION_GLOBAL, Object.freeze(connection));
 }
@@ -41,9 +42,37 @@ describe('API connection', () => {
 		expect(apiConnection()).toEqual({ origin: '', token: undefined });
 	});
 
-	test('uses the backend origin and launch token the desktop shell injects', () => {
+	test('uses the backend origin and launch token the desktop shell handed over', () => {
 		launchDesktop();
 		expect(apiConnection()).toEqual({ origin: 'http://127.0.0.1:43127', token: TOKEN });
+	});
+
+	test('reports that the desktop backend is still starting before the handover', () => {
+		expect(() => apiConnection({ __TAURI_INTERNALS__: {} })).toThrow('The Pau backend is still starting.');
+	});
+
+	test('stores the startup connection once and keeps it frozen', () => {
+		const host = { __TAURI_INTERNALS__: {} };
+		const connection = { api_origin: 'http://127.0.0.1:43127', token: TOKEN };
+
+		setDesktopConnection(connection, host);
+		setDesktopConnection(connection, host);
+
+		expect(apiConnection(host)).toEqual({ origin: 'http://127.0.0.1:43127', token: TOKEN });
+		expect(() => setDesktopConnection({ api_origin: 'http://127.0.0.1:9', token: TOKEN }, host)).toThrow(
+			'The desktop API connection is already set.'
+		);
+		expect(Reflect.set(host, DESKTOP_CONNECTION_GLOBAL, {})).toBe(false);
+		expect(Object.isFrozen(Reflect.get(host, DESKTOP_CONNECTION_GLOBAL))).toBe(true);
+		expect(apiConnection(host).origin).toBe('http://127.0.0.1:43127');
+	});
+
+	test('refuses a startup connection to another origin', () => {
+		const host = {};
+		expect(() => setDesktopConnection({ api_origin: 'https://example.com', token: TOKEN }, host)).toThrow(
+			'desktop API origin is invalid'
+		);
+		expect(Reflect.get(host, DESKTOP_CONNECTION_GLOBAL)).toBeUndefined();
 	});
 
 	test.each([

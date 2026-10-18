@@ -1151,6 +1151,61 @@ export type AgentReadinessReport = {
  */
 agents: Array<AgentReadiness>, };
 
+export type StartupStepId = "login_shell_path" | "database" | "backend" | "agent_readiness";
+
+export type StartupStepState = "pending" | "running" | "done" | "failed";
+
+export type StartupAction = "install_pi" | "update_pi" | "run_pi" | "update_pau";
+
+export type StartupStep = {
+/**
+ * Which step this is.
+ */
+id: StartupStepId,
+/**
+ * Where the step stands.
+ */
+state: StartupStepState,
+/**
+ * Why the step failed, written for the person using Pau. Set only when
+ * `state` is `failed`.
+ */
+reason: string | null,
+/**
+ * What the person can do about the failure, when Pau can offer an action.
+ */
+action: StartupAction | null, };
+
+export type StartupPhase = "running" | "ready" | "failed";
+
+export type DesktopConnection = {
+/**
+ * The backend's loopback origin, such as `http://127.0.0.1:43127`.
+ */
+api_origin: string,
+/**
+ * The bearer token for this launch.
+ */
+token: string, };
+
+export type StartupProgress = {
+/**
+ * Whether the app can open.
+ */
+phase: StartupPhase,
+/**
+ * Every step in the order startup runs them.
+ */
+steps: Array<StartupStep>,
+/**
+ * The backend connection. Set once the backend is serving requests.
+ */
+connection: DesktopConnection | null,
+/**
+ * The agent readiness report, once the check finishes.
+ */
+readiness: AgentReadinessReport | null, };
+
 export type SessionModel = {
 /**
  * The provider the model is routed through.

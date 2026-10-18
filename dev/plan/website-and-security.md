@@ -37,8 +37,10 @@ navigation, search, copy controls, theme behavior, and narrow layouts.
 
 ## Web and desktop security
 
-Desktop startup binds Axum to an ephemeral loopback port and supplies a random
-bearer token to the webview. During desktop development, the desktop frontend
+Desktop startup binds Axum to an ephemeral loopback port and hands its origin
+and a random bearer token to the webview through Tauri IPC once the backend is
+ready, never through a URL. The webview keeps the first connection it receives
+and cannot be pointed at another origin. During desktop development, the desktop frontend
 may run in a normal browser against this local endpoint. This is a development
 path for `apps/desktop`, not the remote web product. Tokens must not be written
 to normal logs.

@@ -19,16 +19,30 @@ use std::{
 const MARKER: &str = "__PAU_LOGIN_PATH__";
 /// An interactive shell can stall on prompts or slow plugins. Startup gives up
 /// after this long and keeps the inherited `PATH`.
-const TIMEOUT: Duration = Duration::from_secs(3);
+pub const TIMEOUT: Duration = Duration::from_secs(3);
 
-/// Runs the login shell and returns its `PATH`, or `None` when the shell fails,
-/// times out, or prints no marked value.
+/// Why the login shell `PATH` could not be read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoginPathError {
+    /// The shell did not finish within the timeout and was stopped.
+    TimedOut,
+    /// The shell could not start, or printed no marked value.
+    Unavailable,
+}
+
+/// Runs the operator's login shell, from `SHELL` or `/bin/zsh`, and returns
+/// its `PATH`. See [`shell_path`].
+pub fn login_shell_path() -> Result<OsString, LoginPathError> {
+    let shell = env::var_os("SHELL").unwrap_or_else(|| OsString::from("/bin/zsh"));
+    shell_path(&shell, TIMEOUT)
+}
+
+/// Runs `shell` and returns its `PATH`, stopping the shell after `timeout`.
 ///
 /// The shell runs as a login and interactive shell so both profile and rc
 /// files apply, which is where version managers and Homebrew usually extend
 /// `PATH`. Markers separate the value from anything the rc files print.
-pub fn login_shell_path() -> Option<OsString> {
-    let shell = env::var_os("SHELL").unwrap_or_else(|| OsString::from("/bin/zsh"));
+pub fn shell_path(shell: &OsStr, timeout: Duration) -> Result<OsString, LoginPathError> {
     let mut child = Command::new(shell)
         .args(["-l", "-i", "-c"])
         .arg(format!("printf '{MARKER}%s{MARKER}' \"$PATH\""))
@@ -36,22 +50,33 @@ pub fn login_shell_path() -> Option<OsString> {
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
-        .ok()?;
+        .map_err(|_| LoginPathError::Unavailable)?;
     let started = Instant::now();
     loop {
         match child.try_wait() {
             Ok(Some(_)) => break,
-            Ok(None) if started.elapsed() < TIMEOUT => thread::sleep(Duration::from_millis(20)),
-            _ => {
+            Ok(None) if started.elapsed() < timeout => thread::sleep(Duration::from_millis(20)),
+            waited => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return None;
+                return Err(if waited.is_ok() {
+                    LoginPathError::TimedOut
+                } else {
+                    LoginPathError::Unavailable
+                });
             }
         }
     }
     let mut output = String::new();
-    child.stdout.take()?.read_to_string(&mut output).ok()?;
-    marked_path(&output).map(OsString::from)
+    child
+        .stdout
+        .take()
+        .ok_or(LoginPathError::Unavailable)?
+        .read_to_string(&mut output)
+        .map_err(|_| LoginPathError::Unavailable)?;
+    marked_path(&output)
+        .map(OsString::from)
+        .ok_or(LoginPathError::Unavailable)
 }
 
 /// Extracts the value between the first pair of markers.
@@ -75,9 +100,55 @@ pub fn merge_paths(login: &OsStr, inherited: &OsStr) -> Option<OsString> {
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::OsStr;
+    use std::{
+        ffi::OsStr,
+        fs,
+        os::unix::fs::PermissionsExt,
+        path::{Path, PathBuf},
+        time::{Duration, Instant},
+    };
 
-    use super::{MARKER, marked_path, merge_paths};
+    use super::{LoginPathError, MARKER, marked_path, merge_paths, shell_path};
+
+    /// Writes an executable script that stands in for the login shell.
+    fn fake_shell(directory: &Path, name: &str, body: &str) -> PathBuf {
+        let path = directory.join(name);
+        fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        path
+    }
+
+    #[test]
+    fn stops_a_slow_login_shell_at_the_timeout() {
+        let directory = tempfile::tempdir().unwrap();
+        let shell = fake_shell(directory.path(), "slow", "sleep 10");
+        let started = Instant::now();
+
+        let result = shell_path(shell.as_os_str(), Duration::from_millis(200));
+
+        assert_eq!(result, Err(LoginPathError::TimedOut));
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    #[test]
+    fn reads_the_path_a_login_shell_prints() {
+        let directory = tempfile::tempdir().unwrap();
+        let shell = fake_shell(
+            directory.path(),
+            "chatty",
+            &format!("echo welcome; printf '{MARKER}/opt/bin:/usr/bin{MARKER}'"),
+        );
+        let silent = fake_shell(directory.path(), "silent", "exit 0");
+
+        assert_eq!(
+            shell_path(shell.as_os_str(), Duration::from_secs(5)),
+            Ok("/opt/bin:/usr/bin".into())
+        );
+        assert_eq!(
+            shell_path(silent.as_os_str(), Duration::from_secs(5)),
+            Err(LoginPathError::Unavailable)
+        );
+    }
 
     #[test]
     fn reads_the_marked_value_past_rc_file_output() {

@@ -86,7 +86,9 @@ Verification:
 
 ### 2.244 Startup progress
 
-Status: planned
+Status: in progress
+Status note: Implemented and tested in the Tauri shell. The installed-build launch
+check remains.
 Blocked by: none
 
 Open the main window as soon as the desktop app starts, then load the login

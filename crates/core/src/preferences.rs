@@ -250,7 +250,10 @@ mod tests {
         let plex = known.replace("inter", "ibm-plex-sans");
         let parsed = serde_json::from_str::<UiPreferences>(&plex).unwrap();
         assert_eq!(parsed.ui_font, UiFontPreference::IbmPlexSans);
-        assert_eq!(UiPreferences::defaults().ui_font, UiFontPreference::Overpass);
+        assert_eq!(
+            UiPreferences::defaults().ui_font,
+            UiFontPreference::Overpass
+        );
 
         let mut preferences = UiPreferences::defaults();
         preferences.pane_widths.context_rail = Some(5);

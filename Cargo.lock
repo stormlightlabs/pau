@@ -2880,12 +2880,15 @@ dependencies = [
 name = "pau-desktop"
 version = "0.8.2"
 dependencies = [
+ "pau-core",
  "pau-server",
- "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
+ "tempfile",
+ "tokio",
+ "tokio-rusqlite",
  "tracing",
  "tracing-subscriber",
 ]

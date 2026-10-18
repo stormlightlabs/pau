@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Pau opens its window right away while it starts, and still opens when Pi is
+  missing.
 - On Linux, Ctrl+K opens the command palette outside text fields and still
   deletes to the end of the line while you type. The shortcut list shows where
   each Pi binding takes a key.

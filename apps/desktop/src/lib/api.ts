@@ -2,6 +2,7 @@ import type {
 	AgentKeybindings,
 	AgentReadinessReport,
 	AgentSession,
+	DesktopConnection,
 	DiagnosticBundle,
 	DiagnosticLevel,
 	EffectiveSandbox,
@@ -52,32 +53,20 @@ import type {
 export type ApiConnection = { origin: string; token: string | undefined };
 
 /**
- * The global the desktop shell defines before any page script runs. It holds
- * the loopback origin of the backend the shell started and that launch's
- * bearer token, as `{ apiOrigin, token }`.
+ * The global that holds the desktop backend connection once startup hands it
+ * over, as `{ apiOrigin, token }`. Only {@link setDesktopConnection} defines
+ * it.
  */
 export const DESKTOP_CONNECTION_GLOBAL = '__PAU_DESKTOP__';
 
 /**
- * Reads the backend connection for this page.
+ * Checks a desktop connection and returns it as an API connection.
  *
- * The desktop shell injects its connection as a frozen, read-only global on
- * every page load, so it survives navigation and reloads without appearing in
- * the URL or history. The global stays on `window` after it is read: any
- * script in the page could already call the API through this client, so
- * deleting it would add no protection, and it would break modules that Vite
- * re-evaluates while `tauri dev` runs.
- *
- * Without the global, as in the browser development server, requests use
- * same-origin paths and carry no token. The Vite proxy adds the
- * `Authorization` header to the HTTP and WebSocket requests it forwards.
- *
- * @throws When the injected connection is malformed.
+ * @throws When the origin is not a loopback HTTP origin or the token is
+ * malformed.
  */
-export function apiConnection(): ApiConnection {
-	const injected: unknown = Reflect.get(globalThis, DESKTOP_CONNECTION_GLOBAL);
-	if (injected === undefined) return { origin: '', token: undefined };
-	const { apiOrigin, token } = (injected ?? {}) as { apiOrigin?: unknown; token?: unknown };
+function parseDesktopConnection(value: unknown): ApiConnection {
+	const { apiOrigin, token } = (value ?? {}) as { apiOrigin?: unknown; token?: unknown };
 	const port = typeof apiOrigin === 'string' ? /^http:\/\/127\.0\.0\.1:(\d{1,5})$/.exec(apiOrigin)?.[1] : undefined;
 	if (port === undefined || Number(port) < 1 || Number(port) > 65_535) {
 		throw new Error('The desktop API origin is invalid.');
@@ -86,6 +75,54 @@ export function apiConnection(): ApiConnection {
 		throw new Error('The desktop API token is invalid.');
 	}
 	return { origin: `http://127.0.0.1:${Number(port)}`, token };
+}
+
+/**
+ * Stores the backend connection the desktop shell handed over at startup.
+ *
+ * The connection arrives through Tauri IPC, never a URL, so the token stays
+ * out of the address bar and history. It becomes a frozen, read-only,
+ * non-configurable global: the first connection wins, a repeat of the same
+ * connection does nothing, and later page code cannot point the client at
+ * another origin. The global stays defined when Vite re-evaluates this module
+ * while `tauri dev` runs.
+ *
+ * @param connection The `connection` from a startup snapshot.
+ * @param host The global object, replaceable in tests.
+ * @throws When the connection is malformed or differs from the stored one.
+ */
+export function setDesktopConnection(connection: DesktopConnection, host: object = globalThis): void {
+	const { origin, token } = parseDesktopConnection({ apiOrigin: connection.api_origin, token: connection.token });
+	const stored: unknown = Reflect.get(host, DESKTOP_CONNECTION_GLOBAL);
+	if (stored !== undefined) {
+		const current = parseDesktopConnection(stored);
+		if (current.origin === origin && current.token === token) return;
+		throw new Error('The desktop API connection is already set.');
+	}
+	Object.defineProperty(host, DESKTOP_CONNECTION_GLOBAL, { value: Object.freeze({ apiOrigin: origin, token }) });
+}
+
+/**
+ * Reads the backend connection for this page.
+ *
+ * In the desktop app, the connection is the one {@link setDesktopConnection}
+ * stored. The global stays on `window` after it is read: any script in the
+ * page could already call the API through this client, so deleting it would
+ * add no protection.
+ *
+ * In the browser development server, which has no Tauri host, requests use
+ * same-origin paths and carry no token. The Vite proxy adds the
+ * `Authorization` header to the HTTP and WebSocket requests it forwards.
+ *
+ * @param host The global object, replaceable in tests.
+ * @throws When the desktop backend has not finished starting or the stored
+ * connection is malformed.
+ */
+export function apiConnection(host: object = globalThis): ApiConnection {
+	const stored: unknown = Reflect.get(host, DESKTOP_CONNECTION_GLOBAL);
+	if (stored !== undefined) return parseDesktopConnection(stored);
+	if ('__TAURI_INTERNALS__' in host) throw new Error('The Pau backend is still starting.');
+	return { origin: '', token: undefined };
 }
 
 function authorization(): HeadersInit | undefined {

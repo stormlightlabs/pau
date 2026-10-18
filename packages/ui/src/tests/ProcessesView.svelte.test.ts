@@ -62,3 +62,17 @@ test('shows empty and completed states', async () => {
 	await userEvent.click(page.getByRole('button', { name: 'Expand Update protocol types process tree' }));
 	await expect.element(page.getByText(/Only its final summary remains/)).toBeVisible();
 });
+
+test('insets the header by the same padding as the process rows', async () => {
+	const { container } = await render(ProcessesView, {
+		workspaceName: 'Pau',
+		processes: resourceMonitoringFixtures.active,
+		actions
+	});
+
+	const header = container.querySelector('header')!;
+	const heading = container.querySelector('.processes-view__table-heading')!;
+	expect(getComputedStyle(header).paddingLeft).toBe(getComputedStyle(heading).paddingLeft);
+	expect(getComputedStyle(header).paddingLeft).not.toBe('0px');
+	expect(getComputedStyle(header).paddingRight).toBe(getComputedStyle(header).paddingLeft);
+});

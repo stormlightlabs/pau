@@ -368,38 +368,6 @@ Verification:
   the command block does not wrap.
 - Screenshot the MCP, Diagnostics, sandbox, and readiness fixtures.
 
-### 2.258 View header insets
-
-Status: planned
-Blocked by: none
-
-The Diagnostics and Processes headers start at the pane's left edge and their
-right-side count or chip touches the right edge while every section below is
-inset. Give the shared view header the same horizontal padding as its sections
-and align the right-side metadata with the section's right edge.
-
-Verification:
-
-- Component-test that the header's left padding equals the first section's
-  left padding in both views.
-- Screenshot both views at 1440px and 900px.
-
-### 2.259 Diagnostics narrow layout
-
-Status: planned
-Blocked by: none
-
-At a 900px window the Diagnostics records truncate their metadata
-("sequence=842 · rep…") and the transport rows stay a six-column table,
-although `surfaces.md` says records stack without truncation and transport
-rows become labelled metric blocks at narrow widths. Apply the narrow layout
-when the main column is under 48rem and wrap record metadata.
-
-Verification:
-
-- Component-test that no record metadata is clipped at a 600px main column
-  and that transport rows render as metric blocks.
-
 ### 2.260 File rail status rows
 
 Status: planned

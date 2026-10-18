@@ -2,6 +2,7 @@
 	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
 	import { formatBytes, formatCpu, formatElapsed } from './resource-format';
+	import ViewHeader from './ViewHeader.svelte';
 	import type { ProcessResourceActions, ProcessResourceSnapshot } from './types/resource-monitoring';
 
 	let {
@@ -26,13 +27,13 @@
 </script>
 
 <section class="processes-view" aria-labelledby="processes-title">
-	<header>
-		<div>
-			<p>{workspaceName}</p>
-			<h1 id="processes-title">Processes</h1>
-		</div>
-		<span aria-live="polite">{processes.length} monitored {processes.length === 1 ? 'tree' : 'trees'}</span>
-	</header>
+	<ViewHeader eyebrow={workspaceName} title="Processes" titleId="processes-title">
+		{#snippet meta()}
+			<span class="processes-view__count" aria-live="polite">
+				{processes.length} monitored {processes.length === 1 ? 'tree' : 'trees'}
+			</span>
+		{/snippet}
+	</ViewHeader>
 
 	{#if processes.length === 0}
 		<div class="processes-view__empty">
@@ -116,43 +117,23 @@
 
 <style>
 	.processes-view {
+		container-type: inline-size;
 		min-width: 0;
 		color: var(--pau-text);
 		font-family: var(--pau-font-ui);
 	}
 
-	header {
-		display: flex;
-		align-items: end;
-		justify-content: space-between;
-		gap: var(--pau-space-4);
-		margin-bottom: var(--pau-space-5);
-	}
-
-	header p,
-	header h1,
-	header span,
-	.processes-view__empty h2,
-	.processes-view__empty p,
-	.process-tree h2,
-	.process-tree p {
-		margin: 0;
-	}
-
-	header p,
-	header span,
+	.processes-view__count,
 	.process-row small,
 	.process-tree p {
 		color: var(--pau-text-muted);
 	}
 
-	header p {
-		font-size: var(--pau-type-xs);
-	}
-
-	h1 {
-		font-size: var(--pau-type-lg);
-		font-weight: var(--pau-weight-semibold);
+	.processes-view__empty h2,
+	.processes-view__empty p,
+	.process-tree h2,
+	.process-tree p {
+		margin: 0;
 	}
 
 	.processes-view__table {
@@ -303,7 +284,7 @@
 	}
 
 	@media (max-width: 42rem) {
-		header {
+		.processes-view :global(.view-header) {
 			position: sticky;
 			left: 0;
 		}

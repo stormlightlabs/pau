@@ -2,6 +2,7 @@
 	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
 	import Select, { type SelectOption } from './Select.svelte';
+	import ViewHeader from './ViewHeader.svelte';
 	import type { DiagnosticBundleView, DiagnosticLevel } from './types/diagnostics';
 
 	let {
@@ -38,15 +39,13 @@
 </script>
 
 <section class="diagnostics-view" aria-labelledby="diagnostics-title">
-	<header>
-		<div>
-			<p>Support and troubleshooting</p>
-			<h1 id="diagnostics-title">Diagnostics</h1>
-		</div>
-		<span class:diagnostics-view__mode--active={bundle.settings.enabled} class="diagnostics-view__mode">
-			{bundle.settings.enabled ? 'Diagnostics mode on' : 'Diagnostics mode off'}
-		</span>
-	</header>
+	<ViewHeader eyebrow="Support and troubleshooting" title="Diagnostics" titleId="diagnostics-title">
+		{#snippet meta()}
+			<span class:diagnostics-view__mode--active={bundle.settings.enabled} class="diagnostics-view__mode">
+				{bundle.settings.enabled ? 'Diagnostics mode on' : 'Diagnostics mode off'}
+			</span>
+		{/snippet}
+	</ViewHeader>
 
 	<section class="diagnostics-view__settings" aria-labelledby="diagnostic-settings-title">
 		<div>
@@ -217,12 +216,12 @@
 
 <style>
 	.diagnostics-view {
+		container-type: inline-size;
 		min-width: 0;
 		color: var(--pau-text);
 		font-family: var(--pau-font-ui);
 	}
 
-	header,
 	.diagnostics-view__section-heading,
 	.diagnostics-view__trace,
 	.diagnostics-view__export-actions {
@@ -232,19 +231,11 @@
 		gap: var(--pau-space-4);
 	}
 
-	header {
-		align-items: end;
-		margin-bottom: var(--pau-space-5);
-	}
-
-	header p,
-	header h1,
 	.diagnostics-view h2,
 	.diagnostics-view p {
 		margin: 0;
 	}
 
-	header p,
 	.diagnostics-view__section-heading p,
 	.diagnostics-view__settings p,
 	.diagnostics-view__trace p,
@@ -254,14 +245,8 @@
 		color: var(--pau-text-muted);
 	}
 
-	header p,
 	small {
 		font-size: var(--pau-type-xs);
-	}
-
-	h1 {
-		font-size: var(--pau-type-lg);
-		font-weight: var(--pau-weight-semibold);
 	}
 
 	h2 {
@@ -285,7 +270,7 @@
 		grid-template-columns: minmax(16rem, 1fr) auto auto;
 		align-items: center;
 		gap: var(--pau-space-5);
-		padding: var(--pau-space-4);
+		padding: var(--pau-space-4) var(--pau-space-3);
 		border-block: 1px solid var(--pau-border);
 	}
 
@@ -338,7 +323,7 @@
 	}
 
 	.diagnostics-view__empty {
-		padding: 3rem var(--pau-space-4);
+		padding: 3rem var(--pau-space-3);
 		text-align: center;
 		border-bottom: 1px solid var(--pau-border);
 	}
@@ -357,7 +342,7 @@
 	.diagnostics-view__versions div {
 		display: grid;
 		gap: var(--pau-space-1);
-		padding: var(--pau-space-3) var(--pau-space-4);
+		padding: var(--pau-space-3);
 		border-right: 1px solid var(--pau-border);
 	}
 
@@ -464,7 +449,7 @@
 	.diagnostics-view__records li {
 		display: grid;
 		grid-template-columns: 11rem 3.5rem 7rem minmax(10rem, 1fr) minmax(8rem, 1fr);
-		align-items: center;
+		align-items: start;
 		gap: var(--pau-space-3);
 		padding: var(--pau-space-2) var(--pau-space-3);
 		border-top: 1px solid var(--pau-border);
@@ -472,11 +457,15 @@
 	}
 
 	.diagnostics-view__records time,
-	.diagnostics-view__records code,
-	.diagnostics-view__records small {
+	.diagnostics-view__records code {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.diagnostics-view__records small {
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.diagnostics-view__level {
@@ -521,16 +510,16 @@
 		margin-top: var(--pau-space-1);
 	}
 
-	@media (max-width: 50rem) {
+	@container (max-width: 48rem) {
 		.diagnostics-view__settings {
 			grid-template-columns: 1fr;
 		}
 
-		.diagnostics-view__transport-heading {
-			display: none !important;
+		.diagnostics-view__transport > .diagnostics-view__transport-heading {
+			display: none;
 		}
 
-		.diagnostics-view__transport > div:not(.diagnostics-view__transport-heading) {
+		.diagnostics-view__transport > div {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 
@@ -541,6 +530,10 @@
 			content: attr(data-label);
 		}
 
+		.diagnostics-view__transport > div > [role='cell']:first-child {
+			grid-column: 1 / -1;
+		}
+
 		.diagnostics-view__rows li,
 		.diagnostics-view__records li {
 			grid-template-columns: 1fr;
@@ -548,8 +541,7 @@
 			padding-block: var(--pau-space-3);
 		}
 
-		.diagnostics-view__trace,
-		header {
+		.diagnostics-view__trace {
 			align-items: flex-start;
 			flex-direction: column;
 		}

@@ -46,3 +46,33 @@ test('shows the explicit control and CLI flag while collection is off', async ()
 	await expect.element(page.getByText('--diagnostics')).toBeVisible();
 	await expect.element(page.getByRole('combobox', { name: 'Minimum log level' })).toBeDisabled();
 });
+
+test('insets the header by the same padding as the first section', async () => {
+	const { container } = await render(DiagnosticsView, { bundle: diagnosticFixtures.active });
+
+	const header = container.querySelector('header')!;
+	const section = container.querySelector('.diagnostics-view__settings')!;
+	expect(getComputedStyle(header).paddingLeft).toBe(getComputedStyle(section).paddingLeft);
+	expect(getComputedStyle(header).paddingLeft).not.toBe('0px');
+	expect(getComputedStyle(header).paddingRight).toBe(getComputedStyle(header).paddingLeft);
+});
+
+test('stacks records and shows transport rows as metric blocks in a 600px main column', async () => {
+	const { container } = await render(DiagnosticsView, { bundle: diagnosticFixtures.active });
+	container.style.width = '600px';
+
+	const metadata = [...container.querySelectorAll<HTMLElement>(':scope .diagnostics-view__records small')];
+	expect(metadata.length).toBeGreaterThan(0);
+	for (const detail of metadata) {
+		expect(detail.scrollWidth).toBeLessThanOrEqual(detail.clientWidth);
+		expect(getComputedStyle(detail).textOverflow).not.toBe('ellipsis');
+	}
+	const record = container.querySelector(':scope .diagnostics-view__records li')!;
+	expect(getComputedStyle(record).gridTemplateColumns.split(' ')).toHaveLength(1);
+	const heading = container.querySelector('.diagnostics-view__transport-heading')!;
+	expect(getComputedStyle(heading).display).toBe('none');
+	const row = container.querySelector(
+		':scope .diagnostics-view__transport > div:not(.diagnostics-view__transport-heading)'
+	)!;
+	expect(getComputedStyle(row).gridTemplateColumns.split(' ')).toHaveLength(2);
+});

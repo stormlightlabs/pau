@@ -4,6 +4,10 @@
 
 ### Desktop
 
+- Diagnostics stacks its records and shows transport details as labelled blocks
+  when the main column is narrow, and no longer cuts off record metadata.
+- Diagnostics and Processes headers line up with the sections below them instead
+  of sitting against the pane edge.
 - Metadata labels such as "Pi · Sonnet" have even spacing on both sides of the
   dot.
 - Extension choices appear as a list with one confirm button, and permission

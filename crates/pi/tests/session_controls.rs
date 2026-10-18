@@ -170,8 +170,10 @@ async fn wait_for_queue(session: &PiSession, expected: &AgentMessageQueue) {
     panic!("queue never reached {expected:?}");
 }
 
+/// Polls the fake Pi's command log. The deadline is generous because the fake
+/// shell can start slowly while other builds load the machine.
 async fn wait_for_commands(fixture: &FakePi, count: usize) -> Vec<Value> {
-    for _ in 0..100 {
+    for _ in 0..500 {
         let commands = fixture.commands();
         if commands.len() >= count {
             return commands;

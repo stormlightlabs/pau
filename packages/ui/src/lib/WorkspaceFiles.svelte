@@ -667,6 +667,11 @@
 		background: var(--shell-surface-raised);
 	}
 
+	.workspace-files__git li button:focus-visible {
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset-inset);
+	}
+
 	.workspace-files__review {
 		display: grid;
 		gap: var(--pau-space-2);
@@ -863,6 +868,11 @@
 		background: var(--shell-surface-raised);
 	}
 
+	.workspace-files__tree-row:focus-visible {
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset-inset);
+	}
+
 	.workspace-files__tree-row--selected {
 		box-shadow: inset 2px 0 0 var(--shell-accent);
 	}
@@ -994,6 +1004,11 @@
 	.workspace-files__results button:hover,
 	.workspace-files__results button:focus-visible {
 		background: var(--shell-surface-raised);
+	}
+
+	.workspace-files__results button:focus-visible {
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset-inset);
 	}
 
 	.workspace-files__result-location {

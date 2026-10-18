@@ -1033,20 +1033,6 @@ Verification:
 - Component-test closing each overlay with Escape, with its close control, and
   after its invoker has unmounted.
 
-### 2.220 Focus ring consistency
-
-Status: planned
-Blocked by: none
-
-Use one focus-ring token, width, and offset across every focusable control,
-without clipping inside scroll containers.
-
-Verification:
-
-- Component-test focus-visible styling on representative controls in a
-  scrolled transcript, the composer, and each overlay.
-- Run Storybook accessibility checks for each changed story.
-
 ### 2.221 Busy indicator timing
 
 Status: planned
@@ -1338,7 +1324,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.175, 2.184, 2.185, 2.194, 2.197, 2.219, 2.220
+Blocked by: 2.156, 2.175, 2.184, 2.185, 2.194, 2.197, 2.219
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

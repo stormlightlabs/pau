@@ -301,8 +301,8 @@
 	.extension-ui__dialog input:focus,
 	.extension-ui__dialog textarea:focus,
 	.extension-ui__dialog button:focus-visible {
-		outline: 2px solid var(--pau-focus);
-		outline-offset: 2px;
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset);
 	}
 
 	.extension-ui__dialog button {

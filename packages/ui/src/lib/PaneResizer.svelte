@@ -153,7 +153,7 @@
 	}
 
 	.pane-resizer:focus-visible::after {
-		inset: 0 calc(50% - 2px);
+		inset: 0 calc(50% - var(--pau-focus-width) / 2);
 		background: var(--pau-focus);
 	}
 </style>

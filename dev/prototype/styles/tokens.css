@@ -32,6 +32,10 @@
 	--pau-radius-surface: 5px;
 	--pau-border-thin: 0.5px;
 
+	--pau-focus-width: 2px;
+	--pau-focus-offset: 2px;
+	--pau-focus-offset-inset: -2px;
+
 	--pau-size-target-compact: 32px;
 	--pau-size-target-touch: 44px;
 	--pau-size-row-sm: 28px;

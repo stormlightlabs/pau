@@ -59,6 +59,11 @@
 		color: var(--pau-text);
 	}
 
+	.copy-button:focus-visible {
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset);
+	}
+
 	.copy-button--copied {
 		border-color: var(--pau-success);
 		color: var(--pau-success);

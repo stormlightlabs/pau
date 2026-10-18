@@ -270,10 +270,19 @@ Under reduced motion:
 - Svelte transitions read the shared motion setting and drop movement.
 - Smooth scrolling is off.
 
+### Focus ring
+
+Every focusable control draws the same ring: `--pau-focus-width` (2px) in
+`--pau-focus`, offset by `--pau-focus-offset` (2px) outside the control. Inside
+scroll containers, edge-to-edge rows, and overlay rails, where an outset ring
+would be clipped, use `--pau-focus-offset-inset` (-2px) so the ring stays
+inside the control. Controls that draw focus another way, such as the pane
+resizer's separator line, use the same color and width.
+
 ### Increased contrast
 
 Under `prefers-contrast: more`, hairline rules become 1px, muted text moves
-toward normal text, and focus rings grow to 3px. Under
+toward normal text, and `--pau-focus-width` becomes 3px. Under
 `forced-colors: active`, focus and selection use system colors.
 
 ### Performance budgets

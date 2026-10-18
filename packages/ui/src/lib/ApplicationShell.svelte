@@ -756,8 +756,8 @@
 	:global(.app-shell button:focus-visible),
 	:global(.app-shell textarea:focus-visible),
 	:global(.app-shell select:focus-visible) {
-		outline: 2px solid var(--shell-focus);
-		outline-offset: -2px;
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset-inset);
 	}
 
 	@media (max-width: 74rem) {

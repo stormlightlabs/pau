@@ -186,7 +186,7 @@
 	}
 
 	.diff-review:focus-visible {
-		box-shadow: inset 0 0 0 2px var(--pau-focus);
+		box-shadow: inset 0 0 0 var(--pau-focus-width) var(--pau-focus);
 	}
 
 	.diff-review__header,
@@ -256,7 +256,8 @@
 
 	.diff-review button:focus-visible {
 		border-color: var(--pau-focus);
-		outline: 1px solid var(--pau-focus);
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset-inset);
 	}
 
 	.diff-review button:disabled {

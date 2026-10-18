@@ -368,8 +368,8 @@
 
 	.terminal-surface button:focus-visible,
 	.terminal-surface__list button:focus-visible {
-		outline: 2px solid var(--shell-focus);
-		outline-offset: -2px;
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset-inset);
 	}
 
 	.terminal-surface__error,

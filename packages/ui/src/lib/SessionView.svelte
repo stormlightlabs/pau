@@ -2509,6 +2509,15 @@
 
 	.session-composer:focus-within {
 		border-color: var(--pau-focus);
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset-inset);
+	}
+
+	/* The transcript scrolls, so rings sit inside the control to stay uncut. */
+	.session-view :global(button:focus-visible),
+	.session-view :global(summary:focus-visible) {
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset-inset);
 	}
 
 	.session-composer--dragging {

@@ -28,6 +28,15 @@
 	--pau-radius-surface: 5px;
 	--pau-border-thin: 0.5px;
 
+	/*
+	 * Every focus ring uses these. The ring sits outside the control by
+	 * default. Inside scroll containers and edge-to-edge rows, where an
+	 * outset ring would be clipped, use the inset offset instead.
+	 */
+	--pau-focus-width: 2px;
+	--pau-focus-offset: 2px;
+	--pau-focus-offset-inset: -2px;
+
 	--pau-size-target-compact: 2rem;
 	--pau-size-target-touch: 2.75rem;
 	--pau-size-row-sm: 1.75rem;
@@ -76,5 +85,11 @@
 		--pau-motion-offset-md: 0;
 		--pau-motion-scale-enter: 1;
 		--pau-motion-travel: 0;
+	}
+}
+
+@media (prefers-contrast: more) {
+	:root {
+		--pau-focus-width: 3px;
 	}
 }

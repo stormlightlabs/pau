@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Focus rings look the same on every control and are no longer cut off inside
+  scrolling panels.
 - Added keyboard shortcuts for sessions, panels, navigation, and page zoom, a
   shortcut list on ⌘/, and New Session and Open Workspace in the app menu. Your
   Pi key bindings take precedence when they collide.

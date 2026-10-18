@@ -314,7 +314,11 @@
 	button:hover:not(:disabled),
 	button:focus-visible {
 		border-color: var(--pau-focus);
-		outline: none;
+	}
+
+	button:focus-visible {
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset-inset);
 	}
 
 	button:disabled {

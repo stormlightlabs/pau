@@ -370,8 +370,8 @@
 	}
 
 	.session-tree__viewport:focus-visible {
-		outline: 2px solid var(--pau-focus);
-		outline-offset: 2px;
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset);
 	}
 
 	.session-tree__row {
@@ -400,8 +400,8 @@
 	}
 
 	.session-tree__row:focus-visible {
-		outline: 2px solid var(--pau-focus);
-		outline-offset: -2px;
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset-inset);
 	}
 
 	.session-tree__row--run .session-tree__label {
@@ -489,8 +489,8 @@
 	}
 
 	button:focus-visible {
-		outline: 2px solid var(--pau-focus);
-		outline-offset: 2px;
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset);
 	}
 
 	.session-tree__sr-only {

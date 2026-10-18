@@ -4,7 +4,14 @@ import { listen, type EventCallback } from '@tauri-apps/api/event';
 import { afterEach, expect, test, vi } from 'vitest';
 
 import { setDesktopConnection } from './api';
-import { followStartup, isDesktopHost, STARTUP_PROGRESS_COMMAND, STARTUP_PROGRESS_EVENT } from './startup';
+import {
+	agentReadinessProblem,
+	followStartup,
+	isDesktopHost,
+	launchSteps,
+	STARTUP_PROGRESS_COMMAND,
+	STARTUP_PROGRESS_EVENT
+} from './startup';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
@@ -105,4 +112,23 @@ test('stops listening when the snapshot request fails', async () => {
 test('detects the desktop host', () => {
 	expect(isDesktopHost({ __TAURI_INTERNALS__: {} })).toBe(true);
 	expect(isDesktopHost({})).toBe(false);
+});
+
+test('names each step for the launch splash', () => {
+	expect(launchSteps(undefined)).toEqual([]);
+	expect(launchSteps(progress(['done', 'running', 'pending', 'pending'])).map((step) => step.label)).toEqual([
+		'Loading your shell PATH',
+		'Opening the database',
+		'Starting the local service',
+		'Checking Pi'
+	]);
+});
+
+test('reports a failed readiness check as a problem for the sessions view', () => {
+	const ready = progress(['done', 'done', 'done', 'done'], 'ready');
+	expect(agentReadinessProblem(ready)).toBeUndefined();
+
+	const missing = progress(['done', 'done', 'done', 'failed'], 'ready');
+	missing.steps[3] = { ...missing.steps[3], reason: 'Pau could not find pi.', action: 'install_pi' };
+	expect(agentReadinessProblem(missing)).toEqual({ reason: 'Pau could not find pi.', action: 'install_pi' });
 });

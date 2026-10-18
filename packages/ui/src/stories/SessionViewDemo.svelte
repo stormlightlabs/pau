@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { PromptImage } from '../lib/composer-images';
+	import type { AgentReadinessProblem } from '../lib/types/launch';
 	import type { ProcessResourceSnapshot } from '../lib/types/resource-monitoring';
 	import type {
 		CommandOption,
@@ -35,7 +36,8 @@
 		openFailure,
 		replyOnSend = false,
 		savedSessions,
-		productItems
+		productItems,
+		agentReadiness
 	}: {
 		workspaces: SessionWorkspace[];
 		initialSessionId?: string;
@@ -64,6 +66,8 @@
 		clearedQueue?: MessageQueue;
 		/** Whether the view offers Open workspace. */
 		openable?: boolean;
+		/** Why Pi cannot start a session, as launch reports it. */
+		agentReadiness?: AgentReadinessProblem;
 		/**
 		 * What a native folder picker returns, with `null` for a cancel. Without
 		 * it, the view asks for a path in a text field.
@@ -136,6 +140,7 @@
 <SessionView
 	workspaces={allWorkspaces}
 	{productItems}
+	{agentReadiness}
 	onOpenWorkspace={openable ? async (path) => openWorkspace(path) : undefined}
 	pickFolder={pickedFolder === undefined ? undefined : async () => pickedFolder ?? undefined}
 	{activeSessionId}

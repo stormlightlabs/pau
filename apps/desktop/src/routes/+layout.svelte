@@ -1,14 +1,21 @@
 <script lang="ts">
 	import type { StartupProgress } from '@stormlightlabs/pau-protocol';
+	import { LaunchSplash } from '@stormlightlabs/pau-ui';
 	import { onMount, setContext, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 
 	import AppKeymap from '$lib/AppKeymap.svelte';
-	import StartupStatus from '$lib/StartupStatus.svelte';
 	import { createDesktopNativeCapabilities, desktopNativeCapabilitiesContext } from '$lib/native-capabilities';
 	import { interfacePreferences } from '$lib/interface-preferences.svelte';
-	import { followStartup, isDesktopHost } from '$lib/startup';
+	import {
+		agentReadinessContext,
+		agentReadinessProblem,
+		followStartup,
+		isDesktopHost,
+		launchSteps,
+		type AgentReadinessSource
+	} from '$lib/startup';
 
 	let { children } = $props();
 
@@ -18,10 +25,13 @@
 	// already running behind the Vite proxy.
 	let progress = $state<StartupProgress>();
 	let startupError = $state<string>();
-	const ready = $derived(!isDesktopHost() || progress?.phase === 'ready');
+	const desktop = isDesktopHost();
+	const phase = $derived(startupError ? 'failed' : (progress?.phase ?? 'running'));
+	const ready = $derived(!desktop || phase === 'ready');
+	setContext<AgentReadinessSource>(agentReadinessContext, () => agentReadinessProblem(progress));
 
 	onMount(() => {
-		if (!isDesktopHost()) return;
+		if (!desktop) return;
 		let stop: (() => void) | undefined;
 		let unmounted = false;
 		void (async () => {
@@ -50,12 +60,18 @@
 	});
 </script>
 
-{#if ready}
+{#snippet app()}
 	<AppKeymap {native} onOpenSessionView={() => void goto(resolve('/'))}>
 		{@render children()}
 	</AppKeymap>
+{/snippet}
+
+{#if desktop}
+	<LaunchSplash {phase} steps={launchSteps(progress)} error={startupError}>
+		{@render app()}
+	</LaunchSplash>
 {:else}
-	<StartupStatus {progress} error={startupError} />
+	{@render app()}
 {/if}
 
 <style>

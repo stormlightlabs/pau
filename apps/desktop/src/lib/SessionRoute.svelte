@@ -7,6 +7,7 @@
 	import { LiveSessions } from './live-sessions.svelte';
 	import { interfacePreferences } from './interface-preferences.svelte';
 	import { desktopNativeCapabilitiesContext, type DesktopNativeCapabilities } from './native-capabilities';
+	import { agentReadinessContext, type AgentReadinessSource } from './startup';
 
 	let {
 		initialSessionId,
@@ -44,6 +45,8 @@
 			workspaces[0]?.id
 	);
 	const native = getContext<DesktopNativeCapabilities | undefined>(desktopNativeCapabilitiesContext);
+	/** Absent in the browser development server, which has no launch check. */
+	const agentReadiness = getContext<AgentReadinessSource | undefined>(agentReadinessContext);
 
 	$effect(() => sessions.view(activeSessionId));
 
@@ -91,6 +94,7 @@
 	pickFolder={native?.pickFolder}
 	revealPath={native?.revealPath}
 	{onOpenTerminal}
+	agentReadiness={agentReadiness?.()}
 	onOpenWorkspace={openWorkspace}
 	onSelectSession={selectSession}
 	onClearAttention={() => sessions.clearUnseen()}

@@ -1,6 +1,7 @@
 export { default as ApplicationShell } from './lib/ApplicationShell.svelte';
 export type { ShellNavItem, ShellPaneWidths } from './lib/ApplicationShell.svelte';
 export type { PaletteEntry, PaletteGroup } from './lib/command-palette';
+export { default as AgentReadinessNotice } from './lib/AgentReadinessNotice.svelte';
 export { default as CapabilityCard } from './lib/CapabilityCard.svelte';
 export { default as ExtensionUi } from './lib/ExtensionUi.svelte';
 export { default as DiagnosticsView } from './lib/DiagnosticsView.svelte';
@@ -11,6 +12,15 @@ export type { PromptImage } from './lib/composer-images';
 export type { EditorFileContent, FileEditorSource } from './lib/types/file-editor';
 export { default as Icon, type IconProps } from './lib/Icon.svelte';
 export { default as KeyboardShortcuts } from './lib/KeyboardShortcuts.svelte';
+export { default as LaunchSplash } from './lib/LaunchSplash.svelte';
+export type {
+	AgentReadinessProblem,
+	AgentSetupAction,
+	LaunchAction,
+	LaunchPhase,
+	LaunchStep,
+	LaunchStepState
+} from './lib/types/launch';
 export {
 	APP_KEY_ACTIONS,
 	KEY_GROUPS,

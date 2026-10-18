@@ -103,22 +103,6 @@ Verification:
 - Launch the installed macOS build and confirm the window appears before the
   backend is ready.
 
-### 2.245 Launch splash
-
-Status: planned
-Blocked by: 2.244
-
-Show the launch states from the prototype while startup runs: the current step,
-restoring the last view, and the readiness check. Leave as soon as the
-workspace can render, and show a failed step with its reason and next action,
-such as opening a terminal to install Pi, instead of the empty app.
-
-Verification:
-
-- Component-test each launch state, a failed step with its action, and
-  leaving once startup finishes.
-- Storybook stories for each state at desktop and narrow widths.
-
 ### 2.183 First-run readiness view
 
 Status: planned

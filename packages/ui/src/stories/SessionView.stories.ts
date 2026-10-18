@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/svelte-vite';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import { commandFixtures } from '../fixtures/commands';
+import { agentReadinessFixtures } from '../fixtures/launch';
 import { fileMentionFixtures } from '../fixtures/file-mentions';
 import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
 import { savedSessionFixtures } from '../fixtures/saved-sessions';
@@ -20,6 +21,25 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Empty: Story = { args: { workspaces: sessionFixtures.empty, initialSessionId: undefined } };
+export const PiNotReady: Story = {
+	args: {
+		workspaces: sessionFixtures.idle,
+		initialSessionId: undefined,
+		agentReadiness: agentReadinessFixtures.missing
+	},
+	play: async ({ canvasElement }) => {
+		const notice = within(canvasElement).getByRole('region', { name: 'Pi is not ready' });
+		await expect(within(notice).getByRole('button', { name: 'Open terminal' })).toBeVisible();
+	}
+};
+export const FirstRunPiNotReady: Story = {
+	args: {
+		workspaces: sessionFixtures.empty,
+		initialSessionId: undefined,
+		openable: true,
+		agentReadiness: agentReadinessFixtures.noProvider
+	}
+};
 export const FirstRun: Story = {
 	args: { workspaces: sessionFixtures.empty, initialSessionId: undefined, openable: true },
 	play: async ({ canvasElement }) => {

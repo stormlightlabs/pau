@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- Pau shows what it is doing while it starts and explains a startup failure with
+  a next step. If Pi isn't ready, the Sessions view shows the command that fixes
+  it.
 - Pau opens its window right away while it starts, and still opens when Pi is
   missing.
 - On Linux, Ctrl+K opens the command palette outside text fields and still

@@ -1,4 +1,5 @@
 import type { StartupProgress, StartupStepId, StartupStepState } from '@stormlightlabs/pau-protocol';
+import type { AgentReadinessProblem, LaunchStep } from '@stormlightlabs/pau-ui';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
@@ -17,6 +18,27 @@ export const STARTUP_STEP_LABELS: Record<StartupStepId, string> = {
 	backend: 'Starting the local service',
 	agent_readiness: 'Checking Pi'
 };
+
+/** Context key for a getter of the Pi readiness problem launch found, if any. */
+export const agentReadinessContext = Symbol('pau.desktop.agent-readiness');
+
+/** Reads the current readiness problem from {@link agentReadinessContext}. */
+export type AgentReadinessSource = () => AgentReadinessProblem | undefined;
+
+/** Names each startup step for the launch splash. */
+export function launchSteps(progress: StartupProgress | undefined): LaunchStep[] {
+	return (progress?.steps ?? []).map((step) => ({ ...step, label: STARTUP_STEP_LABELS[step.id] }));
+}
+
+/**
+ * Describes why Pi cannot start a session. A failed readiness check never
+ * stops launch, so the app shows this where sessions start instead.
+ */
+export function agentReadinessProblem(progress: StartupProgress | undefined): AgentReadinessProblem | undefined {
+	const step = progress?.steps.find((candidate) => candidate.id === 'agent_readiness');
+	if (step?.state !== 'failed' || !step.reason) return undefined;
+	return { reason: step.reason, action: step.action === 'update_pau' ? null : step.action };
+}
 
 const STATE_RANK: Record<StartupStepState, number> = { pending: 0, running: 1, done: 2, failed: 2 };
 

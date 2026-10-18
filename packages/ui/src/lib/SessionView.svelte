@@ -19,6 +19,8 @@
 	import SessionStatusMark from './SessionStatusMark.svelte';
 	import CommandCompletion from './CommandCompletion.svelte';
 	import ContextMenu from './ContextMenu.svelte';
+	import AgentReadinessNotice from './AgentReadinessNotice.svelte';
+	import type { AgentReadinessProblem } from './types/launch';
 	import {
 		contextMenuRequest,
 		isContextMenuKey,
@@ -173,6 +175,11 @@
 		/** Opens a terminal in a workspace. With it, the workspace's context menu offers Open terminal. */
 		onOpenTerminal?: (workspaceId: string) => void;
 		/**
+		 * Why Pi cannot start a session, as launch found it. The empty views,
+		 * where the operator starts sessions, show it with the fixing command.
+		 */
+		agentReadiness?: AgentReadinessProblem;
+		/**
 		 * Shows a path in the system file manager. The desktop app supplies it.
 		 * With it, the workspace's context menu offers to reveal the folder.
 		 */
@@ -258,6 +265,7 @@
 		onRenameSession,
 		onCloneSession,
 		onOpenTerminal,
+		agentReadiness,
 		revealPath,
 		onLoadModels,
 		onSelectModel,
@@ -1679,6 +1687,14 @@
 	}
 </script>
 
+{#snippet readinessNotice(workspaceId?: string)}
+	{#if agentReadiness}
+		<AgentReadinessNotice
+			problem={agentReadiness}
+			onOpenTerminal={onOpenTerminal && workspaceId ? () => onOpenTerminal(workspaceId) : undefined} />
+	{/if}
+{/snippet}
+
 <svelte:window
 	onkeydown={(event) => {
 		handleSearchShortcut(event);
@@ -1882,6 +1898,7 @@
 							if (workspace) void startSession(workspace);
 						}}>Try again</button>
 				{/if}
+				{@render readinessNotice(startFailure.workspaceId)}
 			</div>
 		</section>
 	{:else if onOpenWorkspace && (openFormVisible || openError || (!loading && workspaces.length === 0))}
@@ -1925,6 +1942,7 @@
 					</form>
 				{/if}
 				{#if openError}<p class="session-open__error" role="alert">{openError}</p>{/if}
+				{#if firstRun}{@render readinessNotice()}{/if}
 			</div>
 		</section>
 	{:else if openedWorkspace && openedWorkspace.sessions.length === 0}
@@ -1939,6 +1957,7 @@
 						disabled={disconnected || startingWorkspaceId !== undefined}
 						onclick={() => void startSession(openedWorkspace)}>Start session</button>
 				{/if}
+				{@render readinessNotice(openedWorkspace.id)}
 			</div>
 		</section>
 	{:else if loading && !activeSession}
@@ -2436,6 +2455,7 @@
 						? 'Select a session from the rail, or start one with the + button next to a workspace.'
 						: 'Select a session from the rail, or start one in this workspace.'}
 				</p>
+				{@render readinessNotice(workspaces[0]?.id)}
 			</div>
 		</section>
 	{/if}

@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Type @ in the prompt to pick a workspace file or folder and insert its path,
+  as in Pi.
 - A Jump to latest button (or Ctrl+End) appears when new output arrives while
   you are scrolled up in a session.
 - Drag the edge of the sidebar or inspector to resize it, or use the arrow keys,

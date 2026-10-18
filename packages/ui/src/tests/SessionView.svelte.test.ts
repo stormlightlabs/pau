@@ -3,6 +3,7 @@ import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { commandFixtures } from '../fixtures/commands';
+import { fileMentionFixtures } from '../fixtures/file-mentions';
 import { sessionFixtures } from '../fixtures/sessions';
 import SessionView from '../lib/SessionView.svelte';
 import SessionViewDemo from '../stories/SessionViewDemo.svelte';
@@ -518,4 +519,90 @@ test('marks the supplied Sessions destination when a session needs attention', a
 	await expect.element(sessions).toHaveAttribute('href', '/');
 	await expect.element(sessions.getByLabelText('Needs attention')).toBeInTheDocument();
 	await expect.element(page.getByRole('button', { name: 'Settings' })).toHaveAccessibleDescription('Coming soon');
+});
+
+const mentionProps = {
+	workspaces: sessionFixtures.running,
+	initialSessionId: 'session-running',
+	files: fileMentionFixtures.populated,
+	commands: commandFixtures.populated,
+	history: ['earlier']
+};
+
+test('completes a mid-draft @ mention with Tab and keeps the text after it', async () => {
+	await render(SessionViewDemo, mentionProps);
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.type(prompt, 'check  please');
+	await userEvent.keyboard('{ArrowLeft>7/}');
+	await userEvent.keyboard('@app');
+	await expect.element(page.getByRole('listbox', { name: 'Files' }).getByRole('option')).toHaveLength(1);
+	await userEvent.keyboard('{Tab}');
+	await expect.element(prompt).toHaveValue('check @src/App.svelte  please');
+});
+
+test('filters as the path grows and moves the highlight ahead of history', async () => {
+	await render(SessionViewDemo, mentionProps);
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.type(prompt, '@src');
+	await expect.element(page.getByRole('listbox', { name: 'Files' }).getByRole('option')).toHaveLength(3);
+	await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowUp}');
+	await expect
+		.element(page.getByRole('listbox').getByRole('option', { selected: true }))
+		.toHaveTextContent('App.svelte');
+	await expect.element(prompt).toHaveValue('@src');
+	await userEvent.keyboard('{Enter}');
+	await expect.element(prompt).toHaveValue('@src/App.svelte ');
+});
+
+test('quotes a path with spaces and keeps a folder open for the next segment', async () => {
+	await render(SessionViewDemo, mentionProps);
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.type(prompt, '@release');
+	await expect.element(page.getByRole('option', { name: /release notes/ })).toBeVisible();
+	await userEvent.keyboard('{Enter}');
+	await expect.element(prompt).toHaveValue('@"docs/release notes.md" ');
+
+	await userEvent.clear(prompt);
+	await userEvent.type(prompt, '@src');
+	await expect.element(page.getByRole('listbox', { name: 'Files' }).getByRole('option').first()).toBeVisible();
+	await userEvent.keyboard('{Enter}');
+	await expect.element(prompt).toHaveValue('@src/');
+});
+
+test('shows when nothing matches, and Escape closes the list without interrupting the run', async () => {
+	await render(SessionViewDemo, mentionProps);
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.type(prompt, '@zzz');
+	await expect.element(page.getByText('No matching files')).toBeVisible();
+
+	await userEvent.clear(prompt);
+	await userEvent.type(prompt, '@');
+	await expect.element(page.getByRole('listbox', { name: 'Files' })).toBeVisible();
+	await userEvent.keyboard('{Escape}');
+	await expect.element(page.getByRole('listbox')).not.toBeInTheDocument();
+	await expect.element(page.getByText('No action sent')).toBeVisible();
+});
+
+test('reports a failed file search', async () => {
+	await render(SessionViewDemo, { ...mentionProps, searchFailure: true });
+	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), '@src');
+	await expect.element(page.getByText('Files could not be searched')).toBeVisible();
+});
+
+test('keeps slash completion and history working beside file mentions', async () => {
+	await render(SessionViewDemo, mentionProps);
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.type(prompt, '/');
+	await expect.element(page.getByRole('listbox', { name: 'Commands' })).toBeVisible();
+	await userEvent.keyboard('{Tab}');
+	await expect.element(prompt).toHaveValue('/compact ');
+	await userEvent.type(prompt, '@read');
+	await expect.element(page.getByRole('option', { name: /README/ })).toBeVisible();
+	await userEvent.keyboard('{Tab}');
+	await expect.element(prompt).toHaveValue('/compact @README.md ');
+
+	await userEvent.clear(prompt);
+	await userEvent.keyboard('{ArrowUp}');
+	await expect.element(prompt).toHaveValue('earlier');
+	await expect.element(page.getByRole('listbox')).not.toBeInTheDocument();
 });

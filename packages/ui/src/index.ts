@@ -80,6 +80,7 @@ export type {
 	ExtensionStatus,
 	ExtensionUiResponse,
 	CommandOption,
+	FileMention,
 	MessageQueue,
 	ModelOption,
 	ExtensionUiState,

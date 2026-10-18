@@ -1,6 +1,6 @@
 <script lang="ts">
 	import '../styles/tokens.css';
-	import { onDestroy, untrack } from 'svelte';
+	import { onDestroy, tick, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { fade } from 'svelte/transition';
 	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
@@ -15,6 +15,8 @@
 	import CommandCompletion from './CommandCompletion.svelte';
 	import { commandName, commandQuery, filterCommands } from './command-completion';
 	import ExtensionUi from './ExtensionUi.svelte';
+	import { insertMention, mentionAt } from './file-mention';
+	import MentionCompletion from './MentionCompletion.svelte';
 	import Icon from './Icon.svelte';
 	import Markdown from './Markdown.svelte';
 	import { isReducedMotion, motion } from '../motion';
@@ -31,6 +33,7 @@
 	import type {
 		CommandOption,
 		CompactionReason,
+		FileMention,
 		ExtensionUiResponse,
 		ExtensionUiState,
 		ModelOption,
@@ -69,6 +72,12 @@
 		 * rejection leaves the composer without completion until the next try.
 		 */
 		onLoadCommands?: (sessionId: string) => Promise<CommandOption[]>;
+		/**
+		 * Lists the workspace files and folders that match the path typed after an
+		 * `@` in the composer. Folders end with a slash. A rejection shows that the
+		 * search failed. Without it, `@` does not open completion.
+		 */
+		onSearchFiles?: (workspaceId: string, query: string) => Promise<FileMention[]>;
 		onInterrupt?: (sessionId: string) => void | Promise<void>;
 		onStop?: (sessionId: string) => void | Promise<void>;
 		/** Re-sends the last prompt after a failed turn. A rejected promise shows its message beside the control. */
@@ -179,6 +188,7 @@
 		onSend = () => {},
 		onLoadHistory,
 		onLoadCommands,
+		onSearchFiles,
 		onInterrupt = () => {},
 		onStop = () => {},
 		onRetry = () => {},
@@ -254,6 +264,17 @@
 	/** The draft that Escape closed completion for. */
 	let dismissedDraft = $state<string>();
 	const commandListId = 'composer-commands';
+	const mentionListId = 'composer-mentions';
+	/** Wait after the last keystroke before searching the workspace. */
+	const mentionDebounceMs = 150;
+	/** The caret in the draft, which decides whether an `@` mention is open. */
+	let caret = $state(0);
+	let mentionResults = $state<FileMention[]>();
+	let mentionFailed = $state(false);
+	let mentionSelected = $state(0);
+	/** The draft that Escape closed file completion for. */
+	let dismissedMention = $state<string>();
+	let mentionRun = 0;
 	let sending = $state(false);
 	let error = $state<string>();
 	let composer = $state<HTMLTextAreaElement>();
@@ -308,6 +329,23 @@
 			? filterCommands(sessionCommands, query)
 			: undefined;
 	});
+	const mentionToken = $derived(onSearchFiles && draftTyped ? mentionAt(draft, caret) : undefined);
+	const mentionQuery = $derived(mentionToken?.query);
+	const mentionOpen = $derived(
+		mentionToken !== undefined &&
+			dismissedMention !== draft &&
+			(mentionResults !== undefined || mentionFailed) &&
+			!commandMatches
+	);
+	/** The option the composer announces as active, for whichever list is open. */
+	const activeOption = $derived.by(() => {
+		if (commandMatches?.length) {
+			return { list: commandListId, index: Math.min(commandSelected, commandMatches.length - 1) };
+		}
+		return mentionOpen && mentionResults?.length
+			? { list: mentionListId, index: Math.min(mentionSelected, mentionResults.length - 1) }
+			: undefined;
+	});
 	const unknownCommand = $derived.by(() => {
 		const name = commandName(draft);
 		return sessionCommands !== undefined &&
@@ -351,6 +389,40 @@
 			item.id === 'sessions' ? { ...item, attention: sessions.some((session) => hasAttention(session)) } : item
 		)
 	);
+
+	/** Runs one file search and keeps the result only while it is the latest. */
+	async function searchMentions(
+		search: NonNullable<typeof onSearchFiles>,
+		workspaceId: string,
+		query: string
+	): Promise<void> {
+		const run = mentionRun;
+		try {
+			const files = await search(workspaceId, query);
+			if (run !== mentionRun) return;
+			mentionResults = files;
+			mentionFailed = false;
+			mentionSelected = 0;
+		} catch {
+			if (run !== mentionRun) return;
+			mentionResults = [];
+			mentionFailed = true;
+		}
+	}
+
+	$effect(() => {
+		const workspaceId = activeWorkspace?.id;
+		const query = mentionQuery;
+		const search = onSearchFiles;
+		mentionRun += 1;
+		if (query === undefined || !workspaceId || !search) {
+			mentionResults = undefined;
+			mentionFailed = false;
+			return;
+		}
+		const timer = setTimeout(() => void searchMentions(search, workspaceId, query), mentionDebounceMs);
+		return () => clearTimeout(timer);
+	});
 
 	$effect(() => {
 		if (activeSession?.status === 'running' || activeSession?.id !== retryingSessionId) retryingSessionId = undefined;
@@ -757,6 +829,40 @@
 		composer?.focus();
 	}
 
+	/** Replaces the open mention with the chosen path and puts the caret after it. */
+	async function acceptMention(file: FileMention): Promise<void> {
+		const field = composer;
+		if (!mentionToken || !field) return;
+		const next = insertMention(draft, mentionToken, caret, file);
+		historyCursor = idleHistoryCursor;
+		draft = next.draft;
+		caret = next.caret;
+		mentionResults = undefined;
+		await tick();
+		field.focus();
+		field.setSelectionRange(next.caret, next.caret);
+	}
+
+	function handleMentionKeydown(event: KeyboardEvent, files: FileMention[]): boolean {
+		const modified = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
+		if (event.key === 'Escape') {
+			dismissedMention = draft;
+		} else if (mentionFailed || modified || files.length === 0) {
+			return false;
+		} else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+			const step = event.key === 'ArrowUp' ? -1 : 1;
+			mentionSelected = (mentionSelected + step + files.length) % files.length;
+		} else if (event.key === 'Enter' || event.key === 'Tab') {
+			const file = files[Math.min(mentionSelected, files.length - 1)];
+			if (!file) return false;
+			void acceptMention(file);
+		} else {
+			return false;
+		}
+		event.preventDefault();
+		return true;
+	}
+
 	function handleCommandKeydown(event: KeyboardEvent, matches: CommandOption[]): boolean {
 		const modified = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
 		if (event.key === 'Escape') {
@@ -816,6 +922,7 @@
 
 	function handleComposerKeydown(event: KeyboardEvent): void {
 		if (commandMatches && handleCommandKeydown(event, commandMatches)) return;
+		if (mentionOpen && handleMentionKeydown(event, mentionResults ?? [])) return;
 		if (event.key === 'Escape' && activeSession?.status === 'running') {
 			event.preventDefault();
 			void interrupt();
@@ -1452,6 +1559,16 @@
 									onAccept={acceptCommand} />
 							</div>
 						{/if}
+						{#if mentionOpen}
+							<div class="session-composer__commands">
+								<MentionCompletion
+									id={mentionListId}
+									files={mentionResults ?? []}
+									selected={mentionSelected}
+									failed={mentionFailed}
+									onAccept={acceptMention} />
+							</div>
+						{/if}
 						<label class="session-composer__field">
 							<span class="session-view__sr-only">Prompt</span>
 							<Icon name="chevronRight" class="session-composer__prompt" />
@@ -1463,12 +1580,14 @@
 								oninput={() => {
 									draftTyped = true;
 									commandSelected = 0;
+									mentionSelected = 0;
+									caret = composer?.selectionStart ?? draft.length;
 								}}
-								aria-autocomplete={commandMatches ? 'list' : undefined}
-								aria-controls={commandMatches?.length ? commandListId : undefined}
-								aria-activedescendant={commandMatches?.length
-									? `${commandListId}-option-${Math.min(commandSelected, commandMatches.length - 1)}`
-									: undefined}
+								onkeyup={() => (caret = composer?.selectionStart ?? draft.length)}
+								onclick={() => (caret = composer?.selectionStart ?? draft.length)}
+								aria-autocomplete={commandMatches || mentionOpen ? 'list' : undefined}
+								aria-controls={activeOption?.list}
+								aria-activedescendant={activeOption ? `${activeOption.list}-option-${activeOption.index}` : undefined}
 								placeholder={activeSession.status === 'running'
 									? 'Add direction or queue a follow-up'
 									: 'Message the agent'}

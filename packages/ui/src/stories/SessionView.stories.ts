@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/svelte-vite';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import { commandFixtures } from '../fixtures/commands';
+import { fileMentionFixtures } from '../fixtures/file-mentions';
 import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
 import { sessionFixtures } from '../fixtures/sessions';
 import SessionViewDemo from './SessionViewDemo.svelte';
@@ -177,6 +178,64 @@ export const CommandCompletionUnsupported: Story = {
 		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), '/');
 		await expect(canvas.queryByRole('listbox')).not.toBeInTheDocument();
 		await expect(canvas.queryByText(/Not a known command/)).not.toBeInTheDocument();
+	}
+};
+export const FileMentionResults: Story = {
+	args: { files: fileMentionFixtures.populated },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const prompt = canvas.getByRole('textbox', { name: 'Prompt' });
+		await userEvent.type(prompt, '@');
+		await expect(await canvas.findByRole('listbox', { name: 'Files' })).toBeInTheDocument();
+		await expect(within(canvas.getByRole('listbox')).getAllByRole('option')).toHaveLength(5);
+		await userEvent.keyboard('{ArrowDown}{Enter}');
+		await expect(prompt).toHaveValue('@src/App.svelte ');
+	}
+};
+export const FileMentionFiltering: Story = {
+	args: { files: fileMentionFixtures.populated },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), '@release');
+		await expect(await canvas.findByRole('option', { name: /release notes.md/ })).toBeInTheDocument();
+		await expect(within(canvas.getByRole('listbox')).getAllByRole('option')).toHaveLength(1);
+		await userEvent.keyboard('{Tab}');
+		await expect(canvas.getByRole('textbox', { name: 'Prompt' })).toHaveValue('@"docs/release notes.md" ');
+	}
+};
+export const FileMentionNoMatches: Story = {
+	args: { files: fileMentionFixtures.populated },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), '@zzz');
+		await expect(await canvas.findByText('No matching files')).toBeInTheDocument();
+	}
+};
+export const FileMentionMidDraft: Story = {
+	args: { files: fileMentionFixtures.populated },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const prompt = canvas.getByRole('textbox', { name: 'Prompt' });
+		await userEvent.type(prompt, 'compare  with the old one');
+		await userEvent.keyboard('{ArrowLeft>17/}@api');
+		await expect(await canvas.findByRole('option', { name: /api.ts/ })).toBeInTheDocument();
+		await userEvent.keyboard('{Enter}');
+		await expect(prompt).toHaveValue('compare @src/lib/api.ts  with the old one');
+	}
+};
+export const FileMentionWithSlashCompletion: Story = {
+	args: { files: fileMentionFixtures.populated, commands: commandFixtures.populated },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const prompt = canvas.getByRole('textbox', { name: 'Prompt' });
+		await userEvent.type(prompt, '/');
+		await expect(await canvas.findByRole('listbox', { name: 'Commands' })).toBeInTheDocument();
+		await userEvent.keyboard('{ArrowDown}{Enter}');
+		await expect(prompt).toHaveValue('/review ');
+		await userEvent.type(prompt, '@read');
+		await expect(await canvas.findByRole('listbox', { name: 'Files' })).toBeInTheDocument();
+		await userEvent.keyboard('{Enter}');
+		await expect(prompt).toHaveValue('/review @README.md ');
 	}
 };
 export const ResourcePressure: Story = {

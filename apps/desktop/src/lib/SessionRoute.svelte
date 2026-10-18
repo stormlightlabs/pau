@@ -3,6 +3,7 @@
 	import { getContext, onMount } from 'svelte';
 
 	import type { EventSocketFactory } from './event-stream';
+	import { searchFileMentions } from './file-mentions';
 	import { LiveSessions } from './live-sessions.svelte';
 	import { panePreferences } from './pane-preferences.svelte';
 	import { desktopNativeCapabilitiesContext, type DesktopNativeCapabilities } from './native-capabilities';
@@ -92,6 +93,7 @@
 	onSearchSession={(sessionId, query) => sessions.search(sessionId, query)}
 	onBranchSession={(sessionId, entryId) => sessions.branch(sessionId, entryId)}
 	onLoadCommands={(sessionId) => sessions.listCommands(sessionId)}
+	onSearchFiles={searchFileMentions}
 	onLoadModels={(sessionId) => sessions.listModels(sessionId)}
 	onSelectModel={(sessionId, model) => sessions.selectModel(sessionId, model)}
 	onSelectThinkingLevel={(sessionId, level) => sessions.selectThinkingLevel(sessionId, level)}

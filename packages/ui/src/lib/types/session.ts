@@ -53,6 +53,13 @@ export type CommandOption = {
 	source: 'extension' | 'prompt' | 'skill';
 };
 
+/** One file or folder a prompt can mention with `@`. */
+export type FileMention = {
+	/** Slash-separated path relative to the workspace root. Folders end with a slash. */
+	path: string;
+	directory: boolean;
+};
+
 /** Thinking levels in the order the control lists them. The model may clamp a level it does not support. */
 export const thinkingLevels = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 

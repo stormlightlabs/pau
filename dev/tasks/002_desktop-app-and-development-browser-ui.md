@@ -794,19 +794,6 @@ Verification:
   `/compact`, and an unavailable command with its reason.
 - Run `/new`, `/name`, and `/compact` in a self-hosted session.
 
-### 2.186 File mentions
-
-Status: planned
-Blocked by: none
-
-Complete `@` file mentions in the composer from the workspace file search API
-and insert the chosen path into the prompt.
-
-Verification:
-
-- Component-test fuzzy completion, keyboard selection, a path with spaces, no
-  matches, and a search failure.
-
 ### 2.187 Optimistic prompt echo
 
 Status: planned
@@ -1447,11 +1434,25 @@ Verification:
   that unsafe schemes are refused.
 - Open a link from a self-hosted session transcript.
 
+### 2.234 Workspace file name search API
+
+Status: planned
+Blocked by: none
+
+Search workspace file and folder names, honoring ignore rules, through the
+desktop API so file mentions cover large workspaces without walking folders
+from the client.
+
+Verification:
+
+- Cover ranked name matches, ignored and hidden files, a result limit, and a
+  large fixture tree.
+
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.175, 2.184, 2.185, 2.186, 2.187, 2.194, 2.197, 2.199,
-2.200, 2.205, 2.219, 2.220
+Blocked by: 2.156, 2.175, 2.184, 2.185, 2.187, 2.194, 2.197, 2.199, 2.200,
+2.205, 2.219, 2.220
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

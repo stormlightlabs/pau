@@ -4,6 +4,7 @@
 	import type {
 		CommandOption,
 		ExtensionUiResponse,
+		FileMention,
 		MessageQueue,
 		PromptQueue,
 		SessionWorkspace,
@@ -24,6 +25,8 @@
 		history = [],
 		clearedQueue = { steering: [], followUp: [] },
 		commands = [],
+		files = [],
+		searchFailure = false,
 		sendFailure,
 		openable = false,
 		pickedFolder,
@@ -46,6 +49,10 @@
 		history?: string[];
 		/** Slash commands the composer can complete. */
 		commands?: CommandOption[];
+		/** Files the composer can mention. A query matches paths that contain it. */
+		files?: FileMention[];
+		/** When set, searching files fails. */
+		searchFailure?: boolean;
 		/** When set, sending a prompt fails with this message. */
 		sendFailure?: string;
 		/** What clearing the queue returns. */
@@ -127,6 +134,10 @@
 	onSend={send}
 	onLoadHistory={async () => history}
 	onLoadCommands={async () => commands}
+	onSearchFiles={async (_workspaceId, query) => {
+		if (searchFailure) throw new Error('Search failed');
+		return files.filter((file) => file.path.toLowerCase().includes(query.toLowerCase()));
+	}}
 	onInterrupt={(sessionId) => {
 		lastAction = `${sessionId}: interrupt`;
 	}}

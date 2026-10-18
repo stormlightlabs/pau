@@ -1,3 +1,5 @@
+#[cfg(target_os = "macos")]
+mod login_path;
 mod menu;
 
 use std::{error::Error, net::Ipv4Addr, sync::Mutex};
@@ -68,7 +70,21 @@ fn startup_failure_message(error: &dyn Error) -> String {
 }
 
 fn main() {
+    #[cfg(target_os = "macos")]
+    let login_path = login_path::login_shell_path();
+    #[cfg(target_os = "macos")]
+    if let Some(merged) = login_path.as_deref().and_then(|login| {
+        login_path::merge_paths(login, &std::env::var_os("PATH").unwrap_or_default())
+    }) {
+        // SAFETY: nothing has started another thread yet, so no other code can
+        // read the environment while it changes.
+        unsafe { std::env::set_var("PATH", merged) };
+    }
     tracing_subscriber::fmt().json().init();
+    #[cfg(target_os = "macos")]
+    if login_path.is_none() {
+        tracing::warn!("could not read the login shell PATH; keeping the inherited PATH");
+    }
     let diagnostics = std::env::args().any(|argument| argument == "--diagnostics");
 
     let application = tauri::Builder::default()

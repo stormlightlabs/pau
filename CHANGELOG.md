@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Pau opened from Finder, the Dock, or Spotlight now finds Pi and other tools
+  on your login shell's PATH.
 - Pau uses Overpass by default and Overpass Mono for code and the terminal,
   with larger 14px body text. IBM Plex Sans remains available.
 - Type / in the composer to run Pi's built-in commands, such as /name, /model,

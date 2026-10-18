@@ -283,6 +283,11 @@ export class Keymap {
 		return this.#platform;
 	}
 
+	/** The operator's Pi bindings over Pi's defaults, or none before they load. */
+	get piBindings(): readonly PiKeyBinding[] {
+		return this.#piBindings;
+	}
+
 	/** Replaces the operator's Pi bindings, which win over Pau's default chords. */
 	setPiBindings(bindings: readonly PiKeyBinding[]): void {
 		this.#piBindings = [...bindings];

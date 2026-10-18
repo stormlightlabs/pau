@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tick } from 'svelte';
+
 	import { createFocusReturn } from './focus-return';
 	import type { ModelOption } from './types/session';
 
@@ -26,6 +28,7 @@
 	let trigger = $state<HTMLButtonElement>();
 	const focusReturn = createFocusReturn();
 	let pendingId = $state<string>();
+	let panel = $state<HTMLDivElement>();
 
 	const current = $derived(models?.find((model) => model.current));
 	const label = $derived(current ? modelLabel(current) : (fallbackLabel ?? 'Model'));
@@ -61,6 +64,21 @@
 		} finally {
 			pendingId = undefined;
 		}
+	}
+
+	/**
+	 * Opens the list from the keyboard and focuses the current model, or the
+	 * first control while the list loads.
+	 *
+	 * @returns Whether the list opened. A disabled picker stays closed.
+	 */
+	export async function show(): Promise<boolean> {
+		if (disabled) return false;
+		focusReturn.capture();
+		open = true;
+		await tick();
+		(panel?.querySelector<HTMLButtonElement>('button[aria-current="true"]') ?? panel?.querySelector('button'))?.focus();
+		return true;
 	}
 
 	// The picker mounts for each session, so one load per mount refreshes the list on open.
@@ -113,7 +131,7 @@
 	{#if explanation}<span id="model-picker-note" class="model-picker__hint">{explanation}</span>{/if}
 
 	{#if open}
-		<div class="model-picker__panel" role="group" aria-label="Models">
+		<div bind:this={panel} class="model-picker__panel" role="group" aria-label="Models">
 			{#if selectError}<p class="model-picker__error" role="alert">{selectError}</p>{/if}
 			{#if loadError}
 				<p class="model-picker__error" role="alert">{loadError}</p>

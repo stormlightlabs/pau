@@ -26,6 +26,41 @@ also under **Help > Keyboard Shortcuts**. On Linux, read `⌘` as `Ctrl` and
 The **File** menu has **New Session** and **Open Workspace**, and the **View**
 menu has the zoom commands.
 
+## Composer keys
+
+The composer uses Pi's keys. If your `keybindings.json` assigns other keys to
+one of these Pi actions, the composer uses yours instead.
+
+| Default                  | Pi action              | Action                                     |
+| ------------------------ | ---------------------- | ------------------------------------------ |
+| `Enter`                  | `tui.input.submit`     | Send, or steer the agent during a run      |
+| `Shift+Enter`, `Ctrl+J`  | `tui.input.newLine`    | Start a new line                           |
+| `Alt+Enter`              | `app.message.followUp` | Queue a follow-up during a run             |
+| `Alt+↑`                  | `app.message.dequeue`  | Move queued messages back into the composer |
+| `Shift+Tab`              | `app.thinking.cycle`   | Move to the next thinking level            |
+| `Ctrl+L`                 | `app.model.select`     | Open the model picker                      |
+| `Esc`                    | `app.interrupt`        | Interrupt the run                          |
+
+While a completion list is open, `Esc` closes the list and `Enter` or `Tab`
+picks the highlighted item. Press `Esc` again to interrupt the run. As in Pi,
+`↑` at the start of the draft and `↓` at its end browse earlier prompts.
+
+The composer differs from Pi's editor in these ways:
+
+- `⌘Enter` and `Ctrl+Enter` also send, unless your Pi bindings use them.
+- Pau changes the thinking level and model only between runs. During a run,
+  `Shift+Tab` and `Ctrl+L` explain why instead.
+- When the session cannot change its thinking level, `Shift+Tab` moves focus
+  to the previous control, as it does in other text fields.
+- Text editing keys such as `Ctrl+A`, `Ctrl+K`, and `Alt+B` come from the
+  system text field. Pi bindings for `tui.editor` actions do not change them
+  or the history keys.
+- Paste images with the system paste shortcut, `⌘V` on macOS.
+- `Ctrl+O` shows or hides tool output and does not follow `app.tools.expand`.
+- Pau has no equivalent for Pi's terminal actions: `Ctrl+C` to clear, `Ctrl+D`
+  to exit, `Ctrl+Z` to suspend, and `Ctrl+G` for an external editor. It also
+  has none for `Ctrl+P` to cycle models or `Ctrl+T` to fold thinking.
+
 ## Pi bindings come first
 
 Pau reads Pi's `keybindings.json` and Pi's defaults. When a Pau shortcut uses

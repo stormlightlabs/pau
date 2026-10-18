@@ -32,7 +32,8 @@
 	import { settlePendingPrompts, userMessageIds, type PendingPrompt } from './pending-prompts';
 	import { COMPOSER_ATTRIBUTE, createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
-	import { useKeyActions } from './keymap.svelte';
+	import { composerKeyAction, resolveComposerKeys, type ComposerKeyAction } from './composer-keys';
+	import { detectPlatform, eventChord, formatChord, getKeymap, useKeyActions } from './keymap.svelte';
 	import Markdown from './Markdown.svelte';
 	import { isReducedMotion, motion } from '../motion';
 	import ModelPicker from './ModelPicker.svelte';
@@ -67,6 +68,7 @@
 		TranscriptCompaction,
 		TranscriptEntry
 	} from './types/session';
+	import { thinkingLevels } from './types/session';
 
 	type Props = {
 		workspaces: SessionWorkspace[];
@@ -394,6 +396,13 @@
 	let pendingPrompts = $state<PendingPrompt[]>([]);
 	let pendingSequence = 0;
 	let composer = $state<HTMLTextAreaElement>();
+	let modelPicker = $state<ModelPicker>();
+	const keymap = getKeymap();
+	const keyPlatform = keymap?.platform ?? detectPlatform();
+	/** Pi's composer keys, with the operator's bindings once the app loads them. */
+	const composerKeys = $derived(resolveComposerKeys(keymap?.piBindings ?? [], keyPlatform));
+	const submitShortcut = $derived(composerKeyShortcut('submit'));
+	const interruptShortcut = $derived(composerKeyShortcut('interrupt'));
 	let transcriptSearch = $state<TranscriptSearch>();
 	let searchOpen = $state(false);
 	/** Where the Cmd+F shortcut was pressed, so closing the find bar returns there. */
@@ -1146,16 +1155,17 @@
 	}
 
 	/**
-	 * Sends the draft. The composer clears and the prompt shows as pending
+	 * Sends the draft, during a run as `queueOverride` or the queue the
+	 * composer shows. The composer clears and the prompt shows as pending
 	 * before the backend answers. A refused prompt stays in view marked as not
 	 * sent, and its text and images return to the composer when the operator
 	 * has not moved to another session.
 	 */
-	async function submitPrompt(): Promise<void> {
+	async function submitPrompt(queueOverride?: PromptQueue): Promise<void> {
 		if (sending || !activeSession || !draft.trim()) return;
 		const session = activeSession;
 		const text = draft.trim();
-		const queueTarget = session.status === 'running' ? activeQueue : undefined;
+		const queueTarget = session.status === 'running' ? (queueOverride ?? activeQueue) : undefined;
 		const attached = images;
 		sending = true;
 		error = undefined;
@@ -1316,38 +1326,120 @@
 		}
 	}
 
+	/** The first chord of a composer action, formatted for its button, or `undefined` when it has none. */
+	function composerKeyShortcut(action: 'submit' | 'interrupt'): string | undefined {
+		const chord = composerKeys.byAction[action][0];
+		return chord === undefined ? undefined : formatChord(chord, keyPlatform);
+	}
+
+	/** Inserts a line break at the caret, for new-line chords the text field ignores. */
+	async function insertNewLine(field: HTMLTextAreaElement): Promise<void> {
+		const start = field.selectionStart;
+		draft = `${draft.slice(0, start)}\n${draft.slice(field.selectionEnd)}`;
+		draftTyped = true;
+		await tick();
+		field.setSelectionRange(start + 1, start + 1);
+		caret = start + 1;
+	}
+
+	/** Moves to the next thinking level, as Pi's Shift+Tab does. */
+	async function cycleThinkingLevel(session: SessionViewModel): Promise<void> {
+		if (!onSelectThinkingLevel) return;
+		const index = session.thinkingLevel ? thinkingLevels.indexOf(session.thinkingLevel) : -1;
+		const next = thinkingLevels[(index + 1) % thinkingLevels.length] ?? 'off';
+		error = undefined;
+		try {
+			await onSelectThinkingLevel(session.id, next);
+		} catch (cause) {
+			error = cause instanceof Error ? cause.message : 'The thinking level could not be changed. Try again.';
+		}
+	}
+
+	/**
+	 * Runs one of Pi's composer actions. Returns `false` when the session
+	 * cannot perform it at all, so the key keeps its usual meaning, such as
+	 * Shift+Tab moving focus. An action that is only unavailable for now, such
+	 * as a model change during a run, explains why instead.
+	 */
+	function runComposerKey(action: ComposerKeyAction, field: HTMLTextAreaElement, chord: string): boolean {
+		const session = activeSession;
+		if (!session) return false;
+		switch (action) {
+			case 'interrupt': {
+				if (session.status !== 'running') return false;
+				void interrupt();
+				return true;
+			}
+			case 'submit': {
+				void submitPrompt();
+				return true;
+			}
+			case 'followUp': {
+				void submitPrompt(session.capabilities.followUp ? 'follow-up' : undefined);
+				return true;
+			}
+			case 'dequeue': {
+				if (queuedCount === 0) return false;
+				void clearQueue();
+				return true;
+			}
+			case 'newLine': {
+				// The text field already breaks the line for these.
+				if (chord === 'enter' || chord === 'shift+enter') return false;
+				void insertNewLine(field);
+				return true;
+			}
+			case 'cycleThinking': {
+				if (currentModelReasoning === false || !onSelectThinkingLevel || !session.capabilities.thinkingLevel) {
+					return false;
+				}
+				const reason = thinkingUnavailableReason(session, disconnected);
+				if (reason) error = reason;
+				else void cycleThinkingLevel(session);
+				return true;
+			}
+			case 'selectModel': {
+				if (!modelPicker || !session.capabilities.modelSelection) return false;
+				const reason = modelUnavailableReason(session, disconnected);
+				if (reason) error = reason;
+				else void modelPicker.show();
+				return true;
+			}
+		}
+	}
+
+	/**
+	 * Composer keys follow Pi's bindings. An open completion list takes
+	 * Escape, Enter, Tab, and the arrows first, so Escape closes it before it
+	 * can interrupt a run. Up and Down browse prompt history at the edges of
+	 * the draft.
+	 */
 	function handleComposerKeydown(event: KeyboardEvent): void {
 		if (commandMatches && handleCommandKeydown(event, commandMatches)) return;
 		if (mentionOpen && handleMentionKeydown(event, mentionResults ?? [])) return;
-		if (event.key === 'Escape' && !event.shiftKey && activeSession?.status === 'running') {
+		const field = event.currentTarget as HTMLTextAreaElement;
+		const action = composerKeyAction(composerKeys, event);
+		if (action && runComposerKey(action, field, eventChord(event) ?? '')) {
 			event.preventDefault();
-			void interrupt();
 			return;
 		}
-		if (activeSession && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
-			const field = event.currentTarget as HTMLTextAreaElement;
-			const modified = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
-			const step =
-				modified || field.selectionStart !== field.selectionEnd
-					? undefined
-					: navigateHistory(
-							histories[activeSession.id] ?? [],
-							historyCursor,
-							draft,
-							field.selectionStart,
-							event.key === 'ArrowUp' ? 'previous' : 'next'
-						);
-			if (step) {
-				event.preventDefault();
-				historyCursor = step.cursor;
-				draft = step.draft;
-				draftTyped = false;
-			}
-			return;
-		}
-		if (event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) return;
+		if (!activeSession || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+		const modified = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
+		const step =
+			modified || field.selectionStart !== field.selectionEnd
+				? undefined
+				: navigateHistory(
+						histories[activeSession.id] ?? [],
+						historyCursor,
+						draft,
+						field.selectionStart,
+						event.key === 'ArrowUp' ? 'previous' : 'next'
+					);
+		if (!step) return;
 		event.preventDefault();
-		void submitPrompt();
+		historyCursor = step.cursor;
+		draft = step.draft;
+		draftTyped = false;
 	}
 
 	let defaultOpen = $derived(openByDefault(activeSession?.transcript ?? [], activeSession?.status));
@@ -1691,6 +1783,7 @@
 					{#if onLoadModels && onSelectModel}
 						{#key activeSession.id}
 							<ModelPicker
+								bind:this={modelPicker}
 								load={() => onLoadModels(activeSession.id)}
 								onSelect={(model) => onSelectModel(activeSession.id, model)}
 								supported={activeSession.capabilities.modelSelection ?? false}
@@ -2110,7 +2203,8 @@
 									class="session-composer__interrupt"
 									disabled={disconnected}
 									onclick={() => void interrupt()}>
-									Interrupt <kbd>Esc</kbd>
+									Interrupt{#if interruptShortcut}
+										<kbd>{interruptShortcut}</kbd>{/if}
 								</button>
 							{/if}
 							<button type="submit" disabled={!draft.trim() || sending || composerUnavailable !== undefined}>
@@ -2119,7 +2213,7 @@
 									: activeQueue === 'follow-up' && activeSession.status === 'running'
 										? 'Queue prompt'
 										: 'Send prompt'}
-								<kbd>⌘↵</kbd>
+								{#if submitShortcut}<kbd>{submitShortcut}</kbd>{/if}
 							</button>
 						</div>
 						{#if unknownCommand !== undefined}

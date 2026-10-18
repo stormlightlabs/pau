@@ -4,6 +4,10 @@
 
 ### Desktop
 
+- The composer uses Pi's keys and your Pi keybindings.json: Enter sends or
+  steers, Shift+Enter adds a line, Alt+Enter queues a follow-up, Alt+Up restores
+  the queue, Shift+Tab changes the thinking level, and Ctrl+L opens the model
+  picker.
 - Closing a dialog, menu, or side panel returns focus to the control that opened
   it, or to the prompt when that control is gone.
 - Right-click a session, workspace, file, or message, or press Shift+F10, to

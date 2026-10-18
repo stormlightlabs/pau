@@ -730,24 +730,6 @@ Verification:
 
 ## Composer
 
-### 2.184 Pi composer keys
-
-Status: planned
-Blocked by: none
-
-Match Pi's composer keys, using the operator's `keybindings.json` over Pi's
-defaults. The defaults include Enter to send or steer, Alt+Enter to queue a
-follow-up, Alt+Up to restore the queue, Shift+Tab to cycle thinking, and Ctrl+L
-to open the model picker.
-
-Verification:
-
-- Component-test each default key while idle and while running, a key rebound
-  in a fixture `keybindings.json`, and Esc closing a completion menu before it
-  interrupts.
-- Compare the key list against Pi's keybinding reference and record any
-  deliberate difference in the user documentation.
-
 ### 2.185 Built-in Pi slash commands
 
 Status: planned
@@ -1343,7 +1325,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.184, 2.185, 2.197, 2.235, 2.237
+Blocked by: 2.156, 2.185, 2.197, 2.235, 2.237
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

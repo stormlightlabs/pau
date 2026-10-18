@@ -17,6 +17,14 @@
 	import CopyButton from './CopyButton.svelte';
 	import SessionStatusMark from './SessionStatusMark.svelte';
 	import CommandCompletion from './CommandCompletion.svelte';
+	import ContextMenu from './ContextMenu.svelte';
+	import {
+		contextMenuRequest,
+		isContextMenuKey,
+		revealLabel,
+		type ContextMenuItem,
+		type ContextMenuRequest
+	} from './context-menu';
 	import { commandName, commandQuery, filterCommands } from './command-completion';
 	import ExtensionUi from './ExtensionUi.svelte';
 	import { insertMention, mentionAt } from './file-mention';
@@ -139,6 +147,31 @@
 		 */
 		onBranchSession?: (sessionId: string, entryId: string) => Promise<SessionBranchOutcome>;
 		/**
+		 * Branches a session from a user message in the transcript, named by its
+		 * transcript entry ID. With it and the `branching` capability, the
+		 * message's context menu offers Branch from here. The returned text
+		 * replaces the composer draft. A rejection shows its message in the notices.
+		 */
+		onBranchFromMessage?: (sessionId: string, entryId: string) => Promise<SessionBranchOutcome>;
+		/**
+		 * Renames a session. With it and the `rename` capability, the session's
+		 * context menu offers Rename. A rejection shows its message in the rail.
+		 */
+		onRenameSession?: (sessionId: string, name: string) => void | Promise<void>;
+		/**
+		 * Clones a session into a new saved session that the live session then
+		 * continues. With it and the `cloneSession` capability, the session's
+		 * context menu offers Clone. A rejection shows its message in the rail.
+		 */
+		onCloneSession?: (sessionId: string) => void | Promise<void>;
+		/** Opens a terminal in a workspace. With it, the workspace's context menu offers Open terminal. */
+		onOpenTerminal?: (workspaceId: string) => void;
+		/**
+		 * Shows a path in the system file manager. The desktop app supplies it.
+		 * With it, the workspace's context menu offers to reveal the folder.
+		 */
+		revealPath?: (path: string) => Promise<void>;
+		/**
 		 * Lists the models a session can use. With `onSelectModel`, the session
 		 * header offers a model picker. A rejected promise shows its message.
 		 */
@@ -215,6 +248,11 @@
 		onLoadSessionTree,
 		onSearchSession,
 		onBranchSession,
+		onBranchFromMessage,
+		onRenameSession,
+		onCloneSession,
+		onOpenTerminal,
+		revealPath,
 		onLoadModels,
 		onSelectModel,
 		onSelectThinkingLevel,
@@ -367,6 +405,13 @@
 	let startingWorkspaceId = $state<string>();
 	let startFailure = $state<{ workspaceId: string; workspaceName: string; message: string }>();
 	let controlError = $state<string>();
+	/** The open context menu, if any. */
+	let contextMenu = $state<ContextMenuRequest>();
+	/** Why the last rail action from a context menu failed. */
+	let railError = $state<string>();
+	/** The session whose name is being edited in the rail. */
+	let renamingSessionId = $state<string>();
+	let renameDraft = $state('');
 	let pickerWorkspaceId = $state<string>();
 	let retryingSessionId = $state<string>();
 	let retryError = $state<string>();
@@ -818,6 +863,211 @@
 		if (next) selectSession(next.id);
 	}
 
+	/** Reports the failure of a context menu action in the rail. */
+	async function railAction(action: () => unknown, fallback: string): Promise<void> {
+		railError = undefined;
+		try {
+			await action();
+		} catch (cause) {
+			railError = cause instanceof Error ? cause.message : fallback;
+		}
+	}
+
+	function sessionMenuItems(session: SessionViewModel): ContextMenuItem[] {
+		const live = ['starting', 'idle', 'running', 'waiting'].includes(session.status);
+		const offline = 'Pau is reconnecting to the backend.';
+		const ended = 'This session has ended.';
+		const items: ContextMenuItem[] = [{ id: 'open', label: 'Open' }];
+		if (onRenameSession && session.capabilities.rename) {
+			const reason = disconnected ? offline : live ? undefined : ended;
+			items.push({ id: 'rename', label: 'Rename…', disabled: reason !== undefined, reason });
+		}
+		if (onCloneSession && session.capabilities.cloneSession) {
+			const reason = disconnected
+				? offline
+				: !live
+					? ended
+					: session.status === 'idle'
+						? undefined
+						: `Wait for ${session.agent} to finish before cloning.`;
+			items.push({ id: 'clone', label: 'Clone', disabled: reason !== undefined, reason });
+		}
+		items.push({ id: 'copy-id', label: 'Copy session ID', separatorBefore: true });
+		if (session.capabilities.stop) {
+			const reason = disconnected ? offline : live ? undefined : ended;
+			items.push({ id: 'stop', label: 'Stop', separatorBefore: true, disabled: reason !== undefined, reason });
+		}
+		items.push({
+			id: 'archive',
+			label: 'Archive',
+			separatorBefore: !session.capabilities.stop,
+			disabled: true,
+			reason: 'Coming soon'
+		});
+		return items;
+	}
+
+	function runSessionAction(session: SessionViewModel, id: string): void {
+		switch (id) {
+			case 'open': {
+				selectSession(session.id);
+				break;
+			}
+			case 'rename': {
+				railError = undefined;
+				renameDraft = session.title;
+				renamingSessionId = session.id;
+				break;
+			}
+			case 'clone': {
+				void railAction(() => onCloneSession?.(session.id), 'Pau could not clone the session. Try again.');
+				break;
+			}
+			case 'copy-id': {
+				void railAction(() => navigator.clipboard.writeText(session.id), 'Pau could not copy the session ID.');
+				break;
+			}
+			case 'stop': {
+				void railAction(() => onStop(session.id), 'The session could not be stopped. Try again.');
+				break;
+			}
+		}
+	}
+
+	function openSessionMenu(event: MouseEvent | KeyboardEvent, session: SessionViewModel): void {
+		contextMenu = contextMenuRequest(event, `${session.title} actions`, sessionMenuItems(session), (id) =>
+			runSessionAction(session, id)
+		);
+	}
+
+	/** Saves the edited session name, or drops the edit when the name is blank or unchanged. */
+	async function commitRename(session: SessionViewModel): Promise<void> {
+		if (renamingSessionId !== session.id) return;
+		renamingSessionId = undefined;
+		const name = renameDraft.trim();
+		await tick();
+		document.getElementById(`session-row-${session.id}`)?.focus();
+		if (!onRenameSession || !name || name === session.title) return;
+		await railAction(() => onRenameSession(session.id, name), 'Pau could not rename the session. Try again.');
+	}
+
+	function cancelRename(session: SessionViewModel): void {
+		renamingSessionId = undefined;
+		void tick().then(() => document.getElementById(`session-row-${session.id}`)?.focus());
+	}
+
+	function workspaceMenuItems(workspace: SessionWorkspace): ContextMenuItem[] {
+		const items: ContextMenuItem[] = [];
+		if (onStartSession) {
+			const reason = disconnected
+				? 'Pau is reconnecting to the backend.'
+				: startingWorkspaceId === undefined
+					? undefined
+					: 'A session is already starting.';
+			items.push({ id: 'new-session', label: 'New session', disabled: reason !== undefined, reason });
+		}
+		if (onOpenTerminal) items.push({ id: 'terminal', label: 'Open terminal' });
+		if (workspace.path) {
+			if (revealPath) items.push({ id: 'reveal', label: revealLabel(), separatorBefore: true });
+			items.push({ id: 'copy-path', label: 'Copy path', separatorBefore: !revealPath });
+		}
+		items.push({
+			id: 'remove',
+			label: 'Remove workspace',
+			separatorBefore: true,
+			disabled: true,
+			reason: 'Coming soon'
+		});
+		return items;
+	}
+
+	function runWorkspaceAction(workspace: SessionWorkspace, id: string): void {
+		const path = workspace.path ?? '';
+		switch (id) {
+			case 'new-session': {
+				void startSession(workspace);
+				break;
+			}
+			case 'terminal': {
+				onOpenTerminal?.(workspace.id);
+				break;
+			}
+			case 'reveal': {
+				void railAction(() => revealPath?.(path), 'Pau could not show the folder.');
+				break;
+			}
+			case 'copy-path': {
+				void railAction(() => navigator.clipboard.writeText(path), 'Pau could not copy the path.');
+				break;
+			}
+		}
+	}
+
+	function openWorkspaceMenu(event: MouseEvent | KeyboardEvent, workspace: SessionWorkspace): void {
+		contextMenu = contextMenuRequest(event, `${workspace.name} actions`, workspaceMenuItems(workspace), (id) =>
+			runWorkspaceAction(workspace, id)
+		);
+	}
+
+	/** The message text as the operator reads it, without its heading or controls. */
+	function renderedMessageText(article: HTMLElement): string {
+		return (
+			[...article.children]
+				.filter((child) => child.tagName !== 'H2' && child.tagName !== 'BUTTON')
+				// innerText keeps the line breaks between rendered blocks, which textContent drops.
+				// eslint-disable-next-line unicorn/prefer-dom-node-text-content
+				.map((child) => (child as HTMLElement).innerText.trim())
+				.join('\n\n')
+		);
+	}
+
+	function openMessageMenu(
+		event: MouseEvent | KeyboardEvent,
+		session: SessionViewModel,
+		entry: Extract<TranscriptEntry, { kind: 'message' }>
+	): void {
+		const article = event.currentTarget as HTMLElement;
+		// Leave a text selection to the system menu, which can copy just the selection.
+		const selection = getSelection();
+		if (selection && event.type === 'contextmenu' && !selection.isCollapsed && article.contains(selection.anchorNode)) {
+			return;
+		}
+		const items: ContextMenuItem[] = [{ id: 'copy', label: 'Copy message' }];
+		if (entry.role === 'assistant') items.push({ id: 'copy-markdown', label: 'Copy as Markdown' });
+		if (onBranchFromMessage && entry.role === 'user' && session.capabilities.branching) {
+			const reason = branchUnavailableReason(session, disconnected);
+			items.push({
+				id: 'branch',
+				label: 'Branch from here',
+				separatorBefore: true,
+				disabled: reason !== undefined,
+				reason
+			});
+		}
+		contextMenu = contextMenuRequest(event, 'Message actions', items, (id) => {
+			if (id === 'branch') {
+				void branchFromMessage(session.id, entry.id);
+				return;
+			}
+			const text = id === 'copy' ? renderedMessageText(article) : entry.body;
+			void navigator.clipboard.writeText(text).catch(() => {
+				controlError = 'Pau could not copy the message.';
+			});
+		});
+	}
+
+	async function branchFromMessage(sessionId: string, entryId: string): Promise<void> {
+		if (!onBranchFromMessage) return;
+		controlError = undefined;
+		try {
+			const outcome = await onBranchFromMessage(sessionId, entryId);
+			if (outcome.cancelled) controlError = 'An extension cancelled the branch. The session is unchanged.';
+			else branched(outcome.text ?? '');
+		} catch (cause) {
+			controlError = cause instanceof Error ? cause.message : 'Pau could not branch the session. Try again.';
+		}
+	}
+
 	useKeyActions({
 		'session.new': () => {
 			const workspace = activeWorkspace ?? openedWorkspace ?? workspaces[0];
@@ -1190,8 +1440,17 @@
 			{:else}
 				{#each workspaces as workspace (workspace.id)}
 					<section aria-labelledby={`workspace-${workspace.id}`}>
-						<div class="session-rail__heading">
-							<h2 id={`workspace-${workspace.id}`}>{workspace.name}</h2>
+						<!-- The heading row hosts the workspace menu for the heading and its controls. -->
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<div
+							class="session-rail__heading"
+							oncontextmenu={(event) => openWorkspaceMenu(event, workspace)}
+							onkeydown={(event) => {
+								if (isContextMenuKey(event)) openWorkspaceMenu(event, workspace);
+							}}>
+							<!-- The heading takes focus so the keyboard can open the workspace menu. -->
+							<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+							<h2 id={`workspace-${workspace.id}`} tabindex="0" title={workspace.path}>{workspace.name}</h2>
 							{#if onStartSession}
 								<button
 									type="button"
@@ -1222,35 +1481,62 @@
 						<ul>
 							{#each workspace.sessions as session (session.id)}
 								<li>
-									<button
-										type="button"
-										class:active={session.id === activeSessionId}
-										aria-current={session.id === activeSessionId ? 'page' : undefined}
-										onclick={() => selectSession(session.id)}
-										onkeydown={(event) => {
-											if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-											event.preventDefault();
-											moveSession(session.id, event.key === 'ArrowDown' ? 1 : -1);
-										}}>
-										<SessionStatusMark status={session.status} label={statusLabel(session.status)} />
-										<span class="session-rail__name">{session.title}</span>
-										<span class="session-rail__state">
-											<small aria-hidden="true">{statusLabel(session.status)}</small>
-											{#if session.unseen && session.id !== activeSessionId}
-												{@const kind = markerKind(session.status)}
-												<span class={`session-rail__marker session-rail__marker--${kind}`} data-marker={kind}></span>
-												<span class="session-view__sr-only">{markerLabel[kind]}</span>
-											{:else if hasAttention(session)}
-												<span class="session-view__sr-only">Attention required</span>
-											{/if}
-										</span>
-									</button>
+									{#if renamingSessionId === session.id}
+										<!-- svelte-ignore a11y_autofocus -->
+										<input
+											class="session-rail__rename"
+											aria-label="Session name"
+											autofocus
+											bind:value={renameDraft}
+											onblur={() => void commitRename(session)}
+											onkeydown={(event) => {
+												if (event.key === 'Enter') {
+													event.preventDefault();
+													void commitRename(session);
+												} else if (event.key === 'Escape') {
+													event.preventDefault();
+													event.stopPropagation();
+													cancelRename(session);
+												}
+											}} />
+									{:else}
+										<button
+											type="button"
+											id={`session-row-${session.id}`}
+											class:active={session.id === activeSessionId}
+											aria-current={session.id === activeSessionId ? 'page' : undefined}
+											onclick={() => selectSession(session.id)}
+											oncontextmenu={(event) => openSessionMenu(event, session)}
+											onkeydown={(event) => {
+												if (isContextMenuKey(event)) {
+													openSessionMenu(event, session);
+													return;
+												}
+												if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+												event.preventDefault();
+												moveSession(session.id, event.key === 'ArrowDown' ? 1 : -1);
+											}}>
+											<SessionStatusMark status={session.status} label={statusLabel(session.status)} />
+											<span class="session-rail__name">{session.title}</span>
+											<span class="session-rail__state">
+												<small aria-hidden="true">{statusLabel(session.status)}</small>
+												{#if session.unseen && session.id !== activeSessionId}
+													{@const kind = markerKind(session.status)}
+													<span class={`session-rail__marker session-rail__marker--${kind}`} data-marker={kind}></span>
+													<span class="session-view__sr-only">{markerLabel[kind]}</span>
+												{:else if hasAttention(session)}
+													<span class="session-view__sr-only">Attention required</span>
+												{/if}
+											</span>
+										</button>
+									{/if}
 								</li>
 							{/each}
 						</ul>
 					</section>
 				{/each}
 			{/if}
+			{#if railError}<p class="session-rail__error" role="alert">{railError}</p>{/if}
 		</nav>
 	{/snippet}
 
@@ -1277,6 +1563,13 @@
 			{/key}
 		{/if}
 	{/snippet}
+
+	<!-- The menu renders in the main surface, which stays visible when the rails collapse. -->
+	{#if contextMenu}
+		{#key contextMenu}
+			<ContextMenu request={contextMenu} onClose={() => (contextMenu = undefined)} />
+		{/key}
+	{/if}
 
 	{#if pickerWorkspace && onLoadSavedSessions && onResumeSession}
 		{#key pickerWorkspace.id}
@@ -1551,11 +1844,20 @@
 					{:else}
 						{#each activeSession.transcript as entry (entry.id)}
 							{#if entry.kind === 'message'}
+								<!-- Messages take focus so the keyboard can open their context menu. -->
+								<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 								<article
 									class={`session-message session-message--${entry.role}`}
 									aria-label={`${entry.role} message`}
+									tabindex="0"
 									data-entry-id={entry.id}
-									data-found={entry.id === foundEntryKey || undefined}>
+									data-found={entry.id === foundEntryKey || undefined}
+									oncontextmenu={(event) => openMessageMenu(event, activeSession, entry)}
+									onkeydown={(event) => {
+										if (event.target === event.currentTarget && isContextMenuKey(event)) {
+											openMessageMenu(event, activeSession, entry);
+										}
+									}}>
 									<h2>{entry.label ?? (entry.role === 'user' ? 'You' : activeSession.agent)}</h2>
 									<CopyButton
 										class="session-message__copy"
@@ -2028,6 +2330,30 @@
 		margin: 0;
 		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--pau-text-muted);
+	}
+
+	.session-rail__rename {
+		width: 100%;
+		min-height: var(--pau-size-target-touch);
+		padding: var(--pau-space-2) var(--pau-space-3);
+		color: var(--pau-text);
+		font: inherit;
+		background: var(--pau-canvas);
+		border: 1px solid var(--pau-focus);
+		border-radius: 0;
+	}
+
+	.session-rail__error {
+		margin: var(--pau-space-2) 0 0;
+		padding: var(--pau-space-2) var(--pau-space-3);
+		color: var(--pau-danger);
+		font-size: var(--pau-type-sm);
+	}
+
+	.session-rail h2:focus-visible,
+	.session-message:focus-visible {
+		outline: 2px solid var(--pau-focus);
+		outline-offset: 2px;
 	}
 
 	.session-view {

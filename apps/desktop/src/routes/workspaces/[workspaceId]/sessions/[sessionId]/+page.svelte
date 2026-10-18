@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 
 	import { productNavigation } from '$lib/app-navigation';
@@ -14,4 +16,5 @@
 <SessionRoute
 	initialSessionId={page.params.sessionId}
 	onSessionChange={updateSessionRoute}
+	onOpenTerminal={(workspaceId) => void goto(resolve('/workspaces/[workspaceId]/terminal', { workspaceId }))}
 	navigation={(workspaceId) => productNavigation(page.route.id, workspaceId)} />

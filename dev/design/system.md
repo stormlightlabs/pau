@@ -156,6 +156,16 @@ Use one control vocabulary across screens:
 Controls that show or hide a rail, sidebar, or inspector belong in the top app
 bar. Keep task-specific actions in the task surface.
 
+Sessions, workspaces, files, and transcript messages open a context menu on
+right-click, `Shift+F10`, or the menu key. The menu is an in-app popover in the
+top layer, not a native menu, so it uses the theme tokens, behaves the same in
+the browser and the desktop app, and can show why an action is disabled. It
+lists only actions the item supports. An action that is planned but not ready,
+or that the item's state refuses, stays visible and disabled with its reason
+underneath. Escape, Tab, or a choice closes the menu and returns focus to the
+item. File menus can reveal a file in the system file manager but never launch
+it in another application, because the webview renders agent-generated content.
+
 Every relevant control state needs a visible treatment. Icon-only controls need
 an accessible name and, where meaning is not obvious, a tooltip or adjacent
 label. Destructive actions name the object and preserve a cancel or recovery

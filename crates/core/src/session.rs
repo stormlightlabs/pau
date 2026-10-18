@@ -92,6 +92,10 @@ pub struct AgentSession {
     /// Absent until Pi reports it.
     #[serde(default)]
     pub thinking_level: Option<SessionThinkingLevel>,
+    /// Display name Pi stores in the session file. Absent until the session
+    /// is named or while Pi has not reported it.
+    #[serde(default)]
+    pub name: Option<String>,
     /// Controls this session accepts.
     pub capabilities: SessionCapabilities,
 }

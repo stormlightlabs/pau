@@ -15,6 +15,7 @@ import type {
 	NativeSessionList,
 	SessionBranchRequest,
 	SessionBranchResult,
+	SessionCloneResult,
 	SessionExtensionUi,
 	SessionCommand,
 	SessionCompactionResult,
@@ -26,6 +27,7 @@ import type {
 	SessionMessageRequest,
 	SessionMessages,
 	SessionPromptRequest,
+	SessionRenameRequest,
 	SessionQueue,
 	SessionSearchResult,
 	SessionTree,
@@ -470,6 +472,24 @@ export function cancelSessionRetry(sessionId: string, fetcher: typeof fetch = fe
 /** Stops a session's process. Its final state arrives on the event stream. */
 export function stopSession(sessionId: string, fetcher: typeof fetch = fetch): Promise<void> {
 	return sendSessionRequest(`/${encodeURIComponent(sessionId)}`, 'DELETE', undefined, fetcher);
+}
+
+/** Stores a display name with a live session's saved file. */
+export function renameSession(sessionId: string, name: string, fetcher: typeof fetch = fetch): Promise<void> {
+	const request: SessionRenameRequest = { name };
+	return sendSessionRequest(`/${encodeURIComponent(sessionId)}/name`, 'PUT', request, fetcher);
+}
+
+/**
+ * Copies a live session's saved file into a new saved session. The live
+ * session continues the copy, and the original stays in the saved list.
+ */
+export async function cloneSession(sessionId: string, fetcher: typeof fetch = fetch): Promise<SessionCloneResult> {
+	const response = await fetcher(sessionUrl(`/${encodeURIComponent(sessionId)}/clone`), {
+		method: 'POST',
+		headers: authorization()
+	});
+	return responseJson<SessionCloneResult>(response);
 }
 
 /**

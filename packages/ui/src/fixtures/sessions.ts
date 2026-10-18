@@ -10,7 +10,9 @@ const fullCapabilities = {
 	retry: true,
 	messageQueue: true,
 	commandDiscovery: true,
-	compaction: true
+	compaction: true,
+	rename: true,
+	cloneSession: true
 } satisfies SessionCapabilities;
 
 const claudeCapabilities = {
@@ -112,6 +114,15 @@ export const sessionFixtures = {
 	],
 	idle: [{ id: 'pau', name: 'Pau', sessions: [session('idle', { title: 'Fix diff gutter', transcript: [] })] }],
 	running: [{ id: 'pau', name: 'Pau', sessions: [session('running', { title: 'Fix diff gutter' })] }],
+	/** An idle session with a transcript in a workspace whose folder is known, for context menus. */
+	idleWithPath: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			path: '/Users/operator/projects/pau',
+			sessions: [session('idle', { title: 'Fix diff gutter' }), session('stopped', { title: 'Review fixtures' })]
+		}
+	],
 	failedTurn: [
 		{ id: 'pau', name: 'Pau', sessions: [session('idle', { title: 'Fix diff gutter', transcript: failedTurn })] }
 	],

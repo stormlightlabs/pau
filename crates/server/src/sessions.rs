@@ -110,15 +110,16 @@ struct SessionRecord {
     native: Arc<Mutex<NativeState>>,
 }
 
-/// The session state Pi changes by itself, refreshed from `get_state`.
+/// The session state Pi owns, refreshed from `get_state`.
 ///
 /// Pi reports it only on request, so the API reads it when the session starts
-/// and after the controls that change it (model, thinking level, branch)
-/// instead of on every event.
+/// and after the controls that change it (model, thinking level, branch,
+/// rename) instead of on every event.
 #[derive(Clone, Default, PartialEq)]
 struct NativeState {
     session_id: Option<String>,
     thinking_level: Option<SessionThinkingLevel>,
+    name: Option<String>,
 }
 
 /// Starts Pi sessions and publishes their lifecycle and output events.
@@ -407,8 +408,8 @@ impl SessionApi {
         }
     }
 
-    /// Reads Pi's session identifier and thinking level into the record and
-    /// reports whether either changed. A failed read keeps the last values.
+    /// Reads Pi's session identifier, thinking level, and name into the
+    /// record and reports whether any changed. A failed read keeps the last values.
     async fn refresh_native(&self, record: &SessionRecord, session: &PiSession) -> bool {
         let Ok(state) = session.state().await else {
             return false;
@@ -416,6 +417,7 @@ impl SessionApi {
         let fresh = NativeState {
             session_id: state.native_id,
             thinking_level: state.thinking_level.map(session_thinking_level),
+            name: state.name,
         };
         let mut native = record.native.lock().expect("native state lock poisoned");
         let changed = *native != fresh;
@@ -574,6 +576,7 @@ fn describe(id: &str, record: &SessionRecord, status: SessionStatus) -> AgentSes
         exit_code: None,
         native_session_id: native.session_id,
         thinking_level: native.thinking_level,
+        name: native.name,
         capabilities: session_capabilities(record.capabilities),
     }
 }
@@ -1176,8 +1179,10 @@ pub(crate) async fn rename_session(
     Json(request): Json<SessionRenameRequest>,
 ) -> Result<StatusCode, ApiError> {
     let api = session_api(&state)?;
-    let (_, session) = api.live(&session_id).await?;
+    let (record, session) = api.live(&session_id).await?;
     session.rename(request.name).await?;
+    // Read the name back from Pi so the record carries what the file stores.
+    api.refresh_native(&record, &session).await;
     api.publish_current(&session_id).await;
     Ok(StatusCode::NO_CONTENT)
 }

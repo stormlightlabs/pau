@@ -5,7 +5,8 @@
 
 	type State = 'default' | 'detached' | 'empty' | 'loading' | 'non-repository' | 'permission-error' | 'large-results';
 
-	let { state = 'default' }: { state?: State } = $props();
+	let { state: view = 'default' }: { state?: State } = $props();
+	let lastAction = $state('No action sent');
 
 	const pending = new Promise<never>(() => {});
 	const permissionError = Object.assign(new Error('Permission denied'), { code: 'permission_denied' });
@@ -17,16 +18,16 @@
 
 	let source: WorkspaceFileSource = $derived.by(() => ({
 		listDirectory: async (path) => {
-			if (state === 'loading') return pending;
-			if (state === 'permission-error') throw permissionError;
-			if (state === 'empty') return [];
+			if (view === 'loading') return pending;
+			if (view === 'permission-error') throw permissionError;
+			if (view === 'empty') return [];
 			return structuredClone(workspaceFileFixtures.tree[path] ?? []);
 		},
-		search: async () => structuredClone(state === 'large-results' ? largeResults : workspaceFileFixtures.searchResults),
+		search: async () => structuredClone(view === 'large-results' ? largeResults : workspaceFileFixtures.searchResults),
 		gitStatus: async () => {
 			const status = structuredClone(workspaceFileFixtures.gitStatus);
-			if (state === 'detached') return { ...status, branch: null, detached: true };
-			if (state === 'non-repository') {
+			if (view === 'detached') return { ...status, branch: null, detached: true };
+			if (view === 'non-repository') {
 				return { repository: false, branch: null, head: null, detached: false, files: [] };
 			}
 			return status;
@@ -45,4 +46,28 @@
 	}));
 </script>
 
-<WorkspaceFiles workspaceId="pau" workspaceName="pau" {source} />
+<WorkspaceFiles
+	workspaceId="pau"
+	workspaceName="pau"
+	workspacePath="/Users/operator/projects/pau"
+	{source}
+	revealPath={async (path) => {
+		lastAction = `reveal ${path}`;
+	}} />
+
+<p class="action" aria-live="polite">{lastAction}</p>
+
+<style>
+	.action {
+		position: fixed;
+		right: 0.75rem;
+		bottom: 0.75rem;
+		z-index: 10;
+		margin: 0;
+		padding: var(--pau-space-2);
+		color: var(--pau-text-muted);
+		background: var(--pau-canvas);
+		border: 1px solid var(--pau-border);
+		font: var(--pau-type-xs) var(--pau-font-ui);
+	}
+</style>

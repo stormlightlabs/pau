@@ -65,6 +65,14 @@ failed, and stopped sessions. In a running session, press `Ctrl+Enter` or
 `Command+Enter` to send a prompt and `Escape` to interrupt. Focus a session in
 the workspace rail and use the up or down arrow key to switch sessions.
 
+Right-click a session, a workspace heading, or a transcript message to see its
+actions, or focus it and press `Shift+F10` or the menu key. Session actions
+open, rename, clone, or stop the session and copy its ID. Workspace actions
+start a session, open a terminal, show the folder in the file manager, and copy
+its path. Message actions copy the text or the Markdown source, and a message
+you sent can start a branch. An action that is not available yet stays in the
+menu, disabled, with the reason underneath.
+
 ## Use configured Pi extensions
 
 Pau keeps the extensions that Pi loads from your user and project configuration.

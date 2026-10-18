@@ -398,6 +398,69 @@ export const ConcurrentSessions: Story = {
 		await expect(canvas.getByText('Claude · Sonnet')).toBeInTheDocument();
 	}
 };
+export const SessionMenu: Story = {
+	args: { workspaces: sessionFixtures.idleWithPath, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const row = canvas.getByRole('button', { name: /Fix diff gutter/ });
+		row.focus();
+		await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+		const menu = canvas.getByRole('menu', { name: 'Fix diff gutter actions' });
+		await expect(within(menu).getByRole('menuitem', { name: 'Archive' })).toHaveAccessibleDescription('Coming soon');
+		await userEvent.click(within(menu).getByRole('menuitem', { name: 'Clone' }));
+		await expect(canvas.getByText('session-idle: clone')).toBeInTheDocument();
+		await expect(row).toHaveFocus();
+	}
+};
+export const StoppedSessionMenu: Story = {
+	args: { workspaces: sessionFixtures.idleWithPath, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		canvas.getByRole('button', { name: /Review fixtures/ }).focus();
+		await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+		const menu = canvas.getByRole('menu', { name: 'Review fixtures actions' });
+		await expect(within(menu).getByRole('menuitem', { name: 'Stop' })).toHaveAccessibleDescription(
+			'This session has ended.'
+		);
+		await userEvent.keyboard('{Escape}');
+		await expect(canvas.queryByRole('menu')).not.toBeInTheDocument();
+	}
+};
+export const WorkspaceMenu: Story = {
+	args: { workspaces: sessionFixtures.idleWithPath, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.pointer({ keys: '[MouseRight]', target: canvas.getByRole('heading', { name: 'Pau' }) });
+		const menu = canvas.getByRole('menu', { name: 'Pau actions' });
+		await expect(within(menu).getByRole('menuitem', { name: 'Remove workspace' })).toHaveAccessibleDescription(
+			'Coming soon'
+		);
+		await userEvent.click(within(menu).getByRole('menuitem', { name: 'Open terminal' }));
+		await expect(canvas.getByText('pau: open terminal')).toBeInTheDocument();
+	}
+};
+export const MessageMenu: Story = {
+	args: { workspaces: sessionFixtures.idleWithPath, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		canvas.getByRole('article', { name: 'user message' }).focus();
+		await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+		await userEvent.click(canvas.getByRole('menuitem', { name: 'Branch from here' }));
+		await expect(canvas.getByText('session-idle: branch from prompt-1')).toBeInTheDocument();
+		await expect(canvas.getByRole('textbox', { name: 'Prompt' })).toHaveValue('Edited prompt');
+	}
+};
+export const MessageMenuBranchUnavailable: Story = {
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		canvas.getByRole('article', { name: 'user message' }).focus();
+		await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+		await expect(canvas.getByRole('menuitem', { name: 'Branch from here' })).toHaveAccessibleDescription(
+			'Wait for Pi to finish before branching.'
+		);
+		await expect(canvas.getByRole('menuitem', { name: 'Copy message' })).toBeInTheDocument();
+	}
+};
 export const Narrow: Story = {
 	args: { workspaces: sessionFixtures.sandboxDenials, initialSessionId: 'sandbox-denials' },
 	parameters: { viewport: { defaultViewport: 'narrow' } }

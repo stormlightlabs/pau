@@ -62,6 +62,9 @@ export const KEY_GROUPS = ['General', 'Sessions', 'Navigation', 'Panels', 'View'
 export const APP_KEY_ACTIONS: readonly KeyAction[] = [
 	{ id: 'app.shortcuts', label: 'Show keyboard shortcuts', group: 'General', keys: ['mod+/'], whileTyping: true },
 	{ id: 'workspace.open', label: 'Open workspace', group: 'General', keys: ['mod+o'], whileTyping: true },
+	// The focused row or message opens its own menu, because the menu depends
+	// on that item. The entry lists the chords and registers no handler.
+	{ id: 'item.contextMenu', label: 'Open the context menu', group: 'General', keys: ['shift+f10', 'contextmenu'] },
 	{ id: 'session.new', label: 'New session', group: 'Sessions', keys: ['mod+n'], whileTyping: true },
 	{ id: 'session.next', label: 'Next session', group: 'Sessions', keys: ['ctrl+tab'], whileTyping: true },
 	{ id: 'session.previous', label: 'Previous session', group: 'Sessions', keys: ['ctrl+shift+tab'], whileTyping: true },
@@ -179,7 +182,8 @@ const KEY_NAMES: Record<string, string> = {
 	pageup: 'Page Up',
 	pagedown: 'Page Down',
 	home: 'Home',
-	end: 'End'
+	end: 'End',
+	contextmenu: 'Menu'
 };
 
 /** Formats a chord the way the platform's menus print it: `⌘⇧N` or `Ctrl+Shift+N`. */

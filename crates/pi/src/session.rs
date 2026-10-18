@@ -85,6 +85,8 @@ pub struct PiSessionState {
     pub native_id: Option<String>,
     /// The thinking level Pi applies, after any clamping to the model.
     pub thinking_level: Option<ThinkingLevel>,
+    /// The display name Pi stores in the session file, when one is set.
+    pub name: Option<String>,
 }
 
 /// Where Pi loaded a slash command from.
@@ -278,10 +280,12 @@ impl PiSession {
         }
     }
 
-    /// Reads the session identifier and thinking level Pi currently reports.
+    /// Reads the session identifier, thinking level, and name Pi currently
+    /// reports.
     ///
-    /// Pi changes both on its own: branching starts a new native session and
-    /// a model change clamps the thinking level.
+    /// Pi changes the first two on its own: branching starts a new native
+    /// session and a model change clamps the thinking level. The name comes
+    /// from the session file, so it survives a restart or a resume.
     pub async fn state(&self) -> Result<PiSessionState, PiSessionError> {
         let response = self.process.command(json!({"type": "get_state"})).await?;
         if response.get("success").and_then(Value::as_bool) != Some(true) {
@@ -294,6 +298,10 @@ impl PiSession {
         Ok(PiSessionState {
             native_id: text("sessionId").map(str::to_owned),
             thinking_level: text("thinkingLevel").and_then(ThinkingLevel::from_name),
+            name: text("sessionName")
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(str::to_owned),
         })
     }
 

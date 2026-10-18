@@ -73,6 +73,7 @@ fn main() {
 
     let application = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .menu(menu::build)
         .on_menu_event(menu::handle_event)
         .setup(move |app| {

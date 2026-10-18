@@ -24,6 +24,10 @@ export type SessionCapabilities = {
 	usage?: boolean;
 	/** Whether the agent can compact its context on request. Absent means the surface offers no control. */
 	compaction?: boolean;
+	/** Whether the agent can rename the session. Absent means the surface offers no rename. */
+	rename?: boolean;
+	/** Whether the agent can clone the session into a new saved session. Absent means it cannot. */
+	cloneSession?: boolean;
 };
 
 /** How much of the model's context window a session fills. */
@@ -287,7 +291,13 @@ export type SessionViewModel = {
 };
 
 /** Workspace and its sessions as shown in the contextual rail. */
-export type SessionWorkspace = { id: string; name: string; sessions: SessionViewModel[] };
+export type SessionWorkspace = {
+	id: string;
+	name: string;
+	/** The workspace folder, when known. Path actions in the rail need it. */
+	path?: string;
+	sessions: SessionViewModel[];
+};
 
 /** Queue used when the operator sends text during an active run. */
 export type PromptQueue = 'steer' | 'follow-up';

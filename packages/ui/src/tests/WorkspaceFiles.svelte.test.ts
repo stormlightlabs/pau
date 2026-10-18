@@ -188,3 +188,64 @@ test('renders and opens a large search result set', async () => {
 	await userEvent.click(results.getByRole('button').first());
 	expect(onOpenFile).toHaveBeenCalledWith('packages/example-0/src/file-with-a-long-name-0.ts', 1);
 });
+
+test('opens a file menu from the keyboard and runs its path actions', async () => {
+	const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+	const revealPath = vi.fn().mockResolvedValue(undefined);
+	const onOpenFile = vi.fn();
+	await render(WorkspaceFiles, {
+		workspaceId: 'pau',
+		workspaceName: 'pau',
+		source: source(),
+		workspacePath: '/Users/operator/projects/pau/',
+		revealPath,
+		onOpenFile
+	});
+	await openNavigation();
+	const readme = page.getByRole('treeitem', { name: /README\.md/ });
+	await expect.element(readme).toBeVisible();
+	const openMenu = async () => {
+		(readme.element() as HTMLElement).focus();
+		await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+	};
+
+	await openMenu();
+	await expect
+		.element(page.getByRole('menu', { name: 'README.md actions' }))
+		.toHaveTextContent(/Open.*(Reveal in Finder|Show in folder).*Copy path.*Copy relative path/);
+	await userEvent.click(page.getByRole('menuitem', { name: 'Copy relative path' }));
+	expect(writeText).toHaveBeenLastCalledWith('README.md');
+	await expect.element(readme).toHaveFocus();
+
+	await openMenu();
+	await userEvent.click(page.getByRole('menuitem', { name: 'Copy path' }));
+	expect(writeText).toHaveBeenLastCalledWith('/Users/operator/projects/pau/README.md');
+
+	await openMenu();
+	await userEvent.click(page.getByRole('menuitem', { name: /Reveal in Finder|Show in folder/ }));
+	expect(revealPath).toHaveBeenCalledWith('/Users/operator/projects/pau/README.md');
+
+	await openMenu();
+	await userEvent.click(page.getByRole('menuitem', { name: 'Open', exact: true }));
+	expect(onOpenFile).toHaveBeenCalledWith('README.md');
+	writeText.mockRestore();
+});
+
+test('offers only path actions for a folder and reports a failed action', async () => {
+	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source(), revealPath: vi.fn() });
+	await openNavigation();
+	const writeText = vi
+		.spyOn(navigator.clipboard, 'writeText')
+		.mockRejectedValue(new Error('Clipboard is unavailable.'));
+
+	const dev = page.getByRole('treeitem', { name: /dev/ });
+	await expect.element(dev).toBeVisible();
+	dev.element().dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 40, clientY: 120 }));
+	await expect.element(page.getByRole('menu', { name: 'dev actions' })).toHaveTextContent('Copy relative path');
+	await expect.element(page.getByRole('menuitem', { name: 'Open', exact: true })).not.toBeInTheDocument();
+	await expect.element(page.getByRole('menuitem', { name: 'Copy path' })).not.toBeInTheDocument();
+	await userEvent.click(page.getByRole('menuitem', { name: 'Copy relative path' }));
+
+	await expect.element(page.getByRole('alert')).toHaveTextContent('Clipboard is unavailable.');
+	writeText.mockRestore();
+});

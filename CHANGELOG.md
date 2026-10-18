@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- Right-click a session, workspace, file, or message, or press Shift+F10, to
+  rename, clone, stop, branch, copy paths or text, open a terminal, or reveal
+  items in Finder. Session names now persist across reloads.
 - Finished tool and thinking blocks collapse when the turn ends instead of
   mid-turn. Blocks you open or close stay that way, and the transcript no longer
   jumps when a block above your reading position changes size.

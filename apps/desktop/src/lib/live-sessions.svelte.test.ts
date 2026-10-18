@@ -14,6 +14,7 @@ const session = {
 	exit_code: null,
 	native_session_id: null,
 	thinking_level: null,
+	name: null,
 	capabilities: {}
 } as unknown as AgentSession;
 

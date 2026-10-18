@@ -22,6 +22,21 @@ export const FileTree: Story = {
 	}
 };
 
+export const FileMenu: Story = {
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const tree = await canvas.findByRole('tree', { name: 'pau files' });
+		const readme = within(tree).getByRole('treeitem', { name: /README\.md/ });
+		readme.focus();
+		await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+		const menu = canvas.getByRole('menu', { name: 'README.md actions' });
+		await expect(within(menu).getByRole('menuitem', { name: 'Copy relative path' })).toBeInTheDocument();
+		await userEvent.click(within(menu).getByRole('menuitem', { name: /Reveal in Finder|Show in folder/ }));
+		await expect(canvas.getByText('reveal /Users/operator/projects/pau/README.md')).toBeInTheDocument();
+		await expect(readme).toHaveFocus();
+	}
+};
+
 export const SearchResults: Story = {
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);

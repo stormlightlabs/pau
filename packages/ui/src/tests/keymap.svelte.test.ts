@@ -31,6 +31,8 @@ describe('chords', () => {
 			'ctrl+shift+tab'
 		);
 		expect(eventChord(new KeyboardEvent('keydown', { key: 'Meta', metaKey: true }))).toBeUndefined();
+		expect(eventChord(new KeyboardEvent('keydown', { key: 'F10', shiftKey: true }))).toBe('shift+f10');
+		expect(eventChord(new KeyboardEvent('keydown', { key: 'ContextMenu' }))).toBe('contextmenu');
 	});
 
 	test('formats chords the way each platform prints them', () => {
@@ -38,6 +40,8 @@ describe('chords', () => {
 		expect(formatChord('mod+shift+n', 'other')).toBe('Ctrl+Shift+N');
 		expect(formatChord('ctrl+tab', 'mac')).toBe('⌃Tab');
 		expect(formatChord('mod+plus', 'other')).toBe('Ctrl++');
+		expect(formatChord('shift+f10', 'other')).toBe('Shift+F10');
+		expect(formatChord('contextmenu', 'other')).toBe('Menu');
 	});
 
 	test('detects macOS from the navigator', () => {

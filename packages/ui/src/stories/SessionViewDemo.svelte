@@ -168,6 +168,22 @@
 	onStop={(sessionId) => {
 		lastAction = `${sessionId}: stop`;
 	}}
+	onRenameSession={(sessionId, name) => {
+		lastAction = `${sessionId}: rename: ${name}`;
+	}}
+	onCloneSession={(sessionId) => {
+		lastAction = `${sessionId}: clone`;
+	}}
+	onBranchFromMessage={async (sessionId, entryId) => {
+		lastAction = `${sessionId}: branch from ${entryId}`;
+		return { text: 'Edited prompt', cancelled: false };
+	}}
+	onOpenTerminal={(workspaceId) => {
+		lastAction = `${workspaceId}: open terminal`;
+	}}
+	revealPath={async (path) => {
+		lastAction = `reveal ${path}`;
+	}}
 	onExtensionUiResponse={respondToExtension}
 	onExtensionUiTimeout={(sessionId, requestId) => {
 		lastAction = `${sessionId}: extension timeout: ${requestId}`;

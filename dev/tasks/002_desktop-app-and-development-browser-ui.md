@@ -621,19 +621,6 @@ Verification:
 - Storybook interaction test for opening, filtering, and running an action from
   the keyboard.
 
-### 2.175 Context menus
-
-Status: planned
-Blocked by: none
-
-Open a context menu on sessions, workspaces, files, and transcript messages that
-lists the actions already available for that item.
-
-Verification:
-
-- Component-test each item's menu, opening it from the keyboard, and a disabled
-  action with its reason.
-
 ### 2.176 Restore last view on launch
 
 Status: planned
@@ -1194,17 +1181,6 @@ Verification:
   executable and confirm its tools run inside the sandbox.
 - Confirm a sandbox that cannot start fails the session start with its reason.
 
-### 2.150 Session rename and clone controls
-
-Status: planned
-Blocked by: none
-
-Add rename and clone controls to the session view.
-
-Verification:
-
-- Component-test renaming, cloning, and a failed rename.
-
 ### 2.153 Attention notifications
 
 Status: planned
@@ -1308,7 +1284,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.175, 2.184, 2.185, 2.197, 2.219
+Blocked by: 2.156, 2.184, 2.185, 2.197, 2.219
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

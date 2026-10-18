@@ -13,12 +13,15 @@
 		onSessionChange,
 		fetcher,
 		socketFactory,
-		navigation
+		navigation,
+		onOpenTerminal
 	}: {
 		initialSessionId?: string;
 		/** Builds the product rail for the workspace the operator is working in. */
 		navigation?: (workspaceId: string | undefined) => ShellNavItem[];
 		onSessionChange?: (workspaceId: string, sessionId: string) => void;
+		/** Opens the terminal view of a workspace. */
+		onOpenTerminal?: (workspaceId: string) => void;
 		fetcher?: typeof fetch;
 		socketFactory?: EventSocketFactory;
 	} = $props();
@@ -86,6 +89,8 @@
 	paneWidths={interfacePreferences.widths}
 	onPaneResize={(widths) => interfacePreferences.resize(widths)}
 	pickFolder={native?.pickFolder}
+	revealPath={native?.revealPath}
+	{onOpenTerminal}
 	onOpenWorkspace={openWorkspace}
 	onSelectSession={selectSession}
 	onClearAttention={() => sessions.clearUnseen()}
@@ -95,6 +100,9 @@
 	onLoadSessionTree={(sessionId) => sessions.tree(sessionId)}
 	onSearchSession={(sessionId, query) => sessions.search(sessionId, query)}
 	onBranchSession={(sessionId, entryId) => sessions.branch(sessionId, entryId)}
+	onBranchFromMessage={(sessionId, entryId) => sessions.branchFromMessage(sessionId, entryId)}
+	onRenameSession={(sessionId, name) => sessions.rename(sessionId, name)}
+	onCloneSession={(sessionId) => sessions.clone(sessionId)}
 	onLoadCommands={(sessionId) => sessions.listCommands(sessionId)}
 	onSearchFiles={searchFileMentions}
 	onLoadModels={(sessionId) => sessions.listModels(sessionId)}

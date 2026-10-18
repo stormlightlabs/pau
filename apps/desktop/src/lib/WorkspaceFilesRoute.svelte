@@ -5,7 +5,7 @@
 		type ShellNavItem,
 		type WorkspaceFileSource
 	} from '@stormlightlabs/pau-ui';
-	import { onMount } from 'svelte';
+	import { getContext, onMount } from 'svelte';
 
 	import {
 		getWorkspaceGitDiff,
@@ -16,11 +16,14 @@
 		searchWorkspaceFiles,
 		writeWorkspaceFile
 	} from './api';
+	import { desktopNativeCapabilitiesContext, type DesktopNativeCapabilities } from './native-capabilities';
 	import { interfacePreferences } from './interface-preferences.svelte';
 
 	let { workspaceId, productItems }: { workspaceId: string; productItems?: ShellNavItem[] } = $props();
 
 	let resolvedWorkspaceName = $state<string>();
+	let workspacePath = $state<string>();
+	const native = getContext<DesktopNativeCapabilities | undefined>(desktopNativeCapabilitiesContext);
 	let workspaceName = $derived(resolvedWorkspaceName ?? workspaceId);
 	let disconnected = $state(false);
 	const source: WorkspaceFileSource = {
@@ -38,6 +41,7 @@
 		void listWorkspaces()
 			.then((workspaces) => {
 				const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
+				workspacePath = workspace?.path;
 				resolvedWorkspaceName = workspace?.name || workspace?.path.split(/[\\/]/).at(-1) || workspaceId;
 			})
 			.catch(() => {
@@ -53,5 +57,7 @@
 	{editorSource}
 	{disconnected}
 	{productItems}
+	{workspacePath}
+	revealPath={native?.revealPath}
 	paneWidths={interfacePreferences.widths}
 	onPaneResize={(widths) => interfacePreferences.resize(widths)} />

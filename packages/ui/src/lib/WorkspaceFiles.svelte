@@ -15,6 +15,14 @@
 		WorkspaceTraversalOptions
 	} from './types/workspace-files';
 	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
+	import ContextMenu from './ContextMenu.svelte';
+	import {
+		contextMenuRequest,
+		isContextMenuKey,
+		revealLabel,
+		type ContextMenuItem,
+		type ContextMenuRequest
+	} from './context-menu';
 	import DiffReview from './DiffReview.svelte';
 	import FileEditor from './FileEditor.svelte';
 	import Icon from './Icon.svelte';
@@ -31,6 +39,13 @@
 		disconnected?: boolean;
 		editorSource?: FileEditorSource;
 		onOpenFile?: (path: string, line?: number) => void;
+		/** The workspace folder. Copying a full path and revealing an entry need it. */
+		workspacePath?: string;
+		/**
+		 * Shows a path in the system file manager. The desktop app supplies it.
+		 * With it and `workspacePath`, the file tree's context menu offers it.
+		 */
+		revealPath?: (path: string) => Promise<void>;
 		/** Product rail destinations, supplied by the app that owns the routes. */
 		productItems?: ShellNavItem[];
 		/** Saved widths for the resizable panes. */
@@ -53,6 +68,8 @@
 		disconnected = false,
 		editorSource,
 		onOpenFile,
+		workspacePath,
+		revealPath,
 		productItems = defaultProductItems,
 		paneWidths,
 		onPaneResize
@@ -81,6 +98,9 @@
 	let diffRequestVersion = 0;
 	let requestVersion = 0;
 	let tree = $state<HTMLElement>();
+	let contextMenu = $state<ContextMenuRequest>();
+	/** Why the last file tree action from a context menu failed. */
+	let treeActionError = $state('');
 
 	let traversalOptions = $derived<WorkspaceTraversalOptions>({ includeHidden, includeIgnored });
 	let root = $derived(directories['']);
@@ -283,6 +303,59 @@
 		}
 	}
 
+	/** Joins a workspace-relative path to the workspace folder with the folder's own separator. */
+	function absolutePath(path: string): string | undefined {
+		if (!workspacePath) return undefined;
+		const separator = workspacePath.includes('\\') && !workspacePath.includes('/') ? '\\' : '/';
+		const root = workspacePath.replace(/[\\/]+$/, '');
+		return `${root}${separator}${path.split('/').join(separator)}`;
+	}
+
+	function entryMenuItems(entry: WorkspaceFileEntry): ContextMenuItem[] {
+		const items: ContextMenuItem[] = [];
+		const full = absolutePath(entry.path);
+		if (entry.kind !== 'directory') items.push({ id: 'open', label: 'Open' });
+		if (revealPath && full) items.push({ id: 'reveal', label: revealLabel(), separatorBefore: true });
+		if (full) items.push({ id: 'copy-path', label: 'Copy path', separatorBefore: !revealPath });
+		items.push({ id: 'copy-relative-path', label: 'Copy relative path', separatorBefore: !full });
+		return items;
+	}
+
+	async function runEntryAction(entry: WorkspaceFileEntry, id: string): Promise<void> {
+		const full = absolutePath(entry.path) ?? '';
+		treeActionError = '';
+		try {
+			switch (id) {
+				case 'open': {
+					activePath = entry.path;
+					openFile(entry.path);
+					break;
+				}
+				case 'reveal': {
+					await revealPath?.(full);
+					break;
+				}
+				case 'copy-path': {
+					await navigator.clipboard.writeText(full);
+					break;
+				}
+				case 'copy-relative-path': {
+					await navigator.clipboard.writeText(entry.path);
+					break;
+				}
+			}
+		} catch (error) {
+			treeActionError =
+				error instanceof Error ? error.message : `Pau could not finish that action on ${basename(entry.path)}.`;
+		}
+	}
+
+	function openEntryMenu(event: MouseEvent | KeyboardEvent, entry: WorkspaceFileEntry): void {
+		contextMenu = contextMenuRequest(event, `${basename(entry.path)} actions`, entryMenuItems(entry), (id) => {
+			void runEntryAction(entry, id);
+		});
+	}
+
 	async function runSearch(): Promise<void> {
 		submittedQuery = query.trim();
 		searchError = '';
@@ -460,7 +533,14 @@
 							class:workspace-files__tree-row--selected={selectedPath === entry.path}
 							style:--tree-depth={entry.depth - 1}
 							onfocus={() => (activePath = entry.path)}
-							onkeydown={(event) => handleTreeKeydown(event, entry)}
+							onkeydown={(event) => {
+								if (isContextMenuKey(event)) openEntryMenu(event, entry);
+								else handleTreeKeydown(event, entry);
+							}}
+							oncontextmenu={(event) => {
+								activePath = entry.path;
+								openEntryMenu(event, entry);
+							}}
 							onclick={() => selectEntry(entry)}>
 							<span class="workspace-files__disclosure">
 								{#if entry.kind === 'directory'}
@@ -479,6 +559,11 @@
 						{/if}
 					{/each}
 				</div>
+			{/if}
+			{#if treeActionError}
+				<p class="workspace-files__branch-state workspace-files__branch-state--error" role="alert">
+					{treeActionError}
+				</p>
 			{/if}
 		</section>
 	{/snippet}
@@ -523,6 +608,13 @@
 			{/if}
 		</section>
 	{/snippet}
+
+	<!-- The menu renders in the main surface, which stays visible when the rails collapse. -->
+	{#if contextMenu}
+		{#key contextMenu}
+			<ContextMenu request={contextMenu} onClose={() => (contextMenu = undefined)} />
+		{/key}
+	{/if}
 
 	<section class="workspace-files__surface" aria-labelledby="workspace-files-title">
 		<header>

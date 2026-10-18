@@ -24,6 +24,15 @@ dialog. The plugin is MIT or Apache-2.0 licensed and maintained in the Tauri
 plugins workspace. Later 2.8 releases require Tauri 2.12. Only the Rust shell
 calls it, so the webview gets no dialog permissions.
 
+## Desktop opener dependency selection
+
+Use `tauri-plugin-opener` 2.5.5 and the matching `@tauri-apps/plugin-opener`
+package to show a workspace path in the system file manager. The plugin is MIT
+or Apache-2.0 licensed and maintained in the Tauri plugins workspace. Releases
+from 2.6 require Tauri 2.12. The main window may only reveal paths. It gets no
+permission to open a path or URL with another application, because the webview
+renders agent-generated content and an opened file could be an executable.
+
 ## Development settings
 
 The browser development server loads the repository's `.env` with `dotenvy`

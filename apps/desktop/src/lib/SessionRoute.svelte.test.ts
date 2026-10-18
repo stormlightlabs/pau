@@ -32,6 +32,7 @@ const idleSession: AgentSession = {
 	exit_code: null,
 	native_session_id: null,
 	thinking_level: null,
+	name: null,
 	capabilities: {
 		prompt: true,
 		follow_up: true,
@@ -937,4 +938,111 @@ test('opens a folder from the native picker when the desktop host supplies one',
 
 	expect(pickFolder).toHaveBeenCalledOnce();
 	await expect.element(page.getByRole('heading', { name: 'Pau is open' })).toBeVisible();
+});
+
+const at = (time: string) => Date.parse(time);
+
+/** Opens the context menu of the session's row in the rail. */
+async function openSessionMenu(title: string | RegExp): Promise<void> {
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	const row = page.getByRole('button', { name: title });
+	await expect.element(row).toBeVisible();
+	(row.element() as HTMLElement).focus();
+	await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+}
+
+test('renames a session in the rail and restores the name when Pi rejects it', async () => {
+	let accept = true;
+	const rename = vi.fn(() =>
+		accept ? new Response(null, { status: 204 }) : json({ code: 'control_rejected', message: 'name rejected' }, 422)
+	);
+	const { props, sockets } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'PUT /api/sessions/session-1/name': rename
+	});
+	await render(SessionRoute, props);
+	sockets[0]?.open();
+
+	await openSessionMenu(/New Pi session/);
+	await userEvent.click(page.getByRole('menuitem', { name: 'Rename…' }));
+	await userEvent.fill(page.getByRole('textbox', { name: 'Session name' }), 'Release prep');
+	await userEvent.keyboard('{Enter}');
+
+	expect(rename).toHaveBeenCalledWith(expect.objectContaining({ body: '{"name":"Release prep"}' }));
+	await expect.element(page.getByRole('button', { name: /Release prep/ })).toBeVisible();
+
+	accept = false;
+	(page.getByRole('button', { name: /Release prep/ }).element() as HTMLElement).focus();
+	await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+	await userEvent.click(page.getByRole('menuitem', { name: 'Rename…' }));
+	await userEvent.fill(page.getByRole('textbox', { name: 'Session name' }), 'Bad name');
+	await userEvent.keyboard('{Enter}');
+
+	await expect.element(page.getByRole('alert')).toBeVisible();
+	await expect.element(page.getByRole('button', { name: /Release prep/ })).toBeVisible();
+});
+
+test('shows the name Pi stored for a session after a reload', async () => {
+	const { props } = setup({ 'GET /api/sessions': () => json([{ ...idleSession, name: 'Release prep' }]) });
+	await render(SessionRoute, props);
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+
+	await expect.element(page.getByRole('button', { name: /Release prep/ })).toBeVisible();
+});
+
+test('clones a session from the rail', async () => {
+	const clone = vi.fn(() => json({ native_session_id: 'cloned' }));
+	const { props, sockets } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'POST /api/sessions/session-1/clone': clone
+	});
+	await render(SessionRoute, props);
+	sockets[0]?.open();
+
+	await openSessionMenu(/New Pi session/);
+	await userEvent.click(page.getByRole('menuitem', { name: 'Clone' }));
+
+	await expect.poll(() => clone.mock.calls.length).toBe(1);
+});
+
+test('branches from a user message in the transcript', async () => {
+	const branch = vi.fn(() => json({ text: 'Add a test.', cancelled: false }));
+	const { props, sockets } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/sessions/session-1/messages': () =>
+			json({
+				sequence: 0,
+				truncated: false,
+				messages: [
+					{ role: 'user', content: 'Fix the gutter', timestamp: at('2026-04-01T12:00:01Z') },
+					{
+						role: 'assistant',
+						content: [{ type: 'text', text: 'Gutter fixed.' }],
+						timestamp: at('2026-04-01T12:00:02Z')
+					},
+					{ role: 'user', content: 'Add a test.', timestamp: at('2026-04-01T12:00:03Z') }
+				]
+			}),
+		'GET /api/sessions/session-1/tree': () =>
+			json({
+				entries: sessionTree.entries
+					.slice(0, 3)
+					.map((entry, index) => ({ ...entry, timestamp: `2026-04-01T12:00:0${index + 1}.200Z` })),
+				leaf_id: 'u2',
+				truncated: false
+			}),
+		'POST /api/sessions/session-1/branch': branch
+	});
+	await render(SessionRoute, props);
+	sockets[0]?.open();
+	const message = page.getByRole('article', { name: 'user message' }).filter({ hasText: 'Add a test.' });
+	await expect.element(message).toBeVisible();
+
+	(message.element() as HTMLElement).focus();
+	await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+	await userEvent.click(page.getByRole('menuitem', { name: 'Branch from here' }));
+
+	await expect.poll(() => branch.mock.calls.length).toBe(1);
+	expect(branch).toHaveBeenCalledWith(expect.objectContaining({ body: '{"entry_id":"u2"}' }));
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toHaveValue('Add a test.');
 });

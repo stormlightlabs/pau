@@ -48,6 +48,10 @@ the tree and content search. Search results show the file, line number, and
 matching line. Long paths remain available as a tooltip when the rail truncates
 them.
 
+Right-click a file or folder in the tree, or focus it and press `Shift+F10`,
+to copy its full or workspace-relative path or show it in the file manager.
+Files can also open in Pau's editor.
+
 For a Git worktree, the file rail shows the current branch and each staged,
 modified, deleted, renamed, untracked, or conflicted path. A detached HEAD shows
 the abbreviated commit instead of a branch. Pau labels directories outside a

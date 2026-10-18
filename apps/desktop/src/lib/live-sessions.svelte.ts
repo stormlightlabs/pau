@@ -21,6 +21,7 @@ import {
 	PauApiError,
 	branchSession,
 	cancelSessionRetry,
+	cloneSession,
 	compactSession,
 	clearSessionQueue,
 	getSessionExtensionUi,
@@ -39,6 +40,7 @@ import {
 	openWorkspace,
 	promptSession,
 	queueSessionMessage,
+	renameSession,
 	respondToExtensionUi,
 	retrySession,
 	selectSessionModel,
@@ -254,6 +256,8 @@ export class LiveSessions {
 	/** Estimated context size after each manual compaction, by session and first kept entry. Compaction events omit it. */
 	#compactionEstimates = $state<Record<string, Record<string, number>>>({});
 	#usages = $state<Record<string, SessionUsage>>({});
+	/** Names sent to Pi that it has not confirmed yet, by session. The rail shows them meanwhile. */
+	#pendingNames = $state<Record<string, string>>({});
 	/** The session the operator is looking at. Changes to it never raise a marker. */
 	#viewed = $state<string>();
 	/** Sessions that waited, failed, or finished a turn out of view and have not been opened since. */
@@ -547,7 +551,7 @@ export class LiveSessions {
 		return {
 			id: session.id,
 			workspaceId: session.workspace_id,
-			title: sessionTitle(transcript),
+			title: this.#pendingNames[session.id] ?? session.name ?? sessionTitle(transcript),
 			agent: 'Pi',
 			status: session.status,
 			error: failureMessage(session),
@@ -566,7 +570,9 @@ export class LiveSessions {
 				thinkingLevel: session.capabilities.thinking_level,
 				usage: session.capabilities.usage,
 				commandDiscovery: session.capabilities.command_discovery,
-				compaction: session.capabilities.compaction
+				compaction: session.capabilities.compaction,
+				rename: session.capabilities.rename,
+				cloneSession: session.capabilities.clone_session
 			},
 			thinkingLevel: this.#pendingThinkingLevels[session.id] ?? session.thinking_level ?? undefined,
 			transcript: transcript.entries.map((entry) => {
@@ -603,7 +609,11 @@ export class LiveSessions {
 		const sessions = Object.values(this.#sessions).sort((left, right) =>
 			left.started_at.localeCompare(right.started_at)
 		);
-		const known = this.#workspaces.map((workspace) => ({ id: workspace.id, name: workspaceName(workspace) }));
+		const known = this.#workspaces.map((workspace) => ({
+			id: workspace.id,
+			name: workspaceName(workspace),
+			path: workspace.path
+		}));
 		const unknown = sessions
 			.map((session) => session.workspace_id)
 			.filter((id, index, ids) => ids.indexOf(id) === index)
@@ -819,6 +829,47 @@ export class LiveSessions {
 		}
 		if (!result.cancelled) await this.#readHistory(sessionId);
 		return { text: result.text ?? undefined, cancelled: result.cancelled };
+	}
+
+	/**
+	 * Branches from a user message in the loaded transcript. The transcript
+	 * keeps no Pi entry IDs, so this reads the session tree and picks the user
+	 * entry that the transcript entry shows.
+	 */
+	async branchFromMessage(sessionId: string, transcriptEntryId: string): Promise<SessionBranchOutcome> {
+		const snapshot = await this.tree(sessionId);
+		const entries = (this.#transcripts[sessionId] ?? emptyPiTranscript).entries;
+		const entry = snapshot.entries.find(
+			(candidate) =>
+				candidate.role === 'user' && findTranscriptEntry(entries, 'user', candidate.timestamp) === transcriptEntryId
+		);
+		if (!entry) {
+			throw new Error('Pau could not find this message in the saved session. Branch from the session tree instead.');
+		}
+		return this.branch(sessionId, entry.id);
+	}
+
+	/**
+	 * Renames a session. The rail shows the new name at once and returns to
+	 * the previous one when Pi rejects it. Pi stores the name in the session
+	 * file, and the session record reports it after a reload.
+	 */
+	async rename(sessionId: string, name: string): Promise<void> {
+		this.#pendingNames[sessionId] = name;
+		try {
+			await this.#control(() => renameSession(sessionId, name, this.#fetcher));
+			const session = this.#sessions[sessionId];
+			if (session) this.#sessions[sessionId] = { ...session, name };
+		} finally {
+			delete this.#pendingNames[sessionId];
+		}
+	}
+
+	/** Clones a session into a new saved session, which the live session then continues. */
+	async clone(sessionId: string): Promise<void> {
+		await this.#control(async () => {
+			await cloneSession(sessionId, this.#fetcher);
+		});
 	}
 
 	/** Reads a session's earlier prompts for composer recall, newest first. */

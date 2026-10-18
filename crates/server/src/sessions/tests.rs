@@ -38,7 +38,7 @@ while IFS= read -r command; do
     id=$(printf '%s' "$command" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
     case "$command" in
         *'"type":"get_state"'*)
-            printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"%s","sessionFile":"%s/session.jsonl","thinkingLevel":"%s","model":{"provider":"fixture","id":"%s"}}}\n' "$id" "$native" "$PWD" "$level" "$current"
+            printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"%s","sessionFile":"%s/session.jsonl","thinkingLevel":"%s","sessionName":"%s","model":{"provider":"fixture","id":"%s"}}}\n' "$id" "$native" "$PWD" "$level" "$name" "$current"
             ;;
         *'"message":"exit"'*) exit 3 ;;
         *'"message":"dialogs"'*)
@@ -101,6 +101,7 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"set_session_name","success":false,"error":"Session name cannot be empty"}\n' "$id"
             ;;
         *'"type":"set_session_name"'*)
+            name=$(printf '%s' "$command" | sed -n 's/.*"name":"\([^"]*\)".*/\1/p')
             printf '{"id":"%s","type":"response","command":"set_session_name","success":true}\n' "$id"
             ;;
         *'"type":"clone"'*)
@@ -647,6 +648,8 @@ async fn renames_and_clones_a_session() {
         .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
     next_event(&mut stream, session_changed("idle")).await;
+    let (_, named) = fixture.call("GET", &base, None).await;
+    assert_eq!(named["name"], "release prep");
 
     let (status, rejected) = fixture
         .call("PUT", &format!("{base}/name"), Some(json!({"name": ""})))
@@ -672,6 +675,7 @@ async fn renames_and_clones_a_session() {
             "get_state",
             "get_state",
             "set_session_name",
+            "get_state",
             "set_session_name",
             "clone",
             "get_state",

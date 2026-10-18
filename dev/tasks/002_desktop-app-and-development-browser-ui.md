@@ -1012,8 +1012,8 @@ Replace the 20px step with 18px, add weight tokens for 400, 500, and 600, and
 fold ad hoc 650 and 700 weights into 600. Allow 11px only for uppercase,
 letter-spaced section labels, and record that exception where the 12px floor
 is stated. Move body text that sits at 12px today to 14px, and leave true
-metadata at 12–13px. Update `dev/design/system.md`, the prototype styles and
-pages, and the `pau.fig` text styles and variables together.
+metadata at 12–13px. Update `dev/design/system.md` and the prototype styles
+and pages together. 2.236 carries the change into `pau.fig`.
 
 Verification:
 
@@ -1022,6 +1022,46 @@ Verification:
 - Confirm no product text other than section labels renders below 12px.
 - Review the session view, inspector, Diagnostics, and an overlay in each
   shipped theme at 1440 and 900px widths.
+
+### 2.236 Design file cleanup
+
+Status: planned
+Blocked by: 2.235
+
+Bring `pau.fig` back in line with `dev/design` and the prototype pages. Until
+this unit is complete, the prototype HTML pages are the current visual
+reference wherever the two disagree.
+
+- Fix overlapping and clipped text in every frame.
+- Delete the components left from the old prototype site chrome, including
+  the workbench sidebar, page header, and hub card, and rebuild the `index`
+  page without them.
+- Rebuild screens from the shared components and bind colors, type, spacing,
+  and radii to the token variables.
+- Apply the Overpass fonts and the type scale from 2.235.
+- Add the pending and "Not sent" prompt states to the session frames.
+- Update `dev/prototype/README.md` to match the file.
+
+Verification:
+
+- Run the OpenPencil lint and overlap analysis on every page and fix each
+  finding.
+- Compare each frame's structure and copy against its HTML page.
+
+### 2.237 Storybook polish review
+
+Status: planned
+Blocked by: 2.235
+
+Review every Storybook story against its prototype page and `dev/design`, then
+fix the mismatches in the components: spacing, alignment, type, color tokens,
+borders, radii, icon sizes, truncation, and empty and loading states.
+
+Verification:
+
+- List each story reviewed with its prototype page and the fixes made.
+- Run the Storybook accessibility checks and component tests for each changed
+  component.
 
 ### 2.219 Overlay focus restoration
 
@@ -1316,7 +1356,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.184, 2.185, 2.197, 2.219, 2.235
+Blocked by: 2.156, 2.184, 2.185, 2.197, 2.219, 2.235, 2.237
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

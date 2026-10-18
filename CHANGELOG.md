@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Closing a dialog, menu, or side panel returns focus to the control that opened
+  it, or to the prompt when that control is gone.
 - Right-click a session, workspace, file, or message, or press Shift+F10, to
   rename, clone, stop, branch, copy paths or text, open a terminal, or reveal
   items in Finder. Session names now persist across reloads.

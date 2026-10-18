@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { createFocusReturn } from './focus-return';
 	import type { ModelOption } from './types/session';
 
 	type Props = {
@@ -22,6 +23,8 @@
 	let loadError = $state<string>();
 	let selectError = $state<string>();
 	let open = $state(false);
+	let trigger = $state<HTMLButtonElement>();
+	const focusReturn = createFocusReturn();
 	let pendingId = $state<string>();
 
 	const current = $derived(models?.find((model) => model.current));
@@ -51,7 +54,7 @@
 		selectError = undefined;
 		try {
 			await onSelect(model);
-			open = false;
+			close();
 			await fetchModels();
 		} catch (cause) {
 			selectError = cause instanceof Error ? cause.message : 'The model could not be changed. Try again.';
@@ -66,12 +69,36 @@
 	});
 
 	$effect(() => {
-		if (disabled) open = false;
+		if (disabled) close();
 	});
+
+	function toggle(): void {
+		if (open) close();
+		else {
+			focusReturn.capture(trigger);
+			open = true;
+		}
+	}
+
+	/** Closes the list and returns focus to the trigger, or the composer when the trigger is disabled. */
+	function close(): void {
+		if (!open) return;
+		open = false;
+		focusReturn.restore();
+	}
+
+	function handleKeydown(event: KeyboardEvent): void {
+		if (!open || event.key !== 'Escape') return;
+		event.stopPropagation();
+		close();
+	}
 </script>
 
-<div class="model-picker">
+<!-- Escape bubbles from the trigger and the list. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="model-picker" onkeydown={handleKeydown}>
 	<button
+		bind:this={trigger}
 		type="button"
 		class="model-picker__trigger"
 		aria-label={`Model: ${label}`}
@@ -80,7 +107,7 @@
 		aria-describedby={explanation ? 'model-picker-note' : undefined}
 		title={explanation}
 		{disabled}
-		onclick={() => (open = !open)}>
+		onclick={toggle}>
 		{pendingId ? 'Switching…' : label}
 	</button>
 	{#if explanation}<span id="model-picker-note" class="model-picker__hint">{explanation}</span>{/if}

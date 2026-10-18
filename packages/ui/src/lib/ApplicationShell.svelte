@@ -4,6 +4,7 @@
 	import type { IconKind } from '../icons';
 	import '../styles/tokens.css';
 	import { themeCssProperties, type ThemeName, type UiFontName } from '../theme';
+	import { createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
 	import { useKeyActions } from './keymap.svelte';
 	import PaneResizer from './PaneResizer.svelte';
@@ -79,18 +80,55 @@
 	/** Narrow windows show the contextual rail as an overlay instead of a column. */
 	const NARROW_QUERY = '(max-width: 48rem)';
 
+	const contextFocus = createFocusReturn();
+	const inspectorFocus = createFocusReturn();
+
+	/** Opens or closes the overlay rail. Closing returns focus to whatever opened it. */
+	function toggleContextOverlay(): void {
+		contextHidden = false;
+		if (contextOpen) closeContext();
+		else {
+			contextFocus.capture();
+			contextOpen = true;
+		}
+	}
+
+	function closeContext(): void {
+		contextOpen = false;
+		contextFocus.restore();
+	}
+
+	function toggleInspector(): void {
+		if (inspectorVisible) closeInspector();
+		else {
+			inspectorFocus.capture();
+			inspectorVisible = true;
+		}
+	}
+
+	function closeInspector(): void {
+		inspectorVisible = false;
+		inspectorFocus.restore();
+	}
+
+	/** Closes an open overlay rail on Escape. */
+	function closeOnEscape(event: KeyboardEvent, close: () => void): void {
+		if (event.key !== 'Escape' || event.defaultPrevented) return;
+		event.stopPropagation();
+		close();
+	}
+
 	useKeyActions({
 		'panel.context': () => {
 			if (!hasContext) return;
 			if (matchMedia(NARROW_QUERY).matches) {
-				contextHidden = false;
-				contextOpen = !contextOpen;
+				toggleContextOverlay();
 			} else {
 				contextHidden = !contextHidden;
 			}
 		},
 		'panel.inspector': () => {
-			if (inspector) inspectorVisible = !inspectorVisible;
+			if (inspector) toggleInspector();
 		}
 	});
 	/** Narrowest a resizable pane may be. */
@@ -239,15 +277,18 @@
 	</nav>
 
 	{#if hasContext && !contextHidden}
+		<!-- Escape bubbles from the controls inside the rail -->
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<aside
 			id="shell-context-rail"
 			class:open={contextOpen}
 			class="app-shell__context-rail"
 			aria-label={contextLabel}
+			onkeydown={(event) => contextOpen && closeOnEscape(event, closeContext)}
 			bind:offsetWidth={contextWidth}>
 			<div class="app-shell__rail-heading">
 				<span>{contextLabel}</span>
-				<button type="button" aria-label="Close navigation" onclick={() => (contextOpen = false)}>
+				<button type="button" aria-label="Close navigation" onclick={closeContext}>
 					<Icon name="close" size={18} />
 				</button>
 			</div>
@@ -291,10 +332,7 @@
 					class="app-shell__icon-button app-shell__context-toggle"
 					aria-label="Open navigation"
 					aria-expanded={contextOpen}
-					onclick={() => {
-						contextHidden = false;
-						contextOpen = !contextOpen;
-					}}>
+					onclick={toggleContextOverlay}>
 					<Icon name="sidebar" size={18} />
 				</button>
 			{/if}
@@ -309,7 +347,7 @@
 					class="app-shell__icon-button"
 					aria-label={inspectorVisible ? 'Hide inspector' : 'Show inspector'}
 					aria-expanded={inspectorVisible}
-					onclick={() => (inspectorVisible = !inspectorVisible)}>
+					onclick={toggleInspector}>
 					<Icon name="panel" size={18} />
 				</button>
 			{/if}
@@ -321,15 +359,18 @@
 	</main>
 
 	{#if inspector && inspectorVisible}
-		<button
-			type="button"
-			class="app-shell__backdrop"
-			aria-label="Close inspector"
-			onclick={() => (inspectorVisible = false)}></button>
-		<aside id="shell-inspector" class="app-shell__inspector" aria-label="Inspector" bind:offsetWidth={inspectorWidth}>
+		<button type="button" class="app-shell__backdrop" aria-label="Close inspector" onclick={closeInspector}></button>
+		<!-- Escape bubbles from the controls inside the rail -->
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+		<aside
+			id="shell-inspector"
+			class="app-shell__inspector"
+			aria-label="Inspector"
+			onkeydown={(event) => !inspectorDocked && closeOnEscape(event, closeInspector)}
+			bind:offsetWidth={inspectorWidth}>
 			<div class="app-shell__rail-heading">
 				<span>Inspector</span>
-				<button type="button" aria-label="Close inspector" onclick={() => (inspectorVisible = false)}>
+				<button type="button" aria-label="Close inspector" onclick={closeInspector}>
 					<Icon name="close" size={18} />
 				</button>
 			</div>

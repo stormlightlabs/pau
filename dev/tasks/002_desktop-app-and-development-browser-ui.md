@@ -1063,19 +1063,6 @@ Verification:
 - Run the Storybook accessibility checks and component tests for each changed
   component.
 
-### 2.219 Overlay focus restoration
-
-Status: planned
-Blocked by: none
-
-Return focus to the invoking control when a dialog, popover, or overlay rail
-closes, or to the composer when the invoker is gone.
-
-Verification:
-
-- Component-test closing each overlay with Escape, with its close control, and
-  after its invoker has unmounted.
-
 ### 2.221 Busy indicator timing
 
 Status: planned
@@ -1148,7 +1135,7 @@ Verification:
 ### 2.226 Dialog presentation
 
 Status: planned
-Blocked by: 2.219
+Blocked by: none
 
 Fade and scale extension dialogs in and out, keeping each mounted until its
 exit finishes.
@@ -1356,7 +1343,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.184, 2.185, 2.197, 2.219, 2.235, 2.237
+Blocked by: 2.156, 2.184, 2.185, 2.197, 2.235, 2.237
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

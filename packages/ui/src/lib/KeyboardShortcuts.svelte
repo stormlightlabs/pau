@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../styles/tokens.css';
 	import { themeCssProperties, type ThemeName, type UiFontName } from '../theme';
+	import { createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
 	import { KEY_GROUPS, formatChord, type KeyPlatform, type ResolvedKeyAction } from './keymap.svelte';
 
@@ -16,6 +17,7 @@
 
 	let { open = $bindable(false), actions, platform, theme = 'eldritch', uiFont = 'ibm-plex-sans' }: Props = $props();
 	let dialog = $state<HTMLDialogElement>();
+	const focusReturn = createFocusReturn();
 
 	const style = $derived(
 		Object.entries(themeCssProperties(theme, uiFont))
@@ -32,8 +34,10 @@
 
 	$effect(() => {
 		if (!dialog) return;
-		if (open && !dialog.open) dialog.showModal();
-		else if (!open && dialog.open) dialog.close();
+		if (open && !dialog.open) {
+			focusReturn.capture();
+			dialog.showModal();
+		} else if (!open && dialog.open) dialog.close();
 	});
 
 	function chords(action: ResolvedKeyAction): string[] {
@@ -48,7 +52,10 @@
 	aria-labelledby="keyboard-shortcuts-title"
 	data-theme={theme}
 	{style}
-	onclose={() => (open = false)}>
+	onclose={() => {
+		open = false;
+		focusReturn.restore();
+	}}>
 	<header>
 		<h2 id="keyboard-shortcuts-title">Keyboard shortcuts</h2>
 		<button type="button" aria-label="Close keyboard shortcuts" onclick={() => (open = false)}>

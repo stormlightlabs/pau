@@ -3,6 +3,7 @@
 	import { onMount, tick } from 'svelte';
 
 	import type { ContextMenuRequest } from './context-menu';
+	import { returnFocus } from './focus-return';
 
 	type Props = {
 		request: ContextMenuRequest;
@@ -58,7 +59,7 @@
 	function close(restoreFocus = true): void {
 		if (closed) return;
 		closed = true;
-		if (restoreFocus && request.invoker.isConnected) request.invoker.focus();
+		if (restoreFocus) returnFocus(request.invoker);
 		onClose();
 	}
 

@@ -2,6 +2,7 @@
 	import '../styles/tokens.css';
 	import type { Snippet } from 'svelte';
 
+	import { createFocusReturn } from './focus-return';
 	import type { ExtensionUiResponse, ExtensionUiState } from './types/session';
 
 	type Props = {
@@ -17,6 +18,7 @@
 	let responseError = $state<string>();
 	let expiredDialogId = $state<string>();
 	let dialogSurface = $state<HTMLDialogElement>();
+	const focusReturn = createFocusReturn();
 
 	const dialog = $derived(extensionState.dialog?.id === expiredDialogId ? undefined : extensionState.dialog);
 	const aboveWidgets = $derived(extensionState.widgets.filter((widget) => widget.placement === 'above-editor'));
@@ -33,12 +35,16 @@
 	});
 
 	function openDialog(): void {
-		if (dialogSurface && !dialogSurface.open) dialogSurface.showModal();
+		if (dialogSurface && !dialogSurface.open) {
+			focusReturn.capture();
+			dialogSurface.showModal();
+		}
 		dialogSurface?.focus();
 	}
 
 	function closeDialog(): void {
 		dialogSurface?.close();
+		focusReturn.restore();
 	}
 
 	$effect(() => {

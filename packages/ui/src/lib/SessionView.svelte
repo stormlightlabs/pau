@@ -30,6 +30,7 @@
 	import { insertMention, mentionAt } from './file-mention';
 	import MentionCompletion from './MentionCompletion.svelte';
 	import { settlePendingPrompts, userMessageIds, type PendingPrompt } from './pending-prompts';
+	import { COMPOSER_ATTRIBUTE, createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
 	import { useKeyActions } from './keymap.svelte';
 	import Markdown from './Markdown.svelte';
@@ -395,6 +396,8 @@
 	let composer = $state<HTMLTextAreaElement>();
 	let transcriptSearch = $state<TranscriptSearch>();
 	let searchOpen = $state(false);
+	/** Where the Cmd+F shortcut was pressed, so closing the find bar returns there. */
+	const searchFocus = createFocusReturn();
 	/** The entry the last search selection brought into view. */
 	let foundEntryKey = $state<string>();
 	let foundTimer: ReturnType<typeof setTimeout> | undefined;
@@ -639,12 +642,15 @@
 		if (!onSearchSession || !activeSession || !command || !plainF) return;
 		event.preventDefault();
 		if (searchOpen) transcriptSearch?.focus();
-		else searchOpen = true;
+		else {
+			searchFocus.capture();
+			searchOpen = true;
+		}
 	}
 
 	function closeSearch(): void {
 		searchOpen = false;
-		composer?.focus();
+		searchFocus.restore();
 	}
 
 	/**
@@ -2057,6 +2063,7 @@
 							<Icon name="chevronRight" class="session-composer__prompt" />
 							<textarea
 								bind:this={composer}
+								{...{ [COMPOSER_ATTRIBUTE]: '' }}
 								bind:value={draft}
 								onkeydown={handleComposerKeydown}
 								onpaste={handleComposerPaste}

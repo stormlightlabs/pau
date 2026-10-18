@@ -21,6 +21,10 @@ fails every time. Growing the transcript from 30 to 40 entries moves
 event for that move turns following off. If this happens with live output,
 follow mode drops while a reply streams.
 
+Make the `SessionView.stories.ts` story "Model Without Image Input" reliable. It
+fails occasionally with a `TestingLibraryElementError` when the full
+`packages/ui` suite runs alongside other test runs, and passes alone.
+
 Run the `packages/sandbox` boundary and Pi fixture runs on macOS before Pau
 offers a sandbox profile there. Run the boundary fixtures on an Ubuntu 24.04
 host with AppArmor's unprivileged user-namespace restriction enabled to confirm

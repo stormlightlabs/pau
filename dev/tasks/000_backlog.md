@@ -11,6 +11,16 @@ Make the `pau-pi` test `escalates_shutdown_from_interrupt_to_terminate`
 reliable under build load. It passes alone but fails occasionally while other
 Cargo builds run.
 
+Find what moves the transcript's scroll position during a re-render, then make
+`SessionViewFollow.svelte.test.ts` reliable. The test "stops following after
+the user scrolls up and resumes at the bottom" fails occasionally in the full
+`packages/ui` suite. When `settled()` also waits for a task, so the test's
+updates arrive as app updates do, "stays at the bottom while output streams"
+fails every time. Growing the transcript from 30 to 40 entries moves
+`scrollTop` from the bottom (5098) to 4913 with no removed nodes, and the scroll
+event for that move turns following off. If this happens with live output,
+follow mode drops while a reply streams.
+
 Run the `packages/sandbox` boundary and Pi fixture runs on macOS before Pau
 offers a sandbox profile there. Run the boundary fixtures on an Ubuntu 24.04
 host with AppArmor's unprivileged user-namespace restriction enabled to confirm

@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Changed files in the file rail show the file name first, with its folder muted
+  and shortened from the start.
 - The model, thinking level, and context usage controls sit in the composer
   footer, and the session header shows only the title, status, and session
   actions.

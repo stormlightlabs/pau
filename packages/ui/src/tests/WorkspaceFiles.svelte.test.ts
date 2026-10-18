@@ -85,6 +85,49 @@ test('shows branch and changed-file states with text labels', async () => {
 		.toBeInTheDocument();
 });
 
+test('keeps the file name visible when a long changed path truncates', async () => {
+	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source() });
+	await openNavigation();
+
+	const row = page.getByRole('list', { name: 'Changed files' }).getByRole('button').first();
+	await expect.element(row).toBeInTheDocument();
+	const path = row.element().querySelector<HTMLElement>('.workspace-files__git-path')!;
+	const dir = path.querySelector<HTMLElement>('.workspace-files__git-dir')!;
+	const file = path.querySelector<HTMLElement>('.workspace-files__git-file')!;
+	expect(file.textContent).toBe('WorkspaceFiles.svelte');
+	expect(dir.textContent).toBe('packages/ui/src/lib/');
+
+	// A narrow row clips the directory from its start and leaves the file name whole.
+	row.element().style.width = '20rem';
+	expect(dir.scrollWidth).toBeGreaterThan(dir.clientWidth);
+	expect(file.scrollWidth).toBeLessThanOrEqual(file.clientWidth);
+	expect(getComputedStyle(dir).direction).toBe('rtl');
+	expect(getComputedStyle(dir).color).not.toBe(getComputedStyle(file).color);
+});
+
+test('sets changed-file rows in the same weight as tree rows', async () => {
+	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source() });
+	await openNavigation();
+
+	const changeRow = page.getByRole('list', { name: 'Changed files' }).getByRole('button').first();
+	const treeItem = page.getByRole('treeitem').first();
+	await expect.element(changeRow).toBeInTheDocument();
+	await expect.element(treeItem).toBeInTheDocument();
+	const change = changeRow.element();
+	const treeRow = treeItem.element();
+	expect(getComputedStyle(change.querySelector('.workspace-files__git-file')!).fontWeight).toBe(
+		getComputedStyle(treeRow.querySelector('.workspace-files__name')!).fontWeight
+	);
+});
+
+test('labels file search as a section label', async () => {
+	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source() });
+	await openNavigation();
+
+	const label = page.getByText('Search files').element();
+	expect(getComputedStyle(label).textTransform).toBe('uppercase');
+});
+
 test('navigates changed files with pointer and keyboard', async () => {
 	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source() });
 	await userEvent.click(page.getByRole('button', { name: 'Show inspector' }));

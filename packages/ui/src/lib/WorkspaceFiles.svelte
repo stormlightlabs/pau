@@ -404,6 +404,11 @@
 		return path.split('/').at(-1) ?? path;
 	}
 
+	/** Directory part of a path including its trailing slash, or an empty string. */
+	function dirname(path: string): string {
+		return path.slice(0, path.length - basename(path).length);
+	}
+
 	function gitStateLabel(state: WorkspaceGitFileState): string {
 		return state === 'type_changed' ? 'Type changed' : `${state.charAt(0).toUpperCase()}${state.slice(1)}`;
 	}
@@ -473,7 +478,12 @@
 								<li>
 									<button type="button" title={file.path} onclick={() => void openDiff(file.path)}>
 										<Icon name={gitFileIcon(file)} size={14} />
-										<span>{file.path}</span>
+										<span class="workspace-files__git-path">
+											{#if dirname(file.path)}<span class="workspace-files__git-dir"
+													><bdo dir="ltr">{dirname(file.path)}</bdo></span
+												>{/if}
+											<span class="workspace-files__git-file">{basename(file.path)}</span>
+										</span>
 										<small><MetaText text={gitFileLabel(file)} /></small>
 									</button>
 								</li>
@@ -727,13 +737,38 @@
 		min-height: var(--pau-size-row-sm);
 	}
 
-	.workspace-files__git-branch strong,
-	.workspace-files__git li span {
+	.workspace-files__git-branch strong {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-family: var(--pau-font-code);
 		font-weight: var(--pau-weight-medium);
+	}
+
+	/* Same regular weight as tree rows. The directory shrinks first and is
+	   clipped at its start (rtl) so the file name stays visible. */
+	.workspace-files__git-path {
+		display: flex;
+		min-width: 0;
+		font-family: var(--pau-font-code);
+	}
+
+	.workspace-files__git-dir {
+		flex: 0 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		color: var(--shell-muted);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		direction: rtl;
+	}
+
+	.workspace-files__git-file {
+		flex: 0 0 auto;
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.workspace-files__git-branch small,
@@ -862,6 +897,10 @@
 		border-bottom: 1px solid var(--shell-border);
 	}
 
+	.workspace-files__search label {
+		text-transform: uppercase;
+	}
+
 	.workspace-files__search label,
 	.workspace-files__visibility legend,
 	.workspace-files__tree-header {
@@ -935,8 +974,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
+		min-height: var(--pau-size-row-md);
+		padding: var(--pau-space-3) var(--pau-space-3) var(--pau-space-1);
 		text-transform: uppercase;
 	}
 

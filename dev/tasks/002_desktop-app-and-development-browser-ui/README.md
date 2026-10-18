@@ -27,7 +27,7 @@ deliverable, and blocker lists may name units in any area file.
 
 Status: planned
 Blocked by: 2.116, 2.156, 2.185, 2.235, 2.239, 2.240, 2.242, 2.249, 2.250,
-2.251, 2.252, 2.260, 2.262, 2.263, 2.268
+2.251, 2.252, 2.262, 2.263, 2.268
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

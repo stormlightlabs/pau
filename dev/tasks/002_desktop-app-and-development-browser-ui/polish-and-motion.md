@@ -330,23 +330,6 @@ Verification:
   the command block does not wrap.
 - Screenshot the MCP, Diagnostics, sandbox, and readiness fixtures.
 
-### 2.260 File rail status rows
-
-Status: planned
-Blocked by: none
-
-Changed-file rows truncate paths from the end ("packages/ui/src/l…"), which
-hides the file name, and set them in bold mono while tree rows use regular
-weight. "Search files" is mixed case between uppercase section labels, and the
-search, filter, and tree blocks use different vertical padding. Show the file
-name with the directory muted and truncated at its start, use regular weight,
-make "Search files" a section label, and pad the three blocks with `space/3`.
-
-Verification:
-
-- Component-test that a long changed path keeps its file name visible.
-- Screenshot the file tree fixture at 1440px and 900px.
-
 ### 2.261 Editor error actions
 
 Status: planned

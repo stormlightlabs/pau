@@ -12,6 +12,7 @@ export { default as McpConfigurationView } from './lib/McpConfigurationView.svel
 export { default as ModelPicker } from './lib/ModelPicker.svelte';
 export { default as ContextMeter } from './lib/ContextMeter.svelte';
 export { default as ThinkingLevelPicker } from './lib/ThinkingLevelPicker.svelte';
+export { default as MotionSettingControl } from './lib/MotionSettingControl.svelte';
 export { default as ProcessesView } from './lib/ProcessesView.svelte';
 export { default as SandboxSettingsView } from './lib/SandboxSettingsView.svelte';
 export { default as SessionResourceSummary } from './lib/SessionResourceSummary.svelte';
@@ -131,3 +132,4 @@ export { sandboxFixtures } from './fixtures/sandbox';
 export { sessionFixtures } from './fixtures/sessions';
 export { workspaceFileFixtures } from './fixtures/workspace-files';
 export { isReducedMotion, motion, motionOffset } from './motion';
+export type { MotionSetting } from './motion';

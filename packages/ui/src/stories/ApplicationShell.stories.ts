@@ -92,6 +92,40 @@ export const NarrowLayout: Story = {
 	}
 };
 
+/** Counts the running transform transitions on an element. */
+function transformTransitions(element: Element): number {
+	return element
+		.getAnimations()
+		.filter((animation) => animation instanceof CSSTransition && animation.transitionProperty === 'transform').length;
+}
+
+export const NarrowRailWithReducedMotion: Story = {
+	globals: { reducedMotion: 'on' },
+	parameters: { viewport: { defaultViewport: 'narrow' } },
+	play: async ({ canvasElement }) => {
+		await expect(document.documentElement.dataset.motion).toBe('reduce');
+		const rail = canvasElement.querySelector('#shell-context-rail')!;
+		// The decorator switches the attribute after first render; let that settle before opening.
+		await Promise.all(rail.getAnimations().map((animation) => animation.finished));
+		const closed = getComputedStyle(rail).transform;
+		await userEvent.click(within(canvasElement).getByRole('button', { name: 'Open navigation' }));
+		await expect(rail).toHaveClass('open');
+		await expect(getComputedStyle(rail).transform).toBe(closed);
+		await expect(transformTransitions(rail)).toBe(0);
+	}
+};
+
+export const NarrowRailWithFullMotion: Story = {
+	globals: { reducedMotion: 'off' },
+	parameters: { viewport: { defaultViewport: 'narrow' } },
+	play: async ({ canvasElement }) => {
+		await expect(document.documentElement.dataset.motion).toBe('full');
+		const rail = canvasElement.querySelector('#shell-context-rail')!;
+		await userEvent.click(within(canvasElement).getByRole('button', { name: 'Open navigation' }));
+		await waitFor(() => expect(transformTransitions(rail)).toBeGreaterThan(0));
+	}
+};
+
 const wide = { viewport: { defaultViewport: 'wide' } };
 
 export const ResizeByKeyboard: Story = {

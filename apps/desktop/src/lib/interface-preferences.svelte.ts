@@ -1,4 +1,4 @@
-import type { UiPreferences } from '@stormlightlabs/pau-protocol';
+import type { MotionPreference, UiPreferences } from '@stormlightlabs/pau-protocol';
 import type { ShellPaneWidths } from '@stormlightlabs/pau-ui';
 
 import { getUiPreferences, updateUiPreferences } from './api';
@@ -7,7 +7,11 @@ import { EventStreamClient, type EventSocketFactory } from './event-stream';
 /** Time after the last resize before the widths are saved. */
 const SAVE_DELAY_MS = 400;
 
-export type PanePreferencesOptions = {
+/** Local copy of the motion setting, read by the inline script in `app.html` before first paint. */
+export const MOTION_CACHE_KEY = 'pau.motion';
+
+export type InterfacePreferencesOptions = {
+	root?: HTMLElement;
 	browserOrigin?: string;
 	saveDelayMs?: number;
 	fetcher?: typeof fetch;
@@ -15,25 +19,34 @@ export type PanePreferencesOptions = {
 };
 
 /**
- * Keeps the resizable pane widths in step with the saved interface
- * preferences.
+ * Keeps the pane widths and the motion setting in step with the saved
+ * interface preferences.
  *
- * The shell reports each resize through {@link PanePreferences.resize}. The
+ * The shell reports each resize through {@link InterfacePreferences.resize}. The
  * widths apply at once and save once the operator stops resizing. A
  * `preferences_changed` event from another window reloads them, except while
  * a local change is waiting to save, so a stale echo never undoes a resize.
+ *
+ * The motion setting sets `data-motion` on the root element, which the UI
+ * tokens and transitions read. `system` removes the attribute so the OS
+ * reduced-motion query decides. Every save writes the whole document built
+ * from the latest loaded copy, so a motion change keeps the saved widths and
+ * a resize keeps the motion setting.
  */
-export class PanePreferences {
+export class InterfacePreferences {
 	#saved: UiPreferences | undefined;
 	#timer: ReturnType<typeof setTimeout> | undefined;
 	#saving: Promise<void> | undefined;
 	#stream: EventStreamClient | undefined;
-	readonly #options: PanePreferencesOptions;
+	readonly #options: InterfacePreferencesOptions;
+
+	/** The motion setting. Change it through {@link InterfacePreferences.setMotion}. */
+	motion = $state<MotionPreference>('system');
 
 	/** Widths to hand to the shell. `null` keeps a pane at its default width. */
 	widths = $state<ShellPaneWidths>({ contextRail: null, inspector: null });
 
-	constructor(options: PanePreferencesOptions = {}) {
+	constructor(options: InterfacePreferencesOptions = {}) {
 		this.#options = options;
 	}
 
@@ -52,11 +65,24 @@ export class PanePreferences {
 			const base = this.#saved ?? (await getUiPreferences(this.#options.fetcher));
 			const { contextRail, inspector } = this.widths;
 			this.#saved = await updateUiPreferences(
-				{ ...base, pane_widths: { context_rail: contextRail, inspector } },
+				{ ...base, motion: this.motion, pane_widths: { context_rail: contextRail, inspector } },
 				this.#options.fetcher
 			);
 		} catch {
 			// Nothing to roll back: the widths stay applied in this window.
+		}
+	}
+
+	/** Sets the root attribute and the local copy that the next launch reads before first paint. */
+	#applyMotion(motion: MotionPreference): void {
+		this.motion = motion;
+		const root = this.#options.root ?? document.documentElement;
+		if (motion === 'system') delete root.dataset.motion;
+		else root.dataset.motion = motion;
+		try {
+			localStorage.setItem(MOTION_CACHE_KEY, motion);
+		} catch {
+			// Without storage the first paint follows the OS until preferences load.
 		}
 	}
 
@@ -92,8 +118,15 @@ export class PanePreferences {
 			return;
 		}
 		this.#saved = preferences;
+		if (this.#saving === undefined) this.#applyMotion(preferences.motion);
 		if (this.#timer !== undefined || this.#saving !== undefined) return;
 		this.widths = { contextRail: preferences.pane_widths.context_rail, inspector: preferences.pane_widths.inspector };
+	}
+
+	/** Applies a motion setting the operator chose and saves it at once. */
+	setMotion(motion: MotionPreference): void {
+		this.#applyMotion(motion);
+		void this.#flush();
 	}
 
 	/** Applies widths the operator chose and schedules saving them. */
@@ -105,4 +138,4 @@ export class PanePreferences {
 }
 
 /** The pane widths shared by every route in this window. */
-export const panePreferences = new PanePreferences();
+export const interfacePreferences = new InterfacePreferences();

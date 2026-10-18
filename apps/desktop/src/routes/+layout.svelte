@@ -2,15 +2,15 @@
 	import { onMount, setContext } from 'svelte';
 
 	import { createDesktopNativeCapabilities, desktopNativeCapabilitiesContext } from '$lib/native-capabilities';
-	import { panePreferences } from '$lib/pane-preferences.svelte';
+	import { interfacePreferences } from '$lib/interface-preferences.svelte';
 
 	let { children } = $props();
 
 	setContext(desktopNativeCapabilitiesContext, createDesktopNativeCapabilities());
 
 	onMount(() => {
-		panePreferences.connect();
-		return () => panePreferences.stop();
+		interfacePreferences.connect();
+		return () => interfacePreferences.stop();
 	});
 </script>
 

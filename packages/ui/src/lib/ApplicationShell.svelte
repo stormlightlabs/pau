@@ -828,8 +828,9 @@
 				visibility var(--pau-duration-medium);
 		}
 
+		/* 0% matches the closed value's unit when travel is 0, so reduced motion starts no transform transition. */
 		.app-shell__context-rail.open {
-			transform: translateX(0);
+			transform: translateX(0%);
 			opacity: 1;
 			visibility: visible;
 		}

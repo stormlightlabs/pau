@@ -7,10 +7,10 @@ import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
-const browser = () => ({
+const browser = (reducedMotion?: 'reduce' | 'no-preference') => ({
 	enabled: true,
 	headless: true,
-	provider: playwright(),
+	provider: playwright(reducedMotion ? { contextOptions: { reducedMotion } } : undefined),
 	instances: [{ browser: 'chromium' as const }]
 });
 
@@ -24,10 +24,21 @@ export default defineConfig({
 				test: {
 					name: 'components',
 					include: ['src/**/*.svelte.test.ts'],
+					exclude: ['src/tests/motion-query.svelte.test.ts'],
 					setupFiles: ['vitest-browser-svelte'],
 					browser: browser()
 				}
 			},
+			// The OS reduced-motion query, on and off, for the motion setting.
+			...(['reduce', 'no-preference'] as const).map((reducedMotion) => ({
+				extends: true as const,
+				test: {
+					name: `motion-os-${reducedMotion}`,
+					include: ['src/tests/motion-query.svelte.test.ts'],
+					setupFiles: ['vitest-browser-svelte'],
+					browser: browser(reducedMotion)
+				}
+			})),
 			{
 				extends: true,
 				plugins: [storybookTest({ configDir: path.join(dirname, '.storybook') })],

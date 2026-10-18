@@ -16,7 +16,7 @@
 		searchWorkspaceFiles,
 		writeWorkspaceFile
 	} from './api';
-	import { panePreferences } from './pane-preferences.svelte';
+	import { interfacePreferences } from './interface-preferences.svelte';
 
 	let { workspaceId, productItems }: { workspaceId: string; productItems?: ShellNavItem[] } = $props();
 
@@ -53,5 +53,5 @@
 	{editorSource}
 	{disconnected}
 	{productItems}
-	paneWidths={panePreferences.widths}
-	onPaneResize={(widths) => panePreferences.resize(widths)} />
+	paneWidths={interfacePreferences.widths}
+	onPaneResize={(widths) => interfacePreferences.resize(widths)} />

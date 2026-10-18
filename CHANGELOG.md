@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Added a Motion setting (System, Reduce, Full) on the Diagnostics page that
+  overrides the system reduced-motion preference and syncs across windows.
 - Screen readers hear when a response starts and finishes, when a tool call
   fails, and when Pi needs your input, instead of every streamed update.
 - Type @ in the prompt to pick a workspace file or folder and insert its path,

@@ -722,7 +722,7 @@ Verification:
 ### 2.181 Settings view
 
 Status: planned
-Blocked by: 2.171, 2.218
+Blocked by: 2.171
 
 Add the Settings destination, opened from the app menu with ⌘,, with
 appearance, session notification, and keyboard sections that show each
@@ -932,7 +932,7 @@ Verification:
 ### 2.204 Session status indicator
 
 Status: planned
-Blocked by: 2.218
+Blocked by: none
 
 Give each session state a distinct mark in the session rail and the session
 header, with one small spinner for running work that becomes static under
@@ -1064,7 +1064,7 @@ Verification:
 ### 2.214 Diff update highlight
 
 Status: planned
-Blocked by: 2.218
+Blocked by: none
 
 Tint diff hunks that change while a session runs, fading the tint over one
 second.
@@ -1103,22 +1103,6 @@ Verification:
   commands.
 
 ## Polish and motion
-
-### 2.218 Motion setting
-
-Status: planned
-Blocked by: none
-
-Add a motion setting with system, reduce, and full choices, defaulting to
-system, and combine it with the OS reduced-motion query into one root
-attribute that CSS tokens and Svelte transitions both read.
-
-Verification:
-
-- Component-test the system, reduce, and full settings against both values of
-  the OS query, using a Vitest Playwright instance with `reducedMotion`.
-- Confirm Storybook's reduced-motion control sets the same attribute and that
-  the context-rail story has no transform animation when it is on.
 
 ### 2.219 Overlay focus restoration
 
@@ -1165,7 +1149,7 @@ Verification:
 ### 2.222 Disclosure motion
 
 Status: planned
-Blocked by: 2.194, 2.218
+Blocked by: 2.194
 
 Animate tool and thinking block expansion for finished blocks shorter than one
 viewport, and switch instantly otherwise.
@@ -1179,7 +1163,7 @@ Verification:
 ### 2.223 Inspector toggle
 
 Status: planned
-Blocked by: 2.218
+Blocked by: none
 
 Open and close the wide inspector and context rail without per-frame
 transcript reflow, fading their content in.
@@ -1192,7 +1176,7 @@ Verification:
 ### 2.224 Narrow overlay motion
 
 Status: planned
-Blocked by: 2.218
+Blocked by: none
 
 Slide the narrow context rail and inspector overlay from their edges over a
 fading scrim.
@@ -1205,7 +1189,7 @@ Verification:
 ### 2.225 Popover presentation
 
 Status: planned
-Blocked by: 2.218
+Blocked by: none
 
 Fade and scale pointer-opened pickers and meters from their anchor, keep
 keyboard-opened completion lists instant, and close any open popover before
@@ -1219,7 +1203,7 @@ Verification:
 ### 2.226 Dialog presentation
 
 Status: planned
-Blocked by: 2.218, 2.219
+Blocked by: 2.219
 
 Fade and scale extension dialogs in and out, keeping each mounted until its
 exit finishes.
@@ -1232,7 +1216,7 @@ Verification:
 ### 2.227 Task-surface transition
 
 Status: planned
-Blocked by: 2.218
+Blocked by: none
 
 Fade new task surfaces in with a small offset when the operator navigates by
 pointer, and switch instantly from the keyboard.
@@ -1245,7 +1229,7 @@ Verification:
 ### 2.228 Notification toasts
 
 Status: planned
-Blocked by: 2.218
+Blocked by: none
 
 Show extension and application notices as dismissible toasts that pause on
 hover and focus and keep errors until dismissed.

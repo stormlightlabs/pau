@@ -5,7 +5,7 @@
 
 	import { listWorkspaces } from '$lib/api';
 	import { productNavigation } from '$lib/app-navigation';
-	import { panePreferences } from '$lib/pane-preferences.svelte';
+	import { interfacePreferences } from '$lib/interface-preferences.svelte';
 	import { createTerminalSource } from '$lib/terminal-source';
 
 	const workspaceId = page.params.workspaceId ?? '';
@@ -33,5 +33,5 @@
 	{source}
 	{disconnected}
 	productItems={productNavigation(page.route.id, workspaceId)}
-	paneWidths={panePreferences.widths}
-	onPaneResize={(widths) => panePreferences.resize(widths)} />
+	paneWidths={interfacePreferences.widths}
+	onPaneResize={(widths) => interfacePreferences.resize(widths)} />

@@ -15,6 +15,9 @@ export const motion = {
 	scaleEnter: 0.98
 } as const;
 
+/** How the interface moves: follow the OS, always reduce, or always animate. */
+export type MotionSetting = 'system' | 'reduce' | 'full';
+
 type MotionRoot = { dataset: DOMStringMap };
 type MotionQuery = (query: string) => { matches: boolean };
 

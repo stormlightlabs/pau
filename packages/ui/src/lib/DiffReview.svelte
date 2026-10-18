@@ -57,7 +57,7 @@
 							color: 'var(--pau-text-muted)',
 							borderRight: '1px solid var(--pau-border)'
 						},
-						'.cm-changedLine': { backgroundColor: 'color-mix(in srgb, var(--pau-positive) 11%, transparent)' },
+						'.cm-changedLine': { backgroundColor: 'color-mix(in srgb, var(--pau-success) 11%, transparent)' },
 						'.cm-deletedChunk': { backgroundColor: 'color-mix(in srgb, var(--pau-danger) 11%, transparent)' },
 						'.cm-changeGutter': { width: '3px' },
 						'&.cm-focused': { outline: 'none' }
@@ -250,8 +250,8 @@
 	}
 
 	.diff-review button[aria-pressed='true'] {
-		border-color: var(--pau-positive);
-		color: var(--pau-positive);
+		border-color: var(--pau-success);
+		color: var(--pau-success);
 	}
 
 	.diff-review button:focus-visible {

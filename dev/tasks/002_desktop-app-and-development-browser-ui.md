@@ -887,21 +887,6 @@ Verification:
 
 ## Transcript
 
-### 2.190 Streaming delta batching
-
-Status: planned
-Blocked by: none
-
-Apply all transcript deltas that arrive within one animation frame as a single
-state update.
-
-Verification:
-
-- Unit-test that a burst of deltas produces one commit per frame and the same
-  final transcript as unbatched application.
-- Confirm `message_end` and tool events still apply in order relative to
-  batched text.
-
 ### 2.191 Markdown transcript messages
 
 Status: planned
@@ -1056,7 +1041,7 @@ Verification:
 ### 2.202 Streaming performance check
 
 Status: planned
-Blocked by: 2.190
+Blocked by: none
 
 Replay a recorded 2,000-delta stream in Chromium and fail when a long task
 exceeds 50ms or commits exceed one per frame.
@@ -1597,7 +1582,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.81, 2.156, 2.174, 2.175, 2.184, 2.185, 2.186, 2.187, 2.190,
+Blocked by: 2.81, 2.156, 2.174, 2.175, 2.184, 2.185, 2.186, 2.187,
 2.191, 2.194, 2.196, 2.197, 2.199, 2.200, 2.205, 2.219, 2.220
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do

@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Streaming replies render more smoothly because transcript updates are applied
+  once per frame.
 - Open a project folder from the sessions rail or the first-run screen, and use
   the product rail to move between sessions, files, terminal, agent sandbox,
   and diagnostics. Views that are not ready yet show as coming soon.

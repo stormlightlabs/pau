@@ -68,7 +68,19 @@ import {
 import { usageFromEvent, viewUsage } from './session-usage';
 
 /** Transport hooks for {@link LiveSessions}. Tests replace both. */
-export type LiveSessionsOptions = { browserOrigin: string; fetcher?: typeof fetch; socketFactory?: EventSocketFactory };
+export type LiveSessionsOptions = {
+	browserOrigin: string;
+	fetcher?: typeof fetch;
+	socketFactory?: EventSocketFactory;
+	/** Runs `flush` once on the next animation frame. Tests replace it to flush by hand. */
+	scheduleFrame?: (flush: () => void) => void;
+};
+
+/** Defers to the next animation frame, or a timer where there is no display. */
+function nextFrame(flush: () => void): void {
+	if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => flush());
+	else setTimeout(flush, 16);
+}
 
 const TITLE_LENGTH = 60;
 
@@ -249,6 +261,14 @@ export class LiveSessions {
 	readonly #historyStale = new SvelteSet<string>();
 	/** The event sequence each session's transcript was loaded at. Older output is already in it. */
 	readonly #historySequence = new SvelteMap<string, number>();
+	/**
+	 * Transcript output waiting for the next frame, by session. A streaming turn
+	 * emits many deltas per frame, and each one would otherwise copy the entry
+	 * list and re-render the transcript. Events keep their arrival order.
+	 */
+	readonly #pendingOutput = new SvelteMap<string, unknown[]>();
+	#frameScheduled = false;
+	readonly #scheduleFrame: (flush: () => void) => void;
 	#loadFailed = $state(false);
 	#socketOpen = $state(false);
 	#connectedOnce = false;
@@ -258,6 +278,7 @@ export class LiveSessions {
 
 	constructor(options: LiveSessionsOptions) {
 		this.#fetcher = options.fetcher ?? ((input, init) => fetch(input, init));
+		this.#scheduleFrame = options.scheduleFrame ?? nextFrame;
 		this.#stream = new EventStreamClient({
 			browserOrigin: options.browserOrigin,
 			socketFactory: options.socketFactory,
@@ -331,6 +352,7 @@ export class LiveSessions {
 			this.#historyStale.add(sessionId);
 			return;
 		}
+		this.#flushOutput(sessionId);
 		this.#historyReplay.set(sessionId, []);
 		let transcript: PiTranscript | undefined;
 		let after = this.#historySequence.get(sessionId) ?? 0;
@@ -447,8 +469,7 @@ export class LiveSessions {
 				return;
 			}
 			if (event.sequence <= (this.#historySequence.get(sessionId) ?? 0)) return;
-			const transcript = this.#transcripts[sessionId] ?? emptyPiTranscript;
-			this.#transcripts[sessionId] = reducePiEvent(transcript, payload);
+			this.#queueOutput(sessionId, payload);
 			return;
 		}
 		for (const changed of state.events) {
@@ -463,6 +484,32 @@ export class LiveSessions {
 			if (!known && !this.loading && isLive(session)) void this.#readHistory(session.id);
 			if (!known && isLive(session)) void this.#readUsage(session.id);
 			if (!isLive(session)) this.#updateExtensionUi(session.id, exitedExtensionUi);
+		}
+	}
+
+	/** Holds transcript output until the next frame, then commits the burst at once. */
+	#queueOutput(sessionId: string, payload: unknown): void {
+		const pending = this.#pendingOutput.get(sessionId);
+		if (pending) pending.push(payload);
+		else this.#pendingOutput.set(sessionId, [payload]);
+		if (this.#frameScheduled) return;
+		this.#frameScheduled = true;
+		this.#scheduleFrame(() => {
+			this.#frameScheduled = false;
+			this.#flushOutput();
+		});
+	}
+
+	/** Reduces pending output into one transcript commit per session. Omit the ID to flush every session. */
+	#flushOutput(sessionId?: string): void {
+		const ids = sessionId ? [sessionId] : this.#pendingOutput.keys().toArray();
+		for (const id of ids) {
+			const payloads = this.#pendingOutput.get(id);
+			if (!payloads) continue;
+			this.#pendingOutput.delete(id);
+			let transcript = this.#transcripts[id] ?? emptyPiTranscript;
+			for (const payload of payloads) transcript = reducePiEvent(transcript, payload);
+			this.#transcripts[id] = transcript;
 		}
 	}
 
@@ -546,6 +593,7 @@ export class LiveSessions {
 	/** Closes the event stream. Sessions keep running in the backend. */
 	close(): void {
 		this.#stream.stop();
+		this.#flushOutput();
 	}
 
 	/**

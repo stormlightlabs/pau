@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub mod diagnostics;
+pub mod keybindings;
 pub mod persistence;
 pub mod resource_monitor;
 pub mod sandbox;

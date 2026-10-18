@@ -7,6 +7,9 @@ use pau_core::{
         AdapterDiagnostic, DiagnosticBundle, DiagnosticLevel, DiagnosticRecord, DiagnosticSettings,
         TransportDiagnostic,
     },
+    keybindings::{
+        AgentKeybinding, AgentKeybindingSource, AgentKeybindingWarning, AgentKeybindings,
+    },
     persistence::{McpEnablement, Workspace},
     resource_monitor::{
         ProcessIdentity, ProcessResourceNode, ProcessResourceSnapshot, ProcessResourceSummary,
@@ -111,6 +114,10 @@ fn main() {
         NativeSessionList::decl(&config),
         NativeSessionSummary::decl(&config),
         NativeSessionWarning::decl(&config),
+        AgentKeybindingSource::decl(&config),
+        AgentKeybinding::decl(&config),
+        AgentKeybindingWarning::decl(&config),
+        AgentKeybindings::decl(&config),
         SessionQueue::decl(&config),
         SessionImage::decl(&config),
         SessionPromptRequest::decl(&config),

@@ -1,5 +1,9 @@
 export type {
 	AdapterDiagnostic,
+	AgentKeybinding,
+	AgentKeybindingSource,
+	AgentKeybindingWarning,
+	AgentKeybindings,
 	AgentSession,
 	CreateTerminalRequest,
 	DiagnosticBundle,

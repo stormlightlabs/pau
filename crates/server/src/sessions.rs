@@ -61,6 +61,9 @@ use pau_agent::{
 };
 use pau_core::{
     ServerEventKind,
+    keybindings::{
+        AgentKeybinding, AgentKeybindingSource, AgentKeybindingWarning, AgentKeybindings,
+    },
     session::{
         AgentSession, ExtensionDialog, ExtensionStatus, ExtensionUiResponse, ExtensionWidget,
         ExtensionWidgetPlacement, NativeSessionList, NativeSessionSummary, NativeSessionWarning,
@@ -75,10 +78,11 @@ use pau_core::{
 };
 use pau_pi::{
     DiscoverPiOptions, PiCommand, PiCommandSource, PiExtensionUiRequest, PiExtensionUiResponse,
-    PiExtensionWidgetPlacement, PiImage, PiModel, PiProcessError, PiProcessOutput, PiSession,
-    PiSessionError, PiSessionOutput, PiSessionRegistry, PiSessionRegistryError, PiSessionUsage,
-    PiShutdownTimeouts, StartPiProcessOptions, StartRegisteredPiSession, discover_pi,
-    find_pi_session_file, list_pi_session_files, pi_configuration_paths,
+    PiExtensionWidgetPlacement, PiImage, PiKeybindingSource, PiModel, PiProcessError,
+    PiProcessOutput, PiSession, PiSessionError, PiSessionOutput, PiSessionRegistry,
+    PiSessionRegistryError, PiSessionUsage, PiShutdownTimeouts, StartPiProcessOptions,
+    StartRegisteredPiSession, discover_pi, find_pi_session_file, list_pi_session_files,
+    pi_configuration_paths, read_pi_keybindings,
 };
 use serde_json::Value;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -174,6 +178,13 @@ impl SessionApi {
         discovery.working_directory = root.to_path_buf();
         pi_configuration_paths(&discovery)
             .map(|paths| paths.sessions_directory)
+            .map_err(|error| ApiError::PiUnavailable(error.to_string()))
+    }
+
+    /// Pi's user-level keybindings file, resolved without starting Pi.
+    fn keybindings_path(&self) -> Result<std::path::PathBuf, ApiError> {
+        pi_configuration_paths(&self.discovery)
+            .map(|paths| paths.keybindings)
             .map_err(|error| ApiError::PiUnavailable(error.to_string()))
     }
 
@@ -687,6 +698,47 @@ pub(crate) fn error_status(error: &PiSessionRegistryError) -> (StatusCode, &'sta
 
 fn session_api(state: &ApiState) -> Result<&SessionApi, ApiError> {
     state.sessions.as_ref().ok_or(ApiError::ServiceUnavailable)
+}
+
+/// Pi's effective key bindings: its defaults under the operator's overrides.
+pub(crate) async fn get_pi_keybindings(
+    State(state): State<ApiState>,
+) -> Result<Json<AgentKeybindings>, ApiError> {
+    let path = session_api(&state)?.keybindings_path()?;
+    let keybindings = tokio::task::spawn_blocking(move || read_pi_keybindings(&path))
+        .await
+        .map_err(|error| ApiError::PiUnavailable(error.to_string()))?;
+    for warning in &keybindings.warnings {
+        tracing::warn!(
+            event = "pi.keybindings_ignored",
+            path = %warning.path,
+            message = %warning.message,
+            "ignored part of Pi's keybindings file"
+        );
+    }
+    Ok(Json(AgentKeybindings {
+        bindings: keybindings
+            .bindings
+            .into_iter()
+            .map(|binding| AgentKeybinding {
+                action: binding.action,
+                keys: binding.keys,
+                default_keys: binding.default_keys,
+                source: match binding.source {
+                    PiKeybindingSource::Default => AgentKeybindingSource::Default,
+                    PiKeybindingSource::User => AgentKeybindingSource::User,
+                },
+            })
+            .collect(),
+        warnings: keybindings
+            .warnings
+            .into_iter()
+            .map(|warning| AgentKeybindingWarning {
+                path: warning.path,
+                message: warning.message,
+            })
+            .collect(),
+    }))
 }
 
 /// Lists live sessions, oldest first.

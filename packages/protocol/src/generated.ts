@@ -1215,6 +1215,47 @@ path: string,
  */
 message: string, };
 
+export type AgentKeybindingSource = "default" | "user";
+
+export type AgentKeybinding = {
+/**
+ * The agent's action identifier, such as `app.session.new`.
+ */
+action: string,
+/**
+ * The effective keys, such as `ctrl+shift+n`. Empty when the action is
+ * unbound.
+ */
+keys: Array<string>,
+/**
+ * The agent's built-in keys for the action.
+ */
+default_keys: Array<string>,
+/**
+ * Whether `keys` is the built-in assignment or the operator's override.
+ */
+source: AgentKeybindingSource, };
+
+export type AgentKeybindingWarning = {
+/**
+ * Absolute path of the configuration file.
+ */
+path: string,
+/**
+ * What was ignored and why.
+ */
+message: string, };
+
+export type AgentKeybindings = {
+/**
+ * Every known action with its effective keys.
+ */
+bindings: Array<AgentKeybinding>,
+/**
+ * Parts of the operator's configuration that were ignored.
+ */
+warnings: Array<AgentKeybindingWarning>, };
+
 export type SessionQueue = "steer" | "follow_up";
 
 export type SessionImage = {

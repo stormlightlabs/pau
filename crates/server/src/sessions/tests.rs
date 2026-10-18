@@ -787,6 +787,48 @@ fn native_header(fixture: &Fixture, id: &str, cwd: Option<&str>) -> String {
     json!({"type": "session", "version": 3, "id": id, "timestamp": "2026-01-02T03:04:05.000Z", "cwd": cwd}).to_string()
 }
 
+fn binding(list: &Value, action: &str) -> Value {
+    list["bindings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|binding| binding["action"] == action)
+        .unwrap()
+        .clone()
+}
+
+#[tokio::test]
+async fn serves_pi_keybindings_over_defaults() {
+    let fixture = Fixture::new(None).await;
+    let (status, defaults) = fixture.call("GET", "/api/pi/keybindings", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(defaults["warnings"], json!([]));
+    let submit = binding(&defaults, "tui.input.submit");
+    assert_eq!(submit["keys"], json!(["enter"]));
+    assert_eq!(submit["source"], "default");
+
+    let agent = fixture._directory.path().join(".pi/agent");
+    fs::create_dir_all(&agent).unwrap();
+    fs::write(
+        agent.join("keybindings.json"),
+        r#"{"app.session.new": "ctrl+shift+n", "app.exit": []}"#,
+    )
+    .unwrap();
+    let (_, overridden) = fixture.call("GET", "/api/pi/keybindings", None).await;
+    let new = binding(&overridden, "app.session.new");
+    assert_eq!(new["keys"], json!(["ctrl+shift+n"]));
+    assert_eq!(new["source"], "user");
+    let exit = binding(&overridden, "app.exit");
+    assert_eq!(exit["keys"], json!([]));
+    assert_eq!(exit["default_keys"], json!(["ctrl+d"]));
+
+    fs::write(agent.join("keybindings.json"), "{broken").unwrap();
+    let (status, invalid) = fixture.call("GET", "/api/pi/keybindings", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(invalid["warnings"].as_array().unwrap().len(), 1);
+    assert_eq!(binding(&invalid, "app.exit")["keys"], json!(["ctrl+d"]));
+}
+
 #[tokio::test]
 async fn reads_the_session_tree_and_branches_through_pi() {
     let fixture = Fixture::new(None).await;

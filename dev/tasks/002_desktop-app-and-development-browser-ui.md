@@ -604,23 +604,10 @@ Verification:
 
 ## Shell and navigation
 
-### 2.170 Pi keybindings API
-
-Status: planned
-Blocked by: none
-
-Read the operator's Pi `keybindings.json` and expose the effective Pi key
-bindings through the desktop API.
-
-Verification:
-
-- Cover Pi's defaults without a file, an override, an unbound action, and an
-  invalid file against fixture Pi configuration.
-
 ### 2.171 Application keyboard map
 
 Status: planned
-Blocked by: 2.170
+Blocked by: none
 
 Add global shortcuts for navigation, session switching, panel toggles, and page
 zoom with ⌘+, ⌘−, and ⌘0, an app menu with New Session (⌘N) and Open Workspace
@@ -803,7 +790,7 @@ Verification:
 ### 2.184 Pi composer keys
 
 Status: planned
-Blocked by: 2.170
+Blocked by: none
 
 Match Pi's composer keys, using the operator's `keybindings.json` over Pi's
 defaults. The defaults include Enter to send or steer, Alt+Enter to queue a

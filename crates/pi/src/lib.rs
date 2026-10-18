@@ -1,6 +1,7 @@
 //! Pi discovery, RPC transport, and process supervision.
 
 mod extension_ui;
+mod keybindings;
 mod mcp;
 mod native_sessions;
 mod process;
@@ -13,6 +14,9 @@ mod session;
 pub use extension_ui::{
     PiExtensionNotificationLevel, PiExtensionUiParseError, PiExtensionUiRequest,
     PiExtensionUiResponse, PiExtensionWidgetPlacement,
+};
+pub use keybindings::{
+    PiKeybinding, PiKeybindingSource, PiKeybindingWarning, PiKeybindings, read_pi_keybindings,
 };
 pub use mcp::{
     DiscoverPiMcpOptions, LATEST_VERIFIED_PI_MCP_ADAPTER_VERSION, PINNED_PI_MCP_ADAPTER_VERSION,
@@ -135,6 +139,8 @@ pub struct PiConfigurationPaths {
     pub agent_directory: PathBuf,
     /// Pi's user-level settings file.
     pub user_settings: PathBuf,
+    /// Pi's user-level key binding overrides.
+    pub keybindings: PathBuf,
     /// Pi's user-level authentication file.
     pub authentication: PathBuf,
     /// Pi's session storage directory before any `sessionDir` setting is loaded.
@@ -465,6 +471,7 @@ pub fn pi_configuration_paths(
 
     Ok(PiConfigurationPaths {
         user_settings: agent_directory.join("settings.json"),
+        keybindings: agent_directory.join("keybindings.json"),
         authentication: agent_directory.join("auth.json"),
         sessions_directory,
         project_settings: project_directory.join("settings.json"),

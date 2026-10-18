@@ -448,6 +448,7 @@ fn router_with_services(
             "/api/workspaces/{workspace_id}/sandbox/preview",
             post(preview_sandbox),
         )
+        .route("/api/pi/keybindings", get(sessions::get_pi_keybindings))
         .route(
             "/api/sessions",
             get(sessions::list_sessions).post(sessions::start_session),
@@ -1903,11 +1904,7 @@ mod tests {
                 .unwrap();
 
         for (path, status, code) in [
-            (
-                root.join("missing"),
-                StatusCode::NOT_FOUND,
-                "not_found",
-            ),
+            (root.join("missing"), StatusCode::NOT_FOUND, "not_found"),
             (
                 root.join("note.txt"),
                 StatusCode::UNPROCESSABLE_ENTITY,

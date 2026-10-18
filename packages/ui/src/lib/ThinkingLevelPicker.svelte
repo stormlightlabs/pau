@@ -42,9 +42,23 @@
 		if (reasoning === false) return 'This model does not offer thinking levels.';
 		return unavailableReason;
 	});
+
+	let root = $state<HTMLDivElement>();
+
+	/**
+	 * Focuses the level list's button, as `/thinking` without a level does.
+	 *
+	 * @returns Whether it took focus. A disabled list does not.
+	 */
+	export function show(): boolean {
+		const trigger = root?.querySelector<HTMLButtonElement>('button');
+		if (!trigger || trigger.disabled) return false;
+		trigger.focus();
+		return true;
+	}
 </script>
 
-<div class="thinking-level">
+<div class="thinking-level" bind:this={root}>
 	<span aria-hidden="true">Thinking</span>
 	<Select
 		label="Thinking level"

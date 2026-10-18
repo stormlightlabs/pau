@@ -81,6 +81,11 @@
 		return true;
 	}
 
+	/** Lists the models again, after a model changes outside the picker, such as with `/model`. */
+	export function refresh(): Promise<void> {
+		return fetchModels();
+	}
+
 	// The picker mounts for each session, so one load per mount refreshes the list on open.
 	$effect(() => {
 		if (supported) void fetchModels();

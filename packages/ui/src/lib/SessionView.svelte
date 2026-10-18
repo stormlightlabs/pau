@@ -26,6 +26,7 @@
 		type ContextMenuItem,
 		type ContextMenuRequest
 	} from './context-menu';
+	import { builtinInvocation, withBuiltins, type BuiltinAction, type BuiltinInvocation } from './builtin-commands';
 	import { commandName, commandQuery, filterCommands } from './command-completion';
 	import ExtensionUi from './ExtensionUi.svelte';
 	import { insertMention, mentionAt } from './file-mention';
@@ -399,6 +400,8 @@
 	let pendingSequence = 0;
 	let composer = $state<HTMLTextAreaElement>();
 	let modelPicker = $state<ModelPicker>();
+	let thinkingPicker = $state<ThinkingLevelPicker>();
+	let sessionTree = $state<SessionTree>();
 	const keymap = getKeymap();
 	const keyPlatform = keymap?.platform ?? detectPlatform();
 	/** Pi's composer keys, with the operator's bindings once the app loads them. */
@@ -467,12 +470,16 @@
 	const sessionCommands = $derived(
 		activeSession?.capabilities.commandDiscovery ? commands[activeSession.id] : undefined
 	);
+	/** The session's commands followed by Pi's built-ins, which Pau runs itself. */
+	const composerCommands = $derived(sessionCommands ? withBuiltins(sessionCommands) : undefined);
 	const commandMatches = $derived.by(() => {
 		const query = commandQuery(draft);
-		return sessionCommands && draftTyped && query !== undefined && dismissedDraft !== draft
-			? filterCommands(sessionCommands, query)
+		return composerCommands && draftTyped && query !== undefined && dismissedDraft !== draft
+			? filterCommands(composerCommands, query)
 			: undefined;
 	});
+	/** The built-in the draft runs on submit instead of sending it. */
+	const draftBuiltin = $derived(sessionCommands ? builtinInvocation(draft, sessionCommands) : undefined);
 	const mentionToken = $derived(onSearchFiles && draftTyped ? mentionAt(draft, caret) : undefined);
 	const mentionQuery = $derived(mentionToken?.query);
 	const mentionOpen = $derived(
@@ -492,10 +499,10 @@
 	});
 	const unknownCommand = $derived.by(() => {
 		const name = commandName(draft);
-		return sessionCommands !== undefined &&
+		return composerCommands !== undefined &&
 			name !== undefined &&
 			commandQuery(draft) === undefined &&
-			sessionCommands.every((command) => command.name !== name)
+			composerCommands.every((command) => command.name !== name)
 			? name
 			: undefined;
 	});
@@ -1195,6 +1202,10 @@
 	async function submitPrompt(queueOverride?: PromptQueue): Promise<void> {
 		if (sending || !activeSession || !draft.trim()) return;
 		const session = activeSession;
+		if (draftBuiltin) {
+			await runBuiltin(session, draftBuiltin);
+			return;
+		}
 		const text = draft.trim();
 		const queueTarget = session.status === 'running' ? (queueOverride ?? activeQueue) : undefined;
 		const attached = images;
@@ -1245,6 +1256,138 @@
 		}
 	}
 
+	/**
+	 * Runs a Pi built-in with its Pau action. The draft clears once the action
+	 * starts. A command Pau cannot run keeps the draft and explains why.
+	 */
+	async function runBuiltin(session: SessionViewModel, { command, argument }: BuiltinInvocation): Promise<void> {
+		error = undefined;
+		try {
+			if (command.unavailable || !command.action) throw new Error(command.unavailable);
+			const text = draft.trim();
+			const action = builtinAction(session, command.action, argument);
+			draft = '';
+			draftTyped = false;
+			historyCursor = idleHistoryCursor;
+			histories[session.id] = recordPrompt(histories[session.id] ?? [], text);
+			await action();
+		} catch (cause) {
+			if (activeSession?.id === session.id) {
+				error = cause instanceof Error ? cause.message : `Pau could not run /${command.name}. Try again.`;
+			}
+		}
+	}
+
+	/** Stops a built-in before it runs. A function declaration, so callers narrow on it. */
+	function refuse(reason: string | undefined): never {
+		throw new Error(reason ?? 'This session cannot run that command right now.');
+	}
+
+	/** Shows the inspector when it is hidden, for `/session`, `/tree`, and `/fork`. */
+	async function showInspector(): Promise<void> {
+		if (!document.getElementById('shell-inspector') && !keymap?.run('panel.inspector')) {
+			throw new Error('Pau cannot show the inspector here.');
+		}
+		await tick();
+	}
+
+	/**
+	 * Checks that the session can run a built-in now and returns the action.
+	 * Throws the reason when it cannot, before the draft clears.
+	 */
+	function builtinAction(session: SessionViewModel, action: BuiltinAction, argument: string): () => Promise<unknown> {
+		const menuAction = (id: string, unsupported: string): (() => Promise<void>) => {
+			const item = sessionMenuItems(session).find((candidate) => candidate.id === id);
+			if (!item) refuse(unsupported);
+			if (item.disabled) refuse(item.reason);
+			return async () => runSessionAction(session, id);
+		};
+		const workspace = activeWorkspace;
+		switch (action) {
+			case 'model': {
+				if (!onLoadModels || !onSelectModel || !session.capabilities.modelSelection) {
+					refuse('This agent does not support switching models in a session.');
+				}
+				const reason = modelUnavailableReason(session, disconnected);
+				if (reason) refuse(reason);
+				if (!argument) return async () => modelPicker?.show();
+				return async () => {
+					const models = (await onLoadModels?.(session.id)) ?? [];
+					const model =
+						models.find((candidate) => `${candidate.provider}/${candidate.id}` === argument) ??
+						models.find((candidate) => candidate.id === argument);
+					if (!model) throw new Error(`No model matches ${argument}. Run /model to choose from the list.`);
+					await onSelectModel?.(session.id, model);
+					await modelPicker?.refresh();
+				};
+			}
+			case 'thinking': {
+				if (!onSelectThinkingLevel || !session.capabilities.thinkingLevel) {
+					refuse('This agent does not support changing the thinking level in a session.');
+				}
+				if (currentModelReasoning === false) refuse('This model does not offer thinking levels.');
+				const reason = thinkingUnavailableReason(session, disconnected);
+				if (reason) refuse(reason);
+				if (!argument) return async () => thinkingPicker?.show();
+				const level = thinkingLevels.find((candidate) => candidate === argument);
+				if (!level) refuse(`Choose a thinking level: ${thinkingLevels.join(', ')}.`);
+				return async () => onSelectThinkingLevel?.(session.id, level);
+			}
+			case 'new': {
+				if (!onStartSession || !workspace) refuse('Pau cannot start a session here.');
+				return () => startSession(workspace);
+			}
+			case 'resume': {
+				if (!onLoadSavedSessions || !onResumeSession || !workspace) refuse('Pau cannot list saved sessions here.');
+				return async () => (pickerWorkspaceId = workspace.id);
+			}
+			case 'name': {
+				const rename = menuAction('rename', 'This agent cannot rename sessions.');
+				if (!argument) return rename;
+				return async () => onRenameSession?.(session.id, argument);
+			}
+			case 'clone': {
+				return menuAction('clone', 'This agent cannot clone sessions.');
+			}
+			case 'stop': {
+				return menuAction('stop', 'This agent cannot stop sessions.');
+			}
+			case 'compact': {
+				if (!canCompact) refuse('This agent cannot compact its context on request.');
+				const reason = compactUnavailableReason(session, disconnected, compacting);
+				if (reason) refuse(reason);
+				// A failed compaction reports itself in the compaction notice.
+				return async () => {
+					compactInstructions = argument;
+					await compact();
+				};
+			}
+			case 'copy': {
+				return async () => {
+					const result = await copyLastReply();
+					if (!result) throw new Error('There is no reply to copy yet.');
+					if (!result.ok) throw new Error(result.error);
+				};
+			}
+			case 'shortcuts': {
+				return async () => {
+					if (!keymap?.run('app.shortcuts')) throw new Error('Pau cannot show the keyboard shortcuts here.');
+				};
+			}
+			case 'inspector': {
+				return showInspector;
+			}
+			case 'tree':
+			case 'branch': {
+				if (!onLoadSessionTree || !onBranchSession) refuse('Pau cannot show the session tree here.');
+				return async () => {
+					await showInspector();
+					await sessionTree?.show(action === 'branch');
+				};
+			}
+		}
+	}
+
 	function markPending(id: string, state: PendingPrompt['state']): void {
 		pendingPrompts = pendingPrompts.map((prompt) => (prompt.id === id ? { ...prompt, state } : prompt));
 	}
@@ -1260,6 +1403,7 @@
 	}
 
 	function acceptCommand(command: CommandOption): void {
+		if (command.unavailable) return;
 		historyCursor = idleHistoryCursor;
 		draft = `/${command.name} `;
 		draftTyped = false;
@@ -1683,6 +1827,7 @@
 			{@const session = activeSession}
 			{#key session.id}
 				<SessionTree
+					bind:this={sessionTree}
 					agent={session.agent}
 					supported={session.capabilities.branching === true}
 					load={() => onLoadSessionTree(session.id)}
@@ -1824,6 +1969,7 @@
 								onLoaded={(models) => (currentModelReasoning = models.find((model) => model.current)?.reasoning)} />
 							{#if onSelectThinkingLevel}
 								<ThinkingLevelPicker
+									bind:this={thinkingPicker}
 									level={activeSession.thinkingLevel}
 									onSelect={(level) => onSelectThinkingLevel(activeSession.id, level)}
 									supported={activeSession.capabilities.thinkingLevel ?? false}
@@ -2259,6 +2405,15 @@
 						</div>
 						{#if unknownCommand !== undefined}
 							<p class="session-composer__hint">Not a known command. It will be sent as written.</p>
+						{:else if draftBuiltin?.command.unavailable && !commandMatches}
+							<p class="session-composer__hint">
+								/{draftBuiltin.command.name}: {draftBuiltin.command.unavailable}
+								{#if onOpenPiTerminal}
+									<button type="button" onclick={() => onOpenPiTerminal(activeSession.id)}>Open Pi in terminal</button>
+								{:else if onOpenTerminal && activeWorkspace}
+									<button type="button" onclick={() => onOpenTerminal(activeWorkspace.id)}>Open terminal</button>
+								{/if}
+							</p>
 						{/if}
 						{#if composerUnavailable}
 							<p id="composer-unavailable" class="session-composer__hint">{composerUnavailable}</p>

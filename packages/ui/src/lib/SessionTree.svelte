@@ -108,6 +108,22 @@
 		viewport?.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`)?.focus();
 	}
 
+	/**
+	 * Moves focus into the tree, as `/tree` and `/fork` do. With `branch`, focus
+	 * goes to the newest user message on the current branch, where Branch from
+	 * here applies.
+	 *
+	 * @returns Whether the tree had rows to focus. It has none while it loads.
+	 */
+	export async function show(branch = false): Promise<boolean> {
+		if (rows.length === 0) return false;
+		const target = branch
+			? rows.findLast((row) => row.kind === 'entry' && row.item.role === 'user' && row.onPath)?.key
+			: undefined;
+		await focusRow(target ?? activeRow?.key);
+		return true;
+	}
+
 	function toggle(row: SessionTreeRow, expand: boolean): boolean {
 		if (row.kind === 'run') {
 			if (!expand) return false;

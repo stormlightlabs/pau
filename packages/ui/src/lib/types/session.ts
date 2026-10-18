@@ -54,7 +54,12 @@ export type CommandOption = {
 	/** The name typed after the slash, without the slash. */
 	name: string;
 	description?: string;
-	source: 'extension' | 'prompt' | 'skill';
+	/** Where the command comes from. Pau runs `builtin` commands itself instead of sending them. */
+	source: 'builtin' | 'extension' | 'prompt' | 'skill';
+	/** Arguments the command takes, shown after its name, such as `[level]`. */
+	argument?: string;
+	/** Why Pau cannot run the command. Completion lists it but does not pick it. */
+	unavailable?: string;
 };
 
 /** One file or folder a prompt can mention with `@`. */

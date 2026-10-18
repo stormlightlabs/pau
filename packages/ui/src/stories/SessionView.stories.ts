@@ -5,6 +5,7 @@ import { commandFixtures } from '../fixtures/commands';
 import { fileMentionFixtures } from '../fixtures/file-mentions';
 import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
 import { sessionFixtures } from '../fixtures/sessions';
+import { BUILTIN_COMMANDS, TERMINAL_ONLY_REASON } from '../lib/builtin-commands';
 import SessionViewDemo from './SessionViewDemo.svelte';
 
 const meta = {
@@ -166,7 +167,9 @@ export const CommandCompletion: Story = {
 		const prompt = canvas.getByRole('textbox', { name: 'Prompt' });
 		await userEvent.type(prompt, '/');
 		await expect(await canvas.findByRole('listbox', { name: 'Commands' })).toBeInTheDocument();
-		await expect(within(canvas.getByRole('listbox')).getAllByRole('option')).toHaveLength(4);
+		await expect(within(canvas.getByRole('listbox')).getAllByRole('option')).toHaveLength(
+			commandFixtures.populated.length + BUILTIN_COMMANDS.length
+		);
 		await userEvent.keyboard('{ArrowDown}{Enter}');
 		await expect(canvas.getByRole('textbox', { name: 'Prompt' })).toHaveValue('/review ');
 	}
@@ -178,9 +181,20 @@ export const CommandCompletionFiltering: Story = {
 		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), '/re');
 		await expect(await canvas.findByRole('option', { name: /release-notes/ })).toBeInTheDocument();
 		const options = within(canvas.getByRole('listbox')).getAllByRole('option');
-		await expect(options).toHaveLength(2);
 		await expect(options[0]).toHaveTextContent('/review');
-		await expect(options[1]).toHaveTextContent('/skill:release-notes');
+		await expect(options[1]).toHaveTextContent('/resume');
+		await expect(options[2]).toHaveTextContent('/reload');
+		await expect(options[3]).toHaveTextContent('/skill:release-notes');
+	}
+};
+export const BuiltinCommandUnavailable: Story = {
+	args: { commands: commandFixtures.populated },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), '/login');
+		const option = await canvas.findByRole('option', { name: /\/login/ });
+		await expect(option).toHaveAttribute('aria-disabled', 'true');
+		await expect(option).toHaveTextContent(TERMINAL_ONLY_REASON);
 	}
 };
 export const CommandCompletionNoMatches: Story = {

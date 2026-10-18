@@ -13,7 +13,7 @@
 
 	let { id, commands, selected, onAccept }: Props = $props();
 
-	const sourceLabels = { extension: 'Extension', prompt: 'Prompt', skill: 'Skill' } as const;
+	const sourceLabels = { builtin: 'Pi', extension: 'Extension', prompt: 'Prompt', skill: 'Skill' } as const;
 </script>
 
 <div class="command-completion">
@@ -27,14 +27,21 @@
 					id="{id}-option-{index}"
 					role="option"
 					aria-selected={index === selected}
+					aria-disabled={command.unavailable ? 'true' : undefined}
 					class:command-completion__option--selected={index === selected}
+					class:command-completion__option--unavailable={command.unavailable}
 					onmousedown={(event) => {
 						event.preventDefault();
-						onAccept(command);
+						if (!command.unavailable) onAccept(command);
 					}}>
-					<span class="command-completion__name">/{command.name}</span>
+					<span class="command-completion__name">
+						/{command.name}
+						{#if command.argument}<span class="command-completion__argument">{command.argument}</span>{/if}
+					</span>
 					<span class="command-completion__source">{sourceLabels[command.source]}</span>
-					{#if command.description}
+					{#if command.unavailable}
+						<span class="command-completion__description">Unavailable. {command.unavailable}</span>
+					{:else if command.description}
 						<span class="command-completion__description">{command.description}</span>
 					{/if}
 				</li>
@@ -76,6 +83,18 @@
 	.command-completion__name {
 		color: var(--pau-text);
 		font-family: var(--pau-font-code);
+	}
+
+	.command-completion__argument {
+		color: var(--pau-text-muted);
+	}
+
+	.command-completion__option--unavailable {
+		cursor: default;
+	}
+
+	.command-completion__option--unavailable .command-completion__name {
+		color: var(--pau-text-muted);
 	}
 
 	.command-completion__source {

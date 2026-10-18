@@ -4,7 +4,9 @@
 
 ### 2.185 Built-in Pi slash commands
 
-Status: planned
+Status: in progress
+Status note: Implemented and component-tested. The self-hosted run of `/new`,
+`/name`, and `/compact` remains.
 Blocked by: none
 
 Complete and run Pi's built-in slash commands in the composer by mapping each to

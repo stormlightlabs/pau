@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- Type / in the composer to run Pi's built-in commands, such as /name, /model,
+  /thinking, /compact, /new, and /fork. Commands that need Pi's terminal show
+  why they are unavailable.
 - Dropdowns match Pau's design, show readable names such as "Extra high" for
   thinking levels, and work fully from the keyboard.
 - Press ⌘K, or F1 on Linux, or click the search field to open a command palette

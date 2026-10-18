@@ -72,6 +72,37 @@ The composer differs from Pi's editor in these ways:
   to exit, `Ctrl+Z` to suspend, and `Ctrl+G` for an external editor. It also
   has none for `Ctrl+P` to cycle models or `Ctrl+T` to fold thinking.
 
+## Slash commands
+
+Type `/` in the composer to list commands. The list shows the commands your
+extensions, prompt templates, and skills add, followed by Pi's built-in
+commands. Pau runs a built-in itself instead of sending it to the agent:
+
+| Command                   | What Pau does                                          |
+| ------------------------- | ------------------------------------------------------ |
+| `/model [provider/model]` | Switches to the model, or opens the model picker       |
+| `/thinking [level]`       | Sets the thinking level, or focuses the level list     |
+| `/new`                    | Starts a session in this workspace                     |
+| `/resume`                 | Lists the workspace's saved sessions                   |
+| `/name [name]`            | Renames the session, or edits its name in the rail     |
+| `/session`                | Shows the inspector                                    |
+| `/tree`                   | Shows the session tree                                 |
+| `/fork`                   | Selects your latest prompt in the session tree         |
+| `/clone`                  | Duplicates the session at its current position         |
+| `/compact [instructions]` | Compacts the context, with your instructions if given  |
+| `/copy`                   | Copies the last reply                                  |
+| `/hotkeys`                | Shows the keyboard shortcuts                           |
+| `/quit`                   | Stops the session                                      |
+
+From the session tree, choose **Branch from here** to continue from an earlier
+prompt, as `/fork` does in Pi.
+
+The other built-ins, such as `/login`, `/settings`, and `/export`, need Pi's
+terminal interface. The list shows them as unavailable. To use one, choose
+**Open terminal** under the composer, start `pi` in the workspace terminal, and
+run the command there. If an extension adds a command with a built-in's name,
+Pau sends that command to the extension instead.
+
 ## Pi bindings come first
 
 Pau reads Pi's `keybindings.json` and Pi's defaults. When a Pau shortcut uses

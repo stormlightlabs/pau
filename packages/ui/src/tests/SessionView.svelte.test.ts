@@ -3,6 +3,7 @@ import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { commandFixtures } from '../fixtures/commands';
+import { BUILTIN_COMMANDS } from '../lib/builtin-commands';
 import { fileMentionFixtures } from '../fixtures/file-mentions';
 import { sessionFixtures } from '../fixtures/sessions';
 import { Keymap, keymapContext } from '../lib/keymap.svelte';
@@ -268,7 +269,9 @@ test('completes a command with the keyboard ahead of history', async () => {
 	const prompt = page.getByRole('textbox', { name: 'Prompt' });
 	await userEvent.type(prompt, '/');
 	await expect.element(page.getByRole('listbox', { name: 'Commands' })).toBeVisible();
-	await expect.element(page.getByRole('listbox').getByRole('option')).toHaveLength(4);
+	await expect
+		.element(page.getByRole('listbox').getByRole('option'))
+		.toHaveLength(commandFixtures.populated.length + BUILTIN_COMMANDS.length);
 
 	await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowUp}');
 	await expect.element(page.getByRole('listbox').getByRole('option', { selected: true })).toHaveTextContent('/review');
@@ -618,11 +621,11 @@ test('keeps slash completion and history working beside file mentions', async ()
 	await userEvent.type(prompt, '/');
 	await expect.element(page.getByRole('listbox', { name: 'Commands' })).toBeVisible();
 	await userEvent.keyboard('{Tab}');
-	await expect.element(prompt).toHaveValue('/compact ');
+	await expect.element(prompt).toHaveValue('/condense ');
 	await userEvent.type(prompt, '@read');
 	await expect.element(page.getByRole('option', { name: /README/ })).toBeVisible();
 	await userEvent.keyboard('{Tab}');
-	await expect.element(prompt).toHaveValue('/compact @README.md ');
+	await expect.element(prompt).toHaveValue('/condense @README.md ');
 
 	await userEvent.clear(prompt);
 	await userEvent.keyboard('{ArrowUp}');

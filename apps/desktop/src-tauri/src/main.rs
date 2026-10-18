@@ -1,3 +1,5 @@
+mod menu;
+
 use std::{error::Error, net::Ipv4Addr, sync::Mutex};
 
 use pau_server::{ServerHandle, ServerOptions};
@@ -71,6 +73,8 @@ fn main() {
 
     let application = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .menu(menu::build)
+        .on_menu_event(menu::handle_event)
         .setup(move |app| {
             if let Err(error) = start(app, diagnostics) {
                 tracing::error!(%error, "Pau could not start");

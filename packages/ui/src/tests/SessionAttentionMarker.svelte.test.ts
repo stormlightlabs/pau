@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { sessionFixtures } from '../fixtures/sessions';
+import { Keymap, keymapContext } from '../lib/keymap.svelte';
 import SessionView from '../lib/SessionView.svelte';
 import type { SessionViewModel, SessionWorkspace } from '../lib/types/session';
 
@@ -74,15 +75,20 @@ test('opening a marked session reports the selection that clears it', async () =
 test('Shift+Esc clears all markers without interrupting a running session', async () => {
 	const onClearAttention = vi.fn();
 	const onInterrupt = vi.fn();
+	const keymap = new Keymap({ platform: 'mac' });
+	const handleKeydown = (event: KeyboardEvent) => keymap.handleKeydown(event);
 	await render(SessionView, {
-		workspaces: sessionFixtures.running,
-		activeSessionId: 'session-running',
-		onClearAttention,
-		onInterrupt
+		props: { workspaces: sessionFixtures.running, activeSessionId: 'session-running', onClearAttention, onInterrupt },
+		context: new Map([[keymapContext, keymap]])
 	});
+	addEventListener('keydown', handleKeydown);
 
-	await userEvent.click(page.getByRole('textbox', { name: 'Prompt' }));
-	await userEvent.keyboard('{Shift>}{Escape}{/Shift}');
+	try {
+		await userEvent.click(page.getByRole('textbox', { name: 'Prompt' }));
+		await userEvent.keyboard('{Shift>}{Escape}{/Shift}');
+	} finally {
+		removeEventListener('keydown', handleKeydown);
+	}
 
 	expect(onClearAttention).toHaveBeenCalledOnce();
 	expect(onInterrupt).not.toHaveBeenCalled();

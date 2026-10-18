@@ -5,6 +5,7 @@ import { render } from 'vitest-browser-svelte';
 import { commandFixtures } from '../fixtures/commands';
 import { fileMentionFixtures } from '../fixtures/file-mentions';
 import { sessionFixtures } from '../fixtures/sessions';
+import { Keymap, keymapContext } from '../lib/keymap.svelte';
 import SessionView from '../lib/SessionView.svelte';
 import SessionViewDemo from '../stories/SessionViewDemo.svelte';
 
@@ -519,6 +520,28 @@ test('marks the supplied Sessions destination when a session needs attention', a
 	await expect.element(sessions).toHaveAttribute('href', '/');
 	await expect.element(sessions.getByLabelText('Needs attention')).toBeInTheDocument();
 	await expect.element(page.getByRole('button', { name: 'Settings' })).toHaveAccessibleDescription('Coming soon');
+});
+
+test('runs session shortcuts from the app key map', async () => {
+	const keymap = new Keymap({ platform: 'mac' });
+	const onSelectSession = vi.fn();
+	const onStartSession = vi.fn().mockResolvedValue(undefined);
+	await render(SessionView, {
+		props: { workspaces: sessionFixtures.concurrent, activeSessionId: 'diff-gutter', onSelectSession, onStartSession },
+		context: new Map([[keymapContext, keymap]])
+	});
+	const press = (init: KeyboardEventInit) => keymap.handleKeydown(new KeyboardEvent('keydown', init));
+
+	press({ key: 'Tab', ctrlKey: true });
+	expect(onSelectSession).toHaveBeenLastCalledWith('registry-review');
+	press({ key: 'Tab', ctrlKey: true, shiftKey: true });
+	expect(onSelectSession).toHaveBeenLastCalledWith('session-docs');
+	press({ key: '3', code: 'Digit3', metaKey: true });
+	expect(onSelectSession).toHaveBeenLastCalledWith('claude-review');
+	press({ key: 'n', code: 'KeyN', metaKey: true });
+	expect(onStartSession).toHaveBeenCalledWith('pau');
+	press({ key: 'l', code: 'KeyL', metaKey: true });
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toHaveFocus();
 });
 
 const mentionProps = {

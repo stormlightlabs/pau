@@ -3,5 +3,5 @@
 	"identifier": "default",
 	"description": "Native services the main window may request.",
 	"windows": ["main"],
-	"permissions": ["core:default", "core:window:allow-close", "dialog:allow-open"]
+	"permissions": ["core:default", "core:window:allow-close", "core:webview:allow-set-webview-zoom", "dialog:allow-open"]
 }

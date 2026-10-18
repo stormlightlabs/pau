@@ -93,6 +93,10 @@ folder path instead. A folder that is missing or is a file shows the reason
 beside the control. A newly opened workspace without sessions offers to start
 one.
 
+The shortcut list opens as a dialog over any view. It groups shortcuts by
+area, prints each chord the way the platform's menus do, and names the Pi
+binding that took a chord when the operator's Pi bindings collide with Pau's.
+
 Terminal-only custom extension components show an explicit limitation instead
 of an empty or broken control. The message directs the operator to vanilla Pi
 in a Pau terminal.

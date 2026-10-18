@@ -1,4 +1,5 @@
 import type {
+	AgentKeybindings,
 	AgentSession,
 	DiagnosticBundle,
 	DiagnosticLevel,
@@ -134,6 +135,12 @@ function requestUrl(url: URL): string {
 export async function getBackendVersion(fetcher: typeof fetch = fetch): Promise<VersionResponse> {
 	const response = await fetcher(`${apiConnection().origin}/api/version`, { headers: authorization() });
 	return responseJson<VersionResponse>(response);
+}
+
+/** Reads Pi's effective key bindings, including the operator's overrides. */
+export async function getPiKeybindings(fetcher: typeof fetch = fetch): Promise<AgentKeybindings> {
+	const response = await fetcher(`${apiConnection().origin}/api/pi/keybindings`, { headers: authorization() });
+	return responseJson<AgentKeybindings>(response);
 }
 
 /** Reads the saved interface preferences, or the defaults when none are saved. */

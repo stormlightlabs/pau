@@ -1,0 +1,42 @@
+---
+title: Keyboard shortcuts
+description: Drive Pau from the keyboard and see how it shares keys with Pi.
+order: 2
+---
+
+# Keyboard shortcuts
+
+Press `⌘/` on macOS or `Ctrl+/` on Linux to see every shortcut. The list is
+also under **Help > Keyboard Shortcuts**. On Linux, read `⌘` as `Ctrl` and
+`⌥` as `Alt` in the table below.
+
+| Shortcut                     | Action                              |
+| ---------------------------- | ----------------------------------- |
+| `⌘O`                         | Open a workspace                    |
+| `⌘N`                         | Start a session in this workspace   |
+| `Ctrl+Tab`, `Ctrl+Shift+Tab` | Next or previous session            |
+| `⌘1` to `⌘9`                 | Go to the session at that position  |
+| `Shift+Esc`                  | Clear attention markers             |
+| `⌘L`                         | Focus the composer                  |
+| `⌘[`, `⌘]`                   | Go back or forward                  |
+| `⌘B`                         | Show or hide the session rail       |
+| `⌥⌘B`                        | Show or hide the inspector          |
+| `⌘=`, `⌘-`, `⌘0`             | Zoom in, zoom out, or reset to 100% |
+
+The **File** menu has **New Session** and **Open Workspace**, and the **View**
+menu has the zoom commands.
+
+## Pi bindings come first
+
+Pau reads Pi's `keybindings.json` and Pi's defaults. When a Pau shortcut uses
+a key that one of your Pi bindings uses, Pi keeps the key and the Pau shortcut
+stops responding to it. This mostly affects Linux, where Pi binds many `Ctrl`
+keys, such as `Ctrl+N`, `Ctrl+O`, and `Ctrl+B`. The shortcut list names the Pi
+action that kept each key. The menu items still work.
+
+## Where shortcuts do not run
+
+Shortcuts do not run while the terminal, a code editor, or a dialog has
+focus, so those keys reach the program or the dialog. In the composer and
+other text fields, shortcuts that editing could use, such as `⌘[` and `⌘L`,
+do not run either.

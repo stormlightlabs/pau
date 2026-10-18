@@ -604,28 +604,10 @@ Verification:
 
 ## Shell and navigation
 
-### 2.171 Application keyboard map
-
-Status: planned
-Blocked by: none
-
-Add global shortcuts for navigation, session switching, panel toggles, and page
-zoom with ⌘+, ⌘−, and ⌘0, an app menu with New Session (⌘N) and Open Workspace
-(⌘O), and a shortcut list that opens with ⌘/. When an app shortcut collides
-with one of the operator's Pi bindings, the Pi binding wins.
-
-Verification:
-
-- Component-test each global shortcut, zoom, a shortcut that yields to a
-  conflicting Pi binding, and that shortcuts do not fire while a dialog or the
-  terminal has focus.
-- Open a workspace and start a session from the app menu in the installed app.
-- Drive a self-hosted session from launch to a finished turn without the mouse.
-
 ### 2.172 Command palette
 
 Status: planned
-Blocked by: 2.171
+Blocked by: none
 
 Make the command bar open a palette that searches workspaces, sessions, views,
 and session actions and shows each action's shortcut. The palette opens and
@@ -722,7 +704,7 @@ Verification:
 ### 2.181 Settings view
 
 Status: planned
-Blocked by: 2.171
+Blocked by: none
 
 Add the Settings destination, opened from the app menu with ⌘,, with
 appearance, session notification, and keyboard sections that show each
@@ -894,7 +876,7 @@ Verification:
 ### 2.206 Attention navigation
 
 Status: planned
-Blocked by: 2.171
+Blocked by: none
 
 Jump to the next marked session with ⌘⌥A, taking waiting sessions first, then
 failed, then unread.

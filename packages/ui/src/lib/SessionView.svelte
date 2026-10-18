@@ -23,6 +23,7 @@
 	import MentionCompletion from './MentionCompletion.svelte';
 	import { settlePendingPrompts, userMessageIds, type PendingPrompt } from './pending-prompts';
 	import Icon from './Icon.svelte';
+	import { useKeyActions } from './keymap.svelte';
 	import Markdown from './Markdown.svelte';
 	import { isReducedMotion, motion } from '../motion';
 	import ModelPicker from './ModelPicker.svelte';
@@ -816,6 +817,24 @@
 		if (next) selectSession(next.id);
 	}
 
+	useKeyActions({
+		'session.new': () => {
+			const workspace = activeWorkspace ?? openedWorkspace ?? workspaces[0];
+			if (workspace) void startSession(workspace);
+		},
+		'workspace.open': () => {
+			if (onOpenWorkspace) void chooseWorkspace();
+		},
+		'session.next': () => (activeSessionId ? moveSession(activeSessionId, 1) : undefined),
+		'session.previous': () => (activeSessionId ? moveSession(activeSessionId, -1) : undefined),
+		'session.goto': (index) => {
+			const session = sessions[index];
+			if (session) selectSession(session.id);
+		},
+		'session.clearAttention': () => onClearAttention(),
+		'composer.focus': () => composer?.focus()
+	});
+
 	/** Attaches the supported files and reports each rejected one by name. */
 	function attachImages(files: Iterable<File>): void {
 		const rejected: string[] = [];
@@ -1092,11 +1111,6 @@
 	 * lands, then both belong there.
 	 */
 	function handleWindowKeydown(event: KeyboardEvent): void {
-		if (event.key === 'Escape' && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
-			event.preventDefault();
-			onClearAttention();
-			return;
-		}
 		if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key === 'End') {
 			const target = event.target;
 			const editable =

@@ -5,6 +5,7 @@
 	import '../styles/tokens.css';
 	import { themeCssProperties, type ThemeName, type UiFontName } from '../theme';
 	import Icon from './Icon.svelte';
+	import { useKeyActions } from './keymap.svelte';
 	import PaneResizer from './PaneResizer.svelte';
 
 	/**
@@ -68,9 +69,30 @@
 		inspector
 	}: Props = $props();
 
+	/** Whether the contextual rail shows as an overlay on narrow windows. */
 	let contextOpen = $state(false);
+	/** Whether the operator hid the contextual rail on wide windows. */
+	let contextHidden = $state(false);
 	let hasContext = $derived(Boolean(context) || contextItems.length > 0);
 	let inspectorVisible = $derived(inspectorOpen);
+
+	/** Narrow windows show the contextual rail as an overlay instead of a column. */
+	const NARROW_QUERY = '(max-width: 48rem)';
+
+	useKeyActions({
+		'panel.context': () => {
+			if (!hasContext) return;
+			if (matchMedia(NARROW_QUERY).matches) {
+				contextHidden = false;
+				contextOpen = !contextOpen;
+			} else {
+				contextHidden = !contextHidden;
+			}
+		},
+		'panel.inspector': () => {
+			if (inspector) inspectorVisible = !inspectorVisible;
+		}
+	});
 	/** Narrowest a resizable pane may be. */
 	const MIN_PANE_WIDTH = 160;
 	/** Width the main surface keeps, matching the `minmax(24rem, 1fr)` grid track. */
@@ -153,7 +175,7 @@
 <a class="app-shell__skip-link" href="#main-surface">Skip to main surface</a>
 <div
 	class:app-shell--with-inspector={inspectorVisible && inspector}
-	class:app-shell--without-context={!hasContext}
+	class:app-shell--without-context={!hasContext || contextHidden}
 	class:app-shell--resizing={contextDragging || inspectorDragging}
 	bind:this={shell}
 	bind:offsetWidth={shellWidth}
@@ -216,7 +238,7 @@
 		</ul>
 	</nav>
 
-	{#if hasContext}
+	{#if hasContext && !contextHidden}
 		<aside
 			id="shell-context-rail"
 			class:open={contextOpen}
@@ -269,7 +291,10 @@
 					class="app-shell__icon-button app-shell__context-toggle"
 					aria-label="Open navigation"
 					aria-expanded={contextOpen}
-					onclick={() => (contextOpen = !contextOpen)}>
+					onclick={() => {
+						contextHidden = false;
+						contextOpen = !contextOpen;
+					}}>
 					<Icon name="sidebar" size={18} />
 				</button>
 			{/if}

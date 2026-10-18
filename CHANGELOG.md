@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- Added keyboard shortcuts for sessions, panels, navigation, and page zoom, a
+  shortcut list on ⌘/, and New Session and Open Workspace in the app menu. Your
+  Pi key bindings take precedence when they collide.
 - Returning to a session puts the transcript back where you left it, or at the
   latest output if you were following it.
 - Sent prompts appear in the transcript right away. A prompt that fails to send

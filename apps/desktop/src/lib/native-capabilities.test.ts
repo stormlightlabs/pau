@@ -1,9 +1,13 @@
+import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import { expect, test, vi } from 'vitest';
 
-import { createDesktopNativeCapabilities } from './native-capabilities';
+import { createDesktopNativeCapabilities, MENU_ACTION_EVENT } from './native-capabilities';
 
+vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
+vi.mock('@tauri-apps/api/webview', () => ({ getCurrentWebview: vi.fn() }));
 vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: vi.fn() }));
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
 
@@ -30,4 +34,32 @@ test('picks one folder with the native dialog and treats cancel as no choice', a
 
 	vi.mocked(open).mockResolvedValueOnce(null);
 	await expect(capabilities.pickFolder?.()).resolves.toBeUndefined();
+});
+
+test('zooms the webview', async () => {
+	const setZoom = vi.fn().mockResolvedValue(undefined);
+	vi.mocked(getCurrentWebview).mockReturnValue({ setZoom } as unknown as ReturnType<typeof getCurrentWebview>);
+
+	await createDesktopNativeCapabilities({ __TAURI_INTERNALS__: {} }).setZoom?.(1.25);
+
+	expect(setZoom).toHaveBeenCalledWith(1.25);
+});
+
+test('forwards app menu choices until the listener stops', async () => {
+	const unlisten = vi.fn();
+	let emit: ((event: { payload: string }) => void) | undefined;
+	vi.mocked(listen).mockImplementation((_event, handler) => {
+		emit = handler as typeof emit;
+		return Promise.resolve(unlisten);
+	});
+	const listener = vi.fn();
+
+	const stop = createDesktopNativeCapabilities({ __TAURI_INTERNALS__: {} }).onMenuAction?.(listener);
+	emit?.({ payload: 'session.new' });
+	stop?.();
+	await Promise.resolve();
+
+	expect(listen).toHaveBeenCalledWith(MENU_ACTION_EVENT, expect.any(Function));
+	expect(listener).toHaveBeenCalledWith('session.new');
+	expect(unlisten).toHaveBeenCalledOnce();
 });

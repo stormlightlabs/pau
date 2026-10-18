@@ -8,6 +8,29 @@ export { default as FileEditor } from './lib/FileEditor.svelte';
 export type { PromptImage } from './lib/composer-images';
 export type { EditorFileContent, FileEditorSource } from './lib/types/file-editor';
 export { default as Icon, type IconProps } from './lib/Icon.svelte';
+export { default as KeyboardShortcuts } from './lib/KeyboardShortcuts.svelte';
+export {
+	APP_KEY_ACTIONS,
+	KEY_GROUPS,
+	Keymap,
+	detectPlatform,
+	eventChord,
+	formatChord,
+	getKeymap,
+	keymapContext,
+	normalizeChord,
+	resolveKeyActions,
+	useKeyActions
+} from './lib/keymap.svelte';
+export type {
+	KeyAction,
+	KeyChord,
+	KeyConflict,
+	KeyHandler,
+	KeyPlatform,
+	PiKeyBinding,
+	ResolvedKeyAction
+} from './lib/keymap.svelte';
 export { default as McpConfigurationView } from './lib/McpConfigurationView.svelte';
 export { default as ModelPicker } from './lib/ModelPicker.svelte';
 export { default as ContextMeter } from './lib/ContextMeter.svelte';

@@ -153,12 +153,11 @@
 	button {
 		min-height: var(--pau-size-row-md);
 		padding-inline: var(--pau-space-3);
-		color: var(--pau-canvas);
-		background: var(--pau-warning);
-		border: 0;
+		color: var(--pau-warning);
+		background: transparent;
+		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
 		font: inherit;
-		font-weight: var(--pau-weight-semibold);
 		cursor: pointer;
 	}
 
@@ -168,8 +167,7 @@
 	}
 
 	.resource-summary__stop {
-		color: var(--pau-canvas);
-		background: var(--pau-danger);
+		color: var(--pau-danger);
 	}
 
 	.resource-summary__empty {

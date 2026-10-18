@@ -5,6 +5,7 @@ import { render } from 'vitest-browser-svelte';
 import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
 import ProcessesView from '../lib/ProcessesView.svelte';
 import SessionResourceSummary from '../lib/SessionResourceSummary.svelte';
+import { themeCssProperties } from '../theme';
 
 const actions = Object.fromEntries(
 	resourceMonitoringFixtures.active.map((process) => [process.processId, { interrupt: true, stop: true }])
@@ -51,6 +52,30 @@ test('shows a compact session summary with a non-destructive pressure warning', 
 	expect(onStop).not.toHaveBeenCalled();
 	await userEvent.click(page.getByRole('button', { name: 'Stop session' }));
 	expect(onStop).toHaveBeenCalledWith('registry-tests');
+});
+
+test('styles pressure actions as outlined buttons like the Processes Stop button', async () => {
+	const properties = Object.entries(themeCssProperties('eldritch', 'overpass'));
+	for (const [name, value] of properties) {
+		document.documentElement.style.setProperty(name, value);
+	}
+	await render(ProcessesView, { workspaceName: 'Pau', processes: [resourceMonitoringFixtures.active[2]!], actions });
+	const processStop = getComputedStyle(page.getByRole('button', { name: 'Stop', exact: true }).element());
+	await render(SessionResourceSummary, {
+		snapshot: resourceMonitoringFixtures.active[2]!,
+		actions: { interrupt: true, stop: true }
+	});
+	const interrupt = getComputedStyle(page.getByRole('button', { name: 'Interrupt work' }).element());
+	const stop = getComputedStyle(page.getByRole('button', { name: 'Stop session' }).element());
+
+	for (const style of [interrupt, stop]) {
+		expect(style.backgroundColor).toBe(processStop.backgroundColor);
+		expect(style.borderTopWidth).toBe(processStop.borderTopWidth);
+		expect(style.borderTopColor).toBe(processStop.borderTopColor);
+		expect(style.fontWeight).toBe(processStop.fontWeight);
+	}
+	expect(stop.color).toBe(processStop.color);
+	expect(interrupt.color).not.toBe(stop.color);
 });
 
 test('shows empty and completed states', async () => {

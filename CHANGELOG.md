@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- The sustained pressure card uses outlined Interrupt work and Stop session
+  buttons that match the Processes view.
 - Finished tool calls show their result, such as "212 lines" or "38 passed", on
   one row, and long runs of finished calls collapse behind a group row.
 - The session header keeps its status, Compact, and Stop in place as the state

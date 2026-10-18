@@ -311,21 +311,6 @@ Verification:
   the current model row renders the check mark.
 - Screenshot the model picker, thinking level picker, and context meter open.
 
-### 2.264 Resource pressure actions
-
-Status: planned
-Blocked by: none
-
-The inspector's sustained-pressure card renders "Interrupt work" and "Stop
-session" as filled yellow and red buttons with dark text, while Processes and
-MCP render Stop and Remove server as outlined buttons with danger text. Use the
-outlined secondary style with warning and danger text in the card.
-
-Verification:
-
-- Screenshot the resource pressure fixture in each shipped theme and confirm
-  the buttons match the Processes Stop button.
-
 ### 2.265 Storybook theme for shell demos
 
 Status: planned

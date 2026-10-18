@@ -103,7 +103,10 @@ test('a disabled primary drops the accent for muted text on the raised surface',
 	expect(disabled.opacity).toBe('1');
 	expect(accentButtons(container)).toHaveLength(0);
 
-	await userEvent.click(await page.getByRole('textbox').findElement());
+	// CodeMirror loads its language support asynchronously, so wait for the editor first.
+	const editor = page.getByRole('textbox');
+	await expect.element(editor).toBeInTheDocument();
+	await userEvent.click(editor);
 	await userEvent.keyboard('{End} // changed');
 	await expect.element(save).toBeEnabled();
 	expect(getComputedStyle(save.element()).color).toBe(tokenColor('--pau-canvas'));

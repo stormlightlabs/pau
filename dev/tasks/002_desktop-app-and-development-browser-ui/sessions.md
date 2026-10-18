@@ -313,4 +313,3 @@ Verification:
 - Component-test that a transcript link asks the desktop shell to open it, and
   that unsafe schemes are refused.
 - Open a link from a self-hosted session transcript.
-

@@ -5,7 +5,7 @@
 ### 2.235 Typography scale and Overpass
 
 Status: planned
-Blocked by: 2.172
+Blocked by: none
 
 Make Overpass Variable the default UI font and Overpass Mono the code font,
 both bundled from Fontsource. Keep IBM Plex Sans as a selectable UI font and

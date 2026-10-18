@@ -36,9 +36,9 @@ test.each(Object.keys(UI_FONTS) as UiFontName[])('renders the %s UI font', async
 test('keeps command and named rail controls in keyboard order', async () => {
 	await render(ApplicationShellDemo);
 
-	const commandInput = page.getByRole('searchbox', { name: 'Search or run a command' });
-	await userEvent.click(commandInput);
-	await expect.element(commandInput).toHaveFocus();
+	const commandButton = page.getByRole('button', { name: 'Search or run a command' });
+	commandButton.element().focus();
+	await expect.element(commandButton).toHaveFocus();
 	await userEvent.tab();
 	await expect.element(page.getByRole('link', { name: 'Sessions' })).toHaveFocus();
 

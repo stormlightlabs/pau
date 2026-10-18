@@ -5,7 +5,7 @@
 ### 2.185 Built-in Pi slash commands
 
 Status: planned
-Blocked by: 2.172
+Blocked by: none
 
 Complete and run Pi's built-in slash commands in the composer by mapping each to
 its Pau action, and explain the commands that need vanilla Pi. `/fork` opens

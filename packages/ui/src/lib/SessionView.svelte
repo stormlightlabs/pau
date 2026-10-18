@@ -4,6 +4,7 @@
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { fade } from 'svelte/transition';
 	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
+	import type { PaletteEntry } from './command-palette';
 	import {
 		historyLimit,
 		idleHistoryCursor,
@@ -526,6 +527,23 @@
 			(compactingSessionId !== undefined && compactingSessionId === activeSession?.id)
 	);
 	const composerUnavailable = $derived(composerUnavailableReason(activeSession, disconnected, compacting));
+	const paletteEntries = $derived<PaletteEntry[]>([
+		...workspaces.flatMap((workspace) =>
+			workspace.sessions.map((session) => ({
+				id: `session:${session.id}`,
+				label: session.title,
+				group: 'Sessions' as const,
+				detail: workspace.name,
+				run: () => selectSession(session.id)
+			}))
+		),
+		...workspaces.map((workspace) => ({
+			id: `workspace:${workspace.id}`,
+			label: workspace.name,
+			group: 'Workspaces' as const,
+			run: () => showWorkspace(workspace.id)
+		}))
+	]);
 	const productItems = $derived(
 		appProductItems.map((item) =>
 			item.id === 'sessions' ? { ...item, attention: sessions.some((session) => hasAttention(session)) } : item
@@ -773,13 +791,23 @@
 			openPath = '';
 			pickerWorkspaceId = undefined;
 			startFailure = undefined;
-			const first = workspaces.find((workspace) => workspace.id === workspaceId)?.sessions[0];
-			if (first) selectSession(first.id);
-			else openedWorkspaceId = workspaceId;
+			showWorkspace(workspaceId);
 		} catch (cause) {
 			openError = cause instanceof Error ? cause.message : 'Pau could not open that folder.';
 		} finally {
 			opening = false;
+		}
+	}
+
+	/** Selects a workspace's first session, or shows the workspace's start prompt when it has none. */
+	function showWorkspace(workspaceId: string): void {
+		const first = workspaces.find((workspace) => workspace.id === workspaceId)?.sessions[0];
+		if (first) selectSession(first.id);
+		else {
+			pickerWorkspaceId = undefined;
+			startFailure = undefined;
+			closeOpenForm();
+			openedWorkspaceId = workspaceId;
 		}
 	}
 
@@ -1520,6 +1548,7 @@
 	{disconnected}
 	inspectorOpen={Boolean(resourceSnapshot)}
 	{paneWidths}
+	{paletteEntries}
 	onResize={onPaneResize}>
 	{#snippet context()}
 		<nav class="session-rail" aria-label="Workspaces and sessions">

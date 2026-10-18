@@ -4,9 +4,11 @@
 	import type { IconKind } from '../icons';
 	import '../styles/tokens.css';
 	import { themeCssProperties, type ThemeName, type UiFontName } from '../theme';
+	import type { PaletteEntry } from './command-palette';
+	import CommandPalette from './CommandPalette.svelte';
 	import { createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
-	import { useKeyActions } from './keymap.svelte';
+	import { getKeymap, useKeyActions } from './keymap.svelte';
 	import PaneResizer from './PaneResizer.svelte';
 
 	/**
@@ -49,6 +51,11 @@
 		paneWidths?: ShellPaneWidths;
 		/** Called when a resize ends or a keyboard step lands, with every pane's width. */
 		onResize?: (widths: ShellPaneWidths) => void;
+		/**
+		 * Workspaces and sessions the command palette lists. The palette adds the
+		 * product rail views and the key map's actions itself.
+		 */
+		paletteEntries?: PaletteEntry[];
 		children?: Snippet;
 		context?: Snippet;
 		inspector?: Snippet;
@@ -65,10 +72,40 @@
 		uiFont = 'ibm-plex-sans',
 		paneWidths = { contextRail: null, inspector: null },
 		onResize,
+		paletteEntries = [],
 		children,
 		context,
 		inspector
 	}: Props = $props();
+
+	const keymap = getKeymap();
+	let paletteOpen = $state(false);
+	let paletteEntrance = $state<'keyboard' | 'pointer'>('keyboard');
+	/** Actions that the palette lists. A range action is reached through its own entries, such as sessions. */
+	const actionEntries = $derived<PaletteEntry[]>(
+		(keymap?.actions ?? [])
+			.filter((action) => !action.range && action.palette !== false)
+			.map((action) => ({
+				id: `action:${action.id}`,
+				label: action.label,
+				group: 'Actions',
+				shortcut: keymap?.shortcut(action.id),
+				disabled: keymap?.canRun(action.id) ? undefined : (action.unavailable ?? 'Not available in this view'),
+				run: () => keymap?.run(action.id)
+			}))
+	);
+	const viewEntries = $derived<PaletteEntry[]>(
+		productItems.map((item) => ({
+			id: `view:${item.id}`,
+			label: item.label,
+			group: 'Views',
+			detail: item.active ? 'Current view' : undefined,
+			href: item.href,
+			disabled: item.href ? undefined : (item.unavailable ?? 'Coming soon')
+		}))
+	);
+	const paletteKeys = $derived(keymap?.actions.find((action) => action.id === 'palette.open')?.keys ?? []);
+	const paletteShortcut = $derived(keymap?.shortcut('palette.open'));
 
 	/** Whether the contextual rail shows as an overlay on narrow windows. */
 	let contextOpen = $state(false);
@@ -119,6 +156,10 @@
 	}
 
 	useKeyActions({
+		'palette.open': () => {
+			paletteEntrance = 'keyboard';
+			paletteOpen = !paletteOpen;
+		},
 		'panel.context': () => {
 			if (!hasContext) return;
 			if (matchMedia(NARROW_QUERY).matches) {
@@ -232,13 +273,26 @@
 			<span>{workspaceName}</span>
 		</div>
 
-		<label class="app-shell__command-input">
+		<button
+			type="button"
+			class="app-shell__command-input"
+			aria-haspopup="dialog"
+			onclick={(event) => {
+				// A click from Enter or Space reports no pointer detail and opens at once.
+				paletteEntrance = event.detail > 0 ? 'pointer' : 'keyboard';
+				paletteOpen = true;
+			}}>
 			<span class="app-shell__search-icon" aria-hidden="true"></span>
-			<span class="app-shell__sr-only">Search or run a command</span>
-			<input type="search" placeholder="Search or run a command" />
-			<kbd>⌘K</kbd>
-		</label>
+			<span class="app-shell__command-placeholder">Search or run a command</span>
+			{#if paletteShortcut}<kbd>{paletteShortcut}</kbd>{/if}
+		</button>
 	</header>
+
+	<CommandPalette
+		bind:open={paletteOpen}
+		entries={[...actionEntries, ...paletteEntries, ...viewEntries]}
+		entrance={paletteEntrance}
+		toggleKeys={paletteKeys} />
 
 	<nav class="app-shell__product-rail" aria-label="Product" bind:offsetWidth={railWidth}>
 		<ul>
@@ -534,6 +588,9 @@
 		border: 1px solid var(--shell-border);
 		border-radius: var(--pau-radius-control);
 		background: var(--shell-surface);
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
 	}
 
 	.app-shell__search-icon {
@@ -553,23 +610,18 @@
 		transform: rotate(45deg);
 	}
 
-	.app-shell__command-input input {
+	.app-shell__command-placeholder {
 		min-width: 0;
 		flex: 1;
-		color: var(--shell-text);
-		background: transparent;
-		border: 0;
-		outline: 0;
-		font: inherit;
-	}
-
-	.app-shell__command-input input::placeholder {
+		overflow: hidden;
 		color: var(--shell-muted);
+		text-align: start;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
-	.app-shell__command-input:focus-within {
-		border-color: var(--shell-focus);
-		box-shadow: 0 0 0 1px var(--shell-focus);
+	.app-shell__command-input:hover {
+		border-color: var(--shell-muted);
 	}
 
 	.app-shell__command-input kbd {

@@ -14,7 +14,7 @@ export type KeyPlatform = 'mac' | 'other';
 /**
  * One application action that the operator can run from the keyboard.
  *
- * Every action is also a command palette entry, so `label` reads as a command.
+ * Actions are also command palette entries, so `label` reads as a command.
  */
 export type KeyAction = {
 	/** Stable identity that handlers and menu items refer to. */
@@ -31,6 +31,16 @@ export type KeyAction = {
 	whileTyping?: boolean;
 	/** Shows the chords as a range, such as ⌘1 to ⌘9, in the shortcut list. */
 	range?: boolean;
+	/**
+	 * Why the command palette shows the action disabled when no mounted view
+	 * can run it. The palette falls back to a generic reason.
+	 */
+	unavailable?: string;
+	/**
+	 * Leaves the action out of the command palette, for chords that act on the
+	 * focused item or that the palette itself handles.
+	 */
+	palette?: false;
 };
 
 /** A Pi binding, as Pau's `/api/pi/keybindings` route reports it. */
@@ -55,19 +65,66 @@ export type KeyHandler = (index: number) => void;
 /** Group headings in the order the shortcut list shows them. */
 export const KEY_GROUPS = ['General', 'Sessions', 'Navigation', 'Panels', 'View'] as const;
 
+/** Reason shown for actions that only the Sessions view can run. */
+const SESSIONS_ONLY = 'Available in Sessions';
+/** Reason shown for actions that need the desktop app's native window. */
+const DESKTOP_ONLY = 'Available in the desktop app';
+
 /**
- * Pau's global key map. The command palette and composer add their own
- * actions with {@link Keymap.define}.
+ * Pau's global key map. The composer and other views add their own actions
+ * with {@link Keymap.define}.
  */
 export const APP_KEY_ACTIONS: readonly KeyAction[] = [
+	{
+		id: 'palette.open',
+		label: 'Open the command palette',
+		group: 'General',
+		keys: ['mod+k', 'mod+shift+p', 'f1'],
+		whileTyping: true,
+		palette: false
+	},
 	{ id: 'app.shortcuts', label: 'Show keyboard shortcuts', group: 'General', keys: ['mod+/'], whileTyping: true },
-	{ id: 'workspace.open', label: 'Open workspace', group: 'General', keys: ['mod+o'], whileTyping: true },
+	{
+		id: 'workspace.open',
+		label: 'Open workspace',
+		group: 'General',
+		keys: ['mod+o'],
+		whileTyping: true,
+		unavailable: SESSIONS_ONLY
+	},
 	// The focused row or message opens its own menu, because the menu depends
 	// on that item. The entry lists the chords and registers no handler.
-	{ id: 'item.contextMenu', label: 'Open the context menu', group: 'General', keys: ['shift+f10', 'contextmenu'] },
-	{ id: 'session.new', label: 'New session', group: 'Sessions', keys: ['mod+n'], whileTyping: true },
-	{ id: 'session.next', label: 'Next session', group: 'Sessions', keys: ['ctrl+tab'], whileTyping: true },
-	{ id: 'session.previous', label: 'Previous session', group: 'Sessions', keys: ['ctrl+shift+tab'], whileTyping: true },
+	{
+		id: 'item.contextMenu',
+		label: 'Open the context menu',
+		group: 'General',
+		keys: ['shift+f10', 'contextmenu'],
+		palette: false
+	},
+	{
+		id: 'session.new',
+		label: 'New session',
+		group: 'Sessions',
+		keys: ['mod+n'],
+		whileTyping: true,
+		unavailable: SESSIONS_ONLY
+	},
+	{
+		id: 'session.next',
+		label: 'Next session',
+		group: 'Sessions',
+		keys: ['ctrl+tab'],
+		whileTyping: true,
+		unavailable: SESSIONS_ONLY
+	},
+	{
+		id: 'session.previous',
+		label: 'Previous session',
+		group: 'Sessions',
+		keys: ['ctrl+shift+tab'],
+		whileTyping: true,
+		unavailable: SESSIONS_ONLY
+	},
 	{
 		id: 'session.goto',
 		label: 'Go to session 1 to 9',
@@ -81,18 +138,60 @@ export const APP_KEY_ACTIONS: readonly KeyAction[] = [
 		label: 'Clear attention markers',
 		group: 'Sessions',
 		keys: ['shift+escape'],
-		whileTyping: true
+		whileTyping: true,
+		unavailable: SESSIONS_ONLY
 	},
-	{ id: 'prompt.previous', label: 'Previous prompt', group: 'Navigation', keys: ['ctrl+shift+up'], whileTyping: true },
-	{ id: 'prompt.next', label: 'Next prompt', group: 'Navigation', keys: ['ctrl+shift+down'], whileTyping: true },
-	{ id: 'composer.focus', label: 'Focus the composer', group: 'Navigation', keys: ['mod+l'] },
+	{
+		id: 'composer.focus',
+		label: 'Focus the composer',
+		group: 'Navigation',
+		keys: ['mod+l'],
+		unavailable: SESSIONS_ONLY
+	},
+	{
+		id: 'prompt.previous',
+		label: 'Previous prompt',
+		group: 'Navigation',
+		keys: ['ctrl+shift+up'],
+		whileTyping: true,
+		unavailable: SESSIONS_ONLY
+	},
+	{
+		id: 'prompt.next',
+		label: 'Next prompt',
+		group: 'Navigation',
+		keys: ['ctrl+shift+down'],
+		whileTyping: true,
+		unavailable: SESSIONS_ONLY
+	},
 	{ id: 'navigate.back', label: 'Go back', group: 'Navigation', keys: ['mod+['] },
 	{ id: 'navigate.forward', label: 'Go forward', group: 'Navigation', keys: ['mod+]'] },
 	{ id: 'panel.context', label: 'Toggle the session rail', group: 'Panels', keys: ['mod+b'], whileTyping: true },
 	{ id: 'panel.inspector', label: 'Toggle the inspector', group: 'Panels', keys: ['mod+alt+b'], whileTyping: true },
-	{ id: 'view.zoomIn', label: 'Zoom in', group: 'View', keys: ['mod+=', 'mod+plus'], whileTyping: true },
-	{ id: 'view.zoomOut', label: 'Zoom out', group: 'View', keys: ['mod+-'], whileTyping: true },
-	{ id: 'view.zoomReset', label: 'Actual size', group: 'View', keys: ['mod+0'], whileTyping: true }
+	{
+		id: 'view.zoomIn',
+		label: 'Zoom in',
+		group: 'View',
+		keys: ['mod+=', 'mod+plus'],
+		whileTyping: true,
+		unavailable: DESKTOP_ONLY
+	},
+	{
+		id: 'view.zoomOut',
+		label: 'Zoom out',
+		group: 'View',
+		keys: ['mod+-'],
+		whileTyping: true,
+		unavailable: DESKTOP_ONLY
+	},
+	{
+		id: 'view.zoomReset',
+		label: 'Actual size',
+		group: 'View',
+		keys: ['mod+0'],
+		whileTyping: true,
+		unavailable: DESKTOP_ONLY
+	}
 ];
 
 type Modifier = 'ctrl' | 'alt' | 'shift' | 'meta';

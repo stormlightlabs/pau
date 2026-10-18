@@ -230,25 +230,26 @@ stay visible for at least 500ms.
 
 ### Rules by component class
 
-| Component                      | Enter                        | Exit     | Notes                          |
-| ------------------------------ | ---------------------------- | -------- | ------------------------------ |
-| Hover and press                | feedback, color only         | feedback | Instant in dense lists         |
-| Focus ring                     | instant                      | instant  | Never transition `outline`     |
-| Selection indicator            | feedback, color              | feedback | No sliding indicator           |
-| Session status                 | feedback, color              | feedback | One spinner only for running   |
-| Attention marker               | one 600ms pulse              | instant  | Static badge after the pulse   |
-| Disclosure (tool, thinking)    | medium, rows 0fr to 1fr      | small    | Instant if streaming or tall   |
-| Popover, menu (pointer)        | small, fade and scale-enter  | feedback | Origin at the anchor           |
-| Completion list (keyboard)     | instant                      | instant  |                                |
-| Dialog                         | medium, fade and scale-enter | small    | Backdrop fades with it         |
-| Overlay rail, narrow inspector | medium, translate from edge  | small    | Scrim fades over small         |
-| Wide inspector, rail toggle    | instant layout, small fade   | instant  | No per-frame reflow            |
-| Toast                          | medium, offset-md from edge  | small    | Same edge in and out           |
-| Task-surface change            | large, fade and offset-sm    | none     | Keyboard navigation is instant |
-| Terminal tab                   | instant                      | instant  | Never animate the canvas       |
-| Diff hunk update               | 1s background tint fade      | —        | Static marker when reduced     |
-| Transcript streaming           | none                         | —        | Append per frame, no fades     |
-| Follow-mode scroll             | jump                         | —        | No smooth scrolling            |
+| Component                      | Enter                                 | Exit     | Notes                          |
+| ------------------------------ | ------------------------------------- | -------- | ------------------------------ |
+| Hover and press                | feedback, color only                  | feedback | Instant in dense lists         |
+| Focus ring                     | instant                               | instant  | Never transition `outline`     |
+| Selection indicator            | feedback, color                       | feedback | No sliding indicator           |
+| Session status                 | feedback, color                       | feedback | One spinner only for running   |
+| Attention marker               | one 600ms pulse                       | instant  | Static badge after the pulse   |
+| Disclosure (tool, thinking)    | medium, rows 0fr to 1fr               | small    | Instant if streaming or tall   |
+| Popover, menu (pointer)        | small, fade and scale-enter           | feedback | Origin at the anchor           |
+| Completion list (keyboard)     | instant                               | instant  |                                |
+| Command palette                | instant, feedback fade from a pointer | instant  | No fade under reduced motion   |
+| Dialog                         | medium, fade and scale-enter          | small    | Backdrop fades with it         |
+| Overlay rail, narrow inspector | medium, translate from edge           | small    | Scrim fades over small         |
+| Wide inspector, rail toggle    | instant layout, small fade            | instant  | No per-frame reflow            |
+| Toast                          | medium, offset-md from edge           | small    | Same edge in and out           |
+| Task-surface change            | large, fade and offset-sm             | none     | Keyboard navigation is instant |
+| Terminal tab                   | instant                               | instant  | Never animate the canvas       |
+| Diff hunk update               | 1s background tint fade               | —        | Static marker when reduced     |
+| Transcript streaming           | none                                  | —        | Append per frame, no fades     |
+| Follow-mode scroll             | jump                                  | —        | No smooth scrolling            |
 
 Interaction rules:
 

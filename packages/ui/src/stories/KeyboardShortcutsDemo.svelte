@@ -22,7 +22,7 @@
 
 	$effect(() => {
 		const unregister = keymap.actions
-			.filter((action) => !action.id.startsWith('panel.'))
+			.filter((action) => !action.id.startsWith('panel.') && action.id !== 'palette.open')
 			.map((action) =>
 				keymap.register(action.id, (index) => {
 					if (action.id === 'app.shortcuts') shortcutsOpen = !shortcutsOpen;

@@ -2,23 +2,6 @@
 
 ## Shell and navigation
 
-### 2.172 Command palette
-
-Status: planned
-Blocked by: none
-
-Make the command bar open a palette that searches workspaces, sessions, views,
-and session actions and shows each action's shortcut. The palette opens and
-closes instantly from the keyboard, filters in the same frame as typing, and
-keeps a fixed row height. Pointer opening may fade in over 100ms.
-
-Verification:
-
-- Component-test fuzzy matching, disabled actions with their reasons, an empty
-  result, and closing on Escape and on selection.
-- Storybook interaction test for opening, filtering, and running an action from
-  the keyboard.
-
 ### 2.176 Restore last view on launch
 
 Status: planned

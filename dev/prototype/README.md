@@ -63,9 +63,8 @@ The file has these pages:
   `splash/launch`, `splash/reconnect`, and `screens/<name>` for each product
   screen.
 
-Each top-level frame on a screen page is one state, named `<page> — <state>`.
-The frames still wrap the application window, or the site page, in the old
-workbench sidebar and page header. The HTML pages leave that chrome out.
+Each top-level frame on a screen page is one state, named `<page> — <state>`,
+and holds only the application window or the site page.
 
 ### Tokens
 

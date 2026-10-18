@@ -178,3 +178,19 @@ test('opens the palette with Ctrl+K in the composer once Pi deletes to the line 
 	expect(pressAt(prompt, { key: 'k', code: 'KeyK', ctrlKey: true })).toBe(true);
 	await expect.element(palette()).toBeVisible();
 });
+
+test('opens on the first available action and runs it with Enter', async () => {
+	await render(CommandPaletteDemo);
+	await userEvent.click(commandBar());
+
+	const options = page.getByRole('option');
+	await expect.element(options.first()).toHaveAttribute('aria-selected', 'true');
+	await expect.element(options.first()).not.toHaveAttribute('aria-disabled');
+	await expect
+		.element(page.getByRole('option', { name: /Show keyboard shortcuts/ }))
+		.toHaveAttribute('aria-selected', 'false');
+
+	await userEvent.keyboard('{Enter}');
+	await expect.element(palette()).not.toBeInTheDocument();
+	await expect.element(lastAction()).not.toHaveTextContent('None');
+});

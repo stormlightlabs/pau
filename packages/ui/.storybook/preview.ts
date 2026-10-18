@@ -15,7 +15,14 @@ const preview = {
 			for (const [property, value] of themeProperties) {
 				root.style.setProperty(property, value);
 			}
-			return Story();
+			// Shell demos apply their own theme props, so hand them the toolbar globals unless the story sets one.
+			return Story({
+				args: {
+					...context.args,
+					theme: context.args.theme ?? context.globals.theme,
+					uiFont: context.args.uiFont ?? context.globals.uiFont
+				}
+			});
 		}
 	],
 	globalTypes: {

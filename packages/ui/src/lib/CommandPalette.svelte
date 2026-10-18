@@ -29,7 +29,8 @@
 	let input = $state<HTMLInputElement>();
 	let listbox = $state<HTMLElement>();
 	let query = $state('');
-	let activeIndex = $state(0);
+	/** The row the user moved to. Until then the first available row is active. */
+	let picked = $state<number>();
 	let fade = $state(false);
 	/** Gives focus back to the element that had it before the palette opened. */
 	const focusReturn = createFocusReturn();
@@ -41,6 +42,13 @@
 			items: results.flatMap((entry, index) => (entry.group === group ? [{ entry, index }] : []))
 		})).filter((section) => section.items.length > 0)
 	);
+	const activeIndex = $derived(
+		picked ??
+			Math.max(
+				0,
+				results.findIndex((entry) => !entry.disabled)
+			)
+	);
 	const activeId = $derived(results.length > 0 ? optionId(activeIndex) : undefined);
 
 	$effect(() => {
@@ -48,7 +56,7 @@
 		if (open && !dialog.open) {
 			focusReturn.capture();
 			query = '';
-			activeIndex = 0;
+			picked = undefined;
 			fade = entrance === 'pointer' && !isReducedMotion();
 			dialog.showModal();
 			input.focus();
@@ -87,7 +95,7 @@
 
 	function move(offset: number): void {
 		if (results.length === 0) return;
-		activeIndex = (activeIndex + offset + results.length) % results.length;
+		picked = (activeIndex + offset + results.length) % results.length;
 	}
 
 	function handleKeydown(event: KeyboardEvent): void {
@@ -109,7 +117,7 @@
 			case 'End': {
 				if (results.length === 0) return;
 				event.preventDefault();
-				activeIndex = event.key === 'Home' ? 0 : results.length - 1;
+				picked = event.key === 'Home' ? undefined : results.length - 1;
 				break;
 			}
 			case 'Enter': {
@@ -153,7 +161,7 @@
 			autocomplete="off"
 			spellcheck="false"
 			placeholder="Search or run a command"
-			oninput={() => (activeIndex = 0)}
+			oninput={() => (picked = undefined)}
 			onkeydown={handleKeydown} />
 	</div>
 	<div bind:this={listbox} id={listId} class="command-palette__list" role="listbox" aria-label="Commands">
@@ -179,7 +187,7 @@
 							role="option"
 							tabindex="-1"
 							aria-selected={index === activeIndex}
-							onpointermove={() => (activeIndex = index)}
+							onpointermove={() => (picked = index)}
 							onclick={(event) => choose(entry, event)}>{@render row()}</a>
 					{:else}
 						<!-- Options never take focus. The combobox handles their keys through aria-activedescendant. -->
@@ -191,7 +199,7 @@
 							tabindex="-1"
 							aria-selected={index === activeIndex}
 							aria-disabled={entry.disabled ? 'true' : undefined}
-							onpointermove={() => (activeIndex = index)}
+							onpointermove={() => (picked = index)}
 							onclick={(event) => choose(entry, event)}>
 							{@render row()}
 						</div>

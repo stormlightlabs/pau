@@ -2,13 +2,19 @@
 	import { createTerminalFixture } from '../fixtures/terminals';
 	import TerminalSurface from '../lib/TerminalSurface.svelte';
 	import type { TerminalExit } from '../lib/types/terminal';
-	import type { ThemeName } from '../theme';
+	import type { ThemeName, UiFontName } from '../theme';
 
-	type Props = { theme?: ThemeName; disconnected?: boolean; exitOnConnect?: TerminalExit; createError?: string };
+	type Props = {
+		theme?: ThemeName;
+		uiFont?: UiFontName;
+		disconnected?: boolean;
+		exitOnConnect?: TerminalExit;
+		createError?: string;
+	};
 
-	let { theme = 'eldritch', disconnected = false, exitOnConnect, createError }: Props = $props();
+	let { theme = 'eldritch', uiFont, disconnected = false, exitOnConnect, createError }: Props = $props();
 
 	const { source } = $derived(createTerminalFixture({ exitOnConnect, createError }));
 </script>
 
-<TerminalSurface workspaceName="pau" {source} {theme} {disconnected} />
+<TerminalSurface workspaceName="pau" {source} {theme} {uiFont} {disconnected} />

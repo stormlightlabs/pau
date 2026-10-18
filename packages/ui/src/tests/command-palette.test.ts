@@ -40,3 +40,13 @@ test('orders matches by group, then rank, then original order, with detail match
 		'view'
 	]);
 });
+
+test('lists unavailable entries after available ones within a group', () => {
+	const entries = [
+		{ ...entry('off', 'Show shortcuts', 'Actions'), disabled: 'Not available in this view' },
+		entry('on', 'New session', 'Actions'),
+		entry('view', 'Sessions', 'Views')
+	];
+
+	expect(filterPalette(entries, '').map(({ id }) => id)).toEqual(['on', 'off', 'view']);
+});

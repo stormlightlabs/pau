@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- The command palette opens with the first available action highlighted, so
+  Enter runs it, and actions unavailable in the current view are listed after
+  the rest.
 - The sustained pressure card uses outlined Interrupt work and Stop session
   buttons that match the Processes view.
 - Finished tool calls show their result, such as "212 lines" or "38 passed", on

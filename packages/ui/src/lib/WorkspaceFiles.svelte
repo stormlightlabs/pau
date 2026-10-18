@@ -5,6 +5,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 
 	import type { IconKind } from '../icons';
+	import type { ThemeName, UiFontName } from '../theme';
 	import type {
 		WorkspaceFileEntry,
 		WorkspaceFileSource,
@@ -50,6 +51,10 @@
 		/** Product rail destinations, supplied by the app that owns the routes. */
 		productItems?: ShellNavItem[];
 		/** Saved widths for the resizable panes. */
+		/** Color theme the shell applies. Defaults to the shell's own default. */
+		theme?: ThemeName;
+		/** UI font the shell applies. Defaults to the shell's own default. */
+		uiFont?: UiFontName;
 		paneWidths?: ShellPaneWidths;
 		/** Called with the new widths after the operator resizes a pane. */
 		onPaneResize?: (widths: ShellPaneWidths) => void;
@@ -72,6 +77,8 @@
 		workspacePath,
 		revealPath,
 		productItems = defaultProductItems,
+		theme,
+		uiFont,
 		paneWidths,
 		onPaneResize
 	}: Props = $props();
@@ -453,6 +460,8 @@
 	contextItems={[]}
 	{disconnected}
 	inspectorOpen={false}
+	{theme}
+	{uiFont}
 	{paneWidths}
 	onResize={onPaneResize}>
 	{#snippet context()}

@@ -41,8 +41,8 @@ export function fuzzyRank(query: string, text: string): number | undefined {
 }
 
 /**
- * Filters entries by a query and orders them by group, then by rank, then by
- * their original order. A label match outranks a match in the detail text.
+ * Filters entries by a query and orders them by group, then available before
+ * unavailable, then by rank, then by their original order. A label match outranks a match in the detail text.
  */
 export function filterPalette(entries: readonly PaletteEntry[], query: string): PaletteEntry[] {
 	return entries
@@ -50,9 +50,9 @@ export function filterPalette(entries: readonly PaletteEntry[], query: string): 
 			const label = fuzzyRank(query, entry.label);
 			const detail = entry.detail === undefined ? undefined : fuzzyRank(query, entry.detail);
 			const rank = label ?? (detail === undefined ? undefined : detail + 4);
-			return { entry, order, rank, group: PALETTE_GROUPS.indexOf(entry.group) };
+			return { entry, order, rank, group: PALETTE_GROUPS.indexOf(entry.group), unavailable: entry.disabled ? 1 : 0 };
 		})
 		.filter((match): match is typeof match & { rank: number } => match.rank !== undefined)
-		.sort((a, b) => a.group - b.group || a.rank - b.rank || a.order - b.order)
+		.sort((a, b) => a.group - b.group || a.unavailable - b.unavailable || a.rank - b.rank || a.order - b.order)
 		.map((match) => match.entry);
 }

@@ -4,9 +4,15 @@
 	import { shellNavigationFixtures } from '../fixtures/application-shell';
 	import ApplicationShell from '../lib/ApplicationShell.svelte';
 	import type { PaletteEntry } from '../lib/command-palette';
+	import type { ThemeName, UiFontName } from '../theme';
 	import { Keymap, keymapContext, type KeyPlatform, type PiKeyBinding } from '../lib/keymap.svelte';
 
-	let { platform = 'mac', piBindings = [] }: { platform?: KeyPlatform; piBindings?: PiKeyBinding[] } = $props();
+	let {
+		platform = 'mac',
+		piBindings = [],
+		theme,
+		uiFont
+	}: { platform?: KeyPlatform; piBindings?: PiKeyBinding[]; theme?: ThemeName; uiFont?: UiFontName } = $props();
 
 	// svelte-ignore state_referenced_locally
 	const keymap = setContext(keymapContext, new Keymap({ platform }));
@@ -55,6 +61,8 @@
 	contextLabel="Workspaces"
 	productItems={shellNavigationFixtures.productItems}
 	contextItems={shellNavigationFixtures.contextItems}
+	{theme}
+	{uiFont}
 	{paletteEntries}>
 	<section class="palette-demo">
 		<p>Last action: <output aria-label="Last action">{lastAction}</output></p>

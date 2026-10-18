@@ -18,8 +18,6 @@ const meta = {
 		disconnected: false,
 		inspectorOpen: true,
 		longContent: false,
-		theme: 'eldritch',
-		uiFont: 'inter',
 		paneWidths: { contextRail: null, inspector: null }
 	}
 } satisfies Meta<typeof ApplicationShellDemo>;

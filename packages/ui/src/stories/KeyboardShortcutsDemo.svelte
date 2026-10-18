@@ -4,13 +4,22 @@
 	import { shellNavigationFixtures } from '../fixtures/application-shell';
 	import ApplicationShell from '../lib/ApplicationShell.svelte';
 	import KeyboardShortcuts from '../lib/KeyboardShortcuts.svelte';
+	import type { ThemeName, UiFontName } from '../theme';
 	import { Keymap, keymapContext, type KeyPlatform, type PiKeyBinding } from '../lib/keymap.svelte';
 
 	let {
 		platform = 'mac',
 		piBindings = [],
-		open = false
-	}: { platform?: KeyPlatform; piBindings?: PiKeyBinding[]; open?: boolean } = $props();
+		open = false,
+		theme,
+		uiFont
+	}: {
+		platform?: KeyPlatform;
+		piBindings?: PiKeyBinding[];
+		open?: boolean;
+		theme?: ThemeName;
+		uiFont?: UiFontName;
+	} = $props();
 
 	// svelte-ignore state_referenced_locally
 	const keymap = setContext(keymapContext, new Keymap({ platform }));
@@ -41,7 +50,9 @@
 	workspaceName="fix-diff-gutter"
 	contextLabel="Workspaces"
 	productItems={shellNavigationFixtures.productItems}
-	contextItems={shellNavigationFixtures.contextItems}>
+	contextItems={shellNavigationFixtures.contextItems}
+	{theme}
+	{uiFont}>
 	<section class="keymap-demo">
 		<p>Last action: <output aria-label="Last action">{lastAction}</output></p>
 		<button type="button" onclick={() => (shortcutsOpen = true)}>Show keyboard shortcuts</button>

@@ -6,6 +6,7 @@
 	import { fade } from 'svelte/transition';
 	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
 	import type { PaletteEntry } from './command-palette';
+	import type { ThemeName, UiFontName } from '../theme';
 	import {
 		historyLimit,
 		idleHistoryCursor,
@@ -222,6 +223,10 @@
 		 */
 		productItems?: ShellNavItem[];
 		/** Saved widths for the resizable panes. */
+		/** Color theme the shell applies. Defaults to the shell's own default. */
+		theme?: ThemeName;
+		/** UI font the shell applies. Defaults to the shell's own default. */
+		uiFont?: UiFontName;
 		paneWidths?: ShellPaneWidths;
 		/** Called with the new widths after the operator resizes a pane. */
 		onPaneResize?: (widths: ShellPaneWidths) => void;
@@ -280,6 +285,8 @@
 		onOpenWorkspace,
 		pickFolder,
 		productItems: appProductItems = defaultProductItems,
+		theme,
+		uiFont,
 		paneWidths,
 		onPaneResize,
 		following = $bindable(true)
@@ -1731,6 +1738,8 @@
 	contextItems={[]}
 	{disconnected}
 	inspectorOpen={Boolean(resourceSnapshot)}
+	{theme}
+	{uiFont}
 	{paneWidths}
 	{paletteEntries}
 	onResize={onPaneResize}>

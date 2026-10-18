@@ -10,7 +10,7 @@ const meta = {
 	argTypes: {
 		theme: { control: 'select', options: ['eldritch', 'nord', 'iceberg', 'catppuccin-mocha', 'vitesse-dark'] }
 	},
-	args: { theme: 'eldritch', disconnected: false }
+	args: { disconnected: false }
 } satisfies Meta<typeof TerminalSurfaceDemo>;
 
 export default meta;

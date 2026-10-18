@@ -15,6 +15,7 @@
 	} from '../lib/types/session';
 	import type { ShellNavItem, ShellPaneWidths } from '../lib/ApplicationShell.svelte';
 	import SessionView from '../lib/SessionView.svelte';
+	import type { ThemeName, UiFontName } from '../theme';
 
 	let {
 		workspaces,
@@ -40,7 +41,9 @@
 		productItems,
 		agentReadiness,
 		models,
-		paneWidths
+		paneWidths,
+		theme,
+		uiFont
 	}: {
 		workspaces: SessionWorkspace[];
 		initialSessionId?: string;
@@ -73,6 +76,8 @@
 		agentReadiness?: AgentReadinessProblem;
 		/** Pane widths in pixels; a null width keeps the default. */
 		paneWidths?: ShellPaneWidths;
+		theme?: ThemeName;
+		uiFont?: UiFontName;
 		/**
 		 * What a native folder picker returns, with `null` for a cancel. Without
 		 * it, the view asks for a path in a text field.
@@ -149,6 +154,8 @@
 	{productItems}
 	{agentReadiness}
 	{paneWidths}
+	{theme}
+	{uiFont}
 	onOpenWorkspace={openable ? async (path) => openWorkspace(path) : undefined}
 	pickFolder={pickedFolder === undefined ? undefined : async () => pickedFolder ?? undefined}
 	{activeSessionId}

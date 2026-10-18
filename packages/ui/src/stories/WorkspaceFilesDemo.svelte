@@ -1,11 +1,12 @@
 <script lang="ts">
 	import type { WorkspaceFileSource, WorkspaceSearchMatch } from '../lib/types/workspace-files';
 	import { workspaceFileFixtures } from '../fixtures/workspace-files';
+	import type { ThemeName, UiFontName } from '../theme';
 	import WorkspaceFiles from '../lib/WorkspaceFiles.svelte';
 
 	type State = 'default' | 'detached' | 'empty' | 'loading' | 'non-repository' | 'permission-error' | 'large-results';
 
-	let { state: view = 'default' }: { state?: State } = $props();
+	let { state: view = 'default', theme, uiFont }: { state?: State; theme?: ThemeName; uiFont?: UiFontName } = $props();
 	let lastAction = $state('No action sent');
 
 	const pending = new Promise<never>(() => {});
@@ -51,6 +52,8 @@
 	workspaceName="pau"
 	workspacePath="/Users/operator/projects/pau"
 	{source}
+	{theme}
+	{uiFont}
 	revealPath={async (path) => {
 		lastAction = `reveal ${path}`;
 	}} />

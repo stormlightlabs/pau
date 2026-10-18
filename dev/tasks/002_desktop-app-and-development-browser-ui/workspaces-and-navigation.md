@@ -2,23 +2,6 @@
 
 ## Shell and navigation
 
-### 2.243 Scoped Pi bindings
-
-Status: planned
-Blocked by: none
-
-Let Pi's text-editing bindings take a chord from Pau only while the composer has
-focus, and keep Pi's application bindings taking it everywhere, as the keyboard
-rules in `dev/design/system.md` describe. Show where each yielded chord applies
-in the shortcut list.
-
-Verification:
-
-- Component-test on Linux that Ctrl+K opens the command palette outside the
-  composer and is left to the text field inside it, that Ctrl+Shift+P still
-  yields to Pi everywhere, and that an operator binding which moves a
-  text-editing action to another chord frees Ctrl+K.
-
 ### 2.176 Restore last view on launch
 
 Status: planned

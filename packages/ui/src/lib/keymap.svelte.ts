@@ -46,12 +46,24 @@ export type KeyAction = {
 /** A Pi binding, as Pau's `/api/pi/keybindings` route reports it. */
 export type PiKeyBinding = { action: string; keys: readonly string[] };
 
-/** A default chord that Pau gave up because one of the operator's Pi bindings uses it. */
-export type KeyConflict = { keys: KeyChord; piAction: string };
+/**
+ * Where a Pi binding applies. Pi's text-editing and input bindings
+ * (`editor`) act on the text being typed, so they only matter while a text
+ * field has focus. Pi's application bindings (`application`) act on the
+ * session and apply everywhere.
+ */
+export type PiKeyScope = 'editor' | 'application';
 
 /**
- * An action with its chords resolved for one platform. `keys` holds only the
- * chords Pau listens for, and `yielded` holds the ones Pi kept.
+ * A default chord that one of the operator's Pi bindings uses. Pau gives the
+ * chord up wherever the binding's `scope` applies.
+ */
+export type KeyConflict = { keys: KeyChord; piAction: string; scope: PiKeyScope };
+
+/**
+ * An action with its chords resolved for one platform. `keys` holds the chords
+ * Pau listens for, including those it gives up only while a text field has
+ * focus. `yielded` holds every chord a Pi binding uses, with where Pi keeps it.
  */
 export type ResolvedKeyAction = Omit<KeyAction, 'keys'> & { keys: KeyChord[]; yielded: KeyConflict[] };
 
@@ -302,27 +314,61 @@ export function detectPlatform(navigatorLike: { platform?: string; userAgent?: s
 }
 
 /**
- * Resolves each action's chords for a platform and removes every chord that a
- * Pi binding uses. The operator's Pi bindings win so that Pi's editing keys,
- * such as Ctrl+K on Linux, keep working in the composer and terminal.
+ * Pi application actions that edit the text being typed, so they apply only
+ * while a text field has focus, like the `tui.editor` and `tui.input` actions.
+ */
+const PI_EDITOR_ACTIONS: ReadonlySet<string> = new Set([
+	'app.clear',
+	'app.clipboard.pasteImage',
+	'app.editor.external'
+]);
+
+/**
+ * Classifies a Pi binding by its action ID. Pi namespaces its text-editing
+ * keys under `tui.editor` and `tui.input`. Every other action, including the
+ * fullscreen transcript and list keys, is an application binding.
+ */
+function piKeyScope(piAction: string): PiKeyScope {
+	return piAction.startsWith('tui.editor.') || piAction.startsWith('tui.input.') || PI_EDITOR_ACTIONS.has(piAction)
+		? 'editor'
+		: 'application';
+}
+
+/**
+ * Resolves each action's chords for a platform against the operator's Pi
+ * bindings. A chord that a Pi application binding uses leaves `keys`, so Pau
+ * never handles it. A chord that only a Pi editor binding uses stays in
+ * `keys`, and {@link Keymap.handleKeydown} leaves it to the text field that
+ * has focus. That way Ctrl+K on Linux deletes to the end of the line in the
+ * composer and opens the command palette everywhere else.
  */
 export function resolveKeyActions(
 	actions: readonly KeyAction[],
 	platform: KeyPlatform,
 	piBindings: readonly PiKeyBinding[]
 ): ResolvedKeyAction[] {
-	const piOwners: Partial<Record<KeyChord, string>> = {};
+	// When several Pi actions share a chord, an application binding wins,
+	// because it keeps the chord in more places.
+	const piOwners: Partial<Record<KeyChord, Omit<KeyConflict, 'keys'>>> = {};
+	const ownerOf = (chord: KeyChord) => (Object.hasOwn(piOwners, chord) ? piOwners[chord] : undefined);
 	for (const binding of piBindings) {
-		for (const keys of binding.keys) piOwners[normalizeChord(keys, platform)] ??= binding.action;
+		const scope = piKeyScope(binding.action);
+		for (const keys of binding.keys) {
+			const chord = normalizeChord(keys, platform);
+			const owner = ownerOf(chord);
+			if (!owner || (scope === 'application' && owner.scope === 'editor')) {
+				piOwners[chord] = { piAction: binding.action, scope };
+			}
+		}
 	}
 	return actions.map((action) => {
 		const keys: KeyChord[] = [];
 		const yielded: KeyConflict[] = [];
 		for (const defaultKeys of action.keys) {
 			const chord = normalizeChord(defaultKeys, platform);
-			const piAction = Object.hasOwn(piOwners, chord) ? piOwners[chord] : undefined;
-			if (piAction === undefined) keys.push(chord);
-			else yielded.push({ keys: chord, piAction });
+			const owner = ownerOf(chord);
+			if (owner) yielded.push({ keys: chord, ...owner });
+			if (owner?.scope !== 'application') keys.push(chord);
 		}
 		return { ...action, keys, yielded };
 	});
@@ -457,7 +503,9 @@ export class Keymap {
 	 * Runs the action bound to a key press and prevents the browser default.
 	 *
 	 * Nothing runs inside a code editor, the terminal, or a dialog. In a text
-	 * field, only actions marked `whileTyping` run.
+	 * field, only actions marked `whileTyping` run, and never on a chord that a
+	 * Pi editor binding uses. The composer is the field that rule exists for,
+	 * but it covers every text field, since each one edits text.
 	 *
 	 * @returns The ID of the action that ran.
 	 */
@@ -470,7 +518,9 @@ export class Keymap {
 		const typing = target !== undefined && isTextField(target);
 		for (const action of this.actions) {
 			const index = action.keys.indexOf(chord);
-			if (index === -1 || (typing && !action.whileTyping) || !this.canRun(action.id)) continue;
+			if (index === -1 || !this.canRun(action.id)) continue;
+			// Application conflicts never reach `keys`, so a yielded chord here is an editor one.
+			if (typing && (!action.whileTyping || action.yielded.some((conflict) => conflict.keys === chord))) continue;
 			event.preventDefault();
 			this.run(action.id, { index });
 			return action.id;

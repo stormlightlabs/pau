@@ -66,6 +66,33 @@ describe('Pi bindings', () => {
 		expect(previous?.keys).toEqual([]);
 	});
 
+	test('keep a chord that only a Pi editing binding uses, scoped to typing', () => {
+		const resolved = resolveKeyActions(APP_KEY_ACTIONS, 'other', [
+			{ action: 'tui.editor.deleteToLineEnd', keys: ['ctrl+k'] },
+			{ action: 'app.model.cycleBackward', keys: ['shift+ctrl+p'] }
+		]);
+
+		expect(resolved.find((action) => action.id === 'palette.open')).toMatchObject({
+			keys: ['ctrl+k', 'f1'],
+			yielded: [
+				{ keys: 'ctrl+k', piAction: 'tui.editor.deleteToLineEnd', scope: 'editor' },
+				{ keys: 'ctrl+shift+p', piAction: 'app.model.cycleBackward', scope: 'application' }
+			]
+		});
+	});
+
+	test('let an application binding win a chord it shares with an editing binding', () => {
+		const resolved = resolveKeyActions(APP_KEY_ACTIONS, 'other', [
+			{ action: 'tui.editor.deleteCharForward', keys: ['ctrl+n'] },
+			{ action: 'app.session.toggleNamedFilter', keys: ['ctrl+n'] }
+		]);
+
+		expect(resolved.find((action) => action.id === 'session.new')).toMatchObject({
+			keys: [],
+			yielded: [{ keys: 'ctrl+n', piAction: 'app.session.toggleNamedFilter', scope: 'application' }]
+		});
+	});
+
 	test('never collide with Command chords on macOS', () => {
 		const resolved = resolveKeyActions(APP_KEY_ACTIONS, 'mac', [
 			{ action: 'tui.editor.deleteToLineEnd', keys: ['ctrl+k'] }

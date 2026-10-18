@@ -132,20 +132,49 @@ test('closes with the same chord that opened it', async () => {
 	await expect.element(palette()).not.toBeInTheDocument();
 });
 
-test('gives Ctrl+K and Ctrl+Shift+P to Pi bindings and keeps F1', async () => {
-	await render(CommandPaletteDemo, {
-		platform: 'other',
-		piBindings: [
-			{ action: 'tui.editor.deleteToLineEnd', keys: ['ctrl+k'] },
-			{ action: 'app.model.cycleBackward', keys: ['shift+ctrl+p'] }
-		]
-	});
+const PREVIOUS_MODEL = { action: 'app.model.cycleBackward', keys: ['shift+ctrl+p'] };
+/** Pi's Linux defaults for the chords that open the palette. */
+const PI_LINUX_DEFAULTS = [{ action: 'tui.editor.deleteToLineEnd', keys: ['ctrl+k'] }, PREVIOUS_MODEL];
 
-	press({ key: 'k', code: 'KeyK', ctrlKey: true });
-	press({ key: 'P', code: 'KeyP', ctrlKey: true, shiftKey: true });
+/** Dispatches a key press at an element and reports whether Pau took it. */
+function pressAt(element: Element, init: KeyboardEventInit): boolean {
+	const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+	element.dispatchEvent(event);
+	return event.defaultPrevented;
+}
+
+test('leaves Ctrl+K to the composer and opens the palette with it elsewhere on Linux', async () => {
+	await render(CommandPaletteDemo, { platform: 'other', piBindings: PI_LINUX_DEFAULTS });
+	const prompt = page.getByRole('textbox', { name: 'Prompt' }).element();
+	await expect.element(commandBar()).toHaveTextContent('Ctrl+K');
+
+	expect(pressAt(prompt, { key: 'k', code: 'KeyK', ctrlKey: true })).toBe(false);
 	await expect.element(palette()).not.toBeInTheDocument();
-	await expect.element(commandBar()).toHaveTextContent('F1');
+
+	expect(pressAt(document.body, { key: 'k', code: 'KeyK', ctrlKey: true })).toBe(true);
+	await expect.element(palette()).toBeVisible();
+});
+
+test('gives Ctrl+Shift+P to Pi everywhere and keeps F1', async () => {
+	await render(CommandPaletteDemo, { platform: 'other', piBindings: PI_LINUX_DEFAULTS });
+	const prompt = page.getByRole('textbox', { name: 'Prompt' }).element();
+
+	for (const target of [prompt, document.body]) {
+		expect(pressAt(target, { key: 'P', code: 'KeyP', ctrlKey: true, shiftKey: true })).toBe(false);
+	}
+	await expect.element(palette()).not.toBeInTheDocument();
 
 	press({ key: 'F1', code: 'F1' });
+	await expect.element(palette()).toBeVisible();
+});
+
+test('opens the palette with Ctrl+K in the composer once Pi deletes to the line end with another chord', async () => {
+	await render(CommandPaletteDemo, {
+		platform: 'other',
+		piBindings: [{ action: 'tui.editor.deleteToLineEnd', keys: ['ctrl+shift+k'] }, PREVIOUS_MODEL]
+	});
+	const prompt = page.getByRole('textbox', { name: 'Prompt' }).element();
+
+	expect(pressAt(prompt, { key: 'k', code: 'KeyK', ctrlKey: true })).toBe(true);
 	await expect.element(palette()).toBeVisible();
 });

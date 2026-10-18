@@ -34,8 +34,9 @@ Press `⌘K` or click the search field at the top of the window to open the
 command palette. Type part of a name to find an action, session, workspace, or
 view, then press `Enter` to run it. Each action shows its shortcut. An action
 that the current view cannot run appears dimmed with the reason. Press `Esc` to
-close the palette. On Linux, Pi's default bindings keep `Ctrl+K` and
-`Ctrl+Shift+P`, so press `F1` instead.
+close the palette. On Linux, `Ctrl+K` opens the palette everywhere except the
+composer and other text fields, where it deletes to the end of the line as in
+Pi. Pi keeps `Ctrl+Shift+P` everywhere, so press `F1` while you type.
 
 ## Composer keys
 
@@ -106,10 +107,20 @@ Pau sends that command to the extension instead.
 ## Pi bindings come first
 
 Pau reads Pi's `keybindings.json` and Pi's defaults. When a Pau shortcut uses
-a key that one of your Pi bindings uses, Pi keeps the key and the Pau shortcut
-stops responding to it. This mostly affects Linux, where Pi binds many `Ctrl`
-keys, such as `Ctrl+N`, `Ctrl+O`, and `Ctrl+B`. The shortcut list names the Pi
-action that kept each key. The menu items still work.
+a key that one of your Pi bindings uses, Pi keeps the key where its binding
+applies:
+
+- Pi's text-editing bindings, the `tui.editor` and `tui.input` actions, keep
+  their keys while the composer or another text field has focus. Elsewhere the
+  Pau shortcut still runs.
+- Pi's application bindings, such as `app.model.cycleBackward`, keep their keys
+  everywhere, and the Pau shortcut stops responding to them.
+
+This mostly affects Linux, where Pi binds many `Ctrl` keys, such as `Ctrl+N`,
+`Ctrl+O`, and `Ctrl+K`. If you move a text-editing action to another key in
+`keybindings.json`, Pau takes the old key back in text fields too. The
+shortcut list names the Pi binding that kept each key and where. The menu
+items still work.
 
 ## Where shortcuts do not run
 

@@ -87,6 +87,23 @@ test('gives a chord to a conflicting Pi binding', async () => {
 	expect(event.defaultPrevented).toBe(false);
 });
 
+test('names where each Pi binding keeps its chord', async () => {
+	await render(KeyboardShortcutsDemo, {
+		platform: 'other',
+		open: true,
+		piBindings: [
+			{ action: 'tui.editor.deleteToLineEnd', keys: ['ctrl+k'] },
+			{ action: 'app.model.cycleBackward', keys: ['shift+ctrl+p'] }
+		]
+	});
+	const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+
+	await expect
+		.element(dialog.getByText('Pi uses Ctrl+K to delete to the end of the line while you type'))
+		.toBeVisible();
+	await expect.element(dialog.getByText('Pi uses Ctrl+Shift+P to switch to the previous model')).toBeVisible();
+});
+
 test('leaves keys to the terminal, code editors, and dialogs', async () => {
 	await render(KeyboardShortcutsDemo, { platform: 'mac' });
 

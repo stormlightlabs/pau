@@ -51,7 +51,7 @@ test('keeps browser zoom in the development browser', async () => {
 
 test('gives a zoom chord to a conflicting Pi binding', async () => {
 	const { native } = nativeHost();
-	const fetcher = keybindings([{ action: 'tui.editor.undo', keys: ['ctrl+-'] }]);
+	const fetcher = keybindings([{ action: 'app.model.cycleForward', keys: ['ctrl+-'] }]);
 	await render(AppKeymap, { native, fetcher, platform: 'other' });
 	await vi.waitFor(() => expect(fetcher).toHaveBeenCalled());
 	// Let the response reach the key map.

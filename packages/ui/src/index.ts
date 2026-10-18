@@ -31,6 +31,7 @@ export type {
 	KeyHandler,
 	KeyPlatform,
 	PiKeyBinding,
+	PiKeyScope,
 	ResolvedKeyAction
 } from './lib/keymap.svelte';
 export { default as McpConfigurationView } from './lib/McpConfigurationView.svelte';

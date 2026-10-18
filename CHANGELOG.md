@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- On Linux, Ctrl+K opens the command palette outside text fields and still
+  deletes to the end of the line while you type. The shortcut list shows where
+  each Pi binding takes a key.
 - The session sidebar keeps each workspace's name and its new-session and
   saved-sessions buttons on one row, empty screens sit at the top of the
   window, and the app no longer shows "Connected" while the connection is

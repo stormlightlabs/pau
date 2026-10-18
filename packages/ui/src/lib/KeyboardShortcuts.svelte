@@ -3,7 +3,7 @@
 	import { themeCssProperties, type ThemeName, type UiFontName } from '../theme';
 	import { createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
-	import { KEY_GROUPS, formatChord, type KeyPlatform, type ResolvedKeyAction } from './keymap.svelte';
+	import { KEY_GROUPS, formatChord, type KeyConflict, type KeyPlatform, type ResolvedKeyAction } from './keymap.svelte';
 
 	type Props = {
 		/** Whether the list is showing. Closing the dialog sets it to false. */
@@ -39,6 +39,31 @@
 			dialog.showModal();
 		} else if (!open && dialog.open) dialog.close();
 	});
+
+	/**
+	 * What the Pi actions that use Pau's default chords do, phrased to follow
+	 * "Pi uses Ctrl+K to". Other actions show their Pi ID.
+	 */
+	const PI_ACTION_PURPOSES: Record<string, string> = {
+		'tui.editor.cursorLeft': 'move the cursor left',
+		'tui.editor.deleteToLineEnd': 'delete to the end of the line',
+		'tui.editor.jumpForward': 'jump forward to a character',
+		'tui.editor.undo': 'undo an edit',
+		'tui.altScreen.previousPrompt': 'jump to the previous prompt',
+		'tui.altScreen.nextPrompt': 'jump to the next prompt',
+		'app.model.select': 'open the model picker',
+		'app.model.cycleBackward': 'switch to the previous model',
+		'app.tools.expand': 'show or hide tool output',
+		'app.session.toggleNamedFilter': 'show only named sessions'
+	};
+
+	/** Says which Pi binding uses a chord, and that an editor binding only applies while typing. */
+	function conflictNote(conflict: KeyConflict): string {
+		const purpose = PI_ACTION_PURPOSES[conflict.piAction];
+		const use = purpose ? `to ${purpose}` : `for ${conflict.piAction}`;
+		const where = conflict.scope === 'editor' ? ' while you type' : '';
+		return `Pi uses ${formatChord(conflict.keys, platform)} ${use}${where}`;
+	}
 
 	function chords(action: ResolvedKeyAction): string[] {
 		const formatted = action.keys.map((chord) => formatChord(chord, platform));
@@ -81,7 +106,7 @@
 							<span class="keyboard-shortcuts__label">
 								{action.label}
 								{#each action.yielded as conflict (conflict.keys)}
-									<small>Pi uses {formatChord(conflict.keys, platform)} for {conflict.piAction}</small>
+									<small>{conflictNote(conflict)}</small>
 								{/each}
 							</span>
 							<span class="keyboard-shortcuts__keys">

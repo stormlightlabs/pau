@@ -187,6 +187,22 @@ export async function listWorkspaces(fetcher: typeof fetch = fetch): Promise<Wor
 	return responseJson<Workspace[]>(response);
 }
 
+/**
+ * Registers a folder as a workspace and returns it. Opening a folder that is
+ * already registered returns the existing workspace.
+ *
+ * @throws {PauApiError} With `not_found` when nothing exists at the path, or
+ * `wrong_file_type` when the path is not a folder.
+ */
+export async function openWorkspace(path: string, fetcher: typeof fetch = fetch): Promise<Workspace> {
+	const response = await fetcher(`${apiConnection().origin}/api/workspaces`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', ...authorization() },
+		body: JSON.stringify({ path })
+	});
+	return responseJson<Workspace>(response);
+}
+
 /** Lists one directory in a registered workspace. */
 export async function listWorkspaceFiles(
 	workspaceId: string,

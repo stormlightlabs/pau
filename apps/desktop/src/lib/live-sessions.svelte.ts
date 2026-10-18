@@ -34,6 +34,7 @@ import {
 	listSessionModels,
 	listSessions,
 	listWorkspaces,
+	openWorkspace,
 	promptSession,
 	queueSessionMessage,
 	respondToExtensionUi,
@@ -143,6 +144,27 @@ export function sessionErrorMessage(
 		}
 		case 'invalid_agent_response': {
 			return 'Pi sent a response Pau could not read. Open Diagnostics for details.';
+		}
+		default: {
+			return cause.message;
+		}
+	}
+}
+
+/** Explains why a folder could not be opened as a workspace. */
+export function openWorkspaceErrorMessage(cause: unknown): string {
+	if (!(cause instanceof PauApiError)) {
+		return 'Pau could not reach its backend. Check that the desktop app is still running, then try again.';
+	}
+	switch (cause.code) {
+		case 'not_found': {
+			return 'No folder exists at that path. Check the path and try again.';
+		}
+		case 'wrong_file_type': {
+			return 'That path is a file. Choose a folder instead.';
+		}
+		case 'permission_denied': {
+			return 'Pau does not have permission to read that folder.';
 		}
 		default: {
 			return cause.message;
@@ -430,6 +452,10 @@ export class LiveSessions {
 			return;
 		}
 		for (const changed of state.events) {
+			if (changed.kind === 'workspace_changed') {
+				this.#rememberWorkspace(JSON.parse(changed.payload) as Workspace);
+				continue;
+			}
 			if (changed.kind !== 'session_changed') continue;
 			const session = JSON.parse(changed.payload) as AgentSession;
 			const known = Object.hasOwn(this.#sessions, session.id);
@@ -438,6 +464,13 @@ export class LiveSessions {
 			if (!known && isLive(session)) void this.#readUsage(session.id);
 			if (!isLive(session)) this.#updateExtensionUi(session.id, exitedExtensionUi);
 		}
+	}
+
+	/** Adds a workspace to the list, or replaces the entry with the same ID. */
+	#rememberWorkspace(workspace: Workspace): void {
+		const index = this.#workspaces.findIndex((known) => known.id === workspace.id);
+		if (index === -1) this.#workspaces.push(workspace);
+		else this.#workspaces[index] = workspace;
 	}
 
 	#viewModel(session: AgentSession): SessionViewModel {
@@ -513,6 +546,20 @@ export class LiveSessions {
 	/** Closes the event stream. Sessions keep running in the backend. */
 	close(): void {
 		this.#stream.stop();
+	}
+
+	/**
+	 * Opens a folder as a workspace and returns its ID. A folder that is already
+	 * open returns its existing workspace. Rejects with operator-facing copy.
+	 */
+	async open(path: string): Promise<string> {
+		try {
+			const workspace = await openWorkspace(path, this.#fetcher);
+			this.#rememberWorkspace(workspace);
+			return workspace.id;
+		} catch (cause) {
+			throw new Error(openWorkspaceErrorMessage(cause), { cause });
+		}
 	}
 
 	/** Starts a session and returns its ID. Rejects with operator-facing copy. */

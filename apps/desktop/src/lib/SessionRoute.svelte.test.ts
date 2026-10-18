@@ -10,6 +10,8 @@ import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { DESKTOP_CONNECTION_GLOBAL } from './api';
+import { productNavigation } from './app-navigation';
+import { desktopNativeCapabilitiesContext } from './native-capabilities';
 import { FakeEventSocket } from './fake-event-socket';
 import SessionRoute from './SessionRoute.svelte';
 
@@ -866,4 +868,52 @@ test('connects to the backend the desktop shell injects', async () => {
 	} finally {
 		vi.unstubAllGlobals();
 	}
+});
+
+test('opens a folder on first run and points the rail at the new workspace', async () => {
+	const open = vi.fn(() => json(workspace, 201));
+	const { props } = setup({ 'GET /api/workspaces': () => json([]), 'POST /api/workspaces': open });
+	await render(SessionRoute, { ...props, navigation: (workspaceId) => productNavigation('/', workspaceId) });
+
+	await expect.element(page.getByRole('heading', { name: 'Open a folder to start working' })).toBeVisible();
+	await expect
+		.element(page.getByRole('button', { name: 'Terminal' }))
+		.toHaveAccessibleDescription('Open a workspace first');
+	await userEvent.fill(page.getByRole('textbox', { name: 'Folder path' }), '/home/me/pau');
+	await userEvent.click(page.getByRole('button', { name: 'Open', exact: true }));
+
+	expect(open).toHaveBeenCalledWith(expect.objectContaining({ body: '{"path":"/home/me/pau"}' }));
+	await expect.element(page.getByRole('heading', { name: 'Pau is open' })).toBeVisible();
+	await expect
+		.element(page.getByRole('link', { name: 'Terminal' }))
+		.toHaveAttribute('href', '/workspaces/pau/terminal');
+	await expect.element(page.getByRole('link', { name: 'Sessions' })).toHaveAttribute('aria-current', 'page');
+});
+
+test('explains why a folder could not open', async () => {
+	const { props } = setup({
+		'GET /api/workspaces': () => json([]),
+		'POST /api/workspaces': () => json({ code: 'wrong_file_type', message: 'wrong file type' }, 422)
+	});
+	await render(SessionRoute, props);
+
+	await userEvent.fill(page.getByRole('textbox', { name: 'Folder path' }), '/home/me/notes.txt');
+	await userEvent.click(page.getByRole('button', { name: 'Open', exact: true }));
+
+	await expect.element(page.getByRole('alert')).toHaveTextContent('That path is a file. Choose a folder instead.');
+});
+
+test('opens a folder from the native picker when the desktop host supplies one', async () => {
+	const pickFolder = vi.fn(async () => '/home/me/pau');
+	const { props } = setup({
+		'GET /api/workspaces': () => json([]),
+		'POST /api/workspaces': () => json(workspace, 201)
+	});
+	await render(SessionRoute, { props, context: new Map([[desktopNativeCapabilitiesContext, { pickFolder }]]) });
+
+	await expect.element(page.getByRole('textbox', { name: 'Folder path' })).not.toBeInTheDocument();
+	await userEvent.click(page.getByRole('main').getByRole('button', { name: 'Open workspace…' }));
+
+	expect(pickFolder).toHaveBeenCalledOnce();
+	await expect.element(page.getByRole('heading', { name: 'Pau is open' })).toBeVisible();
 });

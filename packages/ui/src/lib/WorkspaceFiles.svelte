@@ -31,16 +31,26 @@
 		disconnected?: boolean;
 		editorSource?: FileEditorSource;
 		onOpenFile?: (path: string, line?: number) => void;
+		/** Product rail destinations, supplied by the app that owns the routes. */
+		productItems?: ShellNavItem[];
 	};
 
-	let { workspaceId, workspaceName, source, disconnected = false, editorSource, onOpenFile }: Props = $props();
-
-	const productItems: ShellNavItem[] = [
+	const defaultProductItems: ShellNavItem[] = [
 		{ id: 'sessions', label: 'Sessions', icon: 'agents' },
 		{ id: 'files', label: 'Files', icon: 'files', active: true },
 		{ id: 'resources', label: 'Resources', icon: 'resources' },
 		{ id: 'settings', label: 'Settings', icon: 'settings' }
 	];
+
+	let {
+		workspaceId,
+		workspaceName,
+		source,
+		disconnected = false,
+		editorSource,
+		onOpenFile,
+		productItems = defaultProductItems
+	}: Props = $props();
 
 	let directories = $state<Record<string, DirectoryState>>({});
 	let expanded = new SvelteSet<string>();

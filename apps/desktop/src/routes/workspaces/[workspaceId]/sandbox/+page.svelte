@@ -6,11 +6,17 @@
 
 <script lang="ts">
 	import type { SandboxAdapter } from '@stormlightlabs/pau-protocol';
-	import { SandboxSettingsView, type EffectiveSandboxView, type SandboxSelectionModel } from '@stormlightlabs/pau-ui';
+	import {
+		ApplicationShell,
+		SandboxSettingsView,
+		type EffectiveSandboxView,
+		type SandboxSelectionModel
+	} from '@stormlightlabs/pau-ui';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 
-	import { getWorkspaceSandbox, previewSandbox, updateWorkspaceSandbox } from '$lib/api';
+	import { getWorkspaceSandbox, listWorkspaces, previewSandbox, updateWorkspaceSandbox } from '$lib/api';
+	import { productNavigation } from '$lib/app-navigation';
 	import { effectiveView, selectionView, selectionWire } from '$lib/sandbox-model';
 
 	const PREVIEW_DELAY_MS = 250;
@@ -24,9 +30,16 @@
 	let error = $state<string>();
 	let notice = $state<string>();
 	let saving = $state(false);
+	let workspaceName = $state<string>();
 	let previewTimer: ReturnType<typeof setTimeout> | undefined;
 
 	onMount(() => {
+		void listWorkspaces()
+			.then((workspaces) => {
+				const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
+				workspaceName = workspace?.name || workspace?.path.split(/[\\/]/).at(-1);
+			})
+			.catch(() => {});
 		void getWorkspaceSandbox(workspaceId)
 			.then((stored) => {
 				selection = selectionView(stored.selection);
@@ -82,23 +95,29 @@
 
 <svelte:head><title>Agent sandbox · Pau</title></svelte:head>
 
-<main class="sandbox-route">
-	<label class="sandbox-route__agent">
-		Show access for
-		<select bind:value={adapter} onchange={() => void preview()}>
-			<option value="pi">Pi</option>
-			<option value="claude">Claude</option>
-		</select>
-	</label>
-	{#if notice}
-		<p role="status">{notice}</p>
-	{/if}
-	{#if selection}
-		<SandboxSettingsView {selection} {effective} {unavailable} {error} {saving} onChange={change} onSave={save} />
-	{:else if error}
-		<p role="alert">{error}</p>
-	{/if}
-</main>
+<ApplicationShell
+	workspaceName={workspaceName ?? workspaceId}
+	contextLabel="Agent sandbox"
+	productItems={productNavigation(page.route.id, workspaceId)}
+	contextItems={[]}>
+	<div class="sandbox-route">
+		<label class="sandbox-route__agent">
+			Show access for
+			<select bind:value={adapter} onchange={() => void preview()}>
+				<option value="pi">Pi</option>
+				<option value="claude">Claude</option>
+			</select>
+		</label>
+		{#if notice}
+			<p role="status">{notice}</p>
+		{/if}
+		{#if selection}
+			<SandboxSettingsView {selection} {effective} {unavailable} {error} {saving} onChange={change} onSave={save} />
+		{:else if error}
+			<p role="alert">{error}</p>
+		{/if}
+	</div>
+</ApplicationShell>
 
 <style>
 	.sandbox-route {

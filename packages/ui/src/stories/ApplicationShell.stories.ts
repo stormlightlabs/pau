@@ -31,6 +31,31 @@ export const RailsAndInspector: Story = {
 	}
 };
 
+export const RailNavigation: Story = {
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const sessions = canvas.getByRole('link', { name: 'Sessions' });
+
+		await expect(sessions).toHaveAttribute('href', '#sessions');
+		await expect(sessions).toHaveAttribute('aria-current', 'page');
+		await expect(canvas.getByRole('link', { name: 'Files' })).toHaveAttribute('href', '#files');
+		await expect(canvas.getByRole('button', { name: 'Terminal' })).toHaveAccessibleDescription(
+			'Open a workspace first'
+		);
+	}
+};
+
+export const ComingSoon: Story = {
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const settings = canvas.getByRole('button', { name: 'Settings' });
+
+		await expect(settings).toHaveAttribute('aria-disabled', 'true');
+		await expect(settings).toHaveAccessibleDescription('Coming soon');
+		await expect(canvas.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
+	}
+};
+
 export const Nord: Story = { args: { theme: 'nord' } };
 
 export const Iceberg: Story = { args: { theme: 'iceberg' } };

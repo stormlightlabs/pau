@@ -17,6 +17,52 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Empty: Story = { args: { workspaces: sessionFixtures.empty, initialSessionId: undefined } };
+export const FirstRun: Story = {
+	args: { workspaces: sessionFixtures.empty, initialSessionId: undefined, openable: true },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByRole('heading', { name: 'Open a folder to start working' })).toBeInTheDocument();
+		await expect(canvas.getByText('No workspaces yet')).toBeInTheDocument();
+		await expect(canvas.getByRole('button', { name: 'Open workspace…' })).toBeEnabled();
+	}
+};
+export const OpenWorkspace: Story = {
+	args: { workspaces: sessionFixtures.empty, initialSessionId: undefined, openable: true },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.type(canvas.getByRole('textbox', { name: 'Folder path' }), '/Users/operator/projects/pau');
+		await userEvent.click(canvas.getByRole('button', { name: 'Open' }));
+		await expect(await canvas.findByRole('heading', { name: 'pau is open' })).toBeInTheDocument();
+		await expect(canvas.getByRole('button', { name: 'Start session in pau' })).toBeEnabled();
+	}
+};
+export const OpenWorkspaceWithPicker: Story = {
+	args: {
+		workspaces: sessionFixtures.empty,
+		initialSessionId: undefined,
+		openable: true,
+		pickedFolder: '/Users/operator/projects/app'
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(within(canvas.getByRole('main')).getByRole('button', { name: 'Open workspace…' }));
+		await expect(await canvas.findByRole('heading', { name: 'app is open' })).toBeInTheDocument();
+	}
+};
+export const OpenWorkspaceFailed: Story = {
+	args: {
+		workspaces: sessionFixtures.empty,
+		initialSessionId: undefined,
+		openable: true,
+		openFailure: 'That path is a file. Choose a folder instead.'
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.type(canvas.getByRole('textbox', { name: 'Folder path' }), '/Users/operator/notes.txt');
+		await userEvent.click(canvas.getByRole('button', { name: 'Open' }));
+		await expect(await canvas.findByRole('alert')).toHaveTextContent('That path is a file. Choose a folder instead.');
+	}
+};
 export const Loading: Story = {
 	args: { workspaces: sessionFixtures.empty, initialSessionId: undefined, loading: true },
 	play: async ({ canvasElement }) => {

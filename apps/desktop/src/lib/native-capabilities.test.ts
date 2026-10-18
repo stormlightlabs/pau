@@ -1,9 +1,11 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { open } from '@tauri-apps/plugin-dialog';
 import { expect, test, vi } from 'vitest';
 
 import { createDesktopNativeCapabilities } from './native-capabilities';
 
 vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: vi.fn() }));
+vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
 
 test('does not expose native window controls in development browser mode', () => {
 	expect(createDesktopNativeCapabilities({})).toEqual({});
@@ -17,4 +19,15 @@ test('exposes implemented window controls in the Tauri host', async () => {
 	await capabilities.window?.close();
 
 	expect(close).toHaveBeenCalledOnce();
+});
+
+test('picks one folder with the native dialog and treats cancel as no choice', async () => {
+	const capabilities = createDesktopNativeCapabilities({ __TAURI_INTERNALS__: {} });
+
+	vi.mocked(open).mockResolvedValueOnce('/Users/operator/project');
+	await expect(capabilities.pickFolder?.()).resolves.toBe('/Users/operator/project');
+	expect(open).toHaveBeenCalledWith({ directory: true, multiple: false, title: 'Open workspace' });
+
+	vi.mocked(open).mockResolvedValueOnce(null);
+	await expect(capabilities.pickFolder?.()).resolves.toBeUndefined();
 });

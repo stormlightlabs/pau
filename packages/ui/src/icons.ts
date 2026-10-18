@@ -10,6 +10,7 @@ export const ICONS = {
 	chevronRight: 'i-tabler-chevron-right',
 	file: 'i-tabler-file',
 	files: 'i-tabler-folder',
+	folderPlus: 'i-tabler-folder-plus',
 	folderOpen: 'i-catppuccin-folder-open',
 	fileCss: 'i-catppuccin-css',
 	fileHtml: 'i-catppuccin-html',
@@ -35,6 +36,8 @@ export const ICONS = {
 	panel: 'i-tabler-layout-sidebar-right',
 	processes: 'i-tabler-activity-heartbeat',
 	resources: 'i-tabler-plug-connected',
+	sandbox: 'i-tabler-shield-lock',
+	diagnostics: 'i-tabler-stethoscope',
 	settings: 'i-tabler-adjustments-horizontal',
 	sidebar: 'i-tabler-layout-sidebar'
 } as const;

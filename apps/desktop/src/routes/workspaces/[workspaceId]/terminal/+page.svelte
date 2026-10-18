@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 
 	import { listWorkspaces } from '$lib/api';
+	import { productNavigation } from '$lib/app-navigation';
 	import { createTerminalSource } from '$lib/terminal-source';
 
 	const workspaceId = page.params.workspaceId ?? '';
@@ -26,4 +27,4 @@
 
 <svelte:head><title>Terminal · Pau</title></svelte:head>
 
-<TerminalSurface {workspaceName} {source} {disconnected} />
+<TerminalSurface {workspaceName} {source} {disconnected} productItems={productNavigation(page.route.id, workspaceId)} />

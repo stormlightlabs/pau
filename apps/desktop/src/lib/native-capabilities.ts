@@ -1,12 +1,21 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { open } from '@tauri-apps/plugin-dialog';
 
 /** Desktop window operations that shared feature views may request from their app owner. */
 export interface DesktopWindowCapability {
 	close(): Promise<void>;
 }
 
-/** Native services supplied by the desktop application rather than shared UI code. */
-export type DesktopNativeCapabilities = { window?: DesktopWindowCapability };
+/**
+ * Native services supplied by the desktop application rather than shared UI code.
+ *
+ * `pickFolder` shows the system folder picker and resolves to the chosen path,
+ * or `undefined` when the operator cancels.
+ */
+export type DesktopNativeCapabilities = {
+	window?: DesktopWindowCapability;
+	pickFolder?: () => Promise<string | undefined>;
+};
 
 /** Context key used when desktop routes supply native services to a feature view. */
 export const desktopNativeCapabilitiesContext = Symbol('pau.desktop.native-capabilities');
@@ -19,5 +28,8 @@ export function createDesktopNativeCapabilities(
 ): DesktopNativeCapabilities {
 	if (!('__TAURI_INTERNALS__' in host)) return {};
 
-	return { window: { close: async () => getCurrentWindow().close() } };
+	return {
+		window: { close: async () => getCurrentWindow().close() },
+		pickFolder: async () => (await open({ directory: true, multiple: false, title: 'Open workspace' })) ?? undefined
+	};
 }

@@ -118,7 +118,33 @@
 		onExtensionUiResponse?: (sessionId: string, response: ExtensionUiResponse) => void | Promise<void>;
 		onExtensionUiTimeout?: (sessionId: string, requestId: string) => void;
 		onOpenPiTerminal?: (sessionId: string) => void;
+		/**
+		 * Opens a folder as a workspace and resolves to its ID. Opening a folder
+		 * that is already open resolves to the existing workspace. When set, the
+		 * rail and the first-run screen offer an Open workspace control. A
+		 * rejected promise shows its message beside the control.
+		 */
+		onOpenWorkspace?: (path: string) => Promise<string>;
+		/**
+		 * Asks the operator for a folder, resolving to its path or `undefined` on
+		 * cancel. The desktop app supplies its native picker. Without it, the view
+		 * asks for the folder path in a text field.
+		 */
+		pickFolder?: () => Promise<string | undefined>;
+		/**
+		 * Product rail destinations, supplied by the app that owns the routes. The
+		 * view marks the Sessions item when a session needs attention.
+		 */
+		productItems?: ShellNavItem[];
 	};
+
+	const defaultProductItems: ShellNavItem[] = [
+		{ id: 'sessions', label: 'Sessions', icon: 'agents', active: true },
+		{ id: 'files', label: 'Files', icon: 'files' },
+		{ id: 'processes', label: 'Processes', icon: 'processes' },
+		{ id: 'resources', label: 'Resources', icon: 'resources' },
+		{ id: 'settings', label: 'Settings', icon: 'settings' }
+	];
 
 	let {
 		workspaces,
@@ -146,7 +172,10 @@
 		resourceSnapshot,
 		onExtensionUiResponse = () => {},
 		onExtensionUiTimeout = () => {},
-		onOpenPiTerminal
+		onOpenPiTerminal,
+		onOpenWorkspace,
+		pickFolder,
+		productItems: appProductItems = defaultProductItems
 	}: Props = $props();
 
 	/** Whether the active session's current model reasons, as last reported by the model picker. */
@@ -186,8 +215,16 @@
 	let compactingSessionId = $state<string>();
 	let compactError = $state<string>();
 	let now = $state(Date.now());
+	/** Whether the folder path form is showing. Only used without `pickFolder`. */
+	let openFormVisible = $state(false);
+	let openPath = $state('');
+	let opening = $state(false);
+	let openError = $state<string>();
+	/** A workspace the operator just opened that has no session to show yet. */
+	let openedWorkspaceId = $state<string>();
 
 	const pickerWorkspace = $derived(workspaces.find((workspace) => workspace.id === pickerWorkspaceId));
+	const openedWorkspace = $derived(workspaces.find((workspace) => workspace.id === openedWorkspaceId));
 	const sessions = $derived(workspaces.flatMap((workspace) => workspace.sessions));
 	const activeSession = $derived(sessions.find((session) => session.id === activeSessionId));
 	const activeWorkspace = $derived(
@@ -246,19 +283,11 @@
 			(compactingSessionId !== undefined && compactingSessionId === activeSession?.id)
 	);
 	const composerUnavailable = $derived(composerUnavailableReason(activeSession, disconnected, compacting));
-	const productItems = $derived([
-		{
-			id: 'sessions',
-			label: 'Sessions',
-			icon: 'agents',
-			active: true,
-			attention: sessions.some((session) => hasAttention(session))
-		},
-		{ id: 'files', label: 'Files', icon: 'files' },
-		{ id: 'processes', label: 'Processes', icon: 'processes' },
-		{ id: 'resources', label: 'Resources', icon: 'resources' },
-		{ id: 'settings', label: 'Settings', icon: 'settings' }
-	] satisfies ShellNavItem[]);
+	const productItems = $derived(
+		appProductItems.map((item) =>
+			item.id === 'sessions' ? { ...item, attention: sessions.some((session) => hasAttention(session)) } : item
+		)
+	);
 
 	$effect(() => {
 		if (activeSession?.status === 'running' || activeSession?.id !== retryingSessionId) retryingSessionId = undefined;
@@ -391,10 +420,54 @@
 		}
 	}
 
+	/** Starts opening a workspace with the native picker, or shows the path form. */
+	async function chooseWorkspace(): Promise<void> {
+		openError = undefined;
+		if (!pickFolder) {
+			openFormVisible = true;
+			return;
+		}
+		let path: string | undefined;
+		try {
+			path = await pickFolder();
+		} catch (cause) {
+			openError = cause instanceof Error ? cause.message : 'Pau could not show the folder picker.';
+			return;
+		}
+		if (path) await openFolder(path);
+	}
+
+	async function openFolder(path: string): Promise<void> {
+		if (!onOpenWorkspace || opening) return;
+		opening = true;
+		openError = undefined;
+		try {
+			const workspaceId = await onOpenWorkspace(path);
+			openFormVisible = false;
+			openPath = '';
+			pickerWorkspaceId = undefined;
+			startFailure = undefined;
+			const first = workspaces.find((workspace) => workspace.id === workspaceId)?.sessions[0];
+			if (first) selectSession(first.id);
+			else openedWorkspaceId = workspaceId;
+		} catch (cause) {
+			openError = cause instanceof Error ? cause.message : 'Pau could not open that folder.';
+		} finally {
+			opening = false;
+		}
+	}
+
+	function closeOpenForm(): void {
+		openFormVisible = false;
+		openError = undefined;
+	}
+
 	async function startSession(workspace: SessionWorkspace): Promise<void> {
 		if (!onStartSession || startingWorkspaceId) return;
 		startingWorkspaceId = workspace.id;
 		startFailure = undefined;
+		openedWorkspaceId = undefined;
+		closeOpenForm();
 		try {
 			await onStartSession(workspace.id);
 		} catch (cause) {
@@ -460,6 +533,8 @@
 
 	function selectSession(sessionId: string): void {
 		pickerWorkspaceId = undefined;
+		openedWorkspaceId = undefined;
+		closeOpenForm();
 		startFailure = undefined;
 		controlError = undefined;
 		queueError = undefined;
@@ -707,10 +782,20 @@
 	inspectorOpen={Boolean(resourceSnapshot)}>
 	{#snippet context()}
 		<nav class="session-rail" aria-label="Workspaces and sessions">
+			{#if onOpenWorkspace}
+				<button
+					type="button"
+					class="session-rail__open"
+					disabled={disconnected || opening}
+					onclick={() => void chooseWorkspace()}>
+					<Icon name="folderPlus" size={16} />
+					<span>{opening ? 'Opening…' : 'Open workspace…'}</span>
+				</button>
+			{/if}
 			{#if loading}
 				<p class="session-rail__empty">Loading…</p>
 			{:else if workspaces.length === 0}
-				<p class="session-rail__empty">No sessions yet</p>
+				<p class="session-rail__empty">No workspaces yet</p>
 			{:else}
 				{#each workspaces as workspace (workspace.id)}
 					<section aria-labelledby={`workspace-${workspace.id}`}>
@@ -829,6 +914,63 @@
 							const workspace = workspaces.find((candidate) => candidate.id === startFailure?.workspaceId);
 							if (workspace) void startSession(workspace);
 						}}>Try again</button>
+				{/if}
+			</div>
+		</section>
+	{:else if onOpenWorkspace && (openFormVisible || openError || (!loading && workspaces.length === 0))}
+		{@const firstRun = !loading && workspaces.length === 0}
+		<section class="session-view session-view--empty" aria-labelledby="open-workspace-title">
+			<div class="session-view__empty">
+				<h1 id="open-workspace-title">{firstRun ? 'Open a folder to start working' : 'Open a workspace'}</h1>
+				<p>Pau runs each session inside a workspace folder. Open a project folder to add it to the rail.</p>
+				{#if pickFolder}
+					<button
+						type="button"
+						class="session-view__retry"
+						disabled={disconnected || opening}
+						onclick={() => void chooseWorkspace()}>{opening ? 'Opening…' : 'Open workspace…'}</button>
+				{:else}
+					<form
+						class="session-open"
+						aria-label="Open workspace"
+						onsubmit={(event) => {
+							event.preventDefault();
+							void openFolder(openPath.trim());
+						}}>
+						<label>
+							<span>Folder path</span>
+							<input
+								type="text"
+								bind:value={openPath}
+								placeholder="/Users/you/projects/app"
+								autocomplete="off"
+								spellcheck="false" />
+						</label>
+						<div class="session-open__actions">
+							<button
+								type="submit"
+								class="session-view__retry"
+								disabled={disconnected || opening || openPath.trim() === ''}>{opening ? 'Opening…' : 'Open'}</button>
+							{#if !firstRun}
+								<button type="button" class="session-view__retry" onclick={closeOpenForm}>Cancel</button>
+							{/if}
+						</div>
+					</form>
+				{/if}
+				{#if openError}<p class="session-open__error" role="alert">{openError}</p>{/if}
+			</div>
+		</section>
+	{:else if openedWorkspace && openedWorkspace.sessions.length === 0}
+		<section class="session-view session-view--empty" aria-labelledby="opened-workspace-title">
+			<div class="session-view__empty" role="status">
+				<h1 id="opened-workspace-title">{openedWorkspace.name} is open</h1>
+				<p>It has no sessions yet.</p>
+				{#if onStartSession}
+					<button
+						type="button"
+						class="session-view__retry"
+						disabled={disconnected || startingWorkspaceId !== undefined}
+						onclick={() => void startSession(openedWorkspace)}>Start session</button>
 				{/if}
 			</div>
 		</section>
@@ -1320,6 +1462,58 @@
 	.session-rail small {
 		color: inherit;
 		font-size: var(--pau-type-xs);
+	}
+
+	.session-rail .session-rail__open {
+		grid-template-columns: auto minmax(0, 1fr);
+		margin-bottom: var(--pau-space-2);
+		color: var(--pau-text);
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-control);
+	}
+
+	.session-rail .session-rail__open:disabled {
+		color: var(--pau-text-muted);
+		cursor: not-allowed;
+	}
+
+	.session-open {
+		display: grid;
+		gap: var(--pau-space-3);
+		margin-top: var(--pau-space-4);
+		text-align: left;
+	}
+
+	.session-open label {
+		display: grid;
+		gap: var(--pau-space-1);
+		color: var(--pau-text-muted);
+		font-size: var(--pau-type-xs);
+	}
+
+	.session-open input {
+		min-height: var(--pau-size-row-md);
+		padding-inline: var(--pau-space-3);
+		color: var(--pau-text);
+		background: var(--pau-surface);
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-control);
+		font: inherit;
+		font-family: var(--pau-font-code);
+	}
+
+	.session-open__actions {
+		display: flex;
+		gap: var(--pau-space-2);
+	}
+
+	.session-open__actions .session-view__retry {
+		margin-top: 0;
+	}
+
+	.session-view__empty .session-open__error {
+		margin-top: var(--pau-space-3);
+		color: var(--pau-danger);
 	}
 
 	.session-rail__empty {

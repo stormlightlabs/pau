@@ -419,3 +419,88 @@ test('attaches images dropped on the composer and pasted into it', async () => {
 		.dispatchEvent(new ClipboardEvent('paste', { clipboardData: pasted, bubbles: true, cancelable: true }));
 	await expect.element(page.getByRole('img', { name: 'pasted.png' })).toBeVisible();
 });
+
+test('asks for a folder on first run and opens it from a typed path', async () => {
+	await render(SessionViewDemo, { workspaces: sessionFixtures.empty, openable: true });
+
+	await expect.element(page.getByRole('heading', { name: 'Open a folder to start working' })).toBeVisible();
+	await expect.element(page.getByText('No workspaces yet')).toBeInTheDocument();
+	await expect.element(page.getByRole('button', { name: 'Open', exact: true })).toBeDisabled();
+	await userEvent.fill(page.getByRole('textbox', { name: 'Folder path' }), '/Users/operator/projects/pau');
+	await userEvent.click(page.getByRole('button', { name: 'Open', exact: true }));
+
+	await expect.element(page.getByRole('heading', { name: 'pau is open' })).toBeVisible();
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	await expect.element(page.getByRole('button', { name: 'Start session in pau' })).toBeEnabled();
+	await userEvent.click(page.getByRole('button', { name: 'Close navigation' }));
+	await userEvent.click(page.getByRole('button', { name: 'Start session', exact: true }));
+	await expect.element(page.getByText('workspace-pau: start session')).toBeVisible();
+});
+
+test('opens a workspace with the native folder picker', async () => {
+	await render(SessionViewDemo, {
+		workspaces: sessionFixtures.empty,
+		openable: true,
+		pickedFolder: '/Users/operator/projects/app'
+	});
+
+	await expect.element(page.getByRole('textbox', { name: 'Folder path' })).not.toBeInTheDocument();
+	await userEvent.click(page.getByRole('main').getByRole('button', { name: 'Open workspace…' }));
+
+	await expect.element(page.getByRole('heading', { name: 'app is open' })).toBeVisible();
+});
+
+test('ignores a cancelled folder picker', async () => {
+	await render(SessionViewDemo, { workspaces: sessionFixtures.empty, openable: true, pickedFolder: null });
+
+	await userEvent.click(page.getByRole('main').getByRole('button', { name: 'Open workspace…' }));
+
+	await expect.element(page.getByRole('heading', { name: 'Open a folder to start working' })).toBeVisible();
+	await expect.element(page.getByRole('alert')).not.toBeInTheDocument();
+});
+
+test('explains a folder that cannot open and keeps the path for correction', async () => {
+	await render(SessionViewDemo, {
+		workspaces: sessionFixtures.empty,
+		openable: true,
+		openFailure: 'No folder exists at that path. Check the path and try again.'
+	});
+
+	const path = page.getByRole('textbox', { name: 'Folder path' });
+	await userEvent.fill(path, '/missing');
+	await userEvent.click(page.getByRole('button', { name: 'Open', exact: true }));
+
+	await expect.element(page.getByRole('alert')).toHaveTextContent('No folder exists at that path.');
+	await expect.element(path).toHaveValue('/missing');
+});
+
+test('selects an already open workspace instead of adding it again', async () => {
+	await render(SessionViewDemo, { workspaces: sessionFixtures.running, openable: true });
+
+	const rail = page.getByRole('navigation', { name: 'Workspaces and sessions' });
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	await userEvent.click(rail.getByRole('button', { name: 'Open workspace…' }));
+	await userEvent.click(page.getByRole('button', { name: 'Close navigation' }));
+	await userEvent.fill(page.getByRole('textbox', { name: 'Folder path' }), '/Users/operator/Pau');
+	await userEvent.click(page.getByRole('button', { name: 'Open', exact: true }));
+
+	await expect.element(page.getByRole('heading', { name: 'Fix diff gutter', level: 1 })).toBeVisible();
+	await expect.element(rail.getByRole('heading', { name: 'Pau' })).toBeInTheDocument();
+	expect(document.querySelectorAll('.session-rail section')).toHaveLength(1);
+});
+
+test('marks the supplied Sessions destination when a session needs attention', async () => {
+	await render(SessionView, {
+		workspaces: sessionFixtures.waiting,
+		activeSessionId: 'session-waiting',
+		productItems: [
+			{ id: 'sessions', label: 'Sessions', icon: 'agents', href: '/', active: true },
+			{ id: 'settings', label: 'Settings', icon: 'settings' }
+		]
+	});
+
+	const sessions = page.getByRole('link', { name: 'Sessions' });
+	await expect.element(sessions).toHaveAttribute('href', '/');
+	await expect.element(sessions.getByLabelText('Needs attention')).toBeInTheDocument();
+	await expect.element(page.getByRole('button', { name: 'Settings' })).toHaveAccessibleDescription('Coming soon');
+});

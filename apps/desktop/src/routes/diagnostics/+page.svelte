@@ -1,13 +1,28 @@
 <script lang="ts">
 	import type { DiagnosticBundle } from '@stormlightlabs/pau-protocol';
-	import { DiagnosticsView, diagnosticFixtures, type DiagnosticBundleView } from '@stormlightlabs/pau-ui';
+	import {
+		ApplicationShell,
+		DiagnosticsView,
+		diagnosticFixtures,
+		type DiagnosticBundleView
+	} from '@stormlightlabs/pau-ui';
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 
-	import { exportDiagnostics, getDiagnostics, startPayloadTracing, updateDiagnosticSettings } from '$lib/api';
+	import {
+		exportDiagnostics,
+		getDiagnostics,
+		listWorkspaces,
+		startPayloadTracing,
+		updateDiagnosticSettings
+	} from '$lib/api';
+	import { productNavigation } from '$lib/app-navigation';
 
 	let bundle = $state<DiagnosticBundleView>(diagnosticFixtures.disabled);
 	let error = $state<string>();
 	let notice = $state<string>();
+	/** The workspace that the rail's workspace views open. Diagnostics has none of its own, so it uses the first. */
+	let workspaceId = $state<string>();
 
 	function viewModel(value: DiagnosticBundle): DiagnosticBundleView {
 		return {
@@ -51,6 +66,9 @@
 	}
 
 	onMount(() => {
+		void listWorkspaces()
+			.then((workspaces) => (workspaceId = workspaces[0]?.id))
+			.catch(() => {});
 		void getDiagnostics()
 			.then((value) => (bundle = viewModel(value)))
 			.catch((caught: unknown) => (error = caught instanceof Error ? caught.message : String(caught)));
@@ -88,19 +106,24 @@
 
 <svelte:head><title>Diagnostics · Pau</title></svelte:head>
 
-{#if error}<p class="diagnostics-route__message diagnostics-route__message--error" role="alert">{error}</p>{/if}
-{#if notice}<p class="diagnostics-route__message" role="status">{notice}</p>{/if}
-<div class="diagnostics-route">
-	<DiagnosticsView
-		{bundle}
-		onSettingsChange={(enabled, level) => void changeSettings(enabled, level)}
-		onStartPayloadTracing={(duration) => void tracePayloads(duration)}
-		onExport={(destination, revision) => void exportBundle(destination, revision)} />
-</div>
+<ApplicationShell
+	workspaceName="Diagnostics"
+	contextLabel="Diagnostics"
+	productItems={productNavigation(page.route.id, workspaceId)}
+	contextItems={[]}>
+	{#if error}<p class="diagnostics-route__message diagnostics-route__message--error" role="alert">{error}</p>{/if}
+	{#if notice}<p class="diagnostics-route__message" role="status">{notice}</p>{/if}
+	<div class="diagnostics-route">
+		<DiagnosticsView
+			{bundle}
+			onSettingsChange={(enabled, level) => void changeSettings(enabled, level)}
+			onStartPayloadTracing={(duration) => void tracePayloads(duration)}
+			onExport={(destination, revision) => void exportBundle(destination, revision)} />
+	</div>
+</ApplicationShell>
 
 <style>
 	.diagnostics-route {
-		min-height: 100dvh;
 		padding: clamp(1rem, 3vw, 2.5rem);
 		color: var(--pau-text, #e7e9f7);
 		background: var(--pau-surface, #1c1e2d);

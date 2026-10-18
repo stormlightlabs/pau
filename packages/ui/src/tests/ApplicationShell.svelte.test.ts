@@ -43,7 +43,35 @@ test('keeps command and named rail controls in keyboard order', async () => {
 	await expect.element(page.getByRole('link', { name: 'Sessions' })).toHaveFocus();
 
 	await expect.element(page.getByRole('link', { name: 'Files' })).toBeInTheDocument();
-	await expect.element(page.getByRole('link', { name: 'Resources' })).toBeInTheDocument();
-	await expect.element(page.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
 	await expect.element(page.getByRole('button', { name: 'Hide inspector' })).toBeInTheDocument();
+});
+
+test('links rail destinations and marks the current one', async () => {
+	await render(ApplicationShellDemo);
+
+	const sessions = page.getByRole('link', { name: 'Sessions' });
+	await expect.element(sessions).toHaveAttribute('href', '#sessions');
+	await expect.element(sessions).toHaveAttribute('aria-current', 'page');
+	await expect.element(page.getByRole('link', { name: 'Files' })).toHaveAttribute('href', '#files');
+	await expect.element(page.getByRole('link', { name: 'Files' })).not.toHaveAttribute('aria-current');
+});
+
+test('disables destinations that cannot open and explains why', async () => {
+	await render(ApplicationShellDemo);
+
+	const settings = page.getByRole('button', { name: 'Settings' });
+	await expect.element(settings).toHaveAttribute('aria-disabled', 'true');
+	await expect.element(settings).toHaveAccessibleDescription('Coming soon');
+	await expect.element(settings).toHaveAttribute('title', 'Settings: Coming soon');
+	await expect.element(page.getByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
+
+	const terminal = page.getByRole('button', { name: 'Terminal' });
+	await expect.element(terminal).toHaveAccessibleDescription('Open a workspace first');
+});
+
+test('shows the Pau mark beside the product name', async () => {
+	await render(ApplicationShellDemo);
+
+	expect(document.querySelector('.app-shell__identity svg.app-shell__mark')).not.toBeNull();
+	expect(document.querySelector('.app-shell__identity')?.textContent).not.toContain('π');
 });

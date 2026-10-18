@@ -81,6 +81,13 @@ connection is down, the session stays readable but sending, starting, and
 stopping are disabled until Pau reconnects. A control the agent does not
 support is hidden, and the composer explains when no delivery mode is left.
 
+The session rail starts with an Open workspace control. With no workspace
+registered, the task surface asks the operator to open a folder. The desktop
+app shows the system folder picker. The browser development build asks for the
+folder path instead. A folder that is missing or is a file shows the reason
+beside the control. A newly opened workspace without sessions offers to start
+one.
+
 Terminal-only custom extension components show an explicit limitation instead
 of an empty or broken control. The message directs the operator to vanilla Pi
 in a Pau terminal.

@@ -15,7 +15,8 @@
 	"dependencies": {
 		"@stormlightlabs/pau-protocol": "workspace:*",
 		"@stormlightlabs/pau-ui": "workspace:*",
-		"@tauri-apps/api": "2.9.0"
+		"@tauri-apps/api": "2.9.0",
+		"@tauri-apps/plugin-dialog": "2.7.3"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-static": "3.0.10",

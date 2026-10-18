@@ -6,10 +6,21 @@
 	import { themeCssProperties, type ThemeName, type UiFontName } from '../theme';
 	import Icon from './Icon.svelte';
 
-	/** One destination in the product or contextual rail. */
+	/**
+	 * One destination in the product or contextual rail.
+	 *
+	 * An item without `href` cannot be opened. The rail shows it disabled and
+	 * explains why with `unavailable`, so a view that does not work yet never
+	 * opens as an empty page.
+	 */
 	export type ShellNavItem = {
+		/** Stable identity for keyed rendering and tests. */
 		id: string;
 		label: string;
+		/** Where the item navigates. */
+		href?: string;
+		/** Why the item cannot be opened. Defaults to "Coming soon". */
+		unavailable?: string;
 		icon?: IconKind;
 		status?: string;
 		attention?: boolean;
@@ -45,6 +56,7 @@
 	}: Props = $props();
 
 	let contextOpen = $state(false);
+	let hasContext = $derived(Boolean(context) || contextItems.length > 0);
 	let inspectorVisible = $derived(inspectorOpen);
 	let shellStyle = $derived(
 		Object.entries(themeCssProperties(theme, uiFont))
@@ -56,13 +68,17 @@
 <a class="app-shell__skip-link" href="#main-surface">Skip to main surface</a>
 <div
 	class:app-shell--with-inspector={inspectorVisible && inspector}
+	class:app-shell--without-context={!hasContext}
 	class="app-shell"
 	data-theme={theme}
 	data-ui-font={uiFont}
 	style={shellStyle}>
 	<header class="app-shell__command-bar">
 		<div class="app-shell__identity">
-			<span class="app-shell__mark" aria-hidden="true">π</span>
+			<svg class="app-shell__mark" viewBox="0 0 64 64" fill="currentColor" aria-hidden="true">
+				<path d="M9.5 6.5H41A13.5 13.5 0 0 1 41 33.5H23.5V26.5H41A6.5 6.5 0 0 0 41 13.5H9.5Z" />
+				<path d="M23.5 6.5V48A9.5 9.5 0 0 0 33 57.5H38.5V50.5H33A2.5 2.5 0 0 1 30.5 48V6.5Z" />
+			</svg>
 			<strong>Pau</strong>
 			<span>/</span>
 			<span>{workspaceName}</span>
@@ -80,49 +96,77 @@
 		<ul>
 			{#each productItems as item (item.id)}
 				<li>
-					<a href={`#${item.id}`} class:active={item.active} aria-label={item.label}>
-						<Icon name={item.icon ?? 'agents'} size={20} />
-						{#if item.attention}<span class="app-shell__attention" aria-label="Needs attention"></span>{/if}
-					</a>
+					{#if item.href}
+						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the app owner resolves rail destinations -->
+						<a
+							href={item.href}
+							class:active={item.active}
+							aria-current={item.active ? 'page' : undefined}
+							aria-label={item.label}
+							title={item.label}>
+							<Icon name={item.icon ?? 'agents'} size={20} />
+							{#if item.attention}<span class="app-shell__attention" role="img" aria-label="Needs attention"></span
+								>{/if}
+						</a>
+					{:else}
+						{@const reason = item.unavailable ?? 'Coming soon'}
+						<button
+							type="button"
+							class="app-shell__unavailable"
+							class:active={item.active}
+							aria-current={item.active ? 'page' : undefined}
+							aria-disabled="true"
+							aria-label={item.label}
+							aria-describedby={`product-${item.id}-unavailable`}
+							title={`${item.label}: ${reason}`}>
+							<Icon name={item.icon ?? 'agents'} size={20} />
+						</button>
+						<span id={`product-${item.id}-unavailable`} class="app-shell__sr-only">{reason}</span>
+					{/if}
 				</li>
 			{/each}
 		</ul>
 	</nav>
 
-	<aside class:open={contextOpen} class="app-shell__context-rail" aria-label={contextLabel}>
-		<div class="app-shell__rail-heading">
-			<span>{contextLabel}</span>
-			<button type="button" aria-label="Close navigation" onclick={() => (contextOpen = false)}>
-				<Icon name="close" size={18} />
-			</button>
-		</div>
-		{#if context}
-			<div class="app-shell__context-content">{@render context()}</div>
-		{:else}
-			<ul>
-				{#each contextItems as item (item.id)}
-					<li>
-						<a href={`#${item.id}`} class:active={item.active}>
-							<span class:attention={item.attention} class="app-shell__item-dot"></span>
-							<span>{item.label}</span>
-							{#if item.status}<small>{item.status}</small>{/if}
-						</a>
-					</li>
-				{/each}
-			</ul>
-		{/if}
-	</aside>
+	{#if hasContext}
+		<aside class:open={contextOpen} class="app-shell__context-rail" aria-label={contextLabel}>
+			<div class="app-shell__rail-heading">
+				<span>{contextLabel}</span>
+				<button type="button" aria-label="Close navigation" onclick={() => (contextOpen = false)}>
+					<Icon name="close" size={18} />
+				</button>
+			</div>
+			{#if context}
+				<div class="app-shell__context-content">{@render context()}</div>
+			{:else}
+				<ul>
+					{#each contextItems as item (item.id)}
+						<li>
+							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the app owner resolves rail destinations -->
+							<a href={item.href} class:active={item.active} aria-current={item.active ? 'page' : undefined}>
+								<span class:attention={item.attention} class="app-shell__item-dot"></span>
+								<span>{item.label}</span>
+								{#if item.status}<small>{item.status}</small>{/if}
+							</a>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</aside>
+	{/if}
 
 	<main id="main-surface" class="app-shell__main" tabindex="-1">
 		<div class="app-shell__surface-bar">
-			<button
-				type="button"
-				class="app-shell__icon-button app-shell__context-toggle"
-				aria-label="Open navigation"
-				aria-expanded={contextOpen}
-				onclick={() => (contextOpen = !contextOpen)}>
-				<Icon name="sidebar" size={18} />
-			</button>
+			{#if hasContext}
+				<button
+					type="button"
+					class="app-shell__icon-button app-shell__context-toggle"
+					aria-label="Open navigation"
+					aria-expanded={contextOpen}
+					onclick={() => (contextOpen = !contextOpen)}>
+					<Icon name="sidebar" size={18} />
+				</button>
+			{/if}
 			{#if disconnected}
 				<p class="app-shell__connection" role="status"><span></span>Disconnected</p>
 			{:else}
@@ -205,6 +249,21 @@
 			);
 	}
 
+	/* Views without a contextual rail give its column to the main surface. */
+	.app-shell--without-context {
+		grid-template-areas:
+			'command command'
+			'product main';
+		grid-template-columns: var(--pau-size-rail-product) minmax(0, 1fr);
+	}
+
+	.app-shell--without-context.app-shell--with-inspector {
+		grid-template-areas:
+			'command command command'
+			'product main inspector';
+		grid-template-columns: var(--pau-size-rail-product) minmax(24rem, 1fr) var(--pau-size-rail-inspector);
+	}
+
 	.app-shell__skip-link {
 		position: fixed;
 		top: 0.5rem;
@@ -244,13 +303,12 @@
 	}
 
 	.app-shell__mark {
-		display: grid;
-		place-items: center;
+		flex: none;
 		width: 1.5rem;
 		height: 1.5rem;
+		padding: var(--pau-space-1);
 		color: var(--shell-bg);
 		background: var(--shell-accent);
-		font-weight: 800;
 	}
 
 	.app-shell__command-input {
@@ -322,21 +380,30 @@
 		list-style: none;
 	}
 
-	.app-shell__product-rail a {
+	.app-shell__product-rail a,
+	.app-shell__product-rail button {
 		position: relative;
 		display: grid;
 		place-items: center;
 		width: 2.75rem;
 		height: var(--pau-size-target-touch);
 		margin-inline: auto;
+		padding: 0;
 		color: var(--shell-muted);
+		background: transparent;
+		border: 0;
 		text-decoration: none;
 	}
 
 	.app-shell__product-rail a:hover,
-	.app-shell__product-rail a.active {
+	.app-shell__product-rail .active {
 		color: var(--shell-accent);
 		background: var(--shell-surface-raised);
+	}
+
+	.app-shell__product-rail .app-shell__unavailable {
+		cursor: not-allowed;
+		opacity: 0.45;
 	}
 
 	.app-shell__attention {
@@ -529,6 +596,14 @@
 			grid-template-columns: var(--pau-size-rail-product) var(--pau-size-rail-context) minmax(0, 1fr);
 		}
 
+		.app-shell--without-context,
+		.app-shell--without-context.app-shell--with-inspector {
+			grid-template-areas:
+				'command command'
+				'product main';
+			grid-template-columns: var(--pau-size-rail-product) minmax(0, 1fr);
+		}
+
 		.app-shell__inspector {
 			position: fixed;
 			top: 2.75rem;
@@ -607,7 +682,9 @@
 
 	@media (max-width: 30rem) {
 		.app-shell,
-		.app-shell--with-inspector {
+		.app-shell--with-inspector,
+		.app-shell--without-context,
+		.app-shell--without-context.app-shell--with-inspector {
 			grid-template-areas:
 				'command'
 				'main'
@@ -627,7 +704,8 @@
 			padding: var(--pau-space-1);
 		}
 
-		.app-shell__product-rail a {
+		.app-shell__product-rail a,
+		.app-shell__product-rail button {
 			margin: 0;
 		}
 

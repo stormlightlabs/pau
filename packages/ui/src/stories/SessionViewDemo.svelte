@@ -8,6 +8,7 @@
 		PromptQueue,
 		SessionWorkspace
 	} from '../lib/types/session';
+	import type { ShellNavItem } from '../lib/ApplicationShell.svelte';
 	import SessionView from '../lib/SessionView.svelte';
 
 	let {
@@ -22,7 +23,11 @@
 		history = [],
 		clearedQueue = { steering: [], followUp: [] },
 		commands = [],
-		sendFailure
+		sendFailure,
+		openable = false,
+		pickedFolder,
+		openFailure,
+		productItems
 	}: {
 		workspaces: SessionWorkspace[];
 		initialSessionId?: string;
@@ -43,7 +48,32 @@
 		sendFailure?: string;
 		/** What clearing the queue returns. */
 		clearedQueue?: MessageQueue;
+		/** Whether the view offers Open workspace. */
+		openable?: boolean;
+		/**
+		 * What a native folder picker returns, with `null` for a cancel. Without
+		 * it, the view asks for a path in a text field.
+		 */
+		pickedFolder?: string | null;
+		/** When set, opening a workspace fails with this message. */
+		openFailure?: string;
+		productItems?: ShellNavItem[];
 	} = $props();
+
+	let opened = $state<SessionWorkspace[]>([]);
+	const allWorkspaces = $derived([...workspaces, ...opened]);
+
+	/** Opens a folder by its last path segment, reusing a workspace with that name. */
+	function openWorkspace(path: string): string {
+		if (openFailure) throw new Error(openFailure);
+		const name = path.split('/').findLast(Boolean) ?? path;
+		const existing = allWorkspaces.find((workspace) => workspace.name === name);
+		if (existing) return existing.id;
+		const id = `workspace-${name}`;
+		opened.push({ id, name, sessions: [] });
+		lastAction = `opened ${path}`;
+		return id;
+	}
 
 	let activeSessionId = $state<string>();
 	let lastAction = $state('No action sent');
@@ -69,7 +99,10 @@
 </script>
 
 <SessionView
-	{workspaces}
+	workspaces={allWorkspaces}
+	{productItems}
+	onOpenWorkspace={openable ? async (path) => openWorkspace(path) : undefined}
+	pickFolder={pickedFolder === undefined ? undefined : async () => pickedFolder ?? undefined}
 	{activeSessionId}
 	{resourceSnapshot}
 	{loading}

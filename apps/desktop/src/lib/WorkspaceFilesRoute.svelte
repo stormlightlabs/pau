@@ -1,5 +1,10 @@
 <script lang="ts">
-	import { WorkspaceFiles, type FileEditorSource, type WorkspaceFileSource } from '@stormlightlabs/pau-ui';
+	import {
+		WorkspaceFiles,
+		type FileEditorSource,
+		type ShellNavItem,
+		type WorkspaceFileSource
+	} from '@stormlightlabs/pau-ui';
 	import { onMount } from 'svelte';
 
 	import {
@@ -12,7 +17,7 @@
 		writeWorkspaceFile
 	} from './api';
 
-	let { workspaceId }: { workspaceId: string } = $props();
+	let { workspaceId, productItems }: { workspaceId: string; productItems?: ShellNavItem[] } = $props();
 
 	let resolvedWorkspaceName = $state<string>();
 	let workspaceName = $derived(resolvedWorkspaceName ?? workspaceId);
@@ -40,4 +45,4 @@
 	});
 </script>
 
-<WorkspaceFiles {workspaceId} {workspaceName} {source} {editorSource} {disconnected} />
+<WorkspaceFiles {workspaceId} {workspaceName} {source} {editorSource} {disconnected} {productItems} />

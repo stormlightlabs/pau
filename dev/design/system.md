@@ -56,6 +56,11 @@ The main surface must retain the largest useful width. The inspector holds
 selected detail, plans, checks, permissions, diffs, or resource configuration.
 It must not become a second navigation rail.
 
+Each product rail item opens a working view and marks the current one. An item
+whose view is not ready yet stays visible but disabled, with a "Coming soon"
+tooltip. Workspace views stay disabled until a workspace is open. A view
+without a contextual rail gives that column to the main surface.
+
 The application shell fills the viewport and prevents document overscroll.
 Persistent rails and the main task surface scroll independently, so navigation
 and task context remain available with long content. Nested panes contain their

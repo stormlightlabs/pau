@@ -12,7 +12,17 @@
 		theme?: ThemeName;
 		uiFont?: UiFontName;
 		disconnected?: boolean;
+		/** Product rail destinations, supplied by the app that owns the routes. */
+		productItems?: ShellNavItem[];
 	};
+
+	const defaultProductItems: ShellNavItem[] = [
+		{ id: 'sessions', label: 'Sessions', icon: 'agents' },
+		{ id: 'files', label: 'Files', icon: 'files' },
+		{ id: 'terminal', label: 'Terminal', icon: 'terminal', active: true },
+		{ id: 'resources', label: 'Resources', icon: 'resources' },
+		{ id: 'settings', label: 'Settings', icon: 'settings' }
+	];
 
 	/** A tab's lifecycle as reported by its connection. */
 	type TabState = TerminalTab & {
@@ -21,15 +31,14 @@
 		hasSelection: boolean;
 	};
 
-	let { workspaceName, source, theme = 'eldritch', uiFont = 'inter', disconnected = false }: Props = $props();
-
-	const productItems: ShellNavItem[] = [
-		{ id: 'sessions', label: 'Sessions', icon: 'agents' },
-		{ id: 'files', label: 'Files', icon: 'files' },
-		{ id: 'terminal', label: 'Terminal', icon: 'terminal', active: true },
-		{ id: 'resources', label: 'Resources', icon: 'resources' },
-		{ id: 'settings', label: 'Settings', icon: 'settings' }
-	];
+	let {
+		workspaceName,
+		source,
+		theme = 'eldritch',
+		uiFont = 'inter',
+		disconnected = false,
+		productItems = defaultProductItems
+	}: Props = $props();
 
 	let tabs = $state<TabState[]>([]);
 	let activeId = $state<string>();

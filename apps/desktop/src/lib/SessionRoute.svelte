@@ -1,17 +1,21 @@
 <script lang="ts">
-	import { SessionView } from '@stormlightlabs/pau-ui';
-	import { onMount } from 'svelte';
+	import { SessionView, type ShellNavItem } from '@stormlightlabs/pau-ui';
+	import { getContext, onMount } from 'svelte';
 
 	import type { EventSocketFactory } from './event-stream';
 	import { LiveSessions } from './live-sessions.svelte';
+	import { desktopNativeCapabilitiesContext, type DesktopNativeCapabilities } from './native-capabilities';
 
 	let {
 		initialSessionId,
 		onSessionChange,
 		fetcher,
-		socketFactory
+		socketFactory,
+		navigation
 	}: {
 		initialSessionId?: string;
+		/** Builds the product rail for the workspace the operator is working in. */
+		navigation?: (workspaceId: string | undefined) => ShellNavItem[];
 		onSessionChange?: (workspaceId: string, sessionId: string) => void;
 		fetcher?: typeof fetch;
 		socketFactory?: EventSocketFactory;
@@ -26,6 +30,15 @@
 
 	const workspaces = $derived(sessions.workspaces);
 	const activeSessionId = $derived(selectedSessionId ?? workspaces.flatMap((workspace) => workspace.sessions)[0]?.id);
+	/** A workspace opened since the operator last chose a session. */
+	let openedWorkspaceId = $state<string>();
+	/** The workspace that the rail's workspace views open. */
+	const currentWorkspaceId = $derived(
+		openedWorkspaceId ??
+			workspaces.find((workspace) => workspace.sessions.some((session) => session.id === activeSessionId))?.id ??
+			workspaces[0]?.id
+	);
+	const native = getContext<DesktopNativeCapabilities | undefined>(desktopNativeCapabilitiesContext);
 
 	onMount(() => {
 		sessions.connect();
@@ -34,6 +47,7 @@
 
 	function selectSession(sessionId: string): void {
 		selectedSessionId = sessionId;
+		openedWorkspaceId = undefined;
 		const workspace = workspaces.find((candidate) => candidate.sessions.some((session) => session.id === sessionId));
 		if (workspace) onSessionChange?.(workspace.id, sessionId);
 	}
@@ -41,12 +55,20 @@
 	async function startSession(workspaceId: string): Promise<void> {
 		const sessionId = await sessions.start(workspaceId);
 		selectedSessionId = sessionId;
+		openedWorkspaceId = undefined;
 		onSessionChange?.(workspaceId, sessionId);
+	}
+
+	async function openWorkspace(path: string): Promise<string> {
+		const workspaceId = await sessions.open(path);
+		openedWorkspaceId = workspaceId;
+		return workspaceId;
 	}
 
 	async function resumeSession(workspaceId: string, savedSessionId: string): Promise<void> {
 		const sessionId = await sessions.resume(workspaceId, savedSessionId);
 		selectedSessionId = sessionId;
+		openedWorkspaceId = undefined;
 		onSessionChange?.(workspaceId, sessionId);
 	}
 </script>
@@ -56,6 +78,9 @@
 	{activeSessionId}
 	loading={sessions.loading}
 	disconnected={sessions.disconnected}
+	productItems={navigation?.(currentWorkspaceId)}
+	pickFolder={native?.pickFolder}
+	onOpenWorkspace={openWorkspace}
 	onSelectSession={selectSession}
 	onStartSession={startSession}
 	onLoadSavedSessions={(workspaceId) => sessions.listSaved(workspaceId)}

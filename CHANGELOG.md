@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- Open a project folder from the sessions rail or the first-run screen, and use
+  the product rail to move between sessions, files, terminal, agent sandbox,
+  and diagnostics. Views that are not ready yet show as coming soon.
 - The desktop app no longer puts its local API token in the window URL, and
   moving between pages keeps the backend connection.
 - Fixed the installed app opening to a "404 Not Found" page.

@@ -822,6 +822,11 @@ impl IntoResponse for ApiError {
                     {
                         (StatusCode::FORBIDDEN, "permission_denied")
                     }
+                    // Opening a folder that does not exist is an operator
+                    // mistake, not a backend failure.
+                    WorkspaceError::Io(error) if error.kind() == io::ErrorKind::NotFound => {
+                        (StatusCode::NOT_FOUND, "not_found")
+                    }
                     WorkspaceError::Persistence(_)
                     | WorkspaceError::Io(_)
                     | WorkspaceError::Git(_) => {
@@ -1896,6 +1901,33 @@ mod tests {
         let workspace: Workspace =
             serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
+
+        for (path, status, code) in [
+            (
+                root.join("missing"),
+                StatusCode::NOT_FOUND,
+                "not_found",
+            ),
+            (
+                root.join("note.txt"),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "wrong_file_type",
+            ),
+        ] {
+            let rejected = Request::builder()
+                .method("POST")
+                .uri("/api/workspaces")
+                .header(header::AUTHORIZATION, &authorization)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(serde_json::json!({"path": path}).to_string()))
+                .unwrap();
+            let response = app.clone().oneshot(rejected).await.unwrap();
+            assert_eq!(response.status(), status);
+            let body: serde_json::Value =
+                serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                    .unwrap();
+            assert_eq!(body["code"], code);
+        }
 
         let list = Request::builder()
             .uri(format!(

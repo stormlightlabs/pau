@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Each session state now has its own mark in the session list and header, and
+  the running spinner holds still when reduced motion is on.
 - Copy any message, code block, or tool output from the transcript with one
   click. A confirmation shows when the copy works, and a clear message shows
   when the clipboard is unavailable.

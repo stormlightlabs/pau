@@ -15,6 +15,7 @@
 	import { announcementSnapshot, describeChanges, type AnnouncementSnapshot } from './transcript-announcements';
 	import { copyText, findMessage, lastAssistantReply, type CopyResult } from './clipboard';
 	import CopyButton from './CopyButton.svelte';
+	import SessionStatusMark from './SessionStatusMark.svelte';
 	import CommandCompletion from './CommandCompletion.svelte';
 	import { commandName, commandQuery, filterCommands } from './command-completion';
 	import ExtensionUi from './ExtensionUi.svelte';
@@ -1151,11 +1152,9 @@
 											event.preventDefault();
 											moveSession(session.id, event.key === 'ArrowDown' ? 1 : -1);
 										}}>
-										<span
-											class:attention={hasAttention(session)}
-											class={`session-rail__state session-rail__state--${session.status}`}></span>
+										<SessionStatusMark status={session.status} label={statusLabel(session.status)} />
 										<span class="session-rail__name">{session.title}</span>
-										<small>{statusLabel(session.status)}</small>
+										<small aria-hidden="true">{statusLabel(session.status)}</small>
 										{#if hasAttention(session)}<span class="session-view__sr-only">Attention required</span>{/if}
 									</button>
 								</li>
@@ -1361,7 +1360,8 @@
 						</div>
 					{/if}
 					<div class={`session-view__status session-view__status--${activeSession.status}`}>
-						<span></span>{statusLabel(activeSession.status)}
+						<SessionStatusMark status={activeSession.status} label={statusLabel(activeSession.status)} />
+						<span aria-hidden="true">{statusLabel(activeSession.status)}</span>
 					</div>
 					{#if activeSession.capabilities.stop && ['idle', 'running', 'waiting'].includes(activeSession.status)}
 						<button type="button" class="session-view__stop" disabled={disconnected} onclick={() => void stop()}>
@@ -1807,31 +1807,6 @@
 		background: var(--pau-surface-raised);
 	}
 
-	.session-rail__state {
-		width: 0.4rem;
-		height: 0.4rem;
-		background: var(--pau-text-muted);
-		border-radius: 50%;
-	}
-
-	.session-rail__state--idle,
-	.session-rail__state--running {
-		background: var(--pau-success);
-	}
-
-	.session-rail__state--starting,
-	.session-rail__state--stopping {
-		background: var(--pau-info);
-	}
-
-	.session-rail__state.attention {
-		background: var(--pau-warning);
-	}
-
-	.session-rail__state--failed {
-		background: var(--pau-danger);
-	}
-
 	.session-rail__name {
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -2010,26 +1985,6 @@
 		flex: none;
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
-	}
-
-	.session-view__status span {
-		width: 0.45rem;
-		height: 0.45rem;
-		background: currentColor;
-		border-radius: 50%;
-	}
-
-	.session-view__status--idle,
-	.session-view__status--running {
-		color: var(--pau-success);
-	}
-
-	.session-view__status--waiting {
-		color: var(--pau-warning);
-	}
-
-	.session-view__status--failed {
-		color: var(--pau-danger);
 	}
 
 	.session-view__notices {

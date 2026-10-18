@@ -917,24 +917,10 @@ Verification:
 
 ## Session status and attention
 
-### 2.204 Session status indicator
-
-Status: planned
-Blocked by: none
-
-Give each session state a distinct mark in the session rail and the session
-header, with one small spinner for running work that becomes static under
-reduced motion.
-
-Verification:
-
-- Component-test each state's label and mark in the rail and the header, and
-  the static running mark under reduced motion.
-
 ### 2.205 Session attention markers
 
 Status: planned
-Blocked by: 2.204
+Blocked by: none
 
 Mark sessions in the rail that wait for input, fail, or finish a turn while out
 of view, pulse the marker once, and clear it when the operator opens the

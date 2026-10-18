@@ -133,3 +133,4 @@ export { sessionFixtures } from './fixtures/sessions';
 export { workspaceFileFixtures } from './fixtures/workspace-files';
 export { isReducedMotion, motion, motionOffset } from './motion';
 export type { MotionSetting } from './motion';
+export { default as SessionStatusMark } from './lib/SessionStatusMark.svelte';

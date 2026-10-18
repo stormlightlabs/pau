@@ -10,18 +10,19 @@ Press `⌘/` on macOS or `Ctrl+/` on Linux to see every shortcut. The list is
 also under **Help > Keyboard Shortcuts**. On Linux, read `⌘` as `Ctrl` and
 `⌥` as `Alt` in the table below.
 
-| Shortcut                     | Action                              |
-| ---------------------------- | ----------------------------------- |
-| `⌘O`                         | Open a workspace                    |
-| `⌘N`                         | Start a session in this workspace   |
-| `Ctrl+Tab`, `Ctrl+Shift+Tab` | Next or previous session            |
-| `⌘1` to `⌘9`                 | Go to the session at that position  |
-| `Shift+Esc`                  | Clear attention markers             |
-| `⌘L`                         | Focus the composer                  |
-| `⌘[`, `⌘]`                   | Go back or forward                  |
-| `⌘B`                         | Show or hide the session rail       |
-| `⌥⌘B`                        | Show or hide the inspector          |
-| `⌘=`, `⌘-`, `⌘0`             | Zoom in, zoom out, or reset to 100% |
+| Shortcut                           | Action                              |
+| ---------------------------------- | ----------------------------------- |
+| `⌘O`                               | Open a workspace                    |
+| `⌘N`                               | Start a session in this workspace   |
+| `Ctrl+Tab`, `Ctrl+Shift+Tab`       | Next or previous session            |
+| `⌘1` to `⌘9`                       | Go to the session at that position  |
+| `Shift+Esc`                        | Clear attention markers             |
+| `⌘L`                               | Focus the composer                  |
+| `Ctrl+Shift+Up`, `Ctrl+Shift+Down` | Previous or next prompt             |
+| `⌘[`, `⌘]`                         | Go back or forward                  |
+| `⌘B`                               | Show or hide the session rail       |
+| `⌥⌘B`                              | Show or hide the inspector          |
+| `⌘=`, `⌘-`, `⌘0`                   | Zoom in, zoom out, or reset to 100% |
 
 The **File** menu has **New Session** and **Open Workspace**, and the **View**
 menu has the zoom commands.

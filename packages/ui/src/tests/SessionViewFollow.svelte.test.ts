@@ -58,15 +58,19 @@ test('stops following after the user scrolls up and resumes at the bottom', asyn
 	node.scrollTop = 200;
 	await expect.poll(() => following).toBe(false);
 
+	const height = node.scrollHeight;
 	await screen.rerender({ workspaces: workspaces(40), activeSessionId: baseSession.id });
+	// Wait for the new entries to lay out before asserting that the position held.
+	await expect.poll(() => node.scrollHeight).toBeGreaterThan(height);
 	await settled();
 	expect(node.scrollTop).toBe(200);
 
 	node.scrollTop = node.scrollHeight;
 	await expect.poll(() => following).toBe(true);
+	const grown = node.scrollHeight;
 	await screen.rerender({ workspaces: workspaces(45), activeSessionId: baseSession.id });
-	await settled();
-	expect(distanceFromBottom(node)).toBeLessThanOrEqual(1);
+	await expect.poll(() => node.scrollHeight).toBeGreaterThan(grown);
+	await expect.poll(() => distanceFromBottom(node)).toBeLessThanOrEqual(1);
 });
 
 test('a notice does not move the reading position while detached', async () => {

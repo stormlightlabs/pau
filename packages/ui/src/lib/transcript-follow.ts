@@ -38,16 +38,35 @@ function restoreAnchor(node: HTMLElement, anchor: ReadingAnchor): boolean {
 	return true;
 }
 
-function pin(node: HTMLElement): void {
-	node.scrollTop = node.scrollHeight;
-}
-
 /**
  * Scrolls a transcript to its newest content. Smooth scrolling gives way to an
  * instant jump when motion is reduced.
  */
 export function scrollToLatest(node: HTMLElement): void {
 	node.scrollTo({ top: node.scrollHeight, behavior: isReducedMotion() ? 'instant' : 'smooth' });
+}
+
+/**
+ * Moves to the previous or next user prompt and focuses it so screen readers
+ * announce it. The reference point is the focused prompt, or the viewport top
+ * when focus is elsewhere. Does nothing past the first or last prompt. Scrolling
+ * away from the bottom stops following. Smooth scrolling gives way to an
+ * instant jump when motion is reduced.
+ */
+export function scrollToPrompt(node: HTMLElement, direction: 1 | -1): void {
+	const prompts = [...node.querySelectorAll<HTMLElement>('.session-message--user')];
+	const focused = prompts.findIndex((prompt) => prompt.contains(document.activeElement));
+	let target: HTMLElement | undefined;
+	if (focused !== -1) {
+		target = prompts[focused + direction];
+	} else {
+		const top = node.getBoundingClientRect().top;
+		const offset = (prompt: HTMLElement) => prompt.getBoundingClientRect().top - top;
+		target = direction === 1 ? prompts.find((p) => offset(p) > 1) : prompts.findLast((p) => offset(p) < -1);
+	}
+	if (!target) return;
+	target.focus({ preventScroll: true });
+	target.scrollIntoView({ block: 'start', behavior: isReducedMotion() ? 'instant' : 'smooth' });
 }
 
 /**
@@ -79,6 +98,10 @@ export function followTranscript(node: HTMLElement, options: TranscriptFollowOpt
 	let anchoredAt = node.scrollTop;
 	node.style.overflowAnchor = 'none';
 
+	function pin() {
+		node.scrollTop = node.scrollHeight;
+	}
+
 	function captureAnchor() {
 		positions.set(key, following ? undefined : readAnchor(node));
 		anchoredAt = node.scrollTop;
@@ -97,7 +120,7 @@ export function followTranscript(node: HTMLElement, options: TranscriptFollowOpt
 
 	const resize = new ResizeObserver(() => {
 		if (following) {
-			pin(node);
+			pin();
 			return;
 		}
 		const anchor = positions.get(key);
@@ -108,7 +131,7 @@ export function followTranscript(node: HTMLElement, options: TranscriptFollowOpt
 	if (node.firstElementChild) resize.observe(node.firstElementChild);
 	resize.observe(node);
 	node.addEventListener('scroll', onScroll, { passive: true });
-	pin(node);
+	pin();
 
 	return {
 		update(next: TranscriptFollowOptions) {
@@ -122,7 +145,7 @@ export function followTranscript(node: HTMLElement, options: TranscriptFollowOpt
 			}
 			following = false;
 			setFollowing(true);
-			pin(node);
+			pin();
 		},
 		destroy() {
 			resize.disconnect();

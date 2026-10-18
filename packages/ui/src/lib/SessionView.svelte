@@ -43,7 +43,7 @@
 	import SessionResourceSummary from './SessionResourceSummary.svelte';
 	import SessionTree from './SessionTree.svelte';
 	import { openByDefault } from './transcript-disclosure';
-	import { followTranscript, scrollToLatest as scrollTranscriptToLatest } from './transcript-follow';
+	import { followTranscript, scrollToLatest as scrollTranscriptToLatest, scrollToPrompt } from './transcript-follow';
 	import ToolCallView from './ToolCallView.svelte';
 	import TranscriptSearch from './TranscriptSearch.svelte';
 	import type { ProcessResourceSnapshot } from './types/resource-monitoring';
@@ -1098,7 +1098,9 @@
 			if (session) selectSession(session.id);
 		},
 		'session.clearAttention': () => onClearAttention(),
-		'composer.focus': () => composer?.focus()
+		'composer.focus': () => composer?.focus(),
+		'prompt.previous': () => (transcriptElement ? scrollToPrompt(transcriptElement, -1) : undefined),
+		'prompt.next': () => (transcriptElement ? scrollToPrompt(transcriptElement, 1) : undefined)
 	});
 
 	/** Attaches the supported files and reports each rejected one by name. */

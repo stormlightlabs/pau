@@ -83,6 +83,8 @@ export const APP_KEY_ACTIONS: readonly KeyAction[] = [
 		keys: ['shift+escape'],
 		whileTyping: true
 	},
+	{ id: 'prompt.previous', label: 'Previous prompt', group: 'Navigation', keys: ['ctrl+shift+up'], whileTyping: true },
+	{ id: 'prompt.next', label: 'Next prompt', group: 'Navigation', keys: ['ctrl+shift+down'], whileTyping: true },
 	{ id: 'composer.focus', label: 'Focus the composer', group: 'Navigation', keys: ['mod+l'] },
 	{ id: 'navigate.back', label: 'Go back', group: 'Navigation', keys: ['mod+['] },
 	{ id: 'navigate.forward', label: 'Go forward', group: 'Navigation', keys: ['mod+]'] },

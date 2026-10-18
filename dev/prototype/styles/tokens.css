@@ -22,11 +22,17 @@
 	--pau-space-5: 24px;
 	--pau-space-6: 32px;
 
+	/* Only for uppercase, letter-spaced section labels. Other text stays at 12px or larger. */
+	--pau-type-label: 11px;
 	--pau-type-xs: 12px;
 	--pau-type-sm: 13px;
 	--pau-type-md: 14px;
 	--pau-type-lg: 16px;
-	--pau-type-xl: 20px;
+	--pau-type-xl: 18px;
+
+	--pau-weight-regular: 400;
+	--pau-weight-medium: 500;
+	--pau-weight-semibold: 600;
 
 	--pau-radius-control: 3px;
 	--pau-radius-surface: 5px;
@@ -46,10 +52,11 @@
 	--pau-size-rail-context: 248px;
 	--pau-size-rail-inspector: 304px;
 
-	--pau-font-ui: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
-	--pau-font-code: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+	--pau-font-ui: 'Overpass', ui-sans-serif, system-ui, sans-serif;
+	--pau-font-code: 'Overpass Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+	--pau-font-site-body: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
 	--pau-font-site-heading: 'Google Sans', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
-	--pau-font-site-code: 'Google Sans Code', 'IBM Plex Mono', ui-monospace, monospace;
+	--pau-font-site-code: 'Google Sans Code', 'Overpass Mono', ui-monospace, monospace;
 }
 
 /* Eldritch, the default theme. */

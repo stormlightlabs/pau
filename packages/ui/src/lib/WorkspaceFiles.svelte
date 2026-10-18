@@ -683,7 +683,7 @@
 <style>
 	.workspace-files__browser {
 		min-width: 0;
-		font-size: var(--pau-type-xs);
+		font-size: var(--pau-type-sm);
 	}
 
 	.workspace-files__git {
@@ -719,7 +719,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-family: var(--pau-font-code);
-		font-weight: 500;
+		font-weight: var(--pau-weight-medium);
 	}
 
 	.workspace-files__git-branch small,
@@ -767,7 +767,7 @@
 	.workspace-files__review {
 		display: grid;
 		gap: var(--pau-space-2);
-		font-size: var(--pau-type-xs);
+		font-size: var(--pau-type-sm);
 	}
 
 	.workspace-files__review header,
@@ -852,8 +852,8 @@
 	.workspace-files__visibility legend,
 	.workspace-files__tree-header {
 		color: var(--shell-muted);
-		font-size: var(--pau-type-xs);
-		font-weight: 650;
+		font-size: var(--pau-type-label);
+		font-weight: var(--pau-weight-semibold);
 		letter-spacing: 0.04em;
 	}
 
@@ -1043,7 +1043,7 @@
 	.workspace-files__surface header h1 {
 		margin-top: 0;
 		font-size: var(--pau-type-md);
-		font-weight: 600;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	.workspace-files__surface-state {
@@ -1117,7 +1117,7 @@
 		white-space: nowrap;
 		font-family: var(--pau-font-code);
 		font-size: var(--pau-type-xs);
-		font-weight: 500;
+		font-weight: var(--pau-weight-medium);
 	}
 
 	.workspace-files__result-location small {

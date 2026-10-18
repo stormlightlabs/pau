@@ -293,7 +293,7 @@
 
 	.transcript-search__meta strong {
 		color: var(--pau-text);
-		font-weight: 600;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	.transcript-search__snippet {

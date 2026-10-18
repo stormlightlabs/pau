@@ -503,8 +503,8 @@
 	h4,
 	legend,
 	dt {
-		font-size: var(--pau-type-xs);
-		font-weight: 650;
+		font-size: var(--pau-type-sm);
+		font-weight: var(--pau-weight-semibold);
 		letter-spacing: 0.03em;
 	}
 
@@ -513,7 +513,7 @@
 	dd,
 	li {
 		color: var(--workbench-muted);
-		font-size: var(--pau-type-sm);
+		font-size: var(--pau-type-md);
 		line-height: 1.5;
 	}
 
@@ -535,7 +535,7 @@
 	.sandbox__state {
 		color: var(--workbench-available-text);
 		font-size: var(--pau-type-xs);
-		font-weight: 650;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	.sandbox__state.off {
@@ -564,7 +564,7 @@
 	}
 
 	.sandbox__choice strong {
-		font-weight: 500;
+		font-weight: var(--pau-weight-medium);
 	}
 
 	.sandbox__grants > label:not(.sandbox__check),
@@ -688,8 +688,8 @@
 		border: 1px solid transparent;
 		border-radius: var(--pau-radius-control);
 		font: inherit;
-		font-size: var(--pau-type-xs);
-		font-weight: 650;
+		font-size: var(--pau-type-sm);
+		font-weight: var(--pau-weight-semibold);
 		cursor: pointer;
 	}
 

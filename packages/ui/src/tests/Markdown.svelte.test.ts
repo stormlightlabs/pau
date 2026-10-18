@@ -24,7 +24,7 @@ test('renders fenced code with and without a language in the code font', async (
 	expect(blocks).toHaveLength(2);
 	expect(blocks[0]!.dataset.language).toBe('ts');
 	expect(blocks[1]!.dataset.language).toBeUndefined();
-	expect(getComputedStyle(blocks[0]!.querySelector('code')!).fontFamily).toContain('IBM Plex Mono');
+	expect(getComputedStyle(blocks[0]!.querySelector('code')!).fontFamily).toContain('Overpass Mono');
 });
 
 test('keeps raw HTML and images as text', async () => {

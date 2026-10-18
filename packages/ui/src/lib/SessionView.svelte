@@ -2484,10 +2484,8 @@
 		margin: 0;
 		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--pau-text-muted);
-		font-size: var(--pau-type-xs);
-		font-weight: 700;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
+		font-size: var(--pau-type-sm);
+		font-weight: var(--pau-weight-medium);
 	}
 
 	.session-rail ul {
@@ -2595,7 +2593,7 @@
 		display: grid;
 		gap: var(--pau-space-1);
 		color: var(--pau-text-muted);
-		font-size: var(--pau-type-xs);
+		font-size: var(--pau-type-sm);
 	}
 
 	.session-open input {
@@ -2696,13 +2694,13 @@
 	.session-message h2 {
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
-		font-weight: 500;
+		font-weight: var(--pau-weight-medium);
 	}
 
 	.session-view__header h1 {
 		margin-top: var(--pau-space-1);
-		font-size: var(--pau-type-lg);
-		font-weight: 600;
+		font-size: var(--pau-type-xl);
+		font-weight: var(--pau-weight-semibold);
 		text-wrap: balance;
 	}
 
@@ -2972,7 +2970,7 @@
 		background: var(--pau-canvas);
 		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
-		font-size: var(--pau-type-sm);
+		font-size: var(--pau-type-md);
 	}
 
 	.session-compact__panel p {
@@ -3017,14 +3015,14 @@
 
 	.session-denial h2 {
 		font-size: var(--pau-type-md);
-		font-weight: 600;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	.session-denial .session-denial__label {
 		margin-bottom: var(--pau-space-1);
 		color: var(--pau-danger);
-		font-size: var(--pau-type-xs);
-		font-weight: 700;
+		font-size: var(--pau-type-label);
+		font-weight: var(--pau-weight-semibold);
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
 	}
@@ -3039,7 +3037,7 @@
 
 	.session-denial > p {
 		color: var(--pau-text-muted);
-		font-size: var(--pau-type-sm);
+		font-size: var(--pau-type-md);
 		line-height: 1.5;
 	}
 
@@ -3069,7 +3067,7 @@
 	.session-queue h2 {
 		margin: 0;
 		color: var(--pau-text-muted);
-		font-size: var(--pau-type-xs);
+		font-size: var(--pau-type-label);
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
 	}
@@ -3091,13 +3089,13 @@
 		display: grid;
 		grid-template-columns: 5rem minmax(0, 1fr) auto;
 		gap: var(--pau-space-2);
-		font-size: var(--pau-type-sm);
+		font-size: var(--pau-type-md);
 	}
 
 	.session-queue li strong {
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
-		font-weight: 600;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	.session-queue li span {
@@ -3222,7 +3220,7 @@
 		flex: none;
 		margin: var(--pau-space-3) 0 0 var(--pau-space-3);
 		color: var(--pau-accent);
-		font-size: var(--pau-type-lg);
+		font-size: var(--pau-type-md);
 	}
 
 	.session-composer textarea {
@@ -3263,7 +3261,7 @@
 		border: 0;
 		border-radius: var(--pau-radius-control);
 		font: inherit;
-		font-weight: 650;
+		font-weight: var(--pau-weight-semibold);
 		cursor: pointer;
 	}
 
@@ -3283,7 +3281,7 @@
 		color: var(--pau-text);
 		background: transparent;
 		border: 1px solid var(--pau-border);
-		font-weight: 500;
+		font-weight: var(--pau-weight-medium);
 	}
 
 	.session-composer kbd {

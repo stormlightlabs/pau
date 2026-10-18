@@ -23,6 +23,9 @@
 
 	let { label, theme = 'eldritch', active = true, connect, onexit, ondisconnect, onselectionchange }: Props = $props();
 
+	/** Installed monospace faces that xterm can measure before the bundled code font loads. */
+	const SYSTEM_MONO = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+
 	let host: HTMLDivElement;
 	let terminal = $state.raw<Terminal>();
 	let fitAddon: FitAddon | undefined;
@@ -55,7 +58,7 @@
 		const instance = new Terminal({
 			allowProposedApi: true,
 			cursorBlink: true,
-			fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+			fontFamily: SYSTEM_MONO,
 			fontSize: 13,
 			theme: terminalTheme(theme)
 		});
@@ -82,6 +85,16 @@
 		fitAddon = fitter;
 		terminal = instance;
 		fit();
+		// xterm measures its cell grid only when the font option changes, so it
+		// switches to the bundled code font after that face has loaded.
+		const codeFont = getComputedStyle(host).getPropertyValue('--pau-font-code').trim();
+		if (codeFont && 'fonts' in document) {
+			void document.fonts.load(`13px ${codeFont}`).then(() => {
+				if (terminal !== instance) return;
+				instance.options.fontFamily = codeFont;
+				fit();
+			});
+		}
 
 		const encoder = new TextEncoder();
 		const connection = connect({

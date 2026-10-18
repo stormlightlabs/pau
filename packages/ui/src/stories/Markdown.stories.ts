@@ -39,7 +39,7 @@ export const CodeBlocks: Story = {
 	play: async ({ canvasElement }) => {
 		const code = canvasElement.querySelector(':scope pre code') as HTMLElement;
 		await expect(code).toHaveTextContent('export function width');
-		await expect(getComputedStyle(code).fontFamily).toContain('IBM Plex Mono');
+		await expect(getComputedStyle(code).fontFamily).toContain('Overpass Mono');
 		await expect(within(canvasElement).getByText('plain output <b>not html</b>')).toBeInTheDocument();
 	}
 };

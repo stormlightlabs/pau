@@ -21,9 +21,10 @@ each linked page as a `?theme=` query, so `screens-editor-default.html?theme=nor
 also works on its own. The themes are `eldritch` (default), `nord`, `iceberg`,
 `catppuccin-mocha`, and `vitesse-dark`.
 
-The pages load IBM Plex Sans, IBM Plex Mono, and the site's Google Sans faces
-from Google Fonts. Offline, they fall back to locally installed copies and then
-to system fonts. No build step or server is needed.
+The pages load Overpass and Overpass Mono from Google Fonts. The documentation
+pages also load IBM Plex Sans for body copy. Offline, the pages fall back to
+locally installed copies and then to system fonts. No build step or server is
+needed.
 
 Each page shows only the product: the application window for product screens,
 and the page content for the public site and the launch and reconnect states.

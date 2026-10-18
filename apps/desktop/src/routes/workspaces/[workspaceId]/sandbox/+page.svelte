@@ -136,7 +136,7 @@
 		gap: 0.75rem;
 		padding: 1.5rem 1rem;
 		color: var(--workbench-text, #e6e6f0);
-		font-size: 0.875rem;
+		font-size: var(--pau-type-md);
 	}
 
 	.sandbox-route__agent {

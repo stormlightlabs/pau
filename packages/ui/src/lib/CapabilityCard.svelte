@@ -68,7 +68,7 @@
 		background: var(--workbench-unavailable-surface);
 		border-radius: var(--pau-radius-control);
 		font-size: var(--pau-type-xs);
-		font-weight: 650;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	span.available {
@@ -86,7 +86,7 @@
 		border-radius: var(--pau-radius-control);
 		font: inherit;
 		font-size: var(--pau-type-sm);
-		font-weight: 650;
+		font-weight: var(--pau-weight-semibold);
 		cursor: pointer;
 		transition:
 			background var(--pau-duration-feedback) var(--pau-ease-standard),

@@ -260,7 +260,7 @@
 
 	h1 {
 		font-size: var(--pau-type-lg);
-		font-weight: 600;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	h2 {
@@ -298,7 +298,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--pau-space-2);
-		font-size: var(--pau-type-xs);
+		font-size: var(--pau-type-sm);
 	}
 
 	.diagnostics-view__export input {

@@ -39,7 +39,7 @@
 		margin: 0;
 		padding: 0;
 		border: 0;
-		font-size: var(--pau-type-sm);
+		font-size: var(--pau-type-md);
 	}
 
 	legend {

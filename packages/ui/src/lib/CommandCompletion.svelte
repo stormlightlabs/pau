@@ -56,7 +56,7 @@
 		overflow-y: auto;
 		background: var(--pau-surface);
 		border: 1px solid var(--pau-border);
-		font-size: var(--pau-type-sm);
+		font-size: var(--pau-type-md);
 	}
 
 	ul {

@@ -11,7 +11,7 @@ const meta = {
 		theme: { control: 'select', options: ['eldritch', 'nord', 'iceberg', 'catppuccin-mocha', 'vitesse-dark'] },
 		uiFont: {
 			control: 'select',
-			options: ['ibm-plex-sans', 'inter', 'atkinson-hyperlegible-next', 'atkinson-hyperlegible-soft']
+			options: ['overpass', 'ibm-plex-sans', 'inter', 'atkinson-hyperlegible-next', 'atkinson-hyperlegible-soft']
 		}
 	},
 	args: {

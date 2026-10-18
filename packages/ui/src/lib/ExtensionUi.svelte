@@ -198,7 +198,7 @@
 		color: var(--pau-text);
 		background: var(--pau-canvas);
 		border-inline-start: 2px solid var(--pau-info);
-		font-size: var(--pau-type-sm);
+		font-size: var(--pau-type-md);
 	}
 
 	.extension-ui__notification--warning {
@@ -233,7 +233,7 @@
 
 	.extension-ui__statuses strong {
 		color: var(--pau-text);
-		font-weight: 600;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	.extension-ui__dialog {
@@ -290,7 +290,7 @@
 
 	.extension-ui__dialog label span {
 		color: var(--pau-text-muted);
-		font-size: var(--pau-type-xs);
+		font-size: var(--pau-type-sm);
 	}
 
 	.extension-ui__dialog input,
@@ -318,7 +318,7 @@
 		background: var(--pau-accent);
 		border: 0;
 		font: inherit;
-		font-weight: 650;
+		font-weight: var(--pau-weight-semibold);
 		cursor: pointer;
 	}
 

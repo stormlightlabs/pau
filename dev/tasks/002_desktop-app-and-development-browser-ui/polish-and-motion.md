@@ -4,7 +4,9 @@
 
 ### 2.235 Typography scale and Overpass
 
-Status: planned
+Status: in progress
+Status note: Implemented and tested. The visual review in each theme at 1440
+and 900px remains.
 Blocked by: none
 
 Make Overpass Variable the default UI font and Overpass Mono the code font,

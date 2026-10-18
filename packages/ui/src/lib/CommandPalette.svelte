@@ -215,7 +215,7 @@
 		border-radius: var(--pau-radius-surface);
 		box-shadow: 0 1rem 3rem color-mix(in srgb, var(--pau-canvas) 85%, transparent);
 		font-family: var(--pau-font-ui);
-		font-size: var(--pau-type-sm);
+		font-size: var(--pau-type-md);
 		line-height: 1.4;
 	}
 
@@ -277,7 +277,7 @@
 		padding-inline: var(--pau-space-3);
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
-		font-weight: 600;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	/* Every row has the same height, so filtering never changes row geometry. */

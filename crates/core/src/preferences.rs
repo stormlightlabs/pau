@@ -46,8 +46,10 @@ pub enum ThemePreference {
 #[serde(rename_all = "kebab-case")]
 #[ts(rename_all = "kebab-case")]
 pub enum UiFontPreference {
-    /// IBM Plex Sans.
+    /// Overpass, the default.
     #[default]
+    Overpass,
+    /// IBM Plex Sans.
     IbmPlexSans,
     /// Inter.
     Inter,
@@ -245,6 +247,10 @@ mod tests {
         let parsed = serde_json::from_str::<UiPreferences>(&known).unwrap();
         assert_eq!(parsed.theme, ThemePreference::Nord);
         assert_eq!(parsed.ui_font, UiFontPreference::Inter);
+        let plex = known.replace("inter", "ibm-plex-sans");
+        let parsed = serde_json::from_str::<UiPreferences>(&plex).unwrap();
+        assert_eq!(parsed.ui_font, UiFontPreference::IbmPlexSans);
+        assert_eq!(UiPreferences::defaults().ui_font, UiFontPreference::Overpass);
 
         let mut preferences = UiPreferences::defaults();
         preferences.pane_widths.context_rail = Some(5);

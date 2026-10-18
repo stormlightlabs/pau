@@ -6,7 +6,9 @@
  * from `themeCssProperties` because they change with the operator's choice.
  *
  * Spacing and type use rem so browser zoom and default font size scale them.
- * No product text goes below `--pau-type-xs` (12px).
+ * No product text goes below `--pau-type-xs` (12px). The one exception is
+ * `--pau-type-label` (11px), reserved for uppercase, letter-spaced section
+ * labels whose caps and tracking keep them legible at that size.
  */
 @import './fonts.css';
 
@@ -18,11 +20,16 @@
 	--pau-space-5: 1.5rem;
 	--pau-space-6: 2rem;
 
+	--pau-type-label: 0.6875rem;
 	--pau-type-xs: 0.75rem;
 	--pau-type-sm: 0.8125rem;
 	--pau-type-md: 0.875rem;
 	--pau-type-lg: 1rem;
-	--pau-type-xl: 1.25rem;
+	--pau-type-xl: 1.125rem;
+
+	--pau-weight-regular: 400;
+	--pau-weight-medium: 500;
+	--pau-weight-semibold: 600;
 
 	--pau-radius-control: 3px;
 	--pau-radius-surface: 5px;
@@ -64,7 +71,21 @@
 	/* Multiplies full-width travel such as a rail sliding in from its edge. */
 	--pau-motion-travel: 1;
 
-	--pau-font-code: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+	--pau-font-code: 'Overpass Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/*
+ * Browser defaults that fall outside the scale. Headings, `strong`, `b`, and
+ * table headers default to 700, but the scale stops at 600. `small` defaults
+ * to `smaller`, which drops below the 12px floor. `:where` keeps the
+ * specificity at zero, so any component rule wins.
+ */
+:where(h1, h2, h3, h4, h5, h6, strong, b, th) {
+	font-weight: var(--pau-weight-semibold);
+}
+
+:where(small) {
+	font-size: var(--pau-type-xs);
 }
 
 /*

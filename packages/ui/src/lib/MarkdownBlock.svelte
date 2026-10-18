@@ -134,7 +134,7 @@
 
 	.markdown__heading {
 		font-size: var(--pau-type-lg);
-		font-weight: 600;
+		font-weight: var(--pau-weight-semibold);
 		line-height: 1.35;
 		text-wrap: balance;
 	}
@@ -237,7 +237,7 @@
 
 	th {
 		background: var(--pau-surface);
-		font-weight: 600;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	hr {

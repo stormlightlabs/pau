@@ -330,7 +330,7 @@
 		border-color: var(--pau-accent);
 		background: var(--pau-accent);
 		color: var(--pau-canvas);
-		font-weight: 650;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	.file-editor__external {

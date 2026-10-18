@@ -69,7 +69,7 @@
 		disconnected = false,
 		inspectorOpen = true,
 		theme = 'eldritch',
-		uiFont = 'ibm-plex-sans',
+		uiFont = 'overpass',
 		paneWidths = { contextRail: null, inspector: null },
 		onResize,
 		paletteEntries = [],
@@ -477,7 +477,7 @@
 		color: var(--shell-text);
 		background: var(--shell-bg);
 		font-family: var(--pau-font-ui);
-		font-size: var(--pau-type-sm);
+		font-size: var(--pau-type-md);
 		line-height: 1.4;
 	}
 
@@ -701,8 +701,8 @@
 		height: var(--pau-size-row-lg);
 		padding-inline: var(--pau-space-4) var(--pau-space-2);
 		color: var(--shell-muted);
-		font-size: var(--pau-type-xs);
-		font-weight: 700;
+		font-size: var(--pau-type-label);
+		font-weight: var(--pau-weight-semibold);
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 	}

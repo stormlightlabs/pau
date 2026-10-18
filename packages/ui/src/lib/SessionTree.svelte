@@ -401,7 +401,7 @@
 		padding-inline: calc(var(--pau-space-1) + min(var(--depth), 6) * var(--pau-space-3)) var(--pau-space-2);
 		border-left: 2px solid transparent;
 		color: var(--pau-text-muted);
-		font-size: var(--pau-type-xs);
+		font-size: var(--pau-type-sm);
 		white-space: nowrap;
 		cursor: pointer;
 	}
@@ -422,7 +422,7 @@
 
 	.session-tree__row--run .session-tree__label {
 		font-style: italic;
-		font-weight: 400;
+		font-weight: var(--pau-weight-regular);
 	}
 
 	.session-tree__gutter {
@@ -433,7 +433,7 @@
 
 	.session-tree__label {
 		flex: none;
-		font-weight: 600;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	.session-tree__label--user {
@@ -495,7 +495,7 @@
 		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
 		font: inherit;
-		font-size: var(--pau-type-xs);
+		font-size: var(--pau-type-sm);
 		cursor: pointer;
 	}
 

@@ -39,7 +39,7 @@
 		workspaceName,
 		source,
 		theme = 'eldritch',
-		uiFont = 'inter',
+		uiFont = 'overpass',
 		disconnected = false,
 		productItems = defaultProductItems,
 		paneWidths,
@@ -424,7 +424,7 @@
 		background: var(--shell-accent);
 		border: 0;
 		font: inherit;
-		font-weight: 600;
+		font-weight: var(--pau-weight-semibold);
 		cursor: pointer;
 	}
 

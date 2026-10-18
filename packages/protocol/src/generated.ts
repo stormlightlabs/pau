@@ -190,7 +190,7 @@ session_override: boolean | null, };
 
 export type ThemePreference = "eldritch" | "nord" | "iceberg" | "catppuccin-mocha" | "vitesse-dark";
 
-export type UiFontPreference = "ibm-plex-sans" | "inter" | "atkinson-hyperlegible-next" | "atkinson-hyperlegible-soft";
+export type UiFontPreference = "overpass" | "ibm-plex-sans" | "inter" | "atkinson-hyperlegible-next" | "atkinson-hyperlegible-soft";
 
 export type NotificationPolicy = "attention" | "all" | "off";
 

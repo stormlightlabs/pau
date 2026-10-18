@@ -198,8 +198,8 @@
 
 	h3,
 	h4 {
-		font-size: var(--pau-type-xs);
-		font-weight: 650;
+		font-size: var(--pau-type-sm);
+		font-weight: var(--pau-weight-semibold);
 		letter-spacing: 0.03em;
 	}
 
@@ -214,7 +214,7 @@
 	.mcp__managed-state {
 		color: var(--workbench-available-text);
 		font-size: var(--pau-type-xs);
-		font-weight: 650;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	.mcp__managed-state.off,
@@ -311,8 +311,8 @@
 		border: 1px solid transparent;
 		border-radius: var(--pau-radius-control);
 		font: inherit;
-		font-size: var(--pau-type-xs);
-		font-weight: 650;
+		font-size: var(--pau-type-sm);
+		font-weight: var(--pau-weight-semibold);
 		cursor: pointer;
 	}
 

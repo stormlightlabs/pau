@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Pau uses Overpass by default and Overpass Mono for code and the terminal,
+  with larger 14px body text. IBM Plex Sans remains available.
 - Type / in the composer to run Pi's built-in commands, such as /name, /model,
   /thinking, /compact, /new, and /fork. Commands that need Pi's terminal show
   why they are unavailable.

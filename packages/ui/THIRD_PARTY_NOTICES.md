@@ -14,8 +14,9 @@ Pau maps colors from these upstream themes. Each license is included under
 - [Vitesse](https://github.com/antfu/vscode-theme-vitesse), Copyright © 2020
   Primer and Copyright © 2021 Anthony Fu, MIT License.
 
-The Fontsource packages for IBM Plex Sans, IBM Plex Mono, Inter, and Atkinson
-Hyperlegible Next bundle font software under the SIL Open Font License 1.1.
+The Fontsource packages for Overpass, Overpass Mono, IBM Plex Sans, Inter, and
+Atkinson Hyperlegible Next bundle font software under the SIL Open Font License
+1.1.
 Their package metadata and license files remain with the installed packages.
 
 [Atkinson Hyperlegible

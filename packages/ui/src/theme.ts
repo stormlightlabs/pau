@@ -4,7 +4,8 @@ import type { ITheme } from '@xterm/xterm';
 export type ThemeName = 'eldritch' | 'nord' | 'iceberg' | 'catppuccin-mocha' | 'vitesse-dark';
 
 /** Names of the application typefaces bundled with Pau. */
-export type UiFontName = 'ibm-plex-sans' | 'inter' | 'atkinson-hyperlegible-next' | 'atkinson-hyperlegible-soft';
+export type UiFontName =
+	'overpass' | 'ibm-plex-sans' | 'inter' | 'atkinson-hyperlegible-next' | 'atkinson-hyperlegible-soft';
 
 export type ThemeColors = {
 	canvas: string;
@@ -76,6 +77,7 @@ export type PauTheme = {
 
 /** User-selectable UI fonts. Font files are bundled and never loaded from a remote origin. */
 export const UI_FONTS = {
+	overpass: { label: 'Overpass Variable', family: "'Overpass Variable'" },
 	'ibm-plex-sans': { label: 'IBM Plex Sans Variable', family: "'IBM Plex Sans Variable'" },
 	inter: { label: 'Inter Variable', family: "'Inter Variable'" },
 	'atkinson-hyperlegible-next': {

@@ -8,7 +8,7 @@
 		inspectorOpen = true,
 		longContent = false,
 		theme = 'eldritch',
-		uiFont = 'inter',
+		uiFont = 'overpass',
 		paneWidths = { contextRail: null, inspector: null }
 	}: {
 		disconnected?: boolean;
@@ -113,14 +113,14 @@
 	h1 {
 		margin-top: var(--pau-space-2);
 		font-size: var(--pau-type-lg);
-		font-weight: 550;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	h2,
 	header p {
 		color: var(--shell-muted, #a9a8c0);
 		font-size: var(--pau-type-xs);
-		font-weight: 500;
+		font-weight: var(--pau-weight-medium);
 	}
 
 	.tool-log {
@@ -162,7 +162,7 @@
 
 	.inspection h2 {
 		margin: var(--pau-space-4) 0 var(--pau-space-3);
-		font-size: var(--pau-type-xs);
+		font-size: var(--pau-type-label);
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 	}

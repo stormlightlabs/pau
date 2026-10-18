@@ -37,6 +37,7 @@ const preview = {
 			toolbar: {
 				title: 'Font',
 				items: [
+					{ value: 'overpass', title: 'Overpass' },
 					{ value: 'ibm-plex-sans', title: 'IBM Plex Sans' },
 					{ value: 'inter', title: 'Inter' },
 					{ value: 'atkinson-hyperlegible-next', title: 'Atkinson Hyperlegible Next' },
@@ -66,7 +67,7 @@ const preview = {
 			}
 		}
 	},
-	initialGlobals: { theme: 'eldritch', uiFont: 'ibm-plex-sans', reducedMotion: 'off', capabilityProfile: 'full' },
+	initialGlobals: { theme: 'eldritch', uiFont: 'overpass', reducedMotion: 'off', capabilityProfile: 'full' },
 	parameters: {
 		a11y: { test: 'error' },
 		layout: 'centered',

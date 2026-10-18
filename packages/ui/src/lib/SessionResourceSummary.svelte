@@ -118,9 +118,11 @@
 	dt,
 	dd {
 		margin: 0;
+		font-size: var(--pau-type-sm);
 	}
 
 	dd {
+		font-weight: var(--pau-weight-medium);
 		min-width: 0;
 		font-variant-numeric: tabular-nums;
 		text-align: end;
@@ -129,6 +131,7 @@
 	dd small {
 		display: block;
 		font-size: var(--pau-type-xs);
+		font-weight: var(--pau-weight-regular);
 	}
 
 	.resource-summary__warning {
@@ -154,7 +157,7 @@
 		border: 0;
 		border-radius: var(--pau-radius-control);
 		font: inherit;
-		font-weight: 700;
+		font-weight: var(--pau-weight-semibold);
 		cursor: pointer;
 	}
 

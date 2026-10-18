@@ -187,7 +187,7 @@
 	strong {
 		overflow: hidden;
 		font-size: var(--pau-type-md);
-		font-weight: 600;
+		font-weight: var(--pau-weight-semibold);
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}

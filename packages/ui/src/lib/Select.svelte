@@ -418,7 +418,7 @@
 		padding-inline: var(--pau-space-3) var(--pau-space-2);
 		color: var(--pau-text);
 		font: inherit;
-		font-size: var(--pau-type-sm);
+		font-size: var(--pau-type-md);
 		text-align: start;
 		background: var(--pau-canvas);
 		border: 1px solid var(--pau-border);
@@ -489,7 +489,7 @@
 		overflow-y: auto;
 		color: var(--pau-text);
 		font: inherit;
-		font-size: var(--pau-type-sm);
+		font-size: var(--pau-type-md);
 		background: var(--pau-surface-raised);
 		border: var(--pau-border-thin, 1px) solid var(--pau-border);
 		border-radius: var(--pau-radius-surface);

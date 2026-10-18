@@ -105,16 +105,29 @@ surfaces and overlays may use up to 5px.
 
 ## Typography
 
-IBM Plex Sans Variable is the default application face. Operators may select
-Inter Variable, Atkinson Hyperlegible Next Variable, or Atkinson Hyperlegible
-Soft. Font choice must not change layout roles. IBM Plex Mono sets code,
-commands, paths, and identifiers in every UI font choice.
+Overpass Variable is the default application face. Operators may select IBM
+Plex Sans Variable, Inter Variable, Atkinson Hyperlegible Next Variable, or
+Atkinson Hyperlegible Soft. Font choice must not change layout roles. Overpass
+Mono Variable sets code, commands, paths, and identifiers in every UI font
+choice.
 
-- Use the fixed product type scale: 12, 13, 14, 16, and 20px.
-- Keep ordinary transcript prose near 14–16px with a maximum measure of about
-  74 characters.
+Use the fixed product type scale of 11, 12, 13, 14, 16, and 18px and the
+weights 400, 500, and 600. Fold any heavier weight into 600.
+
+| Element                              | Size    | Weight |
+| ------------------------------------ | ------- | ------ |
+| Main task heading                    | 18px    | 600    |
+| Application body                     | 14px    | 400    |
+| Workspace names and inspector values | 13px    | 500    |
+| Commands, paths, and metadata        | 12–13px | 400    |
+| Section labels                       | 11px    | 600    |
+
+- Set transcript prose, the composer, dialog and settings body text, and the
+  primary text of list rows at 14px. Keep ordinary transcript prose to a
+  maximum measure of about 74 characters.
 - Keep metadata readable at 12–13px with sufficient contrast and line height.
-  No product text goes below 12px.
+  No product text goes below 12px, except uppercase, letter-spaced section
+  labels, which may use 11px.
 - Use weight and spacing before large size jumps.
 - Use monospace for code, commands, paths, identifiers, terminal output, and
   aligned counts. Do not use it as a general technical accent.

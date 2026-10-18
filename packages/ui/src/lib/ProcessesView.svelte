@@ -149,7 +149,7 @@
 
 	h1 {
 		font-size: var(--pau-type-lg);
-		font-weight: 600;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	.processes-view__table {
@@ -172,7 +172,7 @@
 		min-height: var(--pau-size-row-lg);
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
-		font-weight: 600;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	.process-row {
@@ -255,7 +255,7 @@
 	}
 
 	.process-tree h2 {
-		font-size: var(--pau-type-xs);
+		font-size: var(--pau-type-sm);
 	}
 
 	.process-tree ul {

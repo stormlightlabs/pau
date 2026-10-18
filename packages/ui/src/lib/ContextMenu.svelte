@@ -173,7 +173,7 @@
 		overflow: visible;
 		color: var(--pau-text);
 		font: inherit;
-		font-size: var(--pau-type-sm);
+		font-size: var(--pau-type-md);
 		background: var(--pau-surface-raised);
 		border: var(--pau-border-thin, 1px) solid var(--pau-border);
 		border-radius: var(--pau-radius-surface);

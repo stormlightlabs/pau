@@ -15,7 +15,7 @@
 		uiFont?: UiFontName;
 	};
 
-	let { open = $bindable(false), actions, platform, theme = 'eldritch', uiFont = 'ibm-plex-sans' }: Props = $props();
+	let { open = $bindable(false), actions, platform, theme = 'eldritch', uiFont = 'overpass' }: Props = $props();
 	let dialog = $state<HTMLDialogElement>();
 	const focusReturn = createFocusReturn();
 
@@ -114,7 +114,7 @@
 		border-radius: var(--pau-radius-surface);
 		box-shadow: 0 1rem 3rem color-mix(in srgb, var(--pau-canvas) 85%, transparent);
 		font-family: var(--pau-font-ui);
-		font-size: var(--pau-type-sm);
+		font-size: var(--pau-type-md);
 		line-height: 1.4;
 	}
 
@@ -206,7 +206,7 @@
 		margin-bottom: var(--pau-space-1);
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
-		font-weight: 600;
+		font-weight: var(--pau-weight-semibold);
 	}
 
 	ul {
@@ -257,6 +257,6 @@
 	.keyboard-shortcuts__separator,
 	.keyboard-shortcuts__none {
 		color: var(--pau-text-muted);
-		font-size: var(--pau-type-xs);
+		font-size: var(--pau-type-sm);
 	}
 </style>

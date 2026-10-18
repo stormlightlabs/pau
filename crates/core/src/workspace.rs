@@ -320,7 +320,7 @@ impl WorkspaceService {
                 size,
             });
         }
-        entries.sort_by(|left, right| left.path.cmp(&right.path));
+        entries.sort_by(compare_entries);
         Ok(entries)
     }
 
@@ -824,6 +824,57 @@ fn is_sensitive(path: &str) -> bool {
     })
 }
 
+/// Orders one directory's entries the way file browsers do: folders first,
+/// then case-insensitive natural order so `file2` precedes `file10`.
+///
+/// Every consumer of directory listings gets this order from the service, so
+/// clients render entries as received.
+fn compare_entries(left: &FileEntry, right: &FileEntry) -> std::cmp::Ordering {
+    let is_directory = |entry: &FileEntry| entry.kind == FileEntryKind::Directory;
+    is_directory(right)
+        .cmp(&is_directory(left))
+        .then_with(|| natural_cmp(&left.path, &right.path))
+        .then_with(|| left.path.cmp(&right.path))
+}
+
+/// Compares names case-insensitively, treating digit runs as numbers.
+fn natural_cmp(left: &str, right: &str) -> std::cmp::Ordering {
+    let mut left = left.chars().peekable();
+    let mut right = right.chars().peekable();
+    loop {
+        match (left.peek().copied(), right.peek().copied()) {
+            (None, None) => return std::cmp::Ordering::Equal,
+            (None, Some(_)) => return std::cmp::Ordering::Less,
+            (Some(_), None) => return std::cmp::Ordering::Greater,
+            (Some(a), Some(b)) if a.is_ascii_digit() && b.is_ascii_digit() => {
+                let a = digit_run(&mut left);
+                let b = digit_run(&mut right);
+                let (a, b) = (a.trim_start_matches('0'), b.trim_start_matches('0'));
+                let order = a.len().cmp(&b.len()).then_with(|| a.cmp(b));
+                if order.is_ne() {
+                    return order;
+                }
+            }
+            (Some(a), Some(b)) => {
+                left.next();
+                right.next();
+                let order = a.to_lowercase().cmp(b.to_lowercase());
+                if order.is_ne() {
+                    return order;
+                }
+            }
+        }
+    }
+}
+
+fn digit_run(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
+    let mut run = String::new();
+    while let Some(digit) = chars.next_if(char::is_ascii_digit) {
+        run.push(digit);
+    }
+    run
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -847,6 +898,42 @@ mod tests {
             .await
             .unwrap();
         (directory, service, workspace)
+    }
+
+    #[test]
+    fn orders_entries_folders_first_and_naturally() {
+        let entry = |path: &str, kind| FileEntry {
+            path: path.to_owned(),
+            kind,
+            size: None,
+        };
+        let mut entries = vec![
+            entry("TODO.md", FileEntryKind::File),
+            entry("file10.txt", FileEntryKind::File),
+            entry("notes", FileEntryKind::Directory),
+            entry(".env.example", FileEntryKind::File),
+            entry("file2.txt", FileEntryKind::File),
+            entry("Anki", FileEntryKind::Directory),
+            entry("agents.md", FileEntryKind::File),
+            entry("cards", FileEntryKind::Directory),
+            entry("Claude.md", FileEntryKind::File),
+        ];
+        entries.sort_by(compare_entries);
+        let paths: Vec<_> = entries.iter().map(|entry| entry.path.as_str()).collect();
+        assert_eq!(
+            paths,
+            [
+                "Anki",
+                "cards",
+                "notes",
+                ".env.example",
+                "agents.md",
+                "Claude.md",
+                "file2.txt",
+                "file10.txt",
+                "TODO.md"
+            ]
+        );
     }
 
     #[tokio::test]

@@ -35,6 +35,7 @@ export const ExternalChange: Story = {
 	}
 };
 
+export const Markdown: Story = { args: { state: 'markdown' } };
 export const ReadOnly: Story = { args: { state: 'read-only' } };
 export const Binary: Story = { args: { state: 'binary' } };
 export const Oversized: Story = { args: { state: 'oversized' } };

@@ -104,6 +104,16 @@
 
 	let traversalOptions = $derived<WorkspaceTraversalOptions>({ includeHidden, includeIgnored });
 	let root = $derived(directories['']);
+	let showsEditor = $derived(
+		!searchLoading &&
+			!searchError &&
+			!submittedQuery &&
+			!diffLoading &&
+			!diffError &&
+			!selectedDiff &&
+			!!selectedPath &&
+			!!editorSource
+	);
 	let visibleEntries = $derived.by(() => {
 		const rows: VisibleEntry[] = [];
 		const append = (directory: string, depth: number): void => {
@@ -616,7 +626,10 @@
 		{/key}
 	{/if}
 
-	<section class="workspace-files__surface" aria-labelledby="workspace-files-title">
+	<section
+		class="workspace-files__surface"
+		class:workspace-files__surface--editing={showsEditor}
+		aria-labelledby="workspace-files-title">
 		<header>
 			<div>
 				<p>Workspace files</p>
@@ -1019,6 +1032,13 @@
 		margin: calc(-1 * clamp(var(--pau-space-4), 3vw, var(--pau-space-6)));
 	}
 
+	/* The editor scrolls inside itself, so the surface takes the pane height instead of the content height. */
+	.workspace-files__surface--editing {
+		height: calc(100% + 2 * clamp(var(--pau-space-4), 3vw, var(--pau-space-6)));
+		min-height: 0;
+		overflow: hidden;
+	}
+
 	.workspace-files__surface > header {
 		display: flex;
 		align-items: center;
@@ -1042,6 +1062,7 @@
 
 	.workspace-files__surface header h1 {
 		margin-top: 0;
+		text-transform: none;
 		font-size: var(--pau-type-md);
 		font-weight: var(--pau-weight-semibold);
 	}

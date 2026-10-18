@@ -3,6 +3,7 @@ import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import FileEditor from '../lib/FileEditor.svelte';
+import { themeCssProperties } from '../theme';
 import type { EditorFileContent, FileEditorSource } from '../lib/types/file-editor';
 
 function file(overrides: Partial<EditorFileContent> = {}): EditorFileContent {
@@ -81,6 +82,63 @@ test.each([
 
 	await expect.element(page.getByRole('textbox')).toHaveAttribute('data-language', language);
 	view.unmount();
+});
+
+test('fills the pane height for a short file, with the gutter spanning it', async () => {
+	const editorSource = source();
+	await render(FileEditor, { path: editorSource.current.path, source: editorSource, pollInterval: 60_000 });
+	await expect.element(page.getByRole('textbox')).toBeInTheDocument();
+	const section = document.querySelector<HTMLElement>('.file-editor')!;
+	section.parentElement!.style.height = '480px';
+	const height = (selector: string): number => section.querySelector(selector)!.getBoundingClientRect().height;
+	await expect.poll(() => Math.abs(height('.cm-editor') - height('.file-editor__code'))).toBeLessThanOrEqual(1);
+	expect(height('.file-editor__code')).toBeGreaterThan(300);
+	expect(Math.abs(height('.cm-gutters') - height('.cm-editor'))).toBeLessThanOrEqual(1);
+});
+
+test('scrolls a long file inside the editor instead of growing the pane', async () => {
+	const editorSource = source(file({ content: Array.from({ length: 200 }, (_, i) => `line ${i}`).join('\n') }));
+	await render(FileEditor, { path: editorSource.current.path, source: editorSource, pollInterval: 60_000 });
+	await expect.element(page.getByRole('textbox')).toBeInTheDocument();
+	const section = document.querySelector<HTMLElement>('.file-editor')!;
+	section.parentElement!.style.height = '480px';
+	const scroller = section.querySelector<HTMLElement>('.cm-scroller')!;
+	await expect.poll(() => section.getBoundingClientRect().height).toBe(480);
+	expect(scroller.scrollHeight).toBeGreaterThan(scroller.clientHeight);
+	expect(getComputedStyle(scroller).overflowY).toBe('auto');
+});
+
+test('centers the file name with the header actions', async () => {
+	await page.viewport(1024, 768);
+	const editorSource = source();
+	await render(FileEditor, { path: editorSource.current.path, source: editorSource, pollInterval: 60_000 });
+	const name = document.querySelector<HTMLElement>('.file-editor__header p')!.getBoundingClientRect();
+	const actions = document.querySelector<HTMLElement>('.file-editor__actions')!.getBoundingClientRect();
+	expect(Math.abs(name.top + name.height / 2 - (actions.top + actions.height / 2))).toBeLessThanOrEqual(1);
+});
+
+function styledSpan(text: string): HTMLElement | undefined {
+	const spans = [...document.querySelectorAll<HTMLElement>('.cm-line span')];
+	return spans.find((node) => node.textContent?.trim() === text);
+}
+
+function colorOf(text: string): string {
+	const node = styledSpan(text);
+	return node ? getComputedStyle(node).color : '';
+}
+
+test('highlights Markdown headings and inline code', async () => {
+	const properties = Object.entries(themeCssProperties('eldritch', 'overpass'));
+	for (const [name, value] of properties) document.documentElement.style.setProperty(name, value);
+	const editorSource = source(file({ path: 'TODO.md', content: '# Study plan\n\nRun `miss::` cards\n' }));
+	await render(FileEditor, { path: 'TODO.md', source: editorSource, pollInterval: 60_000 });
+	await expect.element(page.getByRole('textbox')).toBeInTheDocument();
+	const plain = getComputedStyle(document.querySelector('.cm-content')!).color;
+	await expect.poll(() => colorOf('Study plan')).not.toBe('');
+	expect(colorOf('Study plan')).not.toBe(plain);
+	expect(colorOf('miss::')).not.toBe(plain);
+	const heading = getComputedStyle(styledSpan('Study plan')!);
+	expect(Number(heading.fontWeight)).toBeGreaterThanOrEqual(600);
 });
 
 test('opens a read-only file without editable or save controls', async () => {

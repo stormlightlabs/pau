@@ -30,7 +30,24 @@
 		{ tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: 'var(--pau-syntax-function)' },
 		{ tag: [tags.typeName, tags.className], color: 'var(--pau-syntax-type)' },
 		{ tag: [tags.variableName, tags.propertyName], color: 'var(--pau-syntax-variable)' },
-		{ tag: tags.invalid, color: 'var(--pau-syntax-invalid)', textDecoration: 'underline wavy' }
+		{ tag: tags.invalid, color: 'var(--pau-syntax-invalid)', textDecoration: 'underline wavy' },
+		// Markdown. Markers such as `#`, `-`, `>` and backticks are processing instructions.
+		{ tag: tags.heading, color: 'var(--pau-syntax-function)', fontWeight: 'var(--pau-weight-semibold)' },
+		{ tag: tags.strong, fontWeight: 'var(--pau-weight-semibold)' },
+		{ tag: tags.emphasis, fontStyle: 'italic' },
+		{ tag: tags.strikethrough, textDecoration: 'line-through' },
+		{ tag: tags.link, color: 'var(--pau-syntax-type)' },
+		{ tag: tags.url, color: 'var(--pau-syntax-type)', textDecoration: 'underline' },
+		{ tag: tags.monospace, color: 'var(--pau-syntax-string)' },
+		{ tag: [tags.quote, tags.list], color: 'var(--pau-syntax-keyword)' },
+		{ tag: [tags.contentSeparator, tags.processingInstruction, tags.meta], color: 'var(--pau-syntax-comment)' },
+		// Markup and stylesheets.
+		{ tag: tags.tagName, color: 'var(--pau-syntax-keyword)' },
+		{ tag: tags.attributeName, color: 'var(--pau-syntax-type)' },
+		{ tag: tags.attributeValue, color: 'var(--pau-syntax-string)' },
+		{ tag: tags.labelName, color: 'var(--pau-syntax-variable)' },
+		{ tag: tags.special(tags.string), color: 'var(--pau-syntax-number)' },
+		{ tag: [tags.angleBracket, tags.punctuation], color: 'var(--pau-text-muted)' }
 	]);
 
 	onMount(() => {
@@ -80,12 +97,14 @@
 	function editorTheme(): Extension {
 		return EditorView.theme({
 			'&': { height: '100%', color: 'var(--pau-text)', backgroundColor: 'var(--pau-canvas)' },
+			'.cm-scroller': { alignItems: 'stretch', overflow: 'auto' },
 			'.cm-content': { caretColor: 'var(--pau-accent)', fontFamily: 'var(--pau-font-code)' },
 			'.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--pau-accent)' },
 			'&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
 				backgroundColor: 'var(--pau-selection)'
 			},
 			'.cm-gutters': {
+				minHeight: '100%',
 				backgroundColor: 'var(--pau-surface)',
 				color: 'var(--pau-text-muted)',
 				borderRight: '1px solid var(--pau-border)'
@@ -258,7 +277,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--pau-space-3);
-		min-height: var(--pau-size-target-touch);
+		min-height: var(--pau-size-row-lg);
 		padding: var(--pau-space-1) var(--pau-space-3);
 		border-bottom: 1px solid var(--pau-border);
 		background: var(--pau-surface);
@@ -284,7 +303,6 @@
 	.file-editor__states {
 		display: flex;
 		gap: var(--pau-space-2);
-		min-height: 1rem;
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
 	}
@@ -348,9 +366,16 @@
 		color: var(--pau-text-muted);
 	}
 
+	/* The external-change banner is optional, so pin the body to the flexible row. */
+	.file-editor__code,
+	.file-editor__state {
+		grid-row: 3;
+	}
+
 	.file-editor__code {
 		min-height: 0;
 		overflow: hidden;
+		background: var(--pau-canvas);
 		font-size: var(--pau-type-sm);
 	}
 

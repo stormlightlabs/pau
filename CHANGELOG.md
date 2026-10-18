@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- The file tree lists folders first in natural order, and the editor fills its
+  pane, aligns its header, and highlights Markdown.
 - Pau opened from Finder, the Dock, or Spotlight now finds Pi and other tools
   on your login shell's PATH.
 - Pau uses Overpass by default and Overpass Mono for code and the terminal,

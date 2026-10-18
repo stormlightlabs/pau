@@ -2,6 +2,8 @@
 
 This index is the entry point for Pau's deliverables and work units. Each
 deliverable has its own file in `tasks/`, named with its zero-padded number.
+A deliverable with many units is a folder instead: its `README.md` holds the
+overview, gate, and exit criteria, and each area of work has its own file.
 
 Work is organized into ordered deliverables. Each numbered unit should fit in
 one issue and one pull request. Its verification belongs in the same pull
@@ -50,8 +52,9 @@ Update the status when work starts, becomes blocked, resumes, or completes.
 Treat it as the source of truth instead of inspecting the implementation to
 infer completion. When a unit is complete, record any user-facing change in
 `CHANGELOG.md`, remove the unit from every blocker list, and delete it from its
-deliverable file. When a deliverable has no units left, delete its task file
-and its entry in this index.
+deliverable or area file. Delete an area file when it has no units left. When a
+deliverable has no units left, delete its task file or folder and its entry in
+this index.
 
 Each unit also lists its direct blockers. A whole number refers to every unit in
 that deliverable; for example, `Blocked by: 2` means every unit in deliverable 2
@@ -62,6 +65,6 @@ status `complete`.
 
 ## Deliverables
 
-- [2. Desktop app and development browser UI](tasks/002_desktop-app-and-development-browser-ui.md)
+- [2. Desktop app and development browser UI](tasks/002_desktop-app-and-development-browser-ui/README.md)
 - [3. Web server](tasks/003_web-server.md)
 - [Backlog](tasks/000_backlog.md)

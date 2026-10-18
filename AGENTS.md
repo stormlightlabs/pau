@@ -62,8 +62,8 @@ built artifact.
   they block verification.
 - When a unit is complete, add a concise user-facing changelog entry when it
   changes user-facing behavior, remove it from every blocker list, and delete
-  the unit from its deliverable file. Delete a subsection or deliverable when
-  it has no units left.
+  the unit from its deliverable or area file. Delete a subsection, area file,
+  or deliverable when it has no units left.
 - Write commit messages and pull request descriptions without agent
   attribution. Omit `Co-Authored-By` trailers and generated-by lines.
 

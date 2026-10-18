@@ -1,0 +1,236 @@
+# 2. Desktop app: Polish and motion
+
+## Polish and motion
+
+### 2.235 Typography scale and Overpass
+
+Status: planned
+Blocked by: 2.172
+
+Make Overpass Variable the default UI font and Overpass Mono the code font,
+both bundled from Fontsource. Keep IBM Plex Sans as a selectable UI font and
+drop IBM Plex Mono. Adopt this starting scale:
+
+| Element                              | Size    | Weight |
+| ------------------------------------ | ------- | ------ |
+| Main task heading                    | 18px    | 600    |
+| Application body                     | 14px    | 400    |
+| Workspace names and inspector values | 13px    | 500    |
+| Commands, paths, and metadata        | 12–13px | 400    |
+| Section labels                       | 11px    | 600    |
+
+Replace the 20px step with 18px, add weight tokens for 400, 500, and 600, and
+fold ad hoc 650 and 700 weights into 600. Allow 11px only for uppercase,
+letter-spaced section labels, and record that exception where the 12px floor
+is stated. Move body text that sits at 12px today to 14px, and leave true
+metadata at 12–13px. Update `dev/design/system.md` and the prototype styles
+and pages together. 2.236 carries the change into `pau.fig`.
+
+Verification:
+
+- Component-test that the default preference resolves to Overpass, that IBM
+  Plex Sans remains selectable, and that code uses Overpass Mono.
+- Confirm no product text other than section labels renders below 12px.
+- Review the session view, inspector, Diagnostics, and an overlay in each
+  shipped theme at 1440 and 900px widths.
+
+### 2.236 Design file cleanup
+
+Status: planned
+Blocked by: 2.235
+
+Bring `pau.fig` back in line with `dev/design` and the prototype pages. Until
+this unit is complete, the prototype HTML pages are the current visual
+reference wherever the two disagree.
+
+- Fix overlapping and clipped text in every frame.
+- Delete the components left from the old prototype site chrome, including
+  the workbench sidebar, page header, and hub card, and rebuild the `index`
+  page without them.
+- Rebuild screens from the shared components and bind colors, type, spacing,
+  and radii to the token variables.
+- Apply the Overpass fonts and the type scale from 2.235.
+- Add the pending and "Not sent" prompt states to the session frames.
+- Update `dev/prototype/README.md` to match the file.
+
+Verification:
+
+- Run the OpenPencil lint and overlap analysis on every page and fix each
+  finding.
+- Compare each frame's structure and copy against its HTML page.
+
+### 2.237 Storybook polish review
+
+Status: planned
+Blocked by: 2.235
+
+Review every Storybook story against its prototype page and `dev/design`, then
+fix the mismatches in the components: spacing, alignment, type, color tokens,
+borders, radii, icon sizes, truncation, and empty and loading states.
+
+Verification:
+
+- List each story reviewed with its prototype page and the fixes made.
+- Run the Storybook accessibility checks and component tests for each changed
+  component.
+
+### 2.221 Busy indicator timing
+
+Status: planned
+Blocked by: none
+
+Delay loading and busy indicators by 400ms and keep them visible for at least
+500ms once shown.
+
+Verification:
+
+- Unit-test the timing with fake timers, including a wait that ends before the
+  delay and one that ends during the minimum display.
+- Apply it to the session-list loading state and confirm a fast load shows no
+  indicator.
+
+### 2.222 Disclosure motion
+
+Status: planned
+Blocked by: none
+
+Animate tool and thinking block expansion for finished blocks shorter than one
+viewport, and switch instantly otherwise.
+
+Verification:
+
+- Component-test that a short finished block animates, a streaming or tall
+  block does not, and reduced motion removes the animation.
+- Check the animation in WebKit.
+
+### 2.223 Inspector toggle
+
+Status: planned
+Blocked by: none
+
+Open and close the wide inspector and context rail without per-frame
+transcript reflow, fading their content in.
+
+Verification:
+
+- Component-test toggling from the top app bar and the keyboard, and that the
+  keyboard path is instant.
+
+### 2.224 Narrow overlay motion
+
+Status: planned
+Blocked by: none
+
+Slide the narrow context rail and inspector overlay from their edges over a
+fading scrim.
+
+Verification:
+
+- Component-test opening, closing by scrim click and Escape, and the fade-only
+  presentation under reduced motion.
+
+### 2.225 Popover presentation
+
+Status: planned
+Blocked by: none
+
+Fade and scale pointer-opened pickers and meters from their anchor, keep
+keyboard-opened completion lists instant, and close any open popover before
+another opens.
+
+Verification:
+
+- Component-test the model picker, thinking-level picker, and context meter
+  opened by pointer and keyboard, and opening one while another is open.
+
+### 2.226 Dialog presentation
+
+Status: planned
+Blocked by: none
+
+Fade and scale extension dialogs in and out, keeping each mounted until its
+exit finishes.
+
+Verification:
+
+- Component-test opening, confirming, cancelling, and a new request arriving
+  while the previous dialog exits.
+
+### 2.227 Task-surface transition
+
+Status: planned
+Blocked by: none
+
+Fade new task surfaces in with a small offset when the operator navigates by
+pointer, and switch instantly from the keyboard.
+
+Verification:
+
+- Component-test that the incoming surface is interactive at once and that the
+  keyboard path and reduced motion skip the offset.
+
+### 2.228 Notification toasts
+
+Status: planned
+Blocked by: none
+
+Show extension and application notices as dismissible toasts that pause on
+hover and focus and keep errors until dismissed.
+
+Verification:
+
+- Component-test auto-dismissal with fake timers, pausing, error persistence,
+  and stacking beyond three.
+
+### 2.229 Terminal tab continuity
+
+Status: planned
+Blocked by: none
+
+Switch terminal tabs instantly while preserving each tab's scroll position and
+focus.
+
+Verification:
+
+- Component-test switching between tabs with scrollback and returning to the
+  previous scroll position and focus.
+
+### 2.230 Hover and press states
+
+Status: planned
+Blocked by: none
+
+Use token-driven color changes for hover and press on every control, with no
+press movement in dense rows.
+
+Verification:
+
+- Confirm each control class in Storybook has hover, press, focus, and
+  disabled states, and that hover is absent under `(hover: none)`.
+
+### 2.231 Desktop pointer and selection
+
+Status: planned
+Blocked by: none
+
+Use the arrow cursor on controls and make application chrome unselectable
+while transcript, code, paths, and errors stay selectable.
+
+Verification:
+
+- Component-test that a drag across the rail selects nothing and that
+  transcript text remains copyable.
+
+### 2.232 Increased contrast
+
+Status: planned
+Blocked by: none
+
+Strengthen rules, muted text, and focus rings under `prefers-contrast: more`,
+and use system colors under `forced-colors: active`.
+
+Verification:
+
+- Component-test computed rule width and focus ring width with each media
+  query emulated.
+- Check every shipped theme in Storybook.

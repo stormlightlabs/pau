@@ -81,8 +81,8 @@ constructs the runnable process.
 Keep package boundaries similarly concrete: reusable UI and its component tests
 belong in `packages/ui`, while routing, transport wiring, and integration tests
 belong to the app that performs them. Screen-level design work lives in the
-OpenPencil file `pau.fig` and its PNG exports in `dev/prototype`, outside the
-code workspaces.
+OpenPencil file `pau.fig` and the static HTML screens in `dev/prototype`,
+outside the code workspaces.
 
 ## Project conventions
 

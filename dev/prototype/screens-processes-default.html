@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Processes · Pau prototype</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap"
+			rel="stylesheet" />
+		<link rel="stylesheet" href="styles/tokens.css" />
+		<link rel="stylesheet" href="styles/icons.css" />
+		<link rel="stylesheet" href="styles/app.css" />
+		<script>
+			// Apply the theme chosen on the index page (?theme= or saved choice).
+			try {
+				const theme = new URLSearchParams(location.search).get('theme') || localStorage.getItem('pau-prototype-theme');
+				if (theme) document.documentElement.dataset.theme = theme;
+			} catch {}
+		</script>
+	</head>
+	<body>
+		<div class="app">
+			<header class="topbar">
+				<span class="icon topbar__mark i-pau-mark" role="img" aria-label="Pau"></span>
+				<div class="topbar__history">
+					<button class="icon-button" type="button" aria-label="Back">
+						<span class="icon i-tabler-arrow-left" aria-hidden="true"></span>
+					</button>
+					<button class="icon-button" type="button" aria-label="Forward" disabled>
+						<span class="icon i-tabler-arrow-right" aria-hidden="true"></span>
+					</button>
+					<a class="icon-button" href="screens-dashboard-default.html" aria-label="Home"
+						><span class="icon i-tabler-home" aria-hidden="true"></span
+					></a>
+				</div>
+				<nav aria-label="Location">
+					<ol class="crumbs">
+						<li class="crumbs__root">Pau</li>
+						<li aria-hidden="true">/</li>
+						<li class="crumbs__context">pau / processes</li>
+						<li>
+							<span class="chip mono"><span class="icon i-octicon-git-branch-16" aria-hidden="true"></span>main</span>
+						</li>
+					</ol>
+				</nav>
+				<span class="spacer"></span>
+				<div class="topbar__actions"></div>
+				<button class="command" type="button">
+					<span class="icon i-tabler-search icon--sm" aria-hidden="true"></span
+					><span class="command__label">Search or run a command</span><kbd>⌘K</kbd>
+				</button>
+			</header>
+			<nav class="tabs" aria-label="Open views">
+				<a class="tab" href="screens-session-default.html"
+					><span class="icon i-tabler-folder-code" aria-hidden="true"></span>pau</a
+				>
+				<a class="tab" href="#" aria-current="page"
+					><span class="icon i-tabler-layout-dashboard" aria-hidden="true"></span>processes<span
+						class="icon tab__close i-tabler-x"
+						role="img"
+						aria-label="Close tab"></span
+				></a>
+				<button class="tab tab--add" type="button" aria-label="New tab">
+					<span class="icon i-tabler-plus" aria-hidden="true"></span>
+				</button>
+			</nav>
+			<div class="app__body">
+				<nav class="product-rail" aria-label="Product">
+					<a class="product-rail__link" href="screens-dashboard-default.html" aria-label="Dashboard" title="Dashboard"
+						><span class="icon i-tabler-home" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-session-default.html" aria-label="Sessions" title="Sessions"
+						><span class="icon i-tabler-layers-subtract" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-orchestration-default.html"
+						aria-label="Harness control"
+						title="Harness control"
+						><span class="icon i-tabler-topology-star-3" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-scratchpad-default.html"
+						aria-label="Scratchpad"
+						title="Scratchpad"
+						><span class="icon i-tabler-notebook" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-editor-default.html" aria-label="Editor" title="Editor"
+						><span class="icon i-tabler-code" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-terminal-default.html" aria-label="Terminal" title="Terminal"
+						><span class="icon i-tabler-terminal-2" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-processes-default.html"
+						aria-label="Processes"
+						title="Processes"
+						aria-current="page"
+						><span class="icon i-tabler-activity-heartbeat" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-diagnostics-default.html"
+						aria-label="Diagnostics"
+						title="Diagnostics"
+						><span class="icon i-tabler-stethoscope" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-resources-default.html" aria-label="Resources" title="Resources"
+						><span class="icon i-tabler-plug-connected" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link product-rail__end"
+						href="screens-settings-default.html"
+						aria-label="Settings"
+						title="Settings"
+						><span class="icon i-tabler-adjustments" aria-hidden="true"></span
+					></a>
+				</nav>
+				<nav class="rail rail--padded" aria-label="Workspace views">
+					<h2 class="section-label rail-title">Workspace</h2>
+					<ul class="nav-list">
+						<li>
+							<a class="list-item" href="screens-session-default.html"
+								><span class="icon i-tabler-messages" aria-hidden="true"></span
+								><span class="list-item__label">Sessions</span><span class="list-item__count">4</span></a
+							>
+						</li>
+						<li>
+							<a class="list-item" href="#" aria-current="page"
+								><span class="icon i-tabler-activity-heartbeat" aria-hidden="true"></span
+								><span class="list-item__label">Processes</span><span class="list-item__count">3</span></a
+							>
+						</li>
+						<li>
+							<a class="list-item" href="screens-terminal-default.html"
+								><span class="icon i-tabler-terminal-2" aria-hidden="true"></span
+								><span class="list-item__label">Terminals</span><span class="list-item__count">2</span></a
+							>
+						</li>
+					</ul>
+				</nav>
+				<main class="main">
+					<header class="surface-header">
+						<div>
+							<p class="page-heading__kicker" style="font-size: 13px">Pau</p>
+							<h1 class="page-heading__title">Processes</h1>
+						</div>
+						<p class="note">3 monitored trees</p>
+					</header>
+					<div style="padding: 20px">
+						<table class="process-table">
+							<thead>
+								<tr>
+									<th scope="col">Process</th>
+									<th scope="col" style="inline-size: 72px">CPU</th>
+									<th scope="col" style="inline-size: 96px">Memory</th>
+									<th scope="col" style="inline-size: 56px">Count</th>
+									<th scope="col" style="inline-size: 64px">Elapsed</th>
+									<th scope="col" style="inline-size: 136px">Disk I/O</th>
+									<th scope="col" style="inline-size: 160px">Actions</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>
+										<div class="process-name">
+											<button
+												class="icon-button icon-button--sm"
+												type="button"
+												aria-expanded="true"
+												aria-label="Show process tree for Fix diff gutter">
+												<span class="icon i-tabler-chevron-down" aria-hidden="true"></span>
+											</button>
+											<div><strong>Fix diff gutter</strong><span class="muted">Pi · running</span></div>
+										</div>
+									</td>
+									<td>38.4%</td>
+									<td>486 MiB<br /><span class="muted">peak 612 MiB</span></td>
+									<td>3</td>
+									<td>12m 18s</td>
+									<td>44 MiB ↓ · 18 MiB ↑</td>
+									<td>
+										<div class="row-actions">
+											<button class="button" type="button">Interrupt</button
+											><button class="button button--danger" type="button">Stop</button>
+										</div>
+									</td>
+								</tr>
+								<tr class="process-tree">
+									<td colspan="7">
+										<strong>Process tree</strong
+										><span class="muted">PID 3812 · 38.4% CPU · 486 MiB resident memory</span>
+									</td>
+								</tr>
+								<tr>
+									<td>
+										<div class="process-name">
+											<button
+												class="icon-button icon-button--sm"
+												type="button"
+												aria-expanded="false"
+												aria-label="Show process tree for Review adapter fixtures">
+												<span class="icon i-tabler-chevron-right" aria-hidden="true"></span>
+											</button>
+											<div><strong>Review adapter fixtures</strong><span class="muted">Claude · waiting</span></div>
+										</div>
+									</td>
+									<td>4.2%</td>
+									<td>734 MiB<br /><span class="muted">peak 1.2 GiB</span></td>
+									<td>4</td>
+									<td>31m 4s</td>
+									<td>Unavailable</td>
+									<td>
+										<div class="row-actions">
+											<button class="button" type="button">Interrupt</button
+											><button class="button button--danger" type="button">Stop</button>
+										</div>
+									</td>
+								</tr>
+								<tr>
+									<td>
+										<div class="process-name">
+											<button
+												class="icon-button icon-button--sm"
+												type="button"
+												aria-expanded="false"
+												aria-label="Show process tree for Run session registry tests">
+												<span class="icon i-tabler-chevron-right" aria-hidden="true"></span>
+											</button>
+											<div><strong>Run session registry tests</strong><span class="muted">Pi · CPU pressure</span></div>
+										</div>
+									</td>
+									<td>287.5%</td>
+									<td>2.3 GiB<br /><span class="muted">peak 2.5 GiB</span></td>
+									<td>6</td>
+									<td>8m 52s</td>
+									<td>184 MiB ↓ · 620 MiB ↑</td>
+									<td>
+										<div class="row-actions">
+											<button class="button" type="button">Interrupt</button
+											><button class="button button--danger" type="button">Stop</button>
+										</div>
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+					<p class="idle-note" style="margin-block-start: auto">No action requested</p>
+				</main>
+			</div>
+		</div>
+	</body>
+</html>

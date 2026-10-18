@@ -111,10 +111,10 @@ sentence. Leave sentence fragments unpunctuated.
 Prefer TypeScript type aliases for data shapes and unions. Use interfaces only
 for method-only contracts or types that classes implement.
 
-Keep `dev/design`, the `pau.fig` design file, and its PNG exports in
+Keep `dev/design`, the `pau.fig` design file, and the HTML screens in
 `dev/prototype` synchronized. When a durable visual, interaction, or responsive
 decision changes, update the owning design document, the affected frames, and
-their exported PNGs together. Visual-only polish needs a document change only
+their HTML pages together. Visual-only polish needs a document change only
 when it changes the recorded system or surface contract.
 
 In `pau.fig`, build screens from the shared components and bind colors, type

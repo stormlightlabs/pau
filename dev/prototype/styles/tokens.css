@@ -1,0 +1,245 @@
+/*
+ * Design tokens for the prototype pages.
+ *
+ * Names follow the variables in pau.fig and the custom properties that
+ * packages/ui sets: `space/3` becomes `--pau-space-3`, `color/surface` becomes
+ * `--pau-surface`. Where packages/ui names a role, the prototype uses its
+ * name (`--pau-border`, `--pau-text-muted`, `--pau-success`,
+ * `--pau-selection`), so CSS can move into the product without renaming.
+ *
+ * Theme colors come from the Theme collection in pau.fig. Where the shipped
+ * theme in packages/ui/src/theme.ts has since raised a value for contrast,
+ * the shipped value wins: Nord danger and info, and Iceberg muted text.
+ * Eldritch is the default theme. Pages switch theme with a `data-theme`
+ * attribute on the root element.
+ */
+
+:root {
+	--pau-space-1: 4px;
+	--pau-space-2: 8px;
+	--pau-space-3: 12px;
+	--pau-space-4: 16px;
+	--pau-space-5: 24px;
+	--pau-space-6: 32px;
+
+	--pau-type-xs: 12px;
+	--pau-type-sm: 13px;
+	--pau-type-md: 14px;
+	--pau-type-lg: 16px;
+	--pau-type-xl: 20px;
+
+	--pau-radius-control: 3px;
+	--pau-radius-surface: 5px;
+	--pau-border-thin: 0.5px;
+
+	--pau-size-target-compact: 32px;
+	--pau-size-target-touch: 44px;
+	--pau-size-row-sm: 28px;
+	--pau-size-row-md: 32px;
+	--pau-size-row-lg: 36px;
+	--pau-size-bar-height: 30px;
+	--pau-size-rail-product: 48px;
+	--pau-size-rail-context: 248px;
+	--pau-size-rail-inspector: 304px;
+
+	--pau-font-ui: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+	--pau-font-code: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+	--pau-font-site-heading: 'Google Sans', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+	--pau-font-site-code: 'Google Sans Code', 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+/* Eldritch, the default theme. */
+:root,
+[data-theme='eldritch'] {
+	color-scheme: dark;
+	--pau-canvas: #12151d;
+	--pau-surface: #171b27;
+	--pau-surface-raised: #202536;
+	--pau-selection: #2a3045;
+	--pau-border: #293044;
+	--pau-border-strong: #58617c;
+	--pau-text: #e6e9f2;
+	--pau-text-muted: #9aa3bd;
+	--pau-accent: #38ef9d;
+	--pau-accent-soft: #173b31;
+	--pau-focus: #04d1f9;
+	--pau-success: #57e69a;
+	--pau-warning: #f5bf69;
+	--pau-danger: #ee7180;
+	--pau-info: #43c7e8;
+	--pau-syntax-keyword: #a48cf2;
+	--pau-syntax-entity: #04d1f9;
+	--pau-syntax-string: #37f499;
+	--pau-syntax-constant: #f1fc79;
+	--pau-syntax-comment: #6b7089;
+	--pau-syntax-type: #f16c75;
+	--pau-added-wash: #1f3130;
+	--pau-removed-wash: #31232c;
+	--pau-active-line: #1c1f28;
+	--pau-text-selection: #22423a;
+	--pau-wash-warning: #212124;
+	--pau-wash-danger: #211c24;
+	--pau-wash-accent: #182326;
+}
+
+[data-theme='nord'] {
+	--pau-canvas: #242933;
+	--pau-surface: #2e3440;
+	--pau-surface-raised: #3b4252;
+	--pau-selection: #434c5e;
+	--pau-border: #414a5b;
+	--pau-border-strong: #81a1c1;
+	--pau-text: #eceff4;
+	--pau-text-muted: #b5bfce;
+	--pau-accent: #88c0d0;
+	--pau-accent-soft: #314651;
+	--pau-focus: #88c0d0;
+	--pau-success: #a3be8c;
+	--pau-warning: #ebcb8b;
+	--pau-danger: #f5aab0;
+	--pau-info: #a8c9e5;
+	--pau-syntax-keyword: #81a1c1;
+	--pau-syntax-entity: #88c0d0;
+	--pau-syntax-string: #a3be8c;
+	--pau-syntax-constant: #b48ead;
+	--pau-syntax-comment: #616e88;
+	--pau-syntax-type: #8fbcbb;
+	--pau-added-wash: #363e41;
+	--pau-removed-wash: #3c323c;
+	--pau-active-line: #2e333d;
+	--pau-text-selection: #3a4a55;
+	--pau-wash-warning: #32343a;
+	--pau-wash-danger: #302e37;
+	--pau-wash-accent: #2b343e;
+}
+
+[data-theme='iceberg'] {
+	--pau-canvas: #11131d;
+	--pau-surface: #161923;
+	--pau-surface-raised: #1e2230;
+	--pau-selection: #252a3b;
+	--pau-border: #2b3044;
+	--pau-border-strong: #84a0c6;
+	--pau-text: #c6c8d1;
+	--pau-text-muted: #a3adcb;
+	--pau-accent: #84a0c6;
+	--pau-accent-soft: #26354a;
+	--pau-focus: #95c4ce;
+	--pau-success: #b4be82;
+	--pau-warning: #e2a478;
+	--pau-danger: #e27878;
+	--pau-info: #89b8c2;
+	--pau-syntax-keyword: #a093c7;
+	--pau-syntax-entity: #84a0c6;
+	--pau-syntax-string: #b4be82;
+	--pau-syntax-constant: #e2a478;
+	--pau-syntax-comment: #8389a3;
+	--pau-syntax-type: #89b8c2;
+	--pau-added-wash: #272a2d;
+	--pau-removed-wash: #2e222b;
+	--pau-active-line: #1a1c26;
+	--pau-text-selection: #293141;
+	--pau-wash-warning: #1f1d24;
+	--pau-wash-danger: #1f1b24;
+	--pau-wash-accent: #191c28;
+}
+
+[data-theme='catppuccin-mocha'] {
+	--pau-canvas: #11111b;
+	--pau-surface: #181825;
+	--pau-surface-raised: #1e1e2e;
+	--pau-selection: #313244;
+	--pau-border: #393b4b;
+	--pau-border-strong: #cba6f7;
+	--pau-text: #cdd6f4;
+	--pau-text-muted: #a6adc8;
+	--pau-accent: #cba6f7;
+	--pau-accent-soft: #382f4d;
+	--pau-focus: #89dceb;
+	--pau-success: #a6e3a1;
+	--pau-warning: #f9e2af;
+	--pau-danger: #f38ba8;
+	--pau-info: #89dceb;
+	--pau-syntax-keyword: #cba6f7;
+	--pau-syntax-entity: #89b4fa;
+	--pau-syntax-string: #a6e3a1;
+	--pau-syntax-constant: #fab387;
+	--pau-syntax-comment: #6c7086;
+	--pau-syntax-type: #f9e2af;
+	--pau-added-wash: #252d2f;
+	--pau-removed-wash: #30222f;
+	--pau-active-line: #1a1a26;
+	--pau-text-selection: #373048;
+	--pau-wash-warning: #201f26;
+	--pau-wash-danger: #201a25;
+	--pau-wash-accent: #1d1b29;
+}
+
+[data-theme='vitesse-dark'] {
+	--pau-canvas: #121212;
+	--pau-surface: #171717;
+	--pau-surface-raised: #222222;
+	--pau-selection: #2a2a2a;
+	--pau-border: #303030;
+	--pau-border-strong: #4d9375;
+	--pau-text: #dbd7ca;
+	--pau-text-muted: #a3a3a3;
+	--pau-accent: #4d9375;
+	--pau-accent-soft: #24372f;
+	--pau-focus: #5eaab5;
+	--pau-success: #80a665;
+	--pau-warning: #e6cc77;
+	--pau-danger: #cb7676;
+	--pau-info: #5da994;
+	--pau-syntax-keyword: #4d9375;
+	--pau-syntax-entity: #80a665;
+	--pau-syntax-string: #c98a7d;
+	--pau-syntax-constant: #4c9a91;
+	--pau-syntax-comment: #758575;
+	--pau-syntax-type: #5da994;
+	--pau-added-wash: #21261e;
+	--pau-removed-wash: #2b2020;
+	--pau-active-line: #1c1b1b;
+	--pau-text-selection: #212d27;
+	--pau-wash-warning: #201e1a;
+	--pau-wash-danger: #1f1919;
+	--pau-wash-accent: #171b19;
+}
+
+/*
+ * Public site palette, from the Site collection in pau.fig. Light is the
+ * default; `data-site='dark'` on a site root switches to the dark scheme,
+ * which reuses the Eldritch application colors.
+ */
+.site {
+	color-scheme: light;
+	--site-ink: #202536;
+	--site-muted: #5d667e;
+	--site-line: #dce1eb;
+	--site-paper: #f5f7fc;
+	--site-paper-deep: #e9edf6;
+	--site-raised: #ffffff;
+	--site-accent: #087a55;
+	--site-accent-strong: #055e43;
+	--site-focus: #7651c5;
+	--site-highlight: #087c99;
+	--site-code: #171b27;
+	--site-code-line: #293044;
+	--site-code-ink: #e6e9f2;
+	--site-code-prompt: #f1fc79;
+}
+
+.site[data-site='dark'] {
+	color-scheme: dark;
+	--site-ink: #e6e9f2;
+	--site-muted: #9aa3bd;
+	--site-line: #293044;
+	--site-paper: #12151d;
+	--site-paper-deep: #171b27;
+	--site-raised: #202536;
+	--site-accent: #38ef9d;
+	--site-accent-strong: #66f3b7;
+	--site-focus: #a48cf2;
+	--site-highlight: #f1fc79;
+	--site-code: #0e1118;
+}

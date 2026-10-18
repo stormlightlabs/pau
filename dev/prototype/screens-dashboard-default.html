@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Dashboard · Pau prototype</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap"
+			rel="stylesheet" />
+		<link rel="stylesheet" href="styles/tokens.css" />
+		<link rel="stylesheet" href="styles/icons.css" />
+		<link rel="stylesheet" href="styles/app.css" />
+		<script>
+			// Apply the theme chosen on the index page (?theme= or saved choice).
+			try {
+				const theme = new URLSearchParams(location.search).get('theme') || localStorage.getItem('pau-prototype-theme');
+				if (theme) document.documentElement.dataset.theme = theme;
+			} catch {}
+		</script>
+	</head>
+	<body>
+		<div class="app">
+			<header class="topbar">
+				<span class="icon topbar__mark i-pau-mark" role="img" aria-label="Pau"></span>
+				<div class="topbar__history">
+					<button class="icon-button" type="button" aria-label="Back">
+						<span class="icon i-tabler-arrow-left" aria-hidden="true"></span>
+					</button>
+					<button class="icon-button" type="button" aria-label="Forward" disabled>
+						<span class="icon i-tabler-arrow-right" aria-hidden="true"></span>
+					</button>
+					<a class="icon-button" href="screens-dashboard-default.html" aria-label="Home"
+						><span class="icon i-tabler-home" aria-hidden="true"></span
+					></a>
+				</div>
+				<nav aria-label="Location">
+					<ol class="crumbs">
+						<li class="crumbs__root">Pau</li>
+						<li aria-hidden="true">/</li>
+						<li class="crumbs__context">home</li>
+					</ol>
+				</nav>
+				<span class="spacer"></span>
+				<div class="topbar__actions">
+					<button
+						class="icon-button"
+						type="button"
+						aria-label="Workspace activity"
+						title="Workspace activity"
+						aria-pressed="false">
+						<span class="icon i-tabler-activity" aria-hidden="true"></span>
+					</button>
+				</div>
+				<button class="command" type="button">
+					<span class="icon i-tabler-search icon--sm" aria-hidden="true"></span
+					><span class="command__label">Search or run a command</span><kbd>⌘K</kbd>
+				</button>
+			</header>
+			<nav class="tabs" aria-label="Open views">
+				<a class="tab" href="screens-session-default.html"
+					><span class="icon i-tabler-folder-code" aria-hidden="true"></span>pau</a
+				>
+				<a class="tab" href="#" aria-current="page"
+					><span class="icon i-tabler-layout-dashboard" aria-hidden="true"></span>home<span
+						class="icon tab__close i-tabler-x"
+						role="img"
+						aria-label="Close tab"></span
+				></a>
+				<button class="tab tab--add" type="button" aria-label="New tab">
+					<span class="icon i-tabler-plus" aria-hidden="true"></span>
+				</button>
+			</nav>
+			<div class="app__body">
+				<nav class="product-rail" aria-label="Product">
+					<a
+						class="product-rail__link"
+						href="screens-dashboard-default.html"
+						aria-label="Dashboard"
+						title="Dashboard"
+						aria-current="page"
+						><span class="icon i-tabler-home" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-session-default.html" aria-label="Sessions" title="Sessions"
+						><span class="icon i-tabler-layers-subtract" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-orchestration-default.html"
+						aria-label="Harness control"
+						title="Harness control"
+						><span class="icon i-tabler-topology-star-3" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-scratchpad-default.html"
+						aria-label="Scratchpad"
+						title="Scratchpad"
+						><span class="icon i-tabler-notebook" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-editor-default.html" aria-label="Editor" title="Editor"
+						><span class="icon i-tabler-code" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-terminal-default.html" aria-label="Terminal" title="Terminal"
+						><span class="icon i-tabler-terminal-2" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-processes-default.html" aria-label="Processes" title="Processes"
+						><span class="icon i-tabler-activity-heartbeat" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-diagnostics-default.html"
+						aria-label="Diagnostics"
+						title="Diagnostics"
+						><span class="icon i-tabler-stethoscope" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-resources-default.html" aria-label="Resources" title="Resources"
+						><span class="icon i-tabler-plug-connected" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link product-rail__end"
+						href="screens-settings-default.html"
+						aria-label="Settings"
+						title="Settings"
+						><span class="icon i-tabler-adjustments" aria-hidden="true"></span
+					></a>
+				</nav>
+				<main class="main">
+					<div class="toolbar">
+						<div class="toolbar__title"><strong>Active work</strong><span>3 sessions · 1 needs you</span></div>
+						<button class="field" type="button" style="inline-size: 144px">
+							<span class="field__value">All workspaces</span
+							><span class="icon i-tabler-chevron-down" aria-hidden="true"></span>
+						</button>
+						<button class="button button--primary" type="button">
+							<span class="icon i-tabler-plus" aria-hidden="true"></span>New session
+						</button>
+					</div>
+					<section class="attention" aria-label="Needs a decision">
+						<span class="icon attention__icon i-tabler-alert-circle" aria-hidden="true"></span>
+						<div class="attention__text">
+							<strong>Refine session shell needs a decision</strong
+							><span>Choose what compact tool activity should show.</span>
+						</div>
+						<a class="button button--primary" href="screens-session-default.html"
+							>Review<span class="icon i-tabler-arrow-right" aria-hidden="true"></span
+						></a>
+					</section>
+					<div class="filter-tabs" role="tablist" aria-label="Filter sessions">
+						<button class="filter-tab" role="tab" aria-selected="true">
+							All <span class="filter-tab__count">3</span>
+						</button>
+						<button class="filter-tab" role="tab" aria-selected="false">
+							Needs you <span class="filter-tab__count">1</span>
+						</button>
+						<button class="filter-tab" role="tab" aria-selected="false">
+							Running <span class="filter-tab__count">1</span>
+						</button>
+					</div>
+					<table class="work-table">
+						<thead>
+							<tr>
+								<th scope="col">Task</th>
+								<th scope="col" class="col-agent">Agent</th>
+								<th scope="col" class="col-status">Status</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr class="is-selected">
+								<td>
+									<div class="task">
+										<a class="task__title" href="screens-session-default.html">Refine session shell</a>
+										<div class="meta">
+											pau
+											<span class="branch"
+												><span class="icon i-octicon-git-branch-16" aria-hidden="true"></span
+												><span class="mono">session-shell</span></span
+											><span class="diff-stat"><ins>+18</ins><del>−7</del></span>
+										</div>
+									</div>
+								</td>
+								<td class="col-agent">
+									<span class="agent"
+										><span class="icon i-pi-mark icon--color harness-mark" aria-hidden="true"></span>Pi</span
+									>
+								</td>
+								<td class="col-status">
+									<div class="status-cell">
+										<span class="status tone-warning"><span class="dot"></span>waiting</span><time>02:14</time>
+									</div>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<div class="task">
+										<span class="task__title">Review reconnect handling</span>
+										<div class="meta">
+											pau
+											<span class="branch"
+												><span class="icon i-octicon-git-branch-16" aria-hidden="true"></span
+												><span class="mono">reconnect-fix</span></span
+											><span class="diff-stat"><ins>+42</ins><del>−12</del></span>
+										</div>
+									</div>
+								</td>
+								<td class="col-agent">
+									<span class="agent"
+										><span class="icon i-logos-claude-code icon--color harness-mark" aria-hidden="true"></span>Claude
+										Code</span
+									>
+								</td>
+								<td class="col-status">
+									<div class="status-cell">
+										<span class="status tone-success"><span class="dot"></span>running</span><time>08:31</time>
+									</div>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<div class="task">
+										<span class="task__title">Add path boundary tests</span>
+										<div class="meta">
+											claude-bridge
+											<span class="branch"
+												><span class="icon i-octicon-git-branch-16" aria-hidden="true"></span
+												><span class="mono">path-policy</span></span
+											>
+										</div>
+									</div>
+								</td>
+								<td class="col-agent">
+									<span class="agent"
+										><span class="icon i-simple-icons-openai harness-mark" aria-hidden="true"></span>Codex</span
+									>
+								</td>
+								<td class="col-status">
+									<div class="status-cell">
+										<span class="status tone-muted"><span class="dot"></span>queued</span><span class="mono">—</span>
+									</div>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+					<footer class="dock-summary">
+						<span class="icon i-pi-mark icon--color harness-mark" aria-hidden="true"></span
+						><span>Refine session shell</span><span class="muted">·</span
+						><span class="muted">Choose what compact tool activity should show.</span
+						><a href="screens-session-default.html">Open session</a>
+					</footer>
+				</main>
+			</div>
+		</div>
+	</body>
+</html>

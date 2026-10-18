@@ -11,9 +11,9 @@ and implementation policy remain defined by [`PLAN.md`](../PLAN.md).
 - The PNG files in this directory are early sketches, not implementation
   commitments.
 
-The OpenPencil design file `pau.fig` and its exports in
+The OpenPencil design file `pau.fig` and the HTML screens in
 [`dev/prototype`](../prototype/README.md) draw these decisions. Update the owning
-brief, the affected frames, and their PNGs together when a durable design
+brief, the affected frames, and their HTML pages together when a durable design
 decision changes. A visual-only adjustment does not need a prose change unless
 it changes the recorded system or surface contract.
 

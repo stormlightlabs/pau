@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Design tokens · Pau prototype</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap"
+			rel="stylesheet" />
+		<link rel="stylesheet" href="styles/tokens.css" />
+		<link rel="stylesheet" href="styles/icons.css" />
+		<link rel="stylesheet" href="styles/app.css" />
+		<script>
+			// Apply the theme chosen on the index page (?theme= or saved choice).
+			try {
+				const theme = new URLSearchParams(location.search).get('theme') || localStorage.getItem('pau-prototype-theme');
+				if (theme) document.documentElement.dataset.theme = theme;
+			} catch {}
+		</script>
+	</head>
+	<body>
+		<div class="app app--bare">
+			<main class="main">
+				<div class="page tokens">
+					<header class="page-heading">
+						<div>
+							<p class="page-heading__kicker">Foundations</p>
+							<h1 class="page-heading__title">Pau design tokens</h1>
+						</div>
+					</header>
+					<p class="note tokens__intro">
+						The Theme, Site, and Scale variables in <code>pau.fig</code>, as written in <code>styles/tokens.css</code>.
+						Eldritch is the default theme.
+					</p>
+					<section class="section">
+						<h2 class="section__title">Theme colors</h2>
+						<div class="tokens__scroll">
+							<table class="token-table">
+								<thead>
+									<tr>
+										<th scope="col">Token</th>
+										<th scope="col">Eldritch</th>
+										<th scope="col">Nord</th>
+										<th scope="col">Iceberg</th>
+										<th scope="col">Catppuccin Mocha</th>
+										<th scope="col">Vitesse Dark</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr>
+										<th scope="row">--pau-canvas</th>
+										<td><span class="swatch" style="background: #12151d"></span>#12151d</td>
+										<td><span class="swatch" style="background: #242933"></span>#242933</td>
+										<td><span class="swatch" style="background: #11131d"></span>#11131d</td>
+										<td><span class="swatch" style="background: #11111b"></span>#11111b</td>
+										<td><span class="swatch" style="background: #121212"></span>#121212</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-surface</th>
+										<td><span class="swatch" style="background: #171b27"></span>#171b27</td>
+										<td><span class="swatch" style="background: #2e3440"></span>#2e3440</td>
+										<td><span class="swatch" style="background: #161923"></span>#161923</td>
+										<td><span class="swatch" style="background: #181825"></span>#181825</td>
+										<td><span class="swatch" style="background: #171717"></span>#171717</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-surface-raised</th>
+										<td><span class="swatch" style="background: #202536"></span>#202536</td>
+										<td><span class="swatch" style="background: #3b4252"></span>#3b4252</td>
+										<td><span class="swatch" style="background: #1e2230"></span>#1e2230</td>
+										<td><span class="swatch" style="background: #1e1e2e"></span>#1e1e2e</td>
+										<td><span class="swatch" style="background: #222222"></span>#222222</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-selection</th>
+										<td><span class="swatch" style="background: #2a3045"></span>#2a3045</td>
+										<td><span class="swatch" style="background: #434c5e"></span>#434c5e</td>
+										<td><span class="swatch" style="background: #252a3b"></span>#252a3b</td>
+										<td><span class="swatch" style="background: #313244"></span>#313244</td>
+										<td><span class="swatch" style="background: #2a2a2a"></span>#2a2a2a</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-border</th>
+										<td><span class="swatch" style="background: #293044"></span>#293044</td>
+										<td><span class="swatch" style="background: #414a5b"></span>#414a5b</td>
+										<td><span class="swatch" style="background: #2b3044"></span>#2b3044</td>
+										<td><span class="swatch" style="background: #393b4b"></span>#393b4b</td>
+										<td><span class="swatch" style="background: #303030"></span>#303030</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-border-strong</th>
+										<td><span class="swatch" style="background: #58617c"></span>#58617c</td>
+										<td><span class="swatch" style="background: #81a1c1"></span>#81a1c1</td>
+										<td><span class="swatch" style="background: #84a0c6"></span>#84a0c6</td>
+										<td><span class="swatch" style="background: #cba6f7"></span>#cba6f7</td>
+										<td><span class="swatch" style="background: #4d9375"></span>#4d9375</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-text</th>
+										<td><span class="swatch" style="background: #e6e9f2"></span>#e6e9f2</td>
+										<td><span class="swatch" style="background: #eceff4"></span>#eceff4</td>
+										<td><span class="swatch" style="background: #c6c8d1"></span>#c6c8d1</td>
+										<td><span class="swatch" style="background: #cdd6f4"></span>#cdd6f4</td>
+										<td><span class="swatch" style="background: #dbd7ca"></span>#dbd7ca</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-text-muted</th>
+										<td><span class="swatch" style="background: #9aa3bd"></span>#9aa3bd</td>
+										<td><span class="swatch" style="background: #b5bfce"></span>#b5bfce</td>
+										<td><span class="swatch" style="background: #a3adcb"></span>#a3adcb</td>
+										<td><span class="swatch" style="background: #a6adc8"></span>#a6adc8</td>
+										<td><span class="swatch" style="background: #a3a3a3"></span>#a3a3a3</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-accent</th>
+										<td><span class="swatch" style="background: #38ef9d"></span>#38ef9d</td>
+										<td><span class="swatch" style="background: #88c0d0"></span>#88c0d0</td>
+										<td><span class="swatch" style="background: #84a0c6"></span>#84a0c6</td>
+										<td><span class="swatch" style="background: #cba6f7"></span>#cba6f7</td>
+										<td><span class="swatch" style="background: #4d9375"></span>#4d9375</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-accent-soft</th>
+										<td><span class="swatch" style="background: #173b31"></span>#173b31</td>
+										<td><span class="swatch" style="background: #314651"></span>#314651</td>
+										<td><span class="swatch" style="background: #26354a"></span>#26354a</td>
+										<td><span class="swatch" style="background: #382f4d"></span>#382f4d</td>
+										<td><span class="swatch" style="background: #24372f"></span>#24372f</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-focus</th>
+										<td><span class="swatch" style="background: #04d1f9"></span>#04d1f9</td>
+										<td><span class="swatch" style="background: #88c0d0"></span>#88c0d0</td>
+										<td><span class="swatch" style="background: #95c4ce"></span>#95c4ce</td>
+										<td><span class="swatch" style="background: #89dceb"></span>#89dceb</td>
+										<td><span class="swatch" style="background: #5eaab5"></span>#5eaab5</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-success</th>
+										<td><span class="swatch" style="background: #57e69a"></span>#57e69a</td>
+										<td><span class="swatch" style="background: #a3be8c"></span>#a3be8c</td>
+										<td><span class="swatch" style="background: #b4be82"></span>#b4be82</td>
+										<td><span class="swatch" style="background: #a6e3a1"></span>#a6e3a1</td>
+										<td><span class="swatch" style="background: #80a665"></span>#80a665</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-warning</th>
+										<td><span class="swatch" style="background: #f5bf69"></span>#f5bf69</td>
+										<td><span class="swatch" style="background: #ebcb8b"></span>#ebcb8b</td>
+										<td><span class="swatch" style="background: #e2a478"></span>#e2a478</td>
+										<td><span class="swatch" style="background: #f9e2af"></span>#f9e2af</td>
+										<td><span class="swatch" style="background: #e6cc77"></span>#e6cc77</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-danger</th>
+										<td><span class="swatch" style="background: #ee7180"></span>#ee7180</td>
+										<td><span class="swatch" style="background: #f5aab0"></span>#f5aab0</td>
+										<td><span class="swatch" style="background: #e27878"></span>#e27878</td>
+										<td><span class="swatch" style="background: #f38ba8"></span>#f38ba8</td>
+										<td><span class="swatch" style="background: #cb7676"></span>#cb7676</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-info</th>
+										<td><span class="swatch" style="background: #43c7e8"></span>#43c7e8</td>
+										<td><span class="swatch" style="background: #a8c9e5"></span>#a8c9e5</td>
+										<td><span class="swatch" style="background: #89b8c2"></span>#89b8c2</td>
+										<td><span class="swatch" style="background: #89dceb"></span>#89dceb</td>
+										<td><span class="swatch" style="background: #5da994"></span>#5da994</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-syntax-keyword</th>
+										<td><span class="swatch" style="background: #a48cf2"></span>#a48cf2</td>
+										<td><span class="swatch" style="background: #81a1c1"></span>#81a1c1</td>
+										<td><span class="swatch" style="background: #a093c7"></span>#a093c7</td>
+										<td><span class="swatch" style="background: #cba6f7"></span>#cba6f7</td>
+										<td><span class="swatch" style="background: #4d9375"></span>#4d9375</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-syntax-entity</th>
+										<td><span class="swatch" style="background: #04d1f9"></span>#04d1f9</td>
+										<td><span class="swatch" style="background: #88c0d0"></span>#88c0d0</td>
+										<td><span class="swatch" style="background: #84a0c6"></span>#84a0c6</td>
+										<td><span class="swatch" style="background: #89b4fa"></span>#89b4fa</td>
+										<td><span class="swatch" style="background: #80a665"></span>#80a665</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-syntax-string</th>
+										<td><span class="swatch" style="background: #37f499"></span>#37f499</td>
+										<td><span class="swatch" style="background: #a3be8c"></span>#a3be8c</td>
+										<td><span class="swatch" style="background: #b4be82"></span>#b4be82</td>
+										<td><span class="swatch" style="background: #a6e3a1"></span>#a6e3a1</td>
+										<td><span class="swatch" style="background: #c98a7d"></span>#c98a7d</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-syntax-constant</th>
+										<td><span class="swatch" style="background: #f1fc79"></span>#f1fc79</td>
+										<td><span class="swatch" style="background: #b48ead"></span>#b48ead</td>
+										<td><span class="swatch" style="background: #e2a478"></span>#e2a478</td>
+										<td><span class="swatch" style="background: #fab387"></span>#fab387</td>
+										<td><span class="swatch" style="background: #4c9a91"></span>#4c9a91</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-syntax-comment</th>
+										<td><span class="swatch" style="background: #6b7089"></span>#6b7089</td>
+										<td><span class="swatch" style="background: #616e88"></span>#616e88</td>
+										<td><span class="swatch" style="background: #8389a3"></span>#8389a3</td>
+										<td><span class="swatch" style="background: #6c7086"></span>#6c7086</td>
+										<td><span class="swatch" style="background: #758575"></span>#758575</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-syntax-type</th>
+										<td><span class="swatch" style="background: #f16c75"></span>#f16c75</td>
+										<td><span class="swatch" style="background: #8fbcbb"></span>#8fbcbb</td>
+										<td><span class="swatch" style="background: #89b8c2"></span>#89b8c2</td>
+										<td><span class="swatch" style="background: #f9e2af"></span>#f9e2af</td>
+										<td><span class="swatch" style="background: #5da994"></span>#5da994</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-added-wash</th>
+										<td><span class="swatch" style="background: #1f3130"></span>#1f3130</td>
+										<td><span class="swatch" style="background: #363e41"></span>#363e41</td>
+										<td><span class="swatch" style="background: #272a2d"></span>#272a2d</td>
+										<td><span class="swatch" style="background: #252d2f"></span>#252d2f</td>
+										<td><span class="swatch" style="background: #21261e"></span>#21261e</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-removed-wash</th>
+										<td><span class="swatch" style="background: #31232c"></span>#31232c</td>
+										<td><span class="swatch" style="background: #3c323c"></span>#3c323c</td>
+										<td><span class="swatch" style="background: #2e222b"></span>#2e222b</td>
+										<td><span class="swatch" style="background: #30222f"></span>#30222f</td>
+										<td><span class="swatch" style="background: #2b2020"></span>#2b2020</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-active-line</th>
+										<td><span class="swatch" style="background: #1c1f28"></span>#1c1f28</td>
+										<td><span class="swatch" style="background: #2e333d"></span>#2e333d</td>
+										<td><span class="swatch" style="background: #1a1c26"></span>#1a1c26</td>
+										<td><span class="swatch" style="background: #1a1a26"></span>#1a1a26</td>
+										<td><span class="swatch" style="background: #1c1b1b"></span>#1c1b1b</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-text-selection</th>
+										<td><span class="swatch" style="background: #22423a"></span>#22423a</td>
+										<td><span class="swatch" style="background: #3a4a55"></span>#3a4a55</td>
+										<td><span class="swatch" style="background: #293141"></span>#293141</td>
+										<td><span class="swatch" style="background: #373048"></span>#373048</td>
+										<td><span class="swatch" style="background: #212d27"></span>#212d27</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-wash-warning</th>
+										<td><span class="swatch" style="background: #212124"></span>#212124</td>
+										<td><span class="swatch" style="background: #32343a"></span>#32343a</td>
+										<td><span class="swatch" style="background: #1f1d24"></span>#1f1d24</td>
+										<td><span class="swatch" style="background: #201f26"></span>#201f26</td>
+										<td><span class="swatch" style="background: #201e1a"></span>#201e1a</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-wash-danger</th>
+										<td><span class="swatch" style="background: #211c24"></span>#211c24</td>
+										<td><span class="swatch" style="background: #302e37"></span>#302e37</td>
+										<td><span class="swatch" style="background: #1f1b24"></span>#1f1b24</td>
+										<td><span class="swatch" style="background: #201a25"></span>#201a25</td>
+										<td><span class="swatch" style="background: #1f1919"></span>#1f1919</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-wash-accent</th>
+										<td><span class="swatch" style="background: #182326"></span>#182326</td>
+										<td><span class="swatch" style="background: #2b343e"></span>#2b343e</td>
+										<td><span class="swatch" style="background: #191c28"></span>#191c28</td>
+										<td><span class="swatch" style="background: #1d1b29"></span>#1d1b29</td>
+										<td><span class="swatch" style="background: #171b19"></span>#171b19</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</section>
+					<section class="section">
+						<h2 class="section__title">Site palette</h2>
+						<div class="tokens__scroll">
+							<table class="token-table">
+								<thead>
+									<tr>
+										<th scope="col">Token</th>
+										<th scope="col">Light</th>
+										<th scope="col">Dark</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr>
+										<th scope="row">--site-ink</th>
+										<td><span class="swatch" style="background: #202536"></span>#202536</td>
+										<td><span class="swatch" style="background: #e6e9f2"></span>#e6e9f2</td>
+									</tr>
+									<tr>
+										<th scope="row">--site-muted</th>
+										<td><span class="swatch" style="background: #5d667e"></span>#5d667e</td>
+										<td><span class="swatch" style="background: #9aa3bd"></span>#9aa3bd</td>
+									</tr>
+									<tr>
+										<th scope="row">--site-line</th>
+										<td><span class="swatch" style="background: #dce1eb"></span>#dce1eb</td>
+										<td><span class="swatch" style="background: #293044"></span>#293044</td>
+									</tr>
+									<tr>
+										<th scope="row">--site-paper</th>
+										<td><span class="swatch" style="background: #f5f7fc"></span>#f5f7fc</td>
+										<td><span class="swatch" style="background: #12151d"></span>#12151d</td>
+									</tr>
+									<tr>
+										<th scope="row">--site-paper-deep</th>
+										<td><span class="swatch" style="background: #e9edf6"></span>#e9edf6</td>
+										<td><span class="swatch" style="background: #171b27"></span>#171b27</td>
+									</tr>
+									<tr>
+										<th scope="row">--site-raised</th>
+										<td><span class="swatch" style="background: #ffffff"></span>#ffffff</td>
+										<td><span class="swatch" style="background: #202536"></span>#202536</td>
+									</tr>
+									<tr>
+										<th scope="row">--site-accent</th>
+										<td><span class="swatch" style="background: #087a55"></span>#087a55</td>
+										<td><span class="swatch" style="background: #38ef9d"></span>#38ef9d</td>
+									</tr>
+									<tr>
+										<th scope="row">--site-accent-strong</th>
+										<td><span class="swatch" style="background: #055e43"></span>#055e43</td>
+										<td><span class="swatch" style="background: #66f3b7"></span>#66f3b7</td>
+									</tr>
+									<tr>
+										<th scope="row">--site-focus</th>
+										<td><span class="swatch" style="background: #7651c5"></span>#7651c5</td>
+										<td><span class="swatch" style="background: #a48cf2"></span>#a48cf2</td>
+									</tr>
+									<tr>
+										<th scope="row">--site-highlight</th>
+										<td><span class="swatch" style="background: #087c99"></span>#087c99</td>
+										<td><span class="swatch" style="background: #f1fc79"></span>#f1fc79</td>
+									</tr>
+									<tr>
+										<th scope="row">--site-code</th>
+										<td><span class="swatch" style="background: #171b27"></span>#171b27</td>
+										<td><span class="swatch" style="background: #0e1118"></span>#0e1118</td>
+									</tr>
+									<tr>
+										<th scope="row">--site-code-line</th>
+										<td><span class="swatch" style="background: #293044"></span>#293044</td>
+										<td><span class="swatch" style="background: #293044"></span>#293044</td>
+									</tr>
+									<tr>
+										<th scope="row">--site-code-ink</th>
+										<td><span class="swatch" style="background: #e6e9f2"></span>#e6e9f2</td>
+										<td><span class="swatch" style="background: #e6e9f2"></span>#e6e9f2</td>
+									</tr>
+									<tr>
+										<th scope="row">--site-code-prompt</th>
+										<td><span class="swatch" style="background: #f1fc79"></span>#f1fc79</td>
+										<td><span class="swatch" style="background: #f1fc79"></span>#f1fc79</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</section>
+					<section class="section">
+						<h2 class="section__title">Scale</h2>
+						<div class="tokens__scroll">
+							<table class="token-table">
+								<thead>
+									<tr>
+										<th scope="col">Token</th>
+										<th scope="col">Value</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr>
+										<th scope="row">--pau-space-1</th>
+										<td>4px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-space-2</th>
+										<td>8px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-space-3</th>
+										<td>12px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-space-4</th>
+										<td>16px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-space-5</th>
+										<td>24px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-space-6</th>
+										<td>32px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-type-xs</th>
+										<td>12px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-type-sm</th>
+										<td>13px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-type-md</th>
+										<td>14px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-type-lg</th>
+										<td>16px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-type-xl</th>
+										<td>20px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-radius-control</th>
+										<td>3px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-radius-surface</th>
+										<td>5px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-border-thin</th>
+										<td>0.5px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-size-target-compact</th>
+										<td>32px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-size-target-touch</th>
+										<td>44px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-size-row-sm</th>
+										<td>28px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-size-row-md</th>
+										<td>32px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-size-row-lg</th>
+										<td>36px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-size-bar-height</th>
+										<td>30px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-size-rail-product</th>
+										<td>48px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-size-rail-context</th>
+										<td>248px</td>
+									</tr>
+									<tr>
+										<th scope="row">--pau-size-rail-inspector</th>
+										<td>304px</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</section>
+				</div>
+			</main>
+		</div>
+	</body>
+</html>

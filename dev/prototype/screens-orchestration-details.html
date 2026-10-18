@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Harness control · Pau prototype</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap"
+			rel="stylesheet" />
+		<link rel="stylesheet" href="styles/tokens.css" />
+		<link rel="stylesheet" href="styles/icons.css" />
+		<link rel="stylesheet" href="styles/app.css" />
+		<script>
+			// Apply the theme chosen on the index page (?theme= or saved choice).
+			try {
+				const theme = new URLSearchParams(location.search).get('theme') || localStorage.getItem('pau-prototype-theme');
+				if (theme) document.documentElement.dataset.theme = theme;
+			} catch {}
+		</script>
+	</head>
+	<body>
+		<div class="app">
+			<header class="topbar">
+				<span class="icon topbar__mark i-pau-mark" role="img" aria-label="Pau"></span>
+				<div class="topbar__history">
+					<button class="icon-button" type="button" aria-label="Back">
+						<span class="icon i-tabler-arrow-left" aria-hidden="true"></span>
+					</button>
+					<button class="icon-button" type="button" aria-label="Forward" disabled>
+						<span class="icon i-tabler-arrow-right" aria-hidden="true"></span>
+					</button>
+					<a class="icon-button" href="screens-dashboard-default.html" aria-label="Home"
+						><span class="icon i-tabler-home" aria-hidden="true"></span
+					></a>
+				</div>
+				<nav aria-label="Location">
+					<ol class="crumbs">
+						<li class="crumbs__root">Pau</li>
+						<li aria-hidden="true">/</li>
+						<li class="crumbs__context">control / all sessions</li>
+					</ol>
+				</nav>
+				<span class="spacer"></span>
+				<div class="topbar__actions">
+					<button class="icon-button" type="button" aria-label="Run details" title="Run details" aria-pressed="true">
+						<span class="icon i-tabler-layout-sidebar-right" aria-hidden="true"></span>
+					</button>
+				</div>
+				<button class="command" type="button">
+					<span class="icon i-tabler-search icon--sm" aria-hidden="true"></span
+					><span class="command__label">Search or run a command</span><kbd>⌘K</kbd>
+				</button>
+			</header>
+			<nav class="tabs" aria-label="Open views">
+				<a class="tab" href="screens-session-default.html"
+					><span class="icon i-tabler-folder-code" aria-hidden="true"></span>pau</a
+				>
+				<a class="tab" href="#" aria-current="page"
+					><span class="icon i-tabler-layout-dashboard" aria-hidden="true"></span>all sessions<span
+						class="icon tab__close i-tabler-x"
+						role="img"
+						aria-label="Close tab"></span
+				></a>
+				<button class="tab tab--add" type="button" aria-label="New tab">
+					<span class="icon i-tabler-plus" aria-hidden="true"></span>
+				</button>
+			</nav>
+			<div class="app__body">
+				<nav class="product-rail" aria-label="Product">
+					<a class="product-rail__link" href="screens-dashboard-default.html" aria-label="Dashboard" title="Dashboard"
+						><span class="icon i-tabler-home" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-session-default.html" aria-label="Sessions" title="Sessions"
+						><span class="icon i-tabler-layers-subtract" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-orchestration-default.html"
+						aria-label="Harness control"
+						title="Harness control"
+						aria-current="page"
+						><span class="icon i-tabler-topology-star-3" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-scratchpad-default.html"
+						aria-label="Scratchpad"
+						title="Scratchpad"
+						><span class="icon i-tabler-notebook" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-editor-default.html" aria-label="Editor" title="Editor"
+						><span class="icon i-tabler-code" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-terminal-default.html" aria-label="Terminal" title="Terminal"
+						><span class="icon i-tabler-terminal-2" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-processes-default.html" aria-label="Processes" title="Processes"
+						><span class="icon i-tabler-activity-heartbeat" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-diagnostics-default.html"
+						aria-label="Diagnostics"
+						title="Diagnostics"
+						><span class="icon i-tabler-stethoscope" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-resources-default.html" aria-label="Resources" title="Resources"
+						><span class="icon i-tabler-plug-connected" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link product-rail__end"
+						href="screens-settings-default.html"
+						aria-label="Settings"
+						title="Settings"
+						><span class="icon i-tabler-adjustments" aria-hidden="true"></span
+					></a>
+				</nav>
+				<nav class="rail" aria-label="Agent sessions">
+					<div class="pane-header">
+						<h2 class="section-label">Sessions</h2>
+						<button
+							class="icon-button icon-button--sm"
+							type="button"
+							aria-label="New session"
+							style="--icon-size: 14px">
+							<span class="icon i-tabler-plus" aria-hidden="true"></span>
+						</button>
+					</div>
+					<div class="rail-filter">
+						<button class="field field--block" type="button"><span class="field__value">All</span></button>
+					</div>
+					<a class="run-row is-selected" href="#" aria-current="true"
+						><span class="dot tone-success"></span
+						><span class="run-row__body"
+							><span class="run-row__title">Review reconnect handling</span
+							><span class="run-row__meta"
+								><span class="icon i-logos-claude-code icon--color harness-mark" aria-hidden="true"></span
+								><span class="run-row__workspace">pau</span><time class="mono">04:18</time></span
+							></span
+						></a
+					>
+					<a class="run-row" href="#"
+						><span class="dot tone-warning"></span
+						><span class="run-row__body"
+							><span class="run-row__title">Refine session shell</span
+							><span class="run-row__meta"
+								><span class="icon i-pi-mark icon--color harness-mark" aria-hidden="true"></span
+								><span class="run-row__workspace">pau</span><time class="mono">12:07</time></span
+							></span
+						></a
+					>
+					<a class="run-row" href="#"
+						><span class="dot tone-muted"></span
+						><span class="run-row__body"
+							><span class="run-row__title">Add path boundary tests</span
+							><span class="run-row__meta"
+								><span class="icon i-simple-icons-openai harness-mark" aria-hidden="true"></span
+								><span class="run-row__workspace">pau</span><time class="mono">—</time></span
+							></span
+						></a
+					>
+					<a class="run-row" href="#"
+						><span class="dot tone-muted"></span
+						><span class="run-row__body"
+							><span class="run-row__title">Check setup instructions</span
+							><span class="run-row__meta"
+								><span class="icon i-pi-mark icon--color harness-mark" aria-hidden="true"></span
+								><span class="run-row__workspace">claude-bridge</span><time class="mono">02:41</time></span
+							></span
+						></a
+					>
+					<p class="note rail__footer ruled-top" style="padding: 8px 12px">2 running · 1 waiting · 1 queued</p>
+				</nav>
+				<main class="main">
+					<header class="run-header">
+						<span class="run-header__mark"
+							><span class="icon i-logos-claude-code icon--color harness-mark" aria-hidden="true"></span
+						></span>
+						<div class="run-header__title">
+							<h1><strong>Review reconnect handling</strong></h1>
+							<span class="meta"
+								>pau
+								<span class="branch"
+									><span class="icon i-octicon-git-branch-16" aria-hidden="true"></span
+									><span class="mono">reconnect-fix</span></span
+								></span
+							>
+						</div>
+						<span class="status tone-success" style="padding-inline-end: 8px"><span class="dot"></span>running</span>
+						<button class="button" type="button">
+							<span class="icon i-tabler-player-stop" aria-hidden="true"></span>Interrupt
+						</button>
+					</header>
+					<section class="run-activity" aria-label="Current activity">
+						<p class="meta" style="color: inherit">
+							<span class="tone-success section-label" style="font-weight: 400; color: var(--pau-success)">running</span
+							><span class="muted">·</span><span class="muted">04:18</span>
+						</p>
+						<h2>Running focused reconnect checks</h2>
+						<p>
+							The session remains attached to its native process. Open the conversation to steer the work or inspect its
+							full tool history.
+						</p>
+						<div class="run-activity__actions" style="padding-block-start: 16px">
+							<a class="button button--primary" href="screens-session-default.html"
+								>Open conversation<span class="icon i-tabler-arrow-right" aria-hidden="true"></span
+							></a>
+							<button class="button" type="button">
+								<span class="icon i-tabler-message-forward" aria-hidden="true"></span>Steer
+							</button>
+						</div>
+					</section>
+					<div class="split">
+						<section aria-label="Changes">
+							<div class="split__head">
+								<h3 class="section-label">Changes</h3>
+								<span class="mono" style="font-size: 12px">+42 −12</span>
+							</div>
+							<ul class="value-list value-list--tight mono">
+								<li>
+									<span>reconnect.rs</span><span class="diff-stat"><ins>+28</ins></span>
+								</li>
+								<li>
+									<span>reconnect.test.ts</span><span class="diff-stat"><ins>+14</ins><del>−12</del></span>
+								</li>
+							</ul>
+							<button class="button button--quiet" type="button">Review diff</button>
+						</section>
+						<section aria-label="Checks">
+							<div class="split__head">
+								<h3 class="section-label">Checks</h3>
+								<span class="tone-success" style="font-size: 12px">18 passed</span>
+							</div>
+							<ul class="value-list value-list--tight">
+								<li><span>Unit tests</span><span class="tone-success">passed</span></li>
+								<li><span>Reconnect flow</span><span class="tone-success">passed</span></li>
+								<li><span>Visual review</span><span class="tone-warning">waiting</span></li>
+							</ul>
+							<button class="button button--quiet" type="button">Open checks</button>
+						</section>
+					</div>
+					<button class="events-toggle" type="button" aria-expanded="false">
+						<span class="icon i-tabler-chevron-right" aria-hidden="true"></span
+						><span class="events-toggle__label">Recent events</span>3
+					</button>
+				</main>
+				<aside class="inspector" aria-label="Run details">
+					<div class="pane-header">
+						<h2 class="section-label">Run details</h2>
+						<button class="icon-button icon-button--sm" type="button" aria-label="Close run details">
+							<span class="icon i-tabler-x" aria-hidden="true"></span>
+						</button>
+					</div>
+					<dl class="details-grid">
+						<dt>Harness</dt>
+						<dd>Claude Code</dd>
+						<dt>Model</dt>
+						<dd>Sonnet 4.5</dd>
+						<dt>Profile</dt>
+						<dd>review-with-checks</dd>
+						<dt>Native ID</dt>
+						<dd>ses_8f1c…42ba</dd>
+						<dt>Process</dt>
+						<dd class="tone-success">attached</dd>
+					</dl>
+					<div class="inspector-block">
+						<h3 class="section-label">Capabilities</h3>
+						<ul class="chip-list">
+							<li class="chip">prompt</li>
+							<li class="chip">interrupt</li>
+							<li class="chip">resume</li>
+							<li class="chip">native history</li>
+						</ul>
+						<p class="note">Branching is not reported by this harness.</p>
+					</div>
+					<label class="toggle-row"
+						><div><strong>Allow Pi delegation</strong><span class="muted">Current Pi session only</span></div>
+						<span
+							class="check check--on"
+							role="checkbox"
+							aria-checked="true"
+							style="inline-size: 14px; block-size: 14px"
+							><span class="icon i-tabler-check" aria-hidden="true"></span></span
+					></label>
+					<div class="inspector-footer">
+						<button class="button button--block button--danger" type="button">
+							<span class="icon i-tabler-square-x" aria-hidden="true"></span>Stop native session
+						</button>
+					</div>
+				</aside>
+			</div>
+		</div>
+	</body>
+</html>

@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Settings · Pau prototype</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap"
+			rel="stylesheet" />
+		<link rel="stylesheet" href="styles/tokens.css" />
+		<link rel="stylesheet" href="styles/icons.css" />
+		<link rel="stylesheet" href="styles/app.css" />
+		<script>
+			// Apply the theme chosen on the index page (?theme= or saved choice).
+			try {
+				const theme = new URLSearchParams(location.search).get('theme') || localStorage.getItem('pau-prototype-theme');
+				if (theme) document.documentElement.dataset.theme = theme;
+			} catch {}
+		</script>
+	</head>
+	<body>
+		<div class="app">
+			<header class="topbar">
+				<span class="icon topbar__mark i-pau-mark" role="img" aria-label="Pau"></span>
+				<div class="topbar__history">
+					<button class="icon-button" type="button" aria-label="Back">
+						<span class="icon i-tabler-arrow-left" aria-hidden="true"></span>
+					</button>
+					<button class="icon-button" type="button" aria-label="Forward" disabled>
+						<span class="icon i-tabler-arrow-right" aria-hidden="true"></span>
+					</button>
+					<a class="icon-button" href="screens-dashboard-default.html" aria-label="Home"
+						><span class="icon i-tabler-home" aria-hidden="true"></span
+					></a>
+				</div>
+				<nav aria-label="Location">
+					<ol class="crumbs">
+						<li class="crumbs__root">Pau</li>
+						<li aria-hidden="true">/</li>
+						<li class="crumbs__context">settings / appearance</li>
+					</ol>
+				</nav>
+				<span class="spacer"></span>
+				<div class="topbar__actions"></div>
+				<button class="command" type="button">
+					<span class="icon i-tabler-search icon--sm" aria-hidden="true"></span
+					><span class="command__label">Search or run a command</span><kbd>⌘K</kbd>
+				</button>
+			</header>
+			<nav class="tabs" aria-label="Open views">
+				<a class="tab" href="screens-session-default.html"
+					><span class="icon i-tabler-folder-code" aria-hidden="true"></span>pau</a
+				>
+				<a class="tab" href="#" aria-current="page"
+					><span class="icon i-tabler-layout-dashboard" aria-hidden="true"></span>appearance<span
+						class="icon tab__close i-tabler-x"
+						role="img"
+						aria-label="Close tab"></span
+				></a>
+				<button class="tab tab--add" type="button" aria-label="New tab">
+					<span class="icon i-tabler-plus" aria-hidden="true"></span>
+				</button>
+			</nav>
+			<div class="app__body">
+				<nav class="product-rail" aria-label="Product">
+					<a class="product-rail__link" href="screens-dashboard-default.html" aria-label="Dashboard" title="Dashboard"
+						><span class="icon i-tabler-home" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-session-default.html" aria-label="Sessions" title="Sessions"
+						><span class="icon i-tabler-layers-subtract" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-orchestration-default.html"
+						aria-label="Harness control"
+						title="Harness control"
+						><span class="icon i-tabler-topology-star-3" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-scratchpad-default.html"
+						aria-label="Scratchpad"
+						title="Scratchpad"
+						><span class="icon i-tabler-notebook" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-editor-default.html" aria-label="Editor" title="Editor"
+						><span class="icon i-tabler-code" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-terminal-default.html" aria-label="Terminal" title="Terminal"
+						><span class="icon i-tabler-terminal-2" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-processes-default.html" aria-label="Processes" title="Processes"
+						><span class="icon i-tabler-activity-heartbeat" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-diagnostics-default.html"
+						aria-label="Diagnostics"
+						title="Diagnostics"
+						><span class="icon i-tabler-stethoscope" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-resources-default.html" aria-label="Resources" title="Resources"
+						><span class="icon i-tabler-plug-connected" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link product-rail__end"
+						href="screens-settings-default.html"
+						aria-label="Settings"
+						title="Settings"
+						aria-current="page"
+						><span class="icon i-tabler-adjustments" aria-hidden="true"></span
+					></a>
+				</nav>
+				<nav class="rail rail--padded" aria-label="Settings sections" style="inline-size: 224px">
+					<h2 class="section-label rail-title">Settings</h2>
+					<ul class="nav-list">
+						<li>
+							<a class="list-item" href="#" aria-current="page"
+								><span class="icon i-tabler-palette" aria-hidden="true"></span
+								><span class="list-item__label">Appearance</span></a
+							>
+						</li>
+						<li>
+							<a class="list-item" href="#"
+								><span class="icon i-tabler-robot" aria-hidden="true"></span
+								><span class="list-item__label">Agents</span></a
+							>
+						</li>
+						<li>
+							<a class="list-item" href="#"
+								><span class="icon i-tabler-code" aria-hidden="true"></span
+								><span class="list-item__label">Editors</span></a
+							>
+						</li>
+						<li>
+							<a class="list-item" href="#"
+								><span class="icon i-tabler-keyboard" aria-hidden="true"></span
+								><span class="list-item__label">Keybindings</span></a
+							>
+						</li>
+						<li>
+							<a class="list-item" href="#"
+								><span class="icon i-tabler-bell" aria-hidden="true"></span
+								><span class="list-item__label">Notifications</span></a
+							>
+						</li>
+					</ul>
+				</nav>
+				<main class="main">
+					<div class="settings-page">
+						<h2>Theme</h2>
+						<div class="theme-grid" role="radiogroup" aria-label="Theme">
+							<button class="theme-card" type="button" role="radio" aria-checked="true" data-theme="eldritch">
+								<span class="theme-card__code"
+									><span><span class="muted">const</span> rows =</span
+									><span><span class="tone-accent">gutter</span>(42)</span
+									><span><span class="tone-info">type</span> Hunk = <span class="tone-warning">"ok"</span></span></span
+								>
+								<span class="theme-card__swatches" aria-hidden="true"
+									><span style="background: var(--pau-accent)"></span><span style="background: var(--pau-info)"></span
+									><span style="background: var(--pau-warning)"></span
+									><span style="background: var(--pau-danger)"></span
+								></span>
+								Eldritch
+							</button>
+							<button class="theme-card" type="button" role="radio" aria-checked="false" data-theme="nord">
+								<span class="theme-card__code"
+									><span><span class="muted">const</span> rows =</span
+									><span><span class="tone-accent">gutter</span>(42)</span
+									><span><span class="tone-info">type</span> Hunk = <span class="tone-warning">"ok"</span></span></span
+								>
+								<span class="theme-card__swatches" aria-hidden="true"
+									><span style="background: var(--pau-accent)"></span><span style="background: var(--pau-info)"></span
+									><span style="background: var(--pau-warning)"></span
+									><span style="background: var(--pau-danger)"></span
+								></span>
+								Nord
+							</button>
+							<button class="theme-card" type="button" role="radio" aria-checked="false" data-theme="iceberg">
+								<span class="theme-card__code"
+									><span><span class="muted">const</span> rows =</span
+									><span><span class="tone-accent">gutter</span>(42)</span
+									><span><span class="tone-info">type</span> Hunk = <span class="tone-warning">"ok"</span></span></span
+								>
+								<span class="theme-card__swatches" aria-hidden="true"
+									><span style="background: var(--pau-accent)"></span><span style="background: var(--pau-info)"></span
+									><span style="background: var(--pau-warning)"></span
+									><span style="background: var(--pau-danger)"></span
+								></span>
+								Iceberg
+							</button>
+							<button class="theme-card" type="button" role="radio" aria-checked="false" data-theme="catppuccin-mocha">
+								<span class="theme-card__code"
+									><span><span class="muted">const</span> rows =</span
+									><span><span class="tone-accent">gutter</span>(42)</span
+									><span><span class="tone-info">type</span> Hunk = <span class="tone-warning">"ok"</span></span></span
+								>
+								<span class="theme-card__swatches" aria-hidden="true"
+									><span style="background: var(--pau-accent)"></span><span style="background: var(--pau-info)"></span
+									><span style="background: var(--pau-warning)"></span
+									><span style="background: var(--pau-danger)"></span
+								></span>
+								Catppuccin Mocha
+							</button>
+							<button class="theme-card" type="button" role="radio" aria-checked="false" data-theme="vitesse-dark">
+								<span class="theme-card__code"
+									><span><span class="muted">const</span> rows =</span
+									><span><span class="tone-accent">gutter</span>(42)</span
+									><span><span class="tone-info">type</span> Hunk = <span class="tone-warning">"ok"</span></span></span
+								>
+								<span class="theme-card__swatches" aria-hidden="true"
+									><span style="background: var(--pau-accent)"></span><span style="background: var(--pau-info)"></span
+									><span style="background: var(--pau-warning)"></span
+									><span style="background: var(--pau-danger)"></span
+								></span>
+								Vitesse Dark
+							</button>
+						</div>
+						<div class="setting-rows">
+							<div class="setting-row">
+								<label for="ui-font">Interface font</label
+								><button class="field" id="ui-font" type="button" style="min-inline-size: 210px">
+									<span class="field__value">IBM Plex Sans</span
+									><span class="icon i-tabler-chevron-down" aria-hidden="true"></span>
+								</button>
+							</div>
+							<div class="setting-row">
+								<label for="editor">Preferred editor</label
+								><button class="field" id="editor" type="button">
+									<span class="field__value">Neovim</span
+									><span class="icon i-tabler-chevron-down" aria-hidden="true"></span>
+								</button>
+							</div>
+							<label class="setting-row"
+								>Open terminal editors in Pau<span class="check check--on" role="checkbox" aria-checked="true"
+									><span class="icon i-tabler-check" aria-hidden="true"></span></span
+							></label>
+						</div>
+						<div class="section__head" style="margin-block: 40px 12px">
+							<div>
+								<h2>Agents</h2>
+								<p class="note">Detected from your current environment.</p>
+							</div>
+							<button class="button" type="button" style="--icon-size: 13px">
+								<span class="icon i-tabler-refresh" aria-hidden="true"></span>Scan again
+							</button>
+						</div>
+						<div class="setting-rows">
+							<div class="agent-row">
+								<span>Pi</span><span class="muted">~/.local/bin/pi</span><span class="tone-success">ready</span>
+							</div>
+							<div class="agent-row">
+								<span>Claude Code</span><span class="muted">/usr/local/bin/claude</span
+								><span class="tone-success">ready</span>
+							</div>
+							<div class="agent-row">
+								<span>Codex</span><span class="muted">~/.cargo/bin/codex</span><span class="muted">not found</span>
+							</div>
+						</div>
+					</div>
+				</main>
+			</div>
+		</div>
+	</body>
+</html>

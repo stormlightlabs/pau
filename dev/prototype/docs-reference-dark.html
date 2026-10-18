@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Capability reference · Pau prototype</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap"
+			rel="stylesheet" />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:wght@400;600&amp;family=Google+Sans:wght@400;500;600&amp;display=swap"
+			rel="stylesheet" />
+		<link rel="stylesheet" href="styles/tokens.css" />
+		<link rel="stylesheet" href="styles/icons.css" />
+		<link rel="stylesheet" href="styles/app.css" />
+	</head>
+	<body class="site" data-site="dark">
+		<header class="site-header">
+			<a class="site-header__brand" href="docs-overview.html"
+				><span class="brand-mark"><span class="icon i-pau-mark" aria-hidden="true"></span></span>Pau</a
+			>
+			<nav class="site-nav" aria-label="Site">
+				<a href="docs-overview.html">Overview</a><a href="docs-guide.html">Guide</a
+				><a href="docs-reference-dark.html" aria-current="page">Reference</a>
+			</nav>
+			<div class="site-header__actions">
+				<button type="button" aria-label="Use light theme">
+					<span class="icon i-tabler-sun" aria-hidden="true"></span></button
+				><a href="https://github.com/"><span class="icon i-simple-icons-github" aria-hidden="true"></span>GitHub</a>
+			</div>
+		</header>
+		<main class="reference">
+			<p class="site-kicker">Capability reference</p>
+			<div class="reference__intro">
+				<h1 class="site-display">What Pau can do</h1>
+				<p>Current behavior and first-release plans, separated so you can tell what is ready to use.</p>
+			</div>
+			<label class="reference-filter"
+				><span class="icon i-tabler-search" aria-hidden="true"></span
+				><span>Filter by feature, area, or status</span></label
+			>
+			<table class="capability-table">
+				<thead>
+					<tr>
+						<th scope="col">Capability</th>
+						<th scope="col" class="col-area">Area</th>
+						<th scope="col" class="col-status">Status</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td>
+							<h3>Concurrent Pi and Claude sessions</h3>
+							<p>Start, resume, stream, steer, interrupt, and recover sessions after a UI reconnect.</p>
+						</td>
+						<td>Agents</td>
+						<td>
+							<span class="capability-status"><span class="dot"></span>Available</span>
+						</td>
+					</tr>
+					<tr>
+						<td>
+							<h3>Workspace files and Git status</h3>
+							<p>Browse and search confined workspace roots, including hidden, ignored, and changed-file states.</p>
+						</td>
+						<td>Workspace</td>
+						<td>
+							<span class="capability-status"><span class="dot"></span>Available</span>
+						</td>
+					</tr>
+					<tr>
+						<td>
+							<h3>MCP configuration and diagnostics</h3>
+							<p>Discover and edit native Pi and Claude configuration, then authenticate and test servers.</p>
+						</td>
+						<td>Resources</td>
+						<td>
+							<span class="capability-status"><span class="dot"></span>Available</span>
+						</td>
+					</tr>
+					<tr>
+						<td>
+							<h3>Code editing and diff review</h3>
+							<p>Edit text with CodeMirror and review changed files and hunks in the same workspace.</p>
+						</td>
+						<td>Editor</td>
+						<td>
+							<span class="capability-status capability-status--planned"><span class="dot"></span>Planned</span>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</main>
+	</body>
+</html>

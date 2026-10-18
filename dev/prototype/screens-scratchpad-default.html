@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Scratchpad · Pau prototype</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap"
+			rel="stylesheet" />
+		<link rel="stylesheet" href="styles/tokens.css" />
+		<link rel="stylesheet" href="styles/icons.css" />
+		<link rel="stylesheet" href="styles/app.css" />
+		<script>
+			// Apply the theme chosen on the index page (?theme= or saved choice).
+			try {
+				const theme = new URLSearchParams(location.search).get('theme') || localStorage.getItem('pau-prototype-theme');
+				if (theme) document.documentElement.dataset.theme = theme;
+			} catch {}
+		</script>
+	</head>
+	<body>
+		<div class="app">
+			<header class="topbar">
+				<span class="icon topbar__mark i-pau-mark" role="img" aria-label="Pau"></span>
+				<div class="topbar__history">
+					<button class="icon-button" type="button" aria-label="Back">
+						<span class="icon i-tabler-arrow-left" aria-hidden="true"></span>
+					</button>
+					<button class="icon-button" type="button" aria-label="Forward" disabled>
+						<span class="icon i-tabler-arrow-right" aria-hidden="true"></span>
+					</button>
+					<a class="icon-button" href="screens-dashboard-default.html" aria-label="Home"
+						><span class="icon i-tabler-home" aria-hidden="true"></span
+					></a>
+				</div>
+				<nav aria-label="Location">
+					<ol class="crumbs">
+						<li class="crumbs__root">Pau</li>
+						<li aria-hidden="true">/</li>
+						<li class="crumbs__context">pau / scratchpad / today</li>
+					</ol>
+				</nav>
+				<span class="spacer"></span>
+				<div class="topbar__actions"></div>
+				<button class="command" type="button">
+					<span class="icon i-tabler-search icon--sm" aria-hidden="true"></span
+					><span class="command__label">Search or run a command</span><kbd>⌘K</kbd>
+				</button>
+			</header>
+			<nav class="tabs" aria-label="Open views">
+				<a class="tab" href="screens-session-default.html"
+					><span class="icon i-tabler-folder-code" aria-hidden="true"></span>pau</a
+				>
+				<a class="tab" href="#" aria-current="page"
+					><span class="icon i-tabler-layout-dashboard" aria-hidden="true"></span>today<span
+						class="icon tab__close i-tabler-x"
+						role="img"
+						aria-label="Close tab"></span
+				></a>
+				<button class="tab tab--add" type="button" aria-label="New tab">
+					<span class="icon i-tabler-plus" aria-hidden="true"></span>
+				</button>
+			</nav>
+			<div class="app__body">
+				<nav class="product-rail" aria-label="Product">
+					<a class="product-rail__link" href="screens-dashboard-default.html" aria-label="Dashboard" title="Dashboard"
+						><span class="icon i-tabler-home" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-session-default.html" aria-label="Sessions" title="Sessions"
+						><span class="icon i-tabler-layers-subtract" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-orchestration-default.html"
+						aria-label="Harness control"
+						title="Harness control"
+						><span class="icon i-tabler-topology-star-3" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-scratchpad-default.html"
+						aria-label="Scratchpad"
+						title="Scratchpad"
+						aria-current="page"
+						><span class="icon i-tabler-notebook" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-editor-default.html" aria-label="Editor" title="Editor"
+						><span class="icon i-tabler-code" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-terminal-default.html" aria-label="Terminal" title="Terminal"
+						><span class="icon i-tabler-terminal-2" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-processes-default.html" aria-label="Processes" title="Processes"
+						><span class="icon i-tabler-activity-heartbeat" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link"
+						href="screens-diagnostics-default.html"
+						aria-label="Diagnostics"
+						title="Diagnostics"
+						><span class="icon i-tabler-stethoscope" aria-hidden="true"></span
+					></a>
+					<a class="product-rail__link" href="screens-resources-default.html" aria-label="Resources" title="Resources"
+						><span class="icon i-tabler-plug-connected" aria-hidden="true"></span
+					></a>
+					<a
+						class="product-rail__link product-rail__end"
+						href="screens-settings-default.html"
+						aria-label="Settings"
+						title="Settings"
+						><span class="icon i-tabler-adjustments" aria-hidden="true"></span
+					></a>
+				</nav>
+				<nav class="rail rail--padded" aria-label="Scratchpads">
+					<div class="rail-heading">
+						<h2 class="section-label">Scratchpads</h2>
+						<button class="icon-button" type="button" aria-label="New scratchpad">
+							<span class="icon i-tabler-plus" aria-hidden="true"></span>
+						</button>
+					</div>
+					<ul class="nav-list nav-list--spaced">
+						<li>
+							<a class="note-row is-selected" href="#" aria-current="true"
+								><span class="icon i-tabler-note" aria-hidden="true"></span
+								><span class="note-row__body"
+									><span class="note-row__title">Today</span><span class="note-row__meta">7 lines</span></span
+								><span class="dot dot--sm" title="Unsaved changes"></span
+							></a>
+						</li>
+						<li>
+							<a class="note-row" href="#"
+								><span class="icon i-tabler-note" aria-hidden="true"></span
+								><span class="note-row__body"
+									><span class="note-row__title">Reconnect questions</span
+									><span class="note-row__meta">12 lines</span></span
+								><span class="icon i-tabler-check icon--sm" aria-hidden="true"></span
+							></a>
+						</li>
+						<li>
+							<a class="note-row" href="#"
+								><span class="icon i-tabler-note" aria-hidden="true"></span
+								><span class="note-row__body"
+									><span class="note-row__title">Session shell ideas</span
+									><span class="note-row__meta">9 lines</span></span
+								><span class="icon i-tabler-check icon--sm" aria-hidden="true"></span
+							></a>
+						</li>
+					</ul>
+					<h2 class="section-label" style="padding: 28px 0 8px 2px">Pinned</h2>
+					<ul>
+						<li>
+							<a class="note-row note-row--pinned" href="#"
+								><span class="icon i-tabler-template" aria-hidden="true"></span>Review checklist</a
+							>
+						</li>
+						<li>
+							<a class="note-row note-row--pinned" href="#"
+								><span class="icon i-tabler-terminal-2" aria-hidden="true"></span>Useful commands</a
+							>
+						</li>
+					</ul>
+					<p class="note rail__footer ruled-top" style="padding-block-start: 16px">
+						Scratchpads are workspace files. Agents receive them only when you attach or send them.
+					</p>
+				</nav>
+				<main class="main">
+					<header class="toolbar">
+						<div class="toolbar__title">
+							<h1 style="font-size: 14px; font-weight: 600">Today</h1>
+							<span>Scratchpad · saved locally</span>
+						</div>
+						<button class="icon-button" type="button" aria-label="Pin">
+							<span class="icon i-tabler-pin" aria-hidden="true"></span>
+						</button>
+						<button class="icon-button" type="button" aria-label="More actions">
+							<span class="icon i-tabler-dots" aria-hidden="true"></span>
+						</button>
+					</header>
+					<div class="editor-toolbar" role="toolbar" aria-label="Formatting">
+						<button class="icon-button" type="button" aria-label="Heading">
+							<span class="icon i-tabler-h-2" aria-hidden="true"></span>
+						</button>
+						<button class="icon-button" type="button" aria-label="Bold">
+							<span class="icon i-tabler-bold" aria-hidden="true"></span>
+						</button>
+						<button class="icon-button" type="button" aria-label="Task list">
+							<span class="icon i-tabler-list-check" aria-hidden="true"></span>
+						</button>
+						<button class="icon-button" type="button" aria-label="Code">
+							<span class="icon i-tabler-code" aria-hidden="true"></span>
+						</button>
+						<span class="spacer"></span><span>Markdown</span>
+					</div>
+					<textarea class="note-editor" aria-label="Note">
+# Today
+
+- Compare the dashboard at narrow widths
+- Decide whether tool rows show counts or the latest command
+- Review reconnect behavior with Claude
+
+## Question
+
+Should a resumed session return to its last open inspector?</textarea>
+					<footer class="document-footer"><span>38 words</span><span>Saved just now · workspace scope</span></footer>
+				</main>
+				<aside class="inspector inspector--padded" aria-label="Use this note">
+					<h2 class="section-label rail-title">Use this note</h2>
+					<label class="note" for="target" style="padding-block-end: 8px">Target session</label>
+					<button class="field" id="target" type="button">
+						<span class="field__value">Pi · session-shell</span
+						><span class="icon i-tabler-chevron-down" aria-hidden="true"></span>
+					</button>
+					<h3 class="section-label" style="padding: 20px 0 8px 2px">Workspace context</h3>
+					<ul class="context-list">
+						<li>
+							<span class="check check--on" role="checkbox" aria-checked="true"
+								><span class="icon i-tabler-check" aria-hidden="true"></span></span
+							><span class="icon i-tabler-file-code" aria-hidden="true"></span>dev/PLAN.md
+						</li>
+						<li>
+							<span class="check check--on" role="checkbox" aria-checked="true"
+								><span class="icon i-tabler-check" aria-hidden="true"></span></span
+							><span class="icon i-tabler-file-code" aria-hidden="true"></span>SessionView.svelte
+						</li>
+						<li>
+							<span class="check" role="checkbox" aria-checked="false"></span
+							><span class="icon i-tabler-file-code" aria-hidden="true"></span>reconnect.test.ts
+						</li>
+					</ul>
+					<button class="add-row" type="button">
+						<span class="icon i-tabler-plus" aria-hidden="true"></span>Add file or selection
+					</button>
+					<p class="note ruled-top" style="padding-block: 16px">
+						Only this note and the checked files will be sent. The target session keeps its current permission profile.
+					</p>
+					<div style="display: flex; flex-direction: column; gap: 8px; padding-block-start: 20px">
+						<button class="button button--primary button--block" type="button">
+							<span class="icon i-tabler-send" aria-hidden="true"></span>Send as prompt
+						</button>
+						<button class="button button--block" type="button">
+							<span class="icon i-tabler-bookmark" aria-hidden="true"></span>Save as prompt
+						</button>
+					</div>
+					<p class="note" style="margin-block-start: auto">
+						Sending creates a visible user message in the target session. It does not start an agent-to-agent handoff.
+					</p>
+				</aside>
+			</div>
+		</div>
+	</body>
+</html>

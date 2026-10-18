@@ -22,6 +22,7 @@
 	import SessionPicker from './SessionPicker.svelte';
 	import SessionResourceSummary from './SessionResourceSummary.svelte';
 	import SessionTree from './SessionTree.svelte';
+	import { followTranscript, scrollToLatest as scrollTranscriptToLatest } from './transcript-follow';
 	import ToolCallView from './ToolCallView.svelte';
 	import type { ProcessResourceSnapshot } from './types/resource-monitoring';
 	import type {
@@ -138,6 +139,12 @@
 		 * view marks the Sessions item when a session needs attention.
 		 */
 		productItems?: ShellNavItem[];
+		/**
+		 * Whether the transcript is following its newest content. It follows while
+		 * the operator is at the bottom and stops when they scroll up. Bind it to
+		 * show a control that returns to the latest content.
+		 */
+		following?: boolean;
 	};
 
 	const defaultProductItems: ShellNavItem[] = [
@@ -177,8 +184,16 @@
 		onOpenPiTerminal,
 		onOpenWorkspace,
 		pickFolder,
-		productItems: appProductItems = defaultProductItems
+		productItems: appProductItems = defaultProductItems,
+		following = $bindable(true)
 	}: Props = $props();
+
+	let transcriptElement = $state<HTMLElement>();
+
+	/** Scrolls the transcript to its newest content and resumes following. */
+	export function scrollToLatest() {
+		if (transcriptElement) scrollTranscriptToLatest(transcriptElement);
+	}
 
 	/** Whether the active session's current model reasons, as last reported by the model picker. */
 	let currentModelReasoning = $state<boolean>();
@@ -1146,67 +1161,75 @@
 				{#if retryError}<p class="session-view__notice session-view__notice--failed" role="alert">{retryError}</p>{/if}
 			</div>
 
-			<div class="session-view__transcript" aria-label="Transcript" aria-live="polite">
-				{#if activeSession.transcript.length === 0}
-					<div class="session-view__empty">
-						<h2>Start with a prompt</h2>
-						<p>Describe the task, relevant files, and any limits the agent should follow.</p>
-					</div>
-				{:else}
-					{#each activeSession.transcript as entry (entry.id)}
-						{#if entry.kind === 'message'}
-							<article class={`session-message session-message--${entry.role}`} aria-label={`${entry.role} message`}>
-								<h2>{entry.label ?? (entry.role === 'user' ? 'You' : activeSession.agent)}</h2>
-								{#if entry.role === 'assistant'}
-									<Markdown text={entry.body} />
-								{:else}
+			<div
+				class="session-view__transcript"
+				aria-label="Transcript"
+				aria-live="polite"
+				data-following={following}
+				bind:this={transcriptElement}
+				use:followTranscript={{ key: activeSessionId, onChange: (next) => (following = next) }}>
+				<div class="session-view__transcript-content">
+					{#if activeSession.transcript.length === 0}
+						<div class="session-view__empty">
+							<h2>Start with a prompt</h2>
+							<p>Describe the task, relevant files, and any limits the agent should follow.</p>
+						</div>
+					{:else}
+						{#each activeSession.transcript as entry (entry.id)}
+							{#if entry.kind === 'message'}
+								<article class={`session-message session-message--${entry.role}`} aria-label={`${entry.role} message`}>
+									<h2>{entry.label ?? (entry.role === 'user' ? 'You' : activeSession.agent)}</h2>
+									{#if entry.role === 'assistant'}
+										<Markdown text={entry.body} />
+									{:else}
+										<p>{entry.body}</p>
+									{/if}
+									{#if canRetry && entry.id === retryableEntryId}
+										<button
+											type="button"
+											class="session-view__retry session-message__retry"
+											disabled={retrying}
+											onclick={() => void retry()}>
+											{retrying ? 'Retrying…' : 'Retry'}
+										</button>
+									{/if}
+								</article>
+							{:else if entry.kind === 'thinking'}
+								<details class="session-thinking" open={!entry.complete}>
+									<summary>{entry.complete ? 'Thinking' : 'Thinking…'}</summary>
 									<p>{entry.body}</p>
-								{/if}
-								{#if canRetry && entry.id === retryableEntryId}
-									<button
-										type="button"
-										class="session-view__retry session-message__retry"
-										disabled={retrying}
-										onclick={() => void retry()}>
-										{retrying ? 'Retrying…' : 'Retry'}
-									</button>
-								{/if}
-							</article>
-						{:else if entry.kind === 'thinking'}
-							<details class="session-thinking" open={!entry.complete}>
-								<summary>{entry.complete ? 'Thinking' : 'Thinking…'}</summary>
-								<p>{entry.body}</p>
-							</details>
-						{:else if entry.kind === 'tool'}
-							<ToolCallView
-								tool={entry}
-								open={toolOpen(entry)}
-								onToggle={(open) => toolDisclosures.set(entry.id, open)} />
-						{:else if entry.kind === 'compaction'}
-							<details class="session-compaction" aria-label="Compacted context">
-								<summary>
-									<span>Context compacted{entry.reason === 'manual' ? '' : ' automatically'}</span>
-									{#if compactionSizes(entry)}<small>{compactionSizes(entry)}</small>{/if}
-								</summary>
-								<p>{entry.summary}</p>
-								{#if entry.willRetry}<p>Pi resends your last message next.</p>{/if}
-							</details>
-						{:else}
-							<article class="session-denial" aria-label="Sandbox denial">
-								<div>
-									<p class="session-denial__label">Sandbox denial</p>
-									<h2>{denialTitle(entry)}</h2>
-								</div>
-								{#if entry.target === 'file'}
-									<code>{entry.path}</code>
-								{:else if entry.target === 'network'}
-									<code>{entry.destination}</code>
-								{/if}
-								<p>{denialExplanation(entry)}</p>
-							</article>
-						{/if}
-					{/each}
-				{/if}
+								</details>
+							{:else if entry.kind === 'tool'}
+								<ToolCallView
+									tool={entry}
+									open={toolOpen(entry)}
+									onToggle={(open) => toolDisclosures.set(entry.id, open)} />
+							{:else if entry.kind === 'compaction'}
+								<details class="session-compaction" aria-label="Compacted context">
+									<summary>
+										<span>Context compacted{entry.reason === 'manual' ? '' : ' automatically'}</span>
+										{#if compactionSizes(entry)}<small>{compactionSizes(entry)}</small>{/if}
+									</summary>
+									<p>{entry.summary}</p>
+									{#if entry.willRetry}<p>Pi resends your last message next.</p>{/if}
+								</details>
+							{:else}
+								<article class="session-denial" aria-label="Sandbox denial">
+									<div>
+										<p class="session-denial__label">Sandbox denial</p>
+										<h2>{denialTitle(entry)}</h2>
+									</div>
+									{#if entry.target === 'file'}
+										<code>{entry.path}</code>
+									{:else if entry.target === 'network'}
+										<code>{entry.destination}</code>
+									{/if}
+									<p>{denialExplanation(entry)}</p>
+								</article>
+							{/if}
+						{/each}
+					{/if}
+				</div>
 			</div>
 
 			<div class="session-view__composer-stack">
@@ -1706,11 +1729,14 @@
 
 	.session-view__transcript {
 		grid-area: transcript;
+		overflow: auto;
+	}
+
+	.session-view__transcript-content {
 		display: grid;
 		align-content: start;
 		gap: var(--pau-space-5);
 		padding-block: var(--pau-space-5) var(--pau-space-6);
-		overflow: auto;
 	}
 
 	.session-message {

@@ -877,26 +877,10 @@ Verification:
 - Confirm the first visible entry does not move when a block above it finishes
   or collapses.
 
-### 2.195 Transcript follow mode
-
-Status: planned
-Blocked by: none
-
-Keep the transcript at the newest content while the operator is at the bottom,
-and stop following when they scroll up.
-
-Verification:
-
-- Component-test following during streaming, detaching on wheel, keyboard, and
-  scrollbar input, and reattaching at the bottom.
-- Confirm a notice appearing or disappearing does not move the reading
-  position.
-- Run the follow and detach checks in WebKit.
-
 ### 2.196 Jump to latest
 
 Status: planned
-Blocked by: 2.195
+Blocked by: none
 
 Show a **Jump to latest** control while the transcript is detached and new
 content has arrived.
@@ -909,7 +893,7 @@ Verification:
 ### 2.197 Prompt navigation
 
 Status: planned
-Blocked by: 2.195
+Blocked by: none
 
 Move between user prompts in the transcript with Ctrl+Shift+Up and
 Ctrl+Shift+Down.
@@ -947,7 +931,7 @@ Verification:
 ### 2.200 Session scroll restoration
 
 Status: planned
-Blocked by: 2.195
+Blocked by: none
 
 Restore each session's scroll position or follow mode when the operator
 returns to it.

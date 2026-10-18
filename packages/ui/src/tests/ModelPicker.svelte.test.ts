@@ -48,6 +48,27 @@ test('selects a model and reloads the list', async () => {
 	await expect.element(page.getByRole('group', { name: 'Models' })).not.toBeInTheDocument();
 });
 
+test('uses the Select surface: a chevron on the trigger and a check on the current model', async () => {
+	await renderPicker({ load: async () => modelFixtures.populated, onSelect: vi.fn() });
+
+	const trigger = page.getByRole('button', { name: 'Model: Claude Sonnet 4.5' });
+	await expect.element(trigger).toBeVisible();
+	expect(trigger.element().querySelector('.model-picker__chevron')).toBeVisible();
+
+	await userEvent.click(trigger);
+	const current = page.getByRole('group', { name: 'Models' }).getByRole('button', { name: /Claude Sonnet 4.5/ });
+	await expect.element(current).toHaveAttribute('aria-current', 'true');
+	expect(current.element().querySelector('.model-picker__check')).toBeVisible();
+	const other = page.getByRole('button', { name: /Claude Haiku 4.5/ });
+	expect(other.element().querySelector('.model-picker__check')).not.toBeVisible();
+
+	// The list opens upward from the trigger's left edge, like Select's list.
+	const list = page.getByRole('group', { name: 'Models' }).element().getBoundingClientRect();
+	const anchor = trigger.element().getBoundingClientRect();
+	expect(list.left).toBe(anchor.left);
+	expect(list.bottom).toBeLessThanOrEqual(anchor.top);
+});
+
 test('keeps the list open and explains a rejected selection', async () => {
 	const onSelect = vi.fn().mockRejectedValue(new Error('Pi rejected the request: Model not found'));
 	await renderPicker({ load: async () => modelFixtures.populated, onSelect });

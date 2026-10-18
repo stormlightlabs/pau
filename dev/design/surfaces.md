@@ -80,6 +80,11 @@ transcript, or in the queue during a run, marked as sending until the agent
 echoes it. A prompt the backend refuses stays marked as not sent, and its text
 and images return to the composer.
 
+When a session stops or fails, a notice takes the composer's place. It names
+the state, shows the failure reason, and offers Start again, which resumes the
+saved conversation when Pi kept one. An unsent draft returns to the composer
+once the session runs. Compact and Stop stay hidden until then.
+
 Each workspace in the session rail has a start control. When a session cannot
 start, the task surface names the cause and offers a retry. While the backend
 connection is down, the session stays readable but sending, starting, and

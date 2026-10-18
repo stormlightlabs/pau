@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/svelte-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { modelFixtures } from '../fixtures/models';
 import ModelPicker from '../lib/ModelPicker.svelte';
@@ -27,10 +27,10 @@ export const OpenList: Story = {
 		await userEvent.click(await canvas.findByRole('button', { name: 'Model: Claude Sonnet 4.5' }));
 		await expect(canvas.getByRole('button', { name: /Claude Haiku 4.5/ })).toBeEnabled();
 		await expect(canvas.getByRole('button', { name: /gpt-5.*Reasoning/ })).toBeEnabled();
-		await expect(canvas.getByRole('button', { name: /Claude Sonnet 4.5.*Current/ })).toHaveAttribute(
-			'aria-current',
-			'true'
-		);
+		const current = canvas.getByRole('button', { name: /^anthropic Claude Sonnet 4.5/ });
+		await expect(current).toHaveAttribute('aria-current', 'true');
+		// The list fades in after a pointer open.
+		await waitFor(() => expect(current.querySelector('.model-picker__check')).toBeVisible());
 	}
 };
 

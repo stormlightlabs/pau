@@ -30,6 +30,8 @@
 	const focusReturn = createFocusReturn();
 	let pendingId = $state<string>();
 	let panel = $state<HTMLDivElement>();
+	/** A keyboard open appears at once. A pointer open fades in, as Select's list does. */
+	let keyboardOpen = $state(false);
 
 	const current = $derived(models?.find((model) => model.current));
 	const label = $derived(current ? modelLabel(current) : (fallbackLabel ?? 'Model'));
@@ -76,6 +78,7 @@
 	export async function show(): Promise<boolean> {
 		if (disabled) return false;
 		focusReturn.capture();
+		keyboardOpen = true;
 		open = true;
 		await tick();
 		(panel?.querySelector<HTMLButtonElement>('button[aria-current="true"]') ?? panel?.querySelector('button'))?.focus();
@@ -96,10 +99,12 @@
 		if (disabled) close();
 	});
 
-	function toggle(): void {
+	function toggle(event: MouseEvent): void {
 		if (open) close();
 		else {
 			focusReturn.capture(trigger);
+			// Assistive technology and keyboard clicks report no pointer detail.
+			keyboardOpen = event.detail === 0;
 			open = true;
 		}
 	}
@@ -132,13 +137,18 @@
 		title={explanation}
 		{disabled}
 		onclick={toggle}>
-		{pendingId ? 'Switching…' : label}
+		<span class="model-picker__value">{pendingId ? 'Switching…' : label}</span>
 		<Icon name="chevronDown" class="model-picker__chevron" size="0.75rem" />
 	</button>
 	{#if explanation}<span id="model-picker-note" class="model-picker__hint">{explanation}</span>{/if}
 
 	{#if open}
-		<div bind:this={panel} class="model-picker__panel" role="group" aria-label="Models">
+		<div
+			bind:this={panel}
+			class="model-picker__panel"
+			class:model-picker__panel--keyboard={keyboardOpen}
+			role="group"
+			aria-label="Models">
 			{#if selectError}<p class="model-picker__error" role="alert">{selectError}</p>{/if}
 			{#if loadError}
 				<p class="model-picker__error" role="alert">{loadError}</p>
@@ -156,12 +166,12 @@
 								aria-current={model.current ? 'true' : undefined}
 								disabled={pendingId !== undefined}
 								onclick={() => void select(model)}>
+								<Icon name="check" class="model-picker__check" size="0.875rem" />
 								<span class="model-picker__name">
 									<small>{model.provider}</small>
 									{modelLabel(model)}
 								</span>
 								{#if model.reasoning}<span class="model-picker__badge">Reasoning</span>{/if}
-								{#if model.current}<span class="model-picker__badge">Current</span>{/if}
 							</button>
 						</li>
 					{/each}
@@ -172,19 +182,22 @@
 </div>
 
 <style>
+	/*
+	 * The trigger and list copy Select's quiet trigger and list, so the model
+	 * picker reads like the thinking level beside it. The list stays a group
+	 * of buttons because it also shows loading, retry, and empty states.
+	 */
 	.model-picker {
 		position: relative;
+		min-width: 0;
 	}
 
 	button {
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
 		color: var(--pau-text);
 		background: transparent;
-		border: 1px solid var(--pau-border);
+		border: 1px solid transparent;
 		border-radius: var(--pau-radius-control);
 		font: inherit;
-		font-size: var(--pau-type-sm);
 		cursor: pointer;
 	}
 
@@ -193,22 +206,36 @@
 		cursor: not-allowed;
 	}
 
-	/* A quiet trigger, like the other composer footer controls. */
+	button:focus-visible {
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset);
+	}
+
 	.model-picker__trigger {
-		display: inline-flex;
+		display: flex;
 		align-items: center;
-		gap: var(--pau-space-1);
+		gap: var(--pau-space-2);
+		max-width: 100%;
 		min-height: var(--pau-size-row-sm);
 		padding-inline: var(--pau-space-1);
-		font-size: inherit;
-		border-color: transparent;
+		text-align: start;
+		transition: border-color var(--pau-duration-feedback) var(--pau-ease-standard);
 	}
 
 	.model-picker__trigger:hover:not(:disabled) {
 		border-color: var(--pau-accent);
 	}
 
+	.model-picker__value {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
 	.model-picker__trigger :global(.model-picker__chevron) {
+		flex: none;
 		color: var(--pau-text-muted);
 	}
 
@@ -221,29 +248,47 @@
 		clip-path: inset(50%);
 	}
 
-	/* It sits in the composer footer at the bottom of the window, so it opens upward. */
+	/*
+	 * It sits in the composer footer at the bottom of the window, so it opens
+	 * upward from the trigger's left edge.
+	 */
 	.model-picker__panel {
 		position: absolute;
 		bottom: calc(100% + var(--pau-space-1));
 		left: 0;
 		z-index: 10;
 		display: grid;
-		gap: var(--pau-space-2);
 		width: 20rem;
-		max-width: 80vw;
+		max-width: min(24rem, calc(100vw - 1rem));
 		max-height: 18rem;
-		padding: var(--pau-space-2);
+		padding: var(--pau-space-1);
 		overflow-y: auto;
-		/* The same popover surface as Select's list. */
+		color: var(--pau-text);
+		font-size: var(--pau-type-md);
 		background: var(--pau-surface-raised);
 		border: var(--pau-border-thin, 1px) solid var(--pau-border);
 		border-radius: var(--pau-radius-surface);
 		box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 28%);
+		transform-origin: bottom left;
+		animation: model-picker-enter var(--pau-duration-small) var(--pau-ease-enter);
+	}
+
+	.model-picker__panel--keyboard {
+		animation: none;
+	}
+
+	:global(:root[data-motion='reduce']) .model-picker__panel {
+		animation: none;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		:global(:root:not([data-motion])) .model-picker__panel {
+			animation: none;
+		}
 	}
 
 	ul {
 		display: grid;
-		gap: var(--pau-space-1);
 		margin: 0;
 		padding: 0;
 		list-style: none;
@@ -254,30 +299,57 @@
 		align-items: center;
 		gap: var(--pau-space-2);
 		width: 100%;
-		text-align: left;
-		border-color: transparent;
+		min-height: var(--pau-size-row-md);
+		padding: var(--pau-space-1) var(--pau-space-3) var(--pau-space-1) var(--pau-space-2);
+		text-align: start;
+		border: 0;
+		cursor: default;
 	}
 
-	li button[aria-current='true'] {
-		border-color: var(--pau-border);
+	li button:hover:not(:disabled),
+	li button:focus-visible {
+		background: var(--pau-selection);
+	}
+
+	li button:active:not(:disabled) {
+		background: var(--pau-surface);
+	}
+
+	li button :global(.model-picker__check) {
+		flex: none;
+		color: var(--pau-accent);
+		visibility: hidden;
+	}
+
+	li button[aria-current='true'] :global(.model-picker__check) {
+		visibility: visible;
 	}
 
 	.model-picker__name {
+		display: grid;
 		flex: 1;
+		gap: 2px;
 		min-width: 0;
 		overflow-wrap: anywhere;
 	}
 
-	.model-picker__name small {
-		display: block;
+	.model-picker__name small,
+	.model-picker__badge {
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
 	}
 
 	.model-picker__badge {
 		flex: none;
-		color: var(--pau-text-muted);
-		font-size: var(--pau-type-xs);
+	}
+
+	/* Try again, after the list fails to load. */
+	.model-picker__panel > button {
+		justify-self: start;
+		min-height: var(--pau-size-row-md);
+		margin: 0 var(--pau-space-2) var(--pau-space-2);
+		padding-inline: var(--pau-space-3);
+		border-color: var(--pau-border);
 	}
 
 	.model-picker__note,
@@ -290,5 +362,20 @@
 
 	.model-picker__error {
 		color: var(--pau-danger);
+	}
+
+	@keyframes model-picker-enter {
+		from {
+			opacity: 0;
+			transform: scale(var(--pau-motion-scale-enter));
+		}
+	}
+
+	@media (forced-colors: active) {
+		li button:hover:not(:disabled),
+		li button:focus-visible {
+			outline: 2px solid Highlight;
+			outline-offset: -2px;
+		}
 	}
 </style>

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/svelte-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import { usageFixtures } from '../fixtures/usage';
 import ContextMeter from '../lib/ContextMeter.svelte';
@@ -34,7 +34,7 @@ export const NearLimit: Story = {
 		const canvas = within(canvasElement);
 		await expect(canvas.getByRole('button')).toHaveTextContent(/164k \/ 200k.*82%/);
 		await userEvent.click(canvas.getByRole('button'));
-		await expect(canvas.getByText('The context window is filling up.')).toBeVisible();
+		await waitFor(() => expect(canvas.getByText('The context window is filling up.')).toBeVisible());
 	}
 };
 
@@ -44,7 +44,7 @@ export const AtLimit: Story = {
 		const canvas = within(canvasElement);
 		await expect(canvas.getByRole('button')).toHaveTextContent(/196k \/ 200k.*98%/);
 		await userEvent.click(canvas.getByRole('button'));
-		await expect(canvas.getByText('The context window is almost full.')).toBeVisible();
+		await waitFor(() => expect(canvas.getByText('The context window is almost full.')).toBeVisible());
 	}
 };
 
@@ -55,7 +55,7 @@ export const UnknownAfterCompaction: Story = {
 		await expect(canvas.getByRole('button')).toHaveTextContent('Context unknown / 200k');
 		await expect(canvas.queryByRole('meter')).toBeNull();
 		await userEvent.click(canvas.getByRole('button'));
-		await expect(canvas.getByText('Pi measures context again after its next reply.')).toBeVisible();
+		await waitFor(() => expect(canvas.getByText('Pi measures context again after its next reply.')).toBeVisible());
 	}
 };
 

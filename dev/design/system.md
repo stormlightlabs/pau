@@ -191,7 +191,8 @@ move, Enter or Space chooses, and Escape or Tab closes it. A disabled option
 or control states its reason. A change that the agent rejects shows the error
 and restores the previous value. A pointer open fades in like other popovers.
 A keyboard open, or any open under reduced motion, appears at once. The model
-picker uses the same surface.
+picker and the context meter use the same trigger, chevron, and list surface,
+and the current model shows the check mark.
 
 Every relevant control state needs a visible treatment. Icon-only controls need
 an accessible name and, where meaning is not obvious, a tooltip or adjacent

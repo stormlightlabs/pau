@@ -700,6 +700,20 @@ export class LiveSessions {
 		}
 	}
 
+	/**
+	 * Starts an ended session again and returns the new live session's ID. It
+	 * resumes the saved Pi session when Pi wrote one, so the conversation
+	 * continues. A session that failed before Pi saved anything starts fresh in
+	 * the same workspace.
+	 */
+	async restart(sessionId: string): Promise<string> {
+		const session = this.#sessions[sessionId];
+		if (!session) throw new Error('Pau no longer has this session. Start a new one from the session rail.');
+		return session.native_session_id
+			? this.resume(session.workspace_id, session.native_session_id)
+			: this.start(session.workspace_id);
+	}
+
 	/** Lists the models a session can select. Rejects with operator-facing copy. */
 	async listModels(sessionId: string): Promise<ModelOption[]> {
 		try {

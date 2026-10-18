@@ -81,6 +81,16 @@
 		openedWorkspaceId = undefined;
 		onSessionChange?.(workspaceId, sessionId);
 	}
+
+	async function restartSession(endedSessionId: string): Promise<void> {
+		const workspace = workspaces.find((candidate) =>
+			candidate.sessions.some((session) => session.id === endedSessionId)
+		);
+		const sessionId = await sessions.restart(endedSessionId);
+		selectedSessionId = sessionId;
+		openedWorkspaceId = undefined;
+		if (workspace) onSessionChange?.(workspace.id, sessionId);
+	}
 </script>
 
 <SessionView
@@ -101,6 +111,7 @@
 	onStartSession={startSession}
 	onLoadSavedSessions={(workspaceId) => sessions.listSaved(workspaceId)}
 	onResumeSession={resumeSession}
+	onRestartSession={restartSession}
 	onLoadSessionTree={(sessionId) => sessions.tree(sessionId)}
 	onSearchSession={(sessionId, query) => sessions.search(sessionId, query)}
 	onBranchSession={(sessionId, entryId) => sessions.branch(sessionId, entryId)}

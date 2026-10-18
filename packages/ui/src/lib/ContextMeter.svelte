@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from './Icon.svelte';
 	import MetaText from './MetaText.svelte';
 	import {
 		contextLevel,
@@ -20,6 +21,8 @@
 	let { usage, supported = true }: Props = $props();
 
 	let open = $state(false);
+	/** A keyboard open appears at once. A pointer open fades in, as Select's list does. */
+	let keyboardOpen = $state(false);
 	let root = $state<HTMLDivElement>();
 
 	const context = $derived(usage?.context);
@@ -56,8 +59,15 @@
 			class={`context-meter__button context-meter__button--${level}`}
 			aria-expanded={open}
 			aria-controls="context-meter-details"
-			onclick={() => (open = !open)}>
-			<span class="context-meter__label"><MetaText text={summary} /></span>
+			onclick={(event) => {
+				// Assistive technology and keyboard clicks report no pointer detail.
+				keyboardOpen = event.detail === 0;
+				open = !open;
+			}}>
+			<span class="context-meter__label">
+				<span><MetaText text={summary} /></span>
+				<Icon name="chevronDown" class="context-meter__chevron" size="0.75rem" />
+			</span>
 			{#if context}
 				<span
 					class="context-meter__bar"
@@ -76,7 +86,12 @@
 			{/if}
 		</button>
 		{#if open}
-			<div id="context-meter-details" class="context-meter__details" role="group" aria-label="Session usage">
+			<div
+				id="context-meter-details"
+				class="context-meter__details"
+				class:context-meter__details--keyboard={keyboardOpen}
+				role="group"
+				aria-label="Session usage">
 				{#if note}<p class={`context-meter__note context-meter__note--${level}`}>{note}</p>{/if}
 				<dl>
 					{#if context}
@@ -120,12 +135,14 @@
 		position: relative;
 	}
 
+	/* Select's quiet trigger, with the usage bar under the label. */
 	.context-meter__button {
 		display: grid;
 		gap: var(--pau-space-1);
 		min-height: var(--pau-size-row-sm);
 		padding: var(--pau-space-1);
 		color: var(--pau-text);
+		text-align: start;
 		background: transparent;
 		/* Quiet like the other composer footer controls until usage nears the limit. */
 		border: 1px solid transparent;
@@ -133,6 +150,24 @@
 		font: inherit;
 		font-variant-numeric: tabular-nums;
 		cursor: pointer;
+		transition: border-color var(--pau-duration-feedback) var(--pau-ease-standard);
+	}
+
+	.context-meter__button:focus-visible {
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset);
+	}
+
+	.context-meter__label {
+		display: flex;
+		align-items: center;
+		gap: var(--pau-space-2);
+	}
+
+	.context-meter__button :global(.context-meter__chevron) {
+		flex: none;
+		margin-left: auto;
+		color: var(--pau-text-muted);
 	}
 
 	.context-meter__button:hover:not(.context-meter__button--warning, .context-meter__button--danger) {
@@ -169,19 +204,47 @@
 		background: var(--pau-danger);
 	}
 
-	/* It sits in the composer footer at the bottom of the window, so it opens upward. */
+	/*
+	 * It sits in the composer footer at the bottom of the window, so it opens
+	 * upward from the trigger's left edge, on Select's list surface.
+	 */
 	.context-meter__details {
 		position: absolute;
 		bottom: calc(100% + var(--pau-space-1));
 		left: 0;
 		z-index: 10;
 		width: 16rem;
-		max-width: 80vw;
+		max-width: calc(100vw - 1rem);
 		padding: var(--pau-space-3);
-		background: var(--pau-canvas);
-		border: 1px solid var(--pau-border);
+		color: var(--pau-text);
+		background: var(--pau-surface-raised);
+		border: var(--pau-border-thin, 1px) solid var(--pau-border);
 		border-radius: var(--pau-radius-surface);
+		box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 28%);
 		font-size: var(--pau-type-sm);
+		transform-origin: bottom left;
+		animation: context-meter-enter var(--pau-duration-small) var(--pau-ease-enter);
+	}
+
+	.context-meter__details--keyboard {
+		animation: none;
+	}
+
+	:global(:root[data-motion='reduce']) .context-meter__details {
+		animation: none;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		:global(:root:not([data-motion])) .context-meter__details {
+			animation: none;
+		}
+	}
+
+	@keyframes context-meter-enter {
+		from {
+			opacity: 0;
+			transform: scale(var(--pau-motion-scale-enter));
+		}
 	}
 
 	.context-meter__note {

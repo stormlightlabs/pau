@@ -241,21 +241,3 @@ Verification:
   Storybook shows exactly one accent button per surface.
 - Component-test that a disabled primary uses the disabled text color.
 
-### 2.263 Picker triggers
-
-Status: planned
-Blocked by: none
-
-The model picker trigger has no chevron, its list has no check mark, and the
-list opens to the left of the trigger, while the thinking level picker and
-`Select` use the field style with a chevron and a check mark. `system.md` says
-the model picker uses the Select surface. Give the model picker and the
-context meter trigger the Select field style and align their lists with the
-trigger's edge.
-
-Verification:
-
-- Component-test that the model picker trigger renders the chevron and that
-  the current model row renders the check mark.
-- Screenshot the model picker, thinking level picker, and context meter open.
-

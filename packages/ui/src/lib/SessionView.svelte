@@ -71,6 +71,7 @@
 		SessionBranchOutcome,
 		SessionSearchHit,
 		SessionSearchOutcome,
+		SessionStatus,
 		SessionTreeSnapshot,
 		SessionViewModel,
 		SessionWorkspace,
@@ -143,6 +144,12 @@
 		onLoadSavedSessions?: (workspaceId: string) => Promise<SavedSessionList>;
 		/** Resumes a saved session. A rejected promise shows its message in the picker. */
 		onResumeSession?: (workspaceId: string, savedSessionId: string) => void | Promise<void>;
+		/**
+		 * Starts a stopped or failed session again, from its saved conversation
+		 * when the agent kept one. Without it, an ended session offers no way to
+		 * start again. A rejected promise shows its message in the ended notice.
+		 */
+		onRestartSession?: (sessionId: string) => void | Promise<void>;
 		/**
 		 * Reads a session's entry tree. With `onBranchSession`, the inspector
 		 * shows the tree of the active session.
@@ -267,6 +274,7 @@
 		onStartSession,
 		onLoadSavedSessions,
 		onResumeSession,
+		onRestartSession,
 		onLoadSessionTree,
 		onSearchSession,
 		onBranchSession,
@@ -441,6 +449,9 @@
 	let startingWorkspaceId = $state<string>();
 	let startFailure = $state<{ workspaceId: string; workspaceName: string; message: string }>();
 	let controlError = $state<string>();
+	/** The ended session whose restart is in flight, so its button cannot start it twice. */
+	let restartingSessionId = $state<string>();
+	let restartError = $state<string>();
 	/** The open context menu, if any. */
 	let contextMenu = $state<ContextMenuRequest>();
 	/** Why the last rail action from a context menu failed. */
@@ -547,6 +558,10 @@
 			? `${autoRetrySeconds > 0 ? `Retrying in ${autoRetrySeconds}s` : 'Retrying now'}, attempt ${autoRetry.attempt} of ${autoRetry.maxAttempts}.`
 			: ''
 	);
+	/** Statuses with a running agent process. Compact and Stop show only in these. */
+	const liveStatuses = new Set<SessionStatus>(['idle', 'running', 'waiting']);
+	/** Whether the session's agent process has ended, which replaces the composer with a notice. */
+	const ended = $derived(activeSession?.status === 'stopped' || activeSession?.status === 'failed');
 	const canCompact = $derived(Boolean(activeSession?.capabilities.compaction) && onCompact !== undefined);
 	const compactionState = $derived(activeSession?.compaction);
 	const compacting = $derived(
@@ -921,12 +936,27 @@
 		}
 	}
 
+	/** Starts the ended session again. The draft stays in the composer for the new run. */
+	async function restart(sessionId: string): Promise<void> {
+		if (!onRestartSession || restartingSessionId) return;
+		restartingSessionId = sessionId;
+		restartError = undefined;
+		try {
+			await onRestartSession(sessionId);
+		} catch (cause) {
+			restartError = cause instanceof Error ? cause.message : 'The session could not start again. Try again.';
+		} finally {
+			restartingSessionId = undefined;
+		}
+	}
+
 	function selectSession(sessionId: string): void {
 		pickerWorkspaceId = undefined;
 		openedWorkspaceId = undefined;
 		closeOpenForm();
 		startFailure = undefined;
 		controlError = undefined;
+		restartError = undefined;
 		queueError = undefined;
 		error = undefined;
 		draft = '';
@@ -2024,7 +2054,7 @@
 						<SessionStatusMark status={headerStatus} label={headerStatusLabel} />
 						<span aria-hidden="true">{headerStatusLabel}</span>
 					</div>
-					{#if canCompact}
+					{#if canCompact && liveStatuses.has(activeSession.status)}
 						{@const compactReason = compactUnavailableReason(activeSession, disconnected, compacting)}
 						<div class="session-compact">
 							<button
@@ -2063,7 +2093,7 @@
 							{/if}
 						</div>
 					{/if}
-					{#if activeSession.capabilities.stop && ['idle', 'running', 'waiting'].includes(activeSession.status)}
+					{#if activeSession.capabilities.stop && liveStatuses.has(activeSession.status)}
 						<button
 							type="button"
 							class="session-view__stop session-view__action"
@@ -2103,13 +2133,6 @@
 						<strong>Attention required.</strong>
 						{activeSession.attention ?? 'The agent is waiting for your response.'}
 					</p>
-				{:else if activeSession.status === 'failed'}
-					<p class="session-view__notice session-view__notice--failed" role="alert">
-						<strong>Session failed.</strong>
-						{activeSession.error ?? 'Open the diagnostics and start a new session.'}
-					</p>
-				{:else if activeSession.status === 'stopped'}
-					<p class="session-view__notice" role="status">This session has stopped. Its transcript remains available.</p>
 				{/if}
 				{#if autoRetry}
 					<div class="session-view__notice session-view__notice--attention session-view__auto-retry" role="status">
@@ -2332,175 +2355,207 @@
 					onRespond={(response) => onExtensionUiResponse(activeSession.id, response)}
 					onTimeout={(requestId) => onExtensionUiTimeout(activeSession.id, requestId)}
 					onOpenTerminal={onOpenPiTerminal ? () => onOpenPiTerminal(activeSession.id) : undefined}>
-					<form
-						class="session-composer"
-						class:session-composer--dragging={draggingImages}
-						aria-label="Prompt composer"
-						ondragover={(event) => {
-							if (!hasFiles(event)) return;
-							event.preventDefault();
-							draggingImages = true;
-						}}
-						ondragleave={() => (draggingImages = false)}
-						ondrop={handleImageDrop}
-						onsubmit={(event) => {
-							event.preventDefault();
-							void submitPrompt();
-						}}>
-						{#if images.length > 0}
-							<ul class="session-composer__images" aria-label="Attached images">
-								{#each images as image (image.id)}
-									<li>
-										<img src={image.previewUrl} alt={image.name} />
-										<button type="button" aria-label={`Remove ${image.name}`} onclick={() => removeImage(image.id)}>
-											Remove
-										</button>
-									</li>
-								{/each}
-							</ul>
-						{/if}
-						{#if commandMatches}
-							<div class="session-composer__commands">
-								<CommandCompletion
-									id={commandListId}
-									commands={commandMatches}
-									selected={commandSelected}
-									onAccept={acceptCommand} />
+					{#if ended}
+						<section class="session-ended" aria-label="Session ended">
+							<div class="session-ended__text">
+								{#if activeSession.status === 'failed'}
+									<p class="session-ended__state session-ended__state--failed" role="alert">
+										<strong>Session failed.</strong>
+										{activeSession.error ?? 'Open the diagnostics to see what went wrong.'}
+									</p>
+								{:else}
+									<p class="session-ended__state" role="status">
+										<strong>Session stopped.</strong> Its transcript remains available.
+									</p>
+								{/if}
+								{#if draft.trim()}
+									<p>Your unsent draft returns to the composer when the session starts again.</p>
+								{/if}
+								{#if restartError}<p class="session-ended__error" role="alert">{restartError}</p>{/if}
 							</div>
-						{/if}
-						{#if mentionOpen}
-							<div class="session-composer__commands">
-								<MentionCompletion
-									id={mentionListId}
-									files={mentionResults ?? []}
-									selected={mentionSelected}
-									failed={mentionFailed}
-									onAccept={acceptMention} />
-							</div>
-						{/if}
-						<label class="session-composer__field">
-							<span class="session-view__sr-only">Prompt</span>
-							<Icon name="chevronRight" class="session-composer__prompt" />
-							<textarea
-								bind:this={composer}
-								{...{ [COMPOSER_ATTRIBUTE]: '' }}
-								bind:value={draft}
-								onkeydown={handleComposerKeydown}
-								onpaste={handleComposerPaste}
-								oninput={() => {
-									draftTyped = true;
-									commandSelected = 0;
-									mentionSelected = 0;
-									caret = composer?.selectionStart ?? draft.length;
-								}}
-								onkeyup={() => (caret = composer?.selectionStart ?? draft.length)}
-								onclick={() => (caret = composer?.selectionStart ?? draft.length)}
-								aria-autocomplete={commandMatches || mentionOpen ? 'list' : undefined}
-								aria-controls={activeOption?.list}
-								aria-activedescendant={activeOption ? `${activeOption.list}-option-${activeOption.index}` : undefined}
-								placeholder={activeSession.status === 'running'
-									? 'Add direction or queue a follow-up'
-									: 'Message the agent'}
-								aria-describedby={composerUnavailable ? 'composer-unavailable' : undefined}
-								disabled={composerUnavailable !== undefined}></textarea>
-						</label>
-						<div class="session-composer__footer">
-							{#if activeSession.status === 'running' && canQueue}
-								<Select
-									label="Send as"
-									variant="quiet"
-									options={[
-										...(activeSession.capabilities.steer ? [{ value: 'steer' as const, label: 'Steer now' }] : []),
-										...(activeSession.capabilities.followUp
-											? [{ value: 'follow-up' as const, label: 'Follow up' }]
-											: [])
-									]}
-									value={activeQueue}
-									onChange={(next) => {
-										queue = next;
-									}} />
-							{/if}
-							{#if onLoadModels && onSelectModel}
-								{#key activeSession.id}
-									<ModelPicker
-										bind:this={modelPicker}
-										load={() => onLoadModels(activeSession.id)}
-										onSelect={(model) => onSelectModel(activeSession.id, model)}
-										supported={activeSession.capabilities.modelSelection ?? false}
-										unavailableReason={modelUnavailableReason(activeSession, disconnected)}
-										fallbackLabel={activeSession.model}
-										onLoaded={(models) => (currentModelReasoning = models.find((model) => model.current)?.reasoning)} />
-									{#if onSelectThinkingLevel}
-										<ThinkingLevelPicker
-											bind:this={thinkingPicker}
-											level={activeSession.thinkingLevel}
-											onSelect={(level) => onSelectThinkingLevel(activeSession.id, level)}
-											supported={activeSession.capabilities.thinkingLevel ?? false}
-											reasoning={currentModelReasoning}
-											unavailableReason={thinkingUnavailableReason(activeSession, disconnected)} />
-									{/if}
-								{/key}
-							{/if}
-							<ContextMeter usage={activeSession.usage} supported={activeSession.capabilities.usage ?? false} />
-							<div class="session-composer__actions">
-								<input
-									bind:this={imagePicker}
-									class="session-view__sr-only"
-									type="file"
-									accept={imageAccept}
-									multiple
-									tabindex="-1"
-									aria-label="Image files"
-									onchange={(event) => {
-										attachImages(event.currentTarget.files ?? []);
-										event.currentTarget.value = '';
-									}} />
+							{#if onRestartSession}
 								<button
 									type="button"
-									class="session-composer__attach"
-									disabled={composerUnavailable !== undefined}
-									onclick={() => imagePicker?.click()}>
-									Attach image
+									class="session-ended__restart"
+									disabled={disconnected || restartingSessionId !== undefined}
+									onclick={() => void restart(activeSession.id)}>
+									{restartingSessionId === activeSession.id ? 'Starting…' : 'Start again'}
 								</button>
-								{#if activeSession.status === 'running' && activeSession.capabilities.interrupt}
+							{/if}
+						</section>
+					{:else}
+						<form
+							class="session-composer"
+							class:session-composer--dragging={draggingImages}
+							aria-label="Prompt composer"
+							ondragover={(event) => {
+								if (!hasFiles(event)) return;
+								event.preventDefault();
+								draggingImages = true;
+							}}
+							ondragleave={() => (draggingImages = false)}
+							ondrop={handleImageDrop}
+							onsubmit={(event) => {
+								event.preventDefault();
+								void submitPrompt();
+							}}>
+							{#if images.length > 0}
+								<ul class="session-composer__images" aria-label="Attached images">
+									{#each images as image (image.id)}
+										<li>
+											<img src={image.previewUrl} alt={image.name} />
+											<button type="button" aria-label={`Remove ${image.name}`} onclick={() => removeImage(image.id)}>
+												Remove
+											</button>
+										</li>
+									{/each}
+								</ul>
+							{/if}
+							{#if commandMatches}
+								<div class="session-composer__commands">
+									<CommandCompletion
+										id={commandListId}
+										commands={commandMatches}
+										selected={commandSelected}
+										onAccept={acceptCommand} />
+								</div>
+							{/if}
+							{#if mentionOpen}
+								<div class="session-composer__commands">
+									<MentionCompletion
+										id={mentionListId}
+										files={mentionResults ?? []}
+										selected={mentionSelected}
+										failed={mentionFailed}
+										onAccept={acceptMention} />
+								</div>
+							{/if}
+							<label class="session-composer__field">
+								<span class="session-view__sr-only">Prompt</span>
+								<Icon name="chevronRight" class="session-composer__prompt" />
+								<textarea
+									bind:this={composer}
+									{...{ [COMPOSER_ATTRIBUTE]: '' }}
+									bind:value={draft}
+									onkeydown={handleComposerKeydown}
+									onpaste={handleComposerPaste}
+									oninput={() => {
+										draftTyped = true;
+										commandSelected = 0;
+										mentionSelected = 0;
+										caret = composer?.selectionStart ?? draft.length;
+									}}
+									onkeyup={() => (caret = composer?.selectionStart ?? draft.length)}
+									onclick={() => (caret = composer?.selectionStart ?? draft.length)}
+									aria-autocomplete={commandMatches || mentionOpen ? 'list' : undefined}
+									aria-controls={activeOption?.list}
+									aria-activedescendant={activeOption ? `${activeOption.list}-option-${activeOption.index}` : undefined}
+									placeholder={activeSession.status === 'running'
+										? 'Add direction or queue a follow-up'
+										: 'Message the agent'}
+									aria-describedby={composerUnavailable ? 'composer-unavailable' : undefined}
+									disabled={composerUnavailable !== undefined}></textarea>
+							</label>
+							<div class="session-composer__footer">
+								{#if activeSession.status === 'running' && canQueue}
+									<Select
+										label="Send as"
+										variant="quiet"
+										options={[
+											...(activeSession.capabilities.steer ? [{ value: 'steer' as const, label: 'Steer now' }] : []),
+											...(activeSession.capabilities.followUp
+												? [{ value: 'follow-up' as const, label: 'Follow up' }]
+												: [])
+										]}
+										value={activeQueue}
+										onChange={(next) => {
+											queue = next;
+										}} />
+								{/if}
+								{#if onLoadModels && onSelectModel}
+									{#key activeSession.id}
+										<ModelPicker
+											bind:this={modelPicker}
+											load={() => onLoadModels(activeSession.id)}
+											onSelect={(model) => onSelectModel(activeSession.id, model)}
+											supported={activeSession.capabilities.modelSelection ?? false}
+											unavailableReason={modelUnavailableReason(activeSession, disconnected)}
+											fallbackLabel={activeSession.model}
+											onLoaded={(models) =>
+												(currentModelReasoning = models.find((model) => model.current)?.reasoning)} />
+										{#if onSelectThinkingLevel}
+											<ThinkingLevelPicker
+												bind:this={thinkingPicker}
+												level={activeSession.thinkingLevel}
+												onSelect={(level) => onSelectThinkingLevel(activeSession.id, level)}
+												supported={activeSession.capabilities.thinkingLevel ?? false}
+												reasoning={currentModelReasoning}
+												unavailableReason={thinkingUnavailableReason(activeSession, disconnected)} />
+										{/if}
+									{/key}
+								{/if}
+								<ContextMeter usage={activeSession.usage} supported={activeSession.capabilities.usage ?? false} />
+								<div class="session-composer__actions">
+									<input
+										bind:this={imagePicker}
+										class="session-view__sr-only"
+										type="file"
+										accept={imageAccept}
+										multiple
+										tabindex="-1"
+										aria-label="Image files"
+										onchange={(event) => {
+											attachImages(event.currentTarget.files ?? []);
+											event.currentTarget.value = '';
+										}} />
 									<button
 										type="button"
-										class="session-composer__interrupt"
-										disabled={disconnected}
-										onclick={() => void interrupt()}>
-										Interrupt{#if interruptShortcut}
-											<kbd>{interruptShortcut}</kbd>{/if}
+										class="session-composer__attach"
+										disabled={composerUnavailable !== undefined}
+										onclick={() => imagePicker?.click()}>
+										Attach image
 									</button>
-								{/if}
-								<button type="submit" disabled={!draft.trim() || sending || composerUnavailable !== undefined}>
-									{sending
-										? 'Sending…'
-										: activeQueue === 'follow-up' && activeSession.status === 'running'
-											? 'Queue prompt'
-											: 'Send prompt'}
-									{#if submitShortcut}<kbd>{submitShortcut}</kbd>{/if}
-								</button>
+									{#if activeSession.status === 'running' && activeSession.capabilities.interrupt}
+										<button
+											type="button"
+											class="session-composer__interrupt"
+											disabled={disconnected}
+											onclick={() => void interrupt()}>
+											Interrupt{#if interruptShortcut}
+												<kbd>{interruptShortcut}</kbd>{/if}
+										</button>
+									{/if}
+									<button type="submit" disabled={!draft.trim() || sending || composerUnavailable !== undefined}>
+										{sending
+											? 'Sending…'
+											: activeQueue === 'follow-up' && activeSession.status === 'running'
+												? 'Queue prompt'
+												: 'Send prompt'}
+										{#if submitShortcut}<kbd>{submitShortcut}</kbd>{/if}
+									</button>
+								</div>
 							</div>
-						</div>
-						{#if unknownCommand !== undefined}
-							<p class="session-composer__hint">Not a known command. It will be sent as written.</p>
-						{:else if draftBuiltin?.command.unavailable && !commandMatches}
-							<p class="session-composer__hint">
-								/{draftBuiltin.command.name}: {draftBuiltin.command.unavailable}
-								{#if onOpenPiTerminal}
-									<button type="button" onclick={() => onOpenPiTerminal(activeSession.id)}>Open Pi in terminal</button>
-								{:else if onOpenTerminal && activeWorkspace}
-									<button type="button" onclick={() => onOpenTerminal(activeWorkspace.id)}>Open terminal</button>
-								{/if}
-							</p>
-						{/if}
-						{#if composerUnavailable}
-							<p id="composer-unavailable" class="session-composer__hint">{composerUnavailable}</p>
-						{/if}
-						{#if imageError || error}
-							<p class="session-composer__error" role="alert">{[imageError, error].filter(Boolean).join(' ')}</p>
-						{/if}
-					</form>
+							{#if unknownCommand !== undefined}
+								<p class="session-composer__hint">Not a known command. It will be sent as written.</p>
+							{:else if draftBuiltin?.command.unavailable && !commandMatches}
+								<p class="session-composer__hint">
+									/{draftBuiltin.command.name}: {draftBuiltin.command.unavailable}
+									{#if onOpenPiTerminal}
+										<button type="button" onclick={() => onOpenPiTerminal(activeSession.id)}
+											>Open Pi in terminal</button>
+									{:else if onOpenTerminal && activeWorkspace}
+										<button type="button" onclick={() => onOpenTerminal(activeWorkspace.id)}>Open terminal</button>
+									{/if}
+								</p>
+							{/if}
+							{#if composerUnavailable}
+								<p id="composer-unavailable" class="session-composer__hint">{composerUnavailable}</p>
+							{/if}
+							{#if imageError || error}
+								<p class="session-composer__error" role="alert">{[imageError, error].filter(Boolean).join(' ')}</p>
+							{/if}
+						</form>
+					{/if}
 				</ExtensionUi>
 			</div>
 		</section>
@@ -3288,6 +3343,59 @@
 		display: grid;
 		gap: var(--pau-space-1);
 		justify-items: start;
+	}
+
+	/* Takes the composer's place once the agent process has ended, with the same frame. */
+	.session-ended {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--pau-space-3);
+		padding: var(--pau-space-3);
+		background: var(--pau-surface);
+		border: 1px solid var(--pau-border);
+	}
+
+	.session-ended__text {
+		display: grid;
+		flex: 1 1 16rem;
+		gap: var(--pau-space-1);
+		min-width: 0;
+	}
+
+	.session-ended__text p {
+		margin: 0;
+		color: var(--pau-text-muted);
+		font-size: var(--pau-type-sm);
+	}
+
+	.session-ended__text .session-ended__state {
+		color: var(--pau-text);
+		font-size: var(--pau-type-md);
+	}
+
+	.session-ended__state--failed strong,
+	.session-ended__text .session-ended__error {
+		color: var(--pau-danger);
+	}
+
+	.session-ended__restart {
+		min-height: var(--pau-size-row-md);
+		padding-inline: var(--pau-space-3);
+		color: var(--pau-canvas);
+		background: var(--pau-accent);
+		border: 0;
+		border-radius: var(--pau-radius-control);
+		font: inherit;
+		font-weight: var(--pau-weight-semibold);
+		cursor: pointer;
+	}
+
+	.session-ended__restart:disabled {
+		color: var(--pau-text-muted);
+		background: var(--pau-surface-raised);
+		cursor: not-allowed;
 	}
 
 	.session-composer__images img {

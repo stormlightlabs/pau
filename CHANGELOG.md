@@ -4,6 +4,10 @@
 
 ### Desktop
 
+- A stopped or failed session shows its state and a Start again button in place
+  of the composer, and keeps your unsent draft for when it runs again.
+- The model picker and context meter look and open like the other composer
+  dropdowns, and the model list marks the current model with a check.
 - Binary and oversized files in the editor explain why they can't open and offer
   to reveal the file instead of a retry that can't work.
 - Mode indicators for the sandbox, MCP, and Diagnostics share one outlined chip,

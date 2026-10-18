@@ -350,7 +350,16 @@ export const ResourcePressure: Story = {
 	}
 };
 export const Waiting: Story = { args: { workspaces: sessionFixtures.waiting, initialSessionId: 'session-waiting' } };
-export const Failed: Story = { args: { workspaces: sessionFixtures.failed, initialSessionId: 'session-failed' } };
+export const Failed: Story = {
+	args: { workspaces: sessionFixtures.failed, initialSessionId: 'session-failed' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByRole('region', { name: 'Session ended' })).toHaveTextContent('Session failed.');
+		await expect(canvas.queryByRole('form', { name: 'Prompt composer' })).not.toBeInTheDocument();
+		await userEvent.click(canvas.getByRole('button', { name: 'Start again' }));
+		await expect(canvas.getByText('session-failed: start again')).toBeInTheDocument();
+	}
+};
 export const SandboxDenials: Story = {
 	args: { workspaces: sessionFixtures.sandboxDenials, initialSessionId: 'sandbox-denials' },
 	play: async ({ canvasElement }) => {
@@ -470,7 +479,16 @@ export const QueueCleared: Story = {
 		);
 	}
 };
-export const Stopped: Story = { args: { workspaces: sessionFixtures.stopped, initialSessionId: 'session-stopped' } };
+export const Stopped: Story = {
+	args: { workspaces: sessionFixtures.stopped, initialSessionId: 'session-stopped' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByRole('region', { name: 'Session ended' })).toHaveTextContent('Session stopped.');
+		await expect(canvas.queryByRole('form', { name: 'Prompt composer' })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole('button', { name: 'Compact' })).not.toBeInTheDocument();
+		await expect(canvas.getByRole('button', { name: 'Start again' })).toBeEnabled();
+	}
+};
 export const ExtensionConfirmation: Story = {
 	args: { workspaces: sessionFixtures.extensionConfirm, initialSessionId: 'extension-confirm' },
 	play: async ({ canvasElement }) => {

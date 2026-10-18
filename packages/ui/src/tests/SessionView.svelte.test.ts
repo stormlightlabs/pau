@@ -15,7 +15,7 @@ const stateCases = [
 	['running', sessionFixtures.running, 'session-running', 'Running'],
 	['waiting', sessionFixtures.waiting, 'session-waiting', 'Attention required.'],
 	['failed', sessionFixtures.failed, 'session-failed', 'Session failed.'],
-	['stopped', sessionFixtures.stopped, 'session-stopped', 'This session has stopped.']
+	['stopped', sessionFixtures.stopped, 'session-stopped', 'Session stopped.']
 ] as const;
 
 test('shows the empty session state', async () => {
@@ -80,12 +80,74 @@ test('shows file, network, and unexplained sandbox denials in their owning sessi
 	await expect.element(page.getByLabelText('Sandbox denial').first()).not.toBeInTheDocument();
 });
 
-test('exposes tool activity and disabled stopped controls', async () => {
+test.each([
+	['stopped', sessionFixtures.stopped, 'session-stopped', 'Session stopped.'],
+	['failed', sessionFixtures.failed, 'session-failed', 'Session failed.']
+] as const)(
+	'replaces the composer of a %s session with a notice that starts it again',
+	async (_name, workspaces, activeSessionId, state) => {
+		const onRestartSession = vi.fn();
+		const workspacesWithCompaction = workspaces.map((workspace) => ({
+			...workspace,
+			sessions: workspace.sessions.map((session) => ({
+				...session,
+				capabilities: { ...session.capabilities, compaction: true, stop: true }
+			}))
+		}));
+		await render(SessionView, {
+			workspaces: workspacesWithCompaction,
+			activeSessionId,
+			onRestartSession,
+			onCompact: vi.fn()
+		});
+
+		const notice = page.getByRole('region', { name: 'Session ended' });
+		await expect.element(notice).toHaveTextContent(state);
+		await expect.element(page.getByRole('form', { name: 'Prompt composer' })).not.toBeInTheDocument();
+		await expect.element(page.getByRole('textbox', { name: 'Prompt' })).not.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: /Send prompt/ })).not.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Compact' })).not.toBeInTheDocument();
+		await expect.element(page.getByRole('button', { name: 'Stop', exact: true })).not.toBeInTheDocument();
+
+		await userEvent.click(notice.getByRole('button', { name: 'Start again' }));
+		expect(onRestartSession).toHaveBeenCalledWith(activeSessionId);
+	}
+);
+
+test('keeps the draft when the session stops and returns it after Start again', async () => {
+	const ready = sessionFixtures.stopped.map((workspace) => ({
+		...workspace,
+		sessions: workspace.sessions.map((session) => ({ ...session, status: 'idle' as const }))
+	}));
+	const view = await render(SessionView, { workspaces: ready, activeSessionId: 'session-stopped' });
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.type(prompt, 'Mention the new picker.');
+
+	await view.rerender({ workspaces: sessionFixtures.stopped, onRestartSession: vi.fn() });
+	await expect.element(page.getByRole('region', { name: 'Session ended' })).toHaveTextContent('Your unsent draft');
+
+	await view.rerender({ workspaces: ready });
+	await expect.element(prompt).toHaveValue('Mention the new picker.');
+});
+
+test('shows why Start again failed', async () => {
+	const onRestartSession = vi.fn().mockRejectedValue(new Error('Pi no longer has that saved session.'));
+	await render(SessionView, {
+		workspaces: sessionFixtures.stopped,
+		activeSessionId: 'session-stopped',
+		onRestartSession
+	});
+
+	await userEvent.click(page.getByRole('button', { name: 'Start again' }));
+
+	await expect.element(page.getByRole('alert')).toHaveTextContent('Pi no longer has that saved session.');
+	await expect.element(page.getByRole('button', { name: 'Start again' })).toBeEnabled();
+});
+
+test('shows tool activity in a stopped session', async () => {
 	await render(SessionView, { workspaces: sessionFixtures.stopped, activeSessionId: 'session-stopped' });
 
 	await expect.element(page.getByText('src/diff/gutter.ts')).toBeVisible();
-	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeDisabled();
-	await expect.element(page.getByRole('button', { name: /Send prompt/ })).toBeDisabled();
 });
 
 test('toggles every tool row with Ctrl+O and keeps a row the operator opened', async () => {

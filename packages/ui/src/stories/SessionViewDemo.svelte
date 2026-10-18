@@ -169,6 +169,9 @@
 			}
 		: undefined}
 	onStartSession={startSession}
+	onRestartSession={(sessionId) => {
+		lastAction = `${sessionId}: start again`;
+	}}
 	onSelectSession={(sessionId) => (activeSessionId = sessionId)}
 	onSend={send}
 	onLoadModels={models ? async () => models : undefined}

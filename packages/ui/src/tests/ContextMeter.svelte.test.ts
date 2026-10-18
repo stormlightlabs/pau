@@ -20,6 +20,21 @@ test('shows context use and opens the usage details', async () => {
 	await expect.element(details()).not.toBeInTheDocument();
 });
 
+test('uses the Select trigger with a chevron and opens upward from its left edge', async () => {
+	const target = document.createElement('div');
+	target.style.marginTop = '24rem';
+	document.body.append(target);
+	await render(ContextMeter, { target, props: { usage: usageFixtures.normal } });
+
+	expect(meter().element().querySelector('.context-meter__chevron')).toBeVisible();
+	await meter().click();
+	const panel = details().element().getBoundingClientRect();
+	const anchor = meter().element().getBoundingClientRect();
+	expect(panel.left).toBe(anchor.left);
+	expect(panel.bottom).toBeLessThanOrEqual(anchor.top);
+	target.remove();
+});
+
 test.each([
 	['nearLimit', 'The context window is filling up.'],
 	['atLimit', 'The context window is almost full.']

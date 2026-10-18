@@ -536,6 +536,35 @@ test('resumes a saved session from the picker and selects it', async () => {
 	expect(changes).toEqual(['session-1']);
 });
 
+test.each([
+	['resumes the saved conversation', 'native-1', '"native_session_id":"native-1"'],
+	['starts fresh when Pi saved nothing', null, '"native_session_id":null']
+])('Start again on a stopped session %s and selects the new session', async (_name, nativeId, body) => {
+	const stopped: AgentSession = {
+		...idleSession,
+		id: 'session-0',
+		status: 'stopped',
+		ended_at: '2026-04-01T12:05:00Z',
+		native_session_id: nativeId
+	};
+	const start = vi.fn(() => json({ ...idleSession, status: 'starting' }, 201));
+	const changes: string[] = [];
+	const { props } = setup({ 'GET /api/sessions': () => json([stopped]), 'POST /api/sessions': start });
+	await render(SessionRoute, {
+		...props,
+		initialSessionId: 'session-0',
+		onSessionChange: (_workspace: string, id: string) => {
+			changes.push(id);
+		}
+	});
+
+	await userEvent.click(page.getByRole('button', { name: 'Start again' }));
+
+	await expect.element(page.getByText('Starting the agent process…')).toBeVisible();
+	expect(start).toHaveBeenCalledWith(expect.objectContaining({ body: expect.stringContaining(body) }));
+	expect(changes).toEqual(['session-1']);
+});
+
 /** A two-turn conversation as Pi's `get_messages` reports it. */
 const earlierTurns = [
 	{ role: 'user', content: 'Fix the gutter', timestamp: 1 },

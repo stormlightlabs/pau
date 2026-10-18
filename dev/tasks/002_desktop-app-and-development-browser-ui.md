@@ -991,6 +991,38 @@ Verification:
 
 ## Polish and motion
 
+### 2.235 Typography scale and Overpass
+
+Status: planned
+Blocked by: 2.172
+
+Make Overpass Variable the default UI font and Overpass Mono the code font,
+both bundled from Fontsource. Keep IBM Plex Sans as a selectable UI font and
+drop IBM Plex Mono. Adopt this starting scale:
+
+| Element | Size | Weight |
+|---|---|---|
+| Main task heading | 18px | 600 |
+| Application body | 14px | 400 |
+| Workspace names and inspector values | 13px | 500 |
+| Commands, paths, and metadata | 12–13px | 400 |
+| Section labels | 11px | 600 |
+
+Replace the 20px step with 18px, add weight tokens for 400, 500, and 600, and
+fold ad hoc 650 and 700 weights into 600. Allow 11px only for uppercase,
+letter-spaced section labels, and record that exception where the 12px floor
+is stated. Move body text that sits at 12px today to 14px, and leave true
+metadata at 12–13px. Update `dev/design/system.md`, the prototype styles and
+pages, and the `pau.fig` text styles and variables together.
+
+Verification:
+
+- Component-test that the default preference resolves to Overpass, that IBM
+  Plex Sans remains selectable, and that code uses Overpass Mono.
+- Confirm no product text other than section labels renders below 12px.
+- Review the session view, inspector, Diagnostics, and an overlay in each
+  shipped theme at 1440 and 900px widths.
+
 ### 2.219 Overlay focus restoration
 
 Status: planned
@@ -1284,7 +1316,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.184, 2.185, 2.197, 2.219
+Blocked by: 2.156, 2.184, 2.185, 2.197, 2.219, 2.235
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

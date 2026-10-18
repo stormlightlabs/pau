@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
 	import { onMount, tick } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -473,7 +474,7 @@
 									<button type="button" title={file.path} onclick={() => void openDiff(file.path)}>
 										<Icon name={gitFileIcon(file)} size={14} />
 										<span>{file.path}</span>
-										<small>{gitFileLabel(file)}</small>
+										<small><MetaText text={gitFileLabel(file)} /></small>
 									</button>
 								</li>
 							{/each}

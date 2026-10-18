@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
 	import type { ProcessResourceActions, ProcessResourceSnapshot } from './types/resource-monitoring';
 	import { formatBytes, formatCpu, formatElapsed } from './resource-format';
@@ -44,7 +45,7 @@
 					{#if snapshot.diskReadBytes === undefined || snapshot.diskWriteBytes === undefined}
 						Unavailable
 					{:else}
-						↓ {formatBytes(snapshot.diskReadBytes)} · ↑ {formatBytes(snapshot.diskWriteBytes)}
+						<MetaText text={`↓ ${formatBytes(snapshot.diskReadBytes)} · ↑ ${formatBytes(snapshot.diskWriteBytes)}`} />
 					{/if}
 				</dd>
 			</div>

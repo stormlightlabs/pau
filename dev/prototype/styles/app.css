@@ -106,6 +106,21 @@ pre {
 	color: var(--pau-text-muted);
 }
 
+/* Overpass centers the middle dot in neither its advance nor its margins, so
+ * hide the glyph and draw the dot with equal space on both sides. */
+.meta-sep {
+	display: inline-block;
+	inline-size: calc(var(--pau-space-1) * 0.75);
+	block-size: calc(var(--pau-space-1) * 0.75);
+	margin-inline: calc(var(--pau-space-1) * 1.5);
+	border-radius: 50%;
+	background: currentColor;
+	overflow: hidden;
+	text-indent: 100%;
+	white-space: nowrap;
+	vertical-align: middle;
+}
+
 .spacer {
 	flex: 1 1 auto;
 }

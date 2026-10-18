@@ -13,7 +13,7 @@ const details = () => page.getByRole('group', { name: 'Session usage' });
 test('shows context use and opens the usage details', async () => {
 	await render(ContextMeter, { usage: usageFixtures.normal });
 
-	await expect.element(meter()).toHaveTextContent('Context 84k / 200k · 42%');
+	await expect.element(meter()).toHaveTextContent(/Context 84k \/ 200k.*42%/);
 	await meter().click();
 	await expect.element(details()).toHaveTextContent('Cost $1.23');
 	await userEvent.keyboard('{Escape}');

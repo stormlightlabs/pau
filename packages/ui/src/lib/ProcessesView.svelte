@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
 	import { formatBytes, formatCpu, formatElapsed } from './resource-format';
 	import type { ProcessResourceActions, ProcessResourceSnapshot } from './types/resource-monitoring';
@@ -58,7 +59,9 @@
 							aria-expanded={expanded === process.processId}
 							onclick={() => toggle(process.processId)}>
 							<span aria-hidden="true">{expanded === process.processId ? '▾' : '▸'}</span>
-							<span><strong>{process.label}</strong><small>{process.kind} · {process.status}</small></span>
+							<span
+								><strong>{process.label}</strong><small><MetaText text={`${process.kind} · ${process.status}`} /></small
+								></span>
 						</button>
 						{#if process.pressure}<em>{process.pressure} pressure</em>{/if}
 					</div>

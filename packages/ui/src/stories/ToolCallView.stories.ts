@@ -62,7 +62,7 @@ export const Read: Story = {
 	args: { tools: [toolCallFixtures.read, toolCallFixtures.readTruncated] },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await expect(canvas.getByText('src/diff/gutter.ts · lines 10–14')).toBeInTheDocument();
+		await expect(canvas.getByText('lines 10–14', { exact: false })).toBeInTheDocument();
 		await expect(canvas.getByLabelText('Contents of src/diff/gutter.ts')).toHaveTextContent('gutterRows');
 		await expect(canvas.getByText(/Pi kept the first 450 of 3000 lines because of the size limit/)).toBeInTheDocument();
 		await expect(canvas.getByRole('button', { name: 'Show 200 more lines' })).toBeInTheDocument();

@@ -200,7 +200,10 @@
 					</header>
 					<div class="transcript" role="log" aria-label="Transcript">
 						<article class="message">
-							<header class="message__meta"><span class="message__author">You</span><span>· 10:42</span></header>
+							<header class="message__meta">
+								<span class="message__author">You</span
+								><span><span class="meta-sep" aria-hidden="true">·</span>10:42</span>
+							</header>
 							<p class="message__body">
 								Keep the session controls compact. Show what the agent is doing without making the transcript read like
 								a log viewer.
@@ -208,10 +211,11 @@
 						</article>
 						<details class="tool-calls" open>
 							<summary>
-								<span class="icon i-tabler-chevron-down" aria-hidden="true"></span>3 tool calls · 12s<span
-									class="diff-stat"
-									><ins>+18</ins><del>−7</del></span
-								>
+								<span class="icon i-tabler-chevron-down" aria-hidden="true"></span>3 tool calls<span
+									class="meta-sep"
+									aria-hidden="true"
+									>·</span
+								>12s<span class="diff-stat"><ins>+18</ins><del>−7</del></span>
 							</summary>
 							<ol>
 								<li><span>read</span><b>SessionView.svelte</b><span>248 lines</span></li>
@@ -228,7 +232,10 @@
 							<p class="note">The active sandbox does not allow this path to be read.</p>
 						</section>
 						<article class="message message--agent">
-							<header class="message__meta"><span class="message__author">Pi</span><span>· sonnet</span></header>
+							<header class="message__meta">
+								<span class="message__author">Pi</span
+								><span><span class="meta-sep" aria-hidden="true">·</span>sonnet</span>
+							</header>
 							<p class="message__body">
 								The task remains readable as a conversation. Tool activity is compressed into one scan line, and any
 								result can open in the inspector without leaving the turn.
@@ -295,7 +302,7 @@
 					<div class="inspector-stack">
 						<section class="inspector-section">
 							<div class="inspector-section__head">
-								<h3 class="section-label">Plan · 3 of 5</h3>
+								<h3 class="section-label">Plan<span class="meta-sep" aria-hidden="true">·</span>3 of 5</h3>
 								<span class="note">live</span>
 							</div>
 							<ol class="plan">

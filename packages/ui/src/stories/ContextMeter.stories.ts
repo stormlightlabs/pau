@@ -17,7 +17,7 @@ type Story = StoryObj<typeof meta>;
 export const Normal: Story = {
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await expect(canvas.getByRole('button')).toHaveTextContent('Context 84k / 200k · 42%');
+		await expect(canvas.getByRole('button')).toHaveTextContent(/Context 84k \/ 200k.*42%/);
 		await expect(canvas.getByRole('meter')).toHaveAttribute('aria-valuenow', '42');
 		await userEvent.click(canvas.getByRole('button'));
 		const details = canvas.getByRole('group', { name: 'Session usage' });
@@ -32,7 +32,7 @@ export const NearLimit: Story = {
 	args: { usage: usageFixtures.nearLimit },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await expect(canvas.getByRole('button')).toHaveTextContent('164k / 200k · 82%');
+		await expect(canvas.getByRole('button')).toHaveTextContent(/164k \/ 200k.*82%/);
 		await userEvent.click(canvas.getByRole('button'));
 		await expect(canvas.getByText('The context window is filling up.')).toBeVisible();
 	}
@@ -42,7 +42,7 @@ export const AtLimit: Story = {
 	args: { usage: usageFixtures.atLimit },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await expect(canvas.getByRole('button')).toHaveTextContent('196k / 200k · 98%');
+		await expect(canvas.getByRole('button')).toHaveTextContent(/196k \/ 200k.*98%/);
 		await userEvent.click(canvas.getByRole('button'));
 		await expect(canvas.getByText('The context window is almost full.')).toBeVisible();
 	}

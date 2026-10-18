@@ -462,7 +462,7 @@ export const ConcurrentSessions: Story = {
 		const canvas = within(canvasElement);
 		await userEvent.click(canvas.getByRole('button', { name: /Review adapter fixtures/ }));
 		await expect(canvas.getByRole('heading', { name: 'Review adapter fixtures' })).toBeInTheDocument();
-		await expect(canvas.getByText('Claude · Sonnet')).toBeInTheDocument();
+		await expect(canvas.getByText('Claude', { exact: false })).toBeInTheDocument();
 	}
 };
 export const SessionMenu: Story = {

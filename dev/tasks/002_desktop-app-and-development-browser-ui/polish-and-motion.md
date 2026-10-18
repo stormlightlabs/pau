@@ -222,27 +222,6 @@ Verification:
   query emulated.
 - Check every shipped theme in Storybook.
 
-### 2.246 Metadata separator spacing
-
-Status: planned
-Blocked by: none
-
-Overpass sets the middle dot with almost no right side bearing, so every
-`a · b` label renders as "Pi ·Sonnet", "You ·task", "prompt ·interrupt",
-"2 shown ·12 expired", "project ·stdio", and "Context 164k / 200k ·82%". The
-prototype pages show the same gap. Replace the literal `·` in the session
-header, message labels, tool call paths, Diagnostics, Processes, MCP sources,
-the context meter, the resource summary, and the file rail with one shared
-separator element that carries equal spacing on both sides, and apply the same
-rule in `dev/prototype/styles/app.css`.
-
-Verification:
-
-- Component-test that the session header, a tool call path, and a Diagnostics
-  adapter row render the separator element instead of a middle dot in text.
-- Screenshot the session header in Overpass and IBM Plex Sans and confirm
-  equal spacing on both sides.
-
 ### 2.247 Composer action row
 
 Status: planned

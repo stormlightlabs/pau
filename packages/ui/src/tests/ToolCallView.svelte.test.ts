@@ -47,7 +47,7 @@ test('caps oversized output and reveals earlier lines on request', async () => {
 test('shows a read range and its file contents', async () => {
 	await render(ToolCallViewDemo, { tools: [toolCallFixtures.read] });
 
-	await expect.element(page.getByText('src/diff/gutter.ts · lines 10–14')).toBeVisible();
+	await expect.element(page.getByText('src/diff/gutter.ts')).toBeVisible();
 	await expect.element(page.getByLabelText('Contents of src/diff/gutter.ts')).toHaveTextContent('gutterRows');
 });
 

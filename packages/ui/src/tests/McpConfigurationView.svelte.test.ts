@@ -30,7 +30,7 @@ test('edits, disables, tests, removes, and creates a selected server', async () 
 	const handlers = { onCreate: vi.fn(), onEdit: vi.fn(), onRemove: vi.fn(), onToggle: vi.fn(), onTest: vi.fn() };
 	await render(McpConfigurationView, { configuration: mcpConfigurationFixtures.piConfiguredOff, ...handlers });
 
-	await userEvent.click(page.getByRole('button', { name: /linear user · http connected/i }));
+	await userEvent.click(page.getByRole('button', { name: /linear user http connected/i }));
 	await expect.element(page.getByText('tools, resources, elicitation')).toBeVisible();
 	await userEvent.click(page.getByRole('button', { name: 'Edit' }));
 	await userEvent.click(page.getByRole('button', { name: 'Disable', exact: true }));
@@ -53,6 +53,6 @@ test('offers native authentication and reports a startup failure', async () => {
 	await userEvent.click(page.getByRole('button', { name: 'Authenticate' }));
 	expect(onAuthenticate).toHaveBeenCalledWith('github');
 
-	await userEvent.click(page.getByRole('button', { name: /database project · stdio failed/i }));
+	await userEvent.click(page.getByRole('button', { name: /database project stdio failed/i }));
 	await expect.element(page.getByText('The server did not finish startup before the timeout.')).toBeVisible();
 });

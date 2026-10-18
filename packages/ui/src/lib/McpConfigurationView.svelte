@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
 	import type { McpConfigurationViewModel } from './types/mcp';
 
@@ -88,7 +89,10 @@
 									class:selected={selected?.name === server.name}
 									type="button"
 									onclick={() => (selectedName = server.name)}>
-									<span><strong>{server.name}</strong><small>{server.scope} · {server.transport}</small></span>
+									<span
+										><strong>{server.name}</strong><small
+											><MetaText text={`${server.scope} · ${server.transport}`} /></small
+										></span>
 									<span class:failed={server.status === 'failed'}>{statusLabel(server.status)}</span>
 								</button>
 							</li>
@@ -142,7 +146,7 @@
 				{#each configuration.sources as source (`${source.scope}:${source.path}`)}
 					<li class="mcp__source">
 						<code title={source.path}>{source.path}</code>
-						<span>{source.scope} · {source.serverCount}</span>
+						<span><MetaText text={`${source.scope} · ${source.serverCount}`} /></span>
 					</li>
 				{/each}
 			</ul>

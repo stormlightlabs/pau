@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
 	import Select, { type SelectOption } from './Select.svelte';
 	import type { DiagnosticBundleView, DiagnosticLevel } from './types/diagnostics';
@@ -104,7 +105,7 @@
 						<li>
 							<div><strong>{adapter.name}</strong><small>{adapter.version ?? 'Version unavailable'}</small></div>
 							<span>{adapter.handshake}</span>
-							<p>{adapter.capabilities.join(' · ') || 'No capabilities reported'}</p>
+							<p><MetaText text={adapter.capabilities.join(' · ') || 'No capabilities reported'} /></p>
 						</li>
 					{/each}
 				</ul>
@@ -150,7 +151,7 @@
 					<h2 id="records-title">Recent records</h2>
 					<p>Redacted metadata retained in memory.</p>
 				</div>
-				<span>{bundle.records.length} shown · {bundle.droppedRecords} expired</span>
+				<span><MetaText text={`${bundle.records.length} shown · ${bundle.droppedRecords} expired`} /></span>
 			</div>
 			<div class="diagnostics-view__trace">
 				<div>
@@ -171,7 +172,7 @@
 							<span class={`diagnostics-view__level diagnostics-view__level--${record.level}`}>{record.level}</span>
 							<code>{record.component}</code>
 							<strong>{record.operation}</strong>
-							<small>{recordDetail(record)}</small>
+							<small><MetaText text={recordDetail(record)} /></small>
 						</li>
 					{/each}
 				</ul>

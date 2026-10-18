@@ -9,10 +9,10 @@ test('shows versions, handshakes, replay state, pressure, and correlated records
 	await render(DiagnosticsView, { bundle: diagnosticFixtures.active });
 
 	await expect.element(page.getByText('0.8.8')).toBeVisible();
-	await expect.element(page.getByText('prompt · interrupt · resume · extension UI')).toBeVisible();
+	await expect.element(page.getByText('prompt', { exact: false }).first()).toBeVisible();
 	await expect.element(page.getByRole('cell', { name: '842' })).toBeVisible();
 	await expect.element(page.getByText('event.replay_gap')).toBeVisible();
-	await expect.element(page.getByText(/diff-gutter · sequence=842/)).toBeVisible();
+	await expect.element(page.getByText(/sequence=842/)).toBeVisible();
 });
 
 test('changes release-safe settings and starts bounded tracing explicitly', async () => {

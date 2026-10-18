@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
 	import { onDestroy, tick, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
@@ -1971,9 +1972,10 @@
 			<header class="session-view__header">
 				<div>
 					<p>
-						{activeSession.agent}{activeSession.model && !(onLoadModels && onSelectModel)
-							? ` · ${activeSession.model}`
-							: ''}
+						<MetaText
+							text={activeSession.model && !(onLoadModels && onSelectModel)
+								? `${activeSession.agent} · ${activeSession.model}`
+								: activeSession.agent} />
 					</p>
 					<h1 id="session-title">{activeSession.title}</h1>
 				</div>
@@ -2156,7 +2158,7 @@
 											openMessageMenu(event, activeSession, entry);
 										}
 									}}>
-									<h2>{entry.label ?? (entry.role === 'user' ? 'You' : activeSession.agent)}</h2>
+									<h2><MetaText text={entry.label ?? (entry.role === 'user' ? 'You' : activeSession.agent)} /></h2>
 									<CopyButton
 										class="session-message__copy"
 										text={entry.body}

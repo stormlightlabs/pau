@@ -803,7 +803,7 @@ test('shows context use read on open and follows session usage events', async ()
 	});
 	await render(SessionRoute, props);
 	sockets[0]?.open();
-	await expect.element(page.getByRole('button', { name: /Context 84k \/ 200k · 42%/ })).toBeVisible();
+	await expect.element(page.getByRole('button', { name: /Context 84k \/ 200k 42%/ })).toBeVisible();
 
 	sockets[0]?.receive(
 		output({

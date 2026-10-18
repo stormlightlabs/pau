@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Metadata labels such as "Pi · Sonnet" have even spacing on both sides of the
+  dot.
 - Extension choices appear as a list with one confirm button, and permission
   requests show the tool, command, and working directory and start with nothing
   selected.

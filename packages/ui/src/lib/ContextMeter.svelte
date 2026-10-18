@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MetaText from './MetaText.svelte';
 	import {
 		contextLevel,
 		formatCost,
@@ -56,7 +57,7 @@
 			aria-expanded={open}
 			aria-controls="context-meter-details"
 			onclick={() => (open = !open)}>
-			<span class="context-meter__label">{summary}</span>
+			<span class="context-meter__label"><MetaText text={summary} /></span>
 			{#if context}
 				<span
 					class="context-meter__bar"

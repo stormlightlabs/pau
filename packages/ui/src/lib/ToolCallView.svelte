@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
 	import { formatDuration, outputLines, readRange, truncationNotice } from './tool-call-format';
 	import ToolOutput from './ToolOutput.svelte';
@@ -42,7 +43,7 @@
 	data-entry-id={tool.id}
 	data-found={found || undefined}>
 	<summary>
-		<span class="tool-call__name">{tool.name}</span><code>{summary}</code><small>{status}</small>
+		<span class="tool-call__name">{tool.name}</span><code><MetaText text={summary} /></code><small>{status}</small>
 	</summary>
 	{#if open}
 		<div class="tool-call__body">

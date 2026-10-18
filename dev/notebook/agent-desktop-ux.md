@@ -414,7 +414,8 @@ three rules:
    its shortcut.
 
 On Linux, ⌘ maps to Ctrl, which collides with Pi's Emacs-style editing keys such
-as Ctrl+K and Ctrl+P. On Linux, app shortcuts that collide take Ctrl+Shift.
+as Ctrl+K and Ctrl+P. Pau reads Pi's `keybindings.json`, and when an app
+shortcut collides with one of the operator's Pi bindings, the Pi binding wins.
 
 Global:
 
@@ -561,12 +562,12 @@ gaps have proposed units in the next section.
 
 These units follow the format in
 [`002_desktop-app-and-development-browser-ui.md`](../tasks/002_desktop-app-and-development-browser-ui.md)
-and the layer split in [`ROADMAP.md`](../ROADMAP.md). The coordinator assigns
-real IDs.
+and the layer split in [`ROADMAP.md`](../ROADMAP.md). They are now roadmap
+units with real IDs, listed under [Decisions](#decisions). The roadmap entries
+are authoritative and include the changes those decisions made.
 
-The P0 units 2.NEW-1 through 2.NEW-6 belong in the 2.40 dogfood gate, and 2.40
-would list them as blockers. The rest stay outside the gate unless the open
-questions below move them in.
+The P0 units 2.NEW-1 through 2.NEW-6 and the tool views 2.NEW-7 and 2.NEW-8
+block the 2.40 dogfood gate.
 
 ### 2.NEW-1 Application keyboard map
 
@@ -578,8 +579,9 @@ a shortcut list that opens with ⌘/.
 
 Verification:
 
-- Component-test each global shortcut, the Linux Ctrl+Shift fallbacks, and that
-  shortcuts do not fire while a dialog or the terminal has focus.
+- Component-test each global shortcut, a shortcut that yields to a conflicting
+  Pi binding, and that shortcuts do not fire while a dialog or the terminal has
+  focus.
 - Drive a self-hosted session from launch to a finished turn without the mouse.
 
 ### 2.NEW-2 Command palette
@@ -941,25 +943,45 @@ Verification:
 - Component-test a saved edit, a cancelled edit, and an editor that fails to
   start.
 
-## Open questions
+## Decisions
 
-- The keyboard rules above leave app shortcuts on ⌘ and composer keys on Ctrl
-  and Alt, which works on macOS. On Linux, should colliding app shortcuts move
-  to Ctrl+Shift, or should Pau read Pi's `keybindings.json` and let the
-  operator's Pi bindings win?
-- Should Pau honor `.worktreeinclude` when it creates a worktree, given that
-  copying ignored files such as `.env` moves secrets into a new directory?
-- Where should new worktrees go by default: next to the repository, under
-  `.pau/worktrees/` in it, or under Pau's data directory?
-- Is commit, push, and PR creation in scope before the first release, or does
-  the terminal remain the path? Claude desktop and Conductor both depend on the
-  GitHub CLI for this.
-- Pi has no file checkpoints, and tree branching does not restore files. Is a
-  Conductor-style private Git ref per turn worth researching, given that it
-  writes refs the operator did not ask for?
-- Should the structured tool views (2.NEW-7, 2.NEW-8) and fork (2.NEW-9,
-  2.NEW-10) join the 2.40 gate? Pi's TUI shows edit diffs and supports `/fork`,
-  so the parity audit will flag both if they are missing.
-- Should archive be a Pau-only flag, as proposed, or also hide the session from
-  Pi's own picker? Pi's picker can delete sessions, but Pau's rule is that
-  native history stays authoritative.
+The operator accepted these answers to the earlier open questions:
+
+- Pau reads Pi's `keybindings.json`, and the operator's Pi bindings win when
+  they collide with an app shortcut. This replaces the Linux Ctrl+Shift
+  fallback.
+- Pau honors `.worktreeinclude` only when the operator opts in for that
+  workspace.
+- New worktrees default to a directory next to the repository named
+  `../<repo>-<branch>`.
+- Commit, push, and PR creation stay in the terminal before the first release.
+- Per-turn Git-ref checkpoints are deferred.
+- Archive is a Pau-only flag. Pi's session files stay authoritative, and Pi's
+  own picker still lists archived sessions.
+- The structured tool events and tool call views join the 2.40 gate.
+- Fork needs no new units. The session tree from 2.72 and 2.73 already offers
+  **Branch from here**, so 2.NEW-9 and 2.NEW-10 are dropped, and `/fork` opens
+  that action.
+
+The proposed units map to these roadmap units:
+
+| Proposed | Roadmap     | Proposed | Roadmap      |
+| -------- | ----------- | -------- | ------------ |
+| 2.NEW-1  | 2.171       | 2.NEW-15 | 2.205, 2.206 |
+| 2.NEW-2  | 2.172       | 2.NEW-16 | 2.208        |
+| 2.NEW-3  | 2.184       | 2.NEW-17 | 2.209        |
+| 2.NEW-4  | 2.191       | 2.NEW-18 | 2.173        |
+| 2.NEW-5  | 2.195–2.197 | 2.NEW-19 | 2.181        |
+| 2.NEW-6  | 2.185       | 2.NEW-20 | 2.176        |
+| 2.NEW-7  | 2.192       | 2.NEW-21 | 2.182        |
+| 2.NEW-8  | 2.193       | 2.NEW-22 | 2.183        |
+| 2.NEW-9  | Dropped     | 2.NEW-23 | 2.211        |
+| 2.NEW-10 | Dropped     | 2.NEW-24 | 2.212        |
+| 2.NEW-11 | 2.178       | 2.NEW-25 | 2.213        |
+| 2.NEW-12 | 2.179       | 2.NEW-26 | 2.215        |
+| 2.NEW-13 | 2.207       | 2.NEW-27 | 2.216        |
+| 2.NEW-14 | 2.180       | 2.NEW-28 | 2.189        |
+
+2.NEW-5 merged with the motion note's follow mode and **Jump to latest** units,
+and 2.NEW-15 merged with its session attention markers. Reading Pi's
+`keybindings.json` became its own backend unit, 2.170.

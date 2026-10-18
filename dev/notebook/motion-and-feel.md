@@ -712,9 +712,11 @@ installed app:
 
 ## Proposed roadmap units
 
-2.NEW-M1 to 2.NEW-M13 make daily use through Pau comfortable and should land
-before or alongside 2.40. 2.NEW-M14 to 2.NEW-M31 are later polish. Every UI
-unit also updates its Storybook stories, as `dev/ROADMAP.md` requires.
+2.NEW-M1 to 2.NEW-M13 make daily use through Pau comfortable and block 2.40.
+2.NEW-M14 to 2.NEW-M31 are later polish. Every UI unit also updates its
+Storybook stories, as `dev/ROADMAP.md` requires. These units are now roadmap
+units with real IDs, listed under [Decisions](#decisions). The roadmap entries
+are authoritative and include the changes those decisions made.
 
 ### 2.NEW-M1 Motion tokens
 
@@ -734,7 +736,8 @@ Verification:
 Status: planned
 Blocked by: 2.NEW-M1
 
-Combine the OS reduced-motion query and an operator setting into one root
+Add a motion setting with system, reduce, and full choices, defaulting to
+system, and combine it with the OS reduced-motion query into one root
 attribute that CSS tokens and Svelte transitions both read.
 
 Verification:
@@ -793,8 +796,8 @@ Verification:
 Status: planned
 Blocked by: none
 
-Keep tool and thinking blocks open or closed as the operator left them, and
-stop collapsing finished blocks while they are in view.
+Collapse finished tool blocks when the turn ends, never while it runs, and leave
+tool and thinking blocks that the operator opened or closed as they left them.
 
 Verification:
 
@@ -834,8 +837,9 @@ Verification:
 Status: planned
 Blocked by: 2.NEW-M2
 
-Give each session state a distinct mark, with one small spinner for running
-work that becomes static under reduced motion.
+Give each session state a distinct mark in the session rail and the session
+header, with one small spinner for running work that becomes static under
+reduced motion.
 
 Verification:
 
@@ -1133,24 +1137,50 @@ Verification:
 - Show an improvement in the streaming performance check on a long fixture.
 - Confirm follow mode, search, and copying still work across skipped entries.
 
+## Decisions
+
+The operator accepted these answers to the earlier open questions:
+
+- Pau has its own motion setting with system, reduce, and full choices. It
+  defaults to system.
+- Finished tool blocks collapse when the turn ends, never while the operator is
+  reading a running turn, and a block the operator opened or closed stays that
+  way.
+- The running indicator appears in the session rail as well as the session
+  header.
+- The performance budgets assume a 120Hz MacBook Pro.
+- The command palette is now roadmap unit 2.172 and follows the command bar
+  rules above.
+
+The proposed units map to these roadmap units:
+
+| Proposed  | Roadmap | Proposed  | Roadmap |
+| --------- | ------- | --------- | ------- |
+| 2.NEW-M1  | 2.217   | 2.NEW-M17 | 2.223   |
+| 2.NEW-M2  | 2.218   | 2.NEW-M18 | 2.224   |
+| 2.NEW-M3  | 2.190   | 2.NEW-M19 | 2.225   |
+| 2.NEW-M4  | 2.195   | 2.NEW-M20 | 2.226   |
+| 2.NEW-M5  | 2.196   | 2.NEW-M21 | 2.227   |
+| 2.NEW-M6  | 2.194   | 2.NEW-M22 | 2.228   |
+| 2.NEW-M7  | 2.199   | 2.NEW-M23 | 2.214   |
+| 2.NEW-M8  | 2.187   | 2.NEW-M24 | 2.229   |
+| 2.NEW-M9  | 2.204   | 2.NEW-M25 | 2.188   |
+| 2.NEW-M10 | 2.205   | 2.NEW-M26 | 2.230   |
+| 2.NEW-M11 | 2.219   | 2.NEW-M27 | 2.231   |
+| 2.NEW-M12 | 2.220   | 2.NEW-M28 | 2.232   |
+| 2.NEW-M13 | 2.200   | 2.NEW-M29 | 2.201   |
+| 2.NEW-M14 | 2.221   | 2.NEW-M30 | 2.202   |
+| 2.NEW-M15 | 2.210   | 2.NEW-M31 | 2.203   |
+| 2.NEW-M16 | 2.222   |           |         |
+
+2.NEW-M4 and 2.NEW-M5 absorbed the agent desktop UX note's follow behavior,
+and 2.NEW-M10 also marks sessions with unread output. The UI preferences API,
+2.173, stores the motion setting.
+
 ## Open questions
 
-- Should Pau offer an in-app motion setting with system, reduce, and full, or
-  follow only the OS? The proposal assumes the setting exists because WCAG
-  lists it as a technique and it lets the operator reduce motion in Pau
-  without changing OS settings.
-- Which machine is the reference for the performance budgets? The proposal
-  assumes a 120Hz MacBook Pro.
-- Should finished tool blocks collapse at the end of a turn, stay open, or
-  stay collapsed by default? Pi's TUI behavior may set the expectation.
-- Should the running spinner appear in the session rail as well as the
-  session header, or would that be too much motion with many sessions?
-- Is a command palette planned? `dev/plan/frontend.md` mentions a command bar,
-  but no unit builds one.
 - Should the motion tokens live only in `tokens.css` with a TypeScript mirror
   checked by a test, or be generated from TypeScript like theme colors?
-- `CLAUDE.md` refers to `packages/prototype`, which is missing. Should the
-  guide point at `dev/prototype`, or is the package still planned?
 
 [ai-sdk-chat]: https://ai-sdk.dev/docs/reference/ai-sdk-ui/use-chat
 [bcd]: https://github.com/mdn/browser-compat-data

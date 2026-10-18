@@ -41,6 +41,7 @@
 	import ContextMeter from './ContextMeter.svelte';
 	import ThinkingLevelPicker from './ThinkingLevelPicker.svelte';
 	import SessionPicker from './SessionPicker.svelte';
+	import Select from './Select.svelte';
 	import SessionResourceSummary from './SessionResourceSummary.svelte';
 	import SessionTree from './SessionTree.svelte';
 	import { openByDefault } from './transcript-disclosure';
@@ -2143,13 +2144,22 @@
 							void submitPrompt();
 						}}>
 						{#if activeSession.status === 'running' && canQueue}
-							<label class="session-composer__queue">
-								<span>Send as</span>
-								<select value={activeQueue} onchange={(event) => (queue = event.currentTarget.value as PromptQueue)}>
-									{#if activeSession.capabilities.steer}<option value="steer">Steer now</option>{/if}
-									{#if activeSession.capabilities.followUp}<option value="follow-up">Follow up</option>{/if}
-								</select>
-							</label>
+							<div class="session-composer__queue">
+								<span aria-hidden="true">Send as</span>
+								<Select
+									label="Send as"
+									variant="quiet"
+									options={[
+										...(activeSession.capabilities.steer ? [{ value: 'steer' as const, label: 'Steer now' }] : []),
+										...(activeSession.capabilities.followUp
+											? [{ value: 'follow-up' as const, label: 'Follow up' }]
+											: [])
+									]}
+									value={activeQueue}
+									onChange={(next) => {
+										queue = next;
+									}} />
+							</div>
 						{/if}
 						{#if images.length > 0}
 							<ul class="session-composer__images" aria-label="Attached images">
@@ -3035,13 +3045,6 @@
 		background: var(--pau-canvas);
 		border-bottom: 1px solid var(--pau-border);
 		font-size: var(--pau-type-xs);
-	}
-
-	.session-composer__queue select {
-		color: var(--pau-text);
-		background: transparent;
-		border: 0;
-		font: inherit;
 	}
 
 	.session-composer__commands {

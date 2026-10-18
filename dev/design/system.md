@@ -166,6 +166,20 @@ underneath. Escape, Tab, or a choice closes the menu and returns focus to the
 item. File menus can reveal a file in the system file manager but never launch
 it in another application, because the webview renders agent-generated content.
 
+Single-choice settings use the shared `Select` dropdown instead of a native
+`<select>`. The trigger is a field: control row height, control radius, the
+border token, the current label, and the token chevron at the end. Options
+show readable labels, such as "Extra high" for Pi's `xhigh`, while the stored
+value stays raw. The list opens in the top layer on the raised surface, below
+the trigger or above it near the bottom edge, with fixed-height rows and a
+check mark on the selected option. It follows the select-only combobox
+pattern: Space, Enter, or Alt+Down opens it, arrows, Home, End, and typing
+move, Enter or Space chooses, and Escape or Tab closes it. A disabled option
+or control states its reason. A change that the agent rejects shows the error
+and restores the previous value. A pointer open fades in like other popovers.
+A keyboard open, or any open under reduced motion, appears at once. The model
+picker uses the same surface.
+
 Every relevant control state needs a visible treatment. Icon-only controls need
 an accessible name and, where meaning is not obvious, a tooltip or adjacent
 label. Destructive actions name the object and preserve a cancel or recovery

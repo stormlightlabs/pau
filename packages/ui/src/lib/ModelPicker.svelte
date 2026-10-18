@@ -207,9 +207,11 @@
 		max-height: 18rem;
 		padding: var(--pau-space-2);
 		overflow-y: auto;
-		background: var(--pau-canvas);
-		border: 1px solid var(--pau-border);
+		/* The same popover surface as Select's list. */
+		background: var(--pau-surface-raised);
+		border: var(--pau-border-thin, 1px) solid var(--pau-border);
 		border-radius: var(--pau-radius-surface);
+		box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 28%);
 	}
 
 	ul {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import '../styles/tokens.css';
+	import Select, { type SelectOption } from './Select.svelte';
 	import type {
 		EffectiveSandboxView,
 		SandboxCredentialShape,
@@ -119,7 +120,8 @@
 		},
 		{ value: 'read-only', label: 'Read only', detail: 'Writes only the session temporary directory.' }
 	];
-	const credentialShapes: { value: SandboxCredentialShape; label: string }[] = [
+	const fieldId = $props.id();
+	const credentialShapes: SelectOption<SandboxCredentialShape>[] = [
 		{ value: 'whole-value', label: 'Whole value' },
 		{ value: 'url-password', label: 'Password in a URL' },
 		{ value: 'colon-pair', label: 'Credential after a colon' }
@@ -276,18 +278,18 @@
 								spellcheck="false"
 								oninput={(event) => updateCredentialReference(index, { source: event.currentTarget.value.trim() })} />
 						</label>
-						<label>
-							<span>Value shape</span>
-							<small>Choose how Pau finds the credential without exposing the rest of the value.</small>
-							<select
+						<div class="sandbox__field">
+							<span id={`${fieldId}-shape-${index}`}>Value shape</span>
+							<small id={`${fieldId}-shape-hint-${index}`}
+								>Choose how Pau finds the credential without exposing the rest of the value.</small>
+							<Select
+								block
+								labelledby={`${fieldId}-shape-${index}`}
+								describedby={`${fieldId}-shape-hint-${index}`}
+								options={credentialShapes}
 								value={reference.shape}
-								onchange={(event) =>
-									updateCredentialReference(index, { shape: event.currentTarget.value as SandboxCredentialShape })}>
-								{#each credentialShapes as shape (shape.value)}
-									<option value={shape.value}>{shape.label}</option>
-								{/each}
-							</select>
-						</label>
+								onChange={(shape) => updateCredentialReference(index, { shape })} />
+						</div>
 						<label>
 							<span>TLS destinations</span>
 							<small>One host, wildcard, or host and port per line. Do not include a URL scheme or path.</small>
@@ -566,7 +568,8 @@
 	}
 
 	.sandbox__grants > label:not(.sandbox__check),
-	.sandbox__credential label {
+	.sandbox__credential label,
+	.sandbox__field {
 		display: grid;
 		gap: var(--pau-space-1);
 		font-size: var(--pau-type-md);
@@ -598,7 +601,6 @@
 	}
 
 	textarea,
-	select,
 	input[type='text'] {
 		width: 100%;
 		min-height: var(--pau-size-row-lg);
@@ -611,14 +613,12 @@
 		resize: vertical;
 	}
 
-	select,
 	input[type='text'] {
 		min-height: var(--pau-size-row-lg);
 		resize: none;
 	}
 
 	textarea:focus-visible,
-	select:focus-visible,
 	input:focus-visible,
 	button:focus-visible {
 		outline: var(--pau-focus-width) solid var(--pau-focus);

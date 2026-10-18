@@ -6,6 +6,7 @@ export const ICONS = {
 	paste: 'i-tabler-clipboard',
 	plus: 'i-tabler-plus',
 	terminal: 'i-tabler-terminal-2',
+	check: 'i-tabler-check',
 	chevronDown: 'i-tabler-chevron-down',
 	chevronRight: 'i-tabler-chevron-right',
 	file: 'i-tabler-file',

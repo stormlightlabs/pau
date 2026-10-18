@@ -20,7 +20,8 @@ test('changes release-safe settings and starts bounded tracing explicitly', asyn
 	const onStartPayloadTracing = vi.fn();
 	await render(DiagnosticsView, { bundle: diagnosticFixtures.active, onSettingsChange, onStartPayloadTracing });
 
-	await userEvent.selectOptions(page.getByLabelText('Minimum log level'), 'warn');
+	await userEvent.click(page.getByRole('combobox', { name: 'Minimum log level' }));
+	await userEvent.click(page.getByRole('option', { name: 'Warning' }));
 	expect(onSettingsChange).toHaveBeenCalledWith(true, 'warn');
 	await userEvent.click(page.getByRole('button', { name: 'Trace for 5 minutes' }));
 	expect(onStartPayloadTracing).toHaveBeenCalledWith(300);
@@ -43,5 +44,5 @@ test('shows the explicit control and CLI flag while collection is off', async ()
 
 	await expect.element(page.getByRole('heading', { name: 'Collection is off' })).toBeVisible();
 	await expect.element(page.getByText('--diagnostics')).toBeVisible();
-	await expect.element(page.getByLabelText('Minimum log level')).toBeDisabled();
+	await expect.element(page.getByRole('combobox', { name: 'Minimum log level' })).toBeDisabled();
 });

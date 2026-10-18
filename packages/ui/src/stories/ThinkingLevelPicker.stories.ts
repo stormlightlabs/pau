@@ -14,39 +14,57 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-function levelStory(level: ThinkingLevel): Story {
+function levelStory(level: ThinkingLevel, label: string): Story {
 	return {
 		args: { level },
 		play: async ({ canvasElement }) => {
 			const select = within(canvasElement).getByRole('combobox', { name: 'Thinking level' });
 			await expect(select).toBeEnabled();
-			await expect(select).toHaveValue(level);
+			await expect(select).toHaveTextContent(label);
 		}
 	};
 }
 
-export const Off = levelStory('off');
-export const Minimal = levelStory('minimal');
-export const Low = levelStory('low');
-export const Medium = levelStory('medium');
-export const High = levelStory('high');
-export const ExtraHigh = levelStory('xhigh');
-export const Max = levelStory('max');
+export const Off = levelStory('off', 'Off');
+export const Minimal = levelStory('minimal', 'Minimal');
+export const Low = levelStory('low', 'Low');
+export const Medium = levelStory('medium', 'Medium');
+export const High = levelStory('high', 'High');
+export const ExtraHigh = levelStory('xhigh', 'Extra high');
+export const Max = levelStory('max', 'Max');
 
 export const UnknownLevel: Story = {
 	args: { level: undefined },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await expect(canvas.getByRole('combobox', { name: 'Thinking level' })).toHaveValue('');
-		await expect(canvas.getByRole('option', { name: 'Choose a level' })).toBeDisabled();
+		await expect(canvas.getByRole('combobox', { name: 'Thinking level' })).toHaveTextContent('Choose a level');
 	}
 };
 
 export const ChangeLevel: Story = {
 	play: async ({ canvasElement, args }) => {
-		const select = within(canvasElement).getByRole('combobox', { name: 'Thinking level' });
-		await userEvent.selectOptions(select, 'high');
+		const canvas = within(canvasElement);
+		const select = canvas.getByRole('combobox', { name: 'Thinking level' });
+		await userEvent.click(select);
+		await userEvent.click(await canvas.findByRole('option', { name: 'High' }));
 		await expect(args.onSelect).toHaveBeenCalledWith('high');
+		await expect(select).toHaveFocus();
+	}
+};
+
+/** Opens the list from the keyboard, moves with the arrows, and selects with Enter. */
+export const KeyboardSelection: Story = {
+	play: async ({ canvasElement, args }) => {
+		const canvas = within(canvasElement);
+		const select = canvas.getByRole('combobox', { name: 'Thinking level' });
+		select.focus();
+		await userEvent.keyboard('{ArrowDown}');
+		await expect(select).toHaveAttribute('aria-expanded', 'true');
+		await expect(canvas.getByRole('option', { name: 'Medium' })).toHaveAttribute('aria-selected', 'true');
+		await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+		await expect(args.onSelect).toHaveBeenCalledWith('xhigh');
+		await expect(select).toHaveAttribute('aria-expanded', 'false');
+		await expect(select).toHaveFocus();
 	}
 };
 
@@ -86,9 +104,10 @@ export const Rejected: Story = {
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
 		const select = canvas.getByRole('combobox', { name: 'Thinking level' });
-		await userEvent.selectOptions(select, 'max');
+		await userEvent.click(select);
+		await userEvent.click(await canvas.findByRole('option', { name: 'Max' }));
 		await expect(await canvas.findByRole('alert')).toHaveTextContent('Pi rejected the request: Level not supported');
-		await expect(select).toHaveValue('medium');
+		await expect(select).toHaveTextContent('Medium');
 		await expect(select).toBeEnabled();
 	}
 };

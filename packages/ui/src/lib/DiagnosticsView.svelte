@@ -1,5 +1,6 @@
 <script lang="ts">
 	import '../styles/tokens.css';
+	import Select, { type SelectOption } from './Select.svelte';
 	import type { DiagnosticBundleView, DiagnosticLevel } from './types/diagnostics';
 
 	let {
@@ -17,10 +18,13 @@
 	let destination = $state('pau-diagnostics.json');
 	let reviewOpen = $state(false);
 
-	function changeLevel(event: Event): void {
-		const level = (event.currentTarget as HTMLSelectElement).value as DiagnosticLevel;
-		onSettingsChange?.(bundle.settings.enabled, level);
-	}
+	const levelOptions: SelectOption<DiagnosticLevel>[] = [
+		{ value: 'debug', label: 'Debug' },
+		{ value: 'info', label: 'Info' },
+		{ value: 'warn', label: 'Warning' },
+		{ value: 'error', label: 'Error' }
+	];
+	const levelLabelId = $props.id();
 
 	function recordDetail(record: DiagnosticBundleView['records'][number]): string {
 		return (
@@ -59,15 +63,15 @@
 					onSettingsChange?.((event.currentTarget as HTMLInputElement).checked, bundle.settings.minLevel)} />
 			<span>Enable diagnostics</span>
 		</label>
-		<label>
-			<span>Minimum log level</span>
-			<select value={bundle.settings.minLevel} disabled={!bundle.settings.enabled} onchange={changeLevel}>
-				<option value="debug">Debug</option>
-				<option value="info">Info</option>
-				<option value="warn">Warning</option>
-				<option value="error">Error</option>
-			</select>
-		</label>
+		<div class="diagnostics-view__level">
+			<span id={levelLabelId}>Minimum log level</span>
+			<Select
+				labelledby={levelLabelId}
+				options={levelOptions}
+				value={bundle.settings.minLevel}
+				disabled={!bundle.settings.enabled}
+				onChange={(level) => onSettingsChange?.(bundle.settings.enabled, level)} />
+		</div>
 	</section>
 
 	{#if !bundle.settings.enabled}
@@ -289,14 +293,14 @@
 		margin-top: var(--pau-space-1);
 	}
 
-	.diagnostics-view label {
+	.diagnostics-view label,
+	.diagnostics-view__level {
 		display: flex;
 		align-items: center;
 		gap: var(--pau-space-2);
 		font-size: var(--pau-type-xs);
 	}
 
-	.diagnostics-view select,
 	.diagnostics-view__export input {
 		min-height: var(--pau-size-row-lg);
 		padding-inline: var(--pau-space-2);
@@ -321,15 +325,13 @@
 		border-color: var(--pau-accent);
 	}
 
-	.diagnostics-view button:disabled,
-	.diagnostics-view select:disabled {
+	.diagnostics-view button:disabled {
 		opacity: 0.55;
 		cursor: not-allowed;
 	}
 
 	.diagnostics-view button:focus-visible,
-	.diagnostics-view input:focus-visible,
-	.diagnostics-view select:focus-visible {
+	.diagnostics-view input:focus-visible {
 		outline: var(--pau-focus-width) solid var(--pau-focus);
 		outline-offset: var(--pau-focus-offset);
 	}

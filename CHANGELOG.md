@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Dropdowns match Pau's design, show readable names such as "Extra high" for
+  thinking levels, and work fully from the keyboard.
 - Press ⌘K, or F1 on Linux, or click the search field to open a command palette
   that finds actions, sessions, workspaces, and views and shows each action's
   shortcut.

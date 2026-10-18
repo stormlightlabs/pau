@@ -40,6 +40,7 @@ export { default as ThinkingLevelPicker } from './lib/ThinkingLevelPicker.svelte
 export { default as MotionSettingControl } from './lib/MotionSettingControl.svelte';
 export { default as ProcessesView } from './lib/ProcessesView.svelte';
 export { default as SandboxSettingsView } from './lib/SandboxSettingsView.svelte';
+export { default as Select, type SelectOption } from './lib/Select.svelte';
 export { default as SessionResourceSummary } from './lib/SessionResourceSummary.svelte';
 export { default as TranscriptSearch } from './lib/TranscriptSearch.svelte';
 export { default as SessionPicker } from './lib/SessionPicker.svelte';

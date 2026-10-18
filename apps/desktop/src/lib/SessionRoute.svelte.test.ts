@@ -844,17 +844,18 @@ test('shows the thinking level Pi reports, and the selected level only while the
 
 	const control = page.getByRole('combobox', { name: 'Thinking level' });
 	await expect.element(control).toBeEnabled();
-	await userEvent.selectOptions(control, 'high');
+	await userEvent.click(control);
+	await userEvent.click(page.getByRole('option', { name: 'High', exact: true }));
 
 	expect(put).toHaveBeenCalledWith(expect.objectContaining({ body: '{"level":"high"}' }));
-	await expect.element(control).toHaveValue('high');
+	await expect.element(control).toHaveTextContent('High');
 
 	// Pi clamps the level, and the reported level wins once the request ends.
 	finish?.();
-	await expect.element(control).toHaveValue('low');
+	await expect.element(control).toHaveTextContent('Low');
 	sockets[0]?.open();
 	sockets[0]?.receive(sessionChanged({ ...idleSession, thinking_level: 'medium' }));
-	await expect.element(control).toHaveValue('medium');
+	await expect.element(control).toHaveTextContent('Medium');
 });
 
 test('explains a rejected thinking level', async () => {
@@ -866,7 +867,8 @@ test('explains a rejected thinking level', async () => {
 	});
 	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
 
-	await userEvent.selectOptions(page.getByRole('combobox', { name: 'Thinking level' }), 'max');
+	await userEvent.click(page.getByRole('combobox', { name: 'Thinking level' }));
+	await userEvent.click(page.getByRole('option', { name: 'Max' }));
 
 	await expect.element(page.getByRole('alert')).toHaveTextContent('Pi rejected the request: Level not supported');
 });

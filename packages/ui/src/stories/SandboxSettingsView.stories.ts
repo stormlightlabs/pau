@@ -65,9 +65,10 @@ export const StructuredCredentialReference: Story = {
 	args: { selection: sandboxFixtures.structuredReferenced, effective: sandboxFixtures.effective },
 	play: async ({ args, canvasElement }) => {
 		const canvas = within(canvasElement);
-		const shape = canvas.getByRole('combobox', { name: /Value shape/ });
-		await expect(shape).toHaveValue('url-password');
-		await userEvent.selectOptions(shape, 'colon-pair');
+		const shape = canvas.getByRole('combobox', { name: 'Value shape' });
+		await expect(shape).toHaveTextContent('Password in a URL');
+		await userEvent.click(shape);
+		await userEvent.click(await canvas.findByRole('option', { name: 'Credential after a colon' }));
 		const credential = expect.objectContaining({ source: 'DATABASE_URL', shape: 'colon-pair' });
 		const settings = expect.objectContaining({ credentialReferences: [credential] });
 		await expect(args.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ settings }));

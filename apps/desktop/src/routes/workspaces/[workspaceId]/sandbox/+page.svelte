@@ -9,7 +9,9 @@
 	import {
 		ApplicationShell,
 		SandboxSettingsView,
+		Select,
 		type EffectiveSandboxView,
+		type SelectOption,
 		type SandboxSelectionModel
 	} from '@stormlightlabs/pau-ui';
 	import { onMount } from 'svelte';
@@ -20,6 +22,10 @@
 	import { effectiveView, selectionView, selectionWire } from '$lib/sandbox-model';
 
 	const PREVIEW_DELAY_MS = 250;
+	const agentOptions: SelectOption<SandboxAdapter>[] = [
+		{ value: 'pi', label: 'Pi' },
+		{ value: 'claude', label: 'Claude' }
+	];
 
 	let workspaceId = $derived(page.params.workspaceId ?? '');
 	let selection = $state<SandboxSelectionModel>();
@@ -101,13 +107,17 @@
 	productItems={productNavigation(page.route.id, workspaceId)}
 	contextItems={[]}>
 	<div class="sandbox-route">
-		<label class="sandbox-route__agent">
-			Show access for
-			<select bind:value={adapter} onchange={() => void preview()}>
-				<option value="pi">Pi</option>
-				<option value="claude">Claude</option>
-			</select>
-		</label>
+		<div class="sandbox-route__agent">
+			<span id="sandbox-route-agent">Show access for</span>
+			<Select
+				labelledby="sandbox-route-agent"
+				options={agentOptions}
+				value={adapter}
+				onChange={(next) => {
+					adapter = next;
+					void preview();
+				}} />
+		</div>
 		{#if notice}
 			<p role="status">{notice}</p>
 		{/if}
@@ -134,11 +144,6 @@
 		align-items: center;
 		gap: 0.5rem;
 		width: min(54rem, calc(100vw - 2rem));
-	}
-
-	select {
-		min-height: 2.25rem;
-		font: inherit;
 	}
 
 	p {

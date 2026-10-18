@@ -140,7 +140,7 @@ export const Rejected: Story = {
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement.ownerDocument.body);
 		await userEvent.click(canvas.getByRole('button', { name: 'Select' }));
-		await expect(canvas.getByRole('alert')).toHaveTextContent('The extension could not use that answer.');
+		await expect(await canvas.findByRole('alert')).toHaveTextContent('The extension could not use that answer.');
 	}
 };
 

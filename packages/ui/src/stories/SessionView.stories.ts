@@ -712,8 +712,9 @@ export const ModelWithoutImageInput: Story = {
 		await userEvent.upload(canvas.getByLabelText('Image files'), screenshot());
 		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), 'Describe this.');
 		await userEvent.click(canvas.getByRole('button', { name: /Send prompt/ }));
-		await expect(canvas.getByRole('alert')).toHaveTextContent('The current model cannot read images');
-		await expect(canvas.getByRole('img', { name: 'screenshot.png' })).toBeVisible();
+		// The send fails asynchronously, so wait for the alert instead of querying at once.
+		await expect(await canvas.findByRole('alert')).toHaveTextContent('The current model cannot read images');
+		await expect(await canvas.findByRole('img', { name: 'screenshot.png' })).toBeVisible();
 	}
 };
 

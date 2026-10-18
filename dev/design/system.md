@@ -198,6 +198,26 @@ an accessible name and, where meaning is not obvious, a tooltip or adjacent
 label. Destructive actions name the object and preserve a cancel or recovery
 path where practical.
 
+## Keyboard
+
+Pau matches Pi's workflows, not every Pi key. Three rules decide which chord an
+action gets:
+
+- In the composer and the session, Pi's keys apply. Sending, steering,
+  queueing, interrupting, changing the thinking level, and opening the model
+  picker use Pi's defaults, and the operator's `keybindings.json` overrides
+  them.
+- Actions that Pi does not have follow the platform: ⌘ chords on macOS and
+  Ctrl chords on Linux, as in other desktop editors. This covers the command
+  palette, session switching, panels, zoom, and settings.
+- A Pi binding takes a chord from Pau only where it applies. Pi's text-editing
+  bindings, such as Ctrl+K for deleting to the end of the line, apply while
+  the composer has focus. Pi's application bindings, such as Ctrl+Shift+P for
+  the previous model, apply everywhere.
+
+The shortcut list shows each action's chord, and names the Pi binding that
+took a chord from Pau and where it applies.
+
 ## Motion
 
 Motion shows cause, continuity, and state. It never decorates, never delays

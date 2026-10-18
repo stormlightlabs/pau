@@ -248,7 +248,7 @@
 				<p>Open a terminal to run commands in this workspace.</p>
 				<button
 					type="button"
-					class="terminal-surface__primary"
+					class="pau-button pau-button--primary terminal-surface__primary"
 					disabled={creating || disconnected}
 					onclick={() => void openTerminal()}>
 					{creating ? 'Opening…' : 'Open a terminal'}
@@ -412,19 +412,6 @@
 
 	.terminal-surface__primary {
 		margin-top: var(--pau-space-3);
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
-		color: var(--shell-bg);
-		background: var(--shell-accent);
-		border: 0;
-		font: inherit;
-		font-weight: var(--pau-weight-semibold);
-		cursor: pointer;
-	}
-
-	.terminal-surface__primary:disabled {
-		cursor: default;
-		opacity: 0.6;
 	}
 
 	.terminal-surface__rail-empty {

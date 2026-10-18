@@ -166,6 +166,18 @@ Use one control vocabulary across screens:
 - compact chips for scope, branch, model, state, and attached context;
 - section labels for stable pane regions, not as decoration above every block.
 
+Each surface has at most one accent primary: the action that moves its task
+forward, such as Send prompt in the composer, Open workspace on first run,
+Start session in an empty workspace, Start again in a stopped session, Save in
+the editor, Open a terminal with no terminals open, and Resume on the newest
+saved session in the picker. Other actions on that surface are secondary or
+quiet. A notice inside a surface, such as the Pi readiness notice, uses
+secondary buttons so it never competes with the surface's primary. Actions that
+remove or end something use the danger variant. A disabled primary drops the
+accent fill for the raised surface and muted text, and never relies on
+opacity, so it cannot read as enabled. The shared `pau-button` variants in
+`packages/ui` own these colors, and components only adjust size and spacing.
+
 Controls that show or hide a rail, sidebar, or inspector belong in the top app
 bar. Keep task-specific actions in the task surface.
 

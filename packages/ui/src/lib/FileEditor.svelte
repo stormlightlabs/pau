@@ -253,10 +253,14 @@
 			</div>
 		</div>
 		<div class="file-editor__actions">
-			<button type="button" onclick={() => void checkForExternalChange()} disabled={loading}>Check for changes</button>
-			<button type="button" onclick={revert} disabled={!dirty}>Revert</button>
 			<button
-				class="file-editor__save"
+				class="pau-button pau-button--secondary"
+				type="button"
+				onclick={() => void checkForExternalChange()}
+				disabled={loading}>Check for changes</button>
+			<button class="pau-button pau-button--secondary" type="button" onclick={revert} disabled={!dirty}>Revert</button>
+			<button
+				class="pau-button pau-button--primary"
 				type="button"
 				onclick={() => void save()}
 				disabled={!dirty || saving || !file?.writable}>
@@ -272,8 +276,11 @@
 				<p>{dirty ? 'Your unsaved changes are still in the editor.' : 'Reload to view the current version.'}</p>
 			</div>
 			<div>
-				{#if dirty}<button type="button" onclick={keepLocalVersion}>Keep my version</button>{/if}
-				<button type="button" onclick={() => void showFile(externalFile!)}>Reload from disk</button>
+				{#if dirty}<button class="pau-button pau-button--secondary" type="button" onclick={keepLocalVersion}
+						>Keep my version</button
+					>{/if}
+				<button class="pau-button pau-button--secondary" type="button" onclick={() => void showFile(externalFile!)}
+					>Reload from disk</button>
 			</div>
 		</div>
 	{/if}
@@ -286,9 +293,10 @@
 			<p>{error}</p>
 			{#if revealFailed}<p>Pau could not show this file in the file manager.</p>{/if}
 			{#if retryable}
-				<button type="button" onclick={() => void load()}>Try again</button>
+				<button class="pau-button pau-button--primary" type="button" onclick={() => void load()}>Try again</button>
 			{:else if onReveal}
-				<button type="button" onclick={() => void reveal()}>{revealLabel()}</button>
+				<button class="pau-button pau-button--primary" type="button" onclick={() => void reveal()}
+					>{revealLabel()}</button>
 			{/if}
 		</div>
 	{:else}
@@ -352,37 +360,14 @@
 		gap: var(--pau-space-1);
 	}
 
+	/* Header and banner buttons stay compact; color comes from the shared variants. */
 	button {
 		min-height: var(--pau-size-row-sm);
 		padding: var(--pau-space-1) var(--pau-space-2);
-		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-control);
-		background: var(--pau-surface-raised);
-		color: var(--pau-text);
-		font: inherit;
-		cursor: pointer;
-	}
-
-	button:hover:not(:disabled),
-	button:focus-visible {
-		border-color: var(--pau-focus);
 	}
 
 	button:focus-visible {
-		outline: var(--pau-focus-width) solid var(--pau-focus);
 		outline-offset: var(--pau-focus-offset-inset);
-	}
-
-	button:disabled {
-		cursor: not-allowed;
-		opacity: 0.5;
-	}
-
-	.file-editor__save {
-		border-color: var(--pau-accent);
-		background: var(--pau-accent);
-		color: var(--pau-canvas);
-		font-weight: var(--pau-weight-semibold);
 	}
 
 	.file-editor__external {

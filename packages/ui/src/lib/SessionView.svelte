@@ -1963,7 +1963,7 @@
 				{#if onStartSession}
 					<button
 						type="button"
-						class="session-view__retry"
+						class="pau-button pau-button--primary session-view__retry"
 						disabled={disconnected || startingWorkspaceId !== undefined}
 						onclick={() => {
 							const workspace = workspaces.find((candidate) => candidate.id === startFailure?.workspaceId);
@@ -1984,7 +1984,7 @@
 				{#if pickFolder}
 					<button
 						type="button"
-						class="session-view__retry"
+						class="pau-button pau-button--primary session-view__retry"
 						disabled={disconnected || opening}
 						onclick={() => void chooseWorkspace()}>{opening ? 'Opening…' : 'Open workspace…'}</button>
 				{:else}
@@ -2007,10 +2007,10 @@
 						<div class="session-open__actions">
 							<button
 								type="submit"
-								class="session-view__retry"
+								class="pau-button pau-button--primary"
 								disabled={disconnected || opening || openPath.trim() === ''}>{opening ? 'Opening…' : 'Open'}</button>
 							{#if !firstRun}
-								<button type="button" class="session-view__retry" onclick={closeOpenForm}>Cancel</button>
+								<button type="button" class="pau-button pau-button--secondary" onclick={closeOpenForm}>Cancel</button>
 							{/if}
 						</div>
 					</form>
@@ -2026,7 +2026,7 @@
 				{#if onStartSession}
 					<button
 						type="button"
-						class="session-view__retry"
+						class="pau-button pau-button--primary session-view__retry"
 						disabled={disconnected || startingWorkspaceId !== undefined}
 						onclick={() => void startSession(openedWorkspace)}>Start session</button>
 				{/if}
@@ -2059,7 +2059,7 @@
 						<div class="session-compact">
 							<button
 								type="button"
-								class="session-view__stop session-view__action"
+								class="pau-button pau-button--quiet"
 								aria-expanded={compactOpen}
 								aria-busy={compacting}
 								aria-controls="compact-panel"
@@ -2084,10 +2084,13 @@
 										></textarea>
 									</label>
 									<div>
-										<button type="button" class="session-view__stop" onclick={() => (compactOpen = false)}>
+										<button
+											type="button"
+											class="pau-button pau-button--secondary"
+											onclick={() => (compactOpen = false)}>
 											Cancel
 										</button>
-										<button type="submit" class="session-view__stop">Compact now</button>
+										<button type="submit" class="pau-button pau-button--secondary">Compact now</button>
 									</div>
 								</form>
 							{/if}
@@ -2096,7 +2099,7 @@
 					{#if activeSession.capabilities.stop && liveStatuses.has(activeSession.status)}
 						<button
 							type="button"
-							class="session-view__stop session-view__action"
+							class="pau-button pau-button--quiet"
 							disabled={disconnected}
 							onclick={() => void stop()}>
 							Stop
@@ -2143,7 +2146,7 @@
 						{#if activeSession.capabilities.retry}
 							<button
 								type="button"
-								class="session-view__retry"
+								class="pau-button pau-button--secondary"
 								disabled={disconnected}
 								onclick={() => void cancelRetry()}>
 								Cancel retry
@@ -2224,7 +2227,7 @@
 									{#if canRetry && entry.id === retryableEntryId}
 										<button
 											type="button"
-											class="session-view__retry session-message__retry"
+											class="pau-button pau-button--secondary session-message__retry"
 											disabled={retrying}
 											onclick={() => void retry()}>
 											{retrying ? 'Retrying…' : 'Retry'}
@@ -2376,7 +2379,7 @@
 							{#if onRestartSession}
 								<button
 									type="button"
-									class="session-ended__restart"
+									class="pau-button pau-button--primary"
 									disabled={disconnected || restartingSessionId !== undefined}
 									onclick={() => void restart(activeSession.id)}>
 									{restartingSessionId === activeSession.id ? 'Starting…' : 'Start again'}
@@ -2510,7 +2513,7 @@
 										}} />
 									<button
 										type="button"
-										class="session-composer__attach"
+										class="pau-button pau-button--secondary"
 										disabled={composerUnavailable !== undefined}
 										onclick={() => imagePicker?.click()}>
 										Attach image
@@ -2518,14 +2521,17 @@
 									{#if activeSession.status === 'running' && activeSession.capabilities.interrupt}
 										<button
 											type="button"
-											class="session-composer__interrupt"
+											class="pau-button pau-button--secondary"
 											disabled={disconnected}
 											onclick={() => void interrupt()}>
 											Interrupt{#if interruptShortcut}
 												<kbd>{interruptShortcut}</kbd>{/if}
 										</button>
 									{/if}
-									<button type="submit" disabled={!draft.trim() || sending || composerUnavailable !== undefined}>
+									<button
+										type="submit"
+										class="pau-button pau-button--primary"
+										disabled={!draft.trim() || sending || composerUnavailable !== undefined}>
 										{sending
 											? 'Sending…'
 											: activeQueue === 'follow-up' && activeSession.status === 'running'
@@ -2541,10 +2547,15 @@
 								<p class="session-composer__hint">
 									/{draftBuiltin.command.name}: {draftBuiltin.command.unavailable}
 									{#if onOpenPiTerminal}
-										<button type="button" onclick={() => onOpenPiTerminal(activeSession.id)}
-											>Open Pi in terminal</button>
+										<button
+											type="button"
+											class="pau-button pau-button--secondary"
+											onclick={() => onOpenPiTerminal(activeSession.id)}>Open Pi in terminal</button>
 									{:else if onOpenTerminal && activeWorkspace}
-										<button type="button" onclick={() => onOpenTerminal(activeWorkspace.id)}>Open terminal</button>
+										<button
+											type="button"
+											class="pau-button pau-button--secondary"
+											onclick={() => onOpenTerminal(activeWorkspace.id)}>Open terminal</button>
 									{/if}
 								</p>
 							{/if}
@@ -2776,10 +2787,6 @@
 		gap: var(--pau-space-2);
 	}
 
-	.session-open__actions .session-view__retry {
-		margin-top: 0;
-	}
-
 	.session-view--empty .session-open__error {
 		margin-top: var(--pau-space-3);
 		color: var(--pau-danger);
@@ -2883,35 +2890,6 @@
 		flex: none;
 	}
 
-	.session-view__stop,
-	.session-view__retry {
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
-		color: var(--pau-text);
-		background: transparent;
-		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-control);
-		font: inherit;
-		cursor: pointer;
-	}
-
-	/* Header actions stay quiet: no border until hover or focus. */
-	.session-view__action {
-		color: var(--pau-text-muted);
-		border-color: transparent;
-	}
-
-	.session-view__action:hover:not(:disabled) {
-		color: var(--pau-text);
-		border-color: var(--pau-border);
-	}
-
-	.session-view__stop:disabled,
-	.session-view__retry:disabled {
-		color: var(--pau-text-muted);
-		cursor: not-allowed;
-	}
-
 	.session-view__retry {
 		margin-top: var(--pau-space-4);
 	}
@@ -2931,8 +2909,7 @@
 		margin: 0;
 	}
 
-	.session-view__auto-retry .session-view__retry {
-		margin-top: 0;
+	.session-view__auto-retry button {
 		flex: none;
 	}
 
@@ -3380,24 +3357,6 @@
 		color: var(--pau-danger);
 	}
 
-	.session-ended__restart {
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
-		color: var(--pau-canvas);
-		background: var(--pau-accent);
-		border: 0;
-		border-radius: var(--pau-radius-control);
-		font: inherit;
-		font-weight: var(--pau-weight-semibold);
-		cursor: pointer;
-	}
-
-	.session-ended__restart:disabled {
-		color: var(--pau-text-muted);
-		background: var(--pau-surface-raised);
-		cursor: not-allowed;
-	}
-
 	.session-composer__images img {
 		width: 4rem;
 		height: 4rem;
@@ -3491,37 +3450,6 @@
 		font-size: var(--pau-type-md);
 	}
 
-	.session-composer__actions button {
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
-		color: var(--pau-canvas);
-		background: var(--pau-accent);
-		border: 0;
-		border-radius: var(--pau-radius-control);
-		font: inherit;
-		font-weight: var(--pau-weight-semibold);
-		cursor: pointer;
-	}
-
-	.session-composer__actions button:disabled {
-		color: var(--pau-text-muted);
-		background: var(--pau-surface-raised);
-		cursor: not-allowed;
-	}
-
-	.session-composer__actions .session-composer__attach {
-		color: var(--pau-text);
-		background: var(--pau-surface-raised);
-		border: 1px solid var(--pau-border);
-	}
-
-	.session-composer__actions .session-composer__interrupt {
-		color: var(--pau-text);
-		background: transparent;
-		border: 1px solid var(--pau-border);
-		font-weight: var(--pau-weight-medium);
-	}
-
 	.session-composer kbd {
 		margin-left: var(--pau-space-1);
 		color: inherit;
@@ -3563,10 +3491,7 @@
 	}
 
 	@media (pointer: coarse) {
-		.session-thinking summary,
-		.session-view__stop,
-		.session-view__retry,
-		.session-composer__actions button {
+		.session-thinking summary {
 			min-height: var(--pau-size-target-touch);
 		}
 	}

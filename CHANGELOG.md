@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Each screen highlights one main action, and disabled main buttons no longer
+  look clickable.
 - A stopped or failed session shows its state and a Start again button in place
   of the composer, and keeps your unsent draft for when it runs again.
 - The model picker and context meter look and open like the other composer

@@ -44,7 +44,8 @@ command with a copy button and opens a terminal where they can run it.
 			<CopyButton text={step.command} label="Copy command" />
 		</div>
 		{#if onOpenTerminal}
-			<button type="button" class="agent-readiness__terminal" onclick={onOpenTerminal}>Open terminal</button>
+			<button type="button" class="pau-button pau-button--secondary agent-readiness__terminal" onclick={onOpenTerminal}
+				>Open terminal</button>
 		{/if}
 	{/if}
 </section>
@@ -93,20 +94,8 @@ command with a copy button and opens a terminal where they can run it.
 		overflow-x: auto;
 	}
 
+	/* The notice sits inside a surface whose primary action is elsewhere. */
 	.agent-readiness__terminal {
 		justify-self: start;
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
-		color: var(--pau-text);
-		background: transparent;
-		border: var(--pau-border-thin) solid var(--pau-border);
-		border-radius: var(--pau-radius-control);
-		font: inherit;
-		cursor: pointer;
-	}
-
-	.agent-readiness__terminal:focus-visible {
-		outline: var(--pau-focus-width) solid var(--pau-focus);
-		outline-offset: var(--pau-focus-offset);
 	}
 </style>

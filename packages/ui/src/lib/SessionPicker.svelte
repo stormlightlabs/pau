@@ -22,6 +22,8 @@
 	let loadError = $state<string>();
 	let actionError = $state<string>();
 	let busyId = $state<string>();
+	/** The newest saved session's Resume takes the accent once there is one, so New session steps back. */
+	const resumeIsPrimary = $derived((list?.sessions.length ?? 0) > 0);
 
 	async function fetchList(): Promise<void> {
 		list = undefined;
@@ -56,10 +58,14 @@
 	<header>
 		<h1 id="session-picker-title">Sessions in {workspaceName}</h1>
 		<div>
-			<button type="button" disabled={disabled || busyId !== undefined} onclick={() => run('new', onNew)}>
+			<button
+				type="button"
+				class={['pau-button', resumeIsPrimary ? 'pau-button--secondary' : 'pau-button--primary']}
+				disabled={disabled || busyId !== undefined}
+				onclick={() => run('new', onNew)}>
 				{busyId === 'new' ? 'Starting…' : 'New session'}
 			</button>
-			{#if onClose}<button type="button" onclick={onClose}>Close</button>{/if}
+			{#if onClose}<button type="button" class="pau-button pau-button--secondary" onclick={onClose}>Close</button>{/if}
 		</div>
 	</header>
 
@@ -70,7 +76,7 @@
 	{#if loadError}
 		<div role="alert">
 			<p class="session-picker__error">{loadError}</p>
-			<button type="button" onclick={() => void fetchList()}>Try again</button>
+			<button type="button" class="pau-button pau-button--secondary" onclick={() => void fetchList()}>Try again</button>
 		</div>
 	{:else if !list}
 		<p class="session-picker__note" role="status">Loading saved sessions…</p>
@@ -78,7 +84,7 @@
 		<p class="session-picker__note">Start a new session to begin. Saved Pi sessions in this workspace appear here.</p>
 	{:else}
 		<ul class="session-picker__list" aria-label="Saved sessions">
-			{#each list.sessions as saved (saved.id)}
+			{#each list.sessions as saved, index (saved.id)}
 				<li>
 					<div>
 						<strong>{saved.title}</strong>
@@ -90,6 +96,7 @@
 					</div>
 					<button
 						type="button"
+						class={['pau-button', index === 0 ? 'pau-button--primary' : 'pau-button--secondary']}
 						aria-label={`${saved.live ? 'Open' : 'Resume'} ${saved.title}`}
 						disabled={disabled || busyId !== undefined}
 						onclick={() => run(saved.id, () => onResume(saved.id))}>
@@ -143,22 +150,6 @@
 	h1 {
 		margin: 0;
 		font-size: var(--pau-type-lg);
-	}
-
-	button {
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
-		color: var(--pau-text);
-		background: transparent;
-		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-control);
-		font: inherit;
-		cursor: pointer;
-	}
-
-	button:disabled {
-		color: var(--pau-text-muted);
-		cursor: not-allowed;
 	}
 
 	.session-picker__list {

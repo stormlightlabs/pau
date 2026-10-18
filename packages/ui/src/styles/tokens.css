@@ -11,6 +11,7 @@
  * labels whose caps and tracking keep them legible at that size.
  */
 @import './fonts.css';
+@import './buttons.css';
 
 :root {
 	--pau-space-1: 0.25rem;

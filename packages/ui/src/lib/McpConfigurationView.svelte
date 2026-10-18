@@ -57,7 +57,7 @@
 				<strong>MCP unavailable for {agentLabel}</strong>
 				<p>{configuration.availability.message}</p>
 			</div>
-			<button type="button" onclick={() => onResolve?.()}>
+			<button class="pau-button pau-button--primary" type="button" onclick={() => onResolve?.()}>
 				{configuration.availability.actionLabel}
 			</button>
 		</div>
@@ -71,14 +71,15 @@
 				{/if}
 			</p>
 			{#if !configuration.managedEnabled}
-				<button type="button" onclick={() => onEnable?.()}>Enable for this workspace</button>
+				<button class="pau-button pau-button--primary" type="button" onclick={() => onEnable?.()}
+					>Enable for this workspace</button>
 			{/if}
 		</div>
 
 		<div class="mcp__servers">
 			<div class="mcp__section-heading">
 				<h3>Servers</h3>
-				<button class="quiet" type="button" onclick={() => onCreate?.()}>Add server</button>
+				<button class="pau-button pau-button--secondary" type="button" onclick={() => onCreate?.()}>Add server</button>
 			</div>
 			{#if configuration.servers.length === 0}
 				<p>No editable MCP servers found.</p>
@@ -121,17 +122,32 @@
 								</p>
 							</div>
 							<div class="mcp__actions">
-								<button class="quiet" type="button" onclick={() => onEdit?.(selected.name)}>Edit</button>
-								<button class="quiet" type="button" onclick={() => onToggle?.(selected.name, !selected.enabled)}>
+								<button class="pau-button pau-button--secondary" type="button" onclick={() => onEdit?.(selected.name)}
+									>Edit</button>
+								<button
+									class="pau-button pau-button--secondary"
+									type="button"
+									onclick={() => onToggle?.(selected.name, !selected.enabled)}>
 									{selected.enabled ? 'Disable' : 'Enable'}
 								</button>
 								{#if selected.status === 'needs-auth'}
-									<button type="button" onclick={() => onAuthenticate?.(selected.name)}>Authenticate</button>
+									<button
+										class={[
+											'pau-button',
+											configuration.managedEnabled ? 'pau-button--primary' : 'pau-button--secondary'
+										]}
+										type="button"
+										onclick={() => onAuthenticate?.(selected.name)}>Authenticate</button>
 								{/if}
-								<button type="button" disabled={!selected.enabled} onclick={() => onTest?.(selected.name)}>
+								<button
+									class="pau-button pau-button--secondary"
+									type="button"
+									disabled={!selected.enabled}
+									onclick={() => onTest?.(selected.name)}>
 									Test connection
 								</button>
-								<button class="danger" type="button" onclick={() => onRemove?.(selected.name)}>Remove server</button>
+								<button class="pau-button pau-button--danger" type="button" onclick={() => onRemove?.(selected.name)}
+									>Remove server</button>
 							</div>
 						</div>
 					{/if}
@@ -303,20 +319,10 @@
 
 	button {
 		flex: none;
-		min-height: var(--pau-size-row-lg);
-		padding: var(--pau-space-2) var(--pau-space-3);
-		color: var(--workbench-button-text);
-		background: var(--workbench-button-surface);
-		border: 1px solid transparent;
 		border-radius: var(--pau-radius-control);
-		font: inherit;
-		font-size: var(--pau-type-sm);
-		font-weight: var(--pau-weight-semibold);
+		font-family: inherit;
+		font-size: inherit;
 		cursor: pointer;
-	}
-
-	button:hover:not(:disabled) {
-		background: var(--workbench-button-hover);
 	}
 
 	button:focus-visible {
@@ -324,21 +330,11 @@
 		outline-offset: var(--pau-focus-offset);
 	}
 
-	button:disabled {
-		cursor: not-allowed;
-		opacity: 0.5;
-	}
-
-	button.quiet {
-		color: var(--workbench-text);
-		background: transparent;
-		border-color: var(--workbench-border);
-	}
-
-	button.danger {
-		color: var(--workbench-unavailable-text);
-		background: transparent;
-		border-color: var(--workbench-border);
+	/* Workbench actions are a step larger than transcript controls. */
+	.pau-button {
+		min-height: var(--pau-size-row-lg);
+		padding: var(--pau-space-2) var(--pau-space-3);
+		font-size: var(--pau-type-sm);
 	}
 
 	.mcp__sources h3 {

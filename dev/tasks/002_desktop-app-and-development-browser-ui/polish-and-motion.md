@@ -222,22 +222,3 @@ Verification:
   query emulated.
 - Check every shipped theme in Storybook.
 
-### 2.250 Primary action consistency
-
-Status: planned
-Blocked by: none
-
-Open, Start session, Try again, New session, Resume, Open terminal, and Reload
-from disk use the secondary style while Open a terminal, Send prompt, Save
-workspace default, and Enable for this workspace use the accent primary. The
-disabled primary (Save with no changes, Open a terminal while disconnected) is
-a dim green that still reads as enabled. Give each surface one accent primary
-for the action that advances the task and use the muted surface and disabled
-text token for disabled primaries.
-
-Verification:
-
-- List each surface's primary action in the unit's pull request and confirm
-  Storybook shows exactly one accent button per surface.
-- Component-test that a disabled primary uses the disabled text color.
-

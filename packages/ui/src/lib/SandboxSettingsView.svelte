@@ -300,13 +300,16 @@
 								oninput={(event) =>
 									updateCredentialReference(index, { destinations: lines(event.currentTarget.value) })}></textarea>
 						</label>
-						<button class="quiet sandbox__remove" type="button" onclick={() => removeCredentialReference(index)}>
+						<button
+							class="pau-button pau-button--danger sandbox__remove"
+							type="button"
+							onclick={() => removeCredentialReference(index)}>
 							Remove credential
 						</button>
 					</fieldset>
 				{/each}
 			{/if}
-			<button class="quiet sandbox__add" type="button" onclick={addCredentialReference}
+			<button class="pau-button pau-button--secondary sandbox__add" type="button" onclick={addCredentialReference}
 				>Add credential reference</button>
 		</fieldset>
 
@@ -444,9 +447,14 @@
 
 	<footer class="sandbox__actions">
 		{#if scope === 'session'}
-			<button class="quiet" type="button" onclick={() => onUseWorkspaceDefault?.()}>Use workspace default</button>
+			<button class="pau-button pau-button--secondary" type="button" onclick={() => onUseWorkspaceDefault?.()}
+				>Use workspace default</button>
 		{/if}
-		<button type="button" disabled={saving} onclick={() => onSave?.($state.snapshot(draft) as SandboxSelectionModel)}>
+		<button
+			class="pau-button pau-button--primary"
+			type="button"
+			disabled={saving}
+			onclick={() => onSave?.($state.snapshot(draft) as SandboxSelectionModel)}>
 			{scope === 'workspace' ? 'Save workspace default' : 'Apply to this session'}
 		</button>
 	</footer>
@@ -587,10 +595,6 @@
 		justify-self: start;
 	}
 
-	.sandbox__remove {
-		color: var(--workbench-unavailable-text);
-	}
-
 	textarea,
 	input[type='text'] {
 		width: 100%;
@@ -671,32 +675,11 @@
 		list-style: disc;
 	}
 
-	button {
+	/* Workbench actions are a step larger than transcript controls. */
+	.pau-button {
 		min-height: var(--pau-size-row-lg);
 		padding: var(--pau-space-2) var(--pau-space-3);
-		color: var(--workbench-button-text);
-		background: var(--workbench-button-surface);
-		border: 1px solid transparent;
-		border-radius: var(--pau-radius-control);
-		font: inherit;
 		font-size: var(--pau-type-sm);
-		font-weight: var(--pau-weight-semibold);
-		cursor: pointer;
-	}
-
-	button:hover:not(:disabled) {
-		background: var(--workbench-button-hover);
-	}
-
-	button:disabled {
-		cursor: not-allowed;
-		opacity: 0.5;
-	}
-
-	button.quiet {
-		color: var(--workbench-text);
-		background: transparent;
-		border-color: var(--workbench-border);
 	}
 
 	@media (max-width: 42rem) {

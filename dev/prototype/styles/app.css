@@ -2700,37 +2700,90 @@ pre {
 	font-weight: var(--pau-weight-semibold);
 }
 
-.launch__text {
-	padding-block-end: var(--pau-space-5);
+.launch__step--failed {
+	color: var(--pau-danger);
+}
+
+.launch__steps {
+	display: grid;
+	gap: var(--pau-space-2);
+	margin: var(--pau-space-5) 0 0;
+	padding: var(--pau-space-4) 0 0;
+	list-style: none;
+	border-block-start: var(--pau-border-thin) solid var(--pau-border);
+}
+
+.launch-step {
+	display: grid;
+	grid-template-columns: 12px minmax(0, 1fr) auto;
+	align-items: center;
+	column-gap: var(--pau-space-2);
 	color: var(--pau-text-muted);
+	--icon-size: 12px;
 }
 
-.launch progress {
-	display: block;
-	inline-size: 100%;
-	block-size: 1px;
-	appearance: none;
-	border: 0;
-	background: var(--pau-border);
+.launch-step--running,
+.launch-step--failed {
+	color: var(--pau-text);
 }
 
-.launch progress::-webkit-progress-bar {
-	background: var(--pau-border);
+.launch-step--done .icon {
+	color: var(--pau-success);
 }
 
-.launch progress::-webkit-progress-value {
-	background: var(--pau-accent);
+.launch-step--running .icon {
+	color: var(--pau-accent);
+	animation: launch-step-spin 0.9s linear infinite;
 }
 
-.launch progress::-moz-progress-bar {
-	background: var(--pau-accent);
+.launch-step--attention .icon {
+	color: var(--pau-warning);
 }
 
-.launch__footer {
-	padding-block-start: var(--pau-space-5);
-	font-family: var(--pau-font-code);
+.launch-step--failed .icon {
+	color: var(--pau-danger);
+}
+
+.launch-step__dot {
+	inline-size: 9px;
+	block-size: 9px;
+	margin-inline: 1.5px;
+	border: 1.5px solid currentColor;
+	border-radius: 50%;
+}
+
+.launch-step__state {
 	font-size: var(--pau-type-xs);
-	color: var(--pau-text-muted);
+}
+
+.launch-step__reason {
+	grid-column: 2 / -1;
+	margin-block-start: var(--pau-space-1);
+	color: var(--pau-text);
+	font-size: var(--pau-type-sm);
+	overflow-wrap: anywhere;
+}
+
+.launch__failure {
+	display: grid;
+	gap: var(--pau-space-2);
+	margin-block-start: var(--pau-space-4);
+}
+
+.launch__actions {
+	margin-block-start: var(--pau-space-4);
+}
+
+@keyframes launch-step-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.launch-step--running .icon {
+		animation: none;
+	}
 }
 
 .reconnect-card {

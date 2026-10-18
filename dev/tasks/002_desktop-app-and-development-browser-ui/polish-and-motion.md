@@ -342,22 +342,6 @@ Verification:
 - Confirm in Storybook that switching the theme toolbar recolors the session
   view, Files, and terminal stories.
 
-### 2.266 Prototype launch pages
-
-Status: planned
-Blocked by: none
-
-`splash-launch-*.html` show a percentage progress bar, which contradicts the
-Launch brief in `surfaces.md` ("avoid fake percentages") and the step list the
-app's `LaunchSplash` renders. Replace the bar with the step list, including a
-failed step's reason and the Copy action, and note the change in
-`dev/prototype/README.md`.
-
-Verification:
-
-- Open each launch page and confirm it shows the step list with the same
-  states as the `LaunchSplash` stories.
-
 ### 2.267 Command palette initial highlight
 
 Status: planned

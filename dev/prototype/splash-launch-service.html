@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Restoring workspaces · Pau prototype</title>
+		<title>Starting the local service · Pau prototype</title>
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link
@@ -30,11 +30,30 @@
 							<strong class="launch__name">Pau</strong><span class="launch__tagline">Local coding workspace</span>
 						</div>
 					</div>
-					<p class="launch__step">Launch 2 / 4</p>
-					<h1>Restoring workspaces</h1>
-					<p class="launch__text">Reconnecting to 3 saved workspaces.</p>
-					<progress max="100" value="62" aria-label="Launch progress">62%</progress>
-					<p class="launch__footer">local service<span class="meta-sep" aria-hidden="true">·</span>127.0.0.1</p>
+					<p class="launch__step">Launch 3 / 4</p>
+					<h1>Starting the local service</h1>
+					<ol class="launch__steps" aria-label="Launch steps">
+						<li class="launch-step launch-step--done">
+							<span class="icon i-tabler-check" aria-hidden="true"></span>
+							<span class="launch-step__label">Loading your shell PATH</span>
+							<span class="launch-step__state">Done</span>
+						</li>
+						<li class="launch-step launch-step--done">
+							<span class="icon i-tabler-check" aria-hidden="true"></span>
+							<span class="launch-step__label">Opening the database</span>
+							<span class="launch-step__state">Done</span>
+						</li>
+						<li class="launch-step launch-step--running" aria-current="step">
+							<span class="icon i-tabler-loader-2" aria-hidden="true"></span>
+							<span class="launch-step__label">Starting the local service</span>
+							<span class="launch-step__state">In progress</span>
+						</li>
+						<li class="launch-step launch-step--pending">
+							<span class="launch-step__dot" aria-hidden="true"></span>
+							<span class="launch-step__label">Checking Pi</span>
+							<span class="launch-step__state">Waiting</span>
+						</li>
+					</ol>
 				</div>
 			</main>
 		</div>

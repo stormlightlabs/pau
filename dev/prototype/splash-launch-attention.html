@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Starting the local service · Pau prototype</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Overpass+Mono:wght@400;600&amp;family=Overpass:wght@400;500;600&amp;display=swap"
+			rel="stylesheet" />
+		<link rel="stylesheet" href="styles/tokens.css" />
+		<link rel="stylesheet" href="styles/icons.css" />
+		<link rel="stylesheet" href="styles/app.css" />
+		<script>
+			// Apply the theme chosen on the index page (?theme= or saved choice).
+			try {
+				const theme = new URLSearchParams(location.search).get('theme') || localStorage.getItem('pau-prototype-theme');
+				if (theme) document.documentElement.dataset.theme = theme;
+			} catch {}
+		</script>
+	</head>
+	<body>
+		<div class="app app--bare">
+			<main class="splash" aria-live="polite">
+				<div class="launch">
+					<div class="launch__brand">
+						<span class="brand-mark"><span class="icon i-pau-mark" aria-hidden="true"></span></span>
+						<div>
+							<strong class="launch__name">Pau</strong><span class="launch__tagline">Local coding workspace</span>
+						</div>
+					</div>
+					<p class="launch__step">Launch 3 / 4</p>
+					<h1>Starting the local service</h1>
+					<ol class="launch__steps" aria-label="Launch steps">
+						<li class="launch-step launch-step--attention">
+							<span class="icon i-tabler-alert-circle" aria-hidden="true"></span>
+							<span class="launch-step__label">Loading your shell PATH</span>
+							<span class="launch-step__state">Needs attention</span>
+							<p class="launch-step__reason">
+								Your login shell took longer than 5 seconds to report its PATH, so Pau kept the PATH it was opened with.
+								Pi and other tools may not be found.
+							</p>
+						</li>
+						<li class="launch-step launch-step--done">
+							<span class="icon i-tabler-check" aria-hidden="true"></span>
+							<span class="launch-step__label">Opening the database</span>
+							<span class="launch-step__state">Done</span>
+						</li>
+						<li class="launch-step launch-step--running" aria-current="step">
+							<span class="icon i-tabler-loader-2" aria-hidden="true"></span>
+							<span class="launch-step__label">Starting the local service</span>
+							<span class="launch-step__state">In progress</span>
+						</li>
+						<li class="launch-step launch-step--pending">
+							<span class="launch-step__dot" aria-hidden="true"></span>
+							<span class="launch-step__label">Checking Pi</span>
+							<span class="launch-step__state">Waiting</span>
+						</li>
+					</ol>
+				</div>
+			</main>
+		</div>
+	</body>
+</html>

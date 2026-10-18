@@ -28,6 +28,8 @@ needed.
 
 Each page shows only the product: the application window for product screens,
 and the page content for the public site and the launch and reconnect states.
+The launch pages show the step list the app's launch view renders, including a
+step that needs attention and a failed start, instead of a progress bar.
 Pages lay out for a 1440 × 1000 window and recompose at narrower widths: the
 inspector leaves first, then the context rail.
 

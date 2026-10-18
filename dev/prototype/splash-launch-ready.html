@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Ready · Pau prototype</title>
+		<title>Checking Pi · Pau prototype</title>
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link
@@ -31,10 +31,29 @@
 						</div>
 					</div>
 					<p class="launch__step">Launch 4 / 4</p>
-					<h1>Ready</h1>
-					<p class="launch__text">Your last workspace is available.</p>
-					<progress max="100" value="100" aria-label="Launch progress">100%</progress>
-					<p class="launch__footer">local service<span class="meta-sep" aria-hidden="true">·</span>127.0.0.1</p>
+					<h1>Checking Pi</h1>
+					<ol class="launch__steps" aria-label="Launch steps">
+						<li class="launch-step launch-step--done">
+							<span class="icon i-tabler-check" aria-hidden="true"></span>
+							<span class="launch-step__label">Loading your shell PATH</span>
+							<span class="launch-step__state">Done</span>
+						</li>
+						<li class="launch-step launch-step--done">
+							<span class="icon i-tabler-check" aria-hidden="true"></span>
+							<span class="launch-step__label">Opening the database</span>
+							<span class="launch-step__state">Done</span>
+						</li>
+						<li class="launch-step launch-step--done">
+							<span class="icon i-tabler-check" aria-hidden="true"></span>
+							<span class="launch-step__label">Starting the local service</span>
+							<span class="launch-step__state">Done</span>
+						</li>
+						<li class="launch-step launch-step--done" aria-current="step">
+							<span class="icon i-tabler-check" aria-hidden="true"></span>
+							<span class="launch-step__label">Checking Pi</span>
+							<span class="launch-step__state">Done</span>
+						</li>
+					</ol>
 				</div>
 			</main>
 		</div>

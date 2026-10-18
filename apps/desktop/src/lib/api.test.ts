@@ -4,6 +4,7 @@ import {
 	apiConnection,
 	DESKTOP_CONNECTION_GLOBAL,
 	exportDiagnostics,
+	getAgentReadiness,
 	getBackendVersion,
 	getDiagnostics,
 	getWorkspaceGitDiff,
@@ -248,6 +249,22 @@ test('configures browser and desktop WebSocket handshakes', () => {
 	expect(resolveTerminalSocket('http://localhost:5173', 'a/b')).toEqual({
 		url: 'ws://127.0.0.1:43127/api/terminals/a%2Fb/stream',
 		protocols: ['pau', `pau.bearer.${TOKEN}`]
+	});
+});
+
+describe('agent readiness API', () => {
+	test('reads the report, and asks for a fresh check on request', async () => {
+		const report = { agents: [] };
+		const fetcher = vi.fn<typeof fetch>(async () => Response.json(report));
+		launchDesktop();
+		await expect(getAgentReadiness(false, fetcher)).resolves.toEqual(report);
+		await getAgentReadiness(true, fetcher);
+
+		expect(fetcher.mock.calls.map(([url]) => String(url))).toEqual([
+			'http://127.0.0.1:43127/api/agents/readiness',
+			'http://127.0.0.1:43127/api/agents/readiness?refresh=true'
+		]);
+		expect(new Headers(fetcher.mock.calls[0][1]?.headers).get('Authorization')).toBe(`Bearer ${TOKEN}`);
 	});
 });
 

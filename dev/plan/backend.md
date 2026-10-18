@@ -6,6 +6,17 @@ HTTP handles finite operations such as opening a workspace, starting a session,
 reading a file, or changing settings. Commands return after validation and
 acceptance; long-running progress arrives as events.
 
+## Agent readiness
+
+`GET /api/agents/readiness` reports, for each supported agent, whether Pau
+found the executable, its version, whether that version is supported, and a
+reason when the agent cannot start a session. For Pi it also starts a
+short-lived `pi --mode rpc` to count the models Pi reports; that check is
+limited to 10 seconds and creates no session. Discovery uses the backend's
+`PATH` as it is. The report is read-only, reused for 30 seconds, and
+`?refresh=true` runs the checks again. Claude is not yet in the report because
+only the TypeScript bridge discovers it.
+
 ## Events
 
 Every server event has:

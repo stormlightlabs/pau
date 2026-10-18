@@ -59,6 +59,7 @@ use pau_agent::{
     AgentCapabilities, AgentControlError, AgentMessageQueue, AgentSessionStatus, PromptQueueChoice,
     ThinkingLevel,
 };
+use pau_core::readiness::AgentReadinessReport;
 use pau_core::{
     ServerEventKind,
     keybindings::{
@@ -136,6 +137,8 @@ pub(crate) struct SessionApi {
     /// Current extension UI per live session. See the module documentation.
     extension_ui: Arc<Mutex<HashMap<String, SessionExtensionUi>>>,
     events: EventHub,
+    /// The last agent readiness report and when it was made. See `readiness`.
+    readiness: Arc<tokio::sync::Mutex<Option<(std::time::Instant, AgentReadinessReport)>>>,
 }
 
 impl std::fmt::Debug for SessionApi {
@@ -159,6 +162,7 @@ impl SessionApi {
             records: Arc::default(),
             extension_ui: Arc::default(),
             events,
+            readiness: Arc::default(),
         };
         tokio::spawn(api.clone().forward(api.registry.subscribe()));
         api
@@ -1438,6 +1442,8 @@ pub(crate) async fn respond_to_extension_ui(
     api.publish_resolved(&record.workspace_id, &session_id, &request_id, "answered");
     Ok(StatusCode::NO_CONTENT)
 }
+
+pub(crate) mod readiness;
 
 #[cfg(all(test, unix))]
 mod tests;

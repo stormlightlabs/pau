@@ -1110,6 +1110,47 @@ confirmed: boolean, } | {
  */
 cancelled: boolean, };
 
+export type AgentReadiness = {
+/**
+ * The agent's identifier, such as `pi`.
+ */
+agent: string,
+/**
+ * Whether an executable was located and could be inspected.
+ */
+found: boolean,
+/**
+ * The executable Pau would launch, when one was located.
+ */
+executable_path: string | null,
+/**
+ * The version the executable reported, when it reported one.
+ */
+version: string | null,
+/**
+ * Whether the version is one Pau supports. False when it is unknown.
+ */
+version_supported: boolean,
+/**
+ * How many models the agent reports. Unset when the agent has no model
+ * check or the check did not complete.
+ */
+model_count: number | null,
+/**
+ * Whether the agent can start a session.
+ */
+ready: boolean,
+/**
+ * Why the agent is not ready, with the step that fixes it.
+ */
+reason: string | null, };
+
+export type AgentReadinessReport = {
+/**
+ * One entry per supported agent, in a stable order.
+ */
+agents: Array<AgentReadiness>, };
+
 export type SessionModel = {
 /**
  * The provider the model is routed through.

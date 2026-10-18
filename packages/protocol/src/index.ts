@@ -4,6 +4,8 @@ export type {
 	AgentKeybindingSource,
 	AgentKeybindingWarning,
 	AgentKeybindings,
+	AgentReadiness,
+	AgentReadinessReport,
 	AgentSession,
 	CreateTerminalRequest,
 	DiagnosticBundle,

@@ -1,5 +1,6 @@
 import type {
 	AgentKeybindings,
+	AgentReadinessReport,
 	AgentSession,
 	DiagnosticBundle,
 	DiagnosticLevel,
@@ -143,6 +144,19 @@ export async function getBackendVersion(fetcher: typeof fetch = fetch): Promise<
 export async function getPiKeybindings(fetcher: typeof fetch = fetch): Promise<AgentKeybindings> {
 	const response = await fetcher(`${apiConnection().origin}/api/pi/keybindings`, { headers: authorization() });
 	return responseJson<AgentKeybindings>(response);
+}
+
+/**
+ * Checks whether each supported agent is installed, runs a supported version,
+ * and can start a session. The backend reuses a report for 30 seconds; pass
+ * `refresh` to check again.
+ */
+export async function getAgentReadiness(refresh = false, fetcher: typeof fetch = fetch): Promise<AgentReadinessReport> {
+	const query = refresh ? '?refresh=true' : '';
+	const response = await fetcher(`${apiConnection().origin}/api/agents/readiness${query}`, {
+		headers: authorization()
+	});
+	return responseJson<AgentReadinessReport>(response);
 }
 
 /** Reads the saved interface preferences, or the defaults when none are saved. */

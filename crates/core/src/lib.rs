@@ -7,6 +7,7 @@ pub mod diagnostics;
 pub mod keybindings;
 pub mod persistence;
 pub mod preferences;
+pub mod readiness;
 pub mod resource_monitor;
 pub mod sandbox;
 pub mod session;

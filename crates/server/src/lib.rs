@@ -455,6 +455,10 @@ fn router_with_services(
         )
         .route("/api/pi/keybindings", get(sessions::get_pi_keybindings))
         .route(
+            "/api/agents/readiness",
+            get(sessions::readiness::get_agent_readiness),
+        )
+        .route(
             "/api/sessions",
             get(sessions::list_sessions).post(sessions::start_session),
         )

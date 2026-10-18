@@ -101,23 +101,10 @@ Verification:
   opening Settings with ⌘,, and a failed save.
 - Storybook stories at desktop and narrow widths.
 
-### 2.182 Agent readiness API
-
-Status: planned
-Blocked by: none
-
-Report whether Pau found each supported agent executable, its version, and
-whether Pi reports at least one available model.
-
-Verification:
-
-- Cover a found Pi with models, a found Pi without models, a missing
-  executable, and an unsupported version against the Pi fixture.
-
 ### 2.244 Startup progress
 
 Status: planned
-Blocked by: 2.182
+Blocked by: none
 
 Open the main window as soon as the desktop app starts, then load the login
 shell `PATH`, open the database, start the backend, and check agent readiness in
@@ -150,7 +137,7 @@ Verification:
 ### 2.183 First-run readiness view
 
 Status: planned
-Blocked by: 2.182
+Blocked by: none
 
 Show agent readiness in the empty Sessions view and direct the operator to run
 `pi` in a Pau terminal when no provider is configured.

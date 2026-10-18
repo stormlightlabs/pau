@@ -15,6 +15,7 @@ use pau_core::{
         LastRoute, MotionPreference, NotificationPolicy, PaneWidths, ThemePreference,
         UiFontPreference, UiPreferences,
     },
+    readiness::{AgentReadiness, AgentReadinessReport},
     resource_monitor::{
         ProcessIdentity, ProcessResourceNode, ProcessResourceSnapshot, ProcessResourceSummary,
         ResourcePressureKind, ResourcePressureWarning,
@@ -115,6 +116,8 @@ fn main() {
         ExtensionWidget::decl(&config),
         SessionExtensionUi::decl(&config),
         ExtensionUiResponse::decl(&config),
+        AgentReadiness::decl(&config),
+        AgentReadinessReport::decl(&config),
         SessionModel::decl(&config),
         SessionTreeEntry::decl(&config),
         SessionSearchMatch::decl(&config),

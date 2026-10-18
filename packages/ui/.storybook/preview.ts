@@ -9,7 +9,7 @@ const preview = {
 		(Story, context) => {
 			const root = document.documentElement;
 			root.dataset.workbenchTheme = String(context.globals.theme);
-			root.dataset.reducedMotion = String(context.globals.reducedMotion);
+			root.dataset.motion = context.globals.reducedMotion === 'on' ? 'reduce' : 'full';
 			root.dataset.capabilityProfile = String(context.globals.capabilityProfile);
 			const themeProperties = Object.entries(themeCssProperties(context.globals.theme, context.globals.uiFont));
 			for (const [property, value] of themeProperties) {

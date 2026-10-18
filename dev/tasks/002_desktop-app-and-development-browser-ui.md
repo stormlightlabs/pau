@@ -849,7 +849,7 @@ Verification:
 ### 2.188 Drop target feedback
 
 Status: planned
-Blocked by: 2.217
+Blocked by: none
 
 Show a drop target on the composer without resizing it, and reject unsupported
 files before the drop with a reason.
@@ -1228,23 +1228,10 @@ Verification:
 
 ## Polish and motion
 
-### 2.217 Motion tokens
-
-Status: planned
-Blocked by: none
-
-Add duration, easing, and distance tokens to `packages/ui` and move the
-existing context-rail and capability-card transitions onto them.
-
-Verification:
-
-- Unit-test that the CSS tokens and the exported TypeScript values match.
-- Confirm no component uses a literal duration or easing keyword.
-
 ### 2.218 Motion setting
 
 Status: planned
-Blocked by: 2.173, 2.217
+Blocked by: 2.173
 
 Add a motion setting with system, reduce, and full choices, defaulting to
 system, and combine it with the OS reduced-motion query into one root
@@ -1287,7 +1274,7 @@ Verification:
 ### 2.221 Busy indicator timing
 
 Status: planned
-Blocked by: 2.217
+Blocked by: none
 
 Delay loading and busy indicators by 400ms and keep them visible for at least
 500ms once shown.
@@ -1408,7 +1395,7 @@ Verification:
 ### 2.230 Hover and press states
 
 Status: planned
-Blocked by: 2.217
+Blocked by: none
 
 Use token-driven color changes for hover and press on every control, with no
 press movement in dense rows.
@@ -1569,8 +1556,8 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.81, 2.156, 2.174, 2.175, 2.184, 2.185, 2.186, 2.187,
-2.191, 2.194, 2.196, 2.197, 2.199, 2.200, 2.205, 2.219, 2.220
+Blocked by: 2.81, 2.156, 2.174, 2.175, 2.184, 2.185, 2.186, 2.187, 2.191, 2.194,
+2.196, 2.197, 2.199, 2.200, 2.205, 2.219, 2.220
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

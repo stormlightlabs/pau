@@ -38,5 +38,43 @@
 	--pau-size-rail-context: 15.5rem;
 	--pau-size-rail-inspector: 19rem;
 
+	--pau-duration-instant: 0ms;
+	--pau-duration-feedback: 100ms;
+	--pau-duration-small: 150ms;
+	--pau-duration-medium: 200ms;
+	--pau-duration-large: 250ms;
+
+	--pau-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+	--pau-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
+	--pau-ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
+	--pau-ease-linear: linear;
+
+	--pau-motion-offset-sm: 0.25rem;
+	--pau-motion-offset-md: 0.5rem;
+	--pau-motion-scale-enter: 0.98;
+	/* Multiplies full-width travel such as a rail sliding in from its edge. */
+	--pau-motion-travel: 1;
+
 	--pau-font-code: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/*
+ * Reduced motion collapses distance and scale so movement becomes a fade.
+ * `data-motion` on the root decides: `reduce` and `full` are explicit, and
+ * when the attribute is absent the OS preference applies.
+ */
+:root[data-motion='reduce'] {
+	--pau-motion-offset-sm: 0;
+	--pau-motion-offset-md: 0;
+	--pau-motion-scale-enter: 1;
+	--pau-motion-travel: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root:not([data-motion]) {
+		--pau-motion-offset-sm: 0;
+		--pau-motion-offset-md: 0;
+		--pau-motion-scale-enter: 1;
+		--pau-motion-travel: 0;
+	}
 }

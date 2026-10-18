@@ -119,3 +119,4 @@ export { resourceMonitoringFixtures } from './fixtures/resource-monitoring';
 export { sandboxFixtures } from './fixtures/sandbox';
 export { sessionFixtures } from './fixtures/sessions';
 export { workspaceFileFixtures } from './fixtures/workspace-files';
+export { isReducedMotion, motion, motionOffset } from './motion';

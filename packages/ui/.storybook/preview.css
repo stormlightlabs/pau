@@ -25,9 +25,9 @@ body {
 	line-height: 1.4;
 }
 
-:root[data-reduced-motion='on'] *,
-:root[data-reduced-motion='on'] *::before,
-:root[data-reduced-motion='on'] *::after {
+:root[data-motion='reduce'] *,
+:root[data-motion='reduce'] *::before,
+:root[data-motion='reduce'] *::after {
 	scroll-behavior: auto !important;
 	animation-duration: 0.01ms !important;
 	animation-iteration-count: 1 !important;

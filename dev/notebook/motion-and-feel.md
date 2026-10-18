@@ -1179,8 +1179,8 @@ and 2.NEW-M10 also marks sessions with unread output. The UI preferences API,
 
 ## Open questions
 
-- Should the motion tokens live only in `tokens.css` with a TypeScript mirror
-  checked by a test, or be generated from TypeScript like theme colors?
+None. The motion tokens live in `tokens.css` with a TypeScript mirror in
+`packages/ui/src/motion.ts`, kept in sync by a contract test.
 
 [ai-sdk-chat]: https://ai-sdk.dev/docs/reference/ai-sdk-ui/use-chat
 [bcd]: https://github.com/mdn/browser-compat-data

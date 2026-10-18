@@ -163,15 +163,135 @@ path where practical.
 
 ## Motion
 
-Routine state changes should complete in about 100–250ms. Use motion to show
-selection, panel disclosure, layout continuity, progress, and feedback. Task
-surface changes use a short fade and small directional offset to preserve place.
-Do not sequence the whole product into view or animate live status merely to
-imply activity.
+Motion shows cause, continuity, and state. It never decorates, never delays
+input, and never moves content the operator is reading.
 
-Reduced motion removes spatial movement and indefinite decoration while keeping
-immediate state and short color feedback. Svelte motion and transition APIs own
-application motion.
+### Tokens
+
+`packages/ui/src/styles/tokens.css` defines theme-independent motion tokens
+next to the scale tokens. `packages/ui/src/motion.ts` exports the same values
+for Svelte transitions, and a contract test keeps the two in sync. No
+component uses a literal duration or easing keyword.
+
+```css
+:root {
+	--pau-duration-instant: 0ms;
+	--pau-duration-feedback: 100ms;
+	--pau-duration-small: 150ms;
+	--pau-duration-medium: 200ms;
+	--pau-duration-large: 250ms;
+
+	--pau-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+	--pau-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
+	--pau-ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
+	--pau-ease-linear: linear;
+
+	--pau-motion-offset-sm: 0.25rem;
+	--pau-motion-offset-md: 0.5rem;
+	--pau-motion-scale-enter: 0.98;
+	--pau-motion-travel: 1;
+}
+
+:root[data-motion='reduce'] {
+	--pau-motion-offset-sm: 0;
+	--pau-motion-offset-md: 0;
+	--pau-motion-scale-enter: 1;
+	--pau-motion-travel: 0;
+}
+```
+
+`--pau-motion-travel` multiplies full-width travel, such as a rail sliding in
+from its edge.
+
+- `instant`: keyboard-initiated and high-frequency actions.
+- `feedback`: hover, press, selection, state color, chevron rotation.
+- `small`: popover and menu entry, scrim fade, content fade after a pane
+  toggle.
+- `medium`: dialog entry, overlay rail entry, toast entry, disclosure
+  expansion.
+- `large`: task-surface changes. Nothing routine exceeds it.
+- `standard` easing moves and recolors elements that stay on screen.
+- `enter` easing brings elements in. `exit` easing takes them out.
+- `linear` is for progress and spinners only.
+- Exits use the next shorter duration than their entrance.
+
+The busy-indicator rules use two TypeScript constants: show after 400ms and
+stay visible for at least 500ms.
+
+### Rules by component class
+
+| Component                      | Enter                        | Exit     | Notes                          |
+| ------------------------------ | ---------------------------- | -------- | ------------------------------ |
+| Hover and press                | feedback, color only         | feedback | Instant in dense lists         |
+| Focus ring                     | instant                      | instant  | Never transition `outline`     |
+| Selection indicator            | feedback, color              | feedback | No sliding indicator           |
+| Session status                 | feedback, color              | feedback | One spinner only for running   |
+| Attention marker               | one 600ms pulse              | instant  | Static badge after the pulse   |
+| Disclosure (tool, thinking)    | medium, rows 0fr to 1fr      | small    | Instant if streaming or tall   |
+| Popover, menu (pointer)        | small, fade and scale-enter  | feedback | Origin at the anchor           |
+| Completion list (keyboard)     | instant                      | instant  |                                |
+| Dialog                         | medium, fade and scale-enter | small    | Backdrop fades with it         |
+| Overlay rail, narrow inspector | medium, translate from edge  | small    | Scrim fades over small         |
+| Wide inspector, rail toggle    | instant layout, small fade   | instant  | No per-frame reflow            |
+| Toast                          | medium, offset-md from edge  | small    | Same edge in and out           |
+| Task-surface change            | large, fade and offset-sm    | none     | Keyboard navigation is instant |
+| Terminal tab                   | instant                      | instant  | Never animate the canvas       |
+| Diff hunk update               | 1s background tint fade      | —        | Static marker when reduced     |
+| Transcript streaming           | none                         | —        | Append per frame, no fades     |
+| Follow-mode scroll             | jump                         | —        | No smooth scrolling            |
+
+Interaction rules:
+
+- Animations never block input. An overlay that is leaving does not hold
+  focus or intercept clicks.
+- Interrupting a transition reverses it from its current state.
+- Content above the reading position does not move when entries stream,
+  expand, collapse, or when notices appear.
+- Every overlay returns focus to its invoker, or to the composer if the
+  invoker is gone.
+- Prompts, renames, and queue edits update locally first and roll back on
+  error. Process control waits for the process.
+- Waits under 400ms show no indicator. Waits over 10s show elapsed time or
+  determinate progress and a cancel control where supported.
+
+### Reduced motion
+
+The root element's `data-motion` attribute is `reduce` or `full`. When it is
+absent, the OS `prefers-reduced-motion` query applies, in `tokens.css` and in
+`isReducedMotion()` from `motion.ts`. The operator's motion setting (system,
+reduce, or full) will write the attribute. Storybook's reduced-motion control
+sets it directly.
+
+Under reduced motion:
+
+- Distance and scale tokens collapse, so movement becomes a fade.
+- Opacity and color feedback stays at `feedback` duration or less.
+- Spinners and pulses become static marks.
+- Svelte transitions read the shared motion setting and drop movement.
+- Smooth scrolling is off.
+
+### Increased contrast
+
+Under `prefers-contrast: more`, hairline rules become 1px, muted text moves
+toward normal text, and focus rings grow to 3px. Under
+`forced-colors: active`, focus and selection use system colors.
+
+### Performance budgets
+
+Measured on the reference dogfood machine, a 120Hz MacBook Pro, in the
+installed app:
+
+- Input to visible feedback: 50ms target, 100ms ceiling.
+- Any interaction to next paint: under 200ms.
+- Main-thread work per frame during animation or streaming: under 8ms.
+- No long task over 50ms while streaming a 2,000-delta fixture at 50 deltas
+  per second.
+- At most one transcript state commit per animation frame while streaming.
+- Session switch to a readable transcript: under 100ms for a cached session.
+- Zero movement of the first visible transcript entry during streaming,
+  disclosure, and notice changes.
+- Animated properties: `transform` and `opacity`, plus `color`,
+  `background-color`, and `border-color` for feedback.
 
 ## Content and state
 

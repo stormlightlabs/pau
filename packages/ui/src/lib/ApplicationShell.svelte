@@ -663,15 +663,18 @@
 			z-index: 6;
 			width: min(var(--pau-size-rail-context), calc(100vw - var(--pau-size-rail-product)));
 			box-shadow: 1rem 0 2rem rgb(0 0 0 / 24%);
-			transform: translateX(-110%);
+			transform: translateX(calc(-110% * var(--pau-motion-travel)));
+			opacity: 0;
 			visibility: hidden;
 			transition:
-				transform 180ms ease,
-				visibility 180ms;
+				transform var(--pau-duration-medium) var(--pau-ease-standard),
+				opacity var(--pau-duration-medium) var(--pau-ease-standard),
+				visibility var(--pau-duration-medium);
 		}
 
 		.app-shell__context-rail.open {
 			transform: translateX(0);
+			opacity: 1;
 			visibility: visible;
 		}
 
@@ -723,12 +726,6 @@
 
 		.app-shell__identity strong {
 			display: none;
-		}
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.app-shell__context-rail {
-			transition: none;
 		}
 	}
 </style>

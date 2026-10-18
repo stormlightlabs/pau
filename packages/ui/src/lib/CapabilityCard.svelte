@@ -89,8 +89,8 @@
 		font-weight: 650;
 		cursor: pointer;
 		transition:
-			background 140ms ease,
-			transform 140ms ease;
+			background var(--pau-duration-feedback) var(--pau-ease-standard),
+			transform var(--pau-duration-feedback) var(--pau-ease-standard);
 	}
 
 	button:hover {

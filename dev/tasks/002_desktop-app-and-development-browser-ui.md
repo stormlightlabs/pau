@@ -851,19 +851,6 @@ Verification:
 - Component-test moving between prompts, stopping at the first and last prompt,
   and leaving follow mode, with reduced motion on and off.
 
-### 2.200 Session scroll restoration
-
-Status: planned
-Blocked by: none
-
-Restore each session's scroll position or follow mode when the operator
-returns to it.
-
-Verification:
-
-- Component-test switching between a followed session and a detached one and
-  back.
-
 ### 2.201 Transcript history placeholder
 
 Status: planned
@@ -1369,7 +1356,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.175, 2.184, 2.185, 2.194, 2.197, 2.200, 2.219, 2.220
+Blocked by: 2.156, 2.175, 2.184, 2.185, 2.194, 2.197, 2.219, 2.220
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

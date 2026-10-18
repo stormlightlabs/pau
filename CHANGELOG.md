@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Returning to a session puts the transcript back where you left it, or at the
+  latest output if you were following it.
 - Sent prompts appear in the transcript right away. A prompt that fails to send
   is marked "Not sent" and its text returns to the composer.
 - The session list marks sessions that are waiting for you, failed, or finished

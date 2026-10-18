@@ -94,6 +94,33 @@ test('switching sessions starts at the bottom', async () => {
 	expect(distanceFromBottom(transcriptOf())).toBeLessThanOrEqual(1);
 });
 
+test('returning to a session restores its follow mode or reading position', async () => {
+	const screen = await render(SessionView, { workspaces: workspaces(30), activeSessionId: baseSession.id });
+	await settled();
+	const node = transcriptOf();
+	const firstVisible = () =>
+		[...node.querySelectorAll<HTMLElement>('[data-entry-id]')].find(
+			(entry) => entry.getBoundingClientRect().bottom > node.getBoundingClientRect().top
+		)!.dataset.entryId;
+
+	await screen.rerender({ workspaces: workspaces(30, 'running', 'other'), activeSessionId: 'other' });
+	await settled();
+	node.scrollTop = 300;
+	await settled();
+	const reading = firstVisible();
+	expect(node.dataset.following).toBe('false');
+
+	await screen.rerender({ workspaces: workspaces(30), activeSessionId: baseSession.id });
+	await settled();
+	expect(node.dataset.following).toBe('true');
+	expect(distanceFromBottom(node)).toBeLessThanOrEqual(1);
+
+	await screen.rerender({ workspaces: workspaces(30, 'running', 'other'), activeSessionId: 'other' });
+	await settled();
+	expect(node.dataset.following).toBe('false');
+	expect(firstVisible()).toBe(reading);
+});
+
 test.each([
 	['reduce', 'instant'],
 	['full', 'smooth']

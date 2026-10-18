@@ -37,6 +37,8 @@
 		if (open && !dialog.open) {
 			focusReturn.capture();
 			dialog.showModal();
+			// The list has no field or primary action, so start on the dialog and keep Close one Tab away.
+			dialog.focus();
 		} else if (!open && dialog.open) dialog.close();
 	});
 
@@ -74,6 +76,7 @@
 <dialog
 	bind:this={dialog}
 	class="keyboard-shortcuts"
+	tabindex="-1"
 	aria-labelledby="keyboard-shortcuts-title"
 	data-theme={theme}
 	{style}
@@ -141,6 +144,7 @@
 		font-family: var(--pau-font-ui);
 		font-size: var(--pau-type-md);
 		line-height: 1.4;
+		outline: 0;
 	}
 
 	.keyboard-shortcuts[open] {

@@ -330,7 +330,10 @@ test.each([
 	{
 		dialog: wireDialogs.select,
 		body: { value: 'Work' },
-		answer: () => userEvent.click(page.getByRole('button', { name: 'Work' }))
+		answer: async () => {
+			await userEvent.click(page.getByRole('radio', { name: 'Work' }));
+			await userEvent.click(page.getByRole('button', { name: 'Select' }));
+		}
 	},
 	{
 		dialog: wireDialogs.confirm,
@@ -416,7 +419,7 @@ test('keeps a dialog open and shows why an answer was rejected', async () => {
 	);
 	await render(SessionRoute, props);
 
-	await userEvent.click(page.getByRole('button', { name: 'Review' }));
+	await userEvent.click(page.getByRole('button', { name: 'Select' }));
 
 	await expect
 		.element(page.getByRole('dialog').getByRole('alert'))

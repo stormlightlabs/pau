@@ -4,6 +4,11 @@
 
 ### Desktop
 
+- Extension choices appear as a list with one confirm button, and permission
+  requests show the tool, command, and working directory and start with nothing
+  selected.
+- Dialogs use a neutral border, and keyboard focus starts on the main action or
+  first field instead of the close button.
 - The rail and inspector toggles and the disconnected status sit in the top bar,
   and the task area gains the height of the old toolbar strip.
 - Pau shows what it is doing while it starts and explains a startup failure with

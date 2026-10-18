@@ -130,3 +130,24 @@ test('runs only typing-safe shortcuts from a text field', async () => {
 	press({ key: 'n', code: 'KeyN', metaKey: true }, prompt);
 	await expect.element(lastAction()).toHaveTextContent('New session');
 });
+
+test('draws the shortcut dialog with the border token and does not start on Close', async () => {
+	await render(KeyboardShortcutsDemo, { platform: 'mac' });
+	press({ key: '/', code: 'Slash', metaKey: true }, document.body);
+	const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+	await expect.element(dialog).toBeVisible();
+
+	const probe = document.createElement('i');
+	probe.style.color = 'var(--pau-border)';
+	dialog.element().append(probe);
+	const border = getComputedStyle(probe).color;
+	probe.style.color = 'var(--pau-focus)';
+	const focus = getComputedStyle(probe).color;
+	probe.remove();
+	const style = getComputedStyle(dialog.element());
+	expect(style.borderTopColor).toBe(border);
+	expect(style.borderTopColor).not.toBe(focus);
+	expect(style.borderTopLeftRadius).toBe('5px');
+
+	expect(document.activeElement).toBe(dialog.element());
+});

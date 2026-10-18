@@ -370,43 +370,6 @@ Verification:
 - Component-test that a long name at the minimum rail width renders one line
   with an ellipsis and keeps its full accessible name.
 
-### 2.255 Dialog chrome
-
-Status: planned
-Blocked by: none
-
-Extension dialogs and the shortcut dialog draw `border: 1px solid
-var(--pau-focus)`, so every dialog looks permanently focused and the real
-focus ring on the close button competes with it. Use the border token and the
-overlay shadow with the 5px overlay radius, and move initial focus to the
-primary action or first field instead of the close button.
-
-Verification:
-
-- Component-test that a dialog's border uses the border token and that focus
-  lands on the primary action or first field on open.
-- Screenshot the confirmation, select, input, and shortcut dialogs.
-
-### 2.256 Extension choice rendering
-
-Status: planned
-Blocked by: none
-
-Pi select and permission requests render every option as a filled accent
-button, so Review and Work, or Allow once and Deny, look like three primary
-actions, and a permission request shows its raw JSON payload as the dialog
-title. Render options as a list with one highlighted row and a check mark,
-reserve the accent for the confirm action, and render a permission payload as
-tool, command, and working directory rows, falling back to a trimmed code
-block for other structured titles.
-
-Verification:
-
-- Component-test that a select request renders a list with one selected
-  option and that the permission fixture shows tool, command, and directory
-  rows.
-- Screenshot the select, permission, and long-title fixtures.
-
 ### 2.257 State labels and copy
 
 Status: planned

@@ -28,7 +28,9 @@ export const Select: Story = {
 	play: async ({ args, canvasElement }) => {
 		const canvas = within(canvasElement.ownerDocument.body);
 		await expect(canvas.getByRole('dialog', { name: 'Choose a profile' })).toBeVisible();
-		await userEvent.click(canvas.getByRole('button', { name: 'Work' }));
+		await expect(canvas.getByRole('radio', { name: 'Review' })).toBeChecked();
+		await userEvent.click(canvas.getByRole('radio', { name: 'Work' }));
+		await userEvent.click(canvas.getByRole('button', { name: 'Select' }));
 		await expect(args.onRespond).toHaveBeenCalledWith({ id: 'select', value: 'Work' });
 	}
 };
@@ -85,8 +87,8 @@ export const Unsupported: Story = {
 	}
 };
 
-/** A long unbroken title, such as the JSON envelope Pau's permission extension sends, wraps inside the dialog. */
-export const LongTitle: Story = {
+/** Pau's permission request arrives as a JSON title and renders as tool, command, and directory rows. */
+export const Permission: Story = {
 	args: {
 		state: withDialog({
 			id: 'permission',
@@ -101,7 +103,29 @@ export const LongTitle: Story = {
 		})
 	},
 	play: async ({ canvasElement }) => {
-		const dialog = within(canvasElement.ownerDocument.body).getByRole('dialog');
+		const body = within(canvasElement.ownerDocument.body);
+		const dialog = body.getByRole('dialog', { name: 'Permission request' });
+		await expect(within(dialog).getByText('Working directory')).toBeVisible();
+		await expect(within(dialog).getByText('/home/me/projects/pau/apps/desktop')).toBeVisible();
+		await expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth);
+	}
+};
+
+/** Structured titles that are not permission requests show a trimmed code block. */
+export const LongTitle: Story = {
+	args: {
+		state: withDialog({
+			id: 'structured',
+			kind: 'select',
+			title: JSON.stringify({
+				request: 'sync',
+				paths: Array.from({ length: 40 }, (_, index) => `src/module-${index}.ts`)
+			}),
+			options: ['Continue', 'Skip']
+		})
+	},
+	play: async ({ canvasElement }) => {
+		const dialog = within(canvasElement.ownerDocument.body).getByRole('dialog', { name: 'Extension request' });
 		await expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth);
 	}
 };
@@ -115,7 +139,7 @@ export const Rejected: Story = {
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement.ownerDocument.body);
-		await userEvent.click(canvas.getByRole('button', { name: 'Review' }));
+		await userEvent.click(canvas.getByRole('button', { name: 'Select' }));
 		await expect(canvas.getByRole('alert')).toHaveTextContent('The extension could not use that answer.');
 	}
 };

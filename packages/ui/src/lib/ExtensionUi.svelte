@@ -3,6 +3,7 @@
 	import type { Snippet } from 'svelte';
 
 	import { createFocusReturn } from './focus-return';
+	import Icon from './Icon.svelte';
 	import type { ExtensionUiResponse, ExtensionUiState } from './types/session';
 
 	type Props = {
@@ -18,6 +19,7 @@
 	let responseError = $state<string>();
 	let expiredDialogId = $state<string>();
 	let dialogSurface = $state<HTMLDialogElement>();
+	let selectedOption = $state(0);
 	const focusReturn = createFocusReturn();
 
 	const dialog = $derived(extensionState.dialog?.id === expiredDialogId ? undefined : extensionState.dialog);
@@ -34,12 +36,61 @@
 		return () => clearTimeout(timer);
 	});
 
+	/** Parsed form of a structured title: Pau's permission payload, or any other JSON the extension sent. */
+	type TitleDetail =
+		{ kind: 'permission'; rows: { label: string; value: string }[] } | { kind: 'structured'; text: string };
+
+	const MAX_STRUCTURED_TITLE = 600;
+	const PERMISSION_ROWS = [
+		['tool', 'Tool'],
+		['command', 'Command'],
+		['cwd', 'Working directory']
+	] as const;
+
+	/**
+	 * Reads a title that is a JSON object or array. Pau's permission extension sends
+	 * `{"pau":"permission","tool","command","cwd"}`; showing that as the dialog title would
+	 * expose raw JSON, so it becomes labelled rows. Other structured titles become a trimmed
+	 * code block. Plain text titles return nothing.
+	 */
+	function titleDetail(title: string): TitleDetail | undefined {
+		const text = title.trim();
+		if (!/^[{[]/.test(text)) return undefined;
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(text);
+		} catch {
+			return undefined;
+		}
+		if (typeof parsed !== 'object' || parsed === null) return undefined;
+		const fields = parsed as Record<string, unknown>;
+		if (fields.pau === 'permission') {
+			const rows = PERMISSION_ROWS.flatMap(([key, label]) => {
+				const value = fields[key];
+				return typeof value === 'string' && value ? [{ label, value }] : [];
+			});
+			if (rows.length > 0) return { kind: 'permission', rows };
+		}
+		const pretty = JSON.stringify(parsed, null, 2);
+		return {
+			kind: 'structured',
+			text: pretty.length > MAX_STRUCTURED_TITLE ? `${pretty.slice(0, MAX_STRUCTURED_TITLE)}\n...` : pretty
+		};
+	}
+
+	function headingFor(title: string, detail: TitleDetail | undefined): string {
+		if (!detail) return title;
+		return detail.kind === 'permission' ? 'Permission request' : 'Extension request';
+	}
+
 	function openDialog(): void {
-		if (dialogSurface && !dialogSurface.open) {
+		if (!dialogSurface) return;
+		if (!dialogSurface.open) {
 			focusReturn.capture();
 			dialogSurface.showModal();
 		}
-		dialogSurface?.focus();
+		// Native modal focus picks the first control; the dialog marks its own starting point.
+		(dialogSurface.querySelector<HTMLElement>('[data-initial-focus]') ?? dialogSurface).focus();
 	}
 
 	function closeDialog(): void {
@@ -50,6 +101,8 @@
 	$effect(() => {
 		if (!dialog?.id) return;
 		responseError = undefined;
+		// A permission request starts with nothing chosen so Enter cannot approve a tool call by accident.
+		selectedOption = titleDetail(dialog.kind === 'select' ? dialog.title : '')?.kind === 'permission' ? -1 : 0;
 		queueMicrotask(openDialog);
 		return closeDialog;
 	});
@@ -65,6 +118,12 @@
 		} finally {
 			responding = false;
 		}
+	}
+
+	function submitChoice(event: SubmitEvent, requestId: string, options: string[]): void {
+		event.preventDefault();
+		const value = options[selectedOption];
+		if (value !== undefined) void respond({ id: requestId, value });
 	}
 
 	function submitText(event: SubmitEvent, requestId: string): void {
@@ -124,15 +183,33 @@
 				This extension uses a custom Pi component that Pau cannot render. Open vanilla Pi in a Pau terminal to use it.
 			</p>
 			<div class="extension-ui__actions">
-				<button type="button" class="secondary" onclick={() => void respond({ id: dialog.id, cancelled: true })}>
+				<button
+					type="button"
+					class="secondary"
+					data-initial-focus={onOpenTerminal ? undefined : ''}
+					onclick={() => void respond({ id: dialog.id, cancelled: true })}>
 					Dismiss
 				</button>
 				{#if onOpenTerminal}
-					<button type="button" onclick={onOpenTerminal}>Open Pi in terminal</button>
+					<button type="button" class="primary" data-initial-focus onclick={onOpenTerminal}>Open Pi in terminal</button>
 				{/if}
 			</div>
 		{:else}
-			<h2 id={`extension-dialog-${dialog.id}`}>{dialog.title}</h2>
+			{@const detail = titleDetail(dialog.title)}
+			<h2 id={`extension-dialog-${dialog.id}`}>{headingFor(dialog.title, detail)}</h2>
+			{#if detail?.kind === 'permission'}
+				<dl class="extension-ui__details">
+					{#each detail.rows as row (row.label)}
+						<div>
+							<dt>{row.label}</dt>
+							<dd>{row.value}</dd>
+						</div>
+					{/each}
+				</dl>
+			{:else if detail}
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+				<pre class="extension-ui__code" tabindex="0"><code>{detail.text}</code></pre>
+			{/if}
 			{#if dialog.kind === 'confirm'}
 				<p>{dialog.message}</p>
 				<div class="extension-ui__actions">
@@ -141,29 +218,50 @@
 						class="secondary"
 						disabled={responding}
 						onclick={() => void respond({ id: dialog.id, confirmed: false })}>No</button>
-					<button type="button" disabled={responding} onclick={() => void respond({ id: dialog.id, confirmed: true })}
-						>Yes</button>
+					<button
+						type="button"
+						class="primary"
+						data-initial-focus
+						disabled={responding}
+						onclick={() => void respond({ id: dialog.id, confirmed: true })}>Yes</button>
 				</div>
 			{:else if dialog.kind === 'select'}
-				<div class="extension-ui__options">
-					{#each dialog.options as option, index (`${index}-${option}`)}
-						<button type="button" disabled={responding} onclick={() => void respond({ id: dialog.id, value: option })}
-							>{option}</button>
-					{/each}
-				</div>
-				<button
-					type="button"
-					class="extension-ui__cancel"
-					disabled={responding}
-					onclick={() => void respond({ id: dialog.id, cancelled: true })}>Cancel</button>
+				{@const options = dialog.options}
+				<form onsubmit={(event) => submitChoice(event, dialog.id, options)}>
+					<fieldset class="extension-ui__options" aria-labelledby={`extension-dialog-${dialog.id}`}>
+						{#each options as option, index (`${index}-${option}`)}
+							<label class="extension-ui__option">
+								<input
+									type="radio"
+									name={`extension-option-${dialog.id}`}
+									value={option}
+									checked={index === selectedOption}
+									disabled={responding}
+									data-initial-focus={index === Math.max(selectedOption, 0) ? '' : undefined}
+									onchange={() => (selectedOption = index)} />
+								<span>{option}</span>
+								<Icon name="check" class="extension-ui__check" size={16} />
+							</label>
+						{/each}
+					</fieldset>
+					<div class="extension-ui__actions">
+						<button
+							type="button"
+							class="secondary"
+							disabled={responding}
+							onclick={() => void respond({ id: dialog.id, cancelled: true })}>Cancel</button>
+						<button type="submit" class="primary" disabled={responding || selectedOption < 0 || options.length === 0}
+							>Select</button>
+					</div>
+				</form>
 			{:else}
 				<form onsubmit={(event) => submitText(event, dialog.id)}>
 					<label>
 						<span>{dialog.kind === 'editor' ? 'Text' : 'Response'}</span>
 						{#if dialog.kind === 'editor'}
-							<textarea name="value" rows="7">{dialog.prefill ?? ''}</textarea>
+							<textarea name="value" rows="7" data-initial-focus>{dialog.prefill ?? ''}</textarea>
 						{:else}
-							<input name="value" placeholder={dialog.placeholder} />
+							<input name="value" placeholder={dialog.placeholder} data-initial-focus />
 						{/if}
 					</label>
 					<div class="extension-ui__actions">
@@ -172,7 +270,7 @@
 							class="secondary"
 							disabled={responding}
 							onclick={() => void respond({ id: dialog.id, cancelled: true })}>Cancel</button>
-						<button type="submit" disabled={responding}>Submit</button>
+						<button type="submit" class="primary" disabled={responding}>Submit</button>
 					</div>
 				</form>
 			{/if}
@@ -243,7 +341,8 @@
 		overflow: auto;
 		color: var(--pau-text);
 		background: var(--pau-surface);
-		border: 1px solid var(--pau-focus);
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-surface);
 		box-shadow: 0 1rem 3rem color-mix(in srgb, var(--pau-canvas) 85%, transparent);
 		outline: 0;
 	}
@@ -264,7 +363,8 @@
 	/* Extensions control these strings, and some send long unbroken text such as JSON. */
 	.extension-ui__dialog h2,
 	.extension-ui__dialog p,
-	.extension-ui__options button,
+	.extension-ui__details dd,
+	.extension-ui__option span,
 	.extension-ui__notification {
 		overflow-wrap: anywhere;
 	}
@@ -275,11 +375,107 @@
 		line-height: 1.5;
 	}
 
-	.extension-ui__dialog form,
-	.extension-ui__options {
+	.extension-ui__dialog form {
 		display: grid;
 		gap: var(--pau-space-2);
 		margin-top: var(--pau-space-4);
+	}
+
+	.extension-ui__options {
+		display: grid;
+		margin: 0;
+		padding: 0;
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-control);
+	}
+
+	.extension-ui__dialog label.extension-ui__option {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: var(--pau-space-2);
+		min-height: var(--pau-size-target-touch);
+		padding-inline: var(--pau-space-3);
+		cursor: pointer;
+	}
+
+	.extension-ui__option + .extension-ui__option {
+		border-top: 1px solid var(--pau-border);
+	}
+
+	.extension-ui__dialog .extension-ui__option span {
+		display: block;
+		flex: 1;
+		color: var(--pau-text);
+		font-size: inherit;
+	}
+
+	/* The radio is the accessible control; the row and check mark are its visible form. */
+	.extension-ui__dialog .extension-ui__option input {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		margin: 0;
+		padding: 0;
+		opacity: 0;
+		border: 0;
+		cursor: pointer;
+	}
+
+	.extension-ui__option :global(.extension-ui__check) {
+		visibility: hidden;
+		flex: none;
+		color: var(--pau-accent);
+	}
+
+	.extension-ui__option:has(input:checked) {
+		background: var(--pau-surface-raised);
+	}
+
+	.extension-ui__option:has(input:checked) :global(.extension-ui__check) {
+		visibility: visible;
+	}
+
+	.extension-ui__option:has(input:focus-visible) {
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: calc(var(--pau-focus-width) * -1);
+	}
+
+	.extension-ui__details {
+		display: grid;
+		gap: var(--pau-space-2);
+		margin: var(--pau-space-3) 0 0;
+	}
+
+	.extension-ui__details div {
+		display: grid;
+		gap: var(--pau-space-1);
+	}
+
+	.extension-ui__details dt {
+		color: var(--pau-text-muted);
+		font-size: var(--pau-type-sm);
+	}
+
+	.extension-ui__details dd {
+		margin: 0;
+		font-family: var(--pau-font-code);
+		font-size: var(--pau-type-sm);
+	}
+
+	.extension-ui__code {
+		margin: var(--pau-space-3) 0 0;
+		padding: var(--pau-space-3);
+		max-height: 14rem;
+		overflow: auto;
+		background: var(--pau-canvas);
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-control);
+		font-family: var(--pau-font-code);
+		font-size: var(--pau-type-sm);
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
 	}
 
 	.extension-ui__dialog label,
@@ -295,6 +491,7 @@
 
 	.extension-ui__dialog input,
 	.extension-ui__dialog textarea {
+		box-sizing: border-box;
 		width: 100%;
 		padding: var(--pau-space-3);
 		resize: vertical;
@@ -314,19 +511,20 @@
 	.extension-ui__dialog button {
 		min-height: var(--pau-size-target-touch);
 		padding-inline: var(--pau-space-3);
-		color: var(--pau-canvas);
-		background: var(--pau-accent);
-		border: 0;
+		color: var(--pau-text);
+		background: transparent;
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-control);
 		font: inherit;
 		font-weight: var(--pau-weight-semibold);
 		cursor: pointer;
 	}
 
-	.extension-ui__dialog button.secondary,
-	.extension-ui__dialog .extension-ui__cancel {
-		color: var(--pau-text);
-		background: transparent;
-		border: 1px solid var(--pau-border);
+	/* The accent marks the one action that confirms the request. */
+	.extension-ui__dialog button.primary {
+		color: var(--pau-canvas);
+		background: var(--pau-accent);
+		border-color: transparent;
 	}
 
 	.extension-ui__dialog button:disabled {
@@ -340,10 +538,6 @@
 		justify-content: flex-end;
 		gap: var(--pau-space-2);
 		margin-top: var(--pau-space-4);
-	}
-
-	.extension-ui__cancel {
-		margin-top: var(--pau-space-2);
 	}
 
 	.extension-ui__error {

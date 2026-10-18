@@ -8,6 +8,7 @@ standalone server in normal project work. The unit that first makes a surface
 usable includes a self-hosted smoke run when practical; later work should use
 that surface by default when it fits the task. Dogfood the desktop app from
 the latest signed build of a release tag, not from a development build.
+[Signed macOS builds](../macos-signing.md) describes how to make one.
 
 Dogfooding supplements deterministic tests and does not replace them. Fix a
 discovered defect in the active unit when it violates that unit's behavior or

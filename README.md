@@ -45,6 +45,8 @@ cp .env.example .env
 
 The desktop app, the browser development servers, and the macOS release script
 read `.env`. Variables already set in your shell take precedence.
+[Signed macOS builds](dev/macos-signing.md) covers the signing and notarization
+settings.
 
 ### NixOS
 

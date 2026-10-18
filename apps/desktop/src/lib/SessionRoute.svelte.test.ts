@@ -139,6 +139,27 @@ test('streams a live transcript and sends prompts to the session', async () => {
 	);
 });
 
+test('replaces a pending prompt with the message Pi echoes', async () => {
+	const accepted = Promise.withResolvers<Response>();
+	const { props, sockets } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'POST /api/sessions/session-1/prompt': () => accepted.promise
+	});
+	await render(SessionRoute, props);
+	sockets[0]?.open();
+	const transcript = page.getByRole('region', { name: 'Transcript' });
+
+	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), 'Add a test.');
+	await userEvent.click(page.getByRole('button', { name: /Send prompt/ }));
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toHaveValue('');
+	await expect.element(transcript.getByText('Sending…')).toBeVisible();
+
+	sockets[0]?.receive(output({ type: 'message_start', message: { role: 'user', content: 'Add a test.' } }));
+	accepted.resolve(new Response(null, { status: 202 }));
+	await expect.element(transcript.getByText('Sending…')).not.toBeInTheDocument();
+	expect(transcript.getByText('Add a test.').all()).toHaveLength(1);
+});
+
 const pngFile = () => new File([new Uint8Array([1, 2, 3])], 'a.png', { type: 'image/png' });
 
 test('sends attached images with the prompt', async () => {

@@ -21,6 +21,7 @@
 	import ExtensionUi from './ExtensionUi.svelte';
 	import { insertMention, mentionAt } from './file-mention';
 	import MentionCompletion from './MentionCompletion.svelte';
+	import { settlePendingPrompts, userMessageIds, type PendingPrompt } from './pending-prompts';
 	import Icon from './Icon.svelte';
 	import Markdown from './Markdown.svelte';
 	import { isReducedMotion, motion } from '../motion';
@@ -348,6 +349,9 @@
 	let mentionRun = 0;
 	let sending = $state(false);
 	let error = $state<string>();
+	/** Prompts drawn before their session shows them, in submission order. */
+	let pendingPrompts = $state<PendingPrompt[]>([]);
+	let pendingSequence = 0;
 	let composer = $state<HTMLTextAreaElement>();
 	let transcriptSearch = $state<TranscriptSearch>();
 	let searchOpen = $state(false);
@@ -382,6 +386,14 @@
 	const openedWorkspace = $derived(workspaces.find((workspace) => workspace.id === openedWorkspaceId));
 	const sessions = $derived(workspaces.flatMap((workspace) => workspace.sessions));
 	const activeSession = $derived(sessions.find((session) => session.id === activeSessionId));
+	$effect(() => {
+		const settled = settlePendingPrompts(pendingPrompts, sessions);
+		if (settled !== pendingPrompts) pendingPrompts = settled;
+	});
+	const activePending = $derived(pendingPrompts.filter((prompt) => prompt.sessionId === activeSession?.id));
+	/** Prompts that join the transcript. Queued prompts wait in the queue list instead. */
+	const pendingTranscript = $derived(activePending.filter((prompt) => !prompt.queue));
+	const pendingQueue = $derived(activePending.filter((prompt) => prompt.queue));
 	const activeWorkspace = $derived(
 		workspaces.find((workspace) => workspace.sessions.some((session) => session.id === activeSessionId))
 	);
@@ -835,12 +847,6 @@
 		composer?.focus();
 	}
 
-	function clearImages(): void {
-		for (const image of images) URL.revokeObjectURL(image.previewUrl);
-		images = [];
-		imageError = undefined;
-	}
-
 	onDestroy(() => {
 		for (const image of images) URL.revokeObjectURL(image.previewUrl);
 	});
@@ -863,34 +869,67 @@
 		attachImages(files);
 	}
 
+	/**
+	 * Sends the draft. The composer clears and the prompt shows as pending
+	 * before the backend answers. A refused prompt stays in view marked as not
+	 * sent, and its text and images return to the composer when the operator
+	 * has not moved to another session.
+	 */
 	async function submitPrompt(): Promise<void> {
 		if (sending || !activeSession || !draft.trim()) return;
+		const session = activeSession;
 		const text = draft.trim();
-		const queueTarget = activeSession.status === 'running' ? activeQueue : undefined;
+		const queueTarget = session.status === 'running' ? activeQueue : undefined;
+		const attached = images;
 		sending = true;
 		error = undefined;
 		try {
-			if (images.length > 0) {
-				await onSend(
-					activeSession.id,
-					text,
-					queueTarget,
-					await Promise.all(images.map((image) => encodeImage(image.file)))
-				);
-				clearImages();
-			} else {
-				await onSend(activeSession.id, text, queueTarget);
-			}
-			histories[activeSession.id] = recordPrompt(histories[activeSession.id] ?? [], text);
-			historyCursor = idleHistoryCursor;
+			const encoded = await Promise.all(attached.map((image) => encodeImage(image.file)));
+			const pending: PendingPrompt = {
+				id: `pending-${(pendingSequence += 1)}`,
+				sessionId: session.id,
+				text,
+				queue: queueTarget,
+				seen: userMessageIds(session),
+				state: 'sending'
+			};
+			pendingPrompts = [
+				...pendingPrompts.filter((prompt) => prompt.sessionId !== session.id || prompt.state !== 'failed'),
+				pending
+			];
 			draft = '';
 			draftTyped = false;
+			images = [];
+			imageError = undefined;
+			historyCursor = idleHistoryCursor;
+			try {
+				if (encoded.length > 0) await onSend(session.id, text, queueTarget, encoded);
+				else await onSend(session.id, text, queueTarget);
+			} catch (cause) {
+				markPending(pending.id, 'failed');
+				if (activeSession?.id === session.id) {
+					draft = draft.trim() ? `${text}\n\n${draft}` : text;
+					images = [...attached, ...images];
+				} else {
+					for (const image of attached) URL.revokeObjectURL(image.previewUrl);
+				}
+				throw cause;
+			}
+			markPending(pending.id, 'sent');
+			for (const image of attached) URL.revokeObjectURL(image.previewUrl);
+			histories[session.id] = recordPrompt(histories[session.id] ?? [], text);
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : 'The prompt could not be sent. Try again.';
+			if (activeSession?.id === session.id) {
+				error = cause instanceof Error ? cause.message : 'The prompt could not be sent. Try again.';
+			}
 		} finally {
 			sending = false;
 			composer?.focus();
 		}
+	}
+
+	function markPending(id: string, state: PendingPrompt['state']): void {
+		pendingPrompts = pendingPrompts.map((prompt) => (prompt.id === id ? { ...prompt, state } : prompt));
 	}
 
 	async function interrupt(): Promise<void> {
@@ -1485,7 +1524,7 @@
 				bind:this={transcriptElement}
 				use:followTranscript={{ key: activeSessionId, onChange: (next) => (following = next) }}>
 				<div class="session-view__transcript-content">
-					{#if activeSession.transcript.length === 0}
+					{#if activeSession.transcript.length === 0 && pendingTranscript.length === 0}
 						<div class="session-view__empty">
 							<h2>Start with a prompt</h2>
 							<p>Describe the task, relevant files, and any limits the agent should follow.</p>
@@ -1562,6 +1601,20 @@
 								</article>
 							{/if}
 						{/each}
+						{#each pendingTranscript as prompt (prompt.id)}
+							<article
+								class="session-message session-message--user session-message--pending"
+								aria-label="user message"
+								data-delivery={prompt.state === 'failed' ? 'failed' : 'pending'}>
+								<h2>You <span>{prompt.state === 'failed' ? 'Not sent' : 'Sending…'}</span></h2>
+								<CopyButton
+									class="session-message__copy"
+									text={prompt.text}
+									label="Copy your message"
+									onResult={announceCopy} />
+								<p>{prompt.text}</p>
+							</article>
+						{/each}
 					{/if}
 				</div>
 			</div>
@@ -1583,24 +1636,35 @@
 			{/if}
 
 			<div class="session-view__composer-stack">
-				{#if queuedCount > 0 && activeSession.messageQueue}
+				{#if queuedCount > 0 || pendingQueue.length > 0}
 					<section class="session-queue" aria-label="Queued messages">
 						<header>
-							<h2>Queued <span>{queuedCount}</span></h2>
-							<button
-								type="button"
-								class="session-queue__clear"
-								disabled={disconnected}
-								onclick={() => void clearQueue()}>
-								Clear queue
-							</button>
+							<h2>Queued <span>{queuedCount + pendingQueue.length}</span></h2>
+							{#if queuedCount > 0}
+								<button
+									type="button"
+									class="session-queue__clear"
+									disabled={disconnected}
+									onclick={() => void clearQueue()}>
+									Clear queue
+								</button>
+							{/if}
 						</header>
 						<ul>
-							{#each activeSession.messageQueue.steering as message, index (`steer-${index}`)}
-								<li><strong>Steer</strong><span>{message}</span></li>
-							{/each}
-							{#each activeSession.messageQueue.followUp as message, index (`follow-up-${index}`)}
-								<li><strong>Follow up</strong><span>{message}</span></li>
+							{#if queuedCount > 0 && activeSession.messageQueue}
+								{#each activeSession.messageQueue.steering as message, index (`steer-${index}`)}
+									<li><strong>Steer</strong><span>{message}</span></li>
+								{/each}
+								{#each activeSession.messageQueue.followUp as message, index (`follow-up-${index}`)}
+									<li><strong>Follow up</strong><span>{message}</span></li>
+								{/each}
+							{/if}
+							{#each pendingQueue as prompt (prompt.id)}
+								<li data-delivery={prompt.state === 'failed' ? 'failed' : 'pending'}>
+									<strong>{prompt.queue === 'steer' ? 'Steer' : 'Follow up'}</strong>
+									<span>{prompt.text}</span>
+									<small>{prompt.state === 'failed' ? 'Not sent' : 'Sending…'}</small>
+								</li>
 							{/each}
 						</ul>
 						{#if queueError}<p class="session-composer__error" role="alert">{queueError}</p>{/if}
@@ -2171,6 +2235,33 @@
 		border-left: 2px solid var(--pau-accent);
 	}
 
+	/* A pending prompt reads as a draft of the message it becomes. */
+	.session-message--pending {
+		border-left-color: var(--pau-border);
+	}
+
+	.session-message--pending[data-delivery='pending'] p {
+		opacity: 0.7;
+	}
+
+	.session-message--pending[data-delivery='failed'] {
+		border-left-color: var(--pau-danger);
+	}
+
+	.session-message--pending h2 span {
+		margin-left: var(--pau-space-2);
+	}
+
+	.session-queue li small {
+		color: var(--pau-text-muted);
+		font-size: var(--pau-type-xs);
+	}
+
+	.session-message--pending[data-delivery='failed'] h2 span,
+	.session-queue li[data-delivery='failed'] small {
+		color: var(--pau-danger);
+	}
+
 	.session-message p,
 	.session-thinking p {
 		margin: var(--pau-space-2) 0 0;
@@ -2355,7 +2446,7 @@
 
 	.session-queue li {
 		display: grid;
-		grid-template-columns: 5rem minmax(0, 1fr);
+		grid-template-columns: 5rem minmax(0, 1fr) auto;
 		gap: var(--pau-space-2);
 		font-size: var(--pau-type-sm);
 	}

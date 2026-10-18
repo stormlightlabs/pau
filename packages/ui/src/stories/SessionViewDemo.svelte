@@ -28,6 +28,7 @@
 		files = [],
 		searchFailure = false,
 		sendFailure,
+		holdSend = false,
 		openable = false,
 		pickedFolder,
 		openFailure,
@@ -55,6 +56,8 @@
 		searchFailure?: boolean;
 		/** When set, sending a prompt fails with this message. */
 		sendFailure?: string;
+		/** Whether sends never get an answer, which leaves the prompt pending. */
+		holdSend?: boolean;
 		/** What clearing the queue returns. */
 		clearedQueue?: MessageQueue;
 		/** Whether the view offers Open workspace. */
@@ -101,7 +104,13 @@
 		activeSessionId ??= initialSessionId;
 	});
 
-	function send(sessionId: string, text: string, queue?: PromptQueue, images: PromptImage[] = []): void {
+	function send(
+		sessionId: string,
+		text: string,
+		queue?: PromptQueue,
+		images: PromptImage[] = []
+	): Promise<void> | void {
+		if (holdSend) return new Promise<void>(() => {});
 		if (sendFailure) throw new Error(sendFailure);
 		const attached = images.length > 0 ? ` (${images.length} image${images.length === 1 ? '' : 's'})` : '';
 		lastAction = `${sessionId}: ${queue ?? 'prompt'}: ${text}${attached}`;

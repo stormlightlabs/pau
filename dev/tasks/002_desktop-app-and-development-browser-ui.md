@@ -794,19 +794,6 @@ Verification:
   `/compact`, and an unavailable command with its reason.
 - Run `/new`, `/name`, and `/compact` in a self-hosted session.
 
-### 2.187 Optimistic prompt echo
-
-Status: planned
-Blocked by: none
-
-Show a submitted prompt in the transcript as pending and clear the composer
-before the backend confirms it.
-
-Verification:
-
-- Component-test confirmation replacing the pending entry, a failed send that
-  restores the draft, and a queued prompt during a running turn.
-
 ### 2.188 Drop target feedback
 
 Status: planned
@@ -1382,7 +1369,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.175, 2.184, 2.185, 2.187, 2.194, 2.197, 2.200, 2.219, 2.220
+Blocked by: 2.156, 2.175, 2.184, 2.185, 2.194, 2.197, 2.200, 2.219, 2.220
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

@@ -110,6 +110,32 @@ export const Running: Story = {
 		await expect(canvas.getByText(/session-running: steer/)).toBeInTheDocument();
 	}
 };
+export const PromptPending: Story = {
+	args: { workspaces: sessionFixtures.idle, initialSessionId: 'session-idle', holdSend: true },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const prompt = canvas.getByRole('textbox', { name: 'Prompt' });
+		await userEvent.type(prompt, 'Add a gutter test.');
+		await userEvent.click(canvas.getByRole('button', { name: /Send prompt/ }));
+		await expect(prompt).toHaveValue('');
+		await expect(within(canvas.getByRole('region', { name: 'Transcript' })).getByText('Sending…')).toBeVisible();
+	}
+};
+export const PromptNotSent: Story = {
+	args: {
+		workspaces: sessionFixtures.idle,
+		initialSessionId: 'session-idle',
+		sendFailure: 'The session stopped before the prompt arrived.'
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const prompt = canvas.getByRole('textbox', { name: 'Prompt' });
+		await userEvent.type(prompt, 'Add a gutter test.');
+		await userEvent.click(canvas.getByRole('button', { name: /Send prompt/ }));
+		await expect(await canvas.findByText('Not sent')).toBeVisible();
+		await expect(prompt).toHaveValue('Add a gutter test.');
+	}
+};
 export const PromptHistory: Story = {
 	args: { history: ['Explain the failing build.', 'Add tests for the parser.'] },
 	play: async ({ canvasElement }) => {

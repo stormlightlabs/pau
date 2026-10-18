@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Sent prompts appear in the transcript right away. A prompt that fails to send
+  is marked "Not sent" and its text returns to the composer.
 - The session list marks sessions that are waiting for you, failed, or finished
   while you were elsewhere, until you open them or press Shift+Esc.
 - Each session state now has its own mark in the session list and header, and

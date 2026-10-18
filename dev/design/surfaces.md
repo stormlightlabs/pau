@@ -75,6 +75,11 @@ Pi extensions may add keyed status text and string widgets around the composer.
 Their selection, confirmation, input, and editor requests use a focused dialog.
 Notifications do not block the transcript.
 
+Sending clears the composer at once. The prompt shows at the end of the
+transcript, or in the queue during a run, marked as sending until the agent
+echoes it. A prompt the backend refuses stays marked as not sent, and its text
+and images return to the composer.
+
 Each workspace in the session rail has a start control. When a session cannot
 start, the task surface names the cause and offers a retry. While the backend
 connection is down, the session stays readable but sending, starting, and

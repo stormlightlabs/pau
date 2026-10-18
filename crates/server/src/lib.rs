@@ -28,6 +28,7 @@ use pau_core::{
         ApplicationSetting, ApplicationSettingsRepository, Database, SandboxSelectionRepository,
         Workspace,
     },
+    preferences::{UiPreferences, UiPreferencesStore},
     sandbox::{
         EffectiveSandbox, SandboxExecutables, SandboxLaunchInput, SandboxPreviewRequest,
         SandboxSelection, WorkspaceSandbox, resolve_sandbox, validate_selection,
@@ -420,6 +421,10 @@ fn router_with_services(
         .route("/api/health", get(health))
         .route("/api/version", get(version))
         .route("/api/events", get(websocket))
+        .route(
+            "/api/preferences",
+            get(get_preferences).put(put_preferences),
+        )
         .route("/api/diagnostics", get(get_diagnostics))
         .route("/api/diagnostics/settings", put(update_diagnostic_settings))
         .route(
@@ -684,6 +689,45 @@ async fn update_diagnostic_settings(
     Ok(Json(state.diagnostics.snapshot(SystemTime::now())))
 }
 
+fn preferences_store(state: &ApiState) -> Result<UiPreferencesStore, ApiError> {
+    state
+        .settings
+        .clone()
+        .map(UiPreferencesStore::new)
+        .ok_or(ApiError::ServiceUnavailable)
+}
+
+async fn get_preferences(State(state): State<ApiState>) -> Result<Json<UiPreferences>, ApiError> {
+    let preferences = preferences_store(&state)?
+        .load()
+        .await
+        .map_err(|error| ApiError::Preferences(error.to_string()))?;
+    Ok(Json(preferences))
+}
+
+/// Replaces the preferences and tells every connected window.
+async fn put_preferences(
+    State(state): State<ApiState>,
+    Json(preferences): Json<UiPreferences>,
+) -> Result<Json<UiPreferences>, ApiError> {
+    preferences
+        .validate()
+        .map_err(ApiError::InvalidPreferences)?;
+    let timestamp = diagnostic_timestamp();
+    preferences_store(&state)?
+        .save(&preferences, timestamp.clone())
+        .await
+        .map_err(|error| ApiError::Preferences(error.to_string()))?;
+    state.events.publish(
+        timestamp,
+        None,
+        None,
+        ServerEventKind::PreferencesChanged,
+        serde_json::to_string(&preferences).expect("preferences are serializable"),
+    );
+    Ok(Json(preferences))
+}
+
 #[derive(Debug, Deserialize)]
 struct PayloadTracingRequest {
     duration_seconds: u64,
@@ -763,6 +807,10 @@ enum ApiError {
     ExtensionRequest(StatusCode, &'static str, String),
     /// A prompt image was refused, with its code and message.
     InvalidImage(&'static str, String),
+    /// A preferences document failed validation.
+    InvalidPreferences(String),
+    /// The preferences database could not be read or written.
+    Preferences(String),
 }
 
 impl IntoResponse for ApiError {
@@ -795,6 +843,14 @@ impl IntoResponse for ApiError {
                 (status, code, error.to_string())
             }
             Self::ExtensionRequest(status, code, message) => (status, code, message),
+            Self::InvalidPreferences(message) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "invalid_preferences",
+                message,
+            ),
+            Self::Preferences(message) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "preferences_error", message)
+            }
             Self::InvalidImage(code, message) => (StatusCode::UNPROCESSABLE_ENTITY, code, message),
             Self::Session(error) => {
                 let (status, code) = sessions::error_status(&error);
@@ -1766,6 +1822,69 @@ mod tests {
                 .records
                 .iter()
                 .any(|record| record.operation == "event.slow_consumer")
+        );
+    }
+
+    #[tokio::test]
+    async fn stores_preferences_and_publishes_changes() {
+        let database = Database::open(":memory:").await.unwrap();
+        let events = EventHub::default();
+        let app = router_with_services(
+            test_token(),
+            events.clone(),
+            None,
+            default_diagnostics(),
+            Some(database.settings()),
+            None,
+            None,
+        );
+        let call = |method: &str, body: Option<serde_json::Value>| {
+            let request = Request::builder()
+                .method(method)
+                .uri("/api/preferences")
+                .header(header::AUTHORIZATION, format!("Bearer {TEST_TOKEN}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(body.map_or_else(Body::empty, |body| Body::from(body.to_string())))
+                .unwrap();
+            let app = app.clone();
+            async move {
+                let response = app.oneshot(request).await.unwrap();
+                let status = response.status();
+                let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+                (
+                    status,
+                    serde_json::from_slice::<serde_json::Value>(&body).ok(),
+                )
+            }
+        };
+
+        let (status, body) = call("GET", None).await;
+        assert_eq!(status, StatusCode::OK);
+        let mut preferences = body.unwrap();
+        assert_eq!(preferences["motion"], "system");
+        assert_eq!(preferences["version"], 1);
+
+        preferences["motion"] = "reduce".into();
+        preferences["pane_widths"]["inspector"] = 360.into();
+        let (status, _) = call("PUT", Some(preferences.clone())).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(call("GET", None).await.1.unwrap(), preferences);
+        assert_eq!(events.last_sequence(), 1);
+
+        let mut unknown = preferences.clone();
+        unknown["zoom"] = 2.into();
+        assert!(call("PUT", Some(unknown)).await.0.is_client_error());
+        let mut newer = preferences.clone();
+        newer["version"] = 2.into();
+        assert_eq!(
+            call("PUT", Some(newer)).await.0,
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+        let mut narrow = preferences;
+        narrow["pane_widths"]["inspector"] = 3.into();
+        assert_eq!(
+            call("PUT", Some(narrow)).await.0,
+            StatusCode::UNPROCESSABLE_ENTITY
         );
     }
 

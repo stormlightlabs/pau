@@ -6,6 +6,7 @@ use ts_rs::TS;
 pub mod diagnostics;
 pub mod keybindings;
 pub mod persistence;
+pub mod preferences;
 pub mod resource_monitor;
 pub mod sandbox;
 pub mod session;
@@ -44,6 +45,9 @@ pub enum ServerEventKind {
     SessionOutput,
     /// A terminal was opened, exited, or closed.
     TerminalChanged,
+    /// Interface preferences were saved. The payload is a
+    /// [`preferences::UiPreferences`].
+    PreferencesChanged,
 }
 
 impl ServerEventKind {

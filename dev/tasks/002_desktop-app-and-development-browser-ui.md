@@ -639,23 +639,10 @@ Verification:
 - Storybook interaction test for opening, filtering, and running an action from
   the keyboard.
 
-### 2.173 UI preferences API
-
-Status: planned
-Blocked by: none
-
-Persist theme, UI font, notification policy, motion setting, pane widths, and
-the last workspace and session route in Pau's database.
-
-Verification:
-
-- Cover reading defaults, saving, an unknown key, and a value from a newer
-  version.
-
 ### 2.174 Resizable panes
 
 Status: planned
-Blocked by: 2.173
+Blocked by: none
 
 Let the operator resize the context rail and the inspector by dragging their
 edges, and keep the widths across launches.
@@ -681,7 +668,7 @@ Verification:
 ### 2.176 Restore last view on launch
 
 Status: planned
-Blocked by: 2.173
+Blocked by: none
 
 Reopen the last workspace and session route on launch, showing a stopped
 session from history with a **Resume** action instead of resuming it.
@@ -1203,7 +1190,7 @@ Verification:
 ### 2.218 Motion setting
 
 Status: planned
-Blocked by: 2.173
+Blocked by: none
 
 Add a motion setting with system, reduce, and full choices, defaulting to
 system, and combine it with the OS reduced-motion query into one root

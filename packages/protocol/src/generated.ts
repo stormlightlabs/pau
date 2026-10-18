@@ -188,6 +188,64 @@ workspace_default: boolean,
  */
 session_override: boolean | null, };
 
+export type ThemePreference = "eldritch" | "nord" | "iceberg" | "catppuccin-mocha" | "vitesse-dark";
+
+export type UiFontPreference = "ibm-plex-sans" | "inter" | "atkinson-hyperlegible-next" | "atkinson-hyperlegible-soft";
+
+export type NotificationPolicy = "attention" | "all" | "off";
+
+export type MotionPreference = "system" | "reduce" | "full";
+
+export type PaneWidths = {
+/**
+ * Context rail width.
+ */
+context_rail: number | null,
+/**
+ * Inspector width.
+ */
+inspector: number | null, };
+
+export type LastRoute = {
+/**
+ * Workspace that was open.
+ */
+workspace_id: string,
+/**
+ * Session that was open in the workspace, if any.
+ */
+session_id: string | null, };
+
+export type UiPreferences = {
+/**
+ * Document version. Writes must send [`UI_PREFERENCES_VERSION`].
+ */
+version: number,
+/**
+ * Color scheme.
+ */
+theme: ThemePreference,
+/**
+ * Interface typeface.
+ */
+ui_font: UiFontPreference,
+/**
+ * Notification policy.
+ */
+notifications: NotificationPolicy,
+/**
+ * Motion setting.
+ */
+motion: MotionPreference,
+/**
+ * Resizable pane widths.
+ */
+pane_widths: PaneWidths,
+/**
+ * View to restore on launch.
+ */
+last_route: LastRoute | null, };
+
 export type FileEntryKind = "file" | "directory" | "symlink";
 
 export type FileEntry = {
@@ -460,7 +518,7 @@ disk_read_bytes: number | null,
  */
 disk_write_bytes: number | null, };
 
-export type ServerEventKind = "workspace_changed" | "session_changed" | "session_output" | "terminal_changed";
+export type ServerEventKind = "workspace_changed" | "session_changed" | "session_output" | "terminal_changed" | "preferences_changed";
 
 export type ServerEvent = {
 /**

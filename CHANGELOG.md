@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Screen readers hear when a response starts and finishes, when a tool call
+  fails, and when Pi needs your input, instead of every streamed update.
 - Type @ in the prompt to pick a workspace file or folder and insert its path,
   as in Pi.
 - A Jump to latest button (or Ctrl+End) appears when new output arrives while

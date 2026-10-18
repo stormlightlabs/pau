@@ -552,7 +552,7 @@ export const JumpToLatest: Story = {
 		await userEvent.click(canvas.getByRole('button', { name: /Send prompt/ }));
 
 		const jump = await canvas.findByRole('button', { name: /Jump to latest/ });
-		await expect(canvas.getByText('New output below')).toBeInTheDocument();
+		await expect(await canvas.findByText('New output below')).toBeInTheDocument();
 		await userEvent.click(jump);
 		await waitFor(() => expect(canvas.queryByRole('button', { name: /Jump to latest/ })).not.toBeInTheDocument(), {
 			timeout: 5000

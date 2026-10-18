@@ -12,6 +12,7 @@
 		type HistoryCursor
 	} from './composer-history';
 	import { encodeImage, imageAccept, imageRejection, type ComposerImage, type PromptImage } from './composer-images';
+	import { announcementSnapshot, describeChanges, type AnnouncementSnapshot } from './transcript-announcements';
 	import CommandCompletion from './CommandCompletion.svelte';
 	import { commandName, commandQuery, filterCommands } from './command-completion';
 	import ExtensionUi from './ExtensionUi.svelte';
@@ -243,6 +244,42 @@
 		detachedTail !== undefined && (tail.length !== detachedTail.length || tail.size !== detachedTail.size)
 	);
 	const newEntries = $derived(arrived && detachedTail ? tail.length - detachedTail.length : 0);
+
+	/** Delay that merges a burst of events into one announcement. */
+	const announceDelayMs = 400;
+	let announcement = $state('');
+	let announced: AnnouncementSnapshot | undefined;
+	let announcePending: string[] = [];
+	let announceTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function queueAnnouncements(messages: string[]) {
+		if (messages.length === 0) return;
+		announcePending.push(...messages);
+		clearTimeout(announceTimer);
+		announceTimer = setTimeout(() => {
+			announcement = [...new Set(announcePending)].join('. ');
+			announcePending = [];
+		}, announceDelayMs);
+	}
+
+	// Streamed text changes the snapshot but not the messages, so only events announce.
+	$effect(() => {
+		const next = activeSession ? announcementSnapshot(activeSession) : undefined;
+		const messages = next
+			? describeChanges(
+					untrack(() => announced),
+					next
+				)
+			: [];
+		announced = next;
+		queueAnnouncements(messages);
+	});
+
+	$effect(() => {
+		if (arrived) untrack(() => queueAnnouncements(['New output below']));
+	});
+
+	onDestroy(() => clearTimeout(announceTimer));
 
 	/** Whether the active session's current model reasons, as last reported by the model picker. */
 	let currentModelReasoning = $state<boolean>();
@@ -1297,7 +1334,7 @@
 							{/if}
 						</div>
 					{/if}
-					<div class={`session-view__status session-view__status--${activeSession.status}`} role="status">
+					<div class={`session-view__status session-view__status--${activeSession.status}`}>
 						<span></span>{statusLabel(activeSession.status)}
 					</div>
 					{#if activeSession.capabilities.stop && ['idle', 'running', 'waiting'].includes(activeSession.status)}
@@ -1388,7 +1425,6 @@
 				role="region"
 				tabindex="0"
 				aria-label="Transcript"
-				aria-live="polite"
 				data-following={following}
 				bind:this={transcriptElement}
 				use:followTranscript={{ key: activeSessionId, onChange: (next) => (following = next) }}>
@@ -1469,7 +1505,7 @@
 				</div>
 			</div>
 
-			<p class="session-view__sr-only" role="status">{arrived ? 'New output below' : ''}</p>
+			<p class="session-view__sr-only session-view__announcer" role="status">{announcement}</p>
 			{#if arrived}
 				<!-- Mouse down must not move focus out of the composer. -->
 				<button

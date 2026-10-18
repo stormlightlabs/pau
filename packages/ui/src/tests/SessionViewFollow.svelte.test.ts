@@ -142,12 +142,11 @@ test('Jump to latest appears after new output arrives while detached, and resume
 	await screen.rerender({ workspaces: workspaces(33), activeSessionId: baseSession.id });
 	await expect.poll(jumpButton).not.toBeNull();
 	expect(jumpButton()).toHaveTextContent('3 new');
-	expect(document.querySelector('.session-view__sr-only')).toHaveTextContent('New output below');
+	await expect.poll(() => document.querySelector('.session-view__announcer')?.textContent).toBe('New output below');
 
 	jumpButton()!.click();
 	await expect.poll(isFollowing).toBe(true);
 	await expect.poll(jumpButton).toBeNull();
-	expect(document.querySelector('.session-view__sr-only')).toHaveTextContent('');
 });
 
 test('Jump to latest does not take focus from the composer', async () => {

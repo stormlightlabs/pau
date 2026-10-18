@@ -876,19 +876,6 @@ Verification:
 - Component-test copying a message, a code block, and a streaming message, and
   a clipboard failure.
 
-### 2.199 Transcript announcements
-
-Status: planned
-Blocked by: none
-
-Announce completed messages, status changes, and errors to assistive
-technology instead of every streamed change.
-
-Verification:
-
-- Component-test that the live region receives one announcement per completed
-  message and none per delta.
-
 ### 2.200 Session scroll restoration
 
 Status: planned
@@ -1451,8 +1438,8 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.175, 2.184, 2.185, 2.187, 2.194, 2.197, 2.199, 2.200,
-2.205, 2.219, 2.220
+Blocked by: 2.156, 2.175, 2.184, 2.185, 2.187, 2.194, 2.197, 2.200, 2.205,
+2.219, 2.220
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

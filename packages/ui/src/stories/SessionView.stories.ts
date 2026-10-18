@@ -466,6 +466,14 @@ export const ConcurrentSessions: Story = {
 		await expect(canvas.getByText('Claude', { exact: false })).toBeInTheDocument();
 	}
 };
+/** The context rail dragged to its 160px minimum. Names truncate and each status stays on its row's line. */
+export const NarrowRail: Story = {
+	args: {
+		workspaces: sessionFixtures.concurrent,
+		initialSessionId: 'diff-gutter',
+		paneWidths: { contextRail: 160, inspector: null }
+	}
+};
 export const SessionMenu: Story = {
 	args: { workspaces: sessionFixtures.idleWithPath, initialSessionId: 'session-idle' },
 	play: async ({ canvasElement }) => {

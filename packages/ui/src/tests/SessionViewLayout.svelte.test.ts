@@ -28,6 +28,8 @@ function renderRail(contextRail: number | null) {
 }
 
 const rect = (element: Element) => element.getBoundingClientRect();
+const inset = (element: Element) =>
+	rect(element).left + Number(getComputedStyle(element).paddingLeft.replace('px', ''));
 
 test.each([
 	['minimum', 160],
@@ -52,19 +54,74 @@ test.each([
 	// The name truncates instead of pushing the controls out, and they share its row.
 	expect(heading.scrollWidth).toBeGreaterThan(heading.clientWidth);
 	expect(getComputedStyle(heading).textTransform).toBe('none');
+	expect(getComputedStyle(heading).textOverflow).toBe('ellipsis');
+	expect(getComputedStyle(heading).whiteSpace).toBe('nowrap');
+	expect(heading.getAttribute('title')).toContain('ankify-spaced-repetition-sync-service');
 	const nameBox = rect(heading);
 	const startBox = rect(start.element());
 	expect(startBox.left).toBeGreaterThanOrEqual(nameBox.right);
 	expect(Math.abs(startBox.top + startBox.height / 2 - (nameBox.top + nameBox.height / 2))).toBeLessThan(1);
 });
 
-test('insets the empty session note to the session titles', async () => {
+test('aligns the empty session note with the workspace name', async () => {
 	await render(SessionView, { workspaces: [{ id: 'empty', name: 'Empty', sessions: [] }, ...sessionFixtures.waiting] });
 
 	const note = page.getByText('No sessions yet').element();
-	const title = document.querySelector('.session-rail .session-rail__name')!;
-	const noteText = rect(note).left + Number(getComputedStyle(note).paddingLeft.replace('px', ''));
-	expect(Math.abs(noteText - rect(title).left)).toBeLessThan(1);
+	const heading = page.getByRole('heading', { name: 'Empty' }).element();
+	expect(Math.abs(inset(note) - inset(heading))).toBeLessThan(1);
+});
+
+test('stacks session rows without gaps and spans the selected row across the rail', async () => {
+	await render(SessionView, { workspaces: sessionFixtures.concurrent, activeSessionId: 'diff-gutter' });
+
+	const rail = rect(document.querySelector('.session-rail')!);
+	const rows = [...document.querySelectorAll<HTMLElement>('.session-rail li')].slice(0, 3).map((row) => rect(row));
+	for (const [index, row] of rows.entries()) {
+		expect(row.height).toBe(32);
+		if (index > 0) expect(row.top).toBe(rows[index - 1]!.bottom);
+	}
+
+	const selected = rect(page.getByRole('button', { name: /Fix diff gutter/ }).element());
+	expect(selected.left).toBe(rail.left);
+	expect(selected.right).toBe(rail.right);
+	expect(getComputedStyle(page.getByRole('button', { name: /Fix diff gutter/ }).element()).boxShadow).not.toBe('none');
+});
+
+test('gives the workspace icon buttons a resting border and a 44px hit area', async () => {
+	await renderRail(null);
+
+	const start = page.getByRole('button', { name: 'New session in ankify-spaced-repetition-sync-service' }).element();
+	expect(getComputedStyle(start).borderTopWidth).toBe('1px');
+	const after = getComputedStyle(start, '::after');
+	expect(Number(after.width.replace('px', ''))).toBeGreaterThanOrEqual(44);
+	expect(Number(after.height.replace('px', ''))).toBeGreaterThanOrEqual(44);
+	expect(rect(start).height).toBe(28);
+});
+
+test('truncates long session names on one line and keeps the full name', async () => {
+	const title = 'Reconcile the saved session registry with the running agents';
+	await render(SessionView, {
+		workspaces: [
+			{
+				id: 'ankify',
+				name: 'ankify',
+				sessions: [{ ...sessionFixtures.concurrent[0]!.sessions[0]!, id: 'long', title }]
+			}
+		],
+		paneWidths: { contextRail: 160, inspector: null }
+	});
+
+	const row = page.getByRole('button', { name: new RegExp(title) });
+	await expect.element(row).toHaveAttribute('title', title);
+	const name = document.querySelector<HTMLElement>('.session-rail__name')!;
+	const status = rect(document.querySelector('.session-rail__state')!);
+	expect(name.scrollWidth).toBeGreaterThan(name.clientWidth);
+	expect(getComputedStyle(name).textOverflow).toBe('ellipsis');
+	expect(getComputedStyle(name).whiteSpace).toBe('nowrap');
+	expect(rect(name).height).toBeLessThan(24);
+	// The status shares the name's line and stays inside the rail.
+	expect(Math.abs(status.top + status.height / 2 - (rect(name).top + rect(name).height / 2))).toBeLessThan(1);
+	expect(status.right).toBeLessThanOrEqual(rect(document.querySelector('#shell-context-rail')!).right);
 });
 
 test('lays out the saved-session picker as a top-aligned panel', async () => {

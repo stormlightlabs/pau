@@ -13,7 +13,7 @@
 		SessionWorkspace,
 		TranscriptEntry
 	} from '../lib/types/session';
-	import type { ShellNavItem } from '../lib/ApplicationShell.svelte';
+	import type { ShellNavItem, ShellPaneWidths } from '../lib/ApplicationShell.svelte';
 	import SessionView from '../lib/SessionView.svelte';
 
 	let {
@@ -39,7 +39,8 @@
 		savedSessions,
 		productItems,
 		agentReadiness,
-		models
+		models,
+		paneWidths
 	}: {
 		workspaces: SessionWorkspace[];
 		initialSessionId?: string;
@@ -70,6 +71,8 @@
 		openable?: boolean;
 		/** Why Pi cannot start a session, as launch reports it. */
 		agentReadiness?: AgentReadinessProblem;
+		/** Pane widths in pixels; a null width keeps the default. */
+		paneWidths?: ShellPaneWidths;
 		/**
 		 * What a native folder picker returns, with `null` for a cancel. Without
 		 * it, the view asks for a path in a text field.
@@ -145,6 +148,7 @@
 	workspaces={allWorkspaces}
 	{productItems}
 	{agentReadiness}
+	{paneWidths}
 	onOpenWorkspace={openable ? async (path) => openWorkspace(path) : undefined}
 	pickFolder={pickedFolder === undefined ? undefined : async () => pickedFolder ?? undefined}
 	{activeSessionId}

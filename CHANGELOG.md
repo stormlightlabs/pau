@@ -4,6 +4,10 @@
 
 ### Desktop
 
+- Long workspace and session names in a narrow rail truncate with an ellipsis,
+  and hovering shows the full name.
+- Session rows in the rail are tighter, and the selected session highlights
+  across the full rail with an accent edge.
 - Changed files in the file rail show the file name first, with its folder muted
   and shortened from the start.
 - The model, thinking level, and context usage controls sit in the composer

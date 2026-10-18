@@ -1741,7 +1741,12 @@
 							}}>
 							<!-- The heading takes focus so the keyboard can open the workspace menu. -->
 							<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-							<h2 id={`workspace-${workspace.id}`} tabindex="0" title={workspace.path}>{workspace.name}</h2>
+							<h2
+								id={`workspace-${workspace.id}`}
+								tabindex="0"
+								title={workspace.path ? `${workspace.name}\n${workspace.path}` : workspace.name}>
+								{workspace.name}
+							</h2>
 							{#if onStartSession}
 								<button
 									type="button"
@@ -1797,6 +1802,7 @@
 											type="button"
 											id={`session-row-${session.id}`}
 											class:active={session.id === activeSessionId}
+											title={session.title}
 											aria-current={session.id === activeSessionId ? 'page' : undefined}
 											onclick={() => selectSession(session.id)}
 											oncontextmenu={(event) => openSessionMenu(event, session)}
@@ -2463,8 +2469,9 @@
 </ApplicationShell>
 
 <style>
+	/* Rows run edge to edge so the selected surface spans the rail. */
 	.session-rail {
-		padding: 0 var(--pau-space-2) var(--pau-space-4);
+		padding: 0 0 var(--pau-space-4);
 	}
 
 	/* The workspace name gives way to its controls, which never shrink or clip. */
@@ -2473,9 +2480,12 @@
 		align-items: center;
 		gap: var(--pau-space-1);
 		min-width: 0;
+		padding-inline: var(--pau-space-2);
 	}
 
+	/* The quiet button rests with a border; the pseudo-element widens its hit area to 44px. */
 	.session-rail .session-rail__icon-button {
+		position: relative;
 		display: inline-flex;
 		flex: none;
 		align-items: center;
@@ -2484,7 +2494,15 @@
 		min-height: 0;
 		height: var(--pau-size-row-sm);
 		padding: 0;
+		color: var(--pau-text);
+		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
+	}
+
+	.session-rail .session-rail__icon-button::after {
+		content: '';
+		position: absolute;
+		inset: calc((var(--pau-size-row-sm) - var(--pau-size-target-touch)) / 2 - 1px);
 	}
 
 	.session-rail .session-rail__icon-button[aria-pressed='true'] {
@@ -2517,7 +2535,7 @@
 
 	.session-rail ul {
 		display: grid;
-		gap: var(--pau-space-1);
+		gap: 0;
 		margin: 0;
 		padding: 0;
 		list-style: none;
@@ -2529,8 +2547,8 @@
 		align-items: center;
 		gap: var(--pau-space-2);
 		width: 100%;
-		min-height: var(--pau-size-target-touch);
-		padding: var(--pau-space-2) var(--pau-space-3) var(--pau-space-2) var(--pau-space-2);
+		min-height: var(--pau-size-row-md);
+		padding: 0 var(--pau-space-3) 0 var(--pau-space-4);
 		color: var(--pau-text-muted);
 		background: transparent;
 		border: 0;
@@ -2543,6 +2561,11 @@
 	.session-rail button.active {
 		color: var(--pau-text);
 		background: var(--pau-surface-raised);
+	}
+
+	.session-rail button.active {
+		background: var(--pau-selection);
+		box-shadow: inset 2px 0 0 var(--pau-accent);
 	}
 
 	.session-rail__name {
@@ -2599,7 +2622,8 @@
 	.session-rail .session-rail__open {
 		grid-template-columns: auto minmax(0, 1fr);
 		min-height: var(--pau-size-row-md);
-		margin-bottom: var(--pau-space-3);
+		width: calc(100% - 2 * var(--pau-space-2));
+		margin: 0 var(--pau-space-2) var(--pau-space-3);
 		padding-block: 0;
 		font-size: var(--pau-type-sm);
 		color: var(--pau-text);
@@ -2656,18 +2680,17 @@
 		color: var(--pau-danger);
 	}
 
-	/* The inset matches a session row's title: row padding, marker column, and gap. */
+	/* The inset matches the workspace name: heading inset plus the name's own padding. */
 	.session-rail__empty {
 		margin: 0;
-		padding: var(--pau-space-2) var(--pau-space-3) var(--pau-space-2)
-			calc(var(--pau-space-2) + 0.5rem + var(--pau-space-2));
+		padding: var(--pau-space-2) var(--pau-space-3) var(--pau-space-2) var(--pau-space-4);
 		color: var(--pau-text-muted);
 	}
 
 	.session-rail__rename {
 		width: 100%;
-		min-height: var(--pau-size-target-touch);
-		padding: var(--pau-space-2) var(--pau-space-3) var(--pau-space-2) var(--pau-space-2);
+		min-height: var(--pau-size-row-md);
+		padding: 0 var(--pau-space-3) 0 var(--pau-space-4);
 		color: var(--pau-text);
 		font: inherit;
 		background: var(--pau-canvas);
@@ -2677,7 +2700,7 @@
 
 	.session-rail__error {
 		margin: var(--pau-space-2) 0 0;
-		padding: var(--pau-space-2);
+		padding: var(--pau-space-2) var(--pau-space-4);
 		color: var(--pau-danger);
 		font-size: var(--pau-type-sm);
 	}

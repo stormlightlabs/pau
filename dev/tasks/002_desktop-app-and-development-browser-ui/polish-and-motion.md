@@ -277,40 +277,6 @@ Verification:
 - Screenshot the session, Files, editor, terminal, and Processes empty states
   at 1440px and 900px.
 
-### 2.252 Session rail rows
-
-Status: planned
-Blocked by: none
-
-Session rows sit on a 48px pitch with 12px of canvas between them, the
-selected surface stops short of the rail edges, "No workspaces yet" is
-indented 16px past the workspace names, and the add and history icon buttons
-have no resting treatment. Make rows contiguous at `size/row-md` with the
-selected surface spanning the rail and a left-edge indicator, align the empty
-copy with the workspace name, and give the icon buttons the quiet-button
-resting style with a 44px hit area.
-
-Verification:
-
-- Component-test that consecutive session rows have no gap and that the
-  selected row spans the rail width.
-- Screenshot the concurrent-sessions fixture at 1440px and 900px.
-
-### 2.253 Rail name truncation
-
-Status: planned
-Blocked by: none
-
-Dragging the context rail to its 160px minimum wraps workspace names across
-three lines ("fix-", "diff-", "gutter") and pushes the status text out of
-line. Truncate names with an ellipsis, keep the status on the same line, and
-keep the full name in the accessible label and tooltip.
-
-Verification:
-
-- Component-test that a long name at the minimum rail width renders one line
-  with an ellipsis and keeps its full accessible name.
-
 ### 2.257 State labels and copy
 
 Status: planned

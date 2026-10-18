@@ -1,6 +1,7 @@
 <script lang="ts">
 	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
+	import StateChip from './StateChip.svelte';
 	import type { McpConfigurationViewModel } from './types/mcp';
 
 	let {
@@ -32,8 +33,10 @@
 		configuration.servers.find((server) => server.name === selectedName) ?? configuration.servers[0]
 	);
 
+	/** Sentence case, so "not-connected" reads "Not connected" beside "Connected". */
 	function statusLabel(status: string) {
-		return status.replace('-', ' ');
+		const label = status.replace('-', ' ');
+		return label.charAt(0).toUpperCase() + label.slice(1);
 	}
 </script>
 
@@ -43,9 +46,9 @@
 			<h2 id="mcp-title">{agentLabel} MCP</h2>
 			<p>{configuration.serverCount} configured {configuration.serverCount === 1 ? 'server' : 'servers'}</p>
 		</div>
-		<span class:off={!configuration.managedEnabled} class="mcp__managed-state">
+		<StateChip on={configuration.managedEnabled}>
 			Pau-managed MCP {configuration.managedEnabled ? 'on' : 'off'}
-		</span>
+		</StateChip>
 	</header>
 
 	{#if unavailable && configuration.availability.state !== 'ready'}
@@ -215,13 +218,6 @@
 		line-height: 1.5;
 	}
 
-	.mcp__managed-state {
-		color: var(--workbench-available-text);
-		font-size: var(--pau-type-xs);
-		font-weight: var(--pau-weight-semibold);
-	}
-
-	.mcp__managed-state.off,
 	.failed {
 		color: var(--workbench-unavailable-text);
 	}
@@ -289,7 +285,6 @@
 
 	.mcp__server-row > span:last-child {
 		font-size: var(--pau-type-xs);
-		text-transform: capitalize;
 	}
 
 	.mcp__server-detail {

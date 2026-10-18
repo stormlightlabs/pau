@@ -241,40 +241,6 @@ Verification:
   Storybook shows exactly one accent button per surface.
 - Component-test that a disabled primary uses the disabled text color.
 
-### 2.257 State labels and copy
-
-Status: planned
-Blocked by: none
-
-Several labels misuse color or case: "Pau-managed MCP off" is danger red for a
-neutral state, "Minimum log level" is link blue, "Not Connected" is title case
-beside "Connected", "Sandbox on" and "Diagnostics mode on" are two styles of
-mode indicator, and the readiness notice breaks its install command inside
-"pi-coding-agent". Use muted text for off states, normal text for labels,
-sentence case, one outlined chip for mode indicators, and keep commands on one
-line with horizontal scrolling.
-
-Verification:
-
-- Component-test that the MCP off label uses the muted text color and that
-  the command block does not wrap.
-- Screenshot the MCP, Diagnostics, sandbox, and readiness fixtures.
-
-### 2.261 Editor error actions
-
-Status: planned
-Blocked by: none
-
-Binary and oversized files show a "Try again" button that cannot succeed.
-Replace it with "Reveal in file manager" and, when the preferred editor
-setting exists, "Open in external editor", and state the size limit or the
-binary detection in the message.
-
-Verification:
-
-- Component-test that the binary and oversized states render the reveal
-  action and no retry.
-
 ### 2.263 Picker triggers
 
 Status: planned

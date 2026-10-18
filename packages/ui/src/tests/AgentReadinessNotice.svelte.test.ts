@@ -64,3 +64,11 @@ test('stays hidden when Pi is ready', async () => {
 	await expect.element(page.getByRole('heading', { name: 'No session selected' })).toBeVisible();
 	expect(notice().query()).toBeNull();
 });
+
+test('keeps the install command on one line and scrolls it sideways', async () => {
+	await render(AgentReadinessNotice, { problem: agentReadinessFixtures.missing });
+
+	const style = getComputedStyle(page.getByRole('code').element());
+	expect(style.whiteSpace).toBe('nowrap');
+	expect(style.overflowX).toBe('auto');
+});

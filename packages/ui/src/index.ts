@@ -171,3 +171,4 @@ export { workspaceFileFixtures } from './fixtures/workspace-files';
 export { isReducedMotion, motion, motionOffset } from './motion';
 export type { MotionSetting } from './motion';
 export { default as SessionStatusMark } from './lib/SessionStatusMark.svelte';
+export { default as StateChip } from './lib/StateChip.svelte';

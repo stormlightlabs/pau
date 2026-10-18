@@ -4,6 +4,7 @@ import { render } from 'vitest-browser-svelte';
 
 import { sandboxFixtures } from '../fixtures/sandbox';
 import SandboxSettingsView from '../lib/SandboxSettingsView.svelte';
+import { applyTheme } from './apply-theme';
 
 test('starts unsandboxed and keeps permission prompts separate from the sandbox', async () => {
 	await render(SandboxSettingsView, { selection: sandboxFixtures.unsandboxed });
@@ -179,4 +180,12 @@ test('offers the workspace default for a session override and reports errors', a
 	await userEvent.click(page.getByRole('button', { name: 'Use workspace default' }));
 	expect(onUseWorkspaceDefault).toHaveBeenCalledOnce();
 	await expect.element(page.getByRole('button', { name: 'Apply to this session' })).toBeVisible();
+});
+
+test('shows the sandbox mode as the same outlined chip as the other mode indicators', async () => {
+	applyTheme();
+	await render(SandboxSettingsView, { selection: sandboxFixtures.unsandboxed });
+
+	await expect.element(page.getByText('Sandbox off')).toBeVisible();
+	expect(getComputedStyle(page.getByText('Sandbox off').element()).borderTopStyle).toBe('solid');
 });

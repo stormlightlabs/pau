@@ -4,12 +4,23 @@ import { render } from 'vitest-browser-svelte';
 
 import { mcpConfigurationFixtures } from '../fixtures/mcp';
 import McpConfigurationView from '../lib/McpConfigurationView.svelte';
+import { applyTheme } from './apply-theme';
 
 test('keeps native configuration visible while Pau-managed MCP is off', async () => {
+	applyTheme();
 	const onEnable = vi.fn();
 	await render(McpConfigurationView, { configuration: mcpConfigurationFixtures.piConfiguredOff, onEnable });
 
-	await expect.element(page.getByText('Pau-managed MCP off')).toBeVisible();
+	const state = page.getByText('Pau-managed MCP off');
+	await expect.element(state).toBeVisible();
+	// Off is neutral, so it uses the muted text color.
+	const muted = document.createElement('span');
+	muted.style.color = 'var(--pau-text-muted)';
+	document.body.append(muted);
+	expect(getComputedStyle(state.element()).color).toBe(getComputedStyle(muted).color);
+	muted.remove();
+	await expect.element(page.getByText('Not connected', { exact: true })).toBeVisible();
+	await expect.element(page.getByText('Connected', { exact: true })).toBeVisible();
 	await expect
 		.element(page.getByText('Native Pi MCP remains active. Pau does not change that configuration.'))
 		.toBeVisible();

@@ -89,7 +89,8 @@ command with a copy button and opens a terminal where they can run it.
 		min-width: 0;
 		font-family: var(--pau-font-code);
 		font-size: var(--pau-type-sm);
-		overflow-wrap: anywhere;
+		white-space: nowrap;
+		overflow-x: auto;
 	}
 
 	.agent-readiness__terminal {

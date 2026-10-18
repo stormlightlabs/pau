@@ -697,7 +697,12 @@
 			{/key}
 		{:else if selectedPath && editorSource}
 			{#key selectedPath}
-				<FileEditor path={selectedPath} source={editorSource} line={selectedLine} />
+				{@const fullPath = absolutePath(selectedPath)}
+				<FileEditor
+					path={selectedPath}
+					source={editorSource}
+					line={selectedLine}
+					onReveal={revealPath && fullPath ? () => revealPath(fullPath) : undefined} />
 			{/key}
 		{:else if selectedPath}
 			<div class="workspace-files__surface-state">

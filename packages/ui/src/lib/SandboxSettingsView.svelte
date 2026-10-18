@@ -1,5 +1,6 @@
 <script lang="ts">
 	import '../styles/tokens.css';
+	import StateChip from './StateChip.svelte';
 	import Select, { type SelectOption } from './Select.svelte';
 	import type {
 		EffectiveSandboxView,
@@ -136,9 +137,9 @@
 				{scope === 'workspace' ? 'Default for new agent sessions in this workspace' : 'This session only'}
 			</p>
 		</div>
-		<span class="sandbox__state" class:off={draft.mode === 'unsandboxed'}>
+		<StateChip on={draft.mode !== 'unsandboxed'}>
 			{draft.mode === 'unsandboxed' ? 'Sandbox off' : 'Sandbox on'}
-		</span>
+		</StateChip>
 	</header>
 
 	<fieldset class="sandbox__section">
@@ -530,16 +531,6 @@
 		width: 100%;
 		margin-bottom: var(--pau-space-1);
 		padding: 0;
-	}
-
-	.sandbox__state {
-		color: var(--workbench-available-text);
-		font-size: var(--pau-type-xs);
-		font-weight: var(--pau-weight-semibold);
-	}
-
-	.sandbox__state.off {
-		color: var(--workbench-muted);
 	}
 
 	.sandbox__choice,

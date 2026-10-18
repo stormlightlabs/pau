@@ -1,6 +1,7 @@
 <script lang="ts">
 	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
+	import StateChip from './StateChip.svelte';
 	import Select, { type SelectOption } from './Select.svelte';
 	import ViewHeader from './ViewHeader.svelte';
 	import type { DiagnosticBundleView, DiagnosticLevel } from './types/diagnostics';
@@ -41,9 +42,9 @@
 <section class="diagnostics-view" aria-labelledby="diagnostics-title">
 	<ViewHeader eyebrow="Support and troubleshooting" title="Diagnostics" titleId="diagnostics-title">
 		{#snippet meta()}
-			<span class:diagnostics-view__mode--active={bundle.settings.enabled} class="diagnostics-view__mode">
+			<StateChip on={bundle.settings.enabled}>
 				{bundle.settings.enabled ? 'Diagnostics mode on' : 'Diagnostics mode off'}
-			</span>
+			</StateChip>
 		{/snippet}
 	</ViewHeader>
 
@@ -63,7 +64,7 @@
 					onSettingsChange?.((event.currentTarget as HTMLInputElement).checked, bundle.settings.minLevel)} />
 			<span>Enable diagnostics</span>
 		</label>
-		<div class="diagnostics-view__level">
+		<div class="diagnostics-view__setting">
 			<span id={levelLabelId}>Minimum log level</span>
 			<Select
 				labelledby={levelLabelId}
@@ -253,18 +254,6 @@
 		font-size: var(--pau-type-md);
 	}
 
-	.diagnostics-view__mode {
-		padding: var(--pau-space-1) var(--pau-space-2);
-		color: var(--pau-text-muted);
-		border: 1px solid var(--pau-border);
-		font-size: var(--pau-type-xs);
-	}
-
-	.diagnostics-view__mode--active {
-		color: var(--pau-accent);
-		border-color: var(--pau-accent);
-	}
-
 	.diagnostics-view__settings {
 		display: grid;
 		grid-template-columns: minmax(16rem, 1fr) auto auto;
@@ -280,7 +269,7 @@
 	}
 
 	.diagnostics-view label,
-	.diagnostics-view__level {
+	.diagnostics-view__setting {
 		display: flex;
 		align-items: center;
 		gap: var(--pau-space-2);

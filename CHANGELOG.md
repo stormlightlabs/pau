@@ -4,6 +4,11 @@
 
 ### Desktop
 
+- Binary and oversized files in the editor explain why they can't open and offer
+  to reveal the file instead of a retry that can't work.
+- Mode indicators for the sandbox, MCP, and Diagnostics share one outlined chip,
+  off states are muted instead of red, and the Pi install command stays on one
+  line.
 - Empty states for sessions, Files, Processes, and terminals start at the top of
   the content column and line up with the transcript and view headers.
 - The command palette opens with the first available action highlighted, so

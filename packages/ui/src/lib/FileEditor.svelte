@@ -7,11 +7,23 @@
 	import { basicSetup, EditorView } from 'codemirror';
 	import { onMount, tick } from 'svelte';
 
+	import { revealLabel } from './context-menu';
 	import type { EditorFileContent, FileEditorSource } from './types/file-editor';
 
-	type Props = { path: string; source: FileEditorSource; line?: number; pollInterval?: number };
+	type Props = {
+		path: string;
+		source: FileEditorSource;
+		line?: number;
+		pollInterval?: number;
+		/**
+		 * Shows the file in the system file manager. Files the editor can never
+		 * open offer it in place of a retry. Omit it when the app cannot reveal
+		 * paths.
+		 */
+		onReveal?: () => Promise<void>;
+	};
 
-	let { path, source, line, pollInterval = 2000 }: Props = $props();
+	let { path, source, line, pollInterval = 2000, onReveal }: Props = $props();
 	let host = $state<HTMLElement>();
 	let view: EditorView | undefined;
 	let file = $state<EditorFileContent>();
@@ -20,6 +32,9 @@
 	let saving = $state(false);
 	let dirty = $state(false);
 	let error = $state('');
+	/** False when reading again cannot succeed, such as a binary or oversized file. */
+	let retryable = $state(true);
+	let revealFailed = $state(false);
 	let notice = $state('');
 
 	const syntaxTheme = HighlightStyle.define([
@@ -65,16 +80,19 @@
 			: undefined;
 	}
 
+	/** Open errors that come from the file itself, so a second read fails the same way. */
+	const permanentErrors = new Set(['binary_file', 'file_too_large', 'invalid_encoding']);
+
 	function openError(value: unknown): string {
 		switch (errorCode(value)) {
 			case 'binary_file': {
-				return 'This file contains binary data and cannot be opened in the text editor.';
+				return 'Pau found binary data in this file, so the text editor cannot open it.';
 			}
 			case 'file_too_large': {
-				return 'This file is larger than the 2 MiB built-in editor limit.';
+				return 'This file is larger than 2 MiB, the most the text editor opens.';
 			}
 			case 'invalid_encoding': {
-				return 'This file is not valid UTF-8 and cannot be opened in the text editor.';
+				return 'This file is not valid UTF-8, so the text editor cannot open it.';
 			}
 			case 'permission_denied': {
 				return 'Pau cannot read this file. Check its file permissions and try again.';
@@ -157,13 +175,24 @@
 	async function load(): Promise<void> {
 		loading = true;
 		error = '';
+		revealFailed = false;
 		try {
 			const opened = await source.read(path);
 			loading = false;
 			await showFile(opened);
 		} catch (caught) {
 			error = openError(caught);
+			retryable = !permanentErrors.has(errorCode(caught) ?? '');
 			loading = false;
+		}
+	}
+
+	async function reveal(): Promise<void> {
+		revealFailed = false;
+		try {
+			await onReveal?.();
+		} catch {
+			revealFailed = true;
 		}
 	}
 
@@ -255,7 +284,12 @@
 		<div class="file-editor__state" role="alert">
 			<strong>Cannot open file</strong>
 			<p>{error}</p>
-			<button type="button" onclick={() => void load()}>Try again</button>
+			{#if revealFailed}<p>Pau could not show this file in the file manager.</p>{/if}
+			{#if retryable}
+				<button type="button" onclick={() => void load()}>Try again</button>
+			{:else if onReveal}
+				<button type="button" onclick={() => void reveal()}>{revealLabel()}</button>
+			{/if}
 		</div>
 	{:else}
 		<div class="file-editor__code" bind:this={host}></div>

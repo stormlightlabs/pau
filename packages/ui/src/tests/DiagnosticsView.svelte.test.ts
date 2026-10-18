@@ -4,6 +4,7 @@ import { render } from 'vitest-browser-svelte';
 
 import { diagnosticFixtures } from '../fixtures/diagnostics';
 import DiagnosticsView from '../lib/DiagnosticsView.svelte';
+import { applyTheme } from './apply-theme';
 
 test('shows versions, handshakes, replay state, pressure, and correlated records', async () => {
 	await render(DiagnosticsView, { bundle: diagnosticFixtures.active });
@@ -75,4 +76,14 @@ test('stacks records and shows transport rows as metric blocks in a 600px main c
 		':scope .diagnostics-view__transport > div:not(.diagnostics-view__transport-heading)'
 	)!;
 	expect(getComputedStyle(row).gridTemplateColumns.split(' ')).toHaveLength(2);
+});
+
+test('labels the log level as normal text and shows the mode as an outlined chip', async () => {
+	applyTheme();
+	await render(DiagnosticsView, { bundle: diagnosticFixtures.active });
+
+	const label = getComputedStyle(page.getByText('Minimum log level').element());
+	expect(label.color).toBe(getComputedStyle(page.getByText('Enable diagnostics').element()).color);
+	await expect.element(page.getByText('Diagnostics mode on')).toBeVisible();
+	expect(getComputedStyle(page.getByText('Diagnostics mode on').element()).borderTopStyle).toBe('solid');
 });

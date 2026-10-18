@@ -41,7 +41,11 @@
 </script>
 
 <div class="editor-story">
-	<FileEditor path={state === 'markdown' ? markdown.path : original.path} {source} pollInterval={60_000} />
+	<FileEditor
+		path={state === 'markdown' ? markdown.path : original.path}
+		{source}
+		pollInterval={60_000}
+		onReveal={async () => {}} />
 </div>
 
 <style>

@@ -150,22 +150,41 @@ test('opens a read-only file without editable or save controls', async () => {
 	await expect.element(page.getByRole('button', { name: 'Save' })).toBeDisabled();
 });
 
+function failingSource(code: string): FileEditorSource {
+	return {
+		read: vi.fn(async () => {
+			throw Object.assign(new Error('open failed'), { code });
+		}),
+		write: async () => file()
+	};
+}
+
 test.each([
-	['binary_file', 'contains binary data'],
-	['file_too_large', 'larger than the 2 MiB'],
+	['binary_file', 'found binary data'],
+	['file_too_large', 'larger than 2 MiB'],
 	['invalid_encoding', 'not valid UTF-8']
-])('shows the explicit %s file state', async (code, message) => {
-	const view = await render(FileEditor, {
-		path: 'unsupported.dat',
-		source: {
-			read: async () => {
-				throw Object.assign(new Error('open failed'), { code });
-			},
-			write: async () => file()
-		},
-		pollInterval: 60_000
-	});
+])('offers to reveal the file for %s and no retry', async (code, message) => {
+	const onReveal = vi.fn(async () => {});
+	await render(FileEditor, { path: 'unsupported.dat', source: failingSource(code), pollInterval: 60_000, onReveal });
 
 	await expect.element(page.getByRole('alert')).toHaveTextContent(message);
-	view.unmount();
+	await expect.element(page.getByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+	await userEvent.click(page.getByRole('button', { name: /Reveal in Finder|Show in folder/ }));
+	expect(onReveal).toHaveBeenCalledOnce();
+});
+
+test('shows no action for an unopenable file when the app cannot reveal paths', async () => {
+	await render(FileEditor, { path: 'a.bin', source: failingSource('binary_file'), pollInterval: 60_000 });
+
+	await expect.element(page.getByRole('alert')).toHaveTextContent('found binary data');
+	await expect.element(page.getByRole('button', { name: /Reveal|Show in folder|Try again/ })).not.toBeInTheDocument();
+});
+
+test('keeps the retry for a read that can succeed later', async () => {
+	const source = failingSource('permission_denied');
+	await render(FileEditor, { path: 'a.txt', source, pollInterval: 60_000, onReveal: async () => {} });
+
+	await userEvent.click(page.getByRole('button', { name: 'Try again' }));
+	await expect.poll(() => source.read).toHaveBeenCalledTimes(2);
+	await expect.element(page.getByRole('button', { name: /Reveal in Finder|Show in folder/ })).not.toBeInTheDocument();
 });

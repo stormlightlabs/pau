@@ -312,3 +312,19 @@ Verification:
 - Component-test that a transcript link asks the desktop shell to open it, and
   that unsafe schemes are refused.
 - Open a link from a self-hosted session transcript.
+
+### 2.268 Stopped session composer
+
+Status: planned
+Blocked by: none
+
+A stopped or failed session shows the same composer as a ready one ("Message
+the agent", Attach image, Send prompt) and keeps Compact and Stop in the
+header, although nothing can receive the prompt. Replace the composer with a
+notice that names the state and offers Start again, and hide Compact and Stop
+until the session runs.
+
+Verification:
+
+- Component-test that the stopped and failed fixtures render the notice and
+  the Start again action instead of the composer.

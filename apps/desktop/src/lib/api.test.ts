@@ -15,6 +15,7 @@ import {
 	readWorkspaceFile,
 	resolveEventSocket,
 	resolveTerminalSocket,
+	searchSession,
 	searchWorkspaceFiles,
 	startPayloadTracing,
 	updateDiagnosticSettings,
@@ -126,6 +127,20 @@ test('controls and exports release diagnostics through authenticated requests', 
 		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
 		body: JSON.stringify({ destination: '/tmp/pau diagnostics.json', reviewed_revision: 7 })
 	});
+});
+
+test('searches a session transcript with an encoded query and limit', async () => {
+	launchDesktop();
+	const fetcher = vi
+		.fn<typeof fetch>()
+		.mockImplementation(async () => Response.json({ matches: [], truncated: false }));
+
+	await expect(searchSession('session / 1', 'a & b', 50, fetcher)).resolves.toEqual({ matches: [], truncated: false });
+
+	expect(fetcher).toHaveBeenCalledWith(
+		'http://127.0.0.1:43127/api/sessions/session%20%2F%201/search?q=a+%26+b&limit=50',
+		{ headers: { Authorization: `Bearer ${TOKEN}` } }
+	);
 });
 
 test('lists and searches workspace files with traversal options', async () => {

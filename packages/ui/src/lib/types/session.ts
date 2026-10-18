@@ -317,6 +317,31 @@ export type SessionTreeSnapshot = {
 	truncated: boolean;
 };
 
+/** One transcript entry that contains the searched text. */
+export type SessionSearchHit = {
+	/** The agent's entry identifier. */
+	id: string;
+	/** The message role, such as `user` or `assistant`. Absent for summaries. */
+	role?: string;
+	/** Whitespace-collapsed text around the first occurrence. */
+	snippet: string;
+	/** Start of the occurrence in `snippet`, in UTF-16 code units. */
+	matchStart: number;
+	/** End of the occurrence in `snippet`, in UTF-16 code units. */
+	matchEnd: number;
+	/** ISO 8601 time the entry was recorded, when known. */
+	timestamp?: string;
+	/** The transcript entry that shows this match. Absent when the loaded transcript has none. */
+	entryKey?: string;
+};
+
+/** Matches for a transcript search, newest first. */
+export type SessionSearchOutcome = {
+	hits: SessionSearchHit[];
+	/** Whether older matches were left out to honour the limit. */
+	truncated: boolean;
+};
+
 /**
  * Result of branching from an earlier user message. `text` is that message's
  * prompt, which the composer offers for editing. `cancelled` reports that an

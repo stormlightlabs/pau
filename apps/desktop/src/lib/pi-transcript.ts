@@ -232,6 +232,38 @@ function messageKey(message: JsonObject): string | undefined {
 }
 
 /**
+ * Widest gap between a saved entry's time and its message's time that still
+ * counts as the same message. Pi stamps the entry just after the message.
+ */
+const ENTRY_TIME_TOLERANCE_MS = 5000;
+
+/**
+ * Finds the transcript entry that shows a saved Pi entry. The transcript
+ * keeps no Pi entry IDs, so the match uses the message key's role and time.
+ * Returns `undefined` when the loaded transcript has no such message, such
+ * as a tool result or a message older than the loaded history.
+ */
+export function findTranscriptEntry(
+	entries: TranscriptEntry[],
+	role: string | undefined,
+	timestamp: string | undefined
+): string | undefined {
+	const time = timestamp ? Date.parse(timestamp) : NaN;
+	if (!role || Number.isNaN(time)) return undefined;
+	let found: string | undefined;
+	let nearest = ENTRY_TIME_TOLERANCE_MS + 1;
+	for (const entry of entries) {
+		const key = /^([^:]+)-(\d+):/.exec(entry.id);
+		if (key?.[1] !== role) continue;
+		const gap = Math.abs(Number(key[2]) - time);
+		if (gap >= nearest) continue;
+		found = entry.id;
+		nearest = gap;
+	}
+	return found;
+}
+
+/**
  * Labels for Pi's context summaries. A compaction summary stands in for the
  * turns it replaced, and a branch summary for the branch left behind.
  *

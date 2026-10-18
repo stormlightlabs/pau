@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Press Cmd+F (Ctrl+F on Linux) in a session to search the conversation and jump
+  to any matching message.
 - The transcript stays at the newest output while you are at the bottom and
   stops following when you scroll up.
 - Tool calls in the transcript show bash commands with their output, exit code,

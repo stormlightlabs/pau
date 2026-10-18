@@ -9,6 +9,7 @@ import type {
 	PromptQueue,
 	SavedSessionList,
 	SessionBranchOutcome,
+	SessionSearchOutcome,
 	SessionTreeSnapshot,
 	SessionUsage,
 	SessionViewModel,
@@ -24,6 +25,7 @@ import {
 	clearSessionQueue,
 	getSessionExtensionUi,
 	getSessionTree,
+	searchSession,
 	getSessionHistory,
 	getSessionMessages,
 	getSessionQueue,
@@ -60,12 +62,16 @@ import {
 import { EventStreamClient, type EventSocketFactory, type EventStreamState } from './event-stream';
 import {
 	emptyPiTranscript,
+	findTranscriptEntry,
 	piTranscriptFromMessages,
 	queueFromEvent,
 	reducePiEvent,
 	type PiTranscript
 } from './pi-transcript';
 import { usageFromEvent, viewUsage } from './session-usage';
+
+/** Most matches one transcript search asks for. */
+const SEARCH_LIMIT = 50;
 
 /** Transport hooks for {@link LiveSessions}. Tests replace both. */
 export type LiveSessionsOptions = {
@@ -741,6 +747,32 @@ export class LiveSessions {
 				truncated: tree.truncated
 			};
 			return snapshot;
+		} catch (cause) {
+			throw new Error(sessionErrorMessage(cause, 'control'), { cause });
+		}
+	}
+
+	/**
+	 * Searches a session's saved transcript, newest matches first. Each hit
+	 * names the loaded transcript entry that shows it, when there is one.
+	 * Rejects with operator-facing copy.
+	 */
+	async search(sessionId: string, query: string): Promise<SessionSearchOutcome> {
+		try {
+			const result = await searchSession(sessionId, query, SEARCH_LIMIT, this.#fetcher);
+			const entries = (this.#transcripts[sessionId] ?? emptyPiTranscript).entries;
+			return {
+				hits: result.matches.map((match) => ({
+					id: match.entry_id,
+					role: match.role ?? undefined,
+					snippet: match.snippet,
+					matchStart: match.match_start,
+					matchEnd: match.match_end,
+					timestamp: match.timestamp ?? undefined,
+					entryKey: findTranscriptEntry(entries, match.role ?? undefined, match.timestamp ?? undefined)
+				})),
+				truncated: result.truncated
+			};
 		} catch (cause) {
 			throw new Error(sessionErrorMessage(cause, 'control'), { cause });
 		}

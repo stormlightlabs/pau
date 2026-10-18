@@ -24,6 +24,8 @@
 	import SessionTree from './SessionTree.svelte';
 	import { followTranscript, scrollToLatest as scrollTranscriptToLatest } from './transcript-follow';
 	import ToolCallView from './ToolCallView.svelte';
+	import TranscriptSearch from './TranscriptSearch.svelte';
+	import { isReducedMotion } from '../motion';
 	import type { ProcessResourceSnapshot } from './types/resource-monitoring';
 	import type {
 		CommandOption,
@@ -37,6 +39,8 @@
 		SandboxDenial,
 		SavedSessionList,
 		SessionBranchOutcome,
+		SessionSearchHit,
+		SessionSearchOutcome,
 		SessionTreeSnapshot,
 		SessionViewModel,
 		SessionWorkspace,
@@ -100,6 +104,12 @@
 		 * shows the tree of the active session.
 		 */
 		onLoadSessionTree?: (sessionId: string) => Promise<SessionTreeSnapshot>;
+		/**
+		 * Searches a session's transcript, newest matches first. With it, Cmd+F
+		 * (Ctrl+F elsewhere) opens a find bar above the transcript. A rejected
+		 * promise shows its message in the bar.
+		 */
+		onSearchSession?: (sessionId: string, query: string) => Promise<SessionSearchOutcome>;
 		/**
 		 * Branches a session from an earlier user message. The returned text
 		 * replaces the composer draft. A rejection shows its message in the tree.
@@ -174,6 +184,7 @@
 		onLoadSavedSessions,
 		onResumeSession,
 		onLoadSessionTree,
+		onSearchSession,
 		onBranchSession,
 		onLoadModels,
 		onSelectModel,
@@ -218,6 +229,11 @@
 	let sending = $state(false);
 	let error = $state<string>();
 	let composer = $state<HTMLTextAreaElement>();
+	let transcriptSearch = $state<TranscriptSearch>();
+	let searchOpen = $state(false);
+	/** The entry the last search selection brought into view. */
+	let foundEntryKey = $state<string>();
+	let foundTimer: ReturnType<typeof setTimeout> | undefined;
 	let imagePicker = $state<HTMLInputElement>();
 	let images = $state<ComposerImage[]>([]);
 	let imageError = $state<string>();
@@ -371,6 +387,42 @@
 			return 'This session has ended, so it cannot branch.';
 		}
 		return `Wait for ${session.agent} to finish before branching.`;
+	}
+
+	/**
+	 * Opens the find bar on Cmd+F or Ctrl+F. This local handler stands in for
+	 * the shared keymap registry, which should take over the binding.
+	 */
+	function handleSearchShortcut(event: KeyboardEvent): void {
+		const command = event.metaKey !== event.ctrlKey;
+		const plainF = event.key.toLowerCase() === 'f' && !event.altKey && !event.shiftKey;
+		if (!onSearchSession || !activeSession || !command || !plainF) return;
+		event.preventDefault();
+		if (searchOpen) transcriptSearch?.focus();
+		else searchOpen = true;
+	}
+
+	function closeSearch(): void {
+		searchOpen = false;
+		composer?.focus();
+	}
+
+	/**
+	 * Scrolls the transcript to the entry that shows a match and marks it for
+	 * a moment. Returns `false` when the loaded transcript does not hold it.
+	 */
+	function showSearchHit(hit: SessionSearchHit): boolean {
+		const target = hit.entryKey
+			? [...(transcriptElement?.querySelectorAll<HTMLElement>('[data-entry-id]') ?? [])].find(
+					(element) => element.dataset.entryId === hit.entryKey
+				)
+			: undefined;
+		if (!target) return false;
+		target.scrollIntoView({ block: 'center', behavior: isReducedMotion() ? 'auto' : 'smooth' });
+		foundEntryKey = hit.entryKey;
+		clearTimeout(foundTimer);
+		foundTimer = setTimeout(() => (foundEntryKey = undefined), 1600);
+		return true;
 	}
 
 	function branched(text: string): void {
@@ -808,7 +860,11 @@
 	}
 </script>
 
-<svelte:window onkeydown={handleWindowKeydown} />
+<svelte:window
+	onkeydown={(event) => {
+		handleSearchShortcut(event);
+		handleWindowKeydown(event);
+	}} />
 
 <ApplicationShell
 	workspaceName={activeWorkspace?.name ?? 'Workspaces'}
@@ -1099,6 +1155,16 @@
 			</header>
 
 			<div class="session-view__notices">
+				{#if searchOpen && onSearchSession}
+					{#key activeSession.id}
+						<TranscriptSearch
+							bind:this={transcriptSearch}
+							agent={activeSession.agent}
+							search={(query) => onSearchSession(activeSession.id, query)}
+							onSelect={showSearchHit}
+							onClose={closeSearch} />
+					{/key}
+				{/if}
 				{#if disconnected}
 					<p class="session-view__notice session-view__notice--attention" role="status">
 						<strong>Disconnected.</strong>
@@ -1177,7 +1243,11 @@
 					{:else}
 						{#each activeSession.transcript as entry (entry.id)}
 							{#if entry.kind === 'message'}
-								<article class={`session-message session-message--${entry.role}`} aria-label={`${entry.role} message`}>
+								<article
+									class={`session-message session-message--${entry.role}`}
+									aria-label={`${entry.role} message`}
+									data-entry-id={entry.id}
+									data-found={entry.id === foundEntryKey || undefined}>
 									<h2>{entry.label ?? (entry.role === 'user' ? 'You' : activeSession.agent)}</h2>
 									{#if entry.role === 'assistant'}
 										<Markdown text={entry.body} />
@@ -1195,7 +1265,11 @@
 									{/if}
 								</article>
 							{:else if entry.kind === 'thinking'}
-								<details class="session-thinking" open={!entry.complete}>
+								<details
+									class="session-thinking"
+									open={!entry.complete}
+									data-entry-id={entry.id}
+									data-found={entry.id === foundEntryKey || undefined}>
 									<summary>{entry.complete ? 'Thinking' : 'Thinking…'}</summary>
 									<p>{entry.body}</p>
 								</details>
@@ -1203,9 +1277,14 @@
 								<ToolCallView
 									tool={entry}
 									open={toolOpen(entry)}
+									found={entry.id === foundEntryKey}
 									onToggle={(open) => toolDisclosures.set(entry.id, open)} />
 							{:else if entry.kind === 'compaction'}
-								<details class="session-compaction" aria-label="Compacted context">
+								<details
+									class="session-compaction"
+									aria-label="Compacted context"
+									data-entry-id={entry.id}
+									data-found={entry.id === foundEntryKey || undefined}>
 									<summary>
 										<span>Context compacted{entry.reason === 'manual' ? '' : ' automatically'}</span>
 										{#if compactionSizes(entry)}<small>{compactionSizes(entry)}</small>{/if}
@@ -1741,6 +1820,18 @@
 
 	.session-message {
 		max-width: 75ch;
+	}
+
+	/* Marks the entry a search selection scrolled to, then fades. */
+	.session-view__transcript :global([data-found]) {
+		animation: session-found 1600ms var(--pau-ease-standard);
+	}
+
+	@keyframes session-found {
+		from,
+		60% {
+			background: color-mix(in srgb, var(--pau-accent) 18%, transparent);
+		}
 	}
 
 	.session-message--user {

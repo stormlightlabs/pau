@@ -1436,17 +1436,6 @@ Verification:
 - Component-test a history with a compaction summary and a user prompt with an
   image, both from history and from live events.
 
-### 2.81 Transcript search
-
-Status: planned
-Blocked by: none
-
-Add transcript search to the session view.
-
-Verification:
-
-- Component-test search results and no results.
-
 ### 2.121 Pi transcript export API
 
 Status: planned
@@ -1487,7 +1476,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.81, 2.156, 2.174, 2.175, 2.184, 2.185, 2.186, 2.187, 2.194, 2.196,
+Blocked by: 2.156, 2.174, 2.175, 2.184, 2.185, 2.186, 2.187, 2.194, 2.196,
 2.197, 2.199, 2.200, 2.205, 2.219, 2.220
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do

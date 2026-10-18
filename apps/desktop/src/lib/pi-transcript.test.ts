@@ -4,6 +4,7 @@ import { expect, test } from 'vitest';
 
 import {
 	emptyPiTranscript,
+	findTranscriptEntry,
 	piTranscriptFromMessages,
 	queueFromEvent,
 	reducePiEvent,
@@ -343,4 +344,19 @@ test('keeps a failed or aborted compaction until the next run or compaction', ()
 	expect(aborted.compaction).toEqual({ status: 'aborted', reason: 'overflow' });
 	expect(reduce([{ type: 'agent_start' }], aborted).compaction).toBeUndefined();
 	expect(reduce([{ type: 'compaction_start', reason: 'manual' }], failed).compaction?.status).toBe('running');
+});
+
+const at = (ms: number) => new Date(ms).toISOString();
+
+test('finds the transcript entry for a saved entry by role and time', () => {
+	const entries = piTranscriptFromMessages([
+		{ role: 'user', content: 'Read it', timestamp: 1_000_000 },
+		{ role: 'assistant', content: [{ type: 'text', text: 'Done' }], timestamp: 1_002_000 }
+	]).entries;
+
+	expect(findTranscriptEntry(entries, 'user', at(1_000_300))).toBe('user-1000000:0');
+	expect(findTranscriptEntry(entries, 'assistant', at(1_002_100))).toBe('assistant-1002000:0');
+	expect(findTranscriptEntry(entries, 'assistant', at(1_100_000))).toBeUndefined();
+	expect(findTranscriptEntry(entries, 'toolResult', at(1_000_000))).toBeUndefined();
+	expect(findTranscriptEntry(entries, 'user', undefined)).toBeUndefined();
 });

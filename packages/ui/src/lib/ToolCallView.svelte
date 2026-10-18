@@ -10,9 +10,11 @@
 		open: boolean;
 		/** Reports a disclosure change the operator made on this row. */
 		onToggle: (open: boolean) => void;
+		/** Marks the row a transcript search just scrolled to. */
+		found?: boolean;
 	};
 
-	let { tool, open, onToggle }: Props = $props();
+	let { tool, open, onToggle, found = false }: Props = $props();
 	let call = $derived(tool.call);
 	let resultLines = $derived(outputLines(tool.result ?? ''));
 	let summary = $derived.by(() => {
@@ -33,7 +35,12 @@
 	}
 </script>
 
-<details class={`tool-call tool-call--${tool.status}`} {open} ontoggle={handleToggle}>
+<details
+	class={`tool-call tool-call--${tool.status}`}
+	{open}
+	ontoggle={handleToggle}
+	data-entry-id={tool.id}
+	data-found={found || undefined}>
 	<summary>
 		<span class="tool-call__name">{tool.name}</span><code>{summary}</code><small>{status}</small>
 	</summary>

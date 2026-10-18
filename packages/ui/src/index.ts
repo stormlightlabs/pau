@@ -15,6 +15,7 @@ export { default as ThinkingLevelPicker } from './lib/ThinkingLevelPicker.svelte
 export { default as ProcessesView } from './lib/ProcessesView.svelte';
 export { default as SandboxSettingsView } from './lib/SandboxSettingsView.svelte';
 export { default as SessionResourceSummary } from './lib/SessionResourceSummary.svelte';
+export { default as TranscriptSearch } from './lib/TranscriptSearch.svelte';
 export { default as SessionPicker } from './lib/SessionPicker.svelte';
 export { default as SessionTree } from './lib/SessionTree.svelte';
 export { default as SessionView } from './lib/SessionView.svelte';
@@ -94,6 +95,8 @@ export type {
 	SavedSessionList,
 	SessionBranchOutcome,
 	SessionTreeItem,
+	SessionSearchHit,
+	SessionSearchOutcome,
 	SessionTreeSnapshot,
 	SessionWorkspace,
 	TranscriptCompaction,

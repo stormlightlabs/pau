@@ -26,6 +26,7 @@ import type {
 	SessionMessages,
 	SessionPromptRequest,
 	SessionQueue,
+	SessionSearchResult,
 	SessionTree,
 	SessionThinkingLevel,
 	SessionThinkingLevelRequest,
@@ -459,6 +460,20 @@ export async function getSessionMessages(sessionId: string, fetcher: typeof fetc
 export async function getSessionTree(sessionId: string, fetcher: typeof fetch = fetch): Promise<SessionTree> {
 	const response = await fetcher(sessionUrl(`/${encodeURIComponent(sessionId)}/tree`), { headers: authorization() });
 	return responseJson<SessionTree>(response);
+}
+
+/** Searches a live session's persisted transcript, newest matches first. */
+export async function searchSession(
+	sessionId: string,
+	query: string,
+	limit: number,
+	fetcher: typeof fetch = fetch
+): Promise<SessionSearchResult> {
+	const params = new URLSearchParams({ q: query, limit: String(limit) });
+	const response = await fetcher(sessionUrl(`/${encodeURIComponent(sessionId)}/search?${params}`), {
+		headers: authorization()
+	});
+	return responseJson<SessionSearchResult>(response);
 }
 
 /**

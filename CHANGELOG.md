@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-10-17
+## 2026-10-18
 
 ### Desktop
 
@@ -64,6 +64,11 @@
   and code blocks in the code font.
 - Streaming replies render more smoothly because transcript updates are applied
   once per frame.
+
+## 2026-10-17
+
+### Desktop
+
 - Open a project folder from the sessions rail or the first-run screen, and use
   the product rail to move between sessions, files, terminal, agent sandbox,
   and diagnostics. Views that are not ready yet show as coming soon.

@@ -115,6 +115,8 @@ export const Collapsed: Story = {
 	args: { tools: Object.values(toolCallFixtures), initiallyOpen: false },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
+		await expect(canvas.getByText('+1 −1')).toBeVisible();
+		await expect(canvas.queryByText('Complete')).not.toBeInTheDocument();
 		await expect(canvas.queryByLabelText('Diff for README.md')).not.toBeInTheDocument();
 		await userEvent.click(canvas.getByText('README.md'));
 		await expect(canvas.getByLabelText('Diff for README.md')).toBeInTheDocument();

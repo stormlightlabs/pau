@@ -48,8 +48,9 @@
 	import Select from './Select.svelte';
 	import SessionResourceSummary from './SessionResourceSummary.svelte';
 	import SessionTree from './SessionTree.svelte';
-	import { openByDefault } from './transcript-disclosure';
+	import { groupToolCalls, openByDefault, type TranscriptToolGroup } from './transcript-disclosure';
 	import { followTranscript, scrollToLatest as scrollTranscriptToLatest, scrollToPrompt } from './transcript-follow';
+	import ToolCallGroup from './ToolCallGroup.svelte';
 	import ToolCallView from './ToolCallView.svelte';
 	import TranscriptSearch from './TranscriptSearch.svelte';
 	import type { ProcessResourceSnapshot } from './types/resource-monitoring';
@@ -72,7 +73,8 @@
 		SessionViewModel,
 		SessionWorkspace,
 		TranscriptCompaction,
-		TranscriptEntry
+		TranscriptEntry,
+		TranscriptTool
 	} from './types/session';
 	import { thinkingLevels } from './types/session';
 
@@ -713,6 +715,10 @@
 				)
 			: undefined;
 		if (!target) return false;
+		// A match inside a collapsed group of tool calls has no box to scroll to
+		// until the group opens. Its toggle event records the change as an operator choice.
+		const group = target.closest('[data-group-id]');
+		if (group instanceof HTMLDetailsElement) group.open = true;
 		target.scrollIntoView({ block: 'center', behavior: isReducedMotion() ? 'auto' : 'smooth' });
 		foundEntryKey = hit.entryKey;
 		clearTimeout(foundTimer);
@@ -1632,6 +1638,7 @@
 	}
 
 	let defaultOpen = $derived(openByDefault(activeSession?.transcript ?? [], activeSession?.status));
+	let transcriptRows = $derived(groupToolCalls(activeSession?.transcript ?? []));
 
 	/**
 	 * Whether a tool or thinking block shows its body. An operator choice, from
@@ -1639,6 +1646,15 @@
 	 */
 	function entryOpen(entry: TranscriptEntry): boolean {
 		return disclosures.get(entry.id) ?? defaultOpen.has(entry.id);
+	}
+
+	/**
+	 * Whether a group of finished calls shows them. It follows its calls'
+	 * default, so a group formed during a running turn stays open until the
+	 * turn ends, and an operator choice wins as it does for single rows.
+	 */
+	function groupOpen(group: TranscriptToolGroup): boolean {
+		return disclosures.get(group.id) ?? group.tools.some((tool) => defaultOpen.has(tool.id));
 	}
 
 	/** Records a disclosure change only when it differs from what the host shows, so host changes are not kept. */
@@ -1668,8 +1684,9 @@
 		const tools = activeSession?.transcript.filter((entry) => entry.kind === 'tool') ?? [];
 		if (tools.length === 0) return;
 		event.preventDefault();
-		const next = tools.some((tool) => !entryOpen(tool));
-		for (const tool of tools) disclosures.set(tool.id, next);
+		const groups = transcriptRows.filter((row) => row.kind === 'tool-group');
+		const next = tools.some((tool) => !entryOpen(tool)) || groups.some((group) => !groupOpen(group));
+		for (const row of [...tools, ...groups]) disclosures.set(row.id, next);
 	}
 
 	function denialTitle(denial: SandboxDenial): string {
@@ -2136,7 +2153,14 @@
 							<p>Describe the task, relevant files, and any limits the agent should follow.</p>
 						</div>
 					{:else}
-						{#each activeSession.transcript as entry (entry.id)}
+						{#snippet toolCall(tool: TranscriptTool)}
+							<ToolCallView
+								{tool}
+								open={entryOpen(tool)}
+								found={tool.id === foundEntryKey}
+								onToggle={(open) => disclosures.set(tool.id, open)} />
+						{/snippet}
+						{#each transcriptRows as entry (entry.id)}
 							{#if entry.kind === 'message'}
 								<!-- Messages take focus so the keyboard can open their context menu. -->
 								<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
@@ -2184,11 +2208,17 @@
 									<p>{entry.body}</p>
 								</details>
 							{:else if entry.kind === 'tool'}
-								<ToolCallView
-									tool={entry}
-									open={entryOpen(entry)}
-									found={entry.id === foundEntryKey}
-									onToggle={(open) => disclosures.set(entry.id, open)} />
+								{@render toolCall(entry)}
+							{:else if entry.kind === 'tool-group'}
+								<ToolCallGroup
+									id={entry.id}
+									count={entry.tools.length}
+									open={groupOpen(entry)}
+									onToggle={(open) => disclosures.set(entry.id, open)}>
+									{#each entry.tools as tool (tool.id)}
+										{@render toolCall(tool)}
+									{/each}
+								</ToolCallGroup>
 							{:else if entry.kind === 'compaction'}
 								<details
 									class="session-compaction"

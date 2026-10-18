@@ -293,25 +293,6 @@ Verification:
 - Component-test that the binary and oversized states render the reveal
   action and no retry.
 
-### 2.262 Tool call rows
-
-Status: planned
-Blocked by: none
-
-Each finished tool call renders "Complete" in its right column and its result
-summary on a second line, so a four-call turn takes eight rows. The prototype
-shows the summary ("248 lines", "42 passed", "+18 −7") in the right column,
-one row per call, under a collapsible group row ("3 tool calls · 12s"). Move
-the summary into the right column, show the status text only while running
-or after a failure, and collapse groups of more than three finished calls
-behind a summary row.
-
-Verification:
-
-- Component-test that a finished call renders one row with its summary at
-  the right and that four finished calls collapse behind a group row.
-- Screenshot the running fixture before and after the change.
-
 ### 2.263 Picker triggers
 
 Status: planned

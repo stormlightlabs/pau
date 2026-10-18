@@ -1,4 +1,4 @@
-import type { ReadToolCall, ToolTruncation } from './types/session';
+import type { ReadToolCall, ToolTruncation, TranscriptTool } from './types/session';
 
 /**
  * Lines a tool output block renders before it offers "show more". Pi can
@@ -57,4 +57,36 @@ export function readRange(call: ReadToolCall): string | undefined {
 export function truncationNotice(truncation: ToolTruncation, kept: 'first' | 'last'): string {
 	const limit = truncation.truncatedBy === 'bytes' ? 'the size limit' : 'the line limit';
 	return `Pi kept the ${kept} ${truncation.outputLines} of ${truncation.totalLines} lines because of ${limit}.`;
+}
+
+function lineCount(count: number): string {
+	return count === 1 ? '1 line' : `${count} lines`;
+}
+
+/**
+ * Summarizes what a finished call returned for the right column of its row:
+ * the lines a read or write covered, an edit's added and removed lines, or the
+ * last line a command printed, which is usually its verdict, such as
+ * "38 passed". Other tools show a one-line result as is and a longer one as a
+ * line count, since their last line is often just the end of a JSON value.
+ */
+export function resultSummary(tool: TranscriptTool): string {
+	const call = tool.call;
+	const lines = outputLines(tool.result ?? '');
+	if (call?.tool === 'read') {
+		const truncation = call.truncation;
+		return truncation ? `${truncation.outputLines} of ${lineCount(truncation.totalLines)}` : lineCount(lines.length);
+	}
+	if (call?.tool === 'write') return lineCount(outputLines(call.content).length);
+	if (call?.tool === 'edit') {
+		if (!call.diff) return call.edits.length === 1 ? '1 edit' : `${call.edits.length} edits`;
+		const kinds = outputLines(call.diff).map((line) => diffLineKind(line));
+		const added = kinds.filter((kind) => kind === 'added').length;
+		const removed = kinds.filter((kind) => kind === 'removed').length;
+		return `+${added} −${removed}`;
+	}
+	const printed = lines.map((line) => line.trim()).filter((line) => line !== '');
+	if (printed.length === 0) return 'No output';
+	if (call?.tool === 'bash' || printed.length === 1) return printed.at(-1)!;
+	return lineCount(lines.length);
 }

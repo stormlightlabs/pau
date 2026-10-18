@@ -1,7 +1,7 @@
 <script lang="ts">
 	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
-	import { formatDuration, outputLines, readRange, truncationNotice } from './tool-call-format';
+	import { formatDuration, outputLines, readRange, resultSummary, truncationNotice } from './tool-call-format';
 	import ToolOutput from './ToolOutput.svelte';
 	import type { TranscriptTool } from './types/session';
 
@@ -27,7 +27,10 @@
 		}
 		return call.path;
 	});
-	let status = $derived(tool.status === 'running' ? 'In progress' : tool.status === 'failed' ? 'Failed' : 'Complete');
+	// A finished call shows what it returned. Running and failed calls name their status so they stand out.
+	let outcome = $derived(
+		tool.status === 'running' ? 'In progress' : tool.status === 'failed' ? 'Failed' : resultSummary(tool)
+	);
 
 	function handleToggle(event: Event): void {
 		const next = (event.currentTarget as HTMLDetailsElement).open;
@@ -43,7 +46,8 @@
 	data-entry-id={tool.id}
 	data-found={found || undefined}>
 	<summary>
-		<span class="tool-call__name">{tool.name}</span><code><MetaText text={summary} /></code><small>{status}</small>
+		<span class="tool-call__name">{tool.name}</span><code><MetaText text={summary} /></code><small title={outcome}
+			>{outcome}</small>
 	</summary>
 	{#if open}
 		<div class="tool-call__body">
@@ -108,9 +112,11 @@
 
 	/*
 	 * Consecutive tool calls read as one compact block under a shared rule.
-	 * The previous row is another component instance, so it is matched globally.
+	 * The previous row is another component instance, or a group of finished
+	 * calls, so it is matched globally.
 	 */
-	:global(.tool-call) + .tool-call {
+	:global(.tool-call) + .tool-call,
+	:global(.tool-group) + .tool-call {
 		margin-top: calc(-1 * var(--pau-space-5));
 	}
 
@@ -150,7 +156,12 @@
 	}
 
 	.tool-call small {
+		max-inline-size: 20rem;
+		overflow: hidden;
 		font-size: var(--pau-type-xs);
+		font-variant-numeric: tabular-nums;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.tool-call__body {

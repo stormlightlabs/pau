@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Finished tool calls show their result, such as "212 lines" or "38 passed", on
+  one row, and long runs of finished calls collapse behind a group row.
 - The session header keeps its status, Compact, and Stop in place as the state
   changes, and shows "Compacting…" in the status while compaction runs.
 - Long workspace and session names in a narrow rail truncate with an ellipsis,

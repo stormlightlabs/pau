@@ -8,6 +8,7 @@ import { modelFixtures } from '../fixtures/models';
 import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
 import { savedSessionFixtures } from '../fixtures/saved-sessions';
 import { sessionFixtures } from '../fixtures/sessions';
+import { toolCallFixtures } from '../fixtures/tool-calls';
 import { BUILTIN_COMMANDS, TERMINAL_ONLY_REASON } from '../lib/builtin-commands';
 import SessionViewDemo from './SessionViewDemo.svelte';
 
@@ -358,6 +359,35 @@ export const SandboxDenials: Story = {
 		await expect(canvas.getByText('/home/me/.ssh/id_ed25519')).toBeVisible();
 		await expect(canvas.getByText('api.example.com:443')).toBeVisible();
 		await expect(canvas.getByText('Sandbox may have blocked this call')).toBeVisible();
+	}
+};
+const groupedTools = sessionFixtures.idle.map((workspace) => ({
+	...workspace,
+	sessions: workspace.sessions.map((session) => ({
+		...session,
+		transcript: [
+			{
+				id: 'grouped-prompt',
+				kind: 'message' as const,
+				role: 'user' as const,
+				body: 'Cover folded ranges in the wrap tests.'
+			},
+			toolCallFixtures.read,
+			toolCallFixtures.edit,
+			toolCallFixtures.write,
+			toolCallFixtures.bashComplete,
+			toolCallFixtures.bashFailed,
+			toolCallFixtures.extension
+		]
+	}))
+}));
+export const ToolCallGroups: Story = {
+	args: { workspaces: groupedTools, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByText('4 tool calls')).toBeVisible();
+		await expect(canvas.getByText('Failed')).toBeVisible();
+		await expect(canvas.getByText('+1 −1')).not.toBeVisible();
 	}
 };
 export const FailedTurn: Story = {

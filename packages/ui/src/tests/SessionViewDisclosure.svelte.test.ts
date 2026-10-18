@@ -162,3 +162,42 @@ test.each([
 	expect(details('tall').open).toBe(status === 'running');
 	expect(Math.abs(entry.getBoundingClientRect().top - before)).toBeLessThanOrEqual(1);
 });
+
+const group = () => document.querySelector<HTMLDetailsElement>('[data-group-id]');
+
+test('collapses four finished calls behind one group row and keeps a failure out of it', async () => {
+	const calls = ['a', 'b', 'c', 'd'].map((id) => tool(id, 'complete'));
+	await render(SessionView, {
+		workspaces: workspaces([prompt('p1'), ...calls, tool('broke', 'failed')], 'idle'),
+		activeSessionId: baseSession.id
+	});
+
+	await expect.element(page.getByText('4 tool calls')).toBeVisible();
+	expect(group()!.open).toBe(false);
+	await expect.element(page.getByText('a', { exact: true })).not.toBeVisible();
+	expect(group()!.contains(details('broke'))).toBe(false);
+	expect(details('broke').querySelector('summary')!.textContent).toContain('Failed');
+
+	await userEvent.click(page.getByText('4 tool calls'));
+	await expect.element(page.getByText('a', { exact: true })).toBeVisible();
+	expect(details('a').querySelector(':scope > summary small')!.textContent).toBe('a output');
+	expect(details('a').open).toBe(false);
+});
+
+test('keeps three finished calls as rows and opens a group with Ctrl+O', async () => {
+	const screen = await render(SessionView, {
+		workspaces: workspaces([prompt('p1'), ...['a', 'b', 'c'].map((id) => tool(id, 'complete'))], 'idle'),
+		activeSessionId: baseSession.id
+	});
+	expect(group()).toBeNull();
+
+	const four = [prompt('p1'), ...['a', 'b', 'c', 'd'].map((id) => tool(id, 'complete'))];
+	await screen.rerender({ workspaces: workspaces(four, 'idle'), activeSessionId: baseSession.id });
+	await expect.poll(() => group()?.open).toBe(false);
+
+	await userEvent.keyboard('{Control>}o{/Control}');
+	await expect.poll(() => group()?.open).toBe(true);
+	expect(details('d').open).toBe(true);
+	await userEvent.keyboard('{Control>}o{/Control}');
+	await expect.poll(() => group()?.open).toBe(false);
+});

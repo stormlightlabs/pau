@@ -72,6 +72,23 @@ test('falls back to text for a tool without structured data', async () => {
 	await expect.element(page.getByLabelText('todo output')).toHaveTextContent('Added todo #3: Cover folded ranges');
 });
 
+test('shows a finished call as one row with its result summary at the right', async () => {
+	const { container } = await render(ToolCallViewDemo, {
+		tools: [
+			toolCallFixtures.bashComplete,
+			toolCallFixtures.edit,
+			toolCallFixtures.bashFailed,
+			toolCallFixtures.bashRunning
+		],
+		initiallyOpen: false
+	});
+	const outcomes = [...container.querySelectorAll(':scope .tool-call summary small')].map((cell) => cell.textContent);
+
+	expect(outcomes).toEqual(['?? src/diff/wrap.test.ts', '+1 −1', 'Failed', 'In progress']);
+	expect(container.querySelectorAll('.tool-call__body')).toHaveLength(0);
+	await expect.element(page.getByText('Complete')).not.toBeInTheDocument();
+});
+
 test('renders a collapsed row without its body until opened', async () => {
 	await render(ToolCallViewDemo, { tools: [toolCallFixtures.edit], initiallyOpen: false });
 

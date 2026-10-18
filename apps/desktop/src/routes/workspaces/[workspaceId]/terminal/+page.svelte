@@ -5,6 +5,7 @@
 
 	import { listWorkspaces } from '$lib/api';
 	import { productNavigation } from '$lib/app-navigation';
+	import { panePreferences } from '$lib/pane-preferences.svelte';
 	import { createTerminalSource } from '$lib/terminal-source';
 
 	const workspaceId = page.params.workspaceId ?? '';
@@ -27,4 +28,10 @@
 
 <svelte:head><title>Terminal · Pau</title></svelte:head>
 
-<TerminalSurface {workspaceName} {source} {disconnected} productItems={productNavigation(page.route.id, workspaceId)} />
+<TerminalSurface
+	{workspaceName}
+	{source}
+	{disconnected}
+	productItems={productNavigation(page.route.id, workspaceId)}
+	paneWidths={panePreferences.widths}
+	onPaneResize={(widths) => panePreferences.resize(widths)} />

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/svelte-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import ApplicationShellDemo from './ApplicationShellDemo.svelte';
 
@@ -14,7 +14,14 @@ const meta = {
 			options: ['ibm-plex-sans', 'inter', 'atkinson-hyperlegible-next', 'atkinson-hyperlegible-soft']
 		}
 	},
-	args: { disconnected: false, inspectorOpen: true, longContent: false, theme: 'eldritch', uiFont: 'inter' }
+	args: {
+		disconnected: false,
+		inspectorOpen: true,
+		longContent: false,
+		theme: 'eldritch',
+		uiFont: 'inter',
+		paneWidths: { contextRail: null, inspector: null }
+	}
 } satisfies Meta<typeof ApplicationShellDemo>;
 
 export default meta;
@@ -82,5 +89,81 @@ export const NarrowLayout: Story = {
 		await userEvent.click(within(inspector).getByRole('button', { name: 'Close inspector' }));
 		await userEvent.click(navigationToggle);
 		await expect(navigationToggle).toHaveAttribute('aria-expanded', 'true');
+	}
+};
+
+const wide = { viewport: { defaultViewport: 'wide' } };
+
+export const ResizeByKeyboard: Story = {
+	parameters: wide,
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const separator = canvas.getByRole('separator', { name: 'Resize workspaces' });
+		const before = Number(separator.getAttribute('aria-valuenow'));
+
+		separator.focus();
+		await userEvent.keyboard('{ArrowRight}');
+		await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', String(before + 16)));
+		await userEvent.keyboard('{Shift>}{ArrowLeft}{/Shift}');
+		await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', String(before - 48)));
+	}
+};
+
+export const DragToResize: Story = {
+	parameters: wide,
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const separator = canvas.getByRole('separator', { name: 'Resize inspector' });
+		const before = Number(separator.getAttribute('aria-valuenow'));
+		const { x, y, width, height } = separator.getBoundingClientRect();
+		const start = { clientX: x + width / 2, clientY: y + height / 2 };
+
+		await userEvent.pointer([
+			{ keys: '[MouseLeft>]', target: separator, coords: start },
+			{ coords: { clientX: start.clientX - 40, clientY: start.clientY } },
+			{ keys: '[/MouseLeft]' }
+		]);
+		await waitFor(() =>
+			expect(canvas.getByRole('separator', { name: 'Resize inspector' })).toHaveAttribute(
+				'aria-valuenow',
+				String(before + 40)
+			)
+		);
+	}
+};
+
+export const ResetToDefaultWidth: Story = {
+	parameters: wide,
+	args: { paneWidths: { contextRail: 320, inspector: 400 } },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const separator = canvas.getByRole('separator', { name: 'Resize workspaces' });
+
+		await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', '320'));
+		await userEvent.dblClick(separator);
+		await waitFor(() => expect(separator).not.toHaveAttribute('aria-valuenow', '320'));
+		await expect(canvas.getByLabelText('Saved pane widths')).toHaveTextContent('"contextRail":null');
+	}
+};
+
+export const MinimumWidth: Story = {
+	parameters: wide,
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const separator = canvas.getByRole('separator', { name: 'Resize workspaces' });
+
+		separator.focus();
+		for (let press = 0; press < 8; press += 1) await userEvent.keyboard('{Shift>}{ArrowLeft}{/Shift}');
+		await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', '160'));
+	}
+};
+
+export const MainSurfaceKeepsItsWidth: Story = {
+	parameters: wide,
+	args: { paneWidths: { contextRail: 2000, inspector: 2000 } },
+	play: async ({ canvasElement }) => {
+		const main = canvasElement.querySelector<HTMLElement>('#main-surface')!;
+
+		await expect(main.getBoundingClientRect().width).toBeGreaterThanOrEqual(383);
 	}
 };

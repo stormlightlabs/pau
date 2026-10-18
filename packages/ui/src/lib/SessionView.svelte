@@ -2,7 +2,7 @@
 	import '../styles/tokens.css';
 	import { onDestroy } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-	import ApplicationShell, { type ShellNavItem } from './ApplicationShell.svelte';
+	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
 	import {
 		historyLimit,
 		idleHistoryCursor,
@@ -149,6 +149,10 @@
 		 * view marks the Sessions item when a session needs attention.
 		 */
 		productItems?: ShellNavItem[];
+		/** Saved widths for the resizable panes. */
+		paneWidths?: ShellPaneWidths;
+		/** Called with the new widths after the operator resizes a pane. */
+		onPaneResize?: (widths: ShellPaneWidths) => void;
 		/**
 		 * Whether the transcript is following its newest content. It follows while
 		 * the operator is at the bottom and stops when they scroll up. Bind it to
@@ -196,6 +200,8 @@
 		onOpenWorkspace,
 		pickFolder,
 		productItems: appProductItems = defaultProductItems,
+		paneWidths,
+		onPaneResize,
 		following = $bindable(true)
 	}: Props = $props();
 
@@ -872,7 +878,9 @@
 	{productItems}
 	contextItems={[]}
 	{disconnected}
-	inspectorOpen={Boolean(resourceSnapshot)}>
+	inspectorOpen={Boolean(resourceSnapshot)}
+	{paneWidths}
+	onResize={onPaneResize}>
 	{#snippet context()}
 		<nav class="session-rail" aria-label="Workspaces and sessions">
 			{#if onOpenWorkspace}

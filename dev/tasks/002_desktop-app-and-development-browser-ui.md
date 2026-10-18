@@ -639,19 +639,6 @@ Verification:
 - Storybook interaction test for opening, filtering, and running an action from
   the keyboard.
 
-### 2.174 Resizable panes
-
-Status: planned
-Blocked by: none
-
-Let the operator resize the context rail and the inspector by dragging their
-edges, and keep the widths across launches.
-
-Verification:
-
-- Component-test dragging, keyboard resizing of a focused divider, minimum and
-  maximum widths, a restored width, and a reset to the default width.
-
 ### 2.175 Context menus
 
 Status: planned
@@ -1476,8 +1463,8 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.174, 2.175, 2.184, 2.185, 2.186, 2.187, 2.194, 2.196,
-2.197, 2.199, 2.200, 2.205, 2.219, 2.220
+Blocked by: 2.156, 2.175, 2.184, 2.185, 2.186, 2.187, 2.194, 2.196, 2.197,
+2.199, 2.200, 2.205, 2.219, 2.220
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

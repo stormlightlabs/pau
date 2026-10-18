@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { shellNavigationFixtures } from '../fixtures/application-shell';
-	import ApplicationShell from '../lib/ApplicationShell.svelte';
+	import ApplicationShell, { type ShellPaneWidths } from '../lib/ApplicationShell.svelte';
 	import type { ThemeName, UiFontName } from '../theme';
 
 	let {
@@ -8,14 +8,19 @@
 		inspectorOpen = true,
 		longContent = false,
 		theme = 'eldritch',
-		uiFont = 'inter'
+		uiFont = 'inter',
+		paneWidths = { contextRail: null, inspector: null }
 	}: {
 		disconnected?: boolean;
 		inspectorOpen?: boolean;
 		longContent?: boolean;
 		theme?: ThemeName;
 		uiFont?: UiFontName;
+		paneWidths?: ShellPaneWidths;
 	} = $props();
+
+	// Stands in for the app that stores the widths the shell reports.
+	let saved = $derived<ShellPaneWidths>(paneWidths);
 
 	const reviewNotes = Array.from({ length: 9 }, (_, index) => index + 1);
 </script>
@@ -28,7 +33,9 @@
 	{disconnected}
 	{inspectorOpen}
 	{theme}
-	{uiFont}>
+	{uiFont}
+	paneWidths={saved}
+	onResize={(widths) => (saved = widths)}>
 	<section class="conversation" aria-labelledby="task-title">
 		<header>
 			<p>pi · task</p>
@@ -40,6 +47,7 @@
 			<p><span>edit</span><code>src/diff/gutter.ts</code><small>+24 −9</small></p>
 			<p><span>bash</span><code>pnpm test diff</code><small>38 passed</small></p>
 		</div>
+		<output aria-label="Saved pane widths">{JSON.stringify(saved)}</output>
 		<h2>pi · sonnet</h2>
 		<p>
 			Gutter rows now follow visual line offsets, so wrapped lines keep their markers. Two wrap tests cover folded and

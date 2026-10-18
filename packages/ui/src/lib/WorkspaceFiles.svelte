@@ -14,7 +14,7 @@
 		WorkspaceSearchMatch,
 		WorkspaceTraversalOptions
 	} from './types/workspace-files';
-	import ApplicationShell, { type ShellNavItem } from './ApplicationShell.svelte';
+	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
 	import DiffReview from './DiffReview.svelte';
 	import FileEditor from './FileEditor.svelte';
 	import Icon from './Icon.svelte';
@@ -33,6 +33,10 @@
 		onOpenFile?: (path: string, line?: number) => void;
 		/** Product rail destinations, supplied by the app that owns the routes. */
 		productItems?: ShellNavItem[];
+		/** Saved widths for the resizable panes. */
+		paneWidths?: ShellPaneWidths;
+		/** Called with the new widths after the operator resizes a pane. */
+		onPaneResize?: (widths: ShellPaneWidths) => void;
 	};
 
 	const defaultProductItems: ShellNavItem[] = [
@@ -49,7 +53,9 @@
 		disconnected = false,
 		editorSource,
 		onOpenFile,
-		productItems = defaultProductItems
+		productItems = defaultProductItems,
+		paneWidths,
+		onPaneResize
 	}: Props = $props();
 
 	let directories = $state<Record<string, DirectoryState>>({});
@@ -357,7 +363,9 @@
 	{productItems}
 	contextItems={[]}
 	{disconnected}
-	inspectorOpen={false}>
+	inspectorOpen={false}
+	{paneWidths}
+	onResize={onPaneResize}>
 	{#snippet context()}
 		<section class="workspace-files__browser" aria-label="Workspace files">
 			<section class="workspace-files__git" aria-label="Git status" aria-live="polite">

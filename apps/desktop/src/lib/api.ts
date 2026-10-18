@@ -34,6 +34,7 @@ import type {
 	StartSessionRequest,
 	TerminalInfo,
 	TerminalSize,
+	UiPreferences,
 	VersionResponse,
 	Workspace,
 	WorkspaceSandbox
@@ -133,6 +134,25 @@ function requestUrl(url: URL): string {
 export async function getBackendVersion(fetcher: typeof fetch = fetch): Promise<VersionResponse> {
 	const response = await fetcher(`${apiConnection().origin}/api/version`, { headers: authorization() });
 	return responseJson<VersionResponse>(response);
+}
+
+/** Reads the saved interface preferences, or the defaults when none are saved. */
+export async function getUiPreferences(fetcher: typeof fetch = fetch): Promise<UiPreferences> {
+	const response = await fetcher(`${apiConnection().origin}/api/preferences`, { headers: authorization() });
+	return responseJson<UiPreferences>(response);
+}
+
+/** Replaces the saved interface preferences and notifies every window. */
+export async function updateUiPreferences(
+	preferences: UiPreferences,
+	fetcher: typeof fetch = fetch
+): Promise<UiPreferences> {
+	const response = await fetcher(`${apiConnection().origin}/api/preferences`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json', ...authorization() },
+		body: JSON.stringify(preferences)
+	});
+	return responseJson<UiPreferences>(response);
 }
 
 /** Reads the current redacted diagnostics preview. */

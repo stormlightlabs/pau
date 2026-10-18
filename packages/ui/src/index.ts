@@ -1,5 +1,5 @@
 export { default as ApplicationShell } from './lib/ApplicationShell.svelte';
-export type { ShellNavItem } from './lib/ApplicationShell.svelte';
+export type { ShellNavItem, ShellPaneWidths } from './lib/ApplicationShell.svelte';
 export { default as CapabilityCard } from './lib/CapabilityCard.svelte';
 export { default as ExtensionUi } from './lib/ExtensionUi.svelte';
 export { default as DiagnosticsView } from './lib/DiagnosticsView.svelte';

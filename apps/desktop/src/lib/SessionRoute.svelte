@@ -4,6 +4,7 @@
 
 	import type { EventSocketFactory } from './event-stream';
 	import { LiveSessions } from './live-sessions.svelte';
+	import { panePreferences } from './pane-preferences.svelte';
 	import { desktopNativeCapabilitiesContext, type DesktopNativeCapabilities } from './native-capabilities';
 
 	let {
@@ -79,6 +80,8 @@
 	loading={sessions.loading}
 	disconnected={sessions.disconnected}
 	productItems={navigation?.(currentWorkspaceId)}
+	paneWidths={panePreferences.widths}
+	onPaneResize={(widths) => panePreferences.resize(widths)}
 	pickFolder={native?.pickFolder}
 	onOpenWorkspace={openWorkspace}
 	onSelectSession={selectSession}

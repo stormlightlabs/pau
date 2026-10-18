@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '../styles/tokens.css';
 	import type { ThemeName, UiFontName } from '../theme';
-	import ApplicationShell, { type ShellNavItem } from './ApplicationShell.svelte';
+	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
 	import Icon from './Icon.svelte';
 	import TerminalView from './TerminalView.svelte';
 	import type { TerminalExit, TerminalSource, TerminalTab } from './types/terminal';
@@ -14,6 +14,10 @@
 		disconnected?: boolean;
 		/** Product rail destinations, supplied by the app that owns the routes. */
 		productItems?: ShellNavItem[];
+		/** Saved widths for the resizable panes. */
+		paneWidths?: ShellPaneWidths;
+		/** Called with the new widths after the operator resizes a pane. */
+		onPaneResize?: (widths: ShellPaneWidths) => void;
 	};
 
 	const defaultProductItems: ShellNavItem[] = [
@@ -37,7 +41,9 @@
 		theme = 'eldritch',
 		uiFont = 'inter',
 		disconnected = false,
-		productItems = defaultProductItems
+		productItems = defaultProductItems,
+		paneWidths,
+		onPaneResize
 	}: Props = $props();
 
 	let tabs = $state<TabState[]>([]);
@@ -149,7 +155,9 @@
 	{disconnected}
 	{theme}
 	{uiFont}
-	inspectorOpen={false}>
+	inspectorOpen={false}
+	{paneWidths}
+	onResize={onPaneResize}>
 	{#snippet context()}
 		{#if tabs.length === 0}
 			<p class="terminal-surface__rail-empty">No terminals</p>

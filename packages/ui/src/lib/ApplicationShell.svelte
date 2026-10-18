@@ -5,6 +5,7 @@
 	import '../styles/tokens.css';
 	import { themeCssProperties, type ThemeName, type UiFontName } from '../theme';
 	import Icon from './Icon.svelte';
+	import PaneResizer from './PaneResizer.svelte';
 
 	/**
 	 * One destination in the product or contextual rail.
@@ -27,6 +28,12 @@
 		active?: boolean;
 	};
 
+	/**
+	 * Operator-chosen widths of the resizable panes in CSS pixels. `null`
+	 * keeps a pane at its default width.
+	 */
+	export type ShellPaneWidths = { contextRail: number | null; inspector: number | null };
+
 	type Props = {
 		workspaceName: string;
 		contextLabel: string;
@@ -36,6 +43,10 @@
 		inspectorOpen?: boolean;
 		theme?: ThemeName;
 		uiFont?: UiFontName;
+		/** Saved pane widths to apply. The shell keeps no copy of its own across launches. */
+		paneWidths?: ShellPaneWidths;
+		/** Called when a resize ends or a keyboard step lands, with every pane's width. */
+		onResize?: (widths: ShellPaneWidths) => void;
 		children?: Snippet;
 		context?: Snippet;
 		inspector?: Snippet;
@@ -50,6 +61,8 @@
 		inspectorOpen = true,
 		theme = 'eldritch',
 		uiFont = 'ibm-plex-sans',
+		paneWidths = { contextRail: null, inspector: null },
+		onResize,
 		children,
 		context,
 		inspector
@@ -58,17 +71,92 @@
 	let contextOpen = $state(false);
 	let hasContext = $derived(Boolean(context) || contextItems.length > 0);
 	let inspectorVisible = $derived(inspectorOpen);
+	/** Narrowest a resizable pane may be. */
+	const MIN_PANE_WIDTH = 160;
+	/** Width the main surface keeps, matching the `minmax(24rem, 1fr)` grid track. */
+	const MIN_MAIN_WIDTH = 384;
+	/** Viewport width above which the inspector docks in the grid; keep in sync with the 74rem media query. */
+	const INSPECTOR_DOCK_WIDTH = 1184;
+
+	let shell = $state<HTMLElement>();
+	let shellWidth = $state(0);
+	let viewportWidth = $state(0);
+	let railWidth = $state(0);
+	let contextWidth = $state(0);
+	let inspectorWidth = $state(0);
+	let contextDragging = $state(false);
+	let inspectorDragging = $state(false);
+	/** Widths kept by the latest resize. They stay in effect until `paneWidths` changes. */
+	let kept = $derived<ShellPaneWidths>({ ...paneWidths });
+	let inspectorDocked = $derived(viewportWidth >= INSPECTOR_DOCK_WIDTH);
+
+	/** Largest width a pane can take while the main surface keeps its minimum. */
+	function maxPaneWidth(pane: keyof ShellPaneWidths): number {
+		const sibling = pane === 'contextRail' ? (inspectorDocked ? inspectorWidth : 0) : hasContext ? contextWidth : 0;
+		return Math.max(MIN_PANE_WIDTH, shellWidth - railWidth - sibling - MIN_MAIN_WIDTH);
+	}
+
+	/**
+	 * Applies a saved width, shrinking it when the window can no longer fit it.
+	 *
+	 * The context rail claims space first and leaves the docked inspector its
+	 * minimum. Neither bound reads a width this function sets, so applying a
+	 * width never changes the width it was measured against.
+	 */
+	function appliedWidth(pane: keyof ShellPaneWidths): number | null {
+		const width = kept[pane];
+		if (width === null || shellWidth === 0) return width;
+		const available = shellWidth - railWidth - MIN_MAIN_WIDTH;
+		if (pane === 'contextRail')
+			return Math.max(MIN_PANE_WIDTH, Math.min(width, available - (inspectorDocked ? MIN_PANE_WIDTH : 0)));
+		const context = hasContext ? (appliedWidth('contextRail') ?? contextWidth) : 0;
+		return Math.max(MIN_PANE_WIDTH, Math.min(width, available - context));
+	}
+
+	const widthProperty = { contextRail: '--shell-context-width', inspector: '--shell-inspector-width' } as const;
+
+	let paneProperties = $derived(
+		Object.fromEntries(
+			(['contextRail', 'inspector'] as const).flatMap((pane) => {
+				const width = appliedWidth(pane);
+				return width === null ? [] : [[widthProperty[pane], `${width}px`]];
+			})
+		)
+	);
+
+	/** Moves a pane's edge for the current frame without re-rendering the shell. */
+	function previewWidth(pane: keyof ShellPaneWidths, width: number) {
+		shell?.style.setProperty(widthProperty[pane], `${width}px`);
+	}
+
+	/** Puts the pane back where the last kept width placed it. */
+	function cancelPreview(pane: keyof ShellPaneWidths) {
+		const width = appliedWidth(pane);
+		if (width === null) shell?.style.removeProperty(widthProperty[pane]);
+		else shell?.style.setProperty(widthProperty[pane], `${width}px`);
+	}
+
+	function keepWidth(pane: keyof ShellPaneWidths, width: number | null) {
+		kept = { ...kept, [pane]: width };
+		if (width === null) shell?.style.removeProperty(widthProperty[pane]);
+		onResize?.({ ...kept });
+	}
+
 	let shellStyle = $derived(
-		Object.entries(themeCssProperties(theme, uiFont))
+		Object.entries({ ...themeCssProperties(theme, uiFont), ...paneProperties })
 			.map(([property, value]) => `${property}: ${value}`)
 			.join('; ')
 	);
 </script>
 
+<svelte:window bind:innerWidth={viewportWidth} />
 <a class="app-shell__skip-link" href="#main-surface">Skip to main surface</a>
 <div
 	class:app-shell--with-inspector={inspectorVisible && inspector}
 	class:app-shell--without-context={!hasContext}
+	class:app-shell--resizing={contextDragging || inspectorDragging}
+	bind:this={shell}
+	bind:offsetWidth={shellWidth}
 	class="app-shell"
 	data-theme={theme}
 	data-ui-font={uiFont}
@@ -92,7 +180,7 @@
 		</label>
 	</header>
 
-	<nav class="app-shell__product-rail" aria-label="Product">
+	<nav class="app-shell__product-rail" aria-label="Product" bind:offsetWidth={railWidth}>
 		<ul>
 			{#each productItems as item (item.id)}
 				<li>
@@ -129,7 +217,12 @@
 	</nav>
 
 	{#if hasContext}
-		<aside class:open={contextOpen} class="app-shell__context-rail" aria-label={contextLabel}>
+		<aside
+			id="shell-context-rail"
+			class:open={contextOpen}
+			class="app-shell__context-rail"
+			aria-label={contextLabel}
+			bind:offsetWidth={contextWidth}>
 			<div class="app-shell__rail-heading">
 				<span>{contextLabel}</span>
 				<button type="button" aria-label="Close navigation" onclick={() => (contextOpen = false)}>
@@ -153,6 +246,19 @@
 				</ul>
 			{/if}
 		</aside>
+		<div class="app-shell__resizer app-shell__resizer--context">
+			<PaneResizer
+				label="Resize {contextLabel.toLowerCase()}"
+				controls="shell-context-rail"
+				value={contextWidth}
+				min={MIN_PANE_WIDTH}
+				max={maxPaneWidth('contextRail')}
+				direction={1}
+				bind:dragging={contextDragging}
+				onPreview={(width) => previewWidth('contextRail', width)}
+				onCommit={(width) => keepWidth('contextRail', width)}
+				onCancel={() => cancelPreview('contextRail')} />
+		</div>
 	{/if}
 
 	<main id="main-surface" class="app-shell__main" tabindex="-1">
@@ -195,7 +301,7 @@
 			class="app-shell__backdrop"
 			aria-label="Close inspector"
 			onclick={() => (inspectorVisible = false)}></button>
-		<aside class="app-shell__inspector" aria-label="Inspector">
+		<aside id="shell-inspector" class="app-shell__inspector" aria-label="Inspector" bind:offsetWidth={inspectorWidth}>
 			<div class="app-shell__rail-heading">
 				<span>Inspector</span>
 				<button type="button" aria-label="Close inspector" onclick={() => (inspectorVisible = false)}>
@@ -204,6 +310,19 @@
 			</div>
 			<div class="app-shell__inspector-content">{@render inspector()}</div>
 		</aside>
+		<div class="app-shell__resizer app-shell__resizer--inspector">
+			<PaneResizer
+				label="Resize inspector"
+				controls="shell-inspector"
+				value={inspectorWidth}
+				min={MIN_PANE_WIDTH}
+				max={maxPaneWidth('inspector')}
+				direction={-1}
+				bind:dragging={inspectorDragging}
+				onPreview={(width) => previewWidth('inspector', width)}
+				onCommit={(width) => keepWidth('inspector', width)}
+				onCancel={() => cancelPreview('inspector')} />
+		</div>
 	{/if}
 </div>
 
@@ -224,11 +343,13 @@
 		--shell-warning: var(--pau-warning);
 		--shell-danger: var(--pau-danger);
 		--shell-focus: var(--pau-focus);
+		--shell-context-width: var(--pau-size-rail-context);
+		--shell-inspector-width: var(--pau-size-rail-inspector);
 		display: grid;
 		grid-template-areas:
 			'command command command'
 			'product context main';
-		grid-template-columns: var(--pau-size-rail-product) var(--pau-size-rail-context) minmax(0, 1fr);
+		grid-template-columns: var(--pau-size-rail-product) var(--shell-context-width) minmax(0, 1fr);
 		grid-template-rows: 2.75rem minmax(0, 1fr);
 		min-width: 20rem;
 		height: 100dvh;
@@ -244,8 +365,8 @@
 		grid-template-areas:
 			'command command command command'
 			'product context main inspector';
-		grid-template-columns: var(--pau-size-rail-product) var(--pau-size-rail-context) minmax(24rem, 1fr) var(
-				--pau-size-rail-inspector
+		grid-template-columns: var(--pau-size-rail-product) var(--shell-context-width) minmax(24rem, 1fr) var(
+				--shell-inspector-width
 			);
 	}
 
@@ -261,7 +382,34 @@
 		grid-template-areas:
 			'command command command'
 			'product main inspector';
-		grid-template-columns: var(--pau-size-rail-product) minmax(24rem, 1fr) var(--pau-size-rail-inspector);
+		grid-template-columns: var(--pau-size-rail-product) minmax(24rem, 1fr) var(--shell-inspector-width);
+	}
+
+	/* Resize handles sit over the pane edges. They are separate grid items so scrolling a pane never moves them. */
+	.app-shell__resizer {
+		display: grid;
+		align-self: stretch;
+		min-width: 0;
+	}
+
+	.app-shell__resizer--context {
+		grid-area: context;
+		justify-self: end;
+	}
+
+	.app-shell__resizer--inspector {
+		grid-area: inspector;
+		justify-self: start;
+	}
+
+	/* Dragging must follow the pointer exactly, so nothing animates or selects. */
+	.app-shell--resizing {
+		cursor: col-resize;
+		user-select: none;
+	}
+
+	.app-shell--resizing * {
+		transition: none !important;
 	}
 
 	.app-shell__skip-link {
@@ -593,7 +741,7 @@
 			grid-template-areas:
 				'command command command'
 				'product context main';
-			grid-template-columns: var(--pau-size-rail-product) var(--pau-size-rail-context) minmax(0, 1fr);
+			grid-template-columns: var(--pau-size-rail-product) var(--shell-context-width) minmax(0, 1fr);
 		}
 
 		.app-shell--without-context,
@@ -629,6 +777,10 @@
 		.app-shell__inspector .app-shell__rail-heading button {
 			display: grid;
 		}
+
+		.app-shell__resizer--inspector {
+			display: none;
+		}
 	}
 
 	@media (max-width: 48rem) {
@@ -648,6 +800,10 @@
 
 		.app-shell__command-input {
 			width: min(20rem, calc(100vw - 8rem));
+		}
+
+		.app-shell__resizer--context {
+			display: none;
 		}
 
 		.app-shell__context-toggle {

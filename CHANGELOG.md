@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Drag the edge of the sidebar or inspector to resize it, or use the arrow keys,
+  and double-click to reset. Pau remembers the widths between launches.
 - Press Cmd+F (Ctrl+F on Linux) in a session to search the conversation and jump
   to any matching message.
 - The transcript stays at the newest output while you are at the bottom and

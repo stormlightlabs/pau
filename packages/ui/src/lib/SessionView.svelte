@@ -15,6 +15,7 @@
 	import { commandName, commandQuery, filterCommands } from './command-completion';
 	import ExtensionUi from './ExtensionUi.svelte';
 	import Icon from './Icon.svelte';
+	import Markdown from './Markdown.svelte';
 	import ModelPicker from './ModelPicker.svelte';
 	import ContextMeter from './ContextMeter.svelte';
 	import ThinkingLevelPicker from './ThinkingLevelPicker.svelte';
@@ -1135,7 +1136,11 @@
 						{#if entry.kind === 'message'}
 							<article class={`session-message session-message--${entry.role}`} aria-label={`${entry.role} message`}>
 								<h2>{entry.label ?? (entry.role === 'user' ? 'You' : activeSession.agent)}</h2>
-								<p>{entry.body}</p>
+								{#if entry.role === 'assistant'}
+									<Markdown text={entry.body} />
+								{:else}
+									<p>{entry.body}</p>
+								{/if}
 								{#if canRetry && entry.id === retryableEntryId}
 									<button
 										type="button"

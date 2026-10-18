@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Assistant messages render as Markdown, with headings, lists, tables, links,
+  and code blocks in the code font.
 - Streaming replies render more smoothly because transcript updates are applied
   once per frame.
 - Open a project folder from the sessions rail or the first-run screen, and use

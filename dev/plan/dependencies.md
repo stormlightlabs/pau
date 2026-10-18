@@ -101,3 +101,13 @@ previous spike proved that `nvim --embed` can provide redraw, input, and resize,
 but a complete integration also owns rendering, multigrid, clipboard, input,
 configuration, theming, version compatibility, and reconnect behavior. Revisit
 those dependencies only if deep embedding becomes a separate product priority.
+
+## Markdown dependency selection
+
+Use `marked` 18.1.1 to lex assistant messages into Markdown tokens. The library
+is MIT-licensed, actively maintained, and small, with a lexer that is separate
+from its HTML renderer. Pau renders the tokens with Svelte components instead
+of the HTML renderer, so no HTML string is built or injected and raw HTML in a
+message shows as text. A sanitizer such as DOMPurify would add a second
+dependency to guard output Pau never produces. Links open only for `http`,
+`https`, and `mailto` addresses, and images show their alt text.

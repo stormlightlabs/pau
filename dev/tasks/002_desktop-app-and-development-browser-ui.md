@@ -874,21 +874,6 @@ Verification:
 
 ## Transcript
 
-### 2.191 Markdown transcript messages
-
-Status: planned
-Blocked by: none
-
-Render assistant messages as sanitized Markdown with themed, highlighted code
-blocks.
-
-Verification:
-
-- Component-test headings, lists, tables, links, inline code, fenced code with
-  and without a language, and raw HTML that must not render.
-- Storybook stories for a long code block and a streaming partial message in
-  each theme.
-
 ### 2.193 Tool call views
 
 Status: planned
@@ -1529,11 +1514,25 @@ Verification:
 - Component-test export and export failure.
 - Export a self-hosted Pi session.
 
+### 2.233 External links
+
+Status: planned
+Blocked by: none
+
+Open links from transcripts and other views in the operator's default browser
+from the desktop app.
+
+Verification:
+
+- Component-test that a transcript link asks the desktop shell to open it, and
+  that unsafe schemes are refused.
+- Open a link from a self-hosted session transcript.
+
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.81, 2.156, 2.174, 2.175, 2.184, 2.185, 2.186, 2.187, 2.191, 2.194,
-2.196, 2.197, 2.199, 2.200, 2.205, 2.219, 2.220
+Blocked by: 2.81, 2.156, 2.174, 2.175, 2.184, 2.185, 2.186, 2.187, 2.194, 2.196,
+2.197, 2.199, 2.200, 2.205, 2.219, 2.220
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EmptyState from './EmptyState.svelte';
 	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
 	import { formatBytes, formatCpu, formatElapsed } from './resource-format';
@@ -36,10 +37,9 @@
 	</ViewHeader>
 
 	{#if processes.length === 0}
-		<div class="processes-view__empty">
-			<h2>No managed processes</h2>
+		<EmptyState title="No managed processes">
 			<p>Start an agent session or terminal in this workspace to see its resource use.</p>
-		</div>
+		</EmptyState>
 	{:else}
 		<div class="processes-view__table" role="table" aria-label="Workspace process resource use">
 			<div class="processes-view__table-heading" role="row">
@@ -121,6 +121,8 @@
 		min-width: 0;
 		color: var(--pau-text);
 		font-family: var(--pau-font-ui);
+		/* Line the empty state up with the header's title. */
+		--empty-state-inset: var(--pau-space-3);
 	}
 
 	.processes-view__count,
@@ -129,8 +131,6 @@
 		color: var(--pau-text-muted);
 	}
 
-	.processes-view__empty h2,
-	.processes-view__empty p,
 	.process-tree h2,
 	.process-tree p {
 		margin: 0;
@@ -260,21 +260,6 @@
 	.process-tree code {
 		font-family: var(--pau-font-code);
 		font-size: var(--pau-type-xs);
-	}
-
-	.processes-view__empty {
-		padding: 3rem var(--pau-space-4);
-		border-block: 1px solid var(--pau-border);
-		text-align: center;
-	}
-
-	.processes-view__empty h2 {
-		font-size: var(--pau-type-lg);
-	}
-
-	.processes-view__empty p {
-		margin-top: var(--pau-space-1);
-		color: var(--pau-text-muted);
 	}
 
 	@media (max-width: 64rem) {

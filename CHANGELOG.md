@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Empty states for sessions, Files, Processes, and terminals start at the top of
+  the content column and line up with the transcript and view headers.
 - The command palette opens with the first available action highlighted, so
   Enter runs it, and actions unavailable in the current view are listed after
   the rest.

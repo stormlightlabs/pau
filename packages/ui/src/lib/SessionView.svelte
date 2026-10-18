@@ -18,6 +18,7 @@
 	import { announcementSnapshot, describeChanges, type AnnouncementSnapshot } from './transcript-announcements';
 	import { copyText, findMessage, lastAssistantReply, type CopyResult } from './clipboard';
 	import CopyButton from './CopyButton.svelte';
+	import EmptyState from './EmptyState.svelte';
 	import SessionStatusMark from './SessionStatusMark.svelte';
 	import CommandCompletion from './CommandCompletion.svelte';
 	import ContextMenu from './ContextMenu.svelte';
@@ -1923,8 +1924,11 @@
 		{/key}
 	{:else if startFailure}
 		<section class="session-view session-view--empty" aria-labelledby="start-failed-title">
-			<div class="session-view__empty" role="alert">
-				<h1 id="start-failed-title">Could not start a session in {startFailure.workspaceName}</h1>
+			<EmptyState
+				level={1}
+				role="alert"
+				titleId="start-failed-title"
+				title={`Could not start a session in ${startFailure.workspaceName}`}>
 				<p>{startFailure.message}</p>
 				{#if onStartSession}
 					<button
@@ -1937,13 +1941,15 @@
 						}}>Try again</button>
 				{/if}
 				{@render readinessNotice(startFailure.workspaceId)}
-			</div>
+			</EmptyState>
 		</section>
 	{:else if onOpenWorkspace && (openFormVisible || openError || (!loading && workspaces.length === 0))}
 		{@const firstRun = !loading && workspaces.length === 0}
 		<section class="session-view session-view--empty" aria-labelledby="open-workspace-title">
-			<div class="session-view__empty">
-				<h1 id="open-workspace-title">{firstRun ? 'Open a folder to start working' : 'Open a workspace'}</h1>
+			<EmptyState
+				level={1}
+				titleId="open-workspace-title"
+				title={firstRun ? 'Open a folder to start working' : 'Open a workspace'}>
 				<p>Pau runs each session inside a workspace folder. Open a project folder to add it to the rail.</p>
 				{#if pickFolder}
 					<button
@@ -1981,12 +1987,11 @@
 				{/if}
 				{#if openError}<p class="session-open__error" role="alert">{openError}</p>{/if}
 				{#if firstRun}{@render readinessNotice()}{/if}
-			</div>
+			</EmptyState>
 		</section>
 	{:else if openedWorkspace && openedWorkspace.sessions.length === 0}
 		<section class="session-view session-view--empty" aria-labelledby="opened-workspace-title">
-			<div class="session-view__empty" role="status">
-				<h1 id="opened-workspace-title">{openedWorkspace.name} is open</h1>
+			<EmptyState level={1} role="status" titleId="opened-workspace-title" title={`${openedWorkspace.name} is open`}>
 				<p>It has no sessions yet.</p>
 				{#if onStartSession}
 					<button
@@ -1996,13 +2001,11 @@
 						onclick={() => void startSession(openedWorkspace)}>Start session</button>
 				{/if}
 				{@render readinessNotice(openedWorkspace.id)}
-			</div>
+			</EmptyState>
 		</section>
 	{:else if loading && !activeSession}
 		<section class="session-view session-view--empty" aria-labelledby="loading-title">
-			<div class="session-view__empty" role="status">
-				<h1 id="loading-title">Loading sessions…</h1>
-			</div>
+			<EmptyState level={1} role="status" titleId="loading-title" title="Loading sessions…" />
 		</section>
 	{:else if activeSession}
 		<section class="session-view" aria-labelledby="session-title">
@@ -2157,10 +2160,9 @@
 				use:followTranscript={{ key: activeSessionId, onChange: (next) => (following = next) }}>
 				<div class="session-view__transcript-content">
 					{#if activeSession.transcript.length === 0 && pendingTranscript.length === 0}
-						<div class="session-view__empty">
-							<h2>Start with a prompt</h2>
+						<EmptyState title="Start with a prompt">
 							<p>Describe the task, relevant files, and any limits the agent should follow.</p>
-						</div>
+						</EmptyState>
 					{:else}
 						{#snippet toolCall(tool: TranscriptTool)}
 							<ToolCallView
@@ -2504,15 +2506,14 @@
 		</section>
 	{:else}
 		<section class="session-view session-view--empty" aria-labelledby="empty-title">
-			<div class="session-view__empty">
-				<h1 id="empty-title">No session selected</h1>
+			<EmptyState level={1} titleId="empty-title" title="No session selected">
 				<p>
 					{onStartSession
 						? 'Select a session from the rail, or start one with the + button next to a workspace.'
 						: 'Select a session from the rail, or start one in this workspace.'}
 				</p>
 				{@render readinessNotice(workspaces[0]?.id)}
-			</div>
+			</EmptyState>
 		</section>
 	{/if}
 </ApplicationShell>
@@ -2724,7 +2725,7 @@
 		margin-top: 0;
 	}
 
-	.session-view__empty .session-open__error {
+	.session-view--empty .session-open__error {
 		margin-top: var(--pau-space-3);
 		color: var(--pau-danger);
 	}
@@ -2783,6 +2784,11 @@
 		align-items: start;
 	}
 
+	/* Stand-alone empty states share the transcript column, so their text starts at its left edge. */
+	.session-view--empty > :global(.empty-state) {
+		grid-area: transcript;
+	}
+
 	.session-view__header {
 		grid-area: header;
 		display: flex;
@@ -2797,10 +2803,7 @@
 	.session-view__header h1,
 	.session-message h2,
 	.session-message p,
-	.session-view__notice,
-	.session-view__empty h1,
-	.session-view__empty h2,
-	.session-view__empty p {
+	.session-view__notice {
 		margin: 0;
 	}
 
@@ -3432,24 +3435,6 @@
 		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--pau-danger);
 		border-top: 1px solid var(--pau-border);
-	}
-
-	.session-view__empty {
-		grid-area: transcript;
-		width: min(100%, 40rem);
-		margin-inline: auto;
-		padding: var(--pau-space-5) var(--pau-space-4);
-	}
-
-	.session-view__empty h1,
-	.session-view__empty h2 {
-		font-size: var(--pau-type-lg);
-	}
-
-	.session-view__empty p {
-		margin-top: var(--pau-space-2);
-		color: var(--pau-text-muted);
-		line-height: 1.55;
 	}
 
 	.session-view__sr-only {

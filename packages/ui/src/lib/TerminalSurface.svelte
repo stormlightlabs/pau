@@ -2,6 +2,7 @@
 	import '../styles/tokens.css';
 	import type { ThemeName, UiFontName } from '../theme';
 	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
+	import EmptyState from './EmptyState.svelte';
 	import Icon from './Icon.svelte';
 	import TerminalView from './TerminalView.svelte';
 	import type { TerminalExit, TerminalSource, TerminalTab } from './types/terminal';
@@ -243,8 +244,8 @@
 		{#if error}<p class="terminal-surface__error" role="alert">{error}</p>{/if}
 
 		{#if tabs.length === 0}
-			<div class="terminal-surface__empty">
-				<p>No terminals are open in this workspace.</p>
+			<EmptyState title="No terminals open">
+				<p>Open a terminal to run commands in this workspace.</p>
 				<button
 					type="button"
 					class="terminal-surface__primary"
@@ -252,7 +253,7 @@
 					onclick={() => void openTerminal()}>
 					{creating ? 'Opening…' : 'Open a terminal'}
 				</button>
-			</div>
+			</EmptyState>
 		{/if}
 
 		{#each tabs as tab (tab.id)}
@@ -404,20 +405,13 @@
 		display: none;
 	}
 
-	.terminal-surface__empty {
+	.terminal-surface > :global(.empty-state) {
 		grid-row: 3;
-		display: grid;
-		place-content: center;
-		justify-items: center;
-		gap: var(--pau-space-3);
-		color: var(--shell-muted);
-	}
-
-	.terminal-surface__empty p {
-		margin: 0;
+		--empty-state-inset: var(--pau-space-4);
 	}
 
 	.terminal-surface__primary {
+		margin-top: var(--pau-space-3);
 		min-height: var(--pau-size-row-md);
 		padding-inline: var(--pau-space-3);
 		color: var(--shell-bg);

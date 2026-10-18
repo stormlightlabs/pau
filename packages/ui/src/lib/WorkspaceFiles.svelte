@@ -26,6 +26,7 @@
 		type ContextMenuRequest
 	} from './context-menu';
 	import DiffReview from './DiffReview.svelte';
+	import EmptyState from './EmptyState.svelte';
 	import FileEditor from './FileEditor.svelte';
 	import Icon from './Icon.svelte';
 	import type { FileEditorSource } from './types/file-editor';
@@ -704,11 +705,10 @@
 				<p>{selectedPath}</p>
 			</div>
 		{:else}
-			<div class="workspace-files__surface-state">
-				<Icon name="files" size={28} />
+			<EmptyState title="No file selected">
 				<p>Choose a file from the tree or search its contents.</p>
-				<small>Hidden and ignored files stay excluded until you include them.</small>
-			</div>
+				<p>Hidden and ignored files stay excluded until you include them.</p>
+			</EmptyState>
 		{/if}
 	</section>
 </ApplicationShell>
@@ -1088,6 +1088,11 @@
 		overflow: hidden;
 	}
 
+	/* Line the empty state up with the header's title. */
+	.workspace-files__surface {
+		--empty-state-inset: var(--pau-space-4);
+	}
+
 	.workspace-files__surface > header {
 		display: flex;
 		align-items: center;
@@ -1128,10 +1133,6 @@
 	.workspace-files__surface-state p {
 		margin: var(--pau-space-3) 0 var(--pau-space-1);
 		color: var(--shell-text);
-	}
-
-	.workspace-files__surface-state small {
-		display: block;
 	}
 
 	.workspace-files__surface-state--error {

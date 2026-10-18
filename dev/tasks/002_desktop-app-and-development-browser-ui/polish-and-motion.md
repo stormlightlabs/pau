@@ -241,24 +241,6 @@ Verification:
   Storybook shows exactly one accent button per surface.
 - Component-test that a disabled primary uses the disabled text color.
 
-### 2.251 Empty-state alignment
-
-Status: planned
-Blocked by: none
-
-Session empty states ("No session selected", "Loading sessions…", "Open a
-folder") start 160px right of the transcript column, the "Start with a prompt"
-placeholder starts 280px right of it, and the Files, editor, and Processes
-empty states center vertically. Align every empty state to the task surface's
-content column, top-aligned, with the same heading, body, and action stack.
-
-Verification:
-
-- Component-test that the empty-state heading's left edge equals the
-  transcript column's left edge in the session view.
-- Screenshot the session, Files, editor, terminal, and Processes empty states
-  at 1440px and 900px.
-
 ### 2.257 State labels and copy
 
 Status: planned

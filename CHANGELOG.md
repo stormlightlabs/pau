@@ -4,6 +4,7 @@
 
 ### Desktop
 
+- Ctrl+Shift+Up and Ctrl+Shift+Down move between your prompts in the transcript.
 - The composer uses Pi's keys and your Pi keybindings.json: Enter sends or
   steers, Shift+Enter adds a line, Alt+Enter queues a follow-up, Alt+Up restores
   the queue, Shift+Tab changes the thinking level, and Ctrl+L opens the model

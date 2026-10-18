@@ -773,19 +773,6 @@ Verification:
 
 ## Transcript
 
-### 2.197 Prompt navigation
-
-Status: planned
-Blocked by: none
-
-Move between user prompts in the transcript with Ctrl+Shift+Up and
-Ctrl+Shift+Down.
-
-Verification:
-
-- Component-test moving between prompts, stopping at the first and last prompt,
-  and leaving follow mode, with reduced motion on and off.
-
 ### 2.201 Transcript history placeholder
 
 Status: planned
@@ -1325,7 +1312,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.185, 2.197, 2.235, 2.237
+Blocked by: 2.156, 2.185, 2.235, 2.237
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

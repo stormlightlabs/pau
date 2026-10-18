@@ -42,6 +42,8 @@
 	);
 	const native = getContext<DesktopNativeCapabilities | undefined>(desktopNativeCapabilitiesContext);
 
+	$effect(() => sessions.view(activeSessionId));
+
 	onMount(() => {
 		sessions.connect();
 		return () => sessions.close();
@@ -86,6 +88,7 @@
 	pickFolder={native?.pickFolder}
 	onOpenWorkspace={openWorkspace}
 	onSelectSession={selectSession}
+	onClearAttention={() => sessions.clearUnseen()}
 	onStartSession={startSession}
 	onLoadSavedSessions={(workspaceId) => sessions.listSaved(workspaceId)}
 	onResumeSession={resumeSession}

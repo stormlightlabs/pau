@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- The session list marks sessions that are waiting for you, failed, or finished
+  while you were elsewhere, until you open them or press Shift+Esc.
 - Each session state now has its own mark in the session list and header, and
   the running spinner holds still when reduced motion is on.
 - Copy any message, code block, or tool output from the transcript with one

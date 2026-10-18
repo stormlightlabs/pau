@@ -270,6 +270,12 @@ export type SessionViewModel = {
 	usage?: SessionUsage;
 	status: SessionStatus;
 	attention?: string;
+	/**
+	 * Whether the session waited for input, failed, or finished a turn while
+	 * the operator was looking at another session, and has not been opened
+	 * since. The rail shows a marker until this clears.
+	 */
+	unseen?: boolean;
 	error?: string;
 	capabilities: SessionCapabilities;
 	transcript: TranscriptEntry[];

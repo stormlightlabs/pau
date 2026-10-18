@@ -254,6 +254,10 @@ export class LiveSessions {
 	/** Estimated context size after each manual compaction, by session and first kept entry. Compaction events omit it. */
 	#compactionEstimates = $state<Record<string, Record<string, number>>>({});
 	#usages = $state<Record<string, SessionUsage>>({});
+	/** The session the operator is looking at. Changes to it never raise a marker. */
+	#viewed = $state<string>();
+	/** Sessions that waited, failed, or finished a turn out of view and have not been opened since. */
+	readonly #unseen = new SvelteSet<string>();
 	/** Sessions whose usage an event updated while its read was in flight, so the read is stale. */
 	readonly #usageUpdated = new SvelteSet<string>();
 	/** Extension events received while the session's extension UI read is in flight. */
@@ -486,11 +490,22 @@ export class LiveSessions {
 			if (changed.kind !== 'session_changed') continue;
 			const session = JSON.parse(changed.payload) as AgentSession;
 			const known = Object.hasOwn(this.#sessions, session.id);
+			this.#markUnseen(this.#sessions[session.id], session);
 			this.#sessions[session.id] = session;
 			if (!known && !this.loading && isLive(session)) void this.#readHistory(session.id);
 			if (!known && isLive(session)) void this.#readUsage(session.id);
 			if (!isLive(session)) this.#updateExtensionUi(session.id, exitedExtensionUi);
 		}
+	}
+
+	/**
+	 * Raises an attention marker when a session outside the operator's view
+	 * starts waiting, fails, or returns to idle after running a turn.
+	 */
+	#markUnseen(previous: AgentSession | undefined, next: AgentSession): void {
+		if (!previous || previous.status === next.status || next.id === this.#viewed) return;
+		const finished = previous.status === 'running' && next.status === 'idle';
+		if (finished || next.status === 'waiting' || next.status === 'failed') this.#unseen.add(next.id);
 	}
 
 	/** Holds transcript output until the next frame, then commits the burst at once. */
@@ -536,6 +551,7 @@ export class LiveSessions {
 			agent: 'Pi',
 			status: session.status,
 			error: failureMessage(session),
+			unseen: this.#unseen.has(session.id),
 			attention: extensionUi.dialogs.length > 0 ? 'An extension is waiting for your answer.' : undefined,
 			capabilities: {
 				prompt: session.capabilities.prompt,
@@ -564,6 +580,17 @@ export class LiveSessions {
 			autoRetry: transcript.autoRetry,
 			messageQueue: this.#queues[session.id]
 		};
+	}
+
+	/** Records which session the operator is looking at and clears its marker. */
+	view(sessionId: string | undefined): void {
+		this.#viewed = sessionId;
+		if (sessionId) this.#unseen.delete(sessionId);
+	}
+
+	/** Clears every attention marker. */
+	clearUnseen(): void {
+		this.#unseen.clear();
 	}
 
 	/** Whether the backend is unreachable. The first connection attempt counts as loading. */

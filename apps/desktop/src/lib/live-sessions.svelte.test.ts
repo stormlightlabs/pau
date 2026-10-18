@@ -60,7 +60,20 @@ async function setup() {
 	const flushFrame = () => {
 		for (const flush of frames.splice(0)) flush();
 	};
-	return { socket, frames, transcript, flushFrame };
+	const change = (status: AgentSession['status'], sequence: number) =>
+		socket.receive({
+			type: 'event',
+			event: {
+				sequence,
+				timestamp: '2026-04-01T12:00:02Z',
+				workspace_id: 'pau',
+				session_id: 'session-1',
+				kind: 'session_changed',
+				payload: JSON.stringify({ ...session, status })
+			}
+		});
+	const unseen = () => sessions.workspaces[0]?.sessions[0]?.unseen;
+	return { sessions, socket, frames, transcript, flushFrame, change, unseen };
 }
 
 test('commits a burst of deltas once per frame', async () => {
@@ -102,4 +115,47 @@ test('applies message_end after batched text', async () => {
 	const bodies = transcript().map((entry) => ('body' in entry ? entry.body : undefined));
 	expect(bodies).toContain('Final.');
 	expect(bodies).not.toContain('Draft');
+});
+
+test.each([
+	['waits for input', 'waiting', ['waiting']],
+	['fails', 'failed', ['running', 'failed']],
+	['finishes a turn', 'idle', ['running', 'idle']]
+] as const)('marks a session out of view that %s', async (_name, _final, statuses) => {
+	const { sessions, change, unseen } = await setup();
+	sessions.view('other');
+
+	for (const [index, status] of statuses.entries()) change(status, index + 1);
+
+	expect(unseen()).toBe(true);
+});
+
+test('does not mark the viewed session or a session that merely starts running', async () => {
+	const { sessions, change, unseen } = await setup();
+
+	sessions.view('session-1');
+	change('running', 1);
+	change('idle', 2);
+	expect(unseen()).toBe(false);
+
+	sessions.view('other');
+	change('running', 3);
+	expect(unseen()).toBe(false);
+});
+
+test('clears a marker when the session is viewed and all markers on request', async () => {
+	const { sessions, change, unseen } = await setup();
+	sessions.view('other');
+	change('waiting', 1);
+	expect(unseen()).toBe(true);
+
+	sessions.view('session-1');
+	expect(unseen()).toBe(false);
+
+	sessions.view('other');
+	change('idle', 2);
+	change('failed', 3);
+	expect(unseen()).toBe(true);
+	sessions.clearUnseen();
+	expect(unseen()).toBe(false);
 });

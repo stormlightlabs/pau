@@ -63,6 +63,12 @@
 		/** Shows the loading state until the first session list arrives. */
 		loading?: boolean;
 		onSelectSession?: (sessionId: string) => void;
+		/**
+		 * Called when the operator presses Shift+Esc to dismiss every session
+		 * attention marker. Opening a session clears its own marker through
+		 * `onSelectSession`.
+		 */
+		onClearAttention?: () => void;
 		/** Called with the attached images only when there are any. */
 		onSend?: (sessionId: string, text: string, queue?: PromptQueue, images?: PromptImage[]) => void | Promise<void>;
 		/**
@@ -189,6 +195,7 @@
 		disconnected = false,
 		loading = false,
 		onSelectSession = () => {},
+		onClearAttention = () => {},
 		onSend = () => {},
 		onLoadHistory,
 		onLoadCommands,
@@ -509,6 +516,16 @@
 
 	function hasAttention(session: SessionViewModel): boolean {
 		return session.status === 'waiting' || Boolean(session.attention) || session.status === 'failed';
+	}
+
+	const markerLabel = {
+		waiting: 'Waiting for your input',
+		failed: 'Failed while out of view',
+		unread: 'Finished while out of view'
+	} as const;
+
+	function markerKind(status: SessionViewModel['status']): keyof typeof markerLabel {
+		return status === 'waiting' ? 'waiting' : status === 'failed' ? 'failed' : 'unread';
 	}
 
 	function statusLabel(status: SessionViewModel['status']): string {
@@ -987,7 +1004,7 @@
 	function handleComposerKeydown(event: KeyboardEvent): void {
 		if (commandMatches && handleCommandKeydown(event, commandMatches)) return;
 		if (mentionOpen && handleMentionKeydown(event, mentionResults ?? [])) return;
-		if (event.key === 'Escape' && activeSession?.status === 'running') {
+		if (event.key === 'Escape' && !event.shiftKey && activeSession?.status === 'running') {
 			event.preventDefault();
 			void interrupt();
 			return;
@@ -1036,6 +1053,11 @@
 	 * lands, then both belong there.
 	 */
 	function handleWindowKeydown(event: KeyboardEvent): void {
+		if (event.key === 'Escape' && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+			event.preventDefault();
+			onClearAttention();
+			return;
+		}
 		if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key === 'End') {
 			const target = event.target;
 			const editable =
@@ -1154,8 +1176,16 @@
 										}}>
 										<SessionStatusMark status={session.status} label={statusLabel(session.status)} />
 										<span class="session-rail__name">{session.title}</span>
-										<small aria-hidden="true">{statusLabel(session.status)}</small>
-										{#if hasAttention(session)}<span class="session-view__sr-only">Attention required</span>{/if}
+										<span class="session-rail__state">
+											<small aria-hidden="true">{statusLabel(session.status)}</small>
+											{#if session.unseen && session.id !== activeSessionId}
+												{@const kind = markerKind(session.status)}
+												<span class={`session-rail__marker session-rail__marker--${kind}`} data-marker={kind}></span>
+												<span class="session-view__sr-only">{markerLabel[kind]}</span>
+											{:else if hasAttention(session)}
+												<span class="session-view__sr-only">Attention required</span>
+											{/if}
+										</span>
 									</button>
 								</li>
 							{/each}
@@ -1811,6 +1841,46 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.session-rail__state {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--pau-space-2);
+	}
+
+	.session-rail__marker {
+		flex: none;
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+		background: var(--pau-info);
+		/* One pulse draws the eye when the marker appears, then it holds still. */
+		animation: session-rail-marker-pulse var(--pau-duration-large) var(--pau-ease-standard) 1;
+	}
+
+	.session-rail__marker--waiting {
+		background: var(--pau-warning);
+	}
+
+	.session-rail__marker--failed {
+		background: var(--pau-danger);
+	}
+
+	@keyframes session-rail-marker-pulse {
+		50% {
+			transform: scale(1.8);
+		}
+	}
+
+	:global(:root[data-motion='reduce']) .session-rail__marker {
+		animation: none;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		:global(:root:not([data-motion])) .session-rail__marker {
+			animation: none;
+		}
 	}
 
 	.session-rail small {

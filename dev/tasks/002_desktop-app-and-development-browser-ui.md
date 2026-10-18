@@ -917,24 +917,10 @@ Verification:
 
 ## Session status and attention
 
-### 2.205 Session attention markers
-
-Status: planned
-Blocked by: none
-
-Mark sessions in the rail that wait for input, fail, or finish a turn while out
-of view, pulse the marker once, and clear it when the operator opens the
-session or presses Shift+Esc.
-
-Verification:
-
-- Component-test each marked state, the single pulse, the static marker under
-  reduced motion, clearing on open, and clearing all with Shift+Esc.
-
 ### 2.206 Attention navigation
 
 Status: planned
-Blocked by: 2.171, 2.205
+Blocked by: 2.171
 
 Jump to the next marked session with ⌘⌥A, taking waiting sessions first, then
 failed, then unread.
@@ -1396,8 +1382,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.175, 2.184, 2.185, 2.187, 2.194, 2.197, 2.200, 2.205,
-2.219, 2.220
+Blocked by: 2.156, 2.175, 2.184, 2.185, 2.187, 2.194, 2.197, 2.200, 2.219, 2.220
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

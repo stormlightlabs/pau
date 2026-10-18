@@ -14,7 +14,7 @@ deliverable, and blocker lists may name units in any area file.
 - [Process recovery](process-recovery.md): 5 units
 - [Editors](editors.md): 9 units
 - [Workspaces and navigation](workspaces-and-navigation.md): 16 units
-- [Sessions](sessions.md): 18 units
+- [Sessions](sessions.md): 23 units
 - [Review](review.md): 4 units
 - [Polish and motion](polish-and-motion.md): 15 units
 - [Agent adapters](agent-adapters.md): 8 units
@@ -26,7 +26,7 @@ deliverable, and blocker lists may name units in any area file.
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.185, 2.235, 2.237
+Blocked by: 2.116, 2.156, 2.185, 2.235, 2.237, 2.239, 2.240, 2.242
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

@@ -165,27 +165,101 @@ Verification:
   not.
 - Trigger a notification from a self-hosted Pi session.
 
-### 2.115 Pi shell context API
+### 2.115 Pi shell commands API
 
 Status: planned
 Blocked by: none
 
-Expose Pi shell context through the desktop API.
+Run shell commands through Pi's `bash` RPC command, stream
+`bash_execution_update` events, and stop a running command with `abort_bash`.
+Pass Pi's flag that keeps a command's output out of the model context.
 
 Verification:
 
-- Cover shell context against the Pi fixture.
+- Cover a command that succeeds, one that fails, one stopped with
+  `abort_bash`, and output kept out of context against the Pi fixture.
 
-### 2.116 Composer shell context
+### 2.116 Composer shell commands
 
 Status: planned
 Blocked by: 2.115
 
-Add shell context to the session composer.
+Run `!command` and `!!command` from the composer instead of sending them to the
+model, show each command and its streamed output in the transcript, and stop a
+running command with Escape. `!!` output stays out of the model context.
 
 Verification:
 
-- Component-test shell context and its unsupported state.
+- Component-test `!` and `!!` commands, streamed output, a failed command, and
+  stopping one with Escape.
+- Run a shell command from a self-hosted session.
+
+### 2.238 Interrupt clears the queue
+
+Status: planned
+Blocked by: none
+
+Send `clear_queue` before `abort` when interrupting a Pi session, as Pi's own
+Escape does, and return the cleared steering and follow-up text.
+
+Verification:
+
+- Cover an interrupt with queued messages, an interrupt with an empty queue,
+  and a failed `clear_queue` against the Pi fixture.
+
+### 2.239 Interrupted queue returns to the composer
+
+Status: planned
+Blocked by: 2.238
+
+Put the text of queued messages back in the composer after an interrupt, so
+none of it runs or is lost.
+
+Verification:
+
+- Component-test interrupting with queued messages, with an empty queue, and
+  with a draft already in the composer.
+
+### 2.240 Retry without a duplicate prompt
+
+Status: planned
+Blocked by: none
+
+Retry a failed turn without writing a second copy of its prompt to the session
+file. If Pi offers no way to do that over RPC, replace the manual retry control
+with a clearly labelled send-again action and rely on Pi's automatic retry.
+
+Verification:
+
+- Cover retrying a failed turn against the Pi fixture and confirm the session
+  file holds the prompt once.
+
+### 2.241 Model thinking levels API
+
+Status: planned
+Blocked by: none
+
+Report the current model's thinking levels from Pi's
+`get_available_thinking_levels` command and refresh them when the model
+changes.
+
+Verification:
+
+- Cover a reasoning model, a model without thinking levels, and a model change
+  against the Pi fixture.
+
+### 2.242 Model-aware thinking levels
+
+Status: planned
+Blocked by: 2.241
+
+Offer only the current model's thinking levels in the thinking-level picker and
+in Shift+Tab cycling.
+
+Verification:
+
+- Component-test a model with a subset of levels, a model without thinking
+  levels, and a model change while the picker is open.
 
 ### 2.167 Transcript history details
 

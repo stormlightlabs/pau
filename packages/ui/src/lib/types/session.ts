@@ -84,10 +84,77 @@ export type TranscriptTool = {
 	id: string;
 	kind: 'tool';
 	name: string;
+	/** One-line summary of the arguments: a path, a command, or the arguments as JSON. */
 	detail: string;
+	/** Text the tool returned, or its latest partial output while it runs. */
 	result?: string;
 	status: 'running' | 'complete' | 'failed';
+	/**
+	 * Arguments and result details for a built-in tool the transcript can
+	 * render natively. Absent for other tools and while the model is still
+	 * streaming the arguments; those render from `detail` and `result`.
+	 */
+	call?: ToolCallDetails;
 };
+
+/** How much of a long output the tool kept. */
+export type ToolTruncation = {
+	/** The limit that cut the output. */
+	truncatedBy: 'lines' | 'bytes';
+	totalLines: number;
+	/** Complete lines included in `result`. */
+	outputLines: number;
+};
+
+/** One exact-text replacement requested from the `edit` tool. */
+export type ToolEdit = { oldText: string; newText: string };
+
+/** A `bash` call. Its output is the tool's `result`. */
+export type BashToolCall = {
+	tool: 'bash';
+	command: string;
+	/** Timeout the model requested, in seconds. */
+	timeout?: number;
+	/** Exit code, reported only while the session that ran the command is live. */
+	exitCode?: number;
+	/** Wall-clock run time, reported only while the session that ran the command is live. */
+	durationMs?: number;
+	/** Set when `result` holds only the tail of the output. */
+	truncation?: ToolTruncation;
+	/** File that holds the complete output when it was truncated. */
+	fullOutputPath?: string;
+};
+
+/** A `read` call. The file text is the tool's `result`. */
+export type ReadToolCall = {
+	tool: 'read';
+	path: string;
+	/** First line requested, counting from 1. */
+	offset?: number;
+	/** Number of lines requested. */
+	limit?: number;
+	/** Set when `result` holds only part of the requested range. */
+	truncation?: ToolTruncation;
+};
+
+/** An `edit` call, with the diff once the edit succeeds. */
+export type EditToolCall = {
+	tool: 'edit';
+	path: string;
+	edits: ToolEdit[];
+	/** Display diff from the agent, with line numbers and `+`/`-` markers. */
+	diff?: string;
+	/** Standard unified patch of the same change. */
+	patch?: string;
+	/** First changed line in the new file. */
+	firstChangedLine?: number;
+};
+
+/** A `write` call. The agent reports no diff; `content` is the whole new file. */
+export type WriteToolCall = { tool: 'write'; path: string; content: string };
+
+/** Structured data for the built-in tools, keyed by `tool`. */
+export type ToolCallDetails = BashToolCall | ReadToolCall | EditToolCall | WriteToolCall;
 
 /** What started a compaction: the operator, a full context, or a provider overflow. */
 export type CompactionReason = 'manual' | 'threshold' | 'overflow';

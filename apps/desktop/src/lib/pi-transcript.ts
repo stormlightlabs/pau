@@ -3,6 +3,9 @@ import type {
 	CompactionReason,
 	CompactionState,
 	MessageQueue,
+	ToolCallDetails,
+	ToolEdit,
+	ToolTruncation,
 	TranscriptEntry,
 	TranscriptTool
 } from '@stormlightlabs/pau-ui';
@@ -92,6 +95,112 @@ function toolDetail(args: unknown): string {
 	return preferred ?? JSON.stringify(args);
 }
 
+function truncation(details: JsonObject): ToolTruncation | undefined {
+	const value = details.truncation;
+	if (!isObject(value) || value.truncated !== true) return undefined;
+	const totalLines = numberField(value.totalLines);
+	const outputLines = numberField(value.outputLines);
+	if (totalLines === undefined || outputLines === undefined) return undefined;
+	return { truncatedBy: value.truncatedBy === 'bytes' ? 'bytes' : 'lines', totalLines, outputLines };
+}
+
+function edits(args: JsonObject): ToolEdit[] | undefined {
+	// Older Pi sessions stored a single replacement as top-level oldText and newText.
+	const list: unknown[] = Array.isArray(args.edits) ? args.edits : [args];
+	const parsed = list.flatMap((edit) => {
+		if (!isObject(edit)) return [];
+		const oldText = text(edit.oldText);
+		const newText = text(edit.newText);
+		return oldText === undefined || newText === undefined ? [] : [{ oldText, newText }];
+	});
+	return parsed.length === 0 ? undefined : parsed;
+}
+
+/**
+ * Reads the arguments of Pi's built-in `bash`, `read`, `edit`, and `write`
+ * tools. Returns undefined for other tools and for arguments missing a
+ * required field, so those calls keep their text summary.
+ */
+function toolCall(name: string, args: unknown): ToolCallDetails | undefined {
+	if (!isObject(args)) return undefined;
+	const path = text(args.path);
+	switch (name) {
+		case 'bash': {
+			const command = text(args.command);
+			return command === undefined ? undefined : { tool: 'bash', command, timeout: numberField(args.timeout) };
+		}
+		case 'read': {
+			return path === undefined
+				? undefined
+				: { tool: 'read', path, offset: numberField(args.offset), limit: numberField(args.limit) };
+		}
+		case 'edit': {
+			const list = edits(args);
+			return path === undefined || !list ? undefined : { tool: 'edit', path, edits: list };
+		}
+		case 'write': {
+			const content = text(args.content);
+			return path === undefined || content === undefined ? undefined : { tool: 'write', path, content };
+		}
+		default: {
+			return undefined;
+		}
+	}
+}
+
+/**
+ * Adds result details to a built-in tool call. `result` is either a
+ * `toolResult` message from history or the result of a live tool execution
+ * event; both carry Pi's `details`. Only live results carry
+ * `structuredContent`, which holds the `bash` exit code and run time.
+ */
+function withResult(call: ToolCallDetails | undefined, result: unknown): ToolCallDetails | undefined {
+	if (!call || !isObject(result)) return call;
+	const details = isObject(result.details) ? result.details : {};
+	switch (call.tool) {
+		case 'bash': {
+			const structured = isObject(result.structuredContent) ? result.structuredContent : {};
+			const seconds = numberField(structured.wall_time_seconds);
+			return {
+				...call,
+				exitCode: numberField(structured.exit_code) ?? call.exitCode,
+				durationMs: seconds === undefined ? call.durationMs : Math.round(seconds * 1000),
+				truncation: truncation(details) ?? call.truncation,
+				fullOutputPath: text(details.fullOutputPath) ?? call.fullOutputPath
+			};
+		}
+		case 'read': {
+			return { ...call, truncation: truncation(details) ?? call.truncation };
+		}
+		case 'edit': {
+			return {
+				...call,
+				diff: text(details.diff) ?? call.diff,
+				patch: text(details.patch) ?? call.patch,
+				firstChangedLine: numberField(details.firstChangedLine) ?? call.firstChangedLine
+			};
+		}
+		case 'write': {
+			return call;
+		}
+	}
+}
+
+/**
+ * Replaces a call's arguments and keeps any result details already applied,
+ * because an authoritative `message_end` can repeat the arguments after a live
+ * result has arrived.
+ */
+function withArguments(
+	previous: ToolCallDetails | undefined,
+	name: string,
+	args: unknown
+): ToolCallDetails | undefined {
+	const next = toolCall(name, args);
+	if (!next || previous?.tool !== next.tool) return next ?? previous;
+	return { ...previous, ...next } as ToolCallDetails;
+}
+
 function toolOutput(result: unknown): string | undefined {
 	if (!isObject(result) || !Array.isArray(result.content)) return undefined;
 	const parts = result.content.flatMap((block) =>
@@ -171,12 +280,14 @@ function projectMessage(
 		} else if (block.type === 'toolCall' && text(block.id)) {
 			const toolId = toolEntryId(text(block.id) ?? '');
 			const previous = existing.find((entry): entry is TranscriptTool => entry.id === toolId && entry.kind === 'tool');
+			const name = text(block.name) ?? previous?.name ?? 'tool';
 			projected.push({
 				...(previous ?? { status: 'running' as const }),
 				id: toolId,
 				kind: 'tool',
-				name: text(block.name) ?? previous?.name ?? 'tool',
-				detail: toolDetail(block.arguments)
+				name,
+				detail: toolDetail(block.arguments),
+				call: withArguments(previous?.call, name, block.arguments)
 			});
 		}
 	}
@@ -262,7 +373,12 @@ function applyMessageUpdate(state: PiTranscript, update: JsonObject): PiTranscri
 				entries: updateTool(
 					state.entries,
 					text(call.id) ?? '',
-					(tool) => ({ ...tool, name, detail: toolDetail(call.arguments) }),
+					(tool) => ({
+						...tool,
+						name,
+						detail: toolDetail(call.arguments),
+						call: withArguments(tool.call, name, call.arguments)
+					}),
 					name
 				)
 			};
@@ -289,7 +405,8 @@ function endMessage(state: PiTranscript, message: JsonObject): PiTranscript {
 					(tool) => ({
 						...tool,
 						result: toolOutput(message) ?? tool.result,
-						status: message.isError === true ? 'failed' : 'complete'
+						status: message.isError === true ? 'failed' : 'complete',
+						call: withResult(tool.call, message)
 					}),
 					text(message.toolName) ?? 'tool'
 				)
@@ -343,7 +460,8 @@ export function reducePiEvent(state: PiTranscript, event: unknown): PiTranscript
 			if (!callId) return state;
 			const name = text(event.toolName) ?? 'tool';
 			const ended = event.type === 'tool_execution_end';
-			const output = toolOutput(ended ? event.result : event.partialResult);
+			const result = ended ? event.result : event.partialResult;
+			const output = toolOutput(result);
 			return {
 				...state,
 				entries: updateTool(
@@ -354,7 +472,8 @@ export function reducePiEvent(state: PiTranscript, event: unknown): PiTranscript
 						name,
 						detail: tool.detail || toolDetail(event.args),
 						result: output ?? tool.result,
-						status: ended ? (event.isError === true ? 'failed' : 'complete') : 'running'
+						status: ended ? (event.isError === true ? 'failed' : 'complete') : 'running',
+						call: withResult(tool.call ?? toolCall(name, event.args), result)
 					}),
 					name
 				)

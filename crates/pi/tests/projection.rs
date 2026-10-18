@@ -1,7 +1,7 @@
 use pau_agent::{AgentEventKind, AgentSessionStatus};
 use pau_pi::{
     PiCompactionOutcome, PiCompactionReason, PiEventPayload, PiEventReducer, PiLifecycleEvent,
-    PiMessagePhase, PiProjectedContent, PiToolResultPhase,
+    PiMessagePhase, PiProjectedContent, PiToolCallPhase, PiToolResultPhase,
 };
 use serde_json::Value;
 
@@ -16,7 +16,10 @@ fn replays_captured_events_and_replaces_streamed_messages() {
 
     for line in CAPTURED_EVENTS.lines() {
         let native: Value = serde_json::from_str(line).unwrap();
-        if native["type"] == "message_end" && native["message"]["role"] == "assistant" {
+        if !saw_streamed_projection
+            && native["type"] == "message_end"
+            && native["message"]["role"] == "assistant"
+        {
             assert_eq!(
                 reducer.messages()[0].content,
                 vec![
@@ -39,7 +42,8 @@ fn replays_captured_events_and_replaces_streamed_messages() {
 
     assert!(saw_streamed_projection);
     assert_eq!(reducer.status(), AgentSessionStatus::Idle);
-    assert_eq!(reducer.messages().len(), 2);
+    // Two assistant messages and six tool results.
+    assert_eq!(reducer.messages().len(), 8);
     let assistant = &reducer.messages()[0];
     assert!(assistant.complete);
     assert_eq!(
@@ -95,6 +99,95 @@ fn replays_captured_events_and_replaces_streamed_messages() {
             } if message.native["futureMessageField"]["kept"] == true
         )
     }));
+}
+
+/// Pi's built-in tools report structured arguments and result details that the
+/// projection must pass through intact, along with extension tools and failures.
+#[test]
+fn passes_built_in_extension_and_failed_tool_data_through() {
+    let mut reducer = PiEventReducer::default();
+    let events: Vec<_> = CAPTURED_EVENTS
+        .lines()
+        .filter_map(|line| reducer.reduce(&serde_json::from_str(line).unwrap()))
+        .collect();
+    let executing = |id: &str| {
+        events.iter().find_map(|event| match &event.payload {
+            PiEventPayload::ToolCall {
+                phase: PiToolCallPhase::Executing,
+                id: call,
+                name,
+                arguments,
+            } if call == id => Some((name.as_str(), arguments.clone())),
+            _ => None,
+        })
+    };
+    let completed = |id: &str| {
+        events.iter().find_map(|event| match &event.payload {
+            PiEventPayload::ToolResult {
+                phase: PiToolResultPhase::Completed,
+                id: call,
+                result,
+                is_error,
+                ..
+            } if call == id => Some((result.clone(), *is_error)),
+            _ => None,
+        })
+    };
+
+    assert_eq!(
+        executing("call-1"),
+        Some(("read", serde_json::json!({"path": "README.md"})))
+    );
+    assert_eq!(
+        executing("call-2"),
+        Some((
+            "bash",
+            serde_json::json!({"command": "pnpm test", "timeout": 120})
+        ))
+    );
+    let (bash, failed) = completed("call-2").unwrap();
+    assert!(!failed);
+    assert_eq!(bash["details"]["truncation"]["totalLines"], 3);
+    assert_eq!(bash["structuredContent"]["exit_code"], 0);
+
+    assert_eq!(
+        executing("call-3").unwrap().1["edits"][0]["newText"],
+        "New intro"
+    );
+    let (edit, failed) = completed("call-3").unwrap();
+    assert!(!failed);
+    assert_eq!(
+        edit["details"]["diff"],
+        " 1 # Pau\n-2 Old intro\n+2 New intro"
+    );
+    assert_eq!(edit["details"]["firstChangedLine"], 2);
+
+    assert_eq!(
+        executing("call-4"),
+        Some((
+            "write",
+            serde_json::json!({"path": "NOTES.md", "content": "# Notes\nFirst line\n"})
+        ))
+    );
+    assert_eq!(completed("call-4").map(|(_, failed)| failed), Some(false));
+
+    assert_eq!(executing("call-5").unwrap().0, "todo");
+    assert_eq!(
+        completed("call-5").unwrap().0["details"]["todos"][0]["text"],
+        "Ship it"
+    );
+
+    let (build, failed) = completed("call-6").unwrap();
+    assert!(failed);
+    assert_eq!(build["structuredContent"]["exit_code"], 1);
+    assert!(
+        reducer
+            .messages()
+            .iter()
+            .any(|message| message.role == "toolResult"
+                && message.native["toolCallId"] == "call-6"
+                && message.native["isError"] == true)
+    );
 }
 
 #[test]

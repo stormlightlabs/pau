@@ -99,7 +99,14 @@ export type {
 	TranscriptCompaction,
 	TranscriptEntry,
 	ThinkingLevel,
-	TranscriptTool
+	TranscriptTool,
+	ToolCallDetails,
+	ToolTruncation,
+	ToolEdit,
+	BashToolCall,
+	ReadToolCall,
+	EditToolCall,
+	WriteToolCall
 } from './lib/types/session';
 export { ICONS, type IconKind } from './icons';
 export {

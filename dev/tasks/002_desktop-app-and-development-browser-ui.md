@@ -889,23 +889,10 @@ Verification:
 - Storybook stories for a long code block and a streaming partial message in
   each theme.
 
-### 2.192 Structured Pi tool events
-
-Status: planned
-Blocked by: none
-
-Report tool name, arguments, and result fields for Pi's built-in `bash`,
-`read`, `edit`, and `write` tools in session events and history.
-
-Verification:
-
-- Cover each built-in tool, an extension tool that falls back to text, and a
-  failed call against the Pi fixture.
-
 ### 2.193 Tool call views
 
 Status: planned
-Blocked by: 2.192
+Blocked by: none
 
 Summarize each tool call on one row and expand it to a diff for edits and
 writes, the command output for `bash`, and the path for `read`, with Ctrl+O

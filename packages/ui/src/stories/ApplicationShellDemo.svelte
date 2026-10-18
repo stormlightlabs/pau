@@ -1,6 +1,9 @@
 <script lang="ts">
+	import { setContext } from 'svelte';
+
 	import { shellNavigationFixtures } from '../fixtures/application-shell';
 	import ApplicationShell, { type ShellPaneWidths } from '../lib/ApplicationShell.svelte';
+	import { Keymap, keymapContext } from '../lib/keymap.svelte';
 	import type { ThemeName, UiFontName } from '../theme';
 
 	let {
@@ -18,6 +21,9 @@
 		uiFont?: UiFontName;
 		paneWidths?: ShellPaneWidths;
 	} = $props();
+
+	// The app provides a key map, so the command field and panel toggles show their shortcuts.
+	setContext(keymapContext, new Keymap({ platform: 'mac' }));
 
 	// Stands in for the app that stores the widths the shell reports.
 	let saved = $derived<ShellPaneWidths>(paneWidths);

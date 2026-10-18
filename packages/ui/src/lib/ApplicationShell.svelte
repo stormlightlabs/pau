@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { MediaQuery } from 'svelte/reactivity';
 
 	import type { IconKind } from '../icons';
 	import '../styles/tokens.css';
@@ -115,7 +116,7 @@
 	let inspectorVisible = $derived(inspectorOpen);
 
 	/** Narrow windows show the contextual rail as an overlay instead of a column. */
-	const NARROW_QUERY = '(max-width: 48rem)';
+	const narrow = new MediaQuery('max-width: 48rem');
 
 	const contextFocus = createFocusReturn();
 	const inspectorFocus = createFocusReturn();
@@ -129,6 +130,24 @@
 			contextOpen = true;
 		}
 	}
+
+	/** Opens the overlay rail on narrow windows and hides or shows the rail column on wide ones. */
+	function toggleContext(): void {
+		if (narrow.current) toggleContextOverlay();
+		else contextHidden = !contextHidden;
+	}
+
+	/** Labels a top bar toggle's tooltip with its key map shortcut when it has one. */
+	function withShortcut(label: string, actionId: string): string {
+		const shortcut = keymap?.shortcut(actionId);
+		return shortcut ? `${label} (${shortcut})` : label;
+	}
+
+	/** Narrow windows open the rail as an overlay, so the toggle names that action instead of hiding a column. */
+	const contextToggleLabel = $derived(
+		narrow.current ? 'Open navigation' : contextHidden ? 'Show navigation' : 'Hide navigation'
+	);
+	const inspectorToggleLabel = $derived(inspectorVisible ? 'Hide inspector' : 'Show inspector');
 
 	function closeContext(): void {
 		contextOpen = false;
@@ -161,12 +180,7 @@
 			paletteOpen = !paletteOpen;
 		},
 		'panel.context': () => {
-			if (!hasContext) return;
-			if (matchMedia(NARROW_QUERY).matches) {
-				toggleContextOverlay();
-			} else {
-				contextHidden = !contextHidden;
-			}
+			if (hasContext) toggleContext();
 		},
 		'panel.inspector': () => {
 			if (inspector) toggleInspector();
@@ -271,6 +285,36 @@
 			<strong>Pau</strong>
 			<span>/</span>
 			<span>{workspaceName}</span>
+		</div>
+
+		<!-- A healthy connection stays silent so the bar never implies Pi itself works. -->
+		{#if disconnected}
+			<p class="app-shell__connection" role="status"><span></span>Disconnected</p>
+		{/if}
+
+		<div class="app-shell__panel-toggles">
+			{#if hasContext}
+				<button
+					type="button"
+					class="app-shell__icon-button"
+					aria-label={contextToggleLabel}
+					aria-expanded={narrow.current ? contextOpen : !contextHidden}
+					title={withShortcut(contextToggleLabel, 'panel.context')}
+					onclick={toggleContext}>
+					<Icon name="sidebar" size={18} />
+				</button>
+			{/if}
+			{#if inspector}
+				<button
+					type="button"
+					class="app-shell__icon-button"
+					aria-label={inspectorToggleLabel}
+					aria-expanded={inspectorVisible}
+					title={withShortcut(inspectorToggleLabel, 'panel.inspector')}
+					onclick={toggleInspector}>
+					<Icon name="panel" size={18} />
+				</button>
+			{/if}
 		</div>
 
 		<button
@@ -379,32 +423,6 @@
 	{/if}
 
 	<main id="main-surface" class="app-shell__main" tabindex="-1">
-		<div class="app-shell__surface-bar">
-			{#if hasContext}
-				<button
-					type="button"
-					class="app-shell__icon-button app-shell__context-toggle"
-					aria-label="Open navigation"
-					aria-expanded={contextOpen}
-					onclick={toggleContextOverlay}>
-					<Icon name="sidebar" size={18} />
-				</button>
-			{/if}
-			<!-- A healthy connection stays silent so the bar never implies Pi itself works. -->
-			{#if disconnected}
-				<p class="app-shell__connection" role="status"><span></span>Disconnected</p>
-			{/if}
-			{#if inspector}
-				<button
-					type="button"
-					class="app-shell__icon-button"
-					aria-label={inspectorVisible ? 'Hide inspector' : 'Show inspector'}
-					aria-expanded={inspectorVisible}
-					onclick={toggleInspector}>
-					<Icon name="panel" size={18} />
-				</button>
-			{/if}
-		</div>
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<div class="app-shell__main-content" role="region" aria-label="Main surface content" tabindex="0">
 			{#if children}{@render children()}{/if}
@@ -550,15 +568,16 @@
 		grid-area: command;
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: var(--pau-space-4);
+		gap: var(--pau-space-3);
 		padding-inline: var(--pau-space-3);
 		border-bottom: 1px solid var(--shell-border);
 		background: var(--shell-bg);
 	}
 
+	/* The identity takes the free space so the status, toggles, and command field sit at the trailing edge. */
 	.app-shell__identity {
 		display: flex;
+		flex: 1;
 		align-items: center;
 		gap: var(--pau-space-2);
 		min-width: 0;
@@ -580,8 +599,10 @@
 
 	.app-shell__command-input {
 		display: flex;
+		flex: 0 1 auto;
 		align-items: center;
 		width: min(23rem, 45vw);
+		min-width: var(--pau-size-row-md);
 		height: var(--pau-size-row-md);
 		padding-inline: var(--pau-space-3);
 		border: 1px solid var(--shell-border);
@@ -756,27 +777,29 @@
 	.app-shell__main {
 		grid-area: main;
 		display: grid;
-		grid-template-rows: auto minmax(0, 1fr);
+		grid-template-rows: minmax(0, 1fr);
 		min-width: 0;
 		overflow: hidden;
 		background: var(--shell-surface);
 	}
 
-	.app-shell__surface-bar {
-		position: sticky;
-		top: 0;
-		z-index: 2;
+	.app-shell__panel-toggles {
 		display: flex;
-		align-items: center;
-		gap: var(--pau-space-2);
-		height: var(--pau-size-row-lg);
-		padding-inline: var(--pau-space-3);
-		border-bottom: 1px solid var(--shell-border);
-		background: var(--shell-surface);
+		flex: none;
+		gap: var(--pau-space-1);
 	}
 
-	.app-shell__context-toggle {
-		display: none;
+	.app-shell__panel-toggles .app-shell__icon-button {
+		display: grid;
+		width: var(--pau-size-row-md);
+		height: var(--pau-size-row-md);
+		border-radius: var(--pau-radius-control);
+	}
+
+	/* An open pane shows as a pressed toggle, as in the design prototype. */
+	.app-shell__panel-toggles .app-shell__icon-button[aria-expanded='true'] {
+		color: var(--shell-accent);
+		background: var(--shell-surface-raised);
 	}
 
 	.app-shell__icon-button,
@@ -784,7 +807,6 @@
 		place-items: center;
 		width: 2.75rem;
 		height: var(--pau-size-target-touch);
-		margin-left: auto;
 		padding: 0;
 		color: var(--shell-muted);
 		background: transparent;
@@ -801,9 +823,11 @@
 	.app-shell__connection {
 		display: flex;
 		align-items: center;
+		flex: none;
 		gap: var(--pau-space-2);
 		margin: 0;
 		color: var(--shell-danger);
+		white-space: nowrap;
 		font-size: var(--pau-type-xs);
 	}
 
@@ -924,11 +948,6 @@
 
 		.app-shell__resizer--context {
 			display: none;
-		}
-
-		.app-shell__context-toggle {
-			display: grid;
-			margin-left: 0;
 		}
 
 		.app-shell__context-rail {

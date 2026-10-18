@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- The rail and inspector toggles and the disconnected status sit in the top bar,
+  and the task area gains the height of the old toolbar strip.
 - Pau shows what it is doing while it starts and explains a startup failure with
   a next step. If Pi isn't ready, the Sessions view shows the command that fixes
   it.

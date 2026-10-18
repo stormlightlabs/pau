@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import ApplicationShellDemo from '../stories/ApplicationShellDemo.svelte';
+import KeyboardShortcutsDemo from '../stories/KeyboardShortcutsDemo.svelte';
 import { THEMES, UI_FONTS, type ThemeName, type UiFontName } from '../theme';
 
 test('toggles contextual and inspector rails', async () => {
@@ -17,6 +18,52 @@ test('toggles contextual and inspector rails', async () => {
 
 	await userEvent.click(navigationToggle);
 	await expect.element(navigationToggle).toHaveAttribute('aria-expanded', 'true');
+});
+
+test('puts the panel toggles and disconnected status in the top bar', async () => {
+	await page.viewport(1440, 900);
+	await render(ApplicationShellDemo, { disconnected: true });
+
+	const topBar = page.getByRole('banner');
+	await expect.element(topBar.getByRole('button', { name: 'Hide navigation' })).toBeVisible();
+	await expect.element(topBar.getByRole('button', { name: 'Hide inspector' })).toBeVisible();
+	await expect.element(topBar.getByRole('status')).toHaveTextContent('Disconnected');
+	await expect.element(topBar.getByRole('button', { name: 'Search or run a command' })).toHaveTextContent('⌘K');
+});
+
+test('starts the task surface directly below the top bar', async () => {
+	await page.viewport(1440, 900);
+	await render(ApplicationShellDemo);
+
+	const bar = page.getByRole('banner').element().getBoundingClientRect();
+	const content = page.getByRole('region', { name: 'Main surface content' }).element().getBoundingClientRect();
+	expect(content.top).toBe(bar.bottom);
+});
+
+test('hides and shows the rail column from the top bar in a wide window', async () => {
+	await page.viewport(1440, 900);
+	await render(ApplicationShellDemo);
+
+	const rail = page.getByRole('complementary', { name: 'Workspaces' });
+	await userEvent.click(page.getByRole('button', { name: 'Hide navigation' }));
+	await expect.element(rail).not.toBeInTheDocument();
+
+	const show = page.getByRole('button', { name: 'Show navigation' });
+	await expect.element(show).toHaveAttribute('aria-expanded', 'false');
+	await userEvent.click(show);
+	await expect.element(rail).toBeVisible();
+});
+
+test('names each panel shortcut in the toggle tooltip', async () => {
+	await page.viewport(1440, 900);
+	await render(KeyboardShortcutsDemo, { platform: 'mac' });
+
+	await expect
+		.element(page.getByRole('button', { name: 'Hide navigation' }))
+		.toHaveAttribute('title', 'Hide navigation (⌘B)');
+	await expect
+		.element(page.getByRole('button', { name: 'Hide inspector' }))
+		.toHaveAttribute('title', 'Hide inspector (⌥⌘B)');
 });
 
 test.each(Object.keys(THEMES) as ThemeName[])('renders the %s theme contract', async (theme) => {

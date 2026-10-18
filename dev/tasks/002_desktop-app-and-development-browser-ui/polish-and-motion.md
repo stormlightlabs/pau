@@ -370,24 +370,6 @@ Verification:
 - Component-test that a long name at the minimum rail width renders one line
   with an ellipsis and keeps its full accessible name.
 
-### 2.254 Top app bar controls
-
-Status: planned
-Blocked by: none
-
-The inspector toggle sits alone in a 32px strip below the top app bar on every
-view while the right half of the top bar is empty. `system.md` puts rail and
-inspector toggles in the top app bar, and the prototype shows them beside the
-command field with its ⌘K hint. Move the rail and inspector toggles and the
-disconnected indicator into the top bar, show the ⌘K hint on the command
-field, and remove the strip so the task surface gains the height.
-
-Verification:
-
-- Component-test that the toggles and the disconnected indicator render in
-  the top bar and that the task surface starts directly below it.
-- Screenshot the session, Files, and terminal views at 1440px and 900px.
-
 ### 2.255 Dialog chrome
 
 Status: planned

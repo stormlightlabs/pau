@@ -77,7 +77,13 @@ export const InspectorClosed: Story = { args: { inspectorOpen: false } };
 
 export const LongContent: Story = { args: { longContent: true } };
 
-export const Disconnected: Story = { args: { disconnected: true } };
+export const Disconnected: Story = {
+	args: { disconnected: true },
+	play: async ({ canvasElement }) => {
+		const topBar = within(canvasElement.querySelector<HTMLElement>('.app-shell__command-bar')!);
+		await expect(topBar.getByRole('status')).toHaveTextContent('Disconnected');
+	}
+};
 
 export const NarrowLayout: Story = {
 	parameters: { viewport: { defaultViewport: 'narrow' } },
@@ -127,6 +133,18 @@ export const NarrowRailWithFullMotion: Story = {
 };
 
 const wide = { viewport: { defaultViewport: 'wide' } };
+
+export const RailToggleInTopBar: Story = {
+	parameters: wide,
+	play: async ({ canvasElement }) => {
+		const topBar = within(canvasElement.querySelector<HTMLElement>('.app-shell__command-bar')!);
+
+		await userEvent.click(topBar.getByRole('button', { name: 'Hide navigation' }));
+		await expect(within(canvasElement).queryByRole('complementary', { name: 'Workspaces' })).not.toBeInTheDocument();
+		await userEvent.click(topBar.getByRole('button', { name: 'Show navigation' }));
+		await expect(within(canvasElement).getByRole('complementary', { name: 'Workspaces' })).toBeVisible();
+	}
+};
 
 export const ResizeByKeyboard: Story = {
 	parameters: wide,

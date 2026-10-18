@@ -13,7 +13,7 @@ deliverable, and blocker lists may name units in any area file.
 - [Terminal and shell](terminal-and-shell.md): 13 units
 - [Process recovery](process-recovery.md): 5 units
 - [Editors](editors.md): 9 units
-- [Workspaces and navigation](workspaces-and-navigation.md): 16 units
+- [Workspaces and navigation](workspaces-and-navigation.md): 18 units
 - [Sessions](sessions.md): 23 units
 - [Review](review.md): 4 units
 - [Polish and motion](polish-and-motion.md): 15 units

@@ -634,6 +634,11 @@
 		return status === 'waiting' ? 'waiting' : status === 'failed' ? 'failed' : 'unread';
 	}
 
+	/** The header reports compaction as the state, so it never reads Ready while Compact is busy. */
+	const headerCompacting = $derived(compacting && ['idle', 'running'].includes(activeSession?.status ?? ''));
+	const headerStatus = $derived(headerCompacting ? 'running' : (activeSession?.status ?? 'idle'));
+	const headerStatusLabel = $derived(headerCompacting ? 'Compacting…' : statusLabel(activeSession?.status ?? 'idle'));
+
 	function statusLabel(status: SessionViewModel['status']): string {
 		return {
 			starting: 'Starting',
@@ -1986,18 +1991,23 @@
 					<h1 id="session-title">{activeSession.title}</h1>
 				</div>
 				<div class="session-view__header-actions">
+					<div class={`session-view__status session-view__status--${activeSession.status}`}>
+						<SessionStatusMark status={headerStatus} label={headerStatusLabel} />
+						<span aria-hidden="true">{headerStatusLabel}</span>
+					</div>
 					{#if canCompact}
 						{@const compactReason = compactUnavailableReason(activeSession, disconnected, compacting)}
 						<div class="session-compact">
 							<button
 								type="button"
-								class="session-view__stop"
+								class="session-view__stop session-view__action"
 								aria-expanded={compactOpen}
+								aria-busy={compacting}
 								aria-controls="compact-panel"
 								disabled={compactReason !== undefined}
 								title={compactReason}
 								onclick={() => (compactOpen = !compactOpen)}>
-								{compacting ? 'Compacting…' : 'Compact'}
+								Compact
 							</button>
 							{#if compactOpen && compactReason === undefined}
 								<form
@@ -2024,12 +2034,12 @@
 							{/if}
 						</div>
 					{/if}
-					<div class={`session-view__status session-view__status--${activeSession.status}`}>
-						<SessionStatusMark status={activeSession.status} label={statusLabel(activeSession.status)} />
-						<span aria-hidden="true">{statusLabel(activeSession.status)}</span>
-					</div>
 					{#if activeSession.capabilities.stop && ['idle', 'running', 'waiting'].includes(activeSession.status)}
-						<button type="button" class="session-view__stop" disabled={disconnected} onclick={() => void stop()}>
+						<button
+							type="button"
+							class="session-view__stop session-view__action"
+							disabled={disconnected}
+							onclick={() => void stop()}>
 							Stop
 						</button>
 					{/if}
@@ -2788,6 +2798,17 @@
 		cursor: pointer;
 	}
 
+	/* Header actions stay quiet: no border until hover or focus. */
+	.session-view__action {
+		color: var(--pau-text-muted);
+		border-color: transparent;
+	}
+
+	.session-view__action:hover:not(:disabled) {
+		color: var(--pau-text);
+		border-color: var(--pau-border);
+	}
+
 	.session-view__stop:disabled,
 	.session-view__retry:disabled {
 		color: var(--pau-text-muted);
@@ -2823,8 +2844,11 @@
 		align-items: center;
 		gap: var(--pau-space-2);
 		flex: none;
+		/* Fits the longest label so the actions beside it never move. */
+		width: 7.5rem;
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
+		white-space: nowrap;
 	}
 
 	.session-view__notices {

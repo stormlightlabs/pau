@@ -571,7 +571,8 @@ export const CompactingManually: Story = {
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
 		await expect(canvas.getByText('Compacting the conversation…', { selector: 'p' })).toBeVisible();
-		await expect(canvas.getByRole('button', { name: 'Compacting…' })).toBeDisabled();
+		await expect(canvas.getByRole('button', { name: 'Compact' })).toBeDisabled();
+		await expect(canvas.getByRole('img', { name: 'Compacting…' })).toBeVisible();
 		await expect(canvas.getByRole('textbox', { name: 'Prompt' })).toBeDisabled();
 		await expect(canvas.getByText(/You can send a prompt when it finishes/)).toBeVisible();
 	}
@@ -581,7 +582,8 @@ export const CompactingAutomatically: Story = {
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
 		await expect(canvas.getByText(/because the context is nearly full/)).toBeVisible();
-		await expect(canvas.getByRole('button', { name: 'Compacting…' })).toBeDisabled();
+		await expect(canvas.getByRole('button', { name: 'Compact' })).toBeDisabled();
+		await expect(canvas.getByRole('img', { name: 'Compacting…' })).toBeVisible();
 		// Steering still queues behind the compaction.
 		const prompt = canvas.getByRole('textbox', { name: 'Prompt' });
 		await expect(prompt).toBeEnabled();

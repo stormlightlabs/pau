@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- The session header keeps its status, Compact, and Stop in place as the state
+  changes, and shows "Compacting…" in the status while compaction runs.
 - Long workspace and session names in a narrow rail truncate with an ellipsis,
   and hovering shows the full name.
 - Session rows in the rail are tighter, and the selected session highlights

@@ -222,24 +222,6 @@ Verification:
   query emulated.
 - Check every shipped theme in Storybook.
 
-### 2.249 Session header actions
-
-Status: planned
-Blocked by: none
-
-The header shows Compact, then the status label, then Stop, and the status
-label's width moves the buttons by up to 80px between Starting, Running,
-Ready, and Needs you. While compacting, the Compact button reads
-"Compacting…" but the status still says Ready. Order the header as status
-with a fixed-width slot and elapsed time first, then Compact and Stop as quiet
-buttons, and reflect compaction in the status label.
-
-Verification:
-
-- Component-test that the Stop button's position is the same across the
-  running, idle, waiting, and compacting fixtures.
-- Screenshot the header in each session state at 1440px.
-
 ### 2.250 Primary action consistency
 
 Status: planned

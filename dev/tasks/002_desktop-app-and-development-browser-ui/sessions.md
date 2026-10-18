@@ -143,8 +143,9 @@ Verification:
 Status: planned
 Blocked by: 2.221
 
-Show elapsed time for compaction and session start, and the attempt number and
-next attempt time for automatic retries.
+Show elapsed time for a running turn in the session header's status slot and
+for compaction and session start, and the attempt number and next attempt time
+for automatic retries.
 
 Verification:
 

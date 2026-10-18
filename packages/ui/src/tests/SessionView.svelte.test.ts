@@ -85,6 +85,21 @@ test('exposes tool activity and disabled stopped controls', async () => {
 	await expect.element(page.getByRole('button', { name: /Send prompt/ })).toBeDisabled();
 });
 
+test('toggles every tool row with Ctrl+O and keeps a row the operator opened', async () => {
+	await render(SessionView, { workspaces: sessionFixtures.stopped, activeSessionId: 'session-stopped' });
+	const readOutput = page.getByLabelText('read output');
+
+	await expect.element(readOutput).not.toBeInTheDocument();
+	await userEvent.click(page.getByText('src/diff/gutter.ts'));
+	await expect.element(readOutput).toHaveTextContent('212 lines');
+
+	await userEvent.keyboard('{Control>}o{/Control}');
+	await expect.element(page.getByLabelText('bash output')).toHaveTextContent('38 passed');
+	await userEvent.keyboard('{Control>}o{/Control}');
+	await expect.element(readOutput).not.toBeInTheDocument();
+	await expect.element(page.getByLabelText('bash output')).not.toBeInTheDocument();
+});
+
 test('shows the loading state before sessions arrive', async () => {
 	await render(SessionView, { workspaces: [], loading: true });
 

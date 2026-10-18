@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- Tool calls in the transcript show bash commands with their output, exit code,
+  and duration, read ranges, edit diffs, and write previews. Press Ctrl+O to
+  expand or collapse all of them.
 - Assistant messages render as Markdown, with headings, lists, tables, links,
   and code blocks in the code font.
 - Streaming replies render more smoothly because transcript updates are applied

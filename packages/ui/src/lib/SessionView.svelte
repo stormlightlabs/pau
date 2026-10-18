@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '../styles/tokens.css';
 	import { onDestroy } from 'svelte';
-	import { SvelteSet } from 'svelte/reactivity';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import ApplicationShell, { type ShellNavItem } from './ApplicationShell.svelte';
 	import {
 		historyLimit,
@@ -22,6 +22,7 @@
 	import SessionPicker from './SessionPicker.svelte';
 	import SessionResourceSummary from './SessionResourceSummary.svelte';
 	import SessionTree from './SessionTree.svelte';
+	import ToolCallView from './ToolCallView.svelte';
 	import type { ProcessResourceSnapshot } from './types/resource-monitoring';
 	import type {
 		CommandOption,
@@ -191,6 +192,8 @@
 	const historyRequested = new SvelteSet<string>();
 	let commands = $state<Record<string, CommandOption[]>>({});
 	const commandsRequested = new SvelteSet<string>();
+	/** Tool rows the operator opened or closed, keyed by tool call ID. */
+	const toolDisclosures = new SvelteMap<string, boolean>();
 	let commandSelected = $state(0);
 	/** Whether the user typed the draft, so a recalled `/prompt` does not open completion. */
 	let draftTyped = $state(false);
@@ -749,8 +752,24 @@
 		void submitPrompt();
 	}
 
-	function toolStatus(tool: TranscriptTool): string {
-		return tool.status === 'running' ? 'In progress' : tool.status === 'failed' ? 'Failed' : 'Complete';
+	/**
+	 * Whether a tool row shows its body. An operator choice, from a click or
+	 * Ctrl+O, wins. Otherwise a row stays open while it runs, while its turn
+	 * runs, and after it fails, so finished output does not collapse under
+	 * the reader before the turn ends.
+	 */
+	function toolOpen(tool: TranscriptTool): boolean {
+		return toolDisclosures.get(tool.id) ?? (tool.status !== 'complete' || activeSession?.status === 'running');
+	}
+
+	/** Ctrl+O opens every tool row in the session, or closes them all when all are open. */
+	function handleWindowKeydown(event: KeyboardEvent): void {
+		if (!event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'o') return;
+		const tools = activeSession?.transcript.filter((entry) => entry.kind === 'tool') ?? [];
+		if (tools.length === 0) return;
+		event.preventDefault();
+		const next = tools.some((tool) => !toolOpen(tool));
+		for (const tool of tools) toolDisclosures.set(tool.id, next);
 	}
 
 	function denialTitle(denial: SandboxDenial): string {
@@ -773,6 +792,8 @@
 		}[denial.reason];
 	}
 </script>
+
+<svelte:window onkeydown={handleWindowKeydown} />
 
 <ApplicationShell
 	workspaceName={activeWorkspace?.name ?? 'Workspaces'}
@@ -1157,12 +1178,10 @@
 								<p>{entry.body}</p>
 							</details>
 						{:else if entry.kind === 'tool'}
-							<details class={`session-tool session-tool--${entry.status}`} open={entry.status !== 'complete'}>
-								<summary>
-									<span>{entry.name}</span><code>{entry.detail}</code><small>{toolStatus(entry)}</small>
-								</summary>
-								{#if entry.result}<pre>{entry.result}</pre>{/if}
-							</details>
+							<ToolCallView
+								tool={entry}
+								open={toolOpen(entry)}
+								onToggle={(open) => toolDisclosures.set(entry.id, open)} />
 						{:else if entry.kind === 'compaction'}
 							<details class="session-compaction" aria-label="Compacted context">
 								<summary>
@@ -1716,8 +1735,7 @@
 		color: var(--pau-text-muted);
 	}
 
-	.session-thinking summary,
-	.session-tool summary {
+	.session-thinking summary {
 		min-height: var(--pau-size-row-md);
 		cursor: pointer;
 	}
@@ -1725,52 +1743,6 @@
 	.session-thinking p {
 		padding-left: var(--pau-space-4);
 		font-size: var(--pau-type-sm);
-	}
-
-	.session-tool {
-		border-left: 1px solid var(--pau-border);
-	}
-
-	/* Consecutive tool calls read as one compact block under a shared rule. */
-	.session-tool + .session-tool {
-		margin-top: calc(-1 * var(--pau-space-5));
-	}
-
-	.session-tool summary {
-		display: grid;
-		grid-template-columns: 4rem minmax(0, 1fr) auto;
-		align-items: center;
-		gap: var(--pau-space-3);
-		padding: var(--pau-space-1) var(--pau-space-3);
-		color: var(--pau-text-muted);
-		list-style-position: outside;
-	}
-
-	.session-tool summary::marker {
-		color: var(--pau-info);
-	}
-
-	.session-tool--failed summary::marker {
-		color: var(--pau-danger);
-	}
-
-	.session-tool code,
-	.session-tool pre {
-		color: var(--pau-text);
-		font-family: var(--pau-font-code);
-		font-size: var(--pau-type-xs);
-		font-variant-ligatures: none;
-	}
-
-	.session-tool pre {
-		margin: 0;
-		padding: var(--pau-space-2) var(--pau-space-4) var(--pau-space-3);
-		overflow: auto;
-		white-space: pre-wrap;
-	}
-
-	.session-tool small {
-		font-size: var(--pau-type-xs);
 	}
 
 	.session-compaction {
@@ -2190,14 +2162,6 @@
 			align-items: start;
 		}
 
-		.session-tool summary {
-			grid-template-columns: 3.5rem minmax(0, 1fr);
-		}
-
-		.session-tool small {
-			grid-column: 2;
-		}
-
 		.session-composer {
 			grid-template-areas:
 				'queue'
@@ -2218,7 +2182,6 @@
 
 	@media (pointer: coarse) {
 		.session-thinking summary,
-		.session-tool summary,
 		.session-view__stop,
 		.session-view__retry,
 		.session-composer__actions button {

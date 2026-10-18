@@ -861,25 +861,10 @@ Verification:
 
 ## Transcript
 
-### 2.193 Tool call views
-
-Status: planned
-Blocked by: none
-
-Summarize each tool call on one row and expand it to a diff for edits and
-writes, the command output for `bash`, and the path for `read`, with Ctrl+O
-toggling all rows.
-
-Verification:
-
-- Component-test each tool type, a running call, a failed call, oversized
-  output, and the text fallback.
-- Storybook stories for each tool type.
-
 ### 2.194 Stable transcript disclosures
 
 Status: planned
-Blocked by: 2.193
+Blocked by: none
 
 Collapse finished tool blocks when the turn ends, never while it runs, and leave
 tool and thinking blocks that the operator opened or closed as they left them.

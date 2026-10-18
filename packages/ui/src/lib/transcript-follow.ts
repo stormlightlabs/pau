@@ -56,9 +56,13 @@ export function scrollToLatest(node: HTMLElement): void {
  * explicitly after every size change of the container or its content, which
  * runs before the browser paints. Scrolling away from the bottom stops
  * following. Returning to the bottom resumes it. A change of `key` starts at
- * the bottom. Content above the reading position is never moved while
- * following is off. Returning to a key restores the follow mode or reading
- * anchor it had when it was last shown, held in memory only.
+ * the bottom. Returning to a key restores the follow mode or reading anchor
+ * it had when it was last shown, held in memory only.
+ *
+ * While following is off, the first entry in view keeps its position when
+ * content above it grows or shrinks, such as a tool block that finishes or
+ * collapses. The action turns off native scroll anchoring and restores that
+ * entry itself, so every engine behaves the same.
  *
  * The first child of the node must wrap the content, so growth is observable.
  */
@@ -67,6 +71,18 @@ export function followTranscript(node: HTMLElement, options: TranscriptFollowOpt
 	let following = true;
 	/** Per key: the reading anchor, or undefined while following the newest content. */
 	const positions = new Map<string | undefined, ReadingAnchor | undefined>();
+	/**
+	 * The scroll position when the current anchor was read. A different
+	 * position means the operator scrolled and the scroll event has not run
+	 * yet, so the anchor is stale.
+	 */
+	let anchoredAt = node.scrollTop;
+	node.style.overflowAnchor = 'none';
+
+	function captureAnchor() {
+		positions.set(key, following ? undefined : readAnchor(node));
+		anchoredAt = node.scrollTop;
+	}
 
 	function setFollowing(next: boolean) {
 		if (next === following) return;
@@ -76,12 +92,18 @@ export function followTranscript(node: HTMLElement, options: TranscriptFollowOpt
 
 	function onScroll() {
 		setFollowing(atBottom(node));
-		positions.set(key, following ? undefined : readAnchor(node));
+		captureAnchor();
 	}
 
 	const resize = new ResizeObserver(() => {
-		if (following) pin(node);
-		else setFollowing(atBottom(node));
+		if (following) {
+			pin(node);
+			return;
+		}
+		const anchor = positions.get(key);
+		if (anchor && node.scrollTop === anchoredAt) restoreAnchor(node, anchor);
+		setFollowing(atBottom(node));
+		captureAnchor();
 	});
 	if (node.firstElementChild) resize.observe(node.firstElementChild);
 	resize.observe(node);

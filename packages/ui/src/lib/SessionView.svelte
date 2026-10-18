@@ -32,6 +32,7 @@
 	import SessionPicker from './SessionPicker.svelte';
 	import SessionResourceSummary from './SessionResourceSummary.svelte';
 	import SessionTree from './SessionTree.svelte';
+	import { openByDefault } from './transcript-disclosure';
 	import { followTranscript, scrollToLatest as scrollTranscriptToLatest } from './transcript-follow';
 	import ToolCallView from './ToolCallView.svelte';
 	import TranscriptSearch from './TranscriptSearch.svelte';
@@ -55,7 +56,7 @@
 		SessionViewModel,
 		SessionWorkspace,
 		TranscriptCompaction,
-		TranscriptTool
+		TranscriptEntry
 	} from './types/session';
 
 	type Props = {
@@ -329,8 +330,8 @@
 	const historyRequested = new SvelteSet<string>();
 	let commands = $state<Record<string, CommandOption[]>>({});
 	const commandsRequested = new SvelteSet<string>();
-	/** Tool rows the operator opened or closed, keyed by tool call ID. */
-	const toolDisclosures = new SvelteMap<string, boolean>();
+	/** Tool and thinking blocks the operator opened or closed, keyed by entry ID. */
+	const disclosures = new SvelteMap<string, boolean>();
 	let commandSelected = $state(0);
 	/** Whether the user typed the draft, so a recalled `/prompt` does not open completion. */
 	let draftTyped = $state(false);
@@ -1093,17 +1094,21 @@
 		void submitPrompt();
 	}
 
+	let defaultOpen = $derived(openByDefault(activeSession?.transcript ?? [], activeSession?.status));
+
 	/**
-	 * Whether a tool row shows its body. An operator choice, from a click or
-	 * Ctrl+O, wins. Otherwise a row stays open while it runs, while its turn
-	 * runs, and after it fails, so finished output does not collapse under
-	 * the reader before the turn ends.
+	 * Whether a tool or thinking block shows its body. An operator choice, from
+	 * a click or Ctrl+O, wins over {@link openByDefault}.
 	 */
-	function toolOpen(tool: TranscriptTool): boolean {
-		return toolDisclosures.get(tool.id) ?? (tool.status !== 'complete' || activeSession?.status === 'running');
+	function entryOpen(entry: TranscriptEntry): boolean {
+		return disclosures.get(entry.id) ?? defaultOpen.has(entry.id);
 	}
 
-	/** Ctrl+O opens every tool row in the session, or closes them all when all are open. */
+	/** Records a disclosure change only when it differs from what the host shows, so host changes are not kept. */
+	function recordDisclosure(entry: TranscriptEntry, open: boolean): void {
+		if (open !== entryOpen(entry)) disclosures.set(entry.id, open);
+	}
+
 	/**
 	 * Window shortcuts. Ctrl+O toggles tool output. Ctrl+End jumps to the latest
 	 * output while the Jump to latest control is shown, except in text fields
@@ -1126,8 +1131,8 @@
 		const tools = activeSession?.transcript.filter((entry) => entry.kind === 'tool') ?? [];
 		if (tools.length === 0) return;
 		event.preventDefault();
-		const next = tools.some((tool) => !toolOpen(tool));
-		for (const tool of tools) toolDisclosures.set(tool.id, next);
+		const next = tools.some((tool) => !entryOpen(tool));
+		for (const tool of tools) disclosures.set(tool.id, next);
 	}
 
 	function denialTitle(denial: SandboxDenial): string {
@@ -1575,7 +1580,8 @@
 							{:else if entry.kind === 'thinking'}
 								<details
 									class="session-thinking"
-									open={!entry.complete}
+									open={entryOpen(entry)}
+									ontoggle={(event) => recordDisclosure(entry, event.currentTarget.open)}
 									data-entry-id={entry.id}
 									data-found={entry.id === foundEntryKey || undefined}>
 									<summary>{entry.complete ? 'Thinking' : 'Thinking…'}</summary>
@@ -1584,9 +1590,9 @@
 							{:else if entry.kind === 'tool'}
 								<ToolCallView
 									tool={entry}
-									open={toolOpen(entry)}
+									open={entryOpen(entry)}
 									found={entry.id === foundEntryKey}
-									onToggle={(open) => toolDisclosures.set(entry.id, open)} />
+									onToggle={(open) => disclosures.set(entry.id, open)} />
 							{:else if entry.kind === 'compaction'}
 								<details
 									class="session-compaction"

@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- Finished tool and thinking blocks collapse when the turn ends instead of
+  mid-turn. Blocks you open or close stay that way, and the transcript no longer
+  jumps when a block above your reading position changes size.
 - Focus rings look the same on every control and are no longer cut off inside
   scrolling panels.
 - Added keyboard shortcuts for sessions, panels, navigation, and page zoom, a

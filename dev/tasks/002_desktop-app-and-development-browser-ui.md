@@ -804,22 +804,6 @@ Verification:
 
 ## Transcript
 
-### 2.194 Stable transcript disclosures
-
-Status: planned
-Blocked by: none
-
-Collapse finished tool blocks when the turn ends, never while it runs, and leave
-tool and thinking blocks that the operator opened or closed as they left them.
-
-Verification:
-
-- Component-test a turn that ends with finished blocks, a manually opened block
-  that stays open after the turn, a manually closed block that receives output,
-  and Ctrl+O after the turn.
-- Confirm the first visible entry does not move when a block above it finishes
-  or collapses.
-
 ### 2.197 Prompt navigation
 
 Status: planned
@@ -1051,7 +1035,7 @@ Verification:
 ### 2.222 Disclosure motion
 
 Status: planned
-Blocked by: 2.194
+Blocked by: none
 
 Animate tool and thinking block expansion for finished blocks shorter than one
 viewport, and switch instantly otherwise.
@@ -1324,7 +1308,7 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.175, 2.184, 2.185, 2.194, 2.197, 2.219
+Blocked by: 2.156, 2.175, 2.184, 2.185, 2.197, 2.219
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

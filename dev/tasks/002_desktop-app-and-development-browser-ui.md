@@ -782,7 +782,7 @@ Verification:
 ### 2.185 Built-in Pi slash commands
 
 Status: planned
-Blocked by: 2.172, 2.198
+Blocked by: 2.172
 
 Complete and run Pi's built-in slash commands in the composer by mapping each to
 its Pau action, and explain the commands that need vanilla Pi. `/fork` opens
@@ -863,18 +863,6 @@ Verification:
 
 - Component-test moving between prompts, stopping at the first and last prompt,
   and leaving follow mode, with reduced motion on and off.
-
-### 2.198 Transcript copy
-
-Status: planned
-Blocked by: none
-
-Copy a transcript message or one of its code blocks to the clipboard.
-
-Verification:
-
-- Component-test copying a message, a code block, and a streaming message, and
-  a clipboard failure.
 
 ### 2.200 Session scroll restoration
 

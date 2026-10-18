@@ -1,4 +1,5 @@
 <script lang="ts">
+	import CopyButton from './CopyButton.svelte';
 	import { diffLineKind, outputWindow, toolOutputLineStep } from './tool-call-format';
 
 	type Props = {
@@ -25,6 +26,7 @@
 {/snippet}
 
 <div class="tool-output">
+	<CopyButton class="tool-output__copy" text={lines.join('\n')} label="Copy output" />
 	{#if from === 'tail' && visible.hidden > 0}{@render more()}{/if}
 	{#if diff}
 		<pre aria-label={label}>{#each visible.lines as line, index (index)}<span
@@ -37,6 +39,28 @@
 </div>
 
 <style>
+	.tool-output {
+		position: relative;
+	}
+
+	.tool-output :global(.tool-output__copy) {
+		position: absolute;
+		top: 0;
+		right: 0;
+		opacity: 0;
+	}
+
+	.tool-output:hover :global(.tool-output__copy),
+	.tool-output:focus-within :global(.tool-output__copy) {
+		opacity: 1;
+	}
+
+	@media (hover: none) {
+		.tool-output :global(.tool-output__copy) {
+			opacity: 1;
+		}
+	}
+
 	.tool-output pre {
 		margin: 0;
 		overflow: auto;

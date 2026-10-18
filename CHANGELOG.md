@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- Copy any message, code block, or tool output from the transcript with one
+  click. A confirmation shows when the copy works, and a clear message shows
+  when the clipboard is unavailable.
 - Added a Motion setting (System, Reduce, Full) on the Diagnostics page that
   overrides the system reduced-motion preference and syncs across windows.
 - Screen readers hear when a response starts and finishes, when a tool call

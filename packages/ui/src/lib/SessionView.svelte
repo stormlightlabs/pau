@@ -13,6 +13,8 @@
 	} from './composer-history';
 	import { encodeImage, imageAccept, imageRejection, type ComposerImage, type PromptImage } from './composer-images';
 	import { announcementSnapshot, describeChanges, type AnnouncementSnapshot } from './transcript-announcements';
+	import { copyText, findMessage, lastAssistantReply, type CopyResult } from './clipboard';
+	import CopyButton from './CopyButton.svelte';
 	import CommandCompletion from './CommandCompletion.svelte';
 	import { commandName, commandQuery, filterCommands } from './command-completion';
 	import ExtensionUi from './ExtensionUi.svelte';
@@ -222,6 +224,30 @@
 	/** Scrolls the transcript to its newest content and resumes following. */
 	export function scrollToLatest() {
 		if (transcriptElement) scrollTranscriptToLatest(transcriptElement);
+	}
+
+	/** Announces a copy through the status region so it is heard without moving focus. */
+	function announceCopy(result: CopyResult): void {
+		announcement = result.ok ? 'Copied' : result.error;
+	}
+
+	/**
+	 * Copies a message to the clipboard: the Markdown source of an assistant
+	 * message or the text of a user message. Returns undefined when the entry is
+	 * not a message of the active session.
+	 */
+	export async function copyMessage(entryId: string): Promise<CopyResult | undefined> {
+		const message = findMessage(activeSession?.transcript ?? [], entryId);
+		if (!message) return undefined;
+		const result = await copyText(message.body);
+		announceCopy(result);
+		return result;
+	}
+
+	/** Copies the newest assistant reply, for `/copy`. Returns undefined when there is none. */
+	export async function copyLastReply(): Promise<CopyResult | undefined> {
+		const reply = lastAssistantReply(activeSession?.transcript ?? []);
+		return reply ? copyMessage(reply.id) : undefined;
 	}
 
 	/** Size of the transcript tail, which changes when entries arrive or the last entry streams more text. */
@@ -1443,6 +1469,11 @@
 									data-entry-id={entry.id}
 									data-found={entry.id === foundEntryKey || undefined}>
 									<h2>{entry.label ?? (entry.role === 'user' ? 'You' : activeSession.agent)}</h2>
+									<CopyButton
+										class="session-message__copy"
+										text={entry.body}
+										label={entry.role === 'user' ? 'Copy your message' : 'Copy reply'}
+										onResult={announceCopy} />
 									{#if entry.role === 'assistant'}
 										<Markdown text={entry.body} />
 									{:else}
@@ -2076,7 +2107,26 @@
 	}
 
 	.session-message {
+		position: relative;
 		max-width: 75ch;
+	}
+
+	.session-message :global(.session-message__copy) {
+		position: absolute;
+		top: 0;
+		right: 0;
+		opacity: 0;
+	}
+
+	.session-message:hover :global(.session-message__copy),
+	.session-message:focus-within :global(.session-message__copy) {
+		opacity: 1;
+	}
+
+	@media (hover: none) {
+		.session-message :global(.session-message__copy) {
+			opacity: 1;
+		}
 	}
 
 	/* Marks the entry a search selection scrolled to, then fades. */

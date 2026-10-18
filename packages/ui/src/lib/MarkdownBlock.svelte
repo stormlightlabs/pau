@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Token, Tokens } from 'marked';
+	import CopyButton from './CopyButton.svelte';
 	import { safeHref } from './markdown';
 
 	type Props = {
@@ -53,8 +54,11 @@
 		<p>{@render inline((node as Tokens.Paragraph).tokens)}</p>
 	{:else if node.type === 'code'}
 		{@const code = node as Tokens.Code}
-		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-		<pre data-language={code.lang || undefined} tabindex="0"><code>{code.text}</code></pre>
+		<div class="markdown__code">
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<pre data-language={code.lang || undefined} tabindex="0"><code>{code.text}</code></pre>
+			<CopyButton class="markdown__copy" text={code.text} label="Copy code" />
+		</div>
 	{:else if node.type === 'blockquote'}
 		<blockquote>
 			{#each (node as Tokens.Blockquote).tokens as child, index (index)}{@render block(child)}{/each}
@@ -185,6 +189,28 @@
 		font-family: var(--pau-font-code);
 		font-size: var(--pau-type-sm);
 		line-height: 1.55;
+	}
+
+	.markdown__code {
+		position: relative;
+	}
+
+	.markdown__code :global(.markdown__copy) {
+		position: absolute;
+		top: var(--pau-space-2);
+		right: var(--pau-space-2);
+		opacity: 0;
+	}
+
+	.markdown__code:hover :global(.markdown__copy),
+	.markdown__code:focus-within :global(.markdown__copy) {
+		opacity: 1;
+	}
+
+	@media (hover: none) {
+		.markdown__code :global(.markdown__copy) {
+			opacity: 1;
+		}
 	}
 
 	pre code {

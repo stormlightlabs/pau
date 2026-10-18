@@ -1,5 +1,6 @@
 import { page, userEvent } from 'vitest/browser';
-import { expect, test, vi } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
+import type { ComponentProps } from 'svelte';
 import { render } from 'vitest-browser-svelte';
 
 import { modelFixtures } from '../fixtures/models';
@@ -7,6 +8,22 @@ import { sessionFixtures } from '../fixtures/sessions';
 import ModelPicker from '../lib/ModelPicker.svelte';
 import SessionView from '../lib/SessionView.svelte';
 import type { SessionWorkspace } from '../lib/types/session';
+
+type PickerProps = ComponentProps<typeof ModelPicker>;
+
+const targets: HTMLElement[] = [];
+afterEach(() => {
+	for (const target of targets.splice(0)) target.remove();
+});
+
+/** Renders the picker low in the page, as the composer footer does, so its list has room to open upward. */
+function renderPicker(props: PickerProps) {
+	const target = document.createElement('div');
+	target.style.marginTop = '24rem';
+	document.body.append(target);
+	targets.push(target);
+	return render(ModelPicker, { target, props });
+}
 
 function withModelSelection(workspaces: SessionWorkspace[]): SessionWorkspace[] {
 	return workspaces.map((workspace) => ({
@@ -21,7 +38,7 @@ function withModelSelection(workspaces: SessionWorkspace[]): SessionWorkspace[] 
 test('selects a model and reloads the list', async () => {
 	const load = vi.fn(async () => modelFixtures.populated);
 	const onSelect = vi.fn();
-	await render(ModelPicker, { load, onSelect });
+	await renderPicker({ load, onSelect });
 
 	await userEvent.click(page.getByRole('button', { name: 'Model: Claude Sonnet 4.5' }));
 	await userEvent.click(page.getByRole('button', { name: /gpt-5/ }));
@@ -33,7 +50,7 @@ test('selects a model and reloads the list', async () => {
 
 test('keeps the list open and explains a rejected selection', async () => {
 	const onSelect = vi.fn().mockRejectedValue(new Error('Pi rejected the request: Model not found'));
-	await render(ModelPicker, { load: async () => modelFixtures.populated, onSelect });
+	await renderPicker({ load: async () => modelFixtures.populated, onSelect });
 
 	await userEvent.click(page.getByRole('button', { name: 'Model: Claude Sonnet 4.5' }));
 	await userEvent.click(page.getByRole('button', { name: /gpt-5/ }));
@@ -43,7 +60,7 @@ test('keeps the list open and explains a rejected selection', async () => {
 });
 
 test('explains an empty model list', async () => {
-	await render(ModelPicker, { load: async () => modelFixtures.empty, onSelect: vi.fn() });
+	await renderPicker({ load: async () => modelFixtures.empty, onSelect: vi.fn() });
 
 	await userEvent.click(page.getByRole('button', { name: 'Model: Model' }));
 
@@ -55,7 +72,7 @@ test('shows a load failure with a retry', async () => {
 		.fn()
 		.mockRejectedValueOnce(new Error('Pi did not answer.'))
 		.mockResolvedValue(modelFixtures.populated);
-	await render(ModelPicker, { load, onSelect: vi.fn() });
+	await renderPicker({ load, onSelect: vi.fn() });
 
 	await userEvent.click(page.getByRole('button', { name: 'Model: Model' }));
 	await expect.element(page.getByRole('alert')).toHaveTextContent('Pi did not answer.');
@@ -66,7 +83,7 @@ test('shows a load failure with a retry', async () => {
 
 test('stays closed and explains why when the agent cannot switch models', async () => {
 	const load = vi.fn(async () => modelFixtures.populated);
-	await render(ModelPicker, { load, onSelect: vi.fn(), supported: false, fallbackLabel: 'Sonnet' });
+	await renderPicker({ load, onSelect: vi.fn(), supported: false, fallbackLabel: 'Sonnet' });
 
 	const trigger = page.getByRole('button', { name: 'Model: Sonnet' });
 	await expect.element(trigger).toBeDisabled();

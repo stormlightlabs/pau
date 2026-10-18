@@ -186,15 +186,15 @@
 		 */
 		revealPath?: (path: string) => Promise<void>;
 		/**
-		 * Lists the models a session can use. With `onSelectModel`, the session
-		 * header offers a model picker. A rejected promise shows its message.
+		 * Lists the models a session can use. With `onSelectModel`, the composer
+		 * footer offers a model picker. A rejected promise shows its message.
 		 */
 		onLoadModels?: (sessionId: string) => Promise<ModelOption[]>;
 		/** Switches a session's model. A rejected promise shows its message in the picker. */
 		onSelectModel?: (sessionId: string, model: ModelOption) => void | Promise<void>;
 		/**
-		 * Sets a session's thinking level. With the model picker, the session header
-		 * offers a level control. A rejected promise shows its message beside it.
+		 * Sets a session's thinking level. With the model picker, the composer
+		 * footer offers a level control. A rejected promise shows its message beside it.
 		 */
 		onSelectThinkingLevel?: (sessionId: string, level: ThinkingLevel) => void | Promise<void>;
 		resourceSnapshot?: ProcessResourceSnapshot;
@@ -1980,28 +1980,6 @@
 					<h1 id="session-title">{activeSession.title}</h1>
 				</div>
 				<div class="session-view__header-actions">
-					{#if onLoadModels && onSelectModel}
-						{#key activeSession.id}
-							<ModelPicker
-								bind:this={modelPicker}
-								load={() => onLoadModels(activeSession.id)}
-								onSelect={(model) => onSelectModel(activeSession.id, model)}
-								supported={activeSession.capabilities.modelSelection ?? false}
-								unavailableReason={modelUnavailableReason(activeSession, disconnected)}
-								fallbackLabel={activeSession.model}
-								onLoaded={(models) => (currentModelReasoning = models.find((model) => model.current)?.reasoning)} />
-							{#if onSelectThinkingLevel}
-								<ThinkingLevelPicker
-									bind:this={thinkingPicker}
-									level={activeSession.thinkingLevel}
-									onSelect={(level) => onSelectThinkingLevel(activeSession.id, level)}
-									supported={activeSession.capabilities.thinkingLevel ?? false}
-									reasoning={currentModelReasoning}
-									unavailableReason={thinkingUnavailableReason(activeSession, disconnected)} />
-							{/if}
-						{/key}
-					{/if}
-					<ContextMeter usage={activeSession.usage} supported={activeSession.capabilities.usage ?? false} />
 					{#if canCompact}
 						{@const compactReason = compactUnavailableReason(activeSession, disconnected, compacting)}
 						<div class="session-compact">
@@ -2312,24 +2290,6 @@
 							event.preventDefault();
 							void submitPrompt();
 						}}>
-						{#if activeSession.status === 'running' && canQueue}
-							<div class="session-composer__queue">
-								<span aria-hidden="true">Send as</span>
-								<Select
-									label="Send as"
-									variant="quiet"
-									options={[
-										...(activeSession.capabilities.steer ? [{ value: 'steer' as const, label: 'Steer now' }] : []),
-										...(activeSession.capabilities.followUp
-											? [{ value: 'follow-up' as const, label: 'Follow up' }]
-											: [])
-									]}
-									value={activeQueue}
-									onChange={(next) => {
-										queue = next;
-									}} />
-							</div>
-						{/if}
 						{#if images.length > 0}
 							<ul class="session-composer__images" aria-label="Attached images">
 								{#each images as image (image.id)}
@@ -2387,44 +2347,83 @@
 								aria-describedby={composerUnavailable ? 'composer-unavailable' : undefined}
 								disabled={composerUnavailable !== undefined}></textarea>
 						</label>
-						<div class="session-composer__actions">
-							<input
-								bind:this={imagePicker}
-								class="session-view__sr-only"
-								type="file"
-								accept={imageAccept}
-								multiple
-								tabindex="-1"
-								aria-label="Image files"
-								onchange={(event) => {
-									attachImages(event.currentTarget.files ?? []);
-									event.currentTarget.value = '';
-								}} />
-							<button
-								type="button"
-								class="session-composer__attach"
-								disabled={composerUnavailable !== undefined}
-								onclick={() => imagePicker?.click()}>
-								Attach image
-							</button>
-							{#if activeSession.status === 'running' && activeSession.capabilities.interrupt}
+						<div class="session-composer__footer">
+							{#if activeSession.status === 'running' && canQueue}
+								<Select
+									label="Send as"
+									variant="quiet"
+									options={[
+										...(activeSession.capabilities.steer ? [{ value: 'steer' as const, label: 'Steer now' }] : []),
+										...(activeSession.capabilities.followUp
+											? [{ value: 'follow-up' as const, label: 'Follow up' }]
+											: [])
+									]}
+									value={activeQueue}
+									onChange={(next) => {
+										queue = next;
+									}} />
+							{/if}
+							{#if onLoadModels && onSelectModel}
+								{#key activeSession.id}
+									<ModelPicker
+										bind:this={modelPicker}
+										load={() => onLoadModels(activeSession.id)}
+										onSelect={(model) => onSelectModel(activeSession.id, model)}
+										supported={activeSession.capabilities.modelSelection ?? false}
+										unavailableReason={modelUnavailableReason(activeSession, disconnected)}
+										fallbackLabel={activeSession.model}
+										onLoaded={(models) => (currentModelReasoning = models.find((model) => model.current)?.reasoning)} />
+									{#if onSelectThinkingLevel}
+										<ThinkingLevelPicker
+											bind:this={thinkingPicker}
+											level={activeSession.thinkingLevel}
+											onSelect={(level) => onSelectThinkingLevel(activeSession.id, level)}
+											supported={activeSession.capabilities.thinkingLevel ?? false}
+											reasoning={currentModelReasoning}
+											unavailableReason={thinkingUnavailableReason(activeSession, disconnected)} />
+									{/if}
+								{/key}
+							{/if}
+							<ContextMeter usage={activeSession.usage} supported={activeSession.capabilities.usage ?? false} />
+							<div class="session-composer__actions">
+								<input
+									bind:this={imagePicker}
+									class="session-view__sr-only"
+									type="file"
+									accept={imageAccept}
+									multiple
+									tabindex="-1"
+									aria-label="Image files"
+									onchange={(event) => {
+										attachImages(event.currentTarget.files ?? []);
+										event.currentTarget.value = '';
+									}} />
 								<button
 									type="button"
-									class="session-composer__interrupt"
-									disabled={disconnected}
-									onclick={() => void interrupt()}>
-									Interrupt{#if interruptShortcut}
-										<kbd>{interruptShortcut}</kbd>{/if}
+									class="session-composer__attach"
+									disabled={composerUnavailable !== undefined}
+									onclick={() => imagePicker?.click()}>
+									Attach image
 								</button>
-							{/if}
-							<button type="submit" disabled={!draft.trim() || sending || composerUnavailable !== undefined}>
-								{sending
-									? 'Sending…'
-									: activeQueue === 'follow-up' && activeSession.status === 'running'
-										? 'Queue prompt'
-										: 'Send prompt'}
-								{#if submitShortcut}<kbd>{submitShortcut}</kbd>{/if}
-							</button>
+								{#if activeSession.status === 'running' && activeSession.capabilities.interrupt}
+									<button
+										type="button"
+										class="session-composer__interrupt"
+										disabled={disconnected}
+										onclick={() => void interrupt()}>
+										Interrupt{#if interruptShortcut}
+											<kbd>{interruptShortcut}</kbd>{/if}
+									</button>
+								{/if}
+								<button type="submit" disabled={!draft.trim() || sending || composerUnavailable !== undefined}>
+									{sending
+										? 'Sending…'
+										: activeQueue === 'follow-up' && activeSession.status === 'running'
+											? 'Queue prompt'
+											: 'Send prompt'}
+									{#if submitShortcut}<kbd>{submitShortcut}</kbd>{/if}
+								</button>
+							</div>
 						</div>
 						{#if unknownCommand !== undefined}
 							<p class="session-composer__hint">Not a known command. It will be sent as written.</p>
@@ -3163,24 +3162,15 @@
 		opacity: 0.5;
 	}
 
+	/*
+	 * The field always spans the composer. Delivery mode and the actions share
+	 * one footer row below it, so a narrow main column never squeezes the field.
+	 */
 	.session-composer {
 		display: grid;
-		grid-template-areas:
-			'queue queue'
-			'images images'
-			'commands commands'
-			'field actions'
-			'error error';
-		grid-template-columns: minmax(0, 1fr) auto;
-		grid-template-rows: auto auto;
+		grid-template-columns: minmax(0, 1fr);
 		background: var(--pau-surface);
 		border: 1px solid var(--pau-border);
-	}
-
-	.session-composer:focus-within {
-		border-color: var(--pau-focus);
-		outline: var(--pau-focus-width) solid var(--pau-focus);
-		outline-offset: var(--pau-focus-offset-inset);
 	}
 
 	/* The transcript scrolls, so rings sit inside the control to stay uncut. */
@@ -3196,7 +3186,6 @@
 	}
 
 	.session-composer__images {
-		grid-area: images;
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--pau-space-2);
@@ -3231,20 +3220,7 @@
 		cursor: pointer;
 	}
 
-	.session-composer__queue {
-		grid-area: queue;
-		display: flex;
-		align-items: center;
-		gap: var(--pau-space-2);
-		padding: var(--pau-space-2) var(--pau-space-3);
-		color: var(--pau-text-muted);
-		background: var(--pau-canvas);
-		border-bottom: 1px solid var(--pau-border);
-		font-size: var(--pau-type-xs);
-	}
-
 	.session-composer__commands {
-		grid-area: commands;
 		border-bottom: 1px solid var(--pau-border);
 	}
 
@@ -3253,10 +3229,15 @@
 	}
 
 	.session-composer__field {
-		grid-area: field;
 		display: flex;
 		align-items: start;
 		min-width: 0;
+	}
+
+	/* The ring marks the field, not the footer controls that share the composer. */
+	.session-composer__field:focus-within {
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset-inset);
 	}
 
 	.session-composer__field :global(.session-composer__prompt) {
@@ -3288,12 +3269,29 @@
 		cursor: not-allowed;
 	}
 
-	.session-composer__actions {
-		grid-area: actions;
+	/*
+	 * Controls wrap onto more lines when the row runs out, never the field.
+	 * Delivery mode, model, thinking, and context read as quiet options beside
+	 * the full-size actions. The delivery select names its mode, so it needs no
+	 * visible label.
+	 */
+	.session-composer__footer {
 		display: flex;
-		align-items: end;
+		flex-wrap: wrap;
+		align-items: center;
 		gap: var(--pau-space-2);
 		padding: var(--pau-space-2);
+		border-top: 1px solid var(--pau-border);
+		font-size: var(--pau-type-xs);
+	}
+
+	.session-composer__actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--pau-space-2);
+		margin-left: auto;
+		font-size: var(--pau-type-md);
 	}
 
 	.session-composer__actions button {
@@ -3336,7 +3334,6 @@
 	}
 
 	.session-composer__hint {
-		grid-column: 1 / -1;
 		margin: 0;
 		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--pau-text-muted);
@@ -3345,7 +3342,6 @@
 	}
 
 	.session-composer__error {
-		grid-area: error;
 		margin: 0;
 		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--pau-danger);
@@ -3384,23 +3380,6 @@
 	@media (max-width: 40rem) {
 		.session-view__header {
 			align-items: start;
-		}
-
-		.session-composer {
-			grid-template-areas:
-				'queue'
-				'field'
-				'actions'
-				'error';
-			grid-template-columns: 1fr;
-		}
-
-		.session-composer__actions {
-			grid-template-columns: 1fr;
-		}
-
-		.session-composer__actions {
-			align-items: stretch;
 		}
 	}
 

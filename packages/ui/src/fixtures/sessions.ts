@@ -1,4 +1,5 @@
 import type { SessionCapabilities, SessionViewModel, SessionWorkspace } from '../lib/types/session';
+import { usageFixtures } from './usage';
 
 const fullCapabilities = {
 	prompt: true,
@@ -149,6 +150,21 @@ export const sessionFixtures = {
 						steering: ['Keep the public API unchanged.'],
 						followUp: ['Add a regression test for soft-wrap.', 'Summarize the change for the changelog.']
 					}
+				})
+			]
+		}
+	],
+	/** A running session that reports usage and can switch models and thinking levels. */
+	modelControls: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [
+				session('running', {
+					title: 'Fix diff gutter',
+					thinkingLevel: 'high',
+					usage: usageFixtures.normal,
+					capabilities: { ...fullCapabilities, modelSelection: true, thinkingLevel: true, usage: true }
 				})
 			]
 		}

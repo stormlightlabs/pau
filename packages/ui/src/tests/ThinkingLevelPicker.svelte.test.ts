@@ -36,7 +36,7 @@ function withThinking(workspaces: SessionWorkspace[]): SessionWorkspace[] {
 	}));
 }
 
-function headerProps(models: ModelOption[] = modelFixtures.populated) {
+function composerProps(models: ModelOption[] = modelFixtures.populated) {
 	return { onLoadModels: async () => models, onSelectModel: vi.fn(), onSelectThinkingLevel: vi.fn() };
 }
 
@@ -100,34 +100,34 @@ test('is disabled and explained when the agent cannot change the level', async (
 	await expect.element(picker()).toHaveAccessibleDescription(/does not support changing the thinking level/);
 });
 
-test('the session header enables the control for an idle session on a reasoning model', async () => {
+test('the composer enables the control for an idle session on a reasoning model', async () => {
 	await render(SessionView, {
 		workspaces: withThinking(sessionFixtures.idle),
 		activeSessionId: 'session-idle',
-		...headerProps()
+		...composerProps()
 	});
 
 	await expect.element(picker()).toHaveTextContent('Medium');
 	await expect.element(picker()).toBeEnabled();
 });
 
-test('the session header disables the control for a model without reasoning', async () => {
+test('the composer disables the control for a model without reasoning', async () => {
 	const models = modelFixtures.populated.map((model) => ({ ...model, current: model.id === 'claude-haiku-4-5' }));
 	await render(SessionView, {
 		workspaces: withThinking(sessionFixtures.idle),
 		activeSessionId: 'session-idle',
-		...headerProps(models)
+		...composerProps(models)
 	});
 
 	await expect.element(picker()).toBeDisabled();
 	await expect.element(picker()).toHaveAccessibleDescription(/does not offer thinking levels/);
 });
 
-test('the session header disables the control while a run is in progress', async () => {
+test('the composer disables the control while a run is in progress', async () => {
 	await render(SessionView, {
 		workspaces: withThinking(sessionFixtures.running),
 		activeSessionId: 'session-running',
-		...headerProps()
+		...composerProps()
 	});
 
 	await expect.element(picker()).toBeDisabled();

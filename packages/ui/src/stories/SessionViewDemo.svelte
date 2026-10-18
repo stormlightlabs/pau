@@ -7,6 +7,7 @@
 		ExtensionUiResponse,
 		FileMention,
 		MessageQueue,
+		ModelOption,
 		PromptQueue,
 		SavedSessionList,
 		SessionWorkspace,
@@ -37,7 +38,8 @@
 		replyOnSend = false,
 		savedSessions,
 		productItems,
-		agentReadiness
+		agentReadiness,
+		models
 	}: {
 		workspaces: SessionWorkspace[];
 		initialSessionId?: string;
@@ -80,6 +82,8 @@
 		/** Saved sessions each workspace lists. When set, the rail offers the saved-session picker. */
 		savedSessions?: SavedSessionList;
 		productItems?: ShellNavItem[];
+		/** Models the session can switch to. When set, the composer offers the model and thinking pickers. */
+		models?: ModelOption[];
 	} = $props();
 
 	let opened = $state<SessionWorkspace[]>([]);
@@ -156,6 +160,13 @@
 	onStartSession={startSession}
 	onSelectSession={(sessionId) => (activeSessionId = sessionId)}
 	onSend={send}
+	onLoadModels={models ? async () => models : undefined}
+	onSelectModel={(sessionId, model) => {
+		lastAction = `${sessionId}: model: ${model.id}`;
+	}}
+	onSelectThinkingLevel={(sessionId, level) => {
+		lastAction = `${sessionId}: thinking: ${level}`;
+	}}
 	onLoadHistory={async () => history}
 	onLoadCommands={async () => commands}
 	onSearchFiles={async (_workspaceId, query) => {

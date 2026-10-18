@@ -222,44 +222,6 @@ Verification:
   query emulated.
 - Check every shipped theme in Storybook.
 
-### 2.247 Composer action row
-
-Status: planned
-Blocked by: none
-
-The composer places Attach image, Interrupt, and Send prompt beside the text
-field and wraps them only below 40rem, so at 1200px with the inspector open
-and at 900px the field shrinks to about 130px and the placeholder wraps to
-three clipped lines. Put the delivery-mode select and the action buttons in one
-row below the field at every width, as the prototype session page does, keep
-the field full width, and draw the focus ring on the field instead of around
-the whole composer.
-
-Verification:
-
-- Component-test at 900px and 1440px that the field spans the composer width
-  and the placeholder stays on one line.
-- Check in Storybook that Send prompt and the delivery mode stay reachable at
-  360px.
-
-### 2.248 Composer footer controls
-
-Status: planned
-Blocked by: 2.247
-
-The model picker, thinking level picker, and context meter render in the
-session header beside Compact and Stop, which crowds the title row when Pi
-reports models. Move them into the composer footer row with the delivery mode,
-as `screens-session-default.html` shows, so the header holds only the title,
-status, and session actions.
-
-Verification:
-
-- Component-test that the pickers and meter render in the composer footer and
-  keep their keyboard behavior.
-- Screenshot the running session at 900px and 1440px and confirm the footer
-  wraps without hiding Send prompt.
-
 ### 2.249 Session header actions
 
 Status: planned

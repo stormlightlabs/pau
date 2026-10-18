@@ -123,16 +123,20 @@
 	.context-meter__button {
 		display: grid;
 		gap: var(--pau-space-1);
-		min-height: var(--pau-size-row-md);
-		padding: var(--pau-space-1) var(--pau-space-2);
+		min-height: var(--pau-size-row-sm);
+		padding: var(--pau-space-1);
 		color: var(--pau-text);
 		background: transparent;
-		border: 1px solid var(--pau-border);
+		/* Quiet like the other composer footer controls until usage nears the limit. */
+		border: 1px solid transparent;
 		border-radius: var(--pau-radius-control);
 		font: inherit;
-		font-size: var(--pau-type-sm);
 		font-variant-numeric: tabular-nums;
 		cursor: pointer;
+	}
+
+	.context-meter__button:hover:not(.context-meter__button--warning, .context-meter__button--danger) {
+		border-color: var(--pau-accent);
 	}
 
 	.context-meter__button--warning {
@@ -165,10 +169,11 @@
 		background: var(--pau-danger);
 	}
 
+	/* It sits in the composer footer at the bottom of the window, so it opens upward. */
 	.context-meter__details {
 		position: absolute;
-		top: calc(100% + var(--pau-space-1));
-		right: 0;
+		bottom: calc(100% + var(--pau-space-1));
+		left: 0;
 		z-index: 10;
 		width: 16rem;
 		max-width: 80vw;

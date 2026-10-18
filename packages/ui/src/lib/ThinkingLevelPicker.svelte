@@ -62,6 +62,7 @@
 	<span aria-hidden="true">Thinking</span>
 	<Select
 		label="Thinking level"
+		variant="quiet"
 		options={levelOptions}
 		value={level}
 		placeholder="Choose a level"
@@ -77,6 +78,5 @@
 		align-items: center;
 		gap: var(--pau-space-2);
 		color: var(--pau-text-muted);
-		font-size: var(--pau-type-sm);
 	}
 </style>

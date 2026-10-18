@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 
 	import { createFocusReturn } from './focus-return';
+	import Icon from './Icon.svelte';
 	import type { ModelOption } from './types/session';
 
 	type Props = {
@@ -132,6 +133,7 @@
 		{disabled}
 		onclick={toggle}>
 		{pendingId ? 'Switching…' : label}
+		<Icon name="chevronDown" class="model-picker__chevron" size="0.75rem" />
 	</button>
 	{#if explanation}<span id="model-picker-note" class="model-picker__hint">{explanation}</span>{/if}
 
@@ -191,6 +193,25 @@
 		cursor: not-allowed;
 	}
 
+	/* A quiet trigger, like the other composer footer controls. */
+	.model-picker__trigger {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--pau-space-1);
+		min-height: var(--pau-size-row-sm);
+		padding-inline: var(--pau-space-1);
+		font-size: inherit;
+		border-color: transparent;
+	}
+
+	.model-picker__trigger:hover:not(:disabled) {
+		border-color: var(--pau-accent);
+	}
+
+	.model-picker__trigger :global(.model-picker__chevron) {
+		color: var(--pau-text-muted);
+	}
+
 	/* Screen readers get the explanation through aria-describedby. Sighted users get the title. */
 	.model-picker__hint {
 		position: absolute;
@@ -200,10 +221,11 @@
 		clip-path: inset(50%);
 	}
 
+	/* It sits in the composer footer at the bottom of the window, so it opens upward. */
 	.model-picker__panel {
 		position: absolute;
-		top: calc(100% + var(--pau-space-1));
-		right: 0;
+		bottom: calc(100% + var(--pau-space-1));
+		left: 0;
 		z-index: 10;
 		display: grid;
 		gap: var(--pau-space-2);

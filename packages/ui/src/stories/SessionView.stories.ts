@@ -4,6 +4,7 @@ import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { commandFixtures } from '../fixtures/commands';
 import { agentReadinessFixtures } from '../fixtures/launch';
 import { fileMentionFixtures } from '../fixtures/file-mentions';
+import { modelFixtures } from '../fixtures/models';
 import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
 import { savedSessionFixtures } from '../fixtures/saved-sessions';
 import { sessionFixtures } from '../fixtures/sessions';
@@ -531,6 +532,30 @@ export const MessageMenuBranchUnavailable: Story = {
 export const Narrow: Story = {
 	args: { workspaces: sessionFixtures.sandboxDenials, initialSessionId: 'sandbox-denials' },
 	parameters: { viewport: { defaultViewport: 'narrow' } }
+};
+export const ModelControls: Story = {
+	args: {
+		workspaces: sessionFixtures.modelControls,
+		initialSessionId: 'session-running',
+		models: modelFixtures.populated
+	},
+	play: async ({ canvasElement }) => {
+		const composer = within(canvasElement.querySelector<HTMLElement>('form[aria-label="Prompt composer"]')!);
+		await expect(await composer.findByRole('button', { name: 'Model: Claude Sonnet 4.5' })).toBeVisible();
+		await expect(composer.getByRole('combobox', { name: 'Thinking level' })).toBeVisible();
+		await expect(composer.getByRole('meter', { name: 'Context window used' })).toBeVisible();
+		await expect(composer.getByRole('button', { name: /Send prompt/ })).toBeVisible();
+	}
+};
+export const NarrowModelControls: Story = { ...ModelControls, parameters: { viewport: { defaultViewport: 'narrow' } } };
+export const NarrowRunning: Story = {
+	args: { workspaces: sessionFixtures.queued, initialSessionId: 'session-running' },
+	parameters: { viewport: { defaultViewport: 'narrow' } },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByRole('combobox', { name: 'Send as' })).toBeVisible();
+		await expect(canvas.getByRole('button', { name: /Send prompt/ })).toBeVisible();
+	}
 };
 
 export const CompactingManually: Story = {

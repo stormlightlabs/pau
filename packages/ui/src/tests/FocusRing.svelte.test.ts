@@ -87,13 +87,15 @@ test('controls in a scrolled transcript and the composer use the token ring', as
 	transcript.scrollTop = transcript.scrollHeight;
 	await expectTokenRing(transcript.querySelector<HTMLElement>('button')!);
 
-	const composer = document.querySelector<HTMLElement>('.session-composer')!;
-	composer.querySelector<HTMLElement>('textarea')!.focus();
-	const style = getComputedStyle(composer);
+	// The ring marks the prompt field, not the whole composer.
+	const field = document.querySelector<HTMLElement>('.session-composer__field')!;
+	field.querySelector<HTMLElement>('textarea')!.focus();
+	const style = getComputedStyle(field);
 	expect(style.outlineStyle).toBe('solid');
 	expect(length(style.outlineWidth)).toBe(px('--pau-focus-width'));
 	expect(style.outlineColor).toBe(token('--pau-focus'));
-	expect(ringIsClipped(composer)).toBe(false);
+	expect(ringIsClipped(field)).toBe(false);
+	expect(getComputedStyle(document.querySelector('.session-composer')!).outlineStyle).toBe('none');
 });
 
 test('overlay controls use the token ring', async () => {

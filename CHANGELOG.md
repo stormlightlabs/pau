@@ -4,6 +4,12 @@
 
 ### Desktop
 
+- The model, thinking level, and context usage controls sit in the composer
+  footer, and the session header shows only the title, status, and session
+  actions.
+- The prompt field stays full width, with the send mode and the Attach image,
+  Interrupt, and Send prompt buttons in a row below it, so narrow windows no
+  longer squeeze the field.
 - Diagnostics stacks its records and shows transport details as labelled blocks
   when the main column is narrow, and no longer cuts off record metadata.
 - Diagnostics and Processes headers line up with the sections below them instead

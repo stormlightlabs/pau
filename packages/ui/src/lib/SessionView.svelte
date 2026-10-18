@@ -1,7 +1,8 @@
 <script lang="ts">
 	import '../styles/tokens.css';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { fade } from 'svelte/transition';
 	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
 	import {
 		historyLimit,
@@ -16,6 +17,7 @@
 	import ExtensionUi from './ExtensionUi.svelte';
 	import Icon from './Icon.svelte';
 	import Markdown from './Markdown.svelte';
+	import { isReducedMotion, motion } from '../motion';
 	import ModelPicker from './ModelPicker.svelte';
 	import ContextMeter from './ContextMeter.svelte';
 	import ThinkingLevelPicker from './ThinkingLevelPicker.svelte';
@@ -25,7 +27,6 @@
 	import { followTranscript, scrollToLatest as scrollTranscriptToLatest } from './transcript-follow';
 	import ToolCallView from './ToolCallView.svelte';
 	import TranscriptSearch from './TranscriptSearch.svelte';
-	import { isReducedMotion } from '../motion';
 	import type { ProcessResourceSnapshot } from './types/resource-monitoring';
 	import type {
 		CommandOption,
@@ -211,6 +212,27 @@
 	export function scrollToLatest() {
 		if (transcriptElement) scrollTranscriptToLatest(transcriptElement);
 	}
+
+	/** Size of the transcript tail, which changes when entries arrive or the last entry streams more text. */
+	function transcriptTail(): { length: number; size: number } {
+		const entries = activeSession?.transcript ?? [];
+		const last = entries.at(-1);
+		return { length: entries.length, size: last ? JSON.stringify(last).length : 0 };
+	}
+
+	/** The transcript tail when following stopped. Cleared when following resumes. */
+	let detachedTail = $state<{ length: number; size: number }>();
+
+	$effect(() => {
+		if (following || !activeSession) detachedTail = undefined;
+		else if (!detachedTail) detachedTail = untrack(transcriptTail);
+	});
+
+	const tail = $derived(detachedTail ? transcriptTail() : { length: 0, size: 0 });
+	const arrived = $derived(
+		detachedTail !== undefined && (tail.length !== detachedTail.length || tail.size !== detachedTail.size)
+	);
+	const newEntries = $derived(arrived && detachedTail ? tail.length - detachedTail.length : 0);
 
 	/** Whether the active session's current model reasons, as last reported by the model picker. */
 	let currentModelReasoning = $state<boolean>();
@@ -836,7 +858,24 @@
 	}
 
 	/** Ctrl+O opens every tool row in the session, or closes them all when all are open. */
+	/**
+	 * Window shortcuts. Ctrl+O toggles tool output. Ctrl+End jumps to the latest
+	 * output while the Jump to latest control is shown, except in text fields
+	 * where it moves the caret. This is a local handler until the keymap registry
+	 * lands, then both belong there.
+	 */
 	function handleWindowKeydown(event: KeyboardEvent): void {
+		if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key === 'End') {
+			const target = event.target;
+			const editable =
+				target instanceof HTMLElement &&
+				(target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName));
+			if (arrived && !editable) {
+				event.preventDefault();
+				scrollToLatest();
+			}
+			return;
+		}
 		if (!event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'o') return;
 		const tools = activeSession?.transcript.filter((entry) => entry.kind === 'tool') ?? [];
 		if (tools.length === 0) return;
@@ -1235,8 +1274,12 @@
 				{#if retryError}<p class="session-view__notice session-view__notice--failed" role="alert">{retryError}</p>{/if}
 			</div>
 
+			<!-- A scrollable region needs keyboard access. -->
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<div
 				class="session-view__transcript"
+				role="region"
+				tabindex="0"
 				aria-label="Transcript"
 				aria-live="polite"
 				data-following={following}
@@ -1318,6 +1361,22 @@
 					{/if}
 				</div>
 			</div>
+
+			<p class="session-view__sr-only" role="status">{arrived ? 'New output below' : ''}</p>
+			{#if arrived}
+				<!-- Mouse down must not move focus out of the composer. -->
+				<button
+					type="button"
+					class="session-view__jump"
+					title="Jump to latest (Ctrl+End)"
+					onmousedown={(event) => event.preventDefault()}
+					onclick={scrollToLatest}
+					transition:fade={{ duration: isReducedMotion() ? 0 : motion.duration.small }}>
+					<Icon name="chevronDown" size={14} />
+					<span>Jump to latest</span>
+					{#if newEntries > 0}<small>{newEntries} new</small>{/if}
+				</button>
+			{/if}
 
 			<div class="session-view__composer-stack">
 				{#if queuedCount > 0 && activeSession.messageQueue}
@@ -1812,6 +1871,41 @@
 	.session-view__notice--failed {
 		color: var(--pau-text);
 		border-color: var(--pau-danger);
+	}
+
+	.session-view__sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	.session-view__jump {
+		grid-area: transcript;
+		z-index: 1;
+		align-self: end;
+		justify-self: center;
+		display: inline-flex;
+		align-items: center;
+		gap: var(--pau-space-2);
+		min-height: var(--pau-size-row-md);
+		margin-bottom: var(--pau-space-3);
+		padding-inline: var(--pau-space-3);
+		color: var(--pau-text);
+		background: var(--pau-surface);
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-control);
+		box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 24%);
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.session-view__jump small {
+		color: var(--pau-text-muted);
 	}
 
 	.session-view__transcript {

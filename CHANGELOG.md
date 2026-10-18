@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- A Jump to latest button (or Ctrl+End) appears when new output arrives while
+  you are scrolled up in a session.
 - Drag the edge of the sidebar or inspector to resize it, or use the arrow keys,
   and double-click to reset. Pau remembers the widths between launches.
 - Press Cmd+F (Ctrl+F on Linux) in a session to search the conversation and jump

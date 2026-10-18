@@ -6,7 +6,8 @@
 		ExtensionUiResponse,
 		MessageQueue,
 		PromptQueue,
-		SessionWorkspace
+		SessionWorkspace,
+		TranscriptEntry
 	} from '../lib/types/session';
 	import type { ShellNavItem } from '../lib/ApplicationShell.svelte';
 	import SessionView from '../lib/SessionView.svelte';
@@ -27,6 +28,7 @@
 		openable = false,
 		pickedFolder,
 		openFailure,
+		replyOnSend = false,
 		productItems
 	}: {
 		workspaces: SessionWorkspace[];
@@ -57,11 +59,21 @@
 		pickedFolder?: string | null;
 		/** When set, opening a workspace fails with this message. */
 		openFailure?: string;
+		/** Whether sending a prompt appends an assistant reply to the transcript. */
+		replyOnSend?: boolean;
 		productItems?: ShellNavItem[];
 	} = $props();
 
 	let opened = $state<SessionWorkspace[]>([]);
-	const allWorkspaces = $derived([...workspaces, ...opened]);
+	let replies = $state<TranscriptEntry[]>([]);
+	const allWorkspaces = $derived(
+		[...workspaces, ...opened].map((workspace) => ({
+			...workspace,
+			sessions: workspace.sessions.map((session) =>
+				session.id === activeSessionId ? { ...session, transcript: [...session.transcript, ...replies] } : session
+			)
+		}))
+	);
 
 	/** Opens a folder by its last path segment, reusing a workspace with that name. */
 	function openWorkspace(path: string): string {
@@ -86,6 +98,9 @@
 		if (sendFailure) throw new Error(sendFailure);
 		const attached = images.length > 0 ? ` (${images.length} image${images.length === 1 ? '' : 's'})` : '';
 		lastAction = `${sessionId}: ${queue ?? 'prompt'}: ${text}${attached}`;
+		if (replyOnSend) {
+			replies.push({ id: `reply-${replies.length}`, kind: 'message', role: 'assistant', body: `Reply to ${text}` });
+		}
 	}
 
 	function startSession(workspaceId: string): void {

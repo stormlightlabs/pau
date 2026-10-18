@@ -864,19 +864,6 @@ Verification:
 - Confirm the first visible entry does not move when a block above it finishes
   or collapses.
 
-### 2.196 Jump to latest
-
-Status: planned
-Blocked by: none
-
-Show a **Jump to latest** control while the transcript is detached and new
-content has arrived.
-
-Verification:
-
-- Component-test the control appearing, its keyboard activation, and that it
-  restores follow mode.
-
 ### 2.197 Prompt navigation
 
 Status: planned
@@ -1463,8 +1450,8 @@ Verification:
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.156, 2.175, 2.184, 2.185, 2.186, 2.187, 2.194, 2.196, 2.197,
-2.199, 2.200, 2.205, 2.219, 2.220
+Blocked by: 2.156, 2.175, 2.184, 2.185, 2.186, 2.187, 2.194, 2.197, 2.199,
+2.200, 2.205, 2.219, 2.220
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

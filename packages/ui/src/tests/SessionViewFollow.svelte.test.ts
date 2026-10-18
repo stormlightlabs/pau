@@ -1,4 +1,4 @@
-import { expect, test, vi } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { sessionFixtures } from '../fixtures/sessions';
@@ -106,6 +106,99 @@ test.each([
 	try {
 		screen.component.scrollToLatest();
 		expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior }));
+	} finally {
+		delete document.documentElement.dataset.motion;
+	}
+});
+
+afterEach(() => {
+	delete document.documentElement.dataset.motion;
+});
+
+const jumpButton = () => document.querySelector<HTMLButtonElement>('.session-view__jump');
+
+async function detached(count = 30) {
+	const screen = await render(SessionView, { workspaces: workspaces(count), activeSessionId: baseSession.id });
+	await settled();
+	return { screen, isFollowing: () => transcriptOf().dataset.following === 'true' };
+}
+
+test('Jump to latest is hidden while following', async () => {
+	const { screen } = await detached();
+	await screen.rerender({ workspaces: workspaces(40), activeSessionId: baseSession.id });
+	await settled();
+	expect(jumpButton()).toBeNull();
+});
+
+test('Jump to latest appears after new output arrives while detached, and resumes following', async () => {
+	// Instant scrolling keeps the test independent of smooth-scroll timing.
+	document.documentElement.dataset.motion = 'reduce';
+	const { screen, isFollowing } = await detached();
+	const node = transcriptOf();
+	node.scrollTop = 100;
+	await expect.poll(isFollowing).toBe(false);
+	expect(jumpButton()).toBeNull();
+
+	await screen.rerender({ workspaces: workspaces(33), activeSessionId: baseSession.id });
+	await expect.poll(jumpButton).not.toBeNull();
+	expect(jumpButton()).toHaveTextContent('3 new');
+	expect(document.querySelector('.session-view__sr-only')).toHaveTextContent('New output below');
+
+	jumpButton()!.click();
+	await expect.poll(isFollowing).toBe(true);
+	await expect.poll(jumpButton).toBeNull();
+	expect(document.querySelector('.session-view__sr-only')).toHaveTextContent('');
+});
+
+test('Jump to latest does not take focus from the composer', async () => {
+	// Instant scrolling keeps the test independent of smooth-scroll timing.
+	document.documentElement.dataset.motion = 'reduce';
+	const { screen, isFollowing } = await detached();
+	transcriptOf().scrollTop = 100;
+	await expect.poll(isFollowing).toBe(false);
+	await screen.rerender({ workspaces: workspaces(33), activeSessionId: baseSession.id });
+	await expect.poll(jumpButton).not.toBeNull();
+	const composer = document.querySelector<HTMLTextAreaElement>('textarea')!;
+	composer.focus();
+
+	const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+	jumpButton()!.dispatchEvent(down);
+
+	expect(down.defaultPrevented).toBe(true);
+	expect(document.activeElement).toBe(composer);
+});
+
+test('Ctrl+End jumps to the latest output outside text fields', async () => {
+	// Instant scrolling keeps the test independent of smooth-scroll timing.
+	document.documentElement.dataset.motion = 'reduce';
+	const { screen, isFollowing } = await detached();
+	transcriptOf().scrollTop = 100;
+	await expect.poll(isFollowing).toBe(false);
+	await screen.rerender({ workspaces: workspaces(33), activeSessionId: baseSession.id });
+	await expect.poll(jumpButton).not.toBeNull();
+
+	const inField = new KeyboardEvent('keydown', { key: 'End', ctrlKey: true, bubbles: true, cancelable: true });
+	document.querySelector('textarea')!.dispatchEvent(inField);
+	expect(inField.defaultPrevented).toBe(false);
+
+	const outside = new KeyboardEvent('keydown', { key: 'End', ctrlKey: true, bubbles: true, cancelable: true });
+	document.body.dispatchEvent(outside);
+	expect(outside.defaultPrevented).toBe(true);
+	await expect.poll(isFollowing).toBe(true);
+});
+
+test.each([
+	['reduce', false],
+	['full', true]
+])('Jump to latest fades with %s motion: %s', async (motion, fades) => {
+	document.documentElement.dataset.motion = motion;
+	try {
+		const { screen, isFollowing } = await detached();
+		transcriptOf().scrollTop = 100;
+		await expect.poll(isFollowing).toBe(false);
+		await screen.rerender({ workspaces: workspaces(33), activeSessionId: baseSession.id });
+		await expect.poll(jumpButton).not.toBeNull();
+		expect(jumpButton()!.getAnimations().length > 0).toBe(fades);
 	} finally {
 		delete document.documentElement.dataset.motion;
 	}

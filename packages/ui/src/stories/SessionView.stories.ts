@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/svelte-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import { commandFixtures } from '../fixtures/commands';
 import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
@@ -466,5 +466,38 @@ export const ModelWithoutImageInput: Story = {
 		await userEvent.click(canvas.getByRole('button', { name: /Send prompt/ }));
 		await expect(canvas.getByRole('alert')).toHaveTextContent('The current model cannot read images');
 		await expect(canvas.getByRole('img', { name: 'screenshot.png' })).toBeVisible();
+	}
+};
+
+const longTranscript = sessionFixtures.running.map((workspace) => ({
+	...workspace,
+	sessions: workspace.sessions.map((session) => ({
+		...session,
+		transcript: Array.from({ length: 30 }, (_, index) => ({
+			id: `long-${index}`,
+			kind: 'message' as const,
+			role: 'assistant' as const,
+			body: `Streamed paragraph ${index}. `.repeat(12)
+		}))
+	}))
+}));
+export const JumpToLatest: Story = {
+	args: { workspaces: longTranscript, replyOnSend: true },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const transcript = canvas.getByLabelText('Transcript');
+		await expect(canvas.queryByRole('button', { name: /Jump to latest/ })).not.toBeInTheDocument();
+
+		transcript.scrollTop = 0;
+		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), 'More please.');
+		await userEvent.click(canvas.getByRole('button', { name: /Send prompt/ }));
+
+		const jump = await canvas.findByRole('button', { name: /Jump to latest/ });
+		await expect(canvas.getByText('New output below')).toBeInTheDocument();
+		await userEvent.click(jump);
+		await waitFor(() => expect(canvas.queryByRole('button', { name: /Jump to latest/ })).not.toBeInTheDocument(), {
+			timeout: 5000
+		});
+		await expect(transcript).toHaveAttribute('data-following', 'true');
 	}
 };

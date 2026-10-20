@@ -133,21 +133,26 @@
 	.sandbox-route {
 		display: grid;
 		justify-items: center;
-		gap: 0.75rem;
-		padding: 1.5rem 1rem;
-		color: var(--workbench-text, #e6e6f0);
+		gap: var(--pau-space-3);
+		padding: var(--pau-space-5) var(--pau-space-4);
+		color: var(--pau-text);
 		font-size: var(--pau-type-md);
+	}
+
+	/* Size by the shell's main column, not the viewport, so nothing overflows beside the rails. */
+	.sandbox-route__agent,
+	p {
+		width: 100%;
+		max-width: 54rem;
 	}
 
 	.sandbox-route__agent {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		width: min(54rem, calc(100vw - 2rem));
+		gap: var(--pau-space-2);
 	}
 
 	p {
-		width: min(54rem, calc(100vw - 2rem));
 		margin: 0;
 	}
 </style>

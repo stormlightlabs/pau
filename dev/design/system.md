@@ -215,6 +215,11 @@ an accessible name and, where meaning is not obvious, a tooltip or adjacent
 label. Destructive actions name the object and preserve a cancel or recovery
 path where practical.
 
+Radio buttons and checkboxes stay native and sit `space/2` from their labels.
+The shared `pau-choice` row clears the browser's input margin, which would
+otherwise push the gap off the spacing scale. Text fields and settings panels
+draw their edges with the theme border token.
+
 ## Keyboard
 
 Pau matches Pi's workflows, not every Pi key. Three rules decide which chord an

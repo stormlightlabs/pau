@@ -144,7 +144,7 @@
 
 	<fieldset class="sandbox__section">
 		<legend>Mode</legend>
-		<label class="sandbox__choice">
+		<label class="sandbox__choice pau-choice">
 			<input
 				type="radio"
 				name="sandbox-mode"
@@ -155,7 +155,7 @@
 				<small>Agent tools run with your normal access to files, network, and credentials.</small>
 			</span>
 		</label>
-		<label class="sandbox__choice">
+		<label class="sandbox__choice pau-choice">
 			<input
 				type="radio"
 				name="sandbox-mode"
@@ -181,7 +181,7 @@
 		<fieldset class="sandbox__section">
 			<legend>Profile</legend>
 			{#each profiles as profile (profile.value)}
-				<label class="sandbox__choice">
+				<label class="sandbox__choice pau-choice">
 					<input
 						type="radio"
 						name="sandbox-profile"
@@ -219,7 +219,7 @@
 					value={settings.unsandboxedTools.join('\n')}
 					onchange={(event) => setSettings({ unsandboxedTools: lines(event.currentTarget.value) })}></textarea>
 			</label>
-			<label class="sandbox__check">
+			<label class="sandbox__check pau-choice">
 				<input
 					type="checkbox"
 					checked={settings.homeReadDeny}
@@ -233,7 +233,7 @@
 					</small>
 				</span>
 			</label>
-			<label class="sandbox__check">
+			<label class="sandbox__check pau-choice">
 				<input
 					type="checkbox"
 					checked={settings.grants.unixSockets}
@@ -244,7 +244,7 @@
 						>Linux cannot limit sockets by path, so this allows every socket, including Docker and SSH agents.</small>
 				</span>
 			</label>
-			<label class="sandbox__check">
+			<label class="sandbox__check pau-choice">
 				<input
 					type="checkbox"
 					checked={settings.shareClaudeTemp}
@@ -463,10 +463,11 @@
 <style>
 	.sandbox {
 		display: grid;
-		width: min(54rem, calc(100vw - 2rem));
-		color: var(--workbench-text);
-		background: var(--workbench-surface);
-		border: 1px solid var(--workbench-border);
+		width: 100%;
+		max-width: 54rem;
+		color: var(--pau-text);
+		background: var(--pau-surface);
+		border: 1px solid var(--pau-border);
 	}
 
 	.sandbox__header,
@@ -480,7 +481,7 @@
 	.sandbox__header,
 	.sandbox__section,
 	.sandbox__effective {
-		border-bottom: 1px solid var(--workbench-border);
+		border-bottom: 1px solid var(--pau-border);
 	}
 
 	.sandbox__header,
@@ -521,7 +522,7 @@
 	small,
 	dd,
 	li {
-		color: var(--workbench-muted);
+		color: var(--pau-text-muted);
 		font-size: var(--pau-type-md);
 		line-height: 1.5;
 	}
@@ -531,7 +532,7 @@
 		gap: var(--pau-space-3);
 		margin: 0;
 		border: 0;
-		border-bottom: 1px solid var(--workbench-border);
+		border-bottom: 1px solid var(--pau-border);
 	}
 
 	legend {
@@ -545,7 +546,6 @@
 	.sandbox__check {
 		display: flex;
 		align-items: flex-start;
-		gap: var(--pau-space-2);
 		min-height: var(--pau-size-row-lg);
 		font-size: var(--pau-type-md);
 	}
@@ -553,7 +553,7 @@
 	.sandbox__choice input,
 	.sandbox__check input {
 		margin-top: var(--pau-space-1);
-		accent-color: var(--workbench-focus);
+		accent-color: var(--pau-focus);
 	}
 
 	.sandbox__choice strong,
@@ -580,8 +580,8 @@
 
 	.sandbox__credential {
 		padding: var(--pau-space-3);
-		background: var(--workbench-canvas);
-		border: 1px solid var(--workbench-border);
+		background: var(--pau-canvas);
+		border: 1px solid var(--pau-border);
 	}
 
 	.sandbox__credential legend {
@@ -600,9 +600,9 @@
 		width: 100%;
 		min-height: var(--pau-size-row-lg);
 		padding: var(--pau-space-2);
-		color: var(--workbench-text);
-		background: var(--workbench-canvas);
-		border: 1px solid var(--workbench-border);
+		color: var(--pau-text);
+		background: var(--pau-canvas);
+		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
 		font: var(--pau-type-sm)/1.4 var(--pau-font-code);
 		resize: vertical;
@@ -643,13 +643,13 @@
 
 	code {
 		overflow-wrap: anywhere;
-		color: var(--workbench-text);
+		color: var(--pau-text);
 		font-size: var(--pau-type-xs);
 	}
 
 	.warning,
 	.sandbox__error {
-		color: var(--workbench-unavailable-text);
+		color: var(--pau-danger);
 	}
 
 	.sandbox__brokered,
@@ -661,7 +661,7 @@
 
 	.sandbox__brokered > ul > li {
 		padding-left: var(--pau-space-3);
-		border-left: 2px solid var(--workbench-border);
+		border-left: 2px solid var(--pau-border);
 	}
 
 	.sandbox__brokered > ul > li > ul {

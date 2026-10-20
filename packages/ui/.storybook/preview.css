@@ -2,19 +2,6 @@
 	font-family: var(--pau-font-ui, ui-sans-serif, system-ui, sans-serif);
 	font-synthesis: none;
 	color-scheme: dark;
-	--workbench-text: var(--pau-text, #e6e9f2);
-	--workbench-muted: var(--pau-text-muted, #9aa3bd);
-	--workbench-surface: var(--pau-surface, #171b27);
-	--workbench-border: var(--pau-border, #293044);
-	--workbench-shadow: #000;
-	--workbench-button-text: var(--pau-canvas, #12151d);
-	--workbench-button-surface: var(--pau-accent, #38ef9d);
-	--workbench-button-hover: var(--pau-info, #43c7e8);
-	--workbench-focus: var(--pau-focus, #04d1f9);
-	--workbench-available-text: var(--pau-success, #57e69a);
-	--workbench-available-surface: var(--pau-surface-raised, #202536);
-	--workbench-unavailable-text: var(--pau-danger, #ee7180);
-	--workbench-unavailable-surface: var(--pau-surface-raised, #202536);
 	background: var(--pau-canvas, #12151d);
 }
 

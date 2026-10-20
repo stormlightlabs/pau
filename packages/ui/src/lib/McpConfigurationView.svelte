@@ -176,10 +176,11 @@
 <style>
 	.mcp {
 		display: grid;
-		width: min(54rem, calc(100vw - 2rem));
-		color: var(--workbench-text);
-		background: var(--workbench-surface);
-		border: 1px solid var(--workbench-border);
+		width: 100%;
+		max-width: 54rem;
+		color: var(--pau-text);
+		background: var(--pau-surface);
+		border: 1px solid var(--pau-border);
 	}
 
 	.mcp__header,
@@ -205,7 +206,7 @@
 	.mcp__summary,
 	.mcp__unavailable,
 	.mcp__servers {
-		border-bottom: 1px solid var(--workbench-border);
+		border-bottom: 1px solid var(--pau-border);
 	}
 
 	h2,
@@ -229,17 +230,17 @@
 	p,
 	li,
 	small {
-		color: var(--workbench-muted);
+		color: var(--pau-text-muted);
 		font-size: var(--pau-type-sm);
 		line-height: 1.5;
 	}
 
 	.failed {
-		color: var(--workbench-unavailable-text);
+		color: var(--pau-danger);
 	}
 
 	.mcp__unavailable {
-		background: color-mix(in srgb, var(--workbench-unavailable-surface) 55%, transparent);
+		background: color-mix(in srgb, var(--pau-surface-raised) 55%, transparent);
 	}
 
 	.mcp__unavailable strong,
@@ -256,7 +257,7 @@
 	.mcp__server-layout {
 		display: grid;
 		grid-template-columns: minmax(12rem, 0.8fr) minmax(18rem, 1.2fr);
-		border: 1px solid var(--workbench-border);
+		border: 1px solid var(--pau-border);
 	}
 
 	ul {
@@ -266,12 +267,12 @@
 	}
 
 	.mcp__server-layout > ul {
-		border-right: 1px solid var(--workbench-border);
+		border-right: 1px solid var(--pau-border);
 	}
 
 	.mcp__server-layout li + li,
 	.mcp__source + .mcp__source {
-		border-top: 1px solid var(--workbench-border);
+		border-top: 1px solid var(--pau-border);
 	}
 
 	.mcp__server-row {
@@ -281,7 +282,7 @@
 		width: 100%;
 		min-height: 3.25rem;
 		padding: var(--pau-space-2) var(--pau-space-3);
-		color: var(--workbench-muted);
+		color: var(--pau-text-muted);
 		background: transparent;
 		border: 0;
 		border-left: 2px solid transparent;
@@ -289,9 +290,9 @@
 	}
 
 	.mcp__server-row.selected {
-		color: var(--workbench-text);
-		background: var(--workbench-selected-surface, var(--workbench-canvas));
-		border-left-color: var(--workbench-focus);
+		color: var(--pau-text);
+		background: var(--pau-surface-raised);
+		border-left-color: var(--pau-focus);
 	}
 
 	.mcp__server-row strong,
@@ -348,7 +349,7 @@
 
 	code {
 		overflow: hidden;
-		color: var(--workbench-text);
+		color: var(--pau-text);
 		font: inherit;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -373,7 +374,7 @@
 
 		.mcp__server-layout > ul {
 			border-right: 0;
-			border-bottom: 1px solid var(--workbench-border);
+			border-bottom: 1px solid var(--pau-border);
 		}
 
 		.mcp__summary button,

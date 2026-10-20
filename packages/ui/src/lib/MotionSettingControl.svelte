@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../styles/tokens.css';
 	import type { MotionSetting } from '../motion';
 
 	type Props = {
@@ -21,7 +22,7 @@
 	<legend>Motion</legend>
 	<div class="motion-setting__choices">
 		{#each choices as choice (choice.value)}
-			<label class="motion-setting__choice" title={choice.hint}>
+			<label class="motion-setting__choice pau-choice" title={choice.hint}>
 				<input
 					type="radio"
 					name="motion-setting"
@@ -56,7 +57,6 @@
 	.motion-setting__choice {
 		display: inline-flex;
 		align-items: center;
-		gap: var(--pau-space-2);
 		min-height: var(--pau-size-row-md);
 		color: var(--pau-text);
 		cursor: pointer;

@@ -25,13 +25,13 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--pau-space-6);
-		width: min(34rem, calc(100vw - 3rem));
+		width: 100%;
+		max-width: 34rem;
 		padding: var(--pau-space-4);
-		color: var(--workbench-text);
-		background: var(--workbench-surface);
-		border: 1px solid var(--workbench-border);
+		color: var(--pau-text);
+		background: var(--pau-surface);
+		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-surface);
-		box-shadow: 0 1rem 2.5rem color-mix(in srgb, var(--workbench-shadow) 18%, transparent);
 	}
 
 	.capability-card__copy {
@@ -57,31 +57,30 @@
 
 	p {
 		max-width: 26rem;
-		color: var(--workbench-muted);
+		color: var(--pau-text-muted);
 		font-size: var(--pau-type-md);
 		line-height: 1.5;
 	}
 
 	span {
 		padding: var(--pau-space-1) var(--pau-space-2);
-		color: var(--workbench-unavailable-text);
-		background: var(--workbench-unavailable-surface);
+		color: var(--pau-danger);
+		background: var(--pau-surface-raised);
 		border-radius: var(--pau-radius-control);
 		font-size: var(--pau-type-xs);
 		font-weight: var(--pau-weight-semibold);
 	}
 
 	span.available {
-		color: var(--workbench-available-text);
-		background: var(--workbench-available-surface);
+		color: var(--pau-success);
 	}
 
 	button {
 		min-width: 5.25rem;
 		min-height: var(--pau-size-target-touch);
 		padding: var(--pau-space-2) var(--pau-space-3);
-		color: var(--workbench-button-text);
-		background: var(--workbench-button-surface);
+		color: var(--pau-canvas);
+		background: var(--pau-accent);
 		border: 1px solid transparent;
 		border-radius: var(--pau-radius-control);
 		font: inherit;
@@ -94,7 +93,7 @@
 	}
 
 	button:hover {
-		background: var(--workbench-button-hover);
+		background: var(--pau-info);
 	}
 
 	button:active {

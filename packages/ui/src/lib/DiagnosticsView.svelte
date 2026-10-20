@@ -56,7 +56,7 @@
 				process supervision, permissions, retries, or limits.
 			</p>
 		</div>
-		<label>
+		<label class="pau-choice">
 			<input
 				type="checkbox"
 				checked={bundle.settings.enabled}

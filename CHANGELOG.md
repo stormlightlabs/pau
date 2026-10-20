@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- Sandbox and MCP settings now show their field and panel borders, sandbox
+  settings fit narrow windows without scrolling sideways, and checkbox and radio
+  labels sit evenly beside their controls.
 - The inspector no longer opens over the conversation in narrower windows. Open
   it from the top bar when you need it.
 - Pau now opens at a comfortable size that fits your screen, and it can't be

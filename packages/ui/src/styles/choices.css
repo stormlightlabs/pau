@@ -1,0 +1,14 @@
+/*
+ * Radio and checkbox rows. A label marked `pau-choice` keeps its input one
+ * spacing step from the label text. Browsers add a few pixels of margin around
+ * native inputs, which pushes the gap off the spacing scale, so the input's
+ * margin is cleared here. Components still own the row's layout and alignment.
+ */
+.pau-choice {
+	gap: var(--pau-space-2);
+}
+
+.pau-choice > input {
+	flex: none;
+	margin: 0;
+}

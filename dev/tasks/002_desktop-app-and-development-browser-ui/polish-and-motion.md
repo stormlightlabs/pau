@@ -267,22 +267,6 @@ Verification:
 - Confirm no literal separator joins remain outside `MetaText`, and measure
   equal space on both sides of the dot in a shell command outcome.
 
-### 2.273 Product tokens in settings views
-
-Status: planned
-Blocked by: none
-
-Replace the Storybook-only `--workbench-*` colors in the sandbox, MCP, and
-capability views with product tokens, so their borders and surfaces show in the
-app. Size the sandbox view by its container instead of the viewport. Give radio
-and checkbox rows one shared label gap.
-
-Verification:
-
-- Confirm no `--workbench-*` reference remains outside Storybook, field borders
-  compute to the theme border, the sandbox route has no horizontal overflow at
-  800×560, and choice labels sit 8px from their inputs.
-
 ### 2.274 Processes view in the application shell
 
 Status: planned
@@ -300,7 +284,7 @@ Verification:
 ### 2.275 One control size for buttons and menus
 
 Status: planned
-Blocked by: 2.273
+Blocked by: none
 
 Remove per-view button size overrides so view actions use the shared button
 styles, with at most one documented compact size. Use focus tokens for the
@@ -314,7 +298,7 @@ Verification:
 ### 2.276 View titles, headings, and leading edges
 
 Status: planned
-Blocked by: 2.273
+Blocked by: none
 
 Use one view title role for Files, Processes, Diagnostics, MCP, and Sandbox.
 Give Markdown headings a descending scale. Align the saved-session picker,

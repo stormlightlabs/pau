@@ -137,7 +137,7 @@ test('marks a command kept out of context', async () => {
 	]);
 	const row = page.getByRole('group').filter({ hasText: 'pnpm test' });
 
-	await expect.element(row).toHaveTextContent('Not in context · API_TOKEN=redacted');
+	await expect.element(row.getByTitle('Not in context · API_TOKEN=redacted')).toBeVisible();
 	await expect.element(row).toHaveTextContent('The model does not see this command or its output.');
 });
 

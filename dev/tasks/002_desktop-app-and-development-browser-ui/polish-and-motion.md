@@ -254,19 +254,6 @@ Verification:
 - Measure the shared leading edge and the 8px mark gap, and screenshot a tool
   row hover and expanded tool groups.
 
-### 2.271 Metadata separators everywhere
-
-Status: planned
-Blocked by: none
-
-Render every metadata join with `MetaText` instead of a literal `·`,
-including tool outcomes, read ranges, file tree labels, and diagnostics text.
-
-Verification:
-
-- Confirm no literal separator joins remain outside `MetaText`, and measure
-  equal space on both sides of the dot in a shell command outcome.
-
 ### 2.274 Processes view in the application shell
 
 Status: planned

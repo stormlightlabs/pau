@@ -62,3 +62,29 @@ test('renders Diagnostics adapter capabilities with separator elements', async (
 	expect(capabilities?.textContent).not.toContain(' · ');
 	expect(capabilities ? separators(capabilities) : []).toHaveLength(3);
 });
+
+test('leaves equal space on both sides of the dot in a shell command outcome', async () => {
+	const { container } = await render(ToolCallViewDemo, {
+		tools: [{ ...toolCallFixtures.bashRunning, shell: { excludedFromContext: true } }],
+		initiallyOpen: false
+	});
+
+	const outcome = container.querySelector(':scope .tool-call summary small');
+	const separator = outcome ? separators(outcome)[0] : undefined;
+	const space = separator?.previousElementSibling;
+	if (!outcome || !separator || !space) throw new Error('The outcome has no separated parts.');
+	expect(outcome.textContent).not.toContain(' · ');
+
+	// The hidden space clips a glyph, so the text before ends where that space begins.
+	const before = document.createRange();
+	before.setStart(outcome, 0);
+	before.setEndBefore(space);
+	const after = document.createRange();
+	after.setStartAfter(separator);
+	after.setEnd(outcome, outcome.childNodes.length);
+	const dot = separator.getBoundingClientRect();
+	const leading = dot.left - before.getBoundingClientRect().right;
+	const trailing = after.getBoundingClientRect().left - dot.right;
+	expect(leading).toBeGreaterThan(2);
+	expect(Math.abs(leading - trailing)).toBeLessThan(1);
+});

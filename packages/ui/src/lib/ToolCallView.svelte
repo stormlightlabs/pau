@@ -59,7 +59,7 @@
 	data-found={found || undefined}>
 	<summary>
 		<span class="tool-call__name">{tool.name}</span><code><MetaText text={summary} /></code><small title={outcome}
-			>{outcome}</small>
+			><MetaText text={outcome} /></small>
 	</summary>
 	{#if open}
 		<div class="tool-call__body">

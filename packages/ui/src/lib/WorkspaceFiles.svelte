@@ -631,7 +631,7 @@
 								onclick={() => void openDiff(file.path)}>
 								<Icon name={gitFileIcon(file)} size={14} />
 								<span>{file.path}</span>
-								<small>{reviewLabel(file)}</small>
+								<small><MetaText text={reviewLabel(file)} /></small>
 							</button>
 						</li>
 					{/each}

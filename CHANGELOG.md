@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- The dots between tool-call statuses and between changed-file statuses now have
+  equal space on both sides.
 - Error messages from rejected dropdown choices, such as the thinking level and
   model pickers, now stay beside their control and inside the window, and in the
   composer they no longer cover Attach image or Send prompt.

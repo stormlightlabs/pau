@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- Pau now opens at a comfortable size that fits your screen, and it can't be
+  resized small enough to break the layout.
+- Composer controls, the session status, and the top bar line up correctly.
 - Run shell commands from the composer with `!command`, or `!!command` to keep
   the output out of the model's context, and press Esc to stop one.
 - The thinking-level picker and Shift+Tab now offer only the levels the current

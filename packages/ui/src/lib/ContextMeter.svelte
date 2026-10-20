@@ -135,10 +135,15 @@
 		position: relative;
 	}
 
-	/* Select's quiet trigger, with the usage bar under the label. */
+	/*
+	 * Select's quiet trigger, with the usage bar under the label. The bar sits
+	 * in the bottom padding, so the label centers on the same line as the other
+	 * footer controls.
+	 */
 	.context-meter__button {
-		display: grid;
-		gap: var(--pau-space-1);
+		position: relative;
+		display: flex;
+		align-items: center;
 		min-height: var(--pau-size-row-sm);
 		padding: var(--pau-space-1);
 		color: var(--pau-text);
@@ -183,6 +188,10 @@
 	}
 
 	.context-meter__bar {
+		position: absolute;
+		right: var(--pau-space-1);
+		bottom: 0;
+		left: var(--pau-space-1);
 		display: block;
 		height: 3px;
 		overflow: hidden;

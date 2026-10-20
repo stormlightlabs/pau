@@ -574,13 +574,17 @@
 		background: var(--shell-bg);
 	}
 
-	/* The identity takes the free space so the status, toggles, and command field sit at the trailing edge. */
+	/*
+	 * The identity takes the free space so the status, toggles, and command field sit at the trailing edge.
+	 * It never shrinks below the mark, so a narrow bar shrinks the command field instead of drawing the
+	 * toggles over the mark.
+	 */
 	.app-shell__identity {
 		display: flex;
 		flex: 1;
 		align-items: center;
 		gap: var(--pau-space-2);
-		min-width: 0;
+		min-width: 1.5rem;
 		color: var(--shell-muted);
 	}
 

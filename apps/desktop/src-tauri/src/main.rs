@@ -11,6 +11,29 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 /// The label of the only window, which receives startup progress.
 const MAIN_WINDOW: &str = "main";
+/// The preferred first-launch size in logical pixels, wide enough for the
+/// product rail, context rail, session, and inspector side by side.
+const WINDOW_SIZE: (f64, f64) = (1440.0, 900.0);
+/// The smallest size that keeps the context rail beside the session.
+const WINDOW_MIN_SIZE: (f64, f64) = (800.0, 560.0);
+/// The share of the screen's work area a first-launch window may cover.
+const WINDOW_SCREEN_SHARE: f64 = 0.9;
+
+/// Returns [`WINDOW_SIZE`] scaled down to fit the primary screen's work area,
+/// but never below [`WINDOW_MIN_SIZE`].
+fn window_size(app: &tauri::App) -> (f64, f64) {
+    let Ok(Some(monitor)) = app.primary_monitor() else {
+        return WINDOW_SIZE;
+    };
+    let area = monitor.work_area().size.to_logical::<f64>(monitor.scale_factor());
+    let fit = |preferred: f64, available: f64, min: f64| {
+        preferred.min(available * WINDOW_SCREEN_SHARE).max(min)
+    };
+    (
+        fit(WINDOW_SIZE.0, area.width, WINDOW_MIN_SIZE.0),
+        fit(WINDOW_SIZE.1, area.height, WINDOW_MIN_SIZE.1),
+    )
+}
 
 /// Returns the current startup snapshot, including the backend connection once
 /// it is ready.
@@ -104,8 +127,12 @@ fn main() {
         .menu(menu::build)
         .on_menu_event(menu::handle_event)
         .setup(|app| {
+            let (width, height) = window_size(app);
             let window = WebviewWindowBuilder::new(app, MAIN_WINDOW, WebviewUrl::default())
                 .title("Pau")
+                .inner_size(width, height)
+                .min_inner_size(WINDOW_MIN_SIZE.0, WINDOW_MIN_SIZE.1)
+                .center()
                 .build();
             match window {
                 Ok(_) => {

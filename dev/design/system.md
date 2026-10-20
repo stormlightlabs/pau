@@ -89,6 +89,8 @@ and rail values. `packages/ui` mirrors those names as CSS custom properties, so
 `--pau-size-row-md`. Type sizes use `--pau-type-*` because `--pau-text` names
 the text color.
 
+- Desktop window: opens at 1440×900, within 90% of the screen, and never
+  smaller than 800×560, so the context rail always fits beside the session.
 - Product rail: about 48–56px.
 - Context rail: about 224–256px.
 - Inspector: about 288–320px.

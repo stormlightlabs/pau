@@ -3050,9 +3050,14 @@
 	.session-view__status {
 		display: flex;
 		align-items: center;
+		justify-content: flex-end;
 		gap: var(--pau-space-2);
 		flex: none;
-		/* Fits the longest label so the actions beside it never move. */
+		/*
+		 * Fits the longest label so the actions beside it never move. The label
+		 * sits at the trailing edge, beside the actions, instead of leaving the
+		 * spare width as a gap before them.
+		 */
 		width: 7.5rem;
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
@@ -3530,9 +3535,14 @@
 		outline-offset: var(--pau-focus-offset-inset);
 	}
 
+	/*
+	 * Centers the 1em mark on the field's first 1.5em line. The chevron's stroke
+	 * sits in the middle of its box, so the smaller inline margin lines the
+	 * stroke up with the footer labels below.
+	 */
 	.session-composer__field :global(.session-composer__prompt) {
 		flex: none;
-		margin: var(--pau-space-3) 0 0 var(--pau-space-3);
+		margin: calc(var(--pau-space-3) + 0.25em) 0 0 var(--pau-space-2);
 		color: var(--pau-accent);
 		font-size: var(--pau-type-md);
 	}

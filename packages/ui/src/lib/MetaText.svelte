@@ -22,10 +22,15 @@
 		>{/if}{part}{/each}
 
 <style>
+	/*
+	 * A clipped inline-block takes its bottom edge as its baseline, which would
+	 * raise it above the text and grow the line box, so it aligns to the top.
+	 */
 	.meta-space {
 		display: inline-block;
 		inline-size: 0;
 		overflow: hidden;
+		vertical-align: top;
 	}
 
 	/*

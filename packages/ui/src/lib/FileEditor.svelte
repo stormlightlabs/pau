@@ -364,12 +364,6 @@
 		gap: var(--pau-space-1);
 	}
 
-	/* Header and banner buttons stay compact; color comes from the shared variants. */
-	button {
-		min-height: var(--pau-size-row-sm);
-		padding: var(--pau-space-1) var(--pau-space-2);
-	}
-
 	button:focus-visible {
 		outline-offset: var(--pau-focus-offset-inset);
 	}
@@ -437,12 +431,6 @@
 		.file-editor__actions,
 		.file-editor__external > div:last-child {
 			flex-wrap: wrap;
-		}
-	}
-
-	@media (pointer: coarse) {
-		button {
-			min-height: var(--pau-size-target-touch);
 		}
 	}
 </style>

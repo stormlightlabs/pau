@@ -158,7 +158,11 @@
 					<strong>Temporary payload tracing</strong>
 					<p>Records payload shapes, not prompts, file contents, tool arguments, credentials, or environment values.</p>
 				</div>
-				<button type="button" disabled={bundle.settings.payloadTracing} onclick={() => onStartPayloadTracing?.(300)}>
+				<button
+					class="pau-button pau-button--secondary"
+					type="button"
+					disabled={bundle.settings.payloadTracing}
+					onclick={() => onStartPayloadTracing?.(300)}>
 					{bundle.settings.payloadTracing ? 'Tracing active' : 'Trace for 5 minutes'}
 				</button>
 			</div>
@@ -189,10 +193,11 @@
 			<label
 				><span>Destination</span><input bind:value={destination} aria-label="Diagnostic bundle destination" /></label>
 			<div class="diagnostics-view__export-actions">
-				<button type="button" onclick={() => (reviewOpen = !reviewOpen)}>
+				<button class="pau-button pau-button--secondary" type="button" onclick={() => (reviewOpen = !reviewOpen)}>
 					{reviewOpen ? 'Close review' : 'Review bundle'}
 				</button>
 				<button
+					class="pau-button pau-button--secondary"
 					type="button"
 					disabled={!reviewOpen || destination.trim().length === 0}
 					onclick={() => onExport?.(destination, bundle.revision)}>Export reviewed bundle</button>
@@ -287,27 +292,6 @@
 		font: inherit;
 	}
 
-	.diagnostics-view button {
-		min-height: var(--pau-size-row-lg);
-		padding-inline: var(--pau-space-3);
-		color: var(--pau-text);
-		background: transparent;
-		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-control);
-		font: inherit;
-		cursor: pointer;
-	}
-
-	.diagnostics-view button:hover:not(:disabled) {
-		border-color: var(--pau-accent);
-	}
-
-	.diagnostics-view button:disabled {
-		opacity: 0.55;
-		cursor: not-allowed;
-	}
-
-	.diagnostics-view button:focus-visible,
 	.diagnostics-view input:focus-visible {
 		outline: var(--pau-focus-width) solid var(--pau-focus);
 		outline-offset: var(--pau-focus-offset);

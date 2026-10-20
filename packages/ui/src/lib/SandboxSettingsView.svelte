@@ -684,13 +684,6 @@
 		list-style: disc;
 	}
 
-	/* Workbench actions are a step larger than transcript controls. */
-	.pau-button {
-		min-height: var(--pau-size-row-lg);
-		padding: var(--pau-space-2) var(--pau-space-3);
-		font-size: var(--pau-type-sm);
-	}
-
 	@media (max-width: 42rem) {
 		dl {
 			grid-template-columns: 1fr;

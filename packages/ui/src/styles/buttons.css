@@ -4,9 +4,10 @@
  * Alternatives use `pau-button--secondary`, local utilities use
  * `pau-button--quiet`, and actions that end work use `pau-button--danger`.
  *
- * These rules own color, border, weight, cursor, focus, and disabled state.
- * Components may adjust size and spacing on top of them, but must not
- * restyle the colors, so the accent stays reserved for the primary action.
+ * These rules own size, color, border, weight, cursor, focus, and disabled
+ * state. Every view action shares one height and text size, so components
+ * may place and space buttons but must not resize or recolor them. The
+ * accent stays reserved for the primary action.
  *
  * A disabled button of any variant drops to muted text, and a disabled
  * primary also loses the accent fill for the raised surface. Opacity is not
@@ -24,6 +25,7 @@
 	border: 1px solid var(--pau-border);
 	border-radius: var(--pau-radius-control);
 	font: inherit;
+	font-size: var(--pau-type-md);
 	font-weight: var(--pau-weight-medium);
 	cursor: pointer;
 }

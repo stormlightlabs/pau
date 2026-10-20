@@ -209,8 +209,8 @@
 	}
 
 	.context-menu__item:focus-visible {
-		outline: 2px solid var(--pau-focus);
-		outline-offset: -2px;
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset-inset);
 	}
 
 	.context-menu__item[aria-disabled='true'] {
@@ -237,7 +237,7 @@
 
 	@media (forced-colors: active) {
 		.context-menu__item:focus {
-			outline: 2px solid Highlight;
+			outline: var(--pau-focus-width) solid Highlight;
 		}
 	}
 </style>

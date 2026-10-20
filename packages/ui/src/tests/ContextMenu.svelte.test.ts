@@ -4,6 +4,8 @@ import { render } from 'vitest-browser-svelte';
 
 import { contextMenuRequest, isContextMenuKey, revealLabel, type ContextMenuItem } from '../lib/context-menu';
 import ContextMenu from '../lib/ContextMenu.svelte';
+import '../styles/tokens.css';
+import { applyTheme } from './apply-theme';
 
 const items: ContextMenuItem[] = [
 	{ id: 'open', label: 'Open' },
@@ -58,6 +60,25 @@ test('explains a disabled item and refuses it', async () => {
 
 	expect(onSelect).not.toHaveBeenCalled();
 	expect(onClose).not.toHaveBeenCalled();
+});
+
+test('draws the item focus ring from the focus tokens, so higher contrast widens it', async () => {
+	applyTheme();
+	await renderMenu();
+	await userEvent.keyboard('{ArrowDown}');
+	await expect.element(page.getByRole('menuitem', { name: 'Copy path' })).toHaveFocus();
+	const item = page.getByRole('menuitem', { name: 'Copy path' }).element();
+	const root = getComputedStyle(document.documentElement);
+
+	expect(getComputedStyle(item).outlineWidth).toBe(root.getPropertyValue('--pau-focus-width').trim());
+	expect(getComputedStyle(item).outlineOffset).toBe(root.getPropertyValue('--pau-focus-offset-inset').trim());
+
+	document.documentElement.style.setProperty('--pau-focus-width', '3px');
+	try {
+		expect(getComputedStyle(item).outlineWidth).toBe('3px');
+	} finally {
+		document.documentElement.style.removeProperty('--pau-focus-width');
+	}
 });
 
 test('runs the chosen item and returns focus to the invoker', async () => {

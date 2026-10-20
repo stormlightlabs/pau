@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Buttons in Diagnostics, Processes, MCP, sandbox settings, and the file editor
+  now share one size, and the context menu uses the standard focus ring.
 - Every main view now uses the same title size with its status on the title
   line, Markdown headings step down from h1 to h3, and the saved-session picker,
   file messages, Diagnostics, and Sandbox line up with the view content.

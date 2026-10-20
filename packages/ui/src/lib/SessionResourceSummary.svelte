@@ -57,10 +57,13 @@
 				{#if snapshot.sessionId && (actions.interrupt || actions.stop)}
 					<div>
 						{#if actions.interrupt}
-							<button type="button" onclick={() => onInterrupt?.(snapshot.sessionId!)}>Interrupt work</button>
+							<button
+								class="pau-button pau-button--secondary"
+								type="button"
+								onclick={() => onInterrupt?.(snapshot.sessionId!)}>Interrupt work</button>
 						{/if}
 						{#if actions.stop}
-							<button class="resource-summary__stop" type="button" onclick={() => onStop?.(snapshot.sessionId!)}>
+							<button class="pau-button pau-button--danger" type="button" onclick={() => onStop?.(snapshot.sessionId!)}>
 								Stop session
 							</button>
 						{/if}
@@ -148,26 +151,6 @@
 		display: flex;
 		gap: var(--pau-space-2);
 		margin-top: var(--pau-space-1);
-	}
-
-	button {
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
-		color: var(--pau-warning);
-		background: transparent;
-		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-control);
-		font: inherit;
-		cursor: pointer;
-	}
-
-	button:focus-visible {
-		outline: var(--pau-focus-width) solid var(--pau-focus);
-		outline-offset: var(--pau-focus-offset);
-	}
-
-	.resource-summary__stop {
-		color: var(--pau-danger);
 	}
 
 	.resource-summary__empty {

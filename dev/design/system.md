@@ -195,7 +195,9 @@ secondary buttons so it never competes with the surface's primary. Actions that
 remove or end something use the danger variant. A disabled primary drops the
 accent fill for the raised surface and muted text, and never relies on
 opacity, so it cannot read as enabled. The shared `pau-button` variants in
-`packages/ui` own these colors, and components only adjust size and spacing.
+`packages/ui` own these colors and the size: a `row-md` (32px) height and
+`type-md` (14px) text in every view, toolbars and banners included. Components
+place and space buttons but do not resize them.
 
 Controls that show or hide a rail, sidebar, or inspector belong in the top app
 bar. Keep task-specific actions in the task surface.

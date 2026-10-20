@@ -295,7 +295,9 @@
 		background: transparent;
 		border: 0;
 		border-left: 2px solid transparent;
+		font: inherit;
 		text-align: left;
+		cursor: pointer;
 	}
 
 	.mcp__server-row.selected {
@@ -329,22 +331,11 @@
 
 	button {
 		flex: none;
-		border-radius: var(--pau-radius-control);
-		font-family: inherit;
-		font-size: inherit;
-		cursor: pointer;
 	}
 
 	button:focus-visible {
 		outline: var(--pau-focus-width) solid var(--pau-focus);
 		outline-offset: var(--pau-focus-offset);
-	}
-
-	/* Workbench actions are a step larger than transcript controls. */
-	.pau-button {
-		min-height: var(--pau-size-row-lg);
-		padding: var(--pau-space-2) var(--pau-space-3);
-		font-size: var(--pau-type-sm);
 	}
 
 	.mcp__sources h3 {

@@ -238,17 +238,3 @@ Verification:
 - Measure the shared leading edge and the 8px mark gap, and screenshot a tool
   row hover and expanded tool groups.
 
-### 2.275 One control size for buttons and menus
-
-Status: planned
-Blocked by: none
-
-Remove per-view button size overrides so view actions use the shared button
-styles, with at most one documented compact size. Use focus tokens for the
-context menu's focus ring.
-
-Verification:
-
-- Measure every view action button at the shared height, and the context menu
-  outline at the focus width token.
-

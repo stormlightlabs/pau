@@ -95,10 +95,14 @@
 					</span>
 					<div class="process-row__actions" role="cell">
 						{#if process.sessionId && actions[process.processId]?.interrupt}
-							<button type="button" onclick={() => onInterrupt?.(process.sessionId!)}>Interrupt</button>
+							<button
+								class="pau-button pau-button--secondary"
+								type="button"
+								onclick={() => onInterrupt?.(process.sessionId!)}>Interrupt</button>
 						{/if}
 						{#if process.sessionId && actions[process.processId]?.stop}
-							<button class="process-row__stop" type="button" onclick={() => onStop?.(process.sessionId!)}>Stop</button>
+							<button class="pau-button pau-button--danger" type="button" onclick={() => onStop?.(process.sessionId!)}
+								>Stop</button>
 						{/if}
 					</div>
 				</div>
@@ -221,21 +225,6 @@
 		display: flex;
 		justify-content: end;
 		gap: var(--pau-space-1);
-	}
-
-	.process-row__actions button {
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-2);
-		color: var(--pau-text);
-		background: transparent;
-		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-control);
-		font: inherit;
-		cursor: pointer;
-	}
-
-	.process-row__actions .process-row__stop {
-		color: var(--pau-danger);
 	}
 
 	button:focus-visible {

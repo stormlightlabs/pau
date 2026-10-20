@@ -403,37 +403,37 @@ export const FailedTurn: Story = {
 	args: { workspaces: sessionFixtures.failedTurn, initialSessionId: 'session-idle' },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await expect(canvas.getByRole('button', { name: 'Retry' })).toBeEnabled();
+		await expect(canvas.getByRole('button', { name: 'Send message again' })).toBeEnabled();
 	}
 };
-export const FailedTurnWithoutRetry: Story = {
+export const FailedTurnWithoutSendAgain: Story = {
 	args: { workspaces: sessionFixtures.failedTurnWithoutRetry, initialSessionId: 'session-idle' },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
 		await expect(canvas.getByText(/529 overloaded/)).toBeInTheDocument();
-		await expect(canvas.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole('button', { name: 'Send message again' })).not.toBeInTheDocument();
 	}
 };
-export const Retrying: Story = {
+export const SendingAgain: Story = {
 	args: { workspaces: sessionFixtures.failedTurn, initialSessionId: 'session-idle' },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await userEvent.click(canvas.getByRole('button', { name: 'Retry' }));
+		await userEvent.click(canvas.getByRole('button', { name: 'Send message again' }));
 		await expect(canvas.getByText('session-idle: retry')).toBeInTheDocument();
-		await expect(canvas.getByRole('button', { name: 'Retrying…' })).toBeDisabled();
+		await expect(canvas.getByRole('button', { name: 'Sending…' })).toBeDisabled();
 	}
 };
-export const RetryRejected: Story = {
+export const SendAgainRejected: Story = {
 	args: {
 		workspaces: sessionFixtures.failedTurn,
 		initialSessionId: 'session-idle',
-		retryFailure: 'That turn did not fail, so there is nothing to retry.'
+		retryFailure: 'The last reply did not fail, so there is nothing to send again.'
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await userEvent.click(canvas.getByRole('button', { name: 'Retry' }));
-		await expect(await canvas.findByRole('alert')).toHaveTextContent('nothing to retry');
-		await expect(canvas.getByRole('button', { name: 'Retry' })).toBeEnabled();
+		await userEvent.click(canvas.getByRole('button', { name: 'Send message again' }));
+		await expect(await canvas.findByRole('alert')).toHaveTextContent('nothing to send again');
+		await expect(canvas.getByRole('button', { name: 'Send message again' })).toBeEnabled();
 	}
 };
 export const AutomaticRetryPending: Story = {

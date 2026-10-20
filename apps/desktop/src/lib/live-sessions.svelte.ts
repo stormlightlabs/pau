@@ -140,7 +140,7 @@ export function sessionErrorMessage(
 			return 'The session changed state before Pau could send that. If it is running, wait for the run to finish, then try again.';
 		}
 		case 'control_rejected': {
-			if (action === 'retry') return 'That turn did not fail, so there is nothing to retry.';
+			if (action === 'retry') return 'The last reply did not fail, so there is nothing to send again.';
 			if (action === 'compact') return `Pi could not compact this session: ${cause.message}`;
 			return `Pi rejected the request: ${cause.message}`;
 		}

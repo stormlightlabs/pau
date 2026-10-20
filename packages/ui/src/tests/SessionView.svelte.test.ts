@@ -231,40 +231,40 @@ test('stops the active session from its header', async () => {
 	expect(onStop).toHaveBeenCalledWith('session-idle');
 });
 
-test('retries only the latest failed turn of an idle session', async () => {
+test('offers to send the prompt of the latest failed turn again', async () => {
 	const onRetry = vi.fn();
 	await render(SessionView, { workspaces: sessionFixtures.failedTurn, activeSessionId: 'session-idle', onRetry });
 
-	await userEvent.click(page.getByRole('button', { name: 'Retry' }));
+	await userEvent.click(page.getByRole('button', { name: 'Send message again' }));
 
 	expect(onRetry).toHaveBeenCalledWith('session-idle');
-	await expect.element(page.getByRole('button', { name: 'Retrying…' })).toBeDisabled();
+	await expect.element(page.getByRole('button', { name: 'Sending…' })).toBeDisabled();
 });
 
-test('offers no retry while running, without the capability, or when disconnected', async () => {
+test('offers no send-again action while running, without the capability, or when disconnected', async () => {
 	const failed = sessionFixtures.failedTurn[0]!.sessions[0]!;
 	const running = [{ id: 'pau', name: 'Pau', sessions: [{ ...failed, status: 'running' as const }] }];
 	const view = await render(SessionView, { workspaces: running, activeSessionId: 'session-idle' });
-	await expect.element(page.getByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+	await expect.element(page.getByRole('button', { name: 'Send message again' })).not.toBeInTheDocument();
 
 	await view.rerender({ workspaces: sessionFixtures.failedTurnWithoutRetry, activeSessionId: 'session-idle' });
-	await expect.element(page.getByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+	await expect.element(page.getByRole('button', { name: 'Send message again' })).not.toBeInTheDocument();
 
 	await view.rerender({ workspaces: sessionFixtures.failedTurn, activeSessionId: 'session-idle', disconnected: true });
-	await expect.element(page.getByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+	await expect.element(page.getByRole('button', { name: 'Send message again' })).not.toBeInTheDocument();
 });
 
-test('shows why a retry was rejected and allows another attempt', async () => {
+test('shows why sending again was rejected and allows another attempt', async () => {
 	await render(SessionView, {
 		workspaces: sessionFixtures.failedTurn,
 		activeSessionId: 'session-idle',
-		onRetry: () => Promise.reject(new Error('That turn did not fail, so there is nothing to retry.'))
+		onRetry: () => Promise.reject(new Error('The last reply did not fail, so there is nothing to send again.'))
 	});
 
-	await userEvent.click(page.getByRole('button', { name: 'Retry' }));
+	await userEvent.click(page.getByRole('button', { name: 'Send message again' }));
 
-	await expect.element(page.getByRole('alert').filter({ hasText: 'nothing to retry' })).toBeVisible();
-	await expect.element(page.getByRole('button', { name: 'Retry' })).toBeEnabled();
+	await expect.element(page.getByRole('alert').filter({ hasText: 'nothing to send again' })).toBeVisible();
+	await expect.element(page.getByRole('button', { name: 'Send message again' })).toBeEnabled();
 });
 
 test('counts down an automatic retry and cancels it', async () => {

@@ -1222,7 +1222,7 @@ pub(crate) async fn get_session_history(
     Ok(Json(session.input_history().await?))
 }
 
-/// Runs the last prompt again after a failed assistant turn.
+/// Sends the last prompt again as a new message after a failed assistant turn.
 pub(crate) async fn retry_session(
     State(state): State<ApiState>,
     AxumPath(session_id): AxumPath<String>,

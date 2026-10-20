@@ -732,14 +732,17 @@ impl PiSession {
         self.native_session().await
     }
 
-    /// Runs the last user prompt again after the assistant turn failed.
+    /// Sends the last user prompt again as a new message after the assistant
+    /// turn failed.
     ///
-    /// Pi's RPC protocol has no retry command, so this reads the conversation
-    /// with `get_messages`, requires the last message to be an assistant turn
-    /// that ended with an error, and sends the user prompt before it as a new
-    /// prompt. The retry therefore adds a second copy of that prompt to the
-    /// session history. Use [`Self::set_auto_retry`] for transient provider
-    /// errors that Pi can retry in place.
+    /// Pi's RPC protocol has no command that reruns a turn in place, so this
+    /// reads the conversation with `get_messages`, requires the last message to
+    /// be an assistant turn that ended with an error, and sends the user prompt
+    /// before it as a new prompt. The session file therefore holds a second
+    /// copy of that prompt, and clients must label the action as sending the
+    /// message again rather than as a retry. Pi's automatic retry, configured
+    /// with [`Self::set_auto_retry`], reruns transient provider errors in place
+    /// without that copy. Only the prompt text is sent again.
     pub async fn retry(&self) -> Result<(), PiSessionError> {
         let control = AgentControl::Retry;
         self.require_capability(control)?;
@@ -994,7 +997,7 @@ fn parse_model(entry: &Value, current: Option<&ModelKey<'_>>) -> Result<PiModel,
 }
 
 /// Returns the user prompt that preceded a failed final assistant turn, or why
-/// there is nothing to retry.
+/// there is nothing to send again.
 fn failed_turn_prompt(messages: &[Value]) -> Result<String, String> {
     fn role(message: &Value) -> Option<&str> {
         message.get("role").and_then(Value::as_str)
@@ -1010,7 +1013,7 @@ fn failed_turn_prompt(messages: &[Value]) -> Result<String, String> {
         .iter()
         .rev()
         .find(|message| role(message) == Some("user"))
-        .ok_or_else(|| "the failed turn has no user prompt to retry".to_owned())?;
+        .ok_or_else(|| "the failed turn has no user prompt to send again".to_owned())?;
     let text = match user.get("content") {
         Some(Value::String(text)) => text.clone(),
         Some(Value::Array(blocks)) => blocks
@@ -1022,7 +1025,7 @@ fn failed_turn_prompt(messages: &[Value]) -> Result<String, String> {
         _ => String::new(),
     };
     if text.is_empty() {
-        return Err("the failed prompt has no text to retry".to_owned());
+        return Err("the failed prompt has no text to send again".to_owned());
     }
     Ok(text)
 }

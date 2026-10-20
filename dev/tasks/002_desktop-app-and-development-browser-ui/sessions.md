@@ -223,20 +223,6 @@ Verification:
 - Component-test interrupting with queued messages, with an empty queue, and
   with a draft already in the composer.
 
-### 2.240 Retry without a duplicate prompt
-
-Status: planned
-Blocked by: none
-
-Retry a failed turn without writing a second copy of its prompt to the session
-file. If Pi offers no way to do that over RPC, replace the manual retry control
-with a clearly labelled send-again action and rely on Pi's automatic retry.
-
-Verification:
-
-- Cover retrying a failed turn against the Pi fixture and confirm the session
-  file holds the prompt once.
-
 ### 2.241 Model thinking levels API
 
 Status: planned

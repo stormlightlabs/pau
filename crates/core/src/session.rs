@@ -56,7 +56,8 @@ pub struct SessionCapabilities {
     pub compaction: bool,
     /// Whether the session exposes its entry tree and can branch from it.
     pub branching: bool,
-    /// Whether the session can retry a failed turn and manage automatic retry.
+    /// Whether the session can send a failed turn's prompt again and manage
+    /// automatic retry.
     pub retry: bool,
     /// Whether the session can be renamed.
     pub rename: bool,

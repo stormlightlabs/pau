@@ -26,7 +26,7 @@ deliverable, and blocker lists may name units in any area file.
 ### 2.40 Pi TUI parity and primary dogfood gate
 
 Status: planned
-Blocked by: 2.116, 2.156, 2.185, 2.235, 2.239, 2.240, 2.242
+Blocked by: 2.116, 2.156, 2.185, 2.235, 2.239, 2.242
 
 Confirm that the desktop app covers vanilla Pi's interactive workflows, then do
 normal project work through Pau. Use vanilla Pi in the persistent terminal only

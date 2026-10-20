@@ -29,7 +29,8 @@ pub enum AgentControl {
     AutoCompaction,
     /// Read the session tree and continue from an earlier user message.
     Branching,
-    /// Run the last user prompt again after a failed assistant turn.
+    /// Send the last user prompt again as a new message after a failed
+    /// assistant turn.
     Retry,
     /// Enable or disable automatic retry of transient provider errors.
     AutoRetry,
@@ -59,7 +60,7 @@ impl fmt::Display for AgentControl {
             Self::Compact => "compact",
             Self::AutoCompaction => "change automatic compaction",
             Self::Branching => "branching",
-            Self::Retry => "retry",
+            Self::Retry => "resend",
             Self::AutoRetry => "change automatic retry",
             Self::AbortRetry => "abort retry",
             Self::Rename => "rename",
@@ -96,8 +97,8 @@ pub struct AgentCapabilities {
     pub compaction: bool,
     /// Whether the adapter exposes the session tree and can branch it.
     pub branching: bool,
-    /// Whether the adapter can retry a failed turn, configure automatic retry,
-    /// and cancel a pending automatic retry.
+    /// Whether the adapter can send a failed turn's prompt again, configure
+    /// automatic retry, and cancel a pending automatic retry.
     pub retry: bool,
     /// Whether the adapter can rename the session.
     pub rename: bool,

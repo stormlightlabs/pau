@@ -924,7 +924,8 @@ compaction: boolean,
  */
 branching: boolean,
 /**
- * Whether the session can retry a failed turn and manage automatic retry.
+ * Whether the session can send a failed turn's prompt again and manage
+ * automatic retry.
  */
 retry: boolean,
 /**

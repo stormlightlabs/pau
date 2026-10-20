@@ -534,7 +534,7 @@ async fn compacts_manually_and_reports_failed_compaction() {
 }
 
 #[tokio::test]
-async fn retries_a_failed_turn_and_manages_automatic_retry() {
+async fn sends_a_failed_turn_prompt_again_and_manages_automatic_retry() {
     let fixture = FakePi::new(CONTROL_FIXTURE);
     let session = PiSession::start(fixture.options()).unwrap();
     let mut output = session.subscribe();
@@ -612,7 +612,7 @@ async fn retries_a_failed_turn_and_manages_automatic_retry() {
 }
 
 #[tokio::test]
-async fn refuses_to_retry_when_the_last_turn_succeeded() {
+async fn refuses_to_send_again_when_the_last_turn_succeeded() {
     let fixture = FakePi::new(CONTROL_FIXTURE);
     let session = PiSession::start(fixture.options()).unwrap();
     session.prompt("healthy", Vec::new(), None).await.unwrap();

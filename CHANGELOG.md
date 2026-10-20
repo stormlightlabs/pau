@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- After a reply fails, its button now reads "Send message again", because it
+  sends your message as a new one. Pi still retries temporary provider errors on
+  its own.
 - Each screen highlights one main action, and disabled main buttons no longer
   look clickable.
 - A stopped or failed session shows its state and a Start again button in place

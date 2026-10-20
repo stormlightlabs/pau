@@ -115,7 +115,12 @@
 		onSearchFiles?: (workspaceId: string, query: string) => Promise<FileMention[]>;
 		onInterrupt?: (sessionId: string) => void | Promise<void>;
 		onStop?: (sessionId: string) => void | Promise<void>;
-		/** Re-sends the last prompt after a failed turn. A rejected promise shows its message beside the control. */
+		/**
+		 * Sends the last prompt again as a new message after a failed turn. Pi has
+		 * no way to rerun a turn in place, so the prompt appears twice in the
+		 * session. Pi's automatic retry handles transient provider errors without
+		 * that copy. A rejected promise shows its message beside the control.
+		 */
 		onRetry?: (sessionId: string) => void | Promise<void>;
 		/** Cancels an automatic retry that is waiting to run. */
 		onCancelRetry?: (sessionId: string) => void | Promise<void>;
@@ -540,7 +545,7 @@
 	const canRetry = $derived(
 		Boolean(activeSession?.capabilities.retry) && activeSession?.status === 'idle' && !disconnected
 	);
-	/** Only the failure that ended the transcript can be retried. */
+	/** Only the failure that ended the transcript offers to send its prompt again. */
 	const retryableEntryId = $derived.by(() => {
 		const last = activeSession?.transcript.at(-1);
 		return last?.kind === 'message' && last.failed ? last.id : undefined;
@@ -1530,7 +1535,7 @@
 			await onRetry(activeSession.id);
 		} catch (cause) {
 			retryingSessionId = undefined;
-			retryError = cause instanceof Error ? cause.message : 'The turn could not be retried. Try again.';
+			retryError = cause instanceof Error ? cause.message : 'Your message could not be sent again. Try again.';
 		}
 	}
 
@@ -2230,7 +2235,7 @@
 											class="pau-button pau-button--secondary session-message__retry"
 											disabled={retrying}
 											onclick={() => void retry()}>
-											{retrying ? 'Retrying…' : 'Retry'}
+											{retrying ? 'Sending…' : 'Send message again'}
 										</button>
 									{/if}
 								</article>

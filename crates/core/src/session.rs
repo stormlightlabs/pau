@@ -93,6 +93,11 @@ pub struct AgentSession {
     /// Absent until Pi reports it.
     #[serde(default)]
     pub thinking_level: Option<SessionThinkingLevel>,
+    /// Thinking levels the current model supports, in the order Pi lists
+    /// them. A model without reasoning support offers only `off`. The list
+    /// follows the model and changes with it. Empty until Pi reports it.
+    #[serde(default)]
+    pub thinking_levels: Vec<SessionThinkingLevel>,
     /// Display name Pi stores in the session file. Absent until the session
     /// is named or while Pi has not reported it.
     #[serde(default)]

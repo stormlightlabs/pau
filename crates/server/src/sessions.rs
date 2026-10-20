@@ -120,6 +120,8 @@ struct SessionRecord {
 struct NativeState {
     session_id: Option<String>,
     thinking_level: Option<SessionThinkingLevel>,
+    /// Levels the current model supports, from `get_available_thinking_levels`.
+    thinking_levels: Vec<SessionThinkingLevel>,
     name: Option<String>,
 }
 
@@ -418,14 +420,31 @@ impl SessionApi {
         let Ok(state) = session.state().await else {
             return false;
         };
+        let mut native = record.native.lock().expect("native state lock poisoned");
         let fresh = NativeState {
             session_id: state.native_id,
             thinking_level: state.thinking_level.map(session_thinking_level),
+            thinking_levels: native.thinking_levels.clone(),
             name: state.name,
         };
-        let mut native = record.native.lock().expect("native state lock poisoned");
         let changed = *native != fresh;
         *native = fresh;
+        changed
+    }
+
+    /// Reads the thinking levels the current model supports into the record
+    /// and reports whether they changed. A failed read keeps the last levels.
+    ///
+    /// Only the model decides the levels, so the API reads them when the
+    /// session starts and after a model change rather than on every refresh.
+    async fn refresh_thinking_levels(&self, record: &SessionRecord, session: &PiSession) -> bool {
+        let Ok(levels) = session.thinking_levels().await else {
+            return false;
+        };
+        let levels: Vec<_> = levels.into_iter().map(session_thinking_level).collect();
+        let mut native = record.native.lock().expect("native state lock poisoned");
+        let changed = native.thinking_levels != levels;
+        native.thinking_levels = levels;
         changed
     }
 
@@ -580,6 +599,7 @@ fn describe(id: &str, record: &SessionRecord, status: SessionStatus) -> AgentSes
         exit_code: None,
         native_session_id: native.session_id,
         thinking_level: native.thinking_level,
+        thinking_levels: native.thinking_levels,
         name: native.name,
         capabilities: session_capabilities(record.capabilities),
     }
@@ -913,6 +933,7 @@ pub(crate) async fn start_session(
     }
 
     api.refresh_native(&record, &session).await;
+    api.refresh_thinking_levels(&record, &session).await;
     let summary = describe(&id, &record, session_status(session.status().await));
     api.publish(&summary);
     Ok((StatusCode::CREATED, Json(summary)))
@@ -1081,12 +1102,16 @@ pub(crate) async fn select_session_model(
     Json(request): Json<SessionModelSelection>,
 ) -> Result<Json<Value>, ApiError> {
     let api = session_api(&state)?;
-    let (_, session) = api.live(&session_id).await?;
+    let (record, session) = api.live(&session_id).await?;
     let model = session
         .select_model(request.provider, request.model_id)
         .await?;
-    // Pi clamps the thinking level to what the new model supports.
-    api.refresh_and_publish(&session_id).await;
+    // The new model can offer different levels, and Pi clamps the thinking
+    // level to what it supports.
+    let levels_changed = api.refresh_thinking_levels(&record, &session).await;
+    if api.refresh_native(&record, &session).await || levels_changed {
+        api.publish_current(&session_id).await;
+    }
     Ok(Json(model))
 }
 

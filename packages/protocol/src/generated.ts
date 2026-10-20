@@ -978,6 +978,12 @@ native_session_id: string | null,
  */
 thinking_level: SessionThinkingLevel | null,
 /**
+ * Thinking levels the current model supports, in the order Pi lists
+ * them. A model without reasoning support offers only `off`. The list
+ * follows the model and changes with it. Empty until Pi reports it.
+ */
+thinking_levels: Array<SessionThinkingLevel>,
+/**
  * Display name Pi stores in the session file. Absent until the session
  * is named or while Pi has not reported it.
  */

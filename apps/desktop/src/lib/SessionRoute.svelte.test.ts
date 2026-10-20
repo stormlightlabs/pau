@@ -32,6 +32,7 @@ const idleSession: AgentSession = {
 	exit_code: null,
 	native_session_id: null,
 	thinking_level: null,
+	thinking_levels: [],
 	name: null,
 	capabilities: {
 		prompt: true,

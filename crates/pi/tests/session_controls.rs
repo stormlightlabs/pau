@@ -357,6 +357,33 @@ done
 }
 
 #[tokio::test]
+async fn reports_the_current_models_thinking_levels() {
+    let fixture = FakePi::new(CONTROL_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+
+    // The fixture starts on a model without reasoning support.
+    assert_eq!(
+        session.thinking_levels().await.unwrap(),
+        vec![ThinkingLevel::Off]
+    );
+
+    // Switching to a reasoning model changes the levels Pi reports.
+    session.select_model("fixture", "model-one").await.unwrap();
+    assert_eq!(
+        session.thinking_levels().await.unwrap(),
+        vec![
+            ThinkingLevel::Off,
+            ThinkingLevel::Minimal,
+            ThinkingLevel::Low,
+            ThinkingLevel::Medium,
+            ThinkingLevel::High,
+            ThinkingLevel::ExtraHigh,
+        ]
+    );
+    session.stop().await.unwrap();
+}
+
+#[tokio::test]
 async fn recalls_user_prompts_newest_first() {
     let fixture = FakePi::new(CONTROL_FIXTURE);
     let session = PiSession::start(fixture.options()).unwrap();
@@ -739,6 +766,14 @@ while IFS= read -r command; do
             ;;
         *'"type":"get_state"'*)
             printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"model":{"provider":"fixture","id":"model-two"}}}\n' "$id"
+            ;;
+        *'"type":"get_available_thinking_levels"'*)
+            if grep -q '"modelId":"model-one"' "$PWD/commands.jsonl"; then
+                levels='["off","minimal","low","medium","high","xhigh"]'
+            else
+                levels='["off"]'
+            fi
+            printf '{"id":"%s","type":"response","command":"get_available_thinking_levels","success":true,"data":{"levels":%s}}\n' "$id" "$levels"
             ;;
         *'"type":"get_available_models"'*)
             printf '{"id":"%s","type":"response","command":"get_available_models","success":true,"data":{"models":[{"id":"model-one","name":"Model One","provider":"fixture","reasoning":true,"input":["text","image"]},{"id":"model-two","provider":"fixture","reasoning":false,"input":["text"]}]}}\n' "$id"

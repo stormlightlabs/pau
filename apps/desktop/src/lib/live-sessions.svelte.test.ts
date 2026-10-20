@@ -14,6 +14,7 @@ const session = {
 	exit_code: null,
 	native_session_id: null,
 	thinking_level: null,
+	thinking_levels: [],
 	name: null,
 	capabilities: {}
 } as unknown as AgentSession;
@@ -159,4 +160,31 @@ test('clears a marker when the session is viewed and all markers on request', as
 	expect(unseen()).toBe(true);
 	sessions.clearUnseen();
 	expect(unseen()).toBe(false);
+});
+
+test('offers the thinking levels Pi reports for the current model', async () => {
+	const { sessions, socket } = await setup();
+	const levels = () => sessions.workspaces[0]?.sessions[0]?.thinkingLevels;
+	const report = (thinking_levels: AgentSession['thinking_levels'], sequence: number) =>
+		socket.receive({
+			type: 'event',
+			event: {
+				sequence,
+				timestamp: '2026-04-01T12:00:02Z',
+				workspace_id: 'pau',
+				session_id: 'session-1',
+				kind: 'session_changed',
+				payload: JSON.stringify({ ...session, thinking_levels })
+			}
+		});
+
+	// Pi has not reported levels yet.
+	expect(levels()).toBeUndefined();
+
+	report(['off', 'low', 'medium', 'high'], 1);
+	await vi.waitFor(() => expect(levels()).toEqual(['off', 'low', 'medium', 'high']));
+
+	// A model without reasoning offers only `off`.
+	report(['off'], 2);
+	await vi.waitFor(() => expect(levels()).toEqual(['off']));
 });

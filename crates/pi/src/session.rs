@@ -305,6 +305,31 @@ impl PiSession {
         })
     }
 
+    /// Lists the thinking levels the current model supports, in Pi's order.
+    ///
+    /// A model without reasoning support reports only [`ThinkingLevel::Off`].
+    /// The list follows the model, so callers read it again after a model
+    /// change. Levels this crate does not know are skipped.
+    pub async fn thinking_levels(&self) -> Result<Vec<ThinkingLevel>, PiSessionError> {
+        let control = AgentControl::SetThinkingLevel;
+        self.require_capability(control)?;
+        let response = self
+            .command(control, json!({"type": "get_available_thinking_levels"}))
+            .await?;
+        let levels = response
+            .get("data")
+            .and_then(|data| data.get("levels"))
+            .and_then(Value::as_array)
+            .ok_or_else(|| {
+                PiSessionError::NativeSession("Pi did not report thinking levels".to_owned())
+            })?;
+        Ok(levels
+            .iter()
+            .filter_map(Value::as_str)
+            .filter_map(ThinkingLevel::from_name)
+            .collect())
+    }
+
     /// Lists the prompt templates, skills, and extension commands Pi offers.
     pub async fn commands(&self) -> Result<Vec<PiCommand>, PiSessionError> {
         let control = AgentControl::ListCommands;

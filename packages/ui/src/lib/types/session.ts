@@ -275,6 +275,11 @@ export type SessionViewModel = {
 	model?: string;
 	/** Level last selected in this session, when known. */
 	thinkingLevel?: ThinkingLevel;
+	/**
+	 * Levels the current model supports, in order. A model without reasoning
+	 * offers only `off`. Absent until the agent reports them.
+	 */
+	thinkingLevels?: ThinkingLevel[];
 	/** Context and cost use, when the agent has reported it. */
 	usage?: SessionUsage;
 	status: SessionStatus;

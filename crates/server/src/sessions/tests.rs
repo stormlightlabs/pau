@@ -40,6 +40,11 @@ while IFS= read -r command; do
         *'"type":"get_state"'*)
             printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"%s","sessionFile":"%s/session.jsonl","thinkingLevel":"%s","sessionName":"%s","model":{"provider":"fixture","id":"%s"}}}\n' "$id" "$native" "$PWD" "$level" "$name" "$current"
             ;;
+        *'"type":"get_available_thinking_levels"'*)
+            levels='["off","minimal","low","medium","high","xhigh"]'
+            [ "$current" = model-two ] && levels='["off"]'
+            printf '{"id":"%s","type":"response","command":"get_available_thinking_levels","success":true,"data":{"levels":%s}}\n' "$id" "$levels"
+            ;;
         *'"message":"exit"'*) exit 3 ;;
         *'"message":"dialogs"'*)
             printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
@@ -483,11 +488,13 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
             "get_state",
             "set_model",
             "get_state",
+            "get_available_thinking_levels",
             "get_commands",
             "get_state",
             "get_available_models",
             "get_entries",
             "set_model",
+            "get_available_thinking_levels",
             "get_state",
             "set_model",
             "set_thinking_level",
@@ -617,6 +624,7 @@ async fn reports_usage_on_request_and_after_assistant_messages() {
         [
             "get_state",
             "get_state",
+            "get_available_thinking_levels",
             "get_session_stats",
             "prompt",
             "get_session_stats"
@@ -674,6 +682,7 @@ async fn renames_and_clones_a_session() {
         [
             "get_state",
             "get_state",
+            "get_available_thinking_levels",
             "set_session_name",
             "get_state",
             "set_session_name",
@@ -1032,6 +1041,10 @@ async fn reports_native_session_state_as_pi_changes_it() {
     let (_, started) = fixture.start(None).await;
     assert_eq!(started["native_session_id"], "native");
     assert_eq!(started["thinking_level"], "medium");
+    assert_eq!(
+        started["thinking_levels"],
+        json!(["off", "minimal", "low", "medium", "high", "xhigh"])
+    );
     let id = started["id"].as_str().unwrap();
     let base = format!("/api/sessions/{id}");
 
@@ -1041,12 +1054,15 @@ async fn reports_native_session_state_as_pi_changes_it() {
         .await;
     next_event(&mut stream, session_field("thinking_level", "xhigh")).await;
 
-    // Pi clamps the level when the new model cannot reason.
+    // Pi clamps the level when the new model cannot reason, and the model
+    // offers only `off`.
     let model = json!({"provider": "fixture", "model_id": "model-two"});
     fixture
         .call("PUT", &format!("{base}/model"), Some(model))
         .await;
-    next_event(&mut stream, session_field("thinking_level", "off")).await;
+    let changed = next_event(&mut stream, session_field("thinking_level", "off")).await;
+    let changed: Value = serde_json::from_str(&changed.payload).unwrap();
+    assert_eq!(changed["thinking_levels"], json!(["off"]));
 
     // A branch moves the session to a new native session.
     fixture

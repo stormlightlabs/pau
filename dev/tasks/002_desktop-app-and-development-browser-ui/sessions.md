@@ -223,24 +223,10 @@ Verification:
 - Component-test interrupting with queued messages, with an empty queue, and
   with a draft already in the composer.
 
-### 2.241 Model thinking levels API
-
-Status: planned
-Blocked by: none
-
-Report the current model's thinking levels from Pi's
-`get_available_thinking_levels` command and refresh them when the model
-changes.
-
-Verification:
-
-- Cover a reasoning model, a model without thinking levels, and a model change
-  against the Pi fixture.
-
 ### 2.242 Model-aware thinking levels
 
 Status: planned
-Blocked by: 2.241
+Blocked by: none
 
 Offer only the current model's thinking levels in the thinking-level picker and
 in Shift+Tab cycling.

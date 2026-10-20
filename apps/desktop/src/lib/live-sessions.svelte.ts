@@ -575,6 +575,7 @@ export class LiveSessions {
 				cloneSession: session.capabilities.clone_session
 			},
 			thinkingLevel: this.#pendingThinkingLevels[session.id] ?? session.thinking_level ?? undefined,
+			thinkingLevels: session.thinking_levels.length > 0 ? session.thinking_levels : undefined,
 			transcript: transcript.entries.map((entry) => {
 				if (entry.kind !== 'compaction' || !entry.firstKeptEntryId) return entry;
 				const tokensAfter = this.#compactionEstimates[session.id]?.[entry.firstKeptEntryId];

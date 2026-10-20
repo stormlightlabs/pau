@@ -221,3 +221,138 @@ Verification:
 - Component-test computed rule width and focus ring width with each media
   query emulated.
 - Check every shipped theme in Storybook.
+
+### 2.269 Composer footer fit and completion overlays
+
+Status: planned
+Blocked by: none
+
+Keep the composer footer on one row at 1440×900 with the context rail open and
+model controls shown. At narrow widths, keep the actions on the first row and
+wrap the quiet controls below them. Show `/` and `@` completion lists as a
+popover above the field so the transcript does not move.
+
+Verification:
+
+- Measure one shared center line for every footer control at 1440×900, at most
+  two footer rows at 800×560 with Send prompt on the first, and an unchanged
+  transcript position while a completion list is open.
+
+### 2.270 Transcript and session rail rhythm
+
+Status: planned
+Blocked by: 2.269
+
+Give the session rail status mark the same column and gap as the header mark.
+Use one disclosure treatment, a chevron with a hover state, for thinking, tool
+rows, and tool groups. Put message text, tool labels, tool bodies, and group
+summaries on one leading edge. Size the rail buttons alike, and make the
+attached image's Remove a quiet button.
+
+Verification:
+
+- Measure the shared leading edge and the 8px mark gap, and screenshot a tool
+  row hover and expanded tool groups.
+
+### 2.271 Metadata separators everywhere
+
+Status: planned
+Blocked by: none
+
+Render every metadata join with `MetaText` instead of a literal `·`,
+including tool outcomes, read ranges, file tree labels, and diagnostics text.
+
+Verification:
+
+- Confirm no literal separator joins remain outside `MetaText`, and measure
+  equal space on both sides of the dot in a shell command outcome.
+
+### 2.272 Shell chrome states and rows
+
+Status: planned
+Blocked by: none
+
+Keep the inspector closed below the docked width until the operator opens it,
+instead of opening it over the transcript when a session has resource data.
+Make product rail hover distinct from the active item, size context rail rows
+like the other rail rows, and keep main content padding on the spacing scale.
+
+Verification:
+
+- At 900px wide, a session with resource data shows the transcript with no
+  backdrop until the inspector toggle is pressed. Measure 32px context rail
+  rows and padding on the spacing scale, and screenshot product rail hover.
+
+### 2.273 Product tokens in settings views
+
+Status: planned
+Blocked by: none
+
+Replace the Storybook-only `--workbench-*` colors in the sandbox, MCP, and
+capability views with product tokens, so their borders and surfaces show in the
+app. Size the sandbox view by its container instead of the viewport. Give radio
+and checkbox rows one shared label gap.
+
+Verification:
+
+- Confirm no `--workbench-*` reference remains outside Storybook, field borders
+  compute to the theme border, the sandbox route has no horizontal overflow at
+  800×560, and choice labels sit 8px from their inputs.
+
+### 2.274 Processes view in the application shell
+
+Status: planned
+Blocked by: none
+
+Show the processes route inside the application shell with product navigation
+and live process data, and let its table recompose below its container width
+instead of forcing a minimum width.
+
+Verification:
+
+- Screenshot the route with the product rail and top bar, and measure no
+  horizontal overflow at 800×560 with Stop inside the main surface.
+
+### 2.275 One control size for buttons and menus
+
+Status: planned
+Blocked by: 2.273
+
+Remove per-view button size overrides so view actions use the shared button
+styles, with at most one documented compact size. Use focus tokens for the
+context menu's focus ring.
+
+Verification:
+
+- Measure every view action button at the shared height, and the context menu
+  outline at the focus width token.
+
+### 2.276 View titles, headings, and leading edges
+
+Status: planned
+Blocked by: 2.273
+
+Use one view title role for Files, Processes, Diagnostics, MCP, and Sandbox.
+Give Markdown headings a descending scale. Align the saved-session picker,
+editor blocked states, and route-level controls to the leading edge of the
+view content.
+
+Verification:
+
+- Measure the same title size on every main surface, Markdown h1 larger than h2
+  larger than h3, and shared leading edges for the picker, editor states, and
+  route controls.
+
+### 2.277 Dropdown error placement
+
+Status: planned
+Blocked by: none
+
+Anchor a rejected choice's message to the dropdown trigger and keep it inside
+the window, for the shared dropdown and the model and thinking pickers.
+
+Verification:
+
+- Measure the message inside the window at 600 and 1440 wide in each rejected
+  state, and inside the main surface for the composer's thinking picker at
+  800×560.

@@ -221,4 +221,3 @@ Verification:
 - Component-test computed rule width and focus ring width with each media
   query emulated.
 - Check every shipped theme in Storybook.
-

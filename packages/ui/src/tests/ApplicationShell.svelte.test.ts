@@ -2,6 +2,9 @@ import { page, userEvent } from 'vitest/browser';
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
+import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
+import { sessionFixtures } from '../fixtures/sessions';
+import SessionView from '../lib/SessionView.svelte';
 import ApplicationShellDemo from '../stories/ApplicationShellDemo.svelte';
 import KeyboardShortcutsDemo from '../stories/KeyboardShortcutsDemo.svelte';
 import { THEMES, UI_FONTS, type ThemeName, type UiFontName } from '../theme';
@@ -12,12 +15,55 @@ test('toggles contextual and inspector rails', async () => {
 	const navigationToggle = page.getByRole('button', { name: 'Open navigation' });
 	const inspector = page.getByRole('complementary', { name: 'Inspector' });
 
+	await userEvent.click(page.getByRole('button', { name: 'Show inspector' }));
 	await userEvent.click(inspector.getByRole('button', { name: 'Close inspector' }));
 	await expect.element(page.getByRole('button', { name: 'Show inspector' })).toHaveAttribute('aria-expanded', 'false');
 	await expect.element(inspector).not.toBeInTheDocument();
 
 	await userEvent.click(navigationToggle);
 	await expect.element(navigationToggle).toHaveAttribute('aria-expanded', 'true');
+});
+
+test('keeps a session inspector closed below the docking width until the operator opens it', async () => {
+	await page.viewport(900, 900);
+	await render(SessionView, {
+		workspaces: sessionFixtures.running,
+		activeSessionId: 'session-running',
+		resourceSnapshot: { ...resourceMonitoringFixtures.active[2]!, sessionId: 'session-running' }
+	});
+
+	const inspector = page.getByRole('complementary', { name: 'Inspector' });
+	await expect.element(page.getByRole('region', { name: 'Transcript' })).toBeVisible();
+	await expect.element(inspector).not.toBeInTheDocument();
+	expect(document.querySelector('.app-shell__backdrop')).toBeNull();
+
+	await userEvent.click(page.getByRole('button', { name: 'Show inspector' }));
+	await expect.element(inspector).toBeVisible();
+
+	await page.viewport(1440, 900);
+	await expect.element(inspector).toBeVisible();
+});
+
+test('sizes context rail rows like the other rail rows', async () => {
+	await page.viewport(1440, 900);
+	await render(ApplicationShellDemo);
+
+	const rows = [...document.querySelectorAll<HTMLElement>('.app-shell__context-rail a')];
+	expect(rows.length).toBeGreaterThan(0);
+	for (const row of rows) expect(row.getBoundingClientRect().height).toBe(32);
+});
+
+test.each([
+	[1440, 32],
+	[900, 24],
+	[600, 16]
+])('keeps main content padding on the spacing scale at %ipx', async (width, padding) => {
+	await page.viewport(width, 900);
+	await render(ApplicationShellDemo);
+
+	const style = getComputedStyle(page.getByRole('region', { name: 'Main surface content' }).element());
+	expect(style.paddingLeft).toBe(`${padding}px`);
+	expect(style.paddingTop).toBe(`${padding}px`);
 });
 
 test('puts the panel toggles and disconnected status in the top bar', async () => {

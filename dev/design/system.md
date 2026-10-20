@@ -69,6 +69,8 @@ scroll instead of chaining it into the shell.
 At narrower widths:
 
 1. Remove the inspector from the grid and open it as an overlay or full view.
+   Keep it closed until the operator opens it, so new detail never covers the
+   main surface.
 2. Collapse the contextual rail.
 3. Keep the product rail while its destinations still fit and remain useful.
 4. Give conversation, editor, and terminal surfaces the remaining area.

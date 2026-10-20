@@ -267,22 +267,6 @@ Verification:
 - Confirm no literal separator joins remain outside `MetaText`, and measure
   equal space on both sides of the dot in a shell command outcome.
 
-### 2.272 Shell chrome states and rows
-
-Status: planned
-Blocked by: none
-
-Keep the inspector closed below the docked width until the operator opens it,
-instead of opening it over the transcript when a session has resource data.
-Make product rail hover distinct from the active item, size context rail rows
-like the other rail rows, and keep main content padding on the spacing scale.
-
-Verification:
-
-- At 900px wide, a session with resource data shows the transcript with no
-  backdrop until the inspector toggle is pressed. Measure 32px context rail
-  rows and padding on the spacing scale, and screenshot product rail hover.
-
 ### 2.273 Product tokens in settings views
 
 Status: planned

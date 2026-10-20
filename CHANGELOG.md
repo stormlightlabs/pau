@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- The inspector no longer opens over the conversation in narrower windows. Open
+  it from the top bar when you need it.
 - Pau now opens at a comfortable size that fits your screen, and it can't be
   resized small enough to break the layout.
 - Composer controls, the session status, and the top bar line up correctly.

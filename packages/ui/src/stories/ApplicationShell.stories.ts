@@ -87,9 +87,11 @@ export const NarrowLayout: Story = {
 	parameters: { viewport: { defaultViewport: 'narrow' } },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		const inspector = canvas.getByRole('complementary', { name: 'Inspector' });
 		const navigationToggle = canvas.getByRole('button', { name: 'Open navigation' });
 
+		await expect(canvas.queryByRole('complementary', { name: 'Inspector' })).toBeNull();
+		await userEvent.click(canvas.getByRole('button', { name: 'Show inspector' }));
+		const inspector = canvas.getByRole('complementary', { name: 'Inspector' });
 		await userEvent.click(within(inspector).getByRole('button', { name: 'Close inspector' }));
 		await userEvent.click(navigationToggle);
 		await expect(navigationToggle).toHaveAttribute('aria-expanded', 'true');

@@ -45,6 +45,11 @@
 		productItems: ShellNavItem[];
 		contextItems: ShellNavItem[];
 		disconnected?: boolean;
+		/**
+		 * Whether the inspector starts open where it docks beside the main
+		 * surface. Narrower windows keep it closed until the operator opens it,
+		 * because there it would cover the main surface.
+		 */
 		inspectorOpen?: boolean;
 		theme?: ThemeName;
 		uiFont?: UiFontName;
@@ -113,10 +118,17 @@
 	/** Whether the operator hid the contextual rail on wide windows. */
 	let contextHidden = $state(false);
 	let hasContext = $derived(Boolean(context) || contextItems.length > 0);
-	let inspectorVisible = $derived(inspectorOpen);
 
 	/** Narrow windows show the contextual rail as an overlay instead of a column. */
 	const narrow = new MediaQuery('max-width: 48rem');
+	/** Below this width the inspector leaves the grid and opens over the main surface; matches the 74rem CSS query. */
+	const inspectorOverlay = new MediaQuery('max-width: 74rem');
+	let inspectorDocked = $derived(!inspectorOverlay.current);
+	/**
+	 * The operator's toggle overrides this until the window crosses the docking
+	 * width or `inspectorOpen` changes. An overlay never opens on its own.
+	 */
+	let inspectorVisible = $derived(inspectorOpen && inspectorDocked);
 
 	const contextFocus = createFocusReturn();
 	const inspectorFocus = createFocusReturn();
@@ -190,12 +202,9 @@
 	const MIN_PANE_WIDTH = 160;
 	/** Width the main surface keeps, matching the `minmax(24rem, 1fr)` grid track. */
 	const MIN_MAIN_WIDTH = 384;
-	/** Viewport width above which the inspector docks in the grid; keep in sync with the 74rem media query. */
-	const INSPECTOR_DOCK_WIDTH = 1184;
 
 	let shell = $state<HTMLElement>();
 	let shellWidth = $state(0);
-	let viewportWidth = $state(0);
 	let railWidth = $state(0);
 	let contextWidth = $state(0);
 	let inspectorWidth = $state(0);
@@ -203,7 +212,6 @@
 	let inspectorDragging = $state(false);
 	/** Widths kept by the latest resize. They stay in effect until `paneWidths` changes. */
 	let kept = $derived<ShellPaneWidths>({ ...paneWidths });
-	let inspectorDocked = $derived(viewportWidth >= INSPECTOR_DOCK_WIDTH);
 
 	/** Largest width a pane can take while the main surface keeps its minimum. */
 	function maxPaneWidth(pane: keyof ShellPaneWidths): number {
@@ -264,7 +272,6 @@
 	);
 </script>
 
-<svelte:window bind:innerWidth={viewportWidth} />
 <a class="app-shell__skip-link" href="#main-surface">Skip to main surface</a>
 <div
 	class:app-shell--with-inspector={inspectorVisible && inspector}
@@ -685,7 +692,11 @@
 		text-decoration: none;
 	}
 
-	.app-shell__product-rail a:hover,
+	.app-shell__product-rail a:hover {
+		color: var(--shell-text);
+		background: var(--shell-surface-raised);
+	}
+
 	.app-shell__product-rail .active {
 		color: var(--shell-accent);
 		background: var(--shell-surface-raised);
@@ -750,8 +761,8 @@
 		display: grid;
 		grid-template-columns: 0.5rem minmax(0, 1fr) auto;
 		align-items: center;
-		gap: var(--pau-space-3);
-		min-height: var(--pau-size-target-touch);
+		gap: var(--pau-space-2);
+		min-height: var(--pau-size-row-md);
 		padding-inline: var(--pau-space-3);
 		color: var(--shell-muted);
 		text-decoration: none;
@@ -761,6 +772,12 @@
 	.app-shell__context-rail a.active {
 		color: var(--shell-text);
 		background: var(--shell-surface-raised);
+	}
+
+	@media (pointer: coarse) {
+		.app-shell__context-rail a {
+			min-height: var(--pau-size-target-touch);
+		}
 	}
 
 	.app-shell__context-rail small {
@@ -844,7 +861,7 @@
 
 	.app-shell__main-content {
 		min-height: 0;
-		padding: clamp(var(--pau-space-4), 3vw, var(--pau-space-6));
+		padding: var(--pau-space-6);
 		overflow: auto;
 	}
 
@@ -929,9 +946,17 @@
 		.app-shell__resizer--inspector {
 			display: none;
 		}
+
+		.app-shell__main-content {
+			padding: var(--pau-space-5);
+		}
 	}
 
 	@media (max-width: 48rem) {
+		.app-shell__main-content {
+			padding: var(--pau-space-4);
+		}
+
 		.app-shell,
 		.app-shell--with-inspector {
 			grid-template-areas:

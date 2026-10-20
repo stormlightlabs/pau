@@ -10,12 +10,18 @@
 		workspaceName,
 		processes,
 		actions = {},
+		unavailable,
 		onInterrupt,
 		onStop
 	}: {
 		workspaceName: string;
 		processes: ProcessResourceSnapshot[];
 		actions?: Record<string, ProcessResourceActions>;
+		/**
+		 * Why process data cannot be shown. When set, the view explains this
+		 * instead of listing processes, so it never implies that nothing runs.
+		 */
+		unavailable?: string;
 		onInterrupt?: (sessionId: string) => void;
 		onStop?: (sessionId: string) => void;
 	} = $props();
@@ -30,13 +36,19 @@
 <section class="processes-view" aria-labelledby="processes-title">
 	<ViewHeader eyebrow={workspaceName} title="Processes" titleId="processes-title">
 		{#snippet meta()}
-			<span class="processes-view__count" aria-live="polite">
-				{processes.length} monitored {processes.length === 1 ? 'tree' : 'trees'}
-			</span>
+			{#if !unavailable}
+				<span class="processes-view__count" aria-live="polite">
+					{processes.length} monitored {processes.length === 1 ? 'tree' : 'trees'}
+				</span>
+			{/if}
 		{/snippet}
 	</ViewHeader>
 
-	{#if processes.length === 0}
+	{#if unavailable}
+		<EmptyState title="Process monitoring isn't available">
+			<p>{unavailable}</p>
+		</EmptyState>
+	{:else if processes.length === 0}
 		<EmptyState title="No managed processes">
 			<p>Start an agent session or terminal in this workspace to see its resource use.</p>
 		</EmptyState>
@@ -137,7 +149,6 @@
 	}
 
 	.processes-view__table {
-		min-width: 48rem;
 		border-top: 1px solid var(--pau-border);
 	}
 
@@ -262,29 +273,19 @@
 		font-size: var(--pau-type-xs);
 	}
 
-	@media (max-width: 64rem) {
-		.processes-view {
-			overflow-x: auto;
-		}
-	}
-
-	@media (max-width: 42rem) {
-		.processes-view :global(.view-header) {
-			position: sticky;
-			left: 0;
-		}
-
-		.processes-view__table {
-			min-width: 0;
-		}
-
+	/*
+	 * Below the width the seven table columns need, each process becomes a
+	 * labelled metric block that wraps its metrics to the container, so the
+	 * actions stay inside the surface instead of scrolling sideways.
+	 */
+	@container (max-width: 53rem) {
 		.processes-view__table-heading {
 			display: none;
 		}
 
 		.process-row {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-			gap: var(--pau-space-3) var(--pau-space-4);
+			grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+			gap: var(--pau-space-2) var(--pau-space-4);
 			padding-block: var(--pau-space-3);
 		}
 
@@ -308,8 +309,8 @@
 		}
 
 		.process-tree li {
-			grid-template-columns: 1fr;
-			gap: 0;
+			grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+			gap: 0 var(--pau-space-4);
 		}
 	}
 </style>

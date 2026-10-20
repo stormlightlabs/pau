@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- The Processes view now opens inside the app with its navigation, says when
+  process monitoring isn't available instead of showing sample data, and fits
+  the smallest window.
 - The dots between tool-call statuses and between changed-file statuses now have
   equal space on both sides.
 - Error messages from rejected dropdown choices, such as the thinking level and

@@ -254,20 +254,6 @@ Verification:
 - Measure the shared leading edge and the 8px mark gap, and screenshot a tool
   row hover and expanded tool groups.
 
-### 2.274 Processes view in the application shell
-
-Status: planned
-Blocked by: none
-
-Show the processes route inside the application shell with product navigation
-and live process data, and let its table recompose below its container width
-instead of forcing a minimum width.
-
-Verification:
-
-- Screenshot the route with the product rail and top bar, and measure no
-  horizontal overflow at 800×560 with Stop inside the main surface.
-
 ### 2.275 One control size for buttons and menus
 
 Status: planned

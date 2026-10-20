@@ -214,9 +214,11 @@ values. Expanding a row shows its root and descendants. Sustained-pressure
 warnings stay with the affected session and offer interrupt and stop actions.
 Pau does not interrupt, stop, or throttle work automatically.
 
-At narrow widths, each process becomes a labelled metric block. Actions remain
-visible, and the process-tree breakdown opens below the selected row. Completed
-processes retain a small final summary instead of raw sample history.
+When the main surface is narrower than the table, each process becomes a
+labelled metric block whose metrics wrap to the surface. Actions remain visible,
+and the process-tree breakdown opens below the selected row. Completed processes
+retain a small final summary instead of raw sample history. When Pau cannot
+report resource use, the view says so instead of showing an empty list.
 
 ## Diagnostics
 

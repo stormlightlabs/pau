@@ -33,4 +33,8 @@ export const SustainedPressure: Story = {
 
 export const CompletedSummary: Story = { args: { processes: [resourceMonitoringFixtures.completed] } };
 export const Empty: Story = { args: { processes: [] } };
+export const Unavailable: Story = {
+	args: { processes: [], unavailable: "Pau doesn't collect resource use for workspace processes yet." }
+};
+export const InApplicationShell: Story = { args: { inShell: true } };
 export const Narrow: Story = { parameters: { viewport: { defaultViewport: 'narrow' } } };

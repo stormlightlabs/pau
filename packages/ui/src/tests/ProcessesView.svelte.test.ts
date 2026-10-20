@@ -5,6 +5,7 @@ import { render } from 'vitest-browser-svelte';
 import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
 import ProcessesView from '../lib/ProcessesView.svelte';
 import SessionResourceSummary from '../lib/SessionResourceSummary.svelte';
+import ProcessesViewDemo from '../stories/ProcessesViewDemo.svelte';
 import { themeCssProperties } from '../theme';
 
 const actions = Object.fromEntries(
@@ -100,4 +101,30 @@ test('insets the header by the same padding as the process rows', async () => {
 	expect(getComputedStyle(header).paddingLeft).toBe(getComputedStyle(heading).paddingLeft);
 	expect(getComputedStyle(header).paddingLeft).not.toBe('0px');
 	expect(getComputedStyle(header).paddingRight).toBe(getComputedStyle(header).paddingLeft);
+});
+
+test('explains unavailable monitoring instead of claiming nothing runs', async () => {
+	await render(ProcessesView, { workspaceName: 'Pau', processes: [], unavailable: 'Not collected yet.' });
+
+	await expect.element(page.getByRole('heading', { name: "Process monitoring isn't available" })).toBeVisible();
+	await expect.element(page.getByText('Not collected yet.')).toBeVisible();
+	expect(page.getByText(/monitored tree/).elements()).toHaveLength(0);
+	expect(page.getByRole('heading', { name: 'No managed processes' }).elements()).toHaveLength(0);
+});
+
+test('recomposes rows inside the shell at the minimum window size', async () => {
+	await page.viewport(800, 560);
+	await render(ProcessesViewDemo, { processes: resourceMonitoringFixtures.active, inShell: true });
+	await expect.element(page.getByRole('navigation', { name: 'Product' })).toBeVisible();
+
+	const main = document.querySelector<HTMLElement>('#main-surface')!;
+	const surface = main.getBoundingClientRect();
+	expect(main.scrollWidth).toBe(main.clientWidth);
+	const stops = page.getByRole('button', { name: 'Stop', exact: true }).elements();
+	expect(stops.length).toBeGreaterThan(0);
+	for (const stop of stops) {
+		const box = stop.getBoundingClientRect();
+		expect(box.left).toBeGreaterThanOrEqual(surface.left);
+		expect(box.right).toBeLessThanOrEqual(surface.right);
+	}
 });

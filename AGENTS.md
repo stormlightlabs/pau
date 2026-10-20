@@ -135,6 +135,22 @@ requirements, lifecycle rules, error behavior, or non-obvious design intent.
 Write comments for maintainers: explain the contract and why it exists instead
 of restating the implementation.
 
+## UI work
+
+Before changing a visible surface, load the `ui-design` skill and follow its
+bounded visual verification. For each changed surface:
+
+- Screenshot it inside the application shell at 1440×900 and at 900px wide,
+  and look at every screenshot before finishing.
+- Measure rendered boxes to check alignment instead of judging it by eye.
+  Controls in a row share a center line, and stacked content shares a leading
+  edge.
+- Check each state the surface can reach, including empty, long content,
+  disabled, and error.
+
+Storybook indexes no stories from worktrees under `.claude/`, so take those
+screenshots from a temporary Vitest browser test and delete it afterwards.
+
 ## Keep agent configuration current
 
 Treat direct user corrections to project workflows as configuration changes.

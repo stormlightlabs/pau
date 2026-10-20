@@ -590,8 +590,16 @@ impl PiSession {
         Ok(cleared)
     }
 
-    /// Aborts active work while leaving the Pi process available for another prompt.
-    pub async fn interrupt(&self) -> Result<(), PiSessionError> {
+    /// Aborts active work while leaving the Pi process available for another
+    /// prompt, and returns the steer and follow-up messages it removed.
+    ///
+    /// Pi's `abort` goes on to run any messages still queued, so this sends
+    /// `clear_queue` first, as Pi's own Escape does, and hands the cleared text
+    /// back for the caller to restore. The abort goes ahead when clearing fails
+    /// or the session has no message queue: stopping the run comes first, and
+    /// the messages stay queued in Pi, which runs them after the abort, so no
+    /// text is lost. The returned queue is empty in that case.
+    pub async fn interrupt(&self) -> Result<AgentMessageQueue, PiSessionError> {
         let control = AgentControl::Interrupt;
         self.require_capability(control)?;
         let mut status = self.status.lock().await;
@@ -602,9 +610,10 @@ impl PiSession {
                 "only a running session can be interrupted",
             ));
         }
+        let cleared = self.clear_message_queue().await.unwrap_or_default();
         self.command(control, json!({"type": "abort"})).await?;
         *status = AgentSessionStatus::Idle;
-        Ok(())
+        Ok(cleared)
     }
 
     /// Selects a configured Pi model while the session is idle.

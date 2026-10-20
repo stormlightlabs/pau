@@ -80,7 +80,7 @@ async fn exercises_every_session_control_against_fake_rpc() {
     assert_eq!(session.status().await, AgentSessionStatus::Stopped);
 
     let commands = fixture.commands();
-    assert_eq!(commands.len(), 8);
+    assert_eq!(commands.len(), 9);
     assert_eq!(commands[0]["message"], "/handled");
     let commands = &commands[1..];
     assert_command(&commands[0], "prompt");
@@ -88,12 +88,91 @@ async fn exercises_every_session_control_against_fake_rpc() {
     assert_eq!(commands[1]["streamingBehavior"], "followUp");
     assert_command(&commands[2], "follow_up");
     assert_command(&commands[3], "steer");
-    assert_command(&commands[4], "abort");
-    assert_command(&commands[5], "set_model");
-    assert_eq!(commands[5]["provider"], "fixture");
-    assert_eq!(commands[5]["modelId"], "model-one");
-    assert_command(&commands[6], "set_thinking_level");
-    assert_eq!(commands[6]["level"], "xhigh");
+    assert_command(&commands[4], "clear_queue");
+    assert_command(&commands[5], "abort");
+    assert_command(&commands[6], "set_model");
+    assert_eq!(commands[6]["provider"], "fixture");
+    assert_eq!(commands[6]["modelId"], "model-one");
+    assert_command(&commands[7], "set_thinking_level");
+    assert_eq!(commands[7]["level"], "xhigh");
+}
+
+#[tokio::test]
+async fn interrupt_clears_the_queue_before_aborting() {
+    let fixture = FakePi::new(CONTROL_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+    session.prompt("start", Vec::new(), None).await.unwrap();
+    session.steer("change course", Vec::new()).await.unwrap();
+    session.follow_up("later", Vec::new()).await.unwrap();
+    let queued = AgentMessageQueue {
+        steering: vec!["change course".to_owned()],
+        follow_up: vec!["later".to_owned()],
+    };
+    wait_for_queue(&session, &queued).await;
+
+    assert_eq!(session.interrupt().await.unwrap(), queued);
+    assert_eq!(session.status().await, AgentSessionStatus::Idle);
+    assert_eq!(
+        session.message_queue().await.unwrap(),
+        AgentMessageQueue::default()
+    );
+
+    // With nothing queued, the interrupt still aborts and returns no text.
+    session.prompt("start", Vec::new(), None).await.unwrap();
+    assert_eq!(
+        session.interrupt().await.unwrap(),
+        AgentMessageQueue::default()
+    );
+    assert_eq!(session.status().await, AgentSessionStatus::Idle);
+    session.stop().await.unwrap();
+
+    let commands = fixture.commands();
+    let types: Vec<_> = commands
+        .iter()
+        .map(|command| command["type"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        types,
+        [
+            "prompt",
+            "steer",
+            "follow_up",
+            "clear_queue",
+            "abort",
+            "prompt",
+            "clear_queue",
+            "abort",
+        ]
+    );
+}
+
+#[tokio::test]
+async fn interrupt_aborts_when_clearing_the_queue_fails() {
+    let fixture = FakePi::new(CONTROL_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+    session.prompt("start", Vec::new(), None).await.unwrap();
+    session.follow_up("later", Vec::new()).await.unwrap();
+    let queued = AgentMessageQueue {
+        steering: vec!["change course".to_owned()],
+        follow_up: vec!["later".to_owned()],
+    };
+    wait_for_queue(&session, &queued).await;
+    fs::write(fixture.root.path().join("clear-fails"), "").unwrap();
+
+    // Pi keeps the messages and runs them after the abort, so the interrupt
+    // returns no text to restore and the queue snapshot is unchanged.
+    assert_eq!(
+        session.interrupt().await.unwrap(),
+        AgentMessageQueue::default()
+    );
+    assert_eq!(session.status().await, AgentSessionStatus::Idle);
+    assert_eq!(session.message_queue().await.unwrap(), queued);
+    session.stop().await.unwrap();
+
+    let commands = fixture.commands();
+    assert_eq!(commands.len(), 4);
+    assert_command(&commands[2], "clear_queue");
+    assert_command(&commands[3], "abort");
 }
 
 #[tokio::test]
@@ -731,14 +810,23 @@ while IFS= read -r command; do
             printf '{"type":"agent_start"}\n'
             ;;
         *'"type":"follow_up"'*)
+            : > "$PWD/queued"
             printf '{"id":"%s","type":"response","command":"follow_up","success":true,"data":{"disposition":"queued"}}\n' "$id"
             printf '{"type":"queue_update","steering":["change course"],"followUp":["later"]}\n'
             ;;
         *'"type":"steer"'*)
+            : > "$PWD/queued"
             printf '{"id":"%s","type":"response","command":"steer","success":true,"data":{"disposition":"queued"}}\n' "$id"
             ;;
         *'"type":"clear_queue"'*)
-            printf '{"id":"%s","type":"response","command":"clear_queue","success":true,"data":{"steering":["change course"],"followUp":["later"]}}\n' "$id"
+            if [ -f "$PWD/clear-fails" ]; then
+                printf '{"id":"%s","type":"response","command":"clear_queue","success":false,"error":"Queue unavailable"}\n' "$id"
+            elif [ -f "$PWD/queued" ]; then
+                rm "$PWD/queued"
+                printf '{"id":"%s","type":"response","command":"clear_queue","success":true,"data":{"steering":["change course"],"followUp":["later"]}}\n' "$id"
+            else
+                printf '{"id":"%s","type":"response","command":"clear_queue","success":true,"data":{"steering":[],"followUp":[]}}\n' "$id"
+            fi
             ;;
         *'"type":"abort"'*)
             printf '{"id":"%s","type":"response","command":"abort","success":true}\n' "$id"

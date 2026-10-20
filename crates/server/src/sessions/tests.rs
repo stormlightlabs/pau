@@ -76,11 +76,17 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"steer","success":true}\n' "$id"
             ;;
         *'"type":"follow_up"'*)
+            : > "$PWD/queued"
             printf '{"id":"%s","type":"response","command":"follow_up","success":true}\n' "$id"
             printf '{"type":"queue_update","steering":["change course"],"followUp":["later"]}\n'
             ;;
         *'"type":"clear_queue"'*)
-            printf '{"id":"%s","type":"response","command":"clear_queue","success":true,"data":{"steering":["change course"],"followUp":["later"]}}\n' "$id"
+            if [ -f "$PWD/queued" ]; then
+                rm "$PWD/queued"
+                printf '{"id":"%s","type":"response","command":"clear_queue","success":true,"data":{"steering":["change course"],"followUp":["later"]}}\n' "$id"
+            else
+                printf '{"id":"%s","type":"response","command":"clear_queue","success":true,"data":{"steering":[],"followUp":[]}}\n' "$id"
+            fi
             ;;
         *'"type":"abort"'*)
             printf '{"id":"%s","type":"response","command":"abort","success":true}\n' "$id"
@@ -426,10 +432,17 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(cleared, queued);
 
+    // An interrupt clears the queue and returns its text with the response.
+    let follow_up = json!({"message": "later"});
     let (status, _) = fixture
+        .call("POST", &format!("{base}/follow-up"), Some(follow_up))
+        .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let (status, cleared) = fixture
         .call("POST", &format!("{base}/interrupt"), None)
         .await;
-    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(cleared, queued);
     next_event(&mut stream, session_changed("idle")).await;
     assert_eq!(fixture.call("GET", &base, None).await.1["status"], "idle");
     next_event(&mut stream, output("session_usage")).await;
@@ -453,10 +466,11 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
     assert_eq!(status, StatusCode::NO_CONTENT);
     let (status, _) = fixture.call("DELETE", &format!("{base}/retry"), None).await;
     assert_eq!(status, StatusCode::NO_CONTENT);
-    let (status, _) = fixture
+    let (status, cleared) = fixture
         .call("POST", &format!("{base}/interrupt"), None)
         .await;
-    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(cleared, json!({"steering": [], "follow_up": []}));
 
     let reconnected = fixture.events.subscribe(None);
     let [ServerStreamMessage::Snapshot { snapshot }] = &reconnected.initial[..] else {
@@ -508,12 +522,15 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
             "steer",
             "follow_up",
             "clear_queue",
+            "follow_up",
+            "clear_queue",
             "abort",
             "get_session_stats",
             "get_messages",
             "prompt",
             "set_auto_retry",
             "abort_retry",
+            "clear_queue",
             "abort",
             "get_session_stats",
         ]
@@ -1240,7 +1257,7 @@ async fn clears_pending_dialogs_on_interrupt_timeout_and_exit() {
     let (status, _) = fixture
         .call("POST", &format!("{base}/interrupt"), None)
         .await;
-    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert_eq!(status, StatusCode::OK);
     next_event(&mut stream, resolved("ui-editor", "interrupted")).await;
     let (_, state) = fixture.call("GET", &ui, None).await;
     assert_eq!(state["dialogs"], json!([]));

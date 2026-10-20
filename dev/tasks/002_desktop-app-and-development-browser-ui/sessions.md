@@ -197,23 +197,10 @@ Verification:
   stopping one with Escape.
 - Run a shell command from a self-hosted session.
 
-### 2.238 Interrupt clears the queue
-
-Status: planned
-Blocked by: none
-
-Send `clear_queue` before `abort` when interrupting a Pi session, as Pi's own
-Escape does, and return the cleared steering and follow-up text.
-
-Verification:
-
-- Cover an interrupt with queued messages, an interrupt with an empty queue,
-  and a failed `clear_queue` against the Pi fixture.
-
 ### 2.239 Interrupted queue returns to the composer
 
 Status: planned
-Blocked by: 2.238
+Blocked by: none
 
 Put the text of queued messages back in the composer after an interrupt, so
 none of it runs or is lost.

@@ -10,6 +10,7 @@ import {
 	getWorkspaceGitDiff,
 	getWorkspaceGitStatus,
 	getWorkspaceSandbox,
+	interruptSession,
 	listWorkspaceFiles,
 	PauApiError,
 	previewSandbox,
@@ -171,6 +172,19 @@ test('searches a session transcript with an encoded query and limit', async () =
 		'http://127.0.0.1:43127/api/sessions/session%20%2F%201/search?q=a+%26+b&limit=50',
 		{ headers: { Authorization: `Bearer ${TOKEN}` } }
 	);
+});
+
+test('returns the queued messages an interrupt removed', async () => {
+	launchDesktop();
+	const cleared = { steering: ['change course'], follow_up: ['later'] };
+	const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json(cleared));
+
+	await expect(interruptSession('session 1', fetcher)).resolves.toEqual(cleared);
+
+	expect(fetcher).toHaveBeenCalledWith('http://127.0.0.1:43127/api/sessions/session%201/interrupt', {
+		method: 'POST',
+		headers: { Authorization: `Bearer ${TOKEN}` }
+	});
 });
 
 test('lists and searches workspace files with traversal options', async () => {

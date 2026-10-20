@@ -892,9 +892,22 @@ export class LiveSessions {
 		return getSessionHistory(sessionId, this.#fetcher);
 	}
 
-	/** Interrupts the active run. */
-	interrupt(sessionId: string): Promise<void> {
-		return this.#control(() => interruptSession(sessionId, this.#fetcher));
+	/**
+	 * Interrupts the active run and returns the queued messages it removed.
+	 * When Pi could not clear its queue, the response is empty and the queue
+	 * shown here stays until Pi reports its next change.
+	 */
+	async interrupt(sessionId: string): Promise<MessageQueue> {
+		try {
+			const cleared = await interruptSession(sessionId, this.#fetcher);
+			if (cleared.steering.length > 0 || cleared.follow_up.length > 0) {
+				this.#queueUpdated.add(sessionId);
+				this.#queues[sessionId] = { steering: [], followUp: [] };
+			}
+			return { steering: cleared.steering, followUp: cleared.follow_up };
+		} catch (cause) {
+			throw new Error(sessionErrorMessage(cause, 'control'), { cause });
+		}
 	}
 
 	/** Re-sends the last prompt after a failed turn. */

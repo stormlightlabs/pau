@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Stopping a Pi session now also clears its queued steering and follow-up
+  messages, so they no longer run after you stop the agent.
 - After a reply fails, its button now reads "Send message again", because it
   sends your message as a new one. Pi still retries temporary provider errors on
   its own.

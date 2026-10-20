@@ -1082,17 +1082,19 @@ pub(crate) async fn follow_up_session(
     Ok(StatusCode::ACCEPTED)
 }
 
-/// Aborts the active run and leaves the session ready for another prompt.
+/// Aborts the active run, leaves the session ready for another prompt, and
+/// returns the queued messages the interrupt removed so the client can restore
+/// their text.
 pub(crate) async fn interrupt_session(
     State(state): State<ApiState>,
     AxumPath(session_id): AxumPath<String>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<SessionMessageQueue>, ApiError> {
     let api = session_api(&state)?;
     let (record, session) = api.live(&session_id).await?;
-    session.interrupt().await?;
+    let cleared = session.interrupt().await?;
     api.clear_dialogs(&session_id, &record.workspace_id, "interrupted");
     api.publish_current(&session_id).await;
-    Ok(StatusCode::NO_CONTENT)
+    Ok(Json(message_queue(cleared)))
 }
 
 /// Selects a model and returns Pi's native record for it.

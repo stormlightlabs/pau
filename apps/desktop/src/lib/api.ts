@@ -505,9 +505,16 @@ export function queueSessionMessage(
 	return sendSessionRequest(`/${encodeURIComponent(sessionId)}/${endpoint}`, 'POST', request, fetcher);
 }
 
-/** Interrupts the active run without stopping the session. */
-export function interruptSession(sessionId: string, fetcher: typeof fetch = fetch): Promise<void> {
-	return sendSessionRequest(`/${encodeURIComponent(sessionId)}/interrupt`, 'POST', undefined, fetcher);
+/**
+ * Interrupts the active run without stopping the session. The response holds
+ * the queued messages the interrupt removed, so their text can be restored.
+ */
+export async function interruptSession(sessionId: string, fetcher: typeof fetch = fetch): Promise<SessionMessageQueue> {
+	const response = await fetcher(sessionUrl(`/${encodeURIComponent(sessionId)}/interrupt`), {
+		method: 'POST',
+		headers: authorization()
+	});
+	return responseJson<SessionMessageQueue>(response);
 }
 
 /** Re-sends the last prompt after an assistant turn that ended in an error. */

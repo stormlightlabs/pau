@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- The composer footer fits on one row in the default window, Send prompt stays
+  on the first row in narrow windows, and slash and @ suggestions open above the
+  prompt without moving the conversation.
 - The Processes view now opens inside the app with its navigation, says when
   process monitoring isn't available instead of showing sample data, and fits
   the smallest window.

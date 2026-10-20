@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 
-	import { placeAgainst } from './anchored-placement';
+	import { anchorBox, placeAgainst } from './anchored-placement';
 	import { createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
 	import type { ModelOption } from './types/session';
@@ -114,7 +114,7 @@
 	 */
 	function place(): void {
 		if (!trigger || !panel) return;
-		const anchor = trigger.getBoundingClientRect();
+		const anchor = anchorBox(trigger);
 		const cap = listCapRem * Number(getComputedStyle(document.documentElement).fontSize.replace('px', ''));
 		const placement = placeAgainst(anchor, panel.offsetWidth, Math.min(panel.scrollHeight, cap), 'above');
 		({ left, top, above } = placement);

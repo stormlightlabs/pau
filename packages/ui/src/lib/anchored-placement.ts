@@ -17,6 +17,22 @@ export type AnchoredPlacement = {
 export type AnchoredSide = 'below' | 'above';
 
 /**
+ * The box a surface opens against. Inside an element marked
+ * `data-overlay-anchor`, the box reaches up to that element's top, so a
+ * surface that opens upward clears the whole element. The composer footer
+ * uses it because its actions can sit on a row above the trigger.
+ *
+ * @param trigger The control that owns the surface.
+ */
+export function anchorBox(trigger: Element): DOMRect {
+	const box = trigger.getBoundingClientRect();
+	const group = trigger.closest('[data-overlay-anchor]');
+	if (!group) return box;
+	const top = Math.min(box.top, group.getBoundingClientRect().top);
+	return new DOMRect(box.left, top, box.width, box.bottom - top);
+}
+
+/**
  * Places a top-layer surface, such as a dropdown list or its error, against
  * the trigger that owns it. The surface opens on the preferred side when it
  * fits there, and otherwise on the side with more room. Controls in the

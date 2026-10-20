@@ -79,6 +79,14 @@ At narrower widths:
 
 Do not scale the desktop composition down. Recompose it.
 
+The composer footer holds two groups: quiet options (delivery mode, model,
+thinking, context) and the actions. At 1440×900 with the context rail open,
+both share one row. When they no longer fit, the actions keep the first row
+under the field and the options wrap below them. In a narrow footer, the
+context meter shows only the share used, and its details still list the
+window and token totals. Completion lists open as a popover above the
+composer, so the composer keeps its height and the transcript does not move.
+
 ## Spatial system
 
 The spacing scale uses 4, 8, 12, 16, 24, and 32px steps, named `space/1` to
@@ -211,8 +219,9 @@ window. A pointer open fades in like other popovers.
 A keyboard open, or any open under reduced motion, appears at once. The model
 picker and the context meter use the same trigger, chevron, and list surface,
 and the current model shows the check mark. Pickers in the composer footer
-open their list and error upward, and below only when the space above is too
-short, so neither covers Attach image or Send prompt.
+open their list and error upward from the top of the footer, and below only
+when the space above is too short, so neither covers Attach image or Send
+prompt when the actions sit on the row above them.
 
 Every relevant control state needs a visible treatment. Icon-only controls need
 an accessible name and, where meaning is not obvious, a tooltip or adjacent

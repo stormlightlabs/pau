@@ -1,10 +1,13 @@
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
+import { commandFixtures } from '../fixtures/commands';
+import { fileMentionFixtures } from '../fixtures/file-mentions';
 import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
 import { sessionFixtures } from '../fixtures/sessions';
 import SessionView from '../lib/SessionView.svelte';
+import SessionViewDemo from '../stories/SessionViewDemo.svelte';
 
 const snapshot = { ...resourceMonitoringFixtures.active[2]!, sessionId: 'session-running' };
 
@@ -54,6 +57,36 @@ test.each([
 	expect(send.top).toBeGreaterThanOrEqual(field.bottom);
 	expect(Math.abs(send.top + send.height / 2 - (mode.top + mode.height / 2))).toBeLessThan(2);
 	expect(send.right).toBeLessThanOrEqual(composer.right);
+});
+
+test.each([
+	['/', 'Commands'],
+	['@', 'Files']
+])('opens the %s completion list above the composer without moving the transcript', async (typed, list) => {
+	await page.viewport(1440, 900);
+	await render(SessionViewDemo, {
+		workspaces: sessionFixtures.running,
+		initialSessionId: 'session-running',
+		commands: commandFixtures.populated,
+		files: fileMentionFixtures.populated
+	});
+	await document.fonts.ready;
+	const entry = document.querySelector<HTMLElement>('.session-view__transcript-content > *')!;
+	const composer = document.querySelector<HTMLElement>('.session-composer')!;
+	const entryTop = entry.getBoundingClientRect().top;
+	const composerBox = composer.getBoundingClientRect();
+
+	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), typed);
+	const listbox = page.getByRole('listbox', { name: list });
+	await expect.element(listbox.getByRole('option').first()).toBeVisible();
+
+	expect(entry.getBoundingClientRect().top).toBe(entryTop);
+	expect(composer.getBoundingClientRect().top).toBe(composerBox.top);
+	expect(composer.getBoundingClientRect().height).toBe(composerBox.height);
+	// The popover holding the list shares the composer's leading edge and sits above it.
+	const box = listbox.element().closest('.session-composer__completion')!.getBoundingClientRect();
+	expect(box.bottom).toBeLessThanOrEqual(composerBox.top);
+	expect(box.left).toBe(composerBox.left);
 });
 
 test('keeps Send prompt and the delivery mode inside a 360px composer', async () => {

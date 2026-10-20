@@ -2536,7 +2536,7 @@
 								</ul>
 							{/if}
 							{#if commandMatches}
-								<div class="session-composer__commands">
+								<div class="session-composer__completion">
 									<CommandCompletion
 										id={commandListId}
 										commands={commandMatches}
@@ -2545,7 +2545,7 @@
 								</div>
 							{/if}
 							{#if mentionOpen}
-								<div class="session-composer__commands">
+								<div class="session-composer__completion">
 									<MentionCompletion
 										id={mentionListId}
 										files={mentionResults ?? []}
@@ -2580,46 +2580,48 @@
 									aria-describedby={composerUnavailable ? 'composer-unavailable' : undefined}
 									disabled={composerUnavailable !== undefined}></textarea>
 							</label>
-							<div class="session-composer__footer">
-								{#if activeSession.status === 'running' && canQueue}
-									<Select
-										label="Send as"
-										variant="quiet"
-										options={[
-											...(activeSession.capabilities.steer ? [{ value: 'steer' as const, label: 'Steer now' }] : []),
-											...(activeSession.capabilities.followUp
-												? [{ value: 'follow-up' as const, label: 'Follow up' }]
-												: [])
-										]}
-										value={activeQueue}
-										onChange={(next) => {
-											queue = next;
-										}} />
-								{/if}
-								{#if onLoadModels && onSelectModel}
-									{#key activeSession.id}
-										<ModelPicker
-											bind:this={modelPicker}
-											load={() => onLoadModels(activeSession.id)}
-											onSelect={(model) => onSelectModel(activeSession.id, model)}
-											supported={activeSession.capabilities.modelSelection ?? false}
-											unavailableReason={modelUnavailableReason(activeSession, disconnected)}
-											fallbackLabel={activeSession.model}
-											onLoaded={(models) =>
-												(currentModelReasoning = models.find((model) => model.current)?.reasoning)} />
-										{#if onSelectThinkingLevel}
-											<ThinkingLevelPicker
-												bind:this={thinkingPicker}
-												level={activeSession.thinkingLevel}
-												onSelect={(level) => onSelectThinkingLevel(activeSession.id, level)}
-												supported={activeSession.capabilities.thinkingLevel ?? false}
-												reasoning={offersThinking(activeSession)}
-												levels={activeSession.thinkingLevels}
-												unavailableReason={thinkingUnavailableReason(activeSession, disconnected)} />
-										{/if}
-									{/key}
-								{/if}
-								<ContextMeter usage={activeSession.usage} supported={activeSession.capabilities.usage ?? false} />
+							<div class="session-composer__footer" data-overlay-anchor>
+								<div class="session-composer__options">
+									{#if activeSession.status === 'running' && canQueue}
+										<Select
+											label="Send as"
+											variant="quiet"
+											options={[
+												...(activeSession.capabilities.steer ? [{ value: 'steer' as const, label: 'Steer now' }] : []),
+												...(activeSession.capabilities.followUp
+													? [{ value: 'follow-up' as const, label: 'Follow up' }]
+													: [])
+											]}
+											value={activeQueue}
+											onChange={(next) => {
+												queue = next;
+											}} />
+									{/if}
+									{#if onLoadModels && onSelectModel}
+										{#key activeSession.id}
+											<ModelPicker
+												bind:this={modelPicker}
+												load={() => onLoadModels(activeSession.id)}
+												onSelect={(model) => onSelectModel(activeSession.id, model)}
+												supported={activeSession.capabilities.modelSelection ?? false}
+												unavailableReason={modelUnavailableReason(activeSession, disconnected)}
+												fallbackLabel={activeSession.model}
+												onLoaded={(models) =>
+													(currentModelReasoning = models.find((model) => model.current)?.reasoning)} />
+											{#if onSelectThinkingLevel}
+												<ThinkingLevelPicker
+													bind:this={thinkingPicker}
+													level={activeSession.thinkingLevel}
+													onSelect={(level) => onSelectThinkingLevel(activeSession.id, level)}
+													supported={activeSession.capabilities.thinkingLevel ?? false}
+													reasoning={offersThinking(activeSession)}
+													levels={activeSession.thinkingLevels}
+													unavailableReason={thinkingUnavailableReason(activeSession, disconnected)} />
+											{/if}
+										{/key}
+									{/if}
+									<ContextMeter usage={activeSession.usage} supported={activeSession.capabilities.usage ?? false} />
+								</div>
 								<div class="session-composer__actions">
 									<input
 										bind:this={imagePicker}
@@ -3427,6 +3429,7 @@
 	 * one footer row below it, so a narrow main column never squeezes the field.
 	 */
 	.session-composer {
+		position: relative;
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
 		background: var(--pau-surface);
@@ -3515,11 +3518,26 @@
 		cursor: pointer;
 	}
 
-	.session-composer__commands {
-		border-bottom: 1px solid var(--pau-border);
+	/*
+	 * Completion lists float above the composer on the popover surface, so
+	 * opening one never changes the composer's height or moves the transcript.
+	 */
+	.session-composer__completion {
+		position: absolute;
+		/* Offsets start inside the composer's 1px border, so -1px lines the edges up. */
+		right: -1px;
+		bottom: calc(100% + var(--pau-space-1));
+		left: -1px;
+		z-index: 10;
+		overflow: hidden;
+		background: var(--pau-surface-raised);
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-surface);
+		box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 28%);
 	}
 
-	.session-composer__commands :global(.command-completion) {
+	.session-composer__completion > :global(*) {
+		background: transparent;
 		border: 0;
 	}
 
@@ -3574,10 +3592,18 @@
 	 * Delivery mode, model, thinking, and context read as quiet options beside
 	 * the full-size actions. The delivery select names its mode, so it needs no
 	 * visible label.
+	 *
+	 * The options and the actions are two groups. When they no longer share a
+	 * row, wrap-reverse keeps the actions on the first row next to the field
+	 * and moves the options below them, so sending never drops to the bottom.
+	 * The footer is a size container, so the context meter shortens its label
+	 * when the options alone would need a second row. It is also the overlay
+	 * anchor, so a picker list or error that opens upward clears the actions.
 	 */
 	.session-composer__footer {
+		container-type: inline-size;
 		display: flex;
-		flex-wrap: wrap;
+		flex-wrap: wrap-reverse;
 		align-items: center;
 		gap: var(--pau-space-2);
 		padding: var(--pau-space-2);
@@ -3585,10 +3611,25 @@
 		font-size: var(--pau-type-xs);
 	}
 
+	.session-composer__options {
+		display: flex;
+		flex: 1 1 auto;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--pau-space-2);
+		min-width: 0;
+	}
+
+	/* Svelte leaves whitespace and anchors behind, so :empty never matches. */
+	.session-composer__options:not(:has(*)) {
+		display: none;
+	}
+
 	.session-composer__actions {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
+		justify-content: end;
 		gap: var(--pau-space-2);
 		margin-left: auto;
 		font-size: var(--pau-type-md);

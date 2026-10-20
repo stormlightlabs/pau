@@ -31,9 +31,11 @@
 		if (!context) return 'Usage';
 		const window = formatTokens(context.contextWindow);
 		return context.tokens === undefined
-			? `Context unknown / ${window}`
-			: `Context ${formatTokens(context.tokens)} / ${window} · ${formatPercent(context.percent ?? 0)}`;
+			? `unknown / ${window}`
+			: `${formatTokens(context.tokens)} / ${window} · ${formatPercent(context.percent ?? 0)}`;
 	});
+	/** The label in a narrow container: the share used, or that it is unknown. */
+	const short = $derived(context && (context.tokens === undefined ? 'unknown' : formatPercent(context.percent ?? 0)));
 	const note = $derived.by(() => {
 		if (context && context.tokens === undefined) return 'Pi measures context again after its next reply.';
 		if (level === 'danger') return 'The context window is almost full.';
@@ -65,7 +67,16 @@
 				open = !open;
 			}}>
 			<span class="context-meter__label">
-				<span><MetaText text={summary} /></span>
+				<!--
+					The bar and the details name the context window, so the label shows only the figures.
+					The space after the hidden name starts the line, so CSS drops it from view but the
+					accessible name keeps it.
+				-->
+				<span
+					>{#if context}<span class="context-meter__hidden">Context</span>{/if}
+					<span class="context-meter__summary"><MetaText text={summary} /></span>{#if short}<span
+							class="context-meter__short">{short}</span
+						>{/if}</span>
 				<Icon name="chevronDown" class="context-meter__chevron" size="0.75rem" />
 			</span>
 			{#if context}
@@ -161,6 +172,36 @@
 	.context-meter__button:focus-visible {
 		outline: var(--pau-focus-width) solid var(--pau-focus);
 		outline-offset: var(--pau-focus-offset);
+	}
+
+	/* Keeps "Context" in the accessible name without spending footer width on it. */
+	.context-meter__hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+	}
+
+	.context-meter__short {
+		display: none;
+	}
+
+	/*
+	 * In a narrow container, such as the composer footer at the minimum window
+	 * size, the label keeps only the share used. The details still list the
+	 * window and token totals, and display: none keeps the hidden form out of
+	 * the accessible name.
+	 */
+	@container (width < 32rem) {
+		.context-meter__summary:has(+ .context-meter__short) {
+			display: none;
+		}
+
+		.context-meter__short {
+			display: inline;
+		}
 	}
 
 	.context-meter__label {

@@ -834,7 +834,9 @@ test('shows context use read on open and follows session usage events', async ()
 	});
 	await render(SessionRoute, props);
 	sockets[0]?.open();
-	await expect.element(page.getByRole('button', { name: /Context 84k \/ 200k 42%/ })).toBeVisible();
+	// A narrow footer shows only the share used, so read the full figures from the text.
+	const meter = page.getByRole('button', { name: /^Context/ });
+	await expect.element(meter).toHaveTextContent(/84k \/ 200k.*42%/);
 
 	sockets[0]?.receive(
 		output({
@@ -842,7 +844,7 @@ test('shows context use read on open and follows session usage events', async ()
 			usage: { ...apiUsage, context: { tokens: null, context_window: 200_000, percent: null } }
 		})
 	);
-	await expect.element(page.getByRole('button', { name: /Context unknown \/ 200k/ })).toBeVisible();
+	await expect.element(meter).toHaveTextContent('unknown / 200k');
 	await expect.element(page.getByText('session_usage')).not.toBeInTheDocument();
 });
 

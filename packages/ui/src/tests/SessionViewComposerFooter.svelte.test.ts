@@ -142,3 +142,42 @@ test.each([360, 900, 1440])('wraps the footer without hiding Send prompt at %ipx
 	expect(box.bottom).toBeLessThanOrEqual(composer.bottom);
 	expect(footer().scrollWidth).toBeLessThanOrEqual(footer().clientWidth);
 });
+
+/** Footer controls grouped into rows by their vertical center, top row first. */
+function footerRows(): HTMLElement[][] {
+	const rows = new Map<number, HTMLElement[]>();
+	for (const control of footer().querySelectorAll<HTMLElement>('button, [role="combobox"]')) {
+		const box = control.getBoundingClientRect();
+		if (box.width === 0) continue;
+		const center = box.top + box.height / 2;
+		const row = rows.keys().find((key) => Math.abs(key - center) <= 1) ?? center;
+		rows.set(row, [...(rows.get(row) ?? []), control]);
+	}
+	return rows
+		.keys()
+		.toArray()
+		.sort((a, b) => a - b)
+		.map((row) => rows.get(row)!);
+}
+
+test('keeps every footer control on one center line at 1440×900', async () => {
+	await page.viewport(1440, 900);
+	await setup();
+
+	const rows = footerRows();
+	expect(rows).toHaveLength(1);
+	expect(rows[0]!.map((control) => control.textContent)).toContainEqual(expect.stringMatching(/Send prompt/));
+});
+
+test('puts the actions first and the options below them at 800×560', async () => {
+	await page.viewport(800, 560);
+	await setup();
+
+	const rows = footerRows();
+	expect(rows).toHaveLength(2);
+	const first = rows[0]!.map((control) => control.textContent ?? '');
+	expect(first).toContainEqual(expect.stringMatching(/Send prompt/));
+	expect(first).toContainEqual(expect.stringMatching(/Interrupt/));
+	// The meter shortens to the share used and keeps its name.
+	await expect.element(page.getByRole('button', { name: 'Context 42%' })).toBeVisible();
+});

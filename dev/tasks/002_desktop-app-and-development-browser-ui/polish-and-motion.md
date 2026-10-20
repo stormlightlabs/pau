@@ -222,26 +222,10 @@ Verification:
   query emulated.
 - Check every shipped theme in Storybook.
 
-### 2.269 Composer footer fit and completion overlays
-
-Status: planned
-Blocked by: none
-
-Keep the composer footer on one row at 1440×900 with the context rail open and
-model controls shown. At narrow widths, keep the actions on the first row and
-wrap the quiet controls below them. Show `/` and `@` completion lists as a
-popover above the field so the transcript does not move.
-
-Verification:
-
-- Measure one shared center line for every footer control at 1440×900, at most
-  two footer rows at 800×560 with Send prompt on the first, and an unchanged
-  transcript position while a completion list is open.
-
 ### 2.270 Transcript and session rail rhythm
 
 Status: planned
-Blocked by: 2.269
+Blocked by: none
 
 Give the session rail status mark the same column and gap as the header mark.
 Use one disclosure treatment, a chevron with a hover state, for thinking, tool

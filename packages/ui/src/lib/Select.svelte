@@ -16,7 +16,7 @@
 	import '../styles/tokens.css';
 	import { tick } from 'svelte';
 
-	import { placeAgainst, type AnchoredSide } from './anchored-placement';
+	import { anchorBox, placeAgainst, type AnchoredSide } from './anchored-placement';
 	import { createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
 
@@ -163,7 +163,7 @@
 	/** Places the list under the trigger, or above it when there is more room there. */
 	function place(): void {
 		if (!trigger || !list) return;
-		const anchor = trigger.getBoundingClientRect();
+		const anchor = anchorBox(trigger);
 		const cap = listCapRem * Number(getComputedStyle(document.documentElement).fontSize.replace('px', ''));
 		minWidth = anchor.width;
 		const placement = placeAgainst(
@@ -180,7 +180,7 @@
 	function placeError(): void {
 		if (!trigger || !errorBox) return;
 		({ left: errorLeft, top: errorTop } = placeAgainst(
-			trigger.getBoundingClientRect(),
+			anchorBox(trigger),
 			errorBox.offsetWidth,
 			errorBox.offsetHeight,
 			opens

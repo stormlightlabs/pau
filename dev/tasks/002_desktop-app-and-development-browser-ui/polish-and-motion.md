@@ -311,16 +311,3 @@ Verification:
   larger than h3, and shared leading edges for the picker, editor states, and
   route controls.
 
-### 2.277 Dropdown error placement
-
-Status: planned
-Blocked by: none
-
-Anchor a rejected choice's message to the dropdown trigger and keep it inside
-the window, for the shared dropdown and the model and thinking pickers.
-
-Verification:
-
-- Measure the message inside the window at 600 and 1440 wide in each rejected
-  state, and inside the main surface for the composer's thinking picker at
-  800×560.

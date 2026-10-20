@@ -16,6 +16,7 @@
 	import '../styles/tokens.css';
 	import { tick } from 'svelte';
 
+	import { placeAgainst, type AnchoredSide } from './anchored-placement';
 	import { createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
 
@@ -52,6 +53,12 @@
 		block?: boolean;
 		/** `quiet` drops the border and background for use inside a toolbar row. */
 		variant?: 'field' | 'quiet';
+		/**
+		 * Side the list and a rejection's message open on when they fit there.
+		 * Controls in the composer footer pass `above` so the message never
+		 * covers the actions under them.
+		 */
+		opens?: AnchoredSide;
 	};
 
 	let {
@@ -67,12 +74,10 @@
 		disabledReason,
 		errorFallback = 'The change could not be saved. Try again.',
 		block = false,
-		variant = 'field'
+		variant = 'field',
+		opens = 'below'
 	}: Props = $props();
 
-	/** Gap between the list and the viewport edge, and between the list and its trigger. */
-	const edge = 8;
-	const gap = 4;
 	/** Longest list before it scrolls, matching the `max-height` in the styles. */
 	const listCapRem = 18;
 	/** Typeahead forgets earlier keys after this pause, as native selects do. */
@@ -96,6 +101,9 @@
 	let activeValue = $state<T>();
 	let pendingValue = $state<T>();
 	let error = $state<string>();
+	let errorBox = $state<HTMLParagraphElement>();
+	let errorLeft = $state(0);
+	let errorTop = $state(0);
 	let left = $state(0);
 	let top = $state(0);
 	let minWidth = $state(0);
@@ -157,18 +165,34 @@
 		if (!trigger || !list) return;
 		const anchor = trigger.getBoundingClientRect();
 		const cap = listCapRem * Number(getComputedStyle(document.documentElement).fontSize.replace('px', ''));
-		const natural = Math.min(list.scrollHeight, cap);
-		const below = innerHeight - anchor.bottom - gap - edge;
-		const over = anchor.top - gap - edge;
-		above = natural > below && over > below;
-		const room = Math.max(0, above ? over : below);
-		const height = Math.min(natural, room);
-		maxHeight = Math.min(cap, room);
 		minWidth = anchor.width;
-		const width = Math.max(list.offsetWidth, anchor.width);
-		left = Math.max(edge, Math.min(anchor.left, innerWidth - width - edge));
-		top = above ? anchor.top - gap - height : anchor.bottom + gap;
+		const placement = placeAgainst(
+			anchor,
+			Math.max(list.offsetWidth, anchor.width),
+			Math.min(list.scrollHeight, cap),
+			opens
+		);
+		({ left, top, above } = placement);
+		maxHeight = Math.min(cap, placement.room);
 	}
+
+	/** Places a rejection's message against the trigger by the list's rule, so it stays inside the window. */
+	function placeError(): void {
+		if (!trigger || !errorBox) return;
+		({ left: errorLeft, top: errorTop } = placeAgainst(
+			trigger.getBoundingClientRect(),
+			errorBox.offsetWidth,
+			errorBox.offsetHeight,
+			opens
+		));
+	}
+
+	// The message joins the top layer, like the list, so no scroll container or rail clips it.
+	$effect(() => {
+		if (!error || !errorBox) return;
+		if (!errorBox.matches(':popover-open')) errorBox.showPopover();
+		placeError();
+	});
 
 	function revealActive(): void {
 		list?.querySelector(`#${CSS.escape(optionId(activeIndex))}`)?.scrollIntoView({ block: 'nearest' });
@@ -320,13 +344,17 @@
 
 	function handleScroll(event: Event): void {
 		if (open && !list?.contains(event.target as Node)) place();
+		placeError();
 	}
 </script>
 
 <svelte:window
 	onpointerdowncapture={handleOutsidePointer}
 	onscrollcapture={handleScroll}
-	onresize={() => close(false)}
+	onresize={() => {
+		close(false);
+		placeError();
+	}}
 	onblur={() => close(false)} />
 
 <div class="select" class:select--block={block}>
@@ -405,7 +433,17 @@
 			</div>
 		{/each}
 	</div>
-	{#if error}<p class="select__error" role="alert">{error}</p>{/if}
+	{#if error}
+		<p
+			bind:this={errorBox}
+			popover="manual"
+			class="select__error"
+			role="alert"
+			style:left={`${errorLeft}px`}
+			style:top={`${errorTop}px`}>
+			{error}
+		</p>
+	{/if}
 </div>
 
 <style>
@@ -571,12 +609,10 @@
 	}
 
 	.select__error {
-		position: absolute;
-		top: calc(100% + var(--pau-space-1));
-		right: 0;
-		z-index: 10;
-		width: 16rem;
-		max-width: 80vw;
+		position: fixed;
+		inset: auto;
+		width: max-content;
+		max-width: min(20rem, calc(100vw - 1rem));
 		margin: 0;
 		padding: var(--pau-space-2);
 		color: var(--pau-danger);

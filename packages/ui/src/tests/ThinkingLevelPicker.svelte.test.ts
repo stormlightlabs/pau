@@ -91,6 +91,21 @@ test('keeps the previous level and explains a rejection', async () => {
 	await expect.element(picker()).toHaveTextContent('Low');
 });
 
+test.each([600, 1440])('keeps a rejection message inside a %ipx window', async (width) => {
+	await page.viewport(width, 400);
+	const onSelect = vi.fn().mockRejectedValue(new Error('Pi rejected the request: Level not supported'));
+	await render(ThinkingLevelPicker, { level: 'low', reasoning: true, onSelect });
+
+	await choose('Max');
+
+	const alert = page.getByRole('alert');
+	await expect.element(alert).toBeVisible();
+	const box = alert.element().getBoundingClientRect();
+	expect(box.left).toBeGreaterThanOrEqual(0);
+	expect(box.left).toBe(picker().element().getBoundingClientRect().left);
+	expect(box.right).toBeLessThanOrEqual(innerWidth);
+});
+
 test('is disabled and explained for a model without thinking levels', async () => {
 	await render(ThinkingLevelPicker, { reasoning: false, onSelect: vi.fn() });
 

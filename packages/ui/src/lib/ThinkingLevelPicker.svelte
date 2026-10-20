@@ -79,9 +79,11 @@
 
 <div class="thinking-level" bind:this={root}>
 	<span aria-hidden="true">Thinking</span>
+	<!-- The picker sits in the composer footer, so its list and errors open upward over the transcript. -->
 	<Select
 		label="Thinking level"
 		variant="quiet"
+		opens="above"
 		options={levelOptions}
 		value={level}
 		placeholder="Choose a level"

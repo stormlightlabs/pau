@@ -205,10 +205,14 @@ check mark on the selected option. It follows the select-only combobox
 pattern: Space, Enter, or Alt+Down opens it, arrows, Home, End, and typing
 move, Enter or Space chooses, and Escape or Tab closes it. A disabled option
 or control states its reason. A change that the agent rejects shows the error
-and restores the previous value. A pointer open fades in like other popovers.
+and restores the previous value. The error sits where the list would open,
+starts at the trigger's left edge, and moves left only to stay inside the
+window. A pointer open fades in like other popovers.
 A keyboard open, or any open under reduced motion, appears at once. The model
 picker and the context meter use the same trigger, chevron, and list surface,
-and the current model shows the check mark.
+and the current model shows the check mark. Pickers in the composer footer
+open their list and error upward, and below only when the space above is too
+short, so neither covers Attach image or Send prompt.
 
 Every relevant control state needs a visible treatment. Icon-only controls need
 an accessible name and, where meaning is not obvious, a tooltip or adjacent

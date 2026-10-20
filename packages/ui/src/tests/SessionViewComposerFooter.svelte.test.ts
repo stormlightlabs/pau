@@ -87,6 +87,48 @@ test('keeps keyboard control of the footer pickers and meter', async () => {
 	await expect.element(usage).not.toBeInTheDocument();
 });
 
+test('keeps a rejected thinking level message inside the main surface at the minimum window size', async () => {
+	await page.viewport(800, 560);
+	const { onSelectThinkingLevel } = await setup('idle');
+	onSelectThinkingLevel.mockRejectedValue(new Error('Pi rejected the request: Level not supported'));
+
+	await userEvent.click(page.getByRole('combobox', { name: 'Thinking level' }));
+	await userEvent.click(page.getByRole('option', { name: 'Max', exact: true }));
+
+	const alert = page.getByRole('alert');
+	await expect.element(alert).toHaveTextContent('Pi rejected the request: Level not supported');
+	const box = alert.element().getBoundingClientRect();
+	const surface = document.getElementById('main-surface')!.getBoundingClientRect();
+	expect(box.left).toBeGreaterThanOrEqual(surface.left);
+	expect(box.right).toBeLessThanOrEqual(surface.right);
+	expect(box.top).toBeGreaterThanOrEqual(surface.top);
+	expect(box.bottom).toBeLessThanOrEqual(surface.bottom);
+});
+
+test.each([
+	[900, 900],
+	[800, 560]
+])('opens a rejected thinking level message upward, clear of Send prompt, at %ix%i', async (width, height) => {
+	await page.viewport(width, height);
+	const { onSelectThinkingLevel } = await setup('idle');
+	onSelectThinkingLevel.mockRejectedValue(new Error('Pi rejected the request: Level not supported'));
+
+	const thinking = page.getByRole('combobox', { name: 'Thinking level' });
+	await userEvent.click(thinking);
+	await userEvent.click(page.getByRole('option', { name: 'Max', exact: true }));
+
+	const alert = page.getByRole('alert');
+	await expect.element(alert).toHaveTextContent('Pi rejected the request: Level not supported');
+	const box = alert.element().getBoundingClientRect();
+	expect(box.bottom).toBeLessThanOrEqual(thinking.element().getBoundingClientRect().top);
+	for (const name of [/Attach image/, /Send prompt/]) {
+		const action = page.getByRole('button', { name }).element().getBoundingClientRect();
+		const overlaps =
+			box.left < action.right && action.left < box.right && box.top < action.bottom && action.top < box.bottom;
+		expect(overlaps).toBe(false);
+	}
+});
+
 test.each([360, 900, 1440])('wraps the footer without hiding Send prompt at %ipx', async (width) => {
 	await page.viewport(width, 900);
 	await setup();

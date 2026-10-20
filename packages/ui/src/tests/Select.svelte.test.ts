@@ -200,3 +200,28 @@ test('the list opens above the trigger near the bottom of the viewport', async (
 	const list = page.getByRole('listbox').element().getBoundingClientRect();
 	expect(list.bottom).toBeLessThanOrEqual(trigger().element().getBoundingClientRect().top);
 });
+
+test.each([
+	[600, 'left'],
+	[600, 'right'],
+	[1440, 'left'],
+	[1440, 'right']
+])('a rejection message stays inside a %ipx window with the trigger at the %s edge', async (width, side) => {
+	await page.viewport(width, 400);
+	const onChange = vi.fn().mockRejectedValue(new Error('The fruit stand is closed until the next delivery arrives.'));
+	const { container } = await renderSelect({ onChange });
+	container.style.cssText = `position: fixed; top: 1rem; ${side}: 1rem;`;
+
+	await userEvent.click(trigger());
+	await userEvent.click(option('Cherry'));
+
+	const alert = page.getByRole('alert');
+	await expect.element(alert).toBeVisible();
+	const box = alert.element().getBoundingClientRect();
+	const anchor = trigger().element().getBoundingClientRect();
+	expect(box.left).toBeGreaterThanOrEqual(0);
+	expect(box.right).toBeLessThanOrEqual(innerWidth);
+	expect(box.top).toBeGreaterThan(anchor.bottom);
+	// Like the list, the message starts at the trigger's leading edge when it fits.
+	if (side === 'left') expect(box.left).toBe(anchor.left);
+});

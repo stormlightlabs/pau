@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- Error messages from rejected dropdown choices, such as the thinking level and
+  model pickers, now stay beside their control and inside the window, and in the
+  composer they no longer cover Attach image or Send prompt.
 - Sandbox and MCP settings now show their field and panel borders, sandbox
   settings fit narrow windows without scrolling sideways, and checkbox and radio
   labels sit evenly beside their controls.

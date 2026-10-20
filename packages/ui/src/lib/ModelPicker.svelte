@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 
+	import { placeAgainst } from './anchored-placement';
 	import { createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
 	import type { ModelOption } from './types/session';
@@ -22,6 +23,9 @@
 
 	let { load, onSelect, supported = true, unavailableReason, fallbackLabel, onLoaded }: Props = $props();
 
+	/** Longest list before it scrolls, matching the `max-height` in the styles. */
+	const listCapRem = 18;
+
 	let models = $state<ModelOption[]>();
 	let loadError = $state<string>();
 	let selectError = $state<string>();
@@ -32,6 +36,10 @@
 	let panel = $state<HTMLDivElement>();
 	/** A keyboard open appears at once. A pointer open fades in, as Select's list does. */
 	let keyboardOpen = $state(false);
+	let left = $state(0);
+	let top = $state(0);
+	let maxHeight = $state<number>();
+	let above = $state(true);
 
 	const current = $derived(models?.find((model) => model.current));
 	const label = $derived(current ? modelLabel(current) : (fallbackLabel ?? 'Model'));
@@ -99,6 +107,28 @@
 		if (disabled) close();
 	});
 
+	/**
+	 * Places the list by Select's rule. The picker lives in the composer
+	 * footer, so the list and its errors open upward unless only the space
+	 * below fits them.
+	 */
+	function place(): void {
+		if (!trigger || !panel) return;
+		const anchor = trigger.getBoundingClientRect();
+		const cap = listCapRem * Number(getComputedStyle(document.documentElement).fontSize.replace('px', ''));
+		const placement = placeAgainst(anchor, panel.offsetWidth, Math.min(panel.scrollHeight, cap), 'above');
+		({ left, top, above } = placement);
+		maxHeight = Math.min(cap, placement.room);
+	}
+
+	// The list joins the top layer, like Select's, and moves when a message or the models change its height.
+	$effect(() => {
+		void [models, loadError, selectError, pendingId];
+		if (!open || !panel) return;
+		if (!panel.matches(':popover-open')) panel.showPopover();
+		place();
+	});
+
 	function toggle(event: MouseEvent): void {
 		if (open) close();
 		else {
@@ -116,12 +146,18 @@
 		focusReturn.restore();
 	}
 
+	function handleScroll(event: Event): void {
+		if (!panel?.contains(event.target as Node)) place();
+	}
+
 	function handleKeydown(event: KeyboardEvent): void {
 		if (!open || event.key !== 'Escape') return;
 		event.stopPropagation();
 		close();
 	}
 </script>
+
+<svelte:window onscrollcapture={handleScroll} onresize={place} />
 
 <!-- Escape bubbles from the trigger and the list. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -145,8 +181,13 @@
 	{#if open}
 		<div
 			bind:this={panel}
+			popover="manual"
 			class="model-picker__panel"
 			class:model-picker__panel--keyboard={keyboardOpen}
+			class:model-picker__panel--below={!above}
+			style:left={`${left}px`}
+			style:top={`${top}px`}
+			style:max-height={maxHeight === undefined ? undefined : `${maxHeight}px`}
 			role="group"
 			aria-label="Models">
 			{#if selectError}<p class="model-picker__error" role="alert">{selectError}</p>{/if}
@@ -248,22 +289,18 @@
 		clip-path: inset(50%);
 	}
 
-	/*
-	 * It sits in the composer footer at the bottom of the window, so it opens
-	 * upward from the trigger's left edge.
-	 */
 	.model-picker__panel {
-		position: absolute;
-		bottom: calc(100% + var(--pau-space-1));
-		left: 0;
-		z-index: 10;
+		position: fixed;
+		inset: auto;
 		display: grid;
 		width: 20rem;
 		max-width: min(24rem, calc(100vw - 1rem));
 		max-height: 18rem;
+		margin: 0;
 		padding: var(--pau-space-1);
 		overflow-y: auto;
 		color: var(--pau-text);
+		font: inherit;
 		font-size: var(--pau-type-md);
 		background: var(--pau-surface-raised);
 		border: var(--pau-border-thin, 1px) solid var(--pau-border);
@@ -271,6 +308,10 @@
 		box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 28%);
 		transform-origin: bottom left;
 		animation: model-picker-enter var(--pau-duration-small) var(--pau-ease-enter);
+	}
+
+	.model-picker__panel--below {
+		transform-origin: top left;
 	}
 
 	.model-picker__panel--keyboard {

@@ -16,10 +16,10 @@ afterEach(() => {
 	for (const target of targets.splice(0)) target.remove();
 });
 
-/** Renders the picker low in the page, as the composer footer does, so its list has room to open upward. */
+/** Renders the picker at the bottom of the window, as the composer footer does, so its list opens upward. */
 function renderPicker(props: PickerProps) {
 	const target = document.createElement('div');
-	target.style.marginTop = '24rem';
+	target.style.cssText = 'position: fixed; left: 1rem; bottom: 1rem;';
 	document.body.append(target);
 	targets.push(target);
 	return render(ModelPicker, { target, props });
@@ -78,6 +78,29 @@ test('keeps the list open and explains a rejected selection', async () => {
 
 	await expect.element(page.getByRole('alert')).toHaveTextContent('Pi rejected the request: Model not found');
 	await expect.element(page.getByRole('button', { name: /gpt-5/ })).toBeEnabled();
+});
+
+test.each([
+	[600, 'top'],
+	[600, 'bottom'],
+	[1440, 'top'],
+	[1440, 'bottom']
+])('keeps a rejection message inside a %ipx window with the trigger at the %s', async (width, edge) => {
+	await page.viewport(width, 500);
+	const onSelect = vi.fn().mockRejectedValue(new Error('Pi rejected the request: Model not found'));
+	const { container } = await renderPicker({ load: async () => modelFixtures.populated, onSelect });
+	container.style.cssText = `position: fixed; left: 1rem; ${edge}: 1rem;`;
+
+	await userEvent.click(page.getByRole('button', { name: 'Model: Claude Sonnet 4.5' }));
+	await userEvent.click(page.getByRole('button', { name: /gpt-5/ }));
+
+	const alert = page.getByRole('alert');
+	await expect.element(alert).toHaveTextContent('Pi rejected the request: Model not found');
+	const box = alert.element().getBoundingClientRect();
+	expect(box.left).toBeGreaterThanOrEqual(0);
+	expect(box.right).toBeLessThanOrEqual(innerWidth);
+	expect(box.top).toBeGreaterThanOrEqual(0);
+	expect(box.bottom).toBeLessThanOrEqual(innerHeight);
 });
 
 test('explains an empty model list', async () => {

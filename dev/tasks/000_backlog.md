@@ -1,5 +1,12 @@
 # Backlog
 
+## Defects
+
+The MCP view switches to its narrow layout by window width, not by the width
+it has. Beside the rails at an 800px window its two-column server list needs
+about 512px in a 456px column and overflows. Make its layout respond to its
+container before the view gets a route.
+
 ## Verification backlog
 
 Run the resource-monitoring sampler smoke test on macOS when a runner is

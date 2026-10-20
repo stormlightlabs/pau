@@ -56,7 +56,7 @@
 
 <section class="session-picker" aria-labelledby="session-picker-title">
 	<header>
-		<h1 id="session-picker-title">Sessions in {workspaceName}</h1>
+		<h1 class="pau-view-title" id="session-picker-title">Sessions in {workspaceName}</h1>
 		<div>
 			<button
 				type="button"
@@ -129,8 +129,7 @@
 	.session-picker {
 		grid-area: transcript;
 		width: min(100%, 40rem);
-		margin-inline: auto;
-		padding: var(--pau-space-5) var(--pau-space-4);
+		padding-block: var(--pau-space-5);
 	}
 
 	/* The title and its actions share one row, wrapping only in a narrow pane. */
@@ -149,7 +148,6 @@
 
 	h1 {
 		margin: 0;
-		font-size: var(--pau-type-lg);
 	}
 
 	.session-picker__list {

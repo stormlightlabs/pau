@@ -652,10 +652,10 @@
 		class:workspace-files__surface--editing={showsEditor}
 		aria-labelledby="workspace-files-title">
 		<header>
-			<div>
-				<p>Workspace files</p>
-				<h1 id="workspace-files-title">{submittedQuery ? `Search: ${submittedQuery}` : workspaceName}</h1>
-			</div>
+			<p>Workspace files</p>
+			<h1 class="pau-view-title" id="workspace-files-title">
+				{submittedQuery ? `Search: ${submittedQuery}` : workspaceName}
+			</h1>
 			{#if submittedQuery && !searchLoading && !searchError}
 				<span>{searchResults.length} {searchResults.length === 1 ? 'match' : 'matches'}</span>
 			{/if}
@@ -1098,11 +1098,12 @@
 		--empty-state-inset: var(--pau-space-4);
 	}
 
+	/* The match count centers on the title line, as in the shared view header. */
 	.workspace-files__surface > header {
-		display: flex;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
-		justify-content: space-between;
-		gap: var(--pau-space-4);
+		column-gap: var(--pau-space-4);
 		min-height: 3.5rem;
 		padding: var(--pau-space-3) var(--pau-space-4);
 		border-bottom: 1px solid var(--shell-border);
@@ -1119,11 +1120,12 @@
 		font-size: var(--pau-type-xs);
 	}
 
-	.workspace-files__surface header h1 {
-		margin-top: 0;
-		text-transform: none;
-		font-size: var(--pau-type-md);
-		font-weight: var(--pau-weight-semibold);
+	.workspace-files__surface header :is(p, h1) {
+		grid-column: 1;
+	}
+
+	.workspace-files__surface header span {
+		grid-area: 2 / 2;
 	}
 
 	.workspace-files__surface-state {

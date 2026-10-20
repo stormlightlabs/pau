@@ -5,9 +5,10 @@
 	/**
 	 * Shared heading for full-width views such as Diagnostics and Processes. It
 	 * insets its content by the same `space/3` as the view's sections so the
-	 * title and the right-side metadata align with the rows below. The view
-	 * root must set `container-type: inline-size`; the header stacks when that
-	 * container is narrower than 48rem.
+	 * title and the right-side metadata align with the rows below. The metadata
+	 * centers on the title line rather than on the eyebrow and title together.
+	 * The view root must set `container-type: inline-size`; the header stacks
+	 * when that container is narrower than 48rem.
 	 */
 	let {
 		eyebrow,
@@ -26,19 +27,17 @@
 </script>
 
 <header class="view-header">
-	<div>
-		<p>{eyebrow}</p>
-		<h1 id={titleId}>{title}</h1>
-	</div>
-	{@render meta?.()}
+	<p>{eyebrow}</p>
+	<h1 class="pau-view-title" id={titleId}>{title}</h1>
+	{#if meta}<div class="view-header__meta">{@render meta()}</div>{/if}
 </header>
 
 <style>
 	.view-header {
-		display: flex;
-		align-items: end;
-		justify-content: space-between;
-		gap: var(--pau-space-4);
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		column-gap: var(--pau-space-4);
 		margin-bottom: var(--pau-space-5);
 		padding-inline: var(--pau-space-3);
 		font-family: var(--pau-font-ui);
@@ -46,6 +45,7 @@
 
 	p,
 	h1 {
+		grid-column: 1;
 		margin: 0;
 	}
 
@@ -54,15 +54,19 @@
 		font-size: var(--pau-type-xs);
 	}
 
-	h1 {
-		font-size: var(--pau-type-lg);
-		font-weight: var(--pau-weight-semibold);
+	.view-header__meta {
+		grid-area: 2 / 2;
 	}
 
 	@container (max-width: 48rem) {
 		.view-header {
-			flex-direction: column;
-			align-items: flex-start;
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		.view-header__meta {
+			grid-area: auto;
+			justify-self: start;
+			margin-top: var(--pau-space-2);
 		}
 	}
 </style>

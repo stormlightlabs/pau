@@ -8,6 +8,7 @@
 	import { onMount, tick } from 'svelte';
 
 	import { revealLabel } from './context-menu';
+	import EmptyState from './EmptyState.svelte';
 	import type { EditorFileContent, FileEditorSource } from './types/file-editor';
 
 	type Props = {
@@ -288,17 +289,21 @@
 	{#if loading}
 		<p class="file-editor__state" role="status">Opening {path}…</p>
 	{:else if error}
-		<div class="file-editor__state" role="alert">
-			<strong>Cannot open file</strong>
+		<EmptyState role="alert" title="Cannot open file">
 			<p>{error}</p>
 			{#if revealFailed}<p>Pau could not show this file in the file manager.</p>{/if}
 			{#if retryable}
-				<button class="pau-button pau-button--primary" type="button" onclick={() => void load()}>Try again</button>
+				<button
+					class="pau-button pau-button--primary file-editor__state-action"
+					type="button"
+					onclick={() => void load()}>Try again</button>
 			{:else if onReveal}
-				<button class="pau-button pau-button--primary" type="button" onclick={() => void reveal()}
-					>{revealLabel()}</button>
+				<button
+					class="pau-button pau-button--primary file-editor__state-action"
+					type="button"
+					onclick={() => void reveal()}>{revealLabel()}</button>
 			{/if}
-		</div>
+		</EmptyState>
 	{:else}
 		<div class="file-editor__code" bind:this={host}></div>
 	{/if}
@@ -326,8 +331,7 @@
 	}
 
 	.file-editor__header p,
-	.file-editor__external p,
-	.file-editor__state p {
+	.file-editor__external p {
 		margin: 0;
 	}
 
@@ -387,8 +391,14 @@
 
 	/* The external-change banner is optional, so pin the body to the flexible row. */
 	.file-editor__code,
-	.file-editor__state {
+	.file-editor__state,
+	.file-editor > :global(.empty-state) {
 		grid-row: 3;
+	}
+
+	/* Blocked and loading states start under the header's path, top-aligned like every other empty state. */
+	.file-editor {
+		--empty-state-inset: var(--pau-space-3);
 	}
 
 	.file-editor__code {
@@ -407,21 +417,14 @@
 	}
 
 	.file-editor__state {
-		align-self: center;
-		justify-self: center;
-		display: grid;
-		max-width: 32rem;
-		gap: var(--pau-space-2);
-		padding: var(--pau-space-5);
-		text-align: center;
-	}
-
-	.file-editor__state p {
+		align-self: start;
+		margin: 0;
+		padding: var(--pau-space-5) var(--empty-state-inset);
 		color: var(--pau-text-muted);
 	}
 
-	.file-editor__state button {
-		justify-self: center;
+	.file-editor__state-action {
+		margin-top: var(--pau-space-4);
 	}
 
 	@media (max-width: 42rem) {

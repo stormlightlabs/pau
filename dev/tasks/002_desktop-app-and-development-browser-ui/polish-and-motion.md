@@ -252,19 +252,3 @@ Verification:
 - Measure every view action button at the shared height, and the context menu
   outline at the focus width token.
 
-### 2.276 View titles, headings, and leading edges
-
-Status: planned
-Blocked by: none
-
-Use one view title role for Files, Processes, Diagnostics, MCP, and Sandbox.
-Give Markdown headings a descending scale. Align the saved-session picker,
-editor blocked states, and route-level controls to the leading edge of the
-view content.
-
-Verification:
-
-- Measure the same title size on every main surface, Markdown h1 larger than h2
-  larger than h3, and shared leading edges for the picker, editor states, and
-  route controls.
-

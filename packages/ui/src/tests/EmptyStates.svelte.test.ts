@@ -1,11 +1,13 @@
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { beforeEach, describe, expect, test } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
+import { savedSessionFixtures } from '../fixtures/saved-sessions';
 import { sessionFixtures } from '../fixtures/sessions';
 import ProcessesView from '../lib/ProcessesView.svelte';
 import SessionView from '../lib/SessionView.svelte';
 import type { SessionWorkspace } from '../lib/types/session';
+import FileEditorDemo from '../stories/FileEditorDemo.svelte';
 import FilesDemo from '../stories/WorkspaceFilesDemo.svelte';
 import TerminalDemo from '../stories/TerminalSurfaceDemo.svelte';
 
@@ -61,6 +63,32 @@ describe.each([1440, 900])('at %ipx', (width) => {
 		const heading = page.getByRole('heading', { name: title }).element();
 		expect(left(heading)).toBe(edge);
 		expectTopAligned(heading);
+	});
+
+	test('starts the saved-session picker at the transcript column, top-aligned', async () => {
+		const edge = await transcriptLeft();
+		await render(SessionView, {
+			workspaces: sessionFixtures.workspaceWithoutSessions,
+			onLoadSavedSessions: async () => savedSessionFixtures.populated,
+			onResumeSession: async () => {}
+		});
+		// The context rail is a drawer only in a narrow window.
+		const drawer = page.getByRole('button', { name: 'Open navigation' });
+		if (drawer.query()) await userEvent.click(drawer);
+		await userEvent.click(page.getByRole('button', { name: 'Saved sessions in Pau' }));
+
+		const heading = page.getByRole('heading', { name: 'Sessions in Pau' }).element();
+		expect(left(heading)).toBe(edge);
+		expectTopAligned(heading);
+	});
+
+	test('starts a blocked editor state under the file path, top-aligned', async () => {
+		await render(FileEditorDemo, { state: 'binary' });
+
+		const heading = page.getByRole('heading', { name: 'Cannot open file' });
+		await expect.element(heading).toBeVisible();
+		expect(left(heading.element())).toBe(left(page.getByText('src/session/state.ts').element()));
+		expectTopAligned(heading.element());
 	});
 
 	test('aligns the Files empty state with the header title, top-aligned', async () => {

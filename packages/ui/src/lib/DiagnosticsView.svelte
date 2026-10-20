@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EmptyState from './EmptyState.svelte';
 	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
 	import StateChip from './StateChip.svelte';
@@ -76,10 +77,9 @@
 	</section>
 
 	{#if !bundle.settings.enabled}
-		<div class="diagnostics-view__empty">
-			<h2>Collection is off</h2>
+		<EmptyState title="Collection is off">
 			<p>Enable diagnostics here or start Pau with <code>--diagnostics</code>.</p>
-		</div>
+		</EmptyState>
 	{:else}
 		<div class="diagnostics-view__versions" aria-label="Build versions">
 			<div><span>Frontend</span><strong>{bundle.frontendVersion}</strong></div>
@@ -216,7 +216,9 @@
 </section>
 
 <style>
+	/* Empty states start on the same inset as the header and section rows. */
 	.diagnostics-view {
+		--empty-state-inset: var(--pau-space-3);
 		container-type: inline-size;
 		min-width: 0;
 		color: var(--pau-text);
@@ -309,17 +311,6 @@
 	.diagnostics-view input:focus-visible {
 		outline: var(--pau-focus-width) solid var(--pau-focus);
 		outline-offset: var(--pau-focus-offset);
-	}
-
-	.diagnostics-view__empty {
-		padding: 3rem var(--pau-space-3);
-		text-align: center;
-		border-bottom: 1px solid var(--pau-border);
-	}
-
-	.diagnostics-view__empty p {
-		margin-top: var(--pau-space-1);
-		color: var(--pau-text-muted);
 	}
 
 	.diagnostics-view__versions {

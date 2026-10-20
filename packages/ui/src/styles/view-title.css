@@ -1,0 +1,11 @@
+/*
+ * The one title role for a main surface: the session title, Files, Processes,
+ * Diagnostics, MCP, Sandbox, the saved-session picker, and an empty state
+ * that fills the surface. Every view names its task at the same size and
+ * weight, so moving between views never changes the heading's rank. Components
+ * own the title's margins and layout but must not override its size or weight.
+ */
+.pau-view-title {
+	font-size: var(--pau-type-xl);
+	font-weight: var(--pau-weight-semibold);
+}

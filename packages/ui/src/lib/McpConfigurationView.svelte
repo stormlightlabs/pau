@@ -42,10 +42,8 @@
 
 <section class="mcp" aria-labelledby="mcp-title">
 	<header class="mcp__header">
-		<div>
-			<h2 id="mcp-title">{agentLabel} MCP</h2>
-			<p>{configuration.serverCount} configured {configuration.serverCount === 1 ? 'server' : 'servers'}</p>
-		</div>
+		<h2 class="pau-view-title" id="mcp-title">{agentLabel} MCP</h2>
+		<p>{configuration.serverCount} configured {configuration.serverCount === 1 ? 'server' : 'servers'}</p>
 		<StateChip on={configuration.managedEnabled}>
 			Pau-managed MCP {configuration.managedEnabled ? 'on' : 'off'}
 		</StateChip>
@@ -191,7 +189,6 @@
 		padding: var(--pau-space-4) var(--pau-space-4);
 	}
 
-	.mcp__header,
 	.mcp__unavailable,
 	.mcp__summary,
 	.mcp__section-heading,
@@ -200,6 +197,22 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--pau-space-4);
+	}
+
+	/* The status chip centers on the title line, as in the shared view header. */
+	.mcp__header {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		column-gap: var(--pau-space-4);
+	}
+
+	.mcp__header :is(h2, p) {
+		grid-column: 1;
+	}
+
+	.mcp__header > :global(.state-chip) {
+		grid-area: 1 / 2;
 	}
 
 	.mcp__header,
@@ -214,10 +227,6 @@
 	h4,
 	p {
 		margin: 0;
-	}
-
-	h2 {
-		font-size: var(--pau-type-lg);
 	}
 
 	h3,
@@ -361,7 +370,6 @@
 	}
 
 	@media (max-width: 42rem) {
-		.mcp__header,
 		.mcp__summary,
 		.mcp__unavailable {
 			align-items: stretch;

@@ -3,20 +3,24 @@ import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { diagnosticFixtures } from '../fixtures/diagnostics';
+import { savedSessionFixtures } from '../fixtures/saved-sessions';
 import { mcpConfigurationFixtures } from '../fixtures/mcp';
 import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
 import { sandboxFixtures } from '../fixtures/sandbox';
 import { sessionFixtures } from '../fixtures/sessions';
 import { toolCallFixtures } from '../fixtures/tool-calls';
 import DiagnosticsView from '../lib/DiagnosticsView.svelte';
+import Markdown from '../lib/Markdown.svelte';
 import McpConfigurationView from '../lib/McpConfigurationView.svelte';
 import ProcessesView from '../lib/ProcessesView.svelte';
 import SandboxSettingsView from '../lib/SandboxSettingsView.svelte';
 import SessionResourceSummary from '../lib/SessionResourceSummary.svelte';
+import SessionPicker from '../lib/SessionPicker.svelte';
 import SessionView from '../lib/SessionView.svelte';
 import ApplicationShellDemo from '../stories/ApplicationShellDemo.svelte';
 import KeyboardShortcutsDemo from '../stories/KeyboardShortcutsDemo.svelte';
 import ToolCallViewDemo from '../stories/ToolCallViewDemo.svelte';
+import WorkspaceFilesDemo from '../stories/WorkspaceFilesDemo.svelte';
 import '../styles/tokens.css';
 import { UI_FONTS } from '../theme';
 
@@ -46,6 +50,16 @@ function textBelowFloor(root: ParentNode = document.body): string[] {
 	}
 	return offenders;
 }
+
+/** The vertical center of an element's box. */
+const center = (element: Element) => {
+	const box = element.getBoundingClientRect();
+	return box.top + box.height / 2;
+};
+
+/** The computed font size of the only heading at a level. */
+const headingSize = (level: number) =>
+	pixels(getComputedStyle(page.getByRole('heading', { level }).element()).fontSize);
 
 const base = sessionFixtures.running[0]!;
 const session = base.sessions[0]!;
@@ -101,6 +115,64 @@ test('the main task heading is 18px semibold and body text is 14px', async () =>
 	expect(getComputedStyle(document.querySelector('.session-view__transcript p')!).fontSize).toBe('14px');
 	expect(getComputedStyle(document.querySelector('.session-composer textarea')!).fontSize).toBe('14px');
 	expect(textBelowFloor()).toEqual([]);
+});
+
+test('every main surface names its task with the same title size', async () => {
+	await render(WorkspaceFilesDemo, { state: 'default' });
+	await render(ProcessesView, { workspaceName: 'Pau', processes: [] });
+	await render(DiagnosticsView, { bundle: diagnosticFixtures.active });
+	await render(McpConfigurationView, { configuration: mcpConfigurationFixtures.piConfiguredOff });
+	await render(SandboxSettingsView, { selection: sandboxFixtures.unsandboxed });
+	await render(SessionPicker, {
+		workspaceName: 'Pau',
+		load: async () => savedSessionFixtures.empty,
+		onNew: async () => {},
+		onResume: async () => {}
+	});
+	await render(SessionView, { workspaces: sessionFixtures.idle });
+
+	const titles = [
+		page.getByRole('heading', { level: 1, name: 'pau', exact: true }),
+		page.getByRole('heading', { name: 'Processes', exact: true }),
+		page.getByRole('heading', { name: 'Diagnostics', exact: true }),
+		page.getByRole('heading', { name: 'Pi MCP' }),
+		page.getByRole('heading', { name: 'Agent sandbox' }),
+		page.getByRole('heading', { name: 'Sessions in Pau' }),
+		page.getByRole('heading', { name: 'No session selected' })
+	];
+	for (const title of titles) {
+		const element = title.element();
+		const style = getComputedStyle(element);
+		expect(`${style.fontSize} ${style.fontWeight}`, element.textContent ?? '').toBe('18px 600');
+	}
+});
+
+test('a view status chip centers on the title line', async () => {
+	// A view header narrower than 48rem stacks its status under the title.
+	await page.viewport(1440, 900);
+	await render(ProcessesView, { workspaceName: 'Pau', processes: resourceMonitoringFixtures.active });
+	await render(DiagnosticsView, { bundle: diagnosticFixtures.active });
+	await render(McpConfigurationView, { configuration: mcpConfigurationFixtures.piConfiguredOff });
+	await render(SandboxSettingsView, { selection: sandboxFixtures.unsandboxed });
+
+	for (const [title, status] of [
+		['Processes', '3 monitored trees'],
+		['Diagnostics', 'Diagnostics mode on'],
+		['Pi MCP', 'Pau-managed MCP off'],
+		['Agent sandbox', 'Sandbox off']
+	]) {
+		const heading = page.getByRole('heading', { name: title, exact: true }).element();
+		const offset = center(page.getByText(status!, { exact: true }).element()) - center(heading);
+		expect(Math.abs(offset), title).toBeLessThanOrEqual(1);
+	}
+});
+
+test('Markdown headings descend in size from h1 to h3', async () => {
+	await render(Markdown, { text: '# Findings\n\n## Cause\n\n### Fix\n\nBody.' });
+
+	expect(headingSize(1)).toBeGreaterThan(headingSize(2));
+	expect(headingSize(2)).toBeGreaterThan(headingSize(3));
+	expect(headingSize(3)).toBeGreaterThanOrEqual(14);
 });
 
 test('no shell, inspector, or tool text renders below 12px', async () => {

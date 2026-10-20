@@ -44,3 +44,18 @@ test('draws settings fields with the theme border and fits a minimum-size window
 	const label = checkbox.nextElementSibling!.getBoundingClientRect();
 	expect(label.left - checkbox.getBoundingClientRect().right).toBe(8);
 });
+
+test.each([1440, 900, 800])('starts the page on the shell content edge at %ipx', async (width) => {
+	await page.viewport(width, 900);
+	await render(SandboxPage);
+	const title = page.getByRole('heading', { name: 'Agent sandbox' });
+	await expect.element(title).toBeVisible();
+
+	const content = document.querySelector('.app-shell__main-content')!;
+	const contentEdge =
+		content.getBoundingClientRect().left + Number(getComputedStyle(content).paddingLeft.replace('px', ''));
+	expect(page.getByRole('region', { name: 'Agent sandbox' }).element().getBoundingClientRect().left).toBe(contentEdge);
+
+	const label = page.getByText('Show access for').element();
+	expect(label.getBoundingClientRect().left).toBe(title.element().getBoundingClientRect().left);
+});

@@ -13,6 +13,7 @@
 @import './fonts.css';
 @import './buttons.css';
 @import './choices.css';
+@import './view-title.css';
 
 :root {
 	--pau-space-1: 0.25rem;

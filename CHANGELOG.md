@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- Every main view now uses the same title size with its status on the title
+  line, Markdown headings step down from h1 to h3, and the saved-session picker,
+  file messages, Diagnostics, and Sandbox line up with the view content.
 - The composer footer fits on one row in the default window, Send prompt stays
   on the first row in narrow windows, and slash and @ suggestions open above the
   prompt without moving the conversation.

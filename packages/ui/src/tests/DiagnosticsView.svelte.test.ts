@@ -46,6 +46,9 @@ test('shows the explicit control and CLI flag while collection is off', async ()
 	await expect.element(page.getByRole('heading', { name: 'Collection is off' })).toBeVisible();
 	await expect.element(page.getByText('--diagnostics')).toBeVisible();
 	await expect.element(page.getByRole('combobox', { name: 'Minimum log level' })).toBeDisabled();
+	const left = (name: string) =>
+		page.getByRole('heading', { name, exact: true }).element().getBoundingClientRect().left;
+	expect(left('Collection is off')).toBe(left('Diagnostics'));
 });
 
 test('insets the header by the same padding as the first section', async () => {

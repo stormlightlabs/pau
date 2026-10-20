@@ -29,7 +29,7 @@
 </script>
 
 <div class="empty-state" {role}>
-	<svelte:element this={`h${level}`} id={titleId}>{title}</svelte:element>
+	<svelte:element this={`h${level}`} class={{ 'pau-view-title': level === 1 }} id={titleId}>{title}</svelte:element>
 	{@render children?.()}
 </div>
 
@@ -43,6 +43,10 @@
 
 	.empty-state :is(h1, h2) {
 		margin: 0;
+	}
+
+	/* A level 1 state fills the surface and takes the view title role instead. */
+	.empty-state h2 {
 		font-size: var(--pau-type-lg);
 	}
 

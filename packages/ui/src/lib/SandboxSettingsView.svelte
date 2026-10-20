@@ -131,12 +131,10 @@
 
 <section class="sandbox" aria-labelledby="sandbox-title">
 	<header class="sandbox__header">
-		<div>
-			<h2 id="sandbox-title">Agent sandbox</h2>
-			<p>
-				{scope === 'workspace' ? 'Default for new agent sessions in this workspace' : 'This session only'}
-			</p>
-		</div>
+		<h2 class="pau-view-title" id="sandbox-title">Agent sandbox</h2>
+		<p>
+			{scope === 'workspace' ? 'Default for new agent sessions in this workspace' : 'This session only'}
+		</p>
 		<StateChip on={draft.mode !== 'unsandboxed'}>
 			{draft.mode === 'unsandboxed' ? 'Sandbox off' : 'Sandbox on'}
 		</StateChip>
@@ -484,7 +482,6 @@
 		border-bottom: 1px solid var(--pau-border);
 	}
 
-	.sandbox__header,
 	.sandbox__actions {
 		display: flex;
 		align-items: center;
@@ -496,6 +493,22 @@
 		justify-content: flex-end;
 	}
 
+	/* The status chip centers on the title line, as in the shared view header. */
+	.sandbox__header {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		column-gap: var(--pau-space-4);
+	}
+
+	.sandbox__header :is(h2, p) {
+		grid-column: 1;
+	}
+
+	.sandbox__header > :global(.state-chip) {
+		grid-area: 1 / 2;
+	}
+
 	h2,
 	h3,
 	h4,
@@ -503,10 +516,6 @@
 	dl,
 	dd {
 		margin: 0;
-	}
-
-	h2 {
-		font-size: var(--pau-type-lg);
 	}
 
 	h3,

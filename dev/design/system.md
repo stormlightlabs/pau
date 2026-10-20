@@ -140,6 +140,13 @@ weights 400, 500, and 600. Fold any heavier weight into 600.
 - Keep metadata readable at 12–13px with sufficient contrast and line height.
   No product text goes below 12px, except uppercase, letter-spaced section
   labels, which may use 11px.
+- Every main surface names its task with the one view title role
+  (`pau-view-title`, 18px/600): the session title, Files, Processes,
+  Diagnostics, MCP, Sandbox, the saved-session picker, and an empty state that
+  fills the surface. A count or status chip beside the title centers on the
+  title line.
+- Markdown headings descend one step per level, all at 600: h1 18px, h2 16px,
+  h3 14px, and h4–h6 13px, with h5 and h6 muted.
 - Use weight and spacing before large size jumps.
 - Use monospace for code, commands, paths, identifiers, terminal output, and
   aligned counts. Do not use it as a general technical accent.

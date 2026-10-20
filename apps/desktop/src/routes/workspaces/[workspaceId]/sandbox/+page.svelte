@@ -130,11 +130,10 @@
 </ApplicationShell>
 
 <style>
+	/* The shell's main column already insets the page, so the route starts on its content edge with no padding of its own. */
 	.sandbox-route {
 		display: grid;
-		justify-items: center;
 		gap: var(--pau-space-3);
-		padding: var(--pau-space-5) var(--pau-space-4);
 		color: var(--pau-text);
 		font-size: var(--pau-type-md);
 	}
@@ -146,10 +145,13 @@
 		max-width: 54rem;
 	}
 
+	/* Inset like the settings panel's header (its border plus padding) so the control starts on the title's edge. */
 	.sandbox-route__agent {
 		display: flex;
 		align-items: center;
 		gap: var(--pau-space-2);
+		box-sizing: border-box;
+		padding-inline: calc(var(--pau-space-4) + 1px);
 	}
 
 	p {

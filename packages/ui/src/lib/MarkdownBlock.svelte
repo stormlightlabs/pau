@@ -132,20 +132,37 @@
 		white-space: pre-wrap;
 	}
 
+	/*
+	 * Headings descend one type step per level, all at 600, so an agent's
+	 * outline reads at a glance. Every level is scoped to the heading class so
+	 * no shared rule outranks a level's size.
+	 */
 	.markdown__heading {
-		font-size: var(--pau-type-lg);
 		font-weight: var(--pau-weight-semibold);
 		line-height: 1.35;
 		text-wrap: balance;
 	}
 
-	h1 {
+	h1.markdown__heading {
 		font-size: var(--pau-type-xl);
 	}
 
-	h5,
-	h6 {
+	h2.markdown__heading {
+		font-size: var(--pau-type-lg);
+	}
+
+	h3.markdown__heading {
 		font-size: var(--pau-type-md);
+	}
+
+	h4.markdown__heading,
+	h5.markdown__heading,
+	h6.markdown__heading {
+		font-size: var(--pau-type-sm);
+	}
+
+	h5.markdown__heading,
+	h6.markdown__heading {
 		color: var(--pau-text-muted);
 	}
 

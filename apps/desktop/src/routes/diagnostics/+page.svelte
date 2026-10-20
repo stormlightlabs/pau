@@ -116,9 +116,11 @@
 	{#if error}<p class="diagnostics-route__message diagnostics-route__message--error" role="alert">{error}</p>{/if}
 	{#if notice}<p class="diagnostics-route__message" role="status">{notice}</p>{/if}
 	<div class="diagnostics-route">
-		<MotionSettingControl
-			value={interfacePreferences.motion}
-			onChange={(value) => interfacePreferences.setMotion(value)} />
+		<div class="diagnostics-route__motion">
+			<MotionSettingControl
+				value={interfacePreferences.motion}
+				onChange={(value) => interfacePreferences.setMotion(value)} />
+		</div>
 		<DiagnosticsView
 			{bundle}
 			onSettingsChange={(enabled, level) => void changeSettings(enabled, level)}
@@ -128,12 +130,17 @@
 </ApplicationShell>
 
 <style>
+	/* The shell's main column already insets the page, so the route adds no padding of its own. */
 	.diagnostics-route {
 		display: grid;
 		gap: 1.5rem;
-		padding: clamp(1rem, 3vw, 2.5rem);
 		color: var(--pau-text, #e7e9f7);
 		background: var(--pau-surface, #1c1e2d);
+	}
+
+	/* Match the view header's inset so the control starts on the title's edge. */
+	.diagnostics-route__motion {
+		padding-inline: var(--pau-space-3);
 	}
 
 	.diagnostics-route__message {

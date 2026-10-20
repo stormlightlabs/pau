@@ -2168,7 +2168,7 @@
 								? `${activeSession.agent} · ${activeSession.model}`
 								: activeSession.agent} />
 					</p>
-					<h1 id="session-title">{activeSession.title}</h1>
+					<h1 class="pau-view-title" id="session-title">{activeSession.title}</h1>
 				</div>
 				<div class="session-view__header-actions">
 					<div class={`session-view__status session-view__status--${activeSession.status}`}>
@@ -3014,8 +3014,6 @@
 
 	.session-view__header h1 {
 		margin-top: var(--pau-space-1);
-		font-size: var(--pau-type-xl);
-		font-weight: var(--pau-weight-semibold);
 		text-wrap: balance;
 	}
 

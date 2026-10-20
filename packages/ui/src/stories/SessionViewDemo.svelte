@@ -68,7 +68,7 @@
 		sendFailure?: string;
 		/** Whether sends never get an answer, which leaves the prompt pending. */
 		holdSend?: boolean;
-		/** What clearing the queue returns. */
+		/** What clearing the queue or interrupting returns as the cleared queue. */
 		clearedQueue?: MessageQueue;
 		/** Whether the view offers Open workspace. */
 		openable?: boolean;
@@ -187,8 +187,9 @@
 		if (searchFailure) throw new Error('Search failed');
 		return files.filter((file) => file.path.toLowerCase().includes(query.toLowerCase()));
 	}}
-	onInterrupt={(sessionId) => {
+	onInterrupt={async (sessionId) => {
 		lastAction = `${sessionId}: interrupt`;
+		return clearedQueue;
 	}}
 	onRetry={(sessionId) => {
 		if (retryFailure) throw new Error(retryFailure);

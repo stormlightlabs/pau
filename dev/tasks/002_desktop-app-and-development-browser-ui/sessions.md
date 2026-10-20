@@ -183,19 +183,6 @@ Verification:
   stopping one with Escape.
 - Run a shell command from a self-hosted session.
 
-### 2.239 Interrupted queue returns to the composer
-
-Status: planned
-Blocked by: none
-
-Put the text of queued messages back in the composer after an interrupt, so
-none of it runs or is lost.
-
-Verification:
-
-- Component-test interrupting with queued messages, with an empty queue, and
-  with a draft already in the composer.
-
 ### 2.242 Model-aware thinking levels
 
 Status: planned

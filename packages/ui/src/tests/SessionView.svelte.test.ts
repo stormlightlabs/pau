@@ -412,7 +412,7 @@ test('lists queued messages by kind and hides an empty or unsupported queue', as
 	await expect.element(page.getByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument();
 });
 
-test('restores cleared messages after an existing draft', async () => {
+test('restores cleared messages before an existing draft', async () => {
 	const onClearQueue = vi.fn().mockResolvedValue({ steering: ['Keep the API.'], followUp: ['Add a test.'] });
 	await render(SessionView, { workspaces: sessionFixtures.queued, activeSessionId: 'session-running', onClearQueue });
 
@@ -422,7 +422,38 @@ test('restores cleared messages after an existing draft', async () => {
 	expect(onClearQueue).toHaveBeenCalledWith('session-running');
 	await expect
 		.element(page.getByRole('textbox', { name: 'Prompt' }))
-		.toHaveValue('Draft.\n\nKeep the API.\n\nAdd a test.');
+		.toHaveValue('Keep the API.\n\nAdd a test.\n\nDraft.');
+});
+
+test('puts queued messages back in the composer after an interrupt', async () => {
+	const onInterrupt = vi.fn().mockResolvedValue({ steering: ['Keep the API.'], followUp: ['Add a test.'] });
+	await render(SessionView, { workspaces: sessionFixtures.queued, activeSessionId: 'session-running', onInterrupt });
+
+	await userEvent.click(page.getByRole('button', { name: /Interrupt/ }));
+
+	expect(onInterrupt).toHaveBeenCalledWith('session-running');
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toHaveValue('Keep the API.\n\nAdd a test.');
+});
+
+test('leaves the composer empty when an interrupt clears no queue', async () => {
+	const onInterrupt = vi.fn().mockResolvedValue({ steering: [], followUp: [] });
+	await render(SessionView, { workspaces: sessionFixtures.queued, activeSessionId: 'session-running', onInterrupt });
+
+	await userEvent.click(page.getByRole('button', { name: /Interrupt/ }));
+
+	expect(onInterrupt).toHaveBeenCalledWith('session-running');
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toHaveValue('');
+});
+
+test('keeps the draft after the queued messages an interrupt restores', async () => {
+	const onInterrupt = vi.fn().mockResolvedValue({ steering: [], followUp: ['Add a test.'] });
+	await render(SessionView, { workspaces: sessionFixtures.queued, activeSessionId: 'session-running', onInterrupt });
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+
+	await userEvent.type(prompt, 'Draft.');
+	await userEvent.click(page.getByRole('button', { name: /Interrupt/ }));
+
+	await expect.element(prompt).toHaveValue('Add a test.\n\nDraft.');
 });
 
 test('keeps the queue and shows the reason when clearing fails', async () => {

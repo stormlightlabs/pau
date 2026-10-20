@@ -113,7 +113,13 @@
 		 * search failed. Without it, `@` does not open completion.
 		 */
 		onSearchFiles?: (workspaceId: string, query: string) => Promise<FileMention[]>;
-		onInterrupt?: (sessionId: string) => void | Promise<void>;
+		/**
+		 * Interrupts the running turn. Pi drops any queued messages on interrupt,
+		 * so return what the queue held and the view puts that text back in the
+		 * composer. Return nothing, or an empty queue, when there is nothing to
+		 * restore. A rejected promise shows its message in the notices.
+		 */
+		onInterrupt?: (sessionId: string) => void | MessageQueue | Promise<void | MessageQueue>;
 		onStop?: (sessionId: string) => void | Promise<void>;
 		/**
 		 * Sends the last prompt again as a new message after a failed turn. Pi has
@@ -1457,9 +1463,11 @@
 
 	async function interrupt(): Promise<void> {
 		if (disconnected || !activeSession || !activeSession.capabilities.interrupt) return;
+		const sessionId = activeSession.id;
 		error = undefined;
 		try {
-			await onInterrupt(activeSession.id);
+			const cleared = await onInterrupt(sessionId);
+			if (cleared && activeSessionId === sessionId) restoreQueue(cleared);
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'The session could not be interrupted. Try again.';
 		}
@@ -1556,12 +1564,24 @@
 		queueError = undefined;
 		try {
 			const cleared = await onClearQueue(sessionId);
-			if (activeSessionId !== sessionId) return;
-			draft = [draft.trim() ? draft : '', ...cleared.steering, ...cleared.followUp].filter(Boolean).join('\n\n');
-			composer?.focus();
+			if (activeSessionId === sessionId) restoreQueue(cleared);
 		} catch (cause) {
 			queueError = cause instanceof Error ? cause.message : 'The queue could not be cleared. Try again.';
 		}
+	}
+
+	/**
+	 * Puts cleared queue text back in the composer. Matches Pi's terminal UI:
+	 * steering before follow-ups, the order Pi would have run them, then any
+	 * existing draft, since it had not been sent yet. An empty queue leaves the
+	 * composer untouched.
+	 */
+	function restoreQueue(cleared: MessageQueue): void {
+		const queued = [...cleared.steering, ...cleared.followUp];
+		if (queued.length === 0) return;
+		historyCursor = idleHistoryCursor;
+		draft = [queued.join('\n\n'), draft].filter((text) => text.trim()).join('\n\n');
+		composer?.focus();
 	}
 
 	/** The first chord of a composer action, formatted for its button, or `undefined` when it has none. */

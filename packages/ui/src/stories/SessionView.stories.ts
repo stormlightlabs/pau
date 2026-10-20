@@ -475,7 +475,22 @@ export const QueueCleared: Story = {
 		await userEvent.click(canvas.getByRole('button', { name: 'Clear queue' }));
 		await expect(canvas.getByText('session-running: clear queue')).toBeInTheDocument();
 		await expect(prompt).toHaveValue(
-			'Draft in progress.\n\nKeep the public API unchanged.\n\nAdd a regression test for soft-wrap.'
+			'Keep the public API unchanged.\n\nAdd a regression test for soft-wrap.\n\nDraft in progress.'
+		);
+	}
+};
+export const QueueInterrupted: Story = {
+	args: {
+		workspaces: sessionFixtures.queued,
+		initialSessionId: 'session-running',
+		clearedQueue: { steering: ['Keep the public API unchanged.'], followUp: ['Add a regression test for soft-wrap.'] }
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(canvas.getByRole('button', { name: /Interrupt/ }));
+		await expect(canvas.getByText('session-running: interrupt')).toBeInTheDocument();
+		await expect(canvas.getByRole('textbox', { name: 'Prompt' })).toHaveValue(
+			'Keep the public API unchanged.\n\nAdd a regression test for soft-wrap.'
 		);
 	}
 };

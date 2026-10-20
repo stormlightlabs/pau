@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Stopping a run now puts your queued messages back in the composer, ahead of
+  any draft, so nothing is lost.
 - Stopping a Pi session now also clears its queued steering and follow-up
   messages, so they no longer run after you stop the agent.
 - After a reply fails, its button now reads "Send message again", because it

@@ -32,6 +32,8 @@ import type {
 	SessionRenameRequest,
 	SessionQueue,
 	SessionSearchResult,
+	SessionShellRequest,
+	SessionShellResult,
 	SessionTree,
 	SessionThinkingLevel,
 	SessionThinkingLevelRequest,
@@ -525,6 +527,33 @@ export function retrySession(sessionId: string, fetcher: typeof fetch = fetch): 
 /** Cancels an automatic retry that is waiting to run. */
 export function cancelSessionRetry(sessionId: string, fetcher: typeof fetch = fetch): Promise<void> {
 	return sendSessionRequest(`/${encodeURIComponent(sessionId)}/retry`, 'DELETE', undefined, fetcher);
+}
+
+/**
+ * Runs a shell command in a live session and resolves once it finishes.
+ * `shell_command_start`, `bash_execution_update`, and `shell_command_end`
+ * events with the result's `id` stream the command to every client while it
+ * runs. With `excludeFromContext`, the model never sees the command or its
+ * output.
+ */
+export async function runSessionShellCommand(
+	sessionId: string,
+	command: string,
+	excludeFromContext: boolean,
+	fetcher: typeof fetch = fetch
+): Promise<SessionShellResult> {
+	const request: SessionShellRequest = { command, exclude_from_context: excludeFromContext };
+	const response = await fetcher(sessionUrl(`/${encodeURIComponent(sessionId)}/shell`), {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', ...authorization() },
+		body: JSON.stringify(request)
+	});
+	return responseJson<SessionShellResult>(response);
+}
+
+/** Stops every running shell command in a session. Each resolves as cancelled. */
+export function stopSessionShellCommands(sessionId: string, fetcher: typeof fetch = fetch): Promise<void> {
+	return sendSessionRequest(`/${encodeURIComponent(sessionId)}/shell`, 'DELETE', undefined, fetcher);
 }
 
 /** Stops a session's process. Its final state arrives on the event stream. */

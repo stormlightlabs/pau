@@ -512,6 +512,11 @@ fn router_with_services(
             post(sessions::retry_session).delete(sessions::abort_session_retry),
         )
         .route(
+            "/api/sessions/{session_id}/shell",
+            post(sessions::run_session_shell_command)
+                .delete(sessions::abort_session_shell_commands),
+        )
+        .route(
             "/api/sessions/{session_id}/auto-retry",
             put(sessions::set_session_auto_retry),
         )

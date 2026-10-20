@@ -572,7 +572,8 @@ export class LiveSessions {
 				commandDiscovery: session.capabilities.command_discovery,
 				compaction: session.capabilities.compaction,
 				rename: session.capabilities.rename,
-				cloneSession: session.capabilities.clone_session
+				cloneSession: session.capabilities.clone_session,
+				shellCommands: session.capabilities.shell_commands
 			},
 			thinkingLevel: this.#pendingThinkingLevels[session.id] ?? session.thinking_level ?? undefined,
 			thinkingLevels: session.thinking_levels.length > 0 ? session.thinking_levels : undefined,

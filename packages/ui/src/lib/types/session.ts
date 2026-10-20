@@ -28,6 +28,8 @@ export type SessionCapabilities = {
 	rename?: boolean;
 	/** Whether the agent can clone the session into a new saved session. Absent means it cannot. */
 	cloneSession?: boolean;
+	/** Whether the agent can run shell commands from the composer and stop them. Absent means it cannot. */
+	shellCommands?: boolean;
 };
 
 /** How much of the model's context window a session fills. */

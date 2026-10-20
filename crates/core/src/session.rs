@@ -63,6 +63,9 @@ pub struct SessionCapabilities {
     pub rename: bool,
     /// Whether the session can be cloned into a new stored session.
     pub clone_session: bool,
+    /// Whether the session can run shell commands outside a model turn and
+    /// stop them.
+    pub shell_commands: bool,
     /// Whether the session can stop its process.
     pub stop: bool,
 }
@@ -337,6 +340,36 @@ pub struct SessionCloneResult {
     /// Identifier of the new native session. The live session now continues
     /// it, and the original stays in the workspace's native session list.
     pub native_session_id: String,
+}
+
+/// Runs a shell command in a session outside a model turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionShellRequest {
+    /// The command line, run by the agent's shell in the session's working
+    /// directory.
+    pub command: String,
+    /// Whether to keep the command and its output out of the model context.
+    /// The session still stores them.
+    pub exclude_from_context: bool,
+}
+
+/// How a session shell command finished.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionShellResult {
+    /// Identifier of the command, matching the `id` of the
+    /// `shell_command_start`, `bash_execution_update`, and
+    /// `shell_command_end` events it produced.
+    pub id: String,
+    /// Combined stdout and stderr, truncated when it was long.
+    pub output: String,
+    /// The exit code, or `null` when the command was stopped or killed.
+    pub exit_code: Option<i32>,
+    /// Whether a stop request ended the command.
+    pub cancelled: bool,
+    /// Whether `output` holds only the end of the output.
+    pub truncated: bool,
+    /// The file that holds the complete output when it was truncated.
+    pub full_output_path: Option<String>,
 }
 
 /// Messages waiting in a session's steer and follow-up queues.

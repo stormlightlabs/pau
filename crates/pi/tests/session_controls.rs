@@ -5,10 +5,10 @@ use pau_agent::{
     PromptQueueChoice, ThinkingLevel,
 };
 use pau_pi::{
-    PI_RPC_CAPABILITIES, PiCommand, PiCommandSource, PiCompactionOutcome, PiCompactionReason,
-    PiContextUsage, PiEventPayload, PiEventReducer, PiExtensionUiResponse, PiImage, PiModel,
-    PiProcess, PiProcessOutput, PiSession, PiSessionError, PiSessionUsage, PiShutdownTimeouts,
-    PiTokenUsage, StartPiProcessOptions,
+    PI_RPC_CAPABILITIES, PiBashResult, PiCommand, PiCommandSource, PiCompactionOutcome,
+    PiCompactionReason, PiContextUsage, PiEventPayload, PiEventReducer, PiExtensionUiResponse,
+    PiImage, PiModel, PiProcess, PiProcessOutput, PiSession, PiSessionError, PiSessionUsage,
+    PiShutdownTimeouts, PiTokenUsage, StartPiProcessOptions,
 };
 use serde_json::Value;
 use std::fs;
@@ -784,6 +784,106 @@ async fn renames_and_clones_the_session() {
     assert_command(&commands[3], "get_state");
 }
 
+#[tokio::test]
+async fn runs_shell_commands_and_streams_their_output() {
+    let fixture = FakePi::new(BASH_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+    let mut output = session.subscribe();
+
+    let id = session.next_command_id();
+    let result = session.bash(id.clone(), "echo hi", false).await.unwrap();
+    assert_eq!(
+        result,
+        PiBashResult {
+            output: "hi\n".to_owned(),
+            exit_code: Some(0),
+            cancelled: false,
+            truncated: true,
+            full_output_path: Some("/tmp/pi-bash-fixture.log".to_owned()),
+        }
+    );
+    assert_eq!(
+        next_bash_update(&mut output).await,
+        (id.clone(), "hi\n".to_owned())
+    );
+
+    let failed = session
+        .bash(session.next_command_id(), "false", false)
+        .await
+        .unwrap();
+    assert_eq!(failed.exit_code, Some(1));
+    assert!(!failed.cancelled);
+
+    session
+        .bash(session.next_command_id(), "echo private", true)
+        .await
+        .unwrap();
+
+    let commands = fixture.commands();
+    assert_command(&commands[0], "bash");
+    assert_eq!(commands[0]["id"], id.as_str());
+    assert_eq!(commands[0]["command"], "echo hi");
+    assert!(commands[0].get("excludeFromContext").is_none());
+    assert!(commands[1].get("excludeFromContext").is_none());
+    assert_eq!(commands[2]["command"], "echo private");
+    assert_eq!(commands[2]["excludeFromContext"], true);
+    session.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn stops_a_running_shell_command() {
+    let fixture = FakePi::new(BASH_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+
+    let (result, ()) = tokio::join!(
+        session.bash(session.next_command_id(), "sleep 60", false),
+        async {
+            wait_for_commands(&fixture, 1).await;
+            session.abort_bash().await.unwrap();
+        }
+    );
+    let result = result.unwrap();
+    assert!(result.cancelled);
+    assert_eq!(result.exit_code, None);
+    assert_eq!(result.output, "waiting\n");
+    assert_command(&fixture.commands()[1], "abort_bash");
+    session.stop().await.unwrap();
+
+    let process = PiProcess::start(fixture.options()).unwrap();
+    let capabilities = AgentCapabilities {
+        shell_commands: false,
+        ..PI_RPC_CAPABILITIES
+    };
+    let unsupported = PiSession::from_process(process, capabilities);
+    assert!(matches!(
+        unsupported.abort_bash().await.unwrap_err(),
+        PiSessionError::Control(AgentControlError::Unsupported {
+            control: AgentControl::ShellCommand,
+        })
+    ));
+    unsupported.stop().await.unwrap();
+}
+
+/// Waits for the next `bash_execution_update` and returns its ID and delta.
+async fn next_bash_update(
+    output: &mut tokio::sync::broadcast::Receiver<PiProcessOutput>,
+) -> (String, String) {
+    loop {
+        let next = tokio::time::timeout(Duration::from_secs(5), output.recv())
+            .await
+            .expect("Pi never streamed shell output")
+            .unwrap();
+        if let PiProcessOutput::Event(event) = next
+            && event["type"] == "bash_execution_update"
+        {
+            return (
+                event["id"].as_str().unwrap().to_owned(),
+                event["delta"].as_str().unwrap().to_owned(),
+            );
+        }
+    }
+}
+
 fn assert_command(command: &Value, expected: &str) {
     assert_eq!(command["type"], expected);
     assert!(command["id"].as_str().unwrap().starts_with("pau-"));
@@ -907,6 +1007,39 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"set_auto_compaction","success":true}\n' "$id"
             ;;
         *'"type":"extension_ui_response"'*) ;;
+        *) exit 65 ;;
+    esac
+done
+"#;
+
+/// Answers Pi's `bash` and `abort_bash` commands. `sleep 60` stays running
+/// until `abort_bash` stops it, so the loop can read the abort meanwhile.
+const BASH_FIXTURE: &str = r#"
+while IFS= read -r command; do
+    printf '%s\n' "$command" >> "$PWD/commands.jsonl"
+    id=$(printf '%s' "$command" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+    case "$command" in
+        *'"command":"sleep 60"'*)
+            printf '%s' "$id" > "$PWD/running"
+            printf '{"type":"bash_execution_update","id":"%s","delta":"waiting\\n"}\n' "$id"
+            ;;
+        *'"type":"abort_bash"'*)
+            printf '{"id":"%s","type":"response","command":"abort_bash","success":true}\n' "$id"
+            if [ -f "$PWD/running" ]; then
+                printf '{"id":"%s","type":"response","command":"bash","success":true,"data":{"output":"waiting\\n","cancelled":true,"truncated":false}}\n' "$(cat "$PWD/running")"
+                rm "$PWD/running"
+            fi
+            ;;
+        *'"command":"false"'*)
+            printf '{"id":"%s","type":"response","command":"bash","success":true,"data":{"output":"","exitCode":1,"cancelled":false,"truncated":false}}\n' "$id"
+            ;;
+        *'"command":"echo hi"'*)
+            printf '{"type":"bash_execution_update","id":"%s","delta":"hi\\n"}\n' "$id"
+            printf '{"id":"%s","type":"response","command":"bash","success":true,"data":{"output":"hi\\n","exitCode":0,"cancelled":false,"truncated":true,"fullOutputPath":"/tmp/pi-bash-fixture.log"}}\n' "$id"
+            ;;
+        *'"type":"bash"'*)
+            printf '{"id":"%s","type":"response","command":"bash","success":true,"data":{"output":"private\\n","exitCode":0,"cancelled":false,"truncated":false}}\n' "$id"
+            ;;
         *) exit 65 ;;
     esac
 done

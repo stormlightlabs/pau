@@ -236,8 +236,29 @@ impl PiProcess {
         self.output.subscribe()
     }
 
+    /// Allocates a command ID that no other command to this process uses.
+    ///
+    /// Pass it to [`Self::command_with_id`] when the caller must know the ID
+    /// before Pi answers, such as to match the events a `bash` command streams.
+    pub fn next_command_id(&self) -> String {
+        format!(
+            "pau-{}",
+            self.next_command_id.fetch_add(1, Ordering::Relaxed)
+        )
+    }
+
     /// Sends one command and resolves it with the response bearing the same ID.
     pub async fn command(&self, command: Value) -> Result<Value, PiProcessError> {
+        self.command_with_id(self.next_command_id(), command).await
+    }
+
+    /// Sends one command under an ID from [`Self::next_command_id`] and
+    /// resolves it with the response bearing that ID.
+    pub async fn command_with_id(
+        &self,
+        id: String,
+        command: Value,
+    ) -> Result<Value, PiProcessError> {
         let mut command = match command {
             Value::Object(command) if command.get("type").and_then(Value::as_str).is_some() => {
                 command
@@ -248,10 +269,6 @@ impl PiProcess {
             return Err(PiProcessError::Exited(exit));
         }
 
-        let id = format!(
-            "pau-{}",
-            self.next_command_id.fetch_add(1, Ordering::Relaxed)
-        );
         command.insert("id".to_owned(), Value::String(id.clone()));
         let encoded = encode_record(command);
         let (response_sender, response_receiver) = oneshot::channel();

@@ -31,6 +31,21 @@
 //! can close it without refetching. Notifications are transient by nature and
 //! stay output-only.
 //!
+//! # Shell commands
+//!
+//! `POST /api/sessions/{id}/shell` runs a command through Pi's `bash` RPC
+//! command and returns a [`SessionShellResult`] once it finishes. `DELETE` on
+//! the same path stops every running command, and each stopped command
+//! returns with `cancelled` set. Before Pi runs the command, the API publishes
+//! a synthetic `shell_command_start` `session_output` event with the command
+//! `id`, `command`, and `exclude_from_context`. Pi then streams the output as
+//! native `bash_execution_update` events with the same `id` and a `delta`.
+//! When the command finishes, a synthetic `shell_command_end` event carries
+//! the `id` and either the `result` or an `error` message, with the other
+//! field `null`. Every client can therefore show a command that another
+//! client started. Commands run while the agent works as well as while it is
+//! idle.
+//!
 //! # Conversation history
 //!
 //! The event buffer holds recent output only, and a resumed or branched
@@ -56,8 +71,8 @@ use axum::{
 };
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use pau_agent::{
-    AgentCapabilities, AgentControlError, AgentMessageQueue, AgentSessionStatus, PromptQueueChoice,
-    ThinkingLevel,
+    AgentCapabilities, AgentControl, AgentControlError, AgentMessageQueue, AgentSessionStatus,
+    PromptQueueChoice, ThinkingLevel,
 };
 use pau_core::readiness::AgentReadinessReport;
 use pau_core::{
@@ -73,9 +88,9 @@ use pau_core::{
         SessionCommandSource, SessionCompactRequest, SessionCompactionResult, SessionContextUsage,
         SessionExtensionUi, SessionImage, SessionMessageQueue, SessionMessageRequest,
         SessionMessages, SessionModel, SessionModelSelection, SessionPromptRequest, SessionQueue,
-        SessionRenameRequest, SessionSearchMatch, SessionSearchResult, SessionStatus,
-        SessionThinkingLevel, SessionThinkingLevelRequest, SessionTokenUsage, SessionTree,
-        SessionTreeEntry, SessionUsage, StartSessionRequest,
+        SessionRenameRequest, SessionSearchMatch, SessionSearchResult, SessionShellRequest,
+        SessionShellResult, SessionStatus, SessionThinkingLevel, SessionThinkingLevelRequest,
+        SessionTokenUsage, SessionTree, SessionTreeEntry, SessionUsage, StartSessionRequest,
     },
 };
 use pau_pi::{
@@ -633,6 +648,7 @@ fn session_capabilities(capabilities: AgentCapabilities) -> SessionCapabilities 
         retry: capabilities.retry,
         rename: capabilities.rename,
         clone_session: capabilities.clone_session,
+        shell_commands: capabilities.shell_commands,
         stop: capabilities.stop,
     }
 }
@@ -1467,6 +1483,71 @@ pub(crate) async fn respond_to_extension_ui(
     session.respond_to_extension_ui(native).await?;
     // Other clients showing the same dialog close it without a notice.
     api.publish_resolved(&record.workspace_id, &session_id, &request_id, "answered");
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Runs a shell command in the session and returns once it finishes.
+///
+/// The command is announced and concluded on the event stream so every client
+/// can show it, not only the one that asked. See the module documentation.
+pub(crate) async fn run_session_shell_command(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+    Json(request): Json<SessionShellRequest>,
+) -> Result<Json<SessionShellResult>, ApiError> {
+    let api = session_api(&state)?;
+    let (record, session) = api.live(&session_id).await?;
+    if !record.capabilities.shell_commands {
+        return Err(PiSessionError::Control(AgentControlError::Unsupported {
+            control: AgentControl::ShellCommand,
+        })
+        .into());
+    }
+    let publish = |event: Value| {
+        api.events.publish(
+            diagnostic_timestamp(),
+            Some(record.workspace_id.clone()),
+            Some(session_id.clone()),
+            ServerEventKind::SessionOutput,
+            event.to_string(),
+        );
+    };
+    let id = session.next_command_id();
+    publish(serde_json::json!({
+        "type": "shell_command_start",
+        "id": id,
+        "command": request.command,
+        "exclude_from_context": request.exclude_from_context,
+    }));
+    let result = session
+        .bash(id.clone(), request.command, request.exclude_from_context)
+        .await
+        .map(|result| SessionShellResult {
+            id: id.clone(),
+            output: result.output,
+            exit_code: result.exit_code,
+            cancelled: result.cancelled,
+            truncated: result.truncated,
+            full_output_path: result.full_output_path,
+        });
+    publish(match &result {
+        Ok(result) => serde_json::json!({
+            "type": "shell_command_end", "id": id, "result": result, "error": null,
+        }),
+        Err(error) => serde_json::json!({
+            "type": "shell_command_end", "id": id, "result": null, "error": error.to_string(),
+        }),
+    });
+    Ok(Json(result?))
+}
+
+/// Stops every running shell command in the session.
+pub(crate) async fn abort_session_shell_commands(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+) -> Result<StatusCode, ApiError> {
+    let (_, session) = session_api(&state)?.live(&session_id).await?;
+    session.abort_bash().await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

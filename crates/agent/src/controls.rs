@@ -41,6 +41,8 @@ pub enum AgentControl {
     /// Continue the conversation in a new stored session that copies the
     /// current one.
     CloneSession,
+    /// Run a shell command outside a model turn, or stop a running one.
+    ShellCommand,
     /// Stop the session process.
     Stop,
 }
@@ -65,6 +67,7 @@ impl fmt::Display for AgentControl {
             Self::AbortRetry => "abort retry",
             Self::Rename => "rename",
             Self::CloneSession => "clone",
+            Self::ShellCommand => "shell command",
             Self::Stop => "stop",
         };
         formatter.write_str(name)
@@ -104,6 +107,9 @@ pub struct AgentCapabilities {
     pub rename: bool,
     /// Whether the adapter can clone the session into a new stored session.
     pub clone_session: bool,
+    /// Whether the adapter can run shell commands outside a model turn and
+    /// stop them.
+    pub shell_commands: bool,
     /// Whether the adapter can stop its session process.
     pub stop: bool,
 }
@@ -126,6 +132,7 @@ impl AgentCapabilities {
             AgentControl::Retry | AgentControl::AutoRetry | AgentControl::AbortRetry => self.retry,
             AgentControl::Rename => self.rename,
             AgentControl::CloneSession => self.clone_session,
+            AgentControl::ShellCommand => self.shell_commands,
             AgentControl::Stop => self.stop,
         }
     }

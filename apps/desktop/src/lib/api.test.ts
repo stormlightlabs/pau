@@ -17,10 +17,12 @@ import {
 	readWorkspaceFile,
 	resolveEventSocket,
 	resolveTerminalSocket,
+	runSessionShellCommand,
 	searchSession,
 	searchWorkspaceFiles,
 	setDesktopConnection,
 	startPayloadTracing,
+	stopSessionShellCommands,
 	updateDiagnosticSettings,
 	updateWorkspaceSandbox,
 	writeWorkspaceFile
@@ -172,6 +174,37 @@ test('searches a session transcript with an encoded query and limit', async () =
 		'http://127.0.0.1:43127/api/sessions/session%20%2F%201/search?q=a+%26+b&limit=50',
 		{ headers: { Authorization: `Bearer ${TOKEN}` } }
 	);
+});
+
+test('runs and stops session shell commands', async () => {
+	launchDesktop();
+	const result = {
+		id: 'pau-4',
+		output: 'hi\n',
+		exit_code: 0,
+		cancelled: false,
+		truncated: false,
+		full_output_path: null
+	};
+	const fetcher = vi
+		.fn<typeof fetch>()
+		.mockResolvedValueOnce(Response.json(result))
+		.mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+	await expect(runSessionShellCommand('session 1', 'echo hi', true, fetcher)).resolves.toEqual(result);
+	await stopSessionShellCommands('session 1', fetcher);
+
+	const url = 'http://127.0.0.1:43127/api/sessions/session%201/shell';
+	expect(fetcher).toHaveBeenNthCalledWith(1, url, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+		body: JSON.stringify({ command: 'echo hi', exclude_from_context: true })
+	});
+	expect(fetcher).toHaveBeenNthCalledWith(2, url, {
+		method: 'DELETE',
+		headers: { Authorization: `Bearer ${TOKEN}` },
+		body: undefined
+	});
 });
 
 test('returns the queued messages an interrupt removed', async () => {

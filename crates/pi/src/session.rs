@@ -29,6 +29,7 @@ pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     retry: true,
     rename: true,
     clone_session: true,
+    shell_commands: true,
     stop: true,
 };
 
@@ -201,6 +202,21 @@ pub struct PiBranchOutcome {
     pub text: Option<String>,
     /// Whether an extension cancelled the branch.
     pub cancelled: bool,
+}
+
+/// The final result of a shell command run through Pi's `bash` command.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PiBashResult {
+    /// Combined stdout and stderr, truncated when it was long.
+    pub output: String,
+    /// The exit code, or `None` when the command was stopped or killed.
+    pub exit_code: Option<i32>,
+    /// Whether `abort_bash` stopped the command.
+    pub cancelled: bool,
+    /// Whether `output` holds only the end of the output.
+    pub truncated: bool,
+    /// The file that holds the complete output when it was truncated.
+    pub full_output_path: Option<String>,
 }
 
 /// Owns the controls and observed lifecycle state for one Pi RPC process.
@@ -845,6 +861,66 @@ impl PiSession {
         Ok(())
     }
 
+    /// Allocates the RPC ID for a later [`Self::bash`] call.
+    ///
+    /// Pi tags each `bash_execution_update` event with the ID of the command
+    /// that produced it, so a caller that announces the command before it runs
+    /// can match its streamed output.
+    pub fn next_command_id(&self) -> String {
+        self.process.next_command_id()
+    }
+
+    /// Runs a shell command through Pi and resolves once it finishes.
+    ///
+    /// `id` comes from [`Self::next_command_id`]. Output streams as
+    /// `bash_execution_update` events carrying that ID while the command
+    /// runs. Pi stores the command and its output in the session and adds
+    /// them to the model context on the next prompt, unless
+    /// `exclude_from_context` is set. Commands run in any session status,
+    /// including during a model turn, and [`Self::abort_bash`] stops them.
+    pub async fn bash(
+        &self,
+        id: String,
+        command: impl Into<String>,
+        exclude_from_context: bool,
+    ) -> Result<PiBashResult, PiSessionError> {
+        let control = AgentControl::ShellCommand;
+        self.require_capability(control)?;
+        let mut record = json!({"type": "bash", "command": command.into()});
+        if exclude_from_context {
+            record["excludeFromContext"] = Value::Bool(true);
+        }
+        let response = self.process.command_with_id(id, record).await?;
+        let response = command_response(control, response)?;
+        let data = response.get("data");
+        let field = |key: &str| data.and_then(|data| data.get(key));
+        let output = field("output").and_then(Value::as_str).ok_or_else(|| {
+            PiSessionError::NativeSession("Pi did not report the command output".to_owned())
+        })?;
+        Ok(PiBashResult {
+            output: output.to_owned(),
+            exit_code: field("exitCode")
+                .and_then(Value::as_i64)
+                .and_then(|code| i32::try_from(code).ok()),
+            cancelled: field("cancelled").and_then(Value::as_bool) == Some(true),
+            truncated: field("truncated").and_then(Value::as_bool) == Some(true),
+            full_output_path: field("fullOutputPath")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+        })
+    }
+
+    /// Stops every running [`Self::bash`] command.
+    ///
+    /// Each stopped command resolves with `cancelled` set. Pi accepts the
+    /// request when no command is running.
+    pub async fn abort_bash(&self) -> Result<(), PiSessionError> {
+        let control = AgentControl::ShellCommand;
+        self.require_capability(control)?;
+        self.command(control, json!({"type": "abort_bash"})).await?;
+        Ok(())
+    }
+
     /// Stops the Pi process through staged shutdown.
     pub async fn stop(&self) -> Result<PiProcessExit, PiSessionError> {
         let control = AgentControl::Stop;
@@ -914,19 +990,24 @@ impl PiSession {
         command: Value,
     ) -> Result<Value, PiSessionError> {
         let response = self.process.command(command).await?;
-        if response.get("success").and_then(Value::as_bool) == Some(true) {
-            return Ok(response);
-        }
-        let message = response
-            .get("error")
-            .and_then(Value::as_str)
-            .unwrap_or("Pi returned an invalid command response")
-            .to_owned();
-        Err(PiSessionError::Control(AgentControlError::Rejected {
-            control,
-            message,
-        }))
+        command_response(control, response)
     }
+}
+
+/// Returns a successful command response, or Pi's rejection as an error.
+fn command_response(control: AgentControl, response: Value) -> Result<Value, PiSessionError> {
+    if response.get("success").and_then(Value::as_bool) == Some(true) {
+        return Ok(response);
+    }
+    let message = response
+        .get("error")
+        .and_then(Value::as_str)
+        .unwrap_or("Pi returned an invalid command response")
+        .to_owned();
+    Err(PiSessionError::Control(AgentControlError::Rejected {
+        control,
+        message,
+    }))
 }
 
 fn parse_command(entry: &Value) -> Result<PiCommand, PiSessionError> {

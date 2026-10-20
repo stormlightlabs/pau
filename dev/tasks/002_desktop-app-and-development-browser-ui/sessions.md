@@ -168,24 +168,10 @@ Verification:
   not.
 - Trigger a notification from a self-hosted Pi session.
 
-### 2.115 Pi shell commands API
-
-Status: planned
-Blocked by: none
-
-Run shell commands through Pi's `bash` RPC command, stream
-`bash_execution_update` events, and stop a running command with `abort_bash`.
-Pass Pi's flag that keeps a command's output out of the model context.
-
-Verification:
-
-- Cover a command that succeeds, one that fails, one stopped with
-  `abort_bash`, and output kept out of context against the Pi fixture.
-
 ### 2.116 Composer shell commands
 
 Status: planned
-Blocked by: 2.115
+Blocked by: none
 
 Run `!command` and `!!command` from the composer instead of sending them to the
 model, show each command and its streamed output in the transcript, and stop a

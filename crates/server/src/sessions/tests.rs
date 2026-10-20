@@ -21,7 +21,8 @@ const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 
 /// A Pi RPC stand-in. It records every command in the workspace, answers the
 /// controls the session API sends, and exits with status 3 without answering
-/// a prompt whose text is `exit`. A resumed session answers `get_messages`
+/// a prompt whose text is `exit`. Shell commands other than `echo hi` and
+/// `sleep 60`, which runs until `abort_bash`, fail. A resumed session answers `get_messages`
 /// with the messages of its file, after a summary once it has compacted.
 const FAKE_PI: &str = r#"#!/bin/sh
 if [ "$1" = '--version' ]; then echo 1.0.0; exit 0; fi
@@ -62,6 +63,21 @@ while IFS= read -r command; do
             printf '{"type":"extension_ui_request","id":"ui-short","method":"input","title":"Quick","timeout":100}\n'
             ;;
         *'"type":"extension_ui_response"'*) ;;
+        *'"command":"echo hi"'*)
+            printf '{"type":"bash_execution_update","id":"%s","delta":"hi\\n"}\n' "$id"
+            printf '{"id":"%s","type":"response","command":"bash","success":true,"data":{"output":"hi\\n","exitCode":0,"cancelled":false,"truncated":false}}\n' "$id"
+            ;;
+        *'"command":"sleep 60"'*) printf '%s' "$id" > "$PWD/running" ;;
+        *'"type":"abort_bash"'*)
+            printf '{"id":"%s","type":"response","command":"abort_bash","success":true}\n' "$id"
+            if [ -f "$PWD/running" ]; then
+                printf '{"id":"%s","type":"response","command":"bash","success":true,"data":{"output":"","cancelled":true,"truncated":false}}\n' "$(cat "$PWD/running")"
+                rm "$PWD/running"
+            fi
+            ;;
+        *'"type":"bash"'*)
+            printf '{"id":"%s","type":"response","command":"bash","success":false,"error":"Shell unavailable"}\n' "$id"
+            ;;
         *'"message":"usage"'*)
             printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
             printf '{"type":"agent_start"}\n'
@@ -708,6 +724,79 @@ async fn renames_and_clones_a_session() {
             "get_state"
         ]
     );
+}
+
+#[tokio::test]
+async fn runs_and_stops_shell_commands() {
+    let fixture = Fixture::new(None).await;
+    let mut stream = fixture.events.subscribe(None);
+    let (_, session) = fixture.start(None).await;
+    assert_eq!(session["capabilities"]["shell_commands"], true);
+    let shell = format!("/api/sessions/{}/shell", session["id"].as_str().unwrap());
+
+    let request = json!({"command": "echo hi", "exclude_from_context": true});
+    let (status, result) = fixture.call("POST", &shell, Some(request)).await;
+    assert_eq!(status, StatusCode::OK, "{result}");
+    let id = result["id"].as_str().unwrap().to_owned();
+    assert_eq!(
+        result,
+        json!({
+            "id": id, "output": "hi\n", "exit_code": 0, "cancelled": false,
+            "truncated": false, "full_output_path": null,
+        })
+    );
+    let payload = |event: ServerEvent| serde_json::from_str::<Value>(&event.payload).unwrap();
+    let start = payload(next_event(&mut stream, output("shell_command_start")).await);
+    assert_eq!(
+        start,
+        json!({
+            "type": "shell_command_start", "id": id, "command": "echo hi",
+            "exclude_from_context": true,
+        })
+    );
+    let update = payload(next_event(&mut stream, output("bash_execution_update")).await);
+    assert_eq!(update["id"], id.as_str());
+    assert_eq!(update["delta"], "hi\n");
+    let end = payload(next_event(&mut stream, output("shell_command_end")).await);
+    assert_eq!(end["id"], id.as_str());
+    assert_eq!(end["result"], result);
+    assert_eq!(end["error"], Value::Null);
+
+    let (stopped, stop) = tokio::join!(
+        fixture.call(
+            "POST",
+            &shell,
+            Some(json!({"command": "sleep 60", "exclude_from_context": false})),
+        ),
+        async {
+            next_event(&mut stream, output("shell_command_start")).await;
+            // The start event comes before Pi reads the command.
+            while !fixture.commands().ends_with(&["bash".to_owned()]) {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+            fixture.call("DELETE", &shell, None).await
+        }
+    );
+    assert_eq!(stop.0, StatusCode::NO_CONTENT);
+    assert_eq!(stopped.0, StatusCode::OK);
+    assert_eq!(stopped.1["cancelled"], true);
+    assert_eq!(stopped.1["exit_code"], Value::Null);
+    let end = payload(next_event(&mut stream, output("shell_command_end")).await);
+    assert_eq!(end["result"]["cancelled"], true);
+
+    let request = json!({"command": "broken", "exclude_from_context": false});
+    let (status, rejected) = fixture.call("POST", &shell, Some(request)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(rejected["code"], "control_rejected");
+    let end = payload(next_event(&mut stream, output("shell_command_end")).await);
+    assert_eq!(end["result"], Value::Null);
+    assert_eq!(end["error"], rejected["message"]);
+
+    let (status, missing) = fixture
+        .call("DELETE", "/api/sessions/missing/shell", None)
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(missing["code"], "not_found");
 }
 
 #[tokio::test]

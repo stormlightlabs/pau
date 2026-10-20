@@ -937,6 +937,11 @@ rename: boolean,
  */
 clone_session: boolean,
 /**
+ * Whether the session can run shell commands outside a model turn and
+ * stop them.
+ */
+shell_commands: boolean,
+/**
  * Whether the session can stop its process.
  */
 stop: boolean, };
@@ -1539,6 +1544,46 @@ export type SessionCloneResult = {
  * it, and the original stays in the workspace's native session list.
  */
 native_session_id: string, };
+
+export type SessionShellRequest = {
+/**
+ * The command line, run by the agent's shell in the session's working
+ * directory.
+ */
+command: string,
+/**
+ * Whether to keep the command and its output out of the model context.
+ * The session still stores them.
+ */
+exclude_from_context: boolean, };
+
+export type SessionShellResult = {
+/**
+ * Identifier of the command, matching the `id` of the
+ * `shell_command_start`, `bash_execution_update`, and
+ * `shell_command_end` events it produced.
+ */
+id: string,
+/**
+ * Combined stdout and stderr, truncated when it was long.
+ */
+output: string,
+/**
+ * The exit code, or `null` when the command was stopped or killed.
+ */
+exit_code: number | null,
+/**
+ * Whether a stop request ended the command.
+ */
+cancelled: boolean,
+/**
+ * Whether `output` holds only the end of the output.
+ */
+truncated: boolean,
+/**
+ * The file that holds the complete output when it was truncated.
+ */
+full_output_path: string | null, };
 
 export type SessionRenameRequest = {
 /**

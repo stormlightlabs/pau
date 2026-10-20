@@ -49,6 +49,7 @@ const idleSession: AgentSession = {
 		retry: true,
 		rename: true,
 		clone_session: true,
+		shell_commands: true,
 		stop: true
 	}
 };

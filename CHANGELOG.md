@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- The thinking-level picker and Shift+Tab now offer only the levels the current
+  model supports, and a model without reasoning shows thinking as Off.
 - Stopping a run now puts your queued messages back in the composer, ahead of
   any draft, so nothing is lost.
 - Stopping a Pi session now also clears its queued steering and follow-up

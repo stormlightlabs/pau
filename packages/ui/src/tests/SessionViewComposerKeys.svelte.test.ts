@@ -6,7 +6,7 @@ import { commandFixtures } from '../fixtures/commands';
 import { sessionFixtures } from '../fixtures/sessions';
 import { Keymap, keymapContext, type PiKeyBinding } from '../lib/keymap.svelte';
 import SessionView from '../lib/SessionView.svelte';
-import type { SessionWorkspace } from '../lib/types/session';
+import type { SessionViewModel, SessionWorkspace } from '../lib/types/session';
 
 const models = [
 	{ provider: 'anthropic', id: 'sonnet', name: 'Sonnet', reasoning: true, current: true },
@@ -14,7 +14,7 @@ const models = [
 ];
 
 /** A session that can switch models and thinking levels, with a queue while it runs. */
-function workspaces(status: 'idle' | 'running'): SessionWorkspace[] {
+function workspaces(status: 'idle' | 'running', overrides: Partial<SessionViewModel> = {}): SessionWorkspace[] {
 	const [workspace] = status === 'running' ? sessionFixtures.queued : sessionFixtures.idle;
 	const [session] = workspace!.sessions;
 	return [
@@ -24,14 +24,19 @@ function workspaces(status: 'idle' | 'running'): SessionWorkspace[] {
 				{
 					...session!,
 					thinkingLevel: 'low',
-					capabilities: { ...session!.capabilities, modelSelection: true, thinkingLevel: true }
+					capabilities: { ...session!.capabilities, modelSelection: true, thinkingLevel: true },
+					...overrides
 				}
 			]
 		}
 	];
 }
 
-async function setup(status: 'idle' | 'running', piBindings?: PiKeyBinding[]) {
+async function setup(
+	status: 'idle' | 'running',
+	piBindings?: PiKeyBinding[],
+	overrides: Partial<SessionViewModel> = {}
+) {
 	const handlers = {
 		onSend: vi.fn(),
 		onInterrupt: vi.fn(),
@@ -44,7 +49,7 @@ async function setup(status: 'idle' | 'running', piBindings?: PiKeyBinding[]) {
 	const keymap = new Keymap({ platform: 'other' });
 	if (piBindings) keymap.setPiBindings(piBindings);
 	await render(SessionView, {
-		props: { workspaces: workspaces(status), activeSessionId: `session-${status}`, ...handlers },
+		props: { workspaces: workspaces(status, overrides), activeSessionId: `session-${status}`, ...handlers },
 		context: new Map([[keymapContext, keymap]])
 	});
 	const prompt = page.getByRole('textbox', { name: 'Prompt' });
@@ -77,6 +82,35 @@ test('follows Pi default composer keys while idle', async () => {
 	await userEvent.keyboard('{Control>}l{/Control}');
 	const list = page.getByRole('group', { name: 'Models' });
 	await expect.element(list.getByRole('button', { name: /Sonnet/ })).toHaveFocus();
+});
+
+test('Shift+Tab cycles through only the levels the model offers', async () => {
+	const { onSelectThinkingLevel } = await setup('idle', undefined, { thinkingLevels: ['off', 'low', 'high'] });
+
+	await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+	expect(onSelectThinkingLevel).toHaveBeenLastCalledWith('session-idle', 'high');
+});
+
+test('Shift+Tab wraps to the first offered level after the last', async () => {
+	const { onSelectThinkingLevel } = await setup('idle', undefined, {
+		thinkingLevel: 'high',
+		thinkingLevels: ['off', 'low', 'high']
+	});
+
+	await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+	expect(onSelectThinkingLevel).toHaveBeenLastCalledWith('session-idle', 'off');
+});
+
+test('Shift+Tab explains that a model without reasoning has no thinking levels', async () => {
+	const { onSelectThinkingLevel, prompt } = await setup('idle', undefined, {
+		thinkingLevel: 'off',
+		thinkingLevels: ['off']
+	});
+
+	await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+	expect(onSelectThinkingLevel).not.toHaveBeenCalled();
+	await expect.element(page.getByRole('alert')).toHaveTextContent('This model does not offer thinking levels.');
+	await expect.element(prompt).toHaveFocus();
 });
 
 test('follows Pi default composer keys while running', async () => {

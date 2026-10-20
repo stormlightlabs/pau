@@ -89,7 +89,11 @@
 	let open = $state(false);
 	/** A keyboard open appears at once. A pointer open fades in. */
 	let keyboardOpen = $state(false);
-	let activeIndex = $state(-1);
+	/**
+	 * Option the keyboard points at, tracked by value so that it survives the
+	 * owner replacing `options` while the list is open.
+	 */
+	let activeValue = $state<T>();
 	let pendingValue = $state<T>();
 	let error = $state<string>();
 	let left = $state(0);
@@ -104,13 +108,20 @@
 	const shown = $derived(pendingValue ?? value);
 	const selectedIndex = $derived(options.findIndex((option) => option.value === shown));
 	const selected = $derived(options[selectedIndex]);
+	/** When the active option leaves `options`, the selected or first choosable option takes over. */
+	const activeIndex = $derived.by(() => {
+		if (activeValue === undefined) return -1;
+		const index = options.findIndex((option) => option.value === activeValue);
+		if (index !== -1) return index;
+		return selectedIndex === -1 ? firstEnabled() : selectedIndex;
+	});
 	const explained = $derived(disabled && disabledReason !== undefined);
 	const descriptions = $derived(
 		[explained ? hintId : undefined, describedby].filter((part) => part !== undefined).join(' ') || undefined
 	);
 
 	$effect(() => {
-		if (disabled && open) close(false);
+		if (open && (disabled || options.length === 0)) close(false);
 	});
 
 	/** The first option that can be chosen, or the first option when none can. */
@@ -123,7 +134,7 @@
 		if (disabled || pending || options.length === 0) return;
 		focusReturn.capture(trigger);
 		keyboardOpen = keyboard;
-		activeIndex = index;
+		activeValue = options[index]?.value;
 		maxHeight = undefined;
 		open = true;
 		// The top layer keeps the list above scroll containers and overlay rails.
@@ -164,7 +175,7 @@
 	}
 
 	function move(index: number): void {
-		activeIndex = Math.max(0, Math.min(options.length - 1, index));
+		activeValue = options[Math.max(0, Math.min(options.length - 1, index))]?.value;
 		revealActive();
 	}
 
@@ -383,7 +394,7 @@
 					.filter((part) => part !== undefined)
 					.join(' ') || undefined}
 				title={option.disabled ? option.disabledReason : undefined}
-				onpointermove={() => (activeIndex = index)}
+				onpointermove={() => (activeValue = option.value)}
 				onclick={() => choose(index)}>
 				<Icon name="check" class="select__check" size="0.875rem" />
 				<span class="select__text">

@@ -183,19 +183,6 @@ Verification:
   stopping one with Escape.
 - Run a shell command from a self-hosted session.
 
-### 2.242 Model-aware thinking levels
-
-Status: planned
-Blocked by: none
-
-Offer only the current model's thinking levels in the thinking-level picker and
-in Shift+Tab cycling.
-
-Verification:
-
-- Component-test a model with a subset of levels, a model without thinking
-  levels, and a model change while the picker is open.
-
 ### 2.167 Transcript history details
 
 Status: planned

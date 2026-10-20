@@ -12,11 +12,6 @@
 		xhigh: 'Extra high',
 		max: 'Max'
 	};
-
-	const levelOptions: SelectOption<ThinkingLevel>[] = thinkingLevels.map((level) => ({
-		value: level,
-		label: levelLabels[level]
-	}));
 </script>
 
 <script lang="ts">
@@ -31,15 +26,39 @@
 		supported?: boolean;
 		/** Whether the current model reasons. Absent means the model is not known yet. */
 		reasoning?: boolean;
+		/**
+		 * Levels the current model offers, in Pi's order. Absent until Pi
+		 * reports them, which offers every level.
+		 */
+		levels?: readonly ThinkingLevel[];
 		/** Explains why the control is read-only right now, such as during a run. */
 		unavailableReason?: string;
 	};
 
-	let { level, onSelect, supported = true, reasoning, unavailableReason }: Props = $props();
+	let { level, onSelect, supported = true, reasoning, levels = thinkingLevels, unavailableReason }: Props = $props();
+
+	/**
+	 * The model's levels. A current level the model does not offer stays
+	 * listed, disabled, so the control shows what Pi reports instead of
+	 * changing it.
+	 */
+	const levelOptions = $derived<SelectOption<ThinkingLevel>[]>(
+		thinkingLevels
+			.filter((candidate) => levels.includes(candidate) || candidate === level)
+			.map((candidate) => ({
+				value: candidate,
+				label: levelLabels[candidate],
+				disabled: !levels.includes(candidate),
+				disabledReason: levels.includes(candidate) ? undefined : 'This model does not offer this level.'
+			}))
+	);
 
 	const explanation = $derived.by(() => {
 		if (!supported) return 'This agent does not support changing the thinking level in a session.';
-		if (reasoning === false) return 'This model does not offer thinking levels.';
+		// Pi reports only `off` for a model without reasoning.
+		if (reasoning === false || levels.every((candidate) => candidate === 'off')) {
+			return 'This model does not offer thinking levels.';
+		}
 		return unavailableReason;
 	});
 

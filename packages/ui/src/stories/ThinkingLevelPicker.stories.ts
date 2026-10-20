@@ -68,10 +68,23 @@ export const KeyboardSelection: Story = {
 	}
 };
 
+/** A model that offers some levels lists only those. */
+export const ModelWithSomeLevels: Story = {
+	args: { level: 'low', levels: ['off', 'low', 'medium', 'high'] },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(canvas.getByRole('combobox', { name: 'Thinking level' }));
+		const options = await canvas.findAllByRole('option');
+		await expect(options.map((option) => option.textContent?.trim())).toEqual(['Off', 'Low', 'Medium', 'High']);
+	}
+};
+
+/** Pi reports only `off` for a model without reasoning. */
 export const ModelWithoutThinkingLevels: Story = {
-	args: { level: undefined, reasoning: false },
+	args: { level: 'off', levels: ['off'] },
 	play: async ({ canvasElement }) => {
 		const select = within(canvasElement).getByRole('combobox', { name: 'Thinking level' });
+		await expect(select).toHaveTextContent('Off');
 		await expect(select).toBeDisabled();
 		await expect(select).toHaveAccessibleDescription(/does not offer thinking levels/);
 	}

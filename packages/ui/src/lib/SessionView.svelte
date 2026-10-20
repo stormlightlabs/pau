@@ -774,6 +774,15 @@
 		return undefined;
 	}
 
+	/**
+	 * Whether the session's model has thinking levels. Levels that Pi reported
+	 * for the model win over the model list, which can lag a model change.
+	 */
+	function offersThinking(session: SessionViewModel): boolean {
+		if (session.thinkingLevels) return session.thinkingLevels.some((level) => level !== 'off');
+		return currentModelReasoning !== false;
+	}
+
 	/** Explains why the thinking level is read-only, or returns `undefined` when it accepts a change. */
 	function thinkingUnavailableReason(session: SessionViewModel, offline: boolean): string | undefined {
 		if (offline) return 'Pau is reconnecting to the backend. You can change the thinking level once it reconnects.';
@@ -1394,12 +1403,13 @@
 				if (!onSelectThinkingLevel || !session.capabilities.thinkingLevel) {
 					refuse('This agent does not support changing the thinking level in a session.');
 				}
-				if (currentModelReasoning === false) refuse('This model does not offer thinking levels.');
+				if (!offersThinking(session)) refuse('This model does not offer thinking levels.');
 				const reason = thinkingUnavailableReason(session, disconnected);
 				if (reason) refuse(reason);
 				if (!argument) return async () => thinkingPicker?.show();
-				const level = thinkingLevels.find((candidate) => candidate === argument);
-				if (!level) refuse(`Choose a thinking level: ${thinkingLevels.join(', ')}.`);
+				const levels = session.thinkingLevels ?? thinkingLevels;
+				const level = levels.find((candidate) => candidate === argument);
+				if (!level) refuse(`Choose a thinking level: ${levels.join(', ')}.`);
 				return async () => onSelectThinkingLevel?.(session.id, level);
 			}
 			case 'new': {
@@ -1600,11 +1610,15 @@
 		caret = start + 1;
 	}
 
-	/** Moves to the next thinking level, as Pi's Shift+Tab does. */
+	/**
+	 * Moves to the model's next thinking level, as Pi's Shift+Tab does. A
+	 * current level that the model does not offer moves to its first level.
+	 */
 	async function cycleThinkingLevel(session: SessionViewModel): Promise<void> {
 		if (!onSelectThinkingLevel) return;
-		const index = session.thinkingLevel ? thinkingLevels.indexOf(session.thinkingLevel) : -1;
-		const next = thinkingLevels[(index + 1) % thinkingLevels.length] ?? 'off';
+		const levels = session.thinkingLevels ?? thinkingLevels;
+		const index = session.thinkingLevel ? levels.indexOf(session.thinkingLevel) : -1;
+		const next = levels[(index + 1) % levels.length] ?? 'off';
 		error = undefined;
 		try {
 			await onSelectThinkingLevel(session.id, next);
@@ -1648,10 +1662,11 @@
 				return true;
 			}
 			case 'cycleThinking': {
-				if (currentModelReasoning === false || !onSelectThinkingLevel || !session.capabilities.thinkingLevel) {
-					return false;
-				}
-				const reason = thinkingUnavailableReason(session, disconnected);
+				if (!onSelectThinkingLevel || !session.capabilities.thinkingLevel) return false;
+				// Pi's own Shift+Tab reports that the model has no levels instead of moving focus.
+				const reason = offersThinking(session)
+					? thinkingUnavailableReason(session, disconnected)
+					: 'This model does not offer thinking levels.';
 				if (reason) error = reason;
 				else void cycleThinkingLevel(session);
 				return true;
@@ -2517,7 +2532,8 @@
 												level={activeSession.thinkingLevel}
 												onSelect={(level) => onSelectThinkingLevel(activeSession.id, level)}
 												supported={activeSession.capabilities.thinkingLevel ?? false}
-												reasoning={currentModelReasoning}
+												reasoning={offersThinking(activeSession)}
+												levels={activeSession.thinkingLevels}
 												unavailableReason={thinkingUnavailableReason(activeSession, disconnected)} />
 										{/if}
 									{/key}

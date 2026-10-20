@@ -25,12 +25,17 @@ async function choose(label: string): Promise<void> {
 	await userEvent.click(page.getByRole('option', { name: label, exact: true }));
 }
 
-function withThinking(workspaces: SessionWorkspace[]): SessionWorkspace[] {
+function withThinking(
+	workspaces: SessionWorkspace[],
+	thinkingLevel: ThinkingLevel = 'medium',
+	thinkingLevels?: ThinkingLevel[]
+): SessionWorkspace[] {
 	return workspaces.map((workspace) => ({
 		...workspace,
 		sessions: workspace.sessions.map((session) => ({
 			...session,
-			thinkingLevel: 'medium' as const,
+			thinkingLevel,
+			thinkingLevels,
 			capabilities: { ...session.capabilities, modelSelection: true, thinkingLevel: true }
 		}))
 	}));
@@ -93,6 +98,70 @@ test('is disabled and explained for a model without thinking levels', async () =
 	await expect.element(picker()).toHaveAccessibleDescription(/does not offer thinking levels/);
 });
 
+const optionLabels = () =>
+	page
+		.getByRole('option')
+		.elements()
+		.map((option) => option.textContent?.trim());
+
+test('lists only the levels the model offers', async () => {
+	await render(ThinkingLevelPicker, { level: 'low', levels: ['off', 'low', 'high'], onSelect: vi.fn() });
+
+	await userEvent.click(picker());
+
+	expect(optionLabels()).toEqual(['Off', 'Low', 'High']);
+	await expect.element(page.getByRole('option', { name: 'Low' })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('shows Off and is explained for a model that reports only off', async () => {
+	await render(ThinkingLevelPicker, { level: 'off', levels: ['off'], onSelect: vi.fn() });
+
+	await expect.element(picker()).toHaveTextContent('Off');
+	await expect.element(picker()).toBeDisabled();
+	await expect.element(picker()).toHaveAccessibleDescription(/does not offer thinking levels/);
+});
+
+test('shows a reported level the model does not offer without choosing it again', async () => {
+	const onSelect = vi.fn();
+	await render(ThinkingLevelPicker, { level: 'max', levels: ['off', 'low', 'high'], onSelect });
+
+	await expect.element(picker()).toHaveTextContent('Max');
+	await userEvent.click(picker());
+	const max = page.getByRole('option', { name: 'Max' });
+	await expect.element(max).toHaveAttribute('aria-disabled', 'true');
+	await expect.element(max).toHaveAccessibleDescription('This model does not offer this level.');
+	await userEvent.keyboard('{Enter}');
+	expect(onSelect).not.toHaveBeenCalled();
+});
+
+test('keeps an open list usable when the model changes', async () => {
+	const onSelect = vi.fn();
+	const view = await render(ThinkingLevelPicker, { level: 'medium', onSelect });
+	(picker().element() as HTMLElement).focus();
+	await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}');
+	await expect.element(page.getByRole('option', { name: 'Extra high' })).toHaveClass(/select__option--active/);
+
+	await view.rerender({ level: 'medium', levels: ['off', 'low', 'medium', 'high'], onSelect });
+
+	await expect.element(picker()).toHaveAttribute('aria-expanded', 'true');
+	expect(optionLabels()).toEqual(['Off', 'Low', 'Medium', 'High']);
+	await expect.element(page.getByRole('option', { name: 'Medium' })).toHaveClass(/select__option--active/);
+	await userEvent.keyboard('{ArrowDown}{Enter}');
+	expect(onSelect).toHaveBeenCalledWith('high');
+});
+
+test('closes an open list when the new model has no thinking levels', async () => {
+	const view = await render(ThinkingLevelPicker, { level: 'medium', onSelect: vi.fn() });
+	await userEvent.click(picker());
+	await expect.element(picker()).toHaveAttribute('aria-expanded', 'true');
+
+	await view.rerender({ level: 'off', levels: ['off'] });
+
+	await expect.element(picker()).toHaveAttribute('aria-expanded', 'false');
+	await expect.element(picker()).toBeDisabled();
+	await expect.element(picker()).toHaveTextContent('Off');
+});
+
 test('is disabled and explained when the agent cannot change the level', async () => {
 	await render(ThinkingLevelPicker, { supported: false, onSelect: vi.fn() });
 
@@ -119,6 +188,24 @@ test('the composer disables the control for a model without reasoning', async ()
 		...composerProps(models)
 	});
 
+	await expect.element(picker()).toBeDisabled();
+	await expect.element(picker()).toHaveAccessibleDescription(/does not offer thinking levels/);
+});
+
+test('the composer offers the levels Pi reports for the model', async () => {
+	const workspaces = withThinking(sessionFixtures.idle, 'medium', ['off', 'medium', 'high']);
+	await render(SessionView, { workspaces, activeSessionId: 'session-idle', ...composerProps() });
+
+	await userEvent.click(picker());
+
+	expect(optionLabels()).toEqual(['Off', 'Medium', 'High']);
+});
+
+test('the composer disables the control when Pi reports only off', async () => {
+	const workspaces = withThinking(sessionFixtures.idle, 'off', ['off']);
+	await render(SessionView, { workspaces, activeSessionId: 'session-idle', ...composerProps() });
+
+	await expect.element(picker()).toHaveTextContent('Off');
 	await expect.element(picker()).toBeDisabled();
 	await expect.element(picker()).toHaveAccessibleDescription(/does not offer thinking levels/);
 });

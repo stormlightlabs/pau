@@ -126,6 +126,9 @@
 	onSend={(sessionId, text, queue, images) => sessions.send(sessionId, text, queue, images)}
 	onLoadHistory={(sessionId) => sessions.history(sessionId)}
 	onInterrupt={(sessionId) => sessions.interrupt(sessionId)}
+	onRunShellCommand={(sessionId, command, excludeFromContext) =>
+		sessions.runShellCommand(sessionId, command, excludeFromContext)}
+	onStopShellCommands={(sessionId) => sessions.stopShellCommands(sessionId)}
 	onRetry={(sessionId) => sessions.retry(sessionId)}
 	onCompact={(sessionId, instructions) => sessions.compact(sessionId, instructions)}
 	onClearQueue={(sessionId) => sessions.clearQueue(sessionId)}

@@ -142,6 +142,7 @@ export type {
 	TranscriptEntry,
 	ThinkingLevel,
 	TranscriptTool,
+	ShellCommand,
 	ToolCallDetails,
 	ToolTruncation,
 	ToolEdit,

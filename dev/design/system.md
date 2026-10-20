@@ -228,6 +228,10 @@ action gets:
   the composer has focus. Pi's application bindings, such as Ctrl+Shift+P for
   the previous model, apply everywhere.
 
+Pi's interrupt key, Escape by default, follows Pi's order in the composer: an
+open completion list closes first, then a running turn is interrupted, and
+only when no turn runs does the key stop a running `!` shell command.
+
 The shortcut list shows each action's chord, and names the Pi binding that
 took a chord from Pau and where it applies.
 

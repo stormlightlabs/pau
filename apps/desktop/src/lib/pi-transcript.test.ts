@@ -360,3 +360,119 @@ test('finds the transcript entry for a saved entry by role and time', () => {
 	expect(findTranscriptEntry(entries, 'toolResult', at(1_000_000))).toBeUndefined();
 	expect(findTranscriptEntry(entries, 'user', undefined)).toBeUndefined();
 });
+
+test('streams a shell command from its start, output, and end events', () => {
+	const start = { type: 'shell_command_start', id: '7', command: 'ls src', exclude_from_context: true };
+	const running = reduce([
+		start,
+		{ type: 'bash_execution_update', id: '7', delta: 'lib\n' },
+		{ type: 'bash_execution_update', id: '7', delta: 'routes\n' }
+	]);
+
+	expect(running.entries).toEqual([
+		{
+			id: 'shell:7',
+			kind: 'tool',
+			name: 'shell',
+			detail: 'ls src',
+			result: 'lib\nroutes\n',
+			status: 'running',
+			call: { tool: 'bash', command: 'ls src' },
+			shell: { excludedFromContext: true }
+		}
+	]);
+
+	const result = {
+		id: '7',
+		output: 'lib\nroutes\n',
+		exit_code: 0,
+		cancelled: false,
+		truncated: true,
+		full_output_path: '/tmp/pi-bash.log'
+	};
+	expect(reduce([{ type: 'shell_command_end', id: '7', result, error: null }], running).entries).toEqual([
+		{
+			id: 'shell:7',
+			kind: 'tool',
+			name: 'shell',
+			detail: 'ls src',
+			result: 'lib\nroutes\n',
+			status: 'complete',
+			call: { tool: 'bash', command: 'ls src', exitCode: 0, fullOutputPath: '/tmp/pi-bash.log' },
+			shell: { excludedFromContext: true, truncated: true }
+		}
+	]);
+});
+
+test('fails a shell command that exits non-zero or cannot run, and completes a stopped one', () => {
+	const ended = reduce([
+		{ type: 'shell_command_start', id: '1', command: 'false', exclude_from_context: false },
+		{
+			type: 'shell_command_end',
+			id: '1',
+			result: { id: '1', output: '', exit_code: 1, cancelled: false, truncated: false, full_output_path: null },
+			error: null
+		},
+		{ type: 'shell_command_start', id: '2', command: 'ls', exclude_from_context: false },
+		{ type: 'shell_command_end', id: '2', result: null, error: 'Pi rejected the request: busy' },
+		{ type: 'shell_command_start', id: '3', command: 'sleep 9', exclude_from_context: false },
+		{
+			type: 'shell_command_end',
+			id: '3',
+			result: { id: '3', output: '', exit_code: null, cancelled: true, truncated: false, full_output_path: null },
+			error: null
+		}
+	]);
+
+	expect(ended.entries).toMatchObject([
+		{ id: 'shell:1', status: 'failed', call: { exitCode: 1 } },
+		{ id: 'shell:2', status: 'failed', result: 'Pi rejected the request: busy', call: { command: 'ls' } },
+		{ id: 'shell:3', status: 'complete', shell: { cancelled: true } }
+	]);
+});
+
+test('shows a shell command whose start came before the history read', () => {
+	const entries = reduce([
+		{ type: 'bash_execution_update', id: '4', delta: 'tick\n' },
+		{
+			type: 'shell_command_end',
+			id: '4',
+			result: { id: '4', output: 'tick\n', exit_code: 0, cancelled: false, truncated: false, full_output_path: null },
+			error: null
+		}
+	]).entries;
+
+	expect(entries).toMatchObject([{ id: 'shell:4', status: 'complete', result: 'tick\n' }]);
+});
+
+test('rebuilds shell commands from saved bash executions', () => {
+	const saved = { role: 'bashExecution', cancelled: false, truncated: false };
+	const entries = piTranscriptFromMessages([
+		user,
+		{ ...saved, command: 'cat .env.local', output: 'TOKEN=x\n', exitCode: 0, timestamp: 5, excludeFromContext: true },
+		{ ...saved, command: 'pnpm test', output: 'FAIL\n', exitCode: 1, timestamp: 6 }
+	]).entries;
+
+	expect(entries.slice(1)).toEqual([
+		{
+			id: 'bashExecution-5:0',
+			kind: 'tool',
+			name: 'shell',
+			detail: 'cat .env.local',
+			result: 'TOKEN=x\n',
+			status: 'complete',
+			call: { tool: 'bash', command: 'cat .env.local', exitCode: 0 },
+			shell: { excludedFromContext: true }
+		},
+		{
+			id: 'bashExecution-6:0',
+			kind: 'tool',
+			name: 'shell',
+			detail: 'pnpm test',
+			result: 'FAIL\n',
+			status: 'failed',
+			call: { tool: 'bash', command: 'pnpm test', exitCode: 1 },
+			shell: { excludedFromContext: false }
+		}
+	]);
+});

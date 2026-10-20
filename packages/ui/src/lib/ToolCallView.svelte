@@ -27,9 +27,21 @@
 		}
 		return call.path;
 	});
-	// A finished call shows what it returned. Running and failed calls name their status so they stand out.
-	let outcome = $derived(
-		tool.status === 'running' ? 'In progress' : tool.status === 'failed' ? 'Failed' : resultSummary(tool)
+	// A finished call shows what it returned. Running, failed, and stopped calls name their status so they stand out.
+	let status = $derived(
+		tool.status === 'running'
+			? 'In progress'
+			: tool.status === 'failed'
+				? 'Failed'
+				: tool.shell?.cancelled
+					? 'Stopped'
+					: resultSummary(tool)
+	);
+	// A `!!` command leads with its context marker, so the row says it before the output does.
+	let outcome = $derived(tool.shell?.excludedFromContext ? `Not in context · ${status}` : status);
+	// A shell command that failed without an exit code could not run, and its result is the reason.
+	let errorOutput = $derived(
+		tool.shell !== undefined && tool.status === 'failed' && call?.tool === 'bash' && call.exitCode === undefined
 	);
 
 	function handleToggle(event: Event): void {
@@ -54,15 +66,19 @@
 			{#if call?.tool === 'bash'}
 				<pre class="tool-call__command" aria-label="Command"><span aria-hidden="true">$ </span>{call.command}</pre>
 				{#if resultLines.length > 0}
-					<ToolOutput lines={resultLines} label="Command output" from="tail" />
+					<ToolOutput lines={resultLines} label={errorOutput ? 'Error' : 'Command output'} from="tail" />
 				{:else if tool.status === 'running'}
 					<p class="tool-call__note">Waiting for output…</p>
 				{/if}
-				{#if call.truncation}
+				{#if call.truncation || tool.shell?.truncated}
 					<p class="tool-call__note">
-						{truncationNotice(call.truncation, 'last')}
+						{call.truncation ? truncationNotice(call.truncation, 'last') : 'Pi kept the end of the output.'}
 						{#if call.fullOutputPath}Full output: <code>{call.fullOutputPath}</code>{/if}
 					</p>
+				{/if}
+				{#if tool.shell?.cancelled}<p class="tool-call__note">Stopped before it finished.</p>{/if}
+				{#if tool.shell?.excludedFromContext}
+					<p class="tool-call__note">The model does not see this command or its output.</p>
 				{/if}
 				{#if call.exitCode !== undefined || call.durationMs !== undefined}
 					<p class="tool-call__meta">

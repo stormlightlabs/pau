@@ -139,6 +139,33 @@
 		}
 	}
 
+	/**
+	 * Starts a shell command that prints one line and keeps running until it
+	 * is stopped, so stories can show streamed output and Escape.
+	 */
+	async function runShellCommand(sessionId: string, command: string, excludedFromContext: boolean): Promise<void> {
+		lastAction = `${sessionId}: ${excludedFromContext ? 'shell, not in context' : 'shell'}: ${command}`;
+		replies.push({
+			id: `shell-${replies.length}`,
+			kind: 'tool',
+			name: 'shell',
+			detail: command,
+			result: `Running ${command}\n`,
+			status: 'running',
+			call: { tool: 'bash', command },
+			shell: { excludedFromContext }
+		});
+	}
+
+	async function stopShellCommands(sessionId: string): Promise<void> {
+		lastAction = `${sessionId}: stop shell commands`;
+		replies = replies.map((entry) =>
+			entry.kind === 'tool' && entry.shell && entry.status === 'running'
+				? { ...entry, status: 'complete', shell: { ...entry.shell, cancelled: true } }
+				: entry
+		);
+	}
+
 	function startSession(workspaceId: string): void {
 		if (startFailure) throw new Error(startFailure);
 		lastAction = `${workspaceId}: start session`;
@@ -191,6 +218,8 @@
 		lastAction = `${sessionId}: interrupt`;
 		return clearedQueue;
 	}}
+	onRunShellCommand={runShellCommand}
+	onStopShellCommands={stopShellCommands}
 	onRetry={(sessionId) => {
 		if (retryFailure) throw new Error(retryFailure);
 		lastAction = `${sessionId}: retry`;

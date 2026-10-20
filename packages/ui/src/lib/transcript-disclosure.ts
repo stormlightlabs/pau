@@ -15,7 +15,8 @@ const groupMinimum = 4;
  * Replaces each run of more than three consecutive completed tool calls with
  * a {@link TranscriptToolGroup} and keeps every other entry in place. Running and
  * failed calls end a run and stay as their own rows, so a group never hides
- * work in progress or a failure.
+ * work in progress or a failure. Shell commands the operator ran also stay as
+ * their own rows, because the model did not make them.
  */
 export function groupToolCalls(transcript: readonly TranscriptEntry[]): (TranscriptEntry | TranscriptToolGroup)[] {
 	const rows: (TranscriptEntry | TranscriptToolGroup)[] = [];
@@ -26,7 +27,7 @@ export function groupToolCalls(transcript: readonly TranscriptEntry[]): (Transcr
 		run = [];
 	};
 	for (const entry of transcript) {
-		if (entry.kind === 'tool' && entry.status === 'complete') {
+		if (entry.kind === 'tool' && entry.status === 'complete' && !entry.shell) {
 			run.push(entry);
 			continue;
 		}
@@ -45,7 +46,9 @@ export function groupToolCalls(transcript: readonly TranscriptEntry[]): (Transcr
  * runs, or waits on the operator, every tool and thinking entry after the
  * latest user prompt stays open too, so finished blocks collapse together when
  * the turn ends instead of one at a time under the reader. Blocks from earlier
- * turns stay closed when a new turn starts.
+ * turns stay closed when a new turn starts. Shell commands the operator ran
+ * since the latest prompt stay open, so their output stays in view after they
+ * finish.
  */
 export function openByDefault(transcript: readonly TranscriptEntry[], status: SessionStatus | undefined): Set<string> {
 	const turnActive = status === 'running' || status === 'waiting';
@@ -55,7 +58,8 @@ export function openByDefault(transcript: readonly TranscriptEntry[], status: Se
 		const unfinished =
 			(entry.kind === 'tool' && entry.status !== 'complete') || (entry.kind === 'thinking' && !entry.complete);
 		const inRunningTurn = turnActive && index >= turnStart && (entry.kind === 'tool' || entry.kind === 'thinking');
-		if (unfinished || inRunningTurn) open.add(entry.id);
+		const recentShell = index >= turnStart && entry.kind === 'tool' && entry.shell !== undefined;
+		if (unfinished || inRunningTurn || recentShell) open.add(entry.id);
 	}
 	return open;
 }

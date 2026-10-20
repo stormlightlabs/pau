@@ -43,10 +43,12 @@ import {
 	renameSession,
 	respondToExtensionUi,
 	retrySession,
+	runSessionShellCommand,
 	selectSessionModel,
 	setSessionThinkingLevel,
 	startSession,
-	stopSession
+	stopSession,
+	stopSessionShellCommands
 } from './api';
 import {
 	emptyExtensionUi,
@@ -909,6 +911,21 @@ export class LiveSessions {
 		} catch (cause) {
 			throw new Error(sessionErrorMessage(cause, 'control'), { cause });
 		}
+	}
+
+	/**
+	 * Runs a shell command and resolves once it finishes. The transcript shows
+	 * the command from its stream events, which every window receives.
+	 */
+	runShellCommand(sessionId: string, command: string, excludeFromContext: boolean): Promise<void> {
+		return this.#control(async () => {
+			await runSessionShellCommand(sessionId, command, excludeFromContext, this.#fetcher);
+		});
+	}
+
+	/** Stops every running shell command in the session. */
+	stopShellCommands(sessionId: string): Promise<void> {
+		return this.#control(() => stopSessionShellCommands(sessionId, this.#fetcher));
 	}
 
 	/** Re-sends the last prompt after a failed turn. */

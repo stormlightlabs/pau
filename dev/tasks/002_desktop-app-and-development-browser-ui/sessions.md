@@ -170,7 +170,9 @@ Verification:
 
 ### 2.116 Composer shell commands
 
-Status: planned
+Status: in progress
+Status note: Implemented and component-tested. The self-hosted shell command
+run remains.
 Blocked by: none
 
 Run `!command` and `!!command` from the composer instead of sending them to the

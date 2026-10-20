@@ -4,6 +4,8 @@
 
 ### Desktop
 
+- Run shell commands from the composer with `!command`, or `!!command` to keep
+  the output out of the model's context, and press Esc to stop one.
 - The thinking-level picker and Shift+Tab now offer only the levels the current
   model supports, and a model without reasoning shows thinking as Off.
 - Stopping a run now puts your queued messages back in the composer, ahead of

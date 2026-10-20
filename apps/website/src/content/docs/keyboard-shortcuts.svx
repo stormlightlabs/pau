@@ -51,10 +51,11 @@ one of these Pi actions, the composer uses yours instead.
 | `Alt+↑`                  | `app.message.dequeue`  | Move queued messages back into the composer |
 | `Shift+Tab`              | `app.thinking.cycle`   | Move to the next thinking level            |
 | `Ctrl+L`                 | `app.model.select`     | Open the model picker                      |
-| `Esc`                    | `app.interrupt`        | Interrupt the run                          |
+| `Esc`                    | `app.interrupt`        | Interrupt the run, or stop a shell command |
 
 While a completion list is open, `Esc` closes the list and `Enter` or `Tab`
-picks the highlighted item. Press `Esc` again to interrupt the run. As in Pi,
+picks the highlighted item. Press `Esc` again to interrupt the run. When no run
+is active, `Esc` stops a running shell command instead. As in Pi,
 `↑` at the start of the draft and `↓` at its end browse earlier prompts.
 
 The composer differs from Pi's editor in these ways:
@@ -103,6 +104,18 @@ terminal interface. The list shows them as unavailable. To use one, choose
 **Open terminal** under the composer, start `pi` in the workspace terminal, and
 run the command there. If an extension adds a command with a built-in's name,
 Pau sends that command to the extension instead.
+
+## Shell commands
+
+Start a message with `!` to run the rest as a shell command in the workspace,
+such as `!ls src`. The transcript shows the command and its output as it
+arrives, and the agent sees both with your next prompt. Start with `!!` to keep
+the command and its output from the model. Its row says **Not in context**.
+
+Commands run while the agent works too, one at a time. Press `Esc` or choose
+**Stop command** to stop one. During a run, the first `Esc` interrupts the run
+and the next one stops the command. A `!` or `!!` with nothing after it is sent
+as a prompt.
 
 ## Pi bindings come first
 

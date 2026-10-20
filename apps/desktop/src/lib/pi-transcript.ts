@@ -1,5 +1,6 @@
 import type {
 	AutoRetry,
+	BashToolCall,
 	CompactionReason,
 	CompactionState,
 	MessageQueue,
@@ -14,8 +15,10 @@ import type {
  * Display transcript rebuilt from native Pi messages and events.
  *
  * Entry IDs encode their owner: `<messageKey>:<contentIndex>` for message
- * blocks and `tool:<toolCallId>` for tool calls, so later events can find the
- * entry they update without a separate index. A message key comes from the
+ * blocks, `tool:<toolCallId>` for tool calls, and `shell:<commandId>` for
+ * shell commands that streamed live, so later events can find the entry they
+ * update without a separate index. A shell command loaded from history is a
+ * `bashExecution` message and takes a message key instead. A message key comes from the
  * message's role and timestamp, which Pi keeps from `message_start` through
  * `get_messages`, so a message that arrives both in loaded history and as a
  * live event lands on the same entries. Messages without a timestamp fall
@@ -226,6 +229,97 @@ function updateTool(
 	return upsert(entries, update(existing ?? { id, kind: 'tool', name: fallbackName, detail: '', status: 'running' }));
 }
 
+/** The finished state of a shell command, read from a live result or a saved `bashExecution` message. */
+type ShellOutcome = {
+	output: string;
+	exitCode?: number;
+	cancelled: boolean;
+	truncated: boolean;
+	fullOutputPath?: string;
+};
+
+/**
+ * Projects a shell command the operator ran from the composer. A stopped
+ * command is complete, because the operator ended it on purpose. A command
+ * that exited non-zero, or ended without an exit code and was not stopped,
+ * failed.
+ */
+function shellTool(
+	id: string,
+	command: string,
+	excludedFromContext: boolean,
+	outcome?: ShellOutcome,
+	output?: string
+): TranscriptTool {
+	const call: BashToolCall = { tool: 'bash', command };
+	if (!outcome) {
+		return {
+			id,
+			kind: 'tool',
+			name: 'shell',
+			detail: command,
+			result: output,
+			status: 'running',
+			call,
+			shell: { excludedFromContext }
+		};
+	}
+	const failed = !outcome.cancelled && outcome.exitCode !== 0;
+	return {
+		id,
+		kind: 'tool',
+		name: 'shell',
+		detail: command,
+		result: outcome.output,
+		status: failed ? 'failed' : 'complete',
+		call: { ...call, exitCode: outcome.exitCode, fullOutputPath: outcome.fullOutputPath },
+		shell: { excludedFromContext, cancelled: outcome.cancelled || undefined, truncated: outcome.truncated || undefined }
+	};
+}
+
+/**
+ * Applies Pau's `shell_command_start` and `shell_command_end` events and Pi's
+ * `bash_execution_update` output between them, all keyed by the command ID.
+ * A transcript loaded while the command ran never saw its start, so later
+ * events create the entry from what they carry.
+ */
+function applyShellEvent(state: PiTranscript, event: JsonObject): PiTranscript {
+	const commandId = text(event.id);
+	if (!commandId) return state;
+	const id = `shell:${commandId}`;
+	const existing = state.entries.find((entry): entry is TranscriptTool => entry.id === id && entry.kind === 'tool');
+	const command = existing?.call?.tool === 'bash' ? existing.call.command : '';
+	const excluded = existing?.shell?.excludedFromContext ?? false;
+	let entry: TranscriptTool;
+	if (event.type === 'shell_command_start') {
+		entry = shellTool(
+			id,
+			text(event.command) ?? command,
+			event.exclude_from_context === true,
+			undefined,
+			existing?.result
+		);
+	} else if (event.type === 'bash_execution_update') {
+		entry = shellTool(id, command, excluded, undefined, (existing?.result ?? '') + (text(event.delta) ?? ''));
+	} else if (isObject(event.result)) {
+		const result = event.result;
+		entry = shellTool(id, command, excluded, {
+			output: text(result.output) ?? existing?.result ?? '',
+			exitCode: numberField(result.exit_code),
+			cancelled: result.cancelled === true,
+			truncated: result.truncated === true,
+			fullOutputPath: text(result.full_output_path)
+		});
+	} else {
+		entry = {
+			...shellTool(id, command, excluded),
+			status: 'failed',
+			result: text(event.error) ?? 'Pau could not run the command.'
+		};
+	}
+	return { ...state, entries: upsert(state.entries, entry) };
+}
+
 function messageKey(message: JsonObject): string | undefined {
 	const timestamp = numberField(message.timestamp);
 	return timestamp !== undefined && typeof message.role === 'string' ? `${message.role}-${timestamp}` : undefined;
@@ -298,6 +392,19 @@ function projectMessage(
 						.join('\n')
 				: '');
 		return body ? [{ id: `${key}:0`, kind: 'message', role: 'user', body }] : [];
+	}
+	if (role === 'bashExecution') {
+		const command = text(message.command);
+		if (command === undefined) return [];
+		return [
+			shellTool(`${key}:0`, command, message.excludeFromContext === true, {
+				output: text(message.output) ?? '',
+				exitCode: numberField(message.exitCode),
+				cancelled: message.cancelled === true,
+				truncated: message.truncated === true,
+				fullOutputPath: text(message.fullOutputPath)
+			})
+		];
 	}
 	if (role !== 'assistant' || !Array.isArray(message.content)) return [];
 
@@ -510,6 +617,11 @@ export function reducePiEvent(state: PiTranscript, event: unknown): PiTranscript
 					name
 				)
 			};
+		}
+		case 'shell_command_start':
+		case 'bash_execution_update':
+		case 'shell_command_end': {
+			return applyShellEvent(state, event);
 		}
 		case 'compaction_start': {
 			return { ...state, compaction: { status: 'running', reason: compactionReason(event.reason) } };

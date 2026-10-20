@@ -120,6 +120,15 @@
 		 * restore. A rejected promise shows its message in the notices.
 		 */
 		onInterrupt?: (sessionId: string) => void | MessageQueue | Promise<void | MessageQueue>;
+		/**
+		 * Runs a `!command` or `!!command` draft in the session's shell and
+		 * resolves once it finishes. The transcript shows the command from the
+		 * session's entries, not from this call. A rejection shows its message
+		 * under the composer.
+		 */
+		onRunShellCommand?: (sessionId: string, command: string, excludeFromContext: boolean) => Promise<void>;
+		/** Stops every running shell command in the session. */
+		onStopShellCommands?: (sessionId: string) => Promise<void>;
 		onStop?: (sessionId: string) => void | Promise<void>;
 		/**
 		 * Sends the last prompt again as a new message after a failed turn. Pi has
@@ -277,6 +286,8 @@
 		onLoadCommands,
 		onSearchFiles,
 		onInterrupt = () => {},
+		onRunShellCommand,
+		onStopShellCommands,
 		onStop = () => {},
 		onRetry = () => {},
 		onCompact,
@@ -521,6 +532,23 @@
 	});
 	/** The built-in the draft runs on submit instead of sending it. */
 	const draftBuiltin = $derived(sessionCommands ? builtinInvocation(draft, sessionCommands) : undefined);
+	/**
+	 * The shell command the draft runs on submit, parsed as Pi's editor does:
+	 * `!!` keeps the command out of the model context, and a `!` or `!!` with
+	 * nothing after it is sent as a prompt.
+	 */
+	const draftShell = $derived.by(() => {
+		const text = draft.trim();
+		if (!text.startsWith('!')) return;
+		const excludeFromContext = text.startsWith('!!');
+		const command = text.slice(excludeFromContext ? 2 : 1).trim();
+		return command ? { command, excludeFromContext } : undefined;
+	});
+	/** Whether a shell command the operator started is still running in the active session. */
+	const shellRunning = $derived(
+		activeSession?.transcript.some((entry) => entry.kind === 'tool' && entry.shell && entry.status === 'running') ??
+			false
+	);
 	const mentionToken = $derived(onSearchFiles && draftTyped ? mentionAt(draft, caret) : undefined);
 	const mentionQuery = $derived(mentionToken?.query);
 	const mentionOpen = $derived(
@@ -1280,6 +1308,10 @@
 	async function submitPrompt(queueOverride?: PromptQueue): Promise<void> {
 		if (sending || !activeSession || !draft.trim()) return;
 		const session = activeSession;
+		if (draftShell) {
+			await runShellCommand(session, draftShell.command, draftShell.excludeFromContext);
+			return;
+		}
 		if (draftBuiltin) {
 			await runBuiltin(session, draftBuiltin);
 			return;
@@ -1353,6 +1385,49 @@
 			if (activeSession?.id === session.id) {
 				error = cause instanceof Error ? cause.message : `Pau could not run /${command.name}. Try again.`;
 			}
+		}
+	}
+
+	/**
+	 * Runs the draft as a shell command, as Pi's `!` and `!!` do, including
+	 * during a run. The draft clears once the command starts. Like Pi, Pau runs
+	 * one command at a time, so the draft stays while another command runs or
+	 * when the session cannot run commands, and the reason shows instead.
+	 */
+	async function runShellCommand(
+		session: SessionViewModel,
+		command: string,
+		excludeFromContext: boolean
+	): Promise<void> {
+		error = undefined;
+		if (!onRunShellCommand || !session.capabilities.shellCommands) {
+			error = `${session.agent} cannot run shell commands in this session. Remove the ! to send the text as a prompt.`;
+			return;
+		}
+		if (shellRunning) {
+			error = `A shell command is still running. Stop it${interruptShortcut ? ` with ${interruptShortcut}` : ''} before you run another.`;
+			return;
+		}
+		histories[session.id] = recordPrompt(histories[session.id] ?? [], draft.trim());
+		draft = '';
+		draftTyped = false;
+		historyCursor = idleHistoryCursor;
+		try {
+			await onRunShellCommand(session.id, command, excludeFromContext);
+		} catch (cause) {
+			if (activeSession?.id === session.id) {
+				error = cause instanceof Error ? cause.message : 'The command could not run. Try again.';
+			}
+		}
+	}
+
+	async function stopShellCommands(): Promise<void> {
+		if (disconnected || !activeSession || !onStopShellCommands) return;
+		error = undefined;
+		try {
+			await onStopShellCommands(activeSession.id);
+		} catch (cause) {
+			error = cause instanceof Error ? cause.message : 'The command could not be stopped. Try again.';
 		}
 	}
 
@@ -1638,8 +1713,14 @@
 		if (!session) return false;
 		switch (action) {
 			case 'interrupt': {
-				if (session.status !== 'running') return false;
-				void interrupt();
+				// As in Pi, the key interrupts a running turn first and stops shell
+				// commands only when no turn runs.
+				if (session.status === 'running') {
+					void interrupt();
+					return true;
+				}
+				if (!shellRunning || !onStopShellCommands) return false;
+				void stopShellCommands();
 				return true;
 			}
 			case 'submit': {
@@ -2569,15 +2650,27 @@
 												<kbd>{interruptShortcut}</kbd>{/if}
 										</button>
 									{/if}
+									{#if shellRunning && onStopShellCommands}
+										<button
+											type="button"
+											class="pau-button pau-button--secondary"
+											disabled={disconnected}
+											onclick={() => void stopShellCommands()}>
+											Stop command{#if interruptShortcut && activeSession.status !== 'running'}
+												<kbd>{interruptShortcut}</kbd>{/if}
+										</button>
+									{/if}
 									<button
 										type="submit"
 										class="pau-button pau-button--primary"
 										disabled={!draft.trim() || sending || composerUnavailable !== undefined}>
 										{sending
 											? 'Sending…'
-											: activeQueue === 'follow-up' && activeSession.status === 'running'
-												? 'Queue prompt'
-												: 'Send prompt'}
+											: onRunShellCommand && draftShell && activeSession.capabilities.shellCommands
+												? 'Run command'
+												: activeQueue === 'follow-up' && activeSession.status === 'running'
+													? 'Queue prompt'
+													: 'Send prompt'}
 										{#if submitShortcut}<kbd>{submitShortcut}</kbd>{/if}
 									</button>
 								</div>

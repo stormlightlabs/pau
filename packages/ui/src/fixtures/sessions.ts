@@ -13,7 +13,8 @@ const fullCapabilities = {
 	commandDiscovery: true,
 	compaction: true,
 	rename: true,
-	cloneSession: true
+	cloneSession: true,
+	shellCommands: true
 } satisfies SessionCapabilities;
 
 const claudeCapabilities = {
@@ -60,6 +61,72 @@ const session = (status: SessionViewModel['status'], overrides: Partial<SessionV
 	transcript,
 	...overrides
 });
+
+/** Shell commands run from the composer: kept in context, kept out, failed, stopped, and refused. */
+const shellTranscript: SessionViewModel['transcript'] = [
+	{
+		id: 'shell-1',
+		kind: 'tool',
+		name: 'shell',
+		detail: 'ls src/diff',
+		result: 'gutter.ts\nwrap.test.ts\n',
+		status: 'complete',
+		call: { tool: 'bash', command: 'ls src/diff', exitCode: 0 },
+		shell: { excludedFromContext: false }
+	},
+	{
+		id: 'shell-2',
+		kind: 'tool',
+		name: 'shell',
+		detail: 'cat .env.local',
+		result: 'API_TOKEN=redacted\n',
+		status: 'complete',
+		call: { tool: 'bash', command: 'cat .env.local', exitCode: 0 },
+		shell: { excludedFromContext: true }
+	},
+	{
+		id: 'shell-3',
+		kind: 'tool',
+		name: 'shell',
+		detail: 'pnpm test diff',
+		result: 'FAIL src/diff/wrap.test.ts\n  expected 12, received 14\n1 failed, 37 passed\n',
+		status: 'failed',
+		call: { tool: 'bash', command: 'pnpm test diff', exitCode: 1 },
+		shell: { excludedFromContext: false }
+	},
+	{
+		id: 'shell-4',
+		kind: 'tool',
+		name: 'shell',
+		detail: 'pnpm dev',
+		result: 'Local: http://localhost:5173/\n',
+		status: 'complete',
+		call: { tool: 'bash', command: 'pnpm dev' },
+		shell: { excludedFromContext: false, cancelled: true }
+	},
+	{
+		id: 'shell-5',
+		kind: 'tool',
+		name: 'shell',
+		detail: 'ls',
+		result: 'Pi rejected the request: Session is shutting down',
+		status: 'failed',
+		call: { tool: 'bash', command: 'ls' },
+		shell: { excludedFromContext: false }
+	}
+];
+
+/** A shell command still printing output. */
+const runningShell: SessionViewModel['transcript'][number] = {
+	id: 'shell-running',
+	kind: 'tool',
+	name: 'shell',
+	detail: 'pnpm test --watch',
+	result: 'RUN v3.2.4\n✓ src/diff/gutter.test.ts (6 tests)\n',
+	status: 'running',
+	call: { tool: 'bash', command: 'pnpm test --watch' },
+	shell: { excludedFromContext: false }
+};
 
 const failedTurn: SessionViewModel['transcript'] = [
 	transcript[0]!,
@@ -252,6 +319,16 @@ export const sessionFixtures = {
 					capabilities: claudeCapabilities
 				})
 			]
+		}
+	],
+	shellCommands: [
+		{ id: 'pau', name: 'Pau', sessions: [session('idle', { title: 'Fix diff gutter', transcript: shellTranscript })] }
+	],
+	shellCommandRunning: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [session('idle', { title: 'Fix diff gutter', transcript: [transcript[0]!, runningShell] })]
 		}
 	],
 	workspaceWithoutSessions: [{ id: 'pau', name: 'Pau', sessions: [] }],

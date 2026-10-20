@@ -113,6 +113,23 @@ export type TranscriptTool = {
 	 * streaming the arguments; those render from `detail` and `result`.
 	 */
 	call?: ToolCallDetails;
+	/** Set for a command the operator ran from the composer, rather than a call the model made. */
+	shell?: ShellCommand;
+};
+
+/**
+ * A command the operator ran from the composer with `!command` or
+ * `!!command`. The entry's `call` holds the command line, exit code, and
+ * full output path, and `result` holds the output, or the error when the
+ * command could not run.
+ */
+export type ShellCommand = {
+	/** Whether `!!` kept the command and its output out of the model context. */
+	excludedFromContext: boolean;
+	/** Whether the operator stopped the command before it finished. */
+	cancelled?: boolean;
+	/** Whether Pi kept only the end of a long output. */
+	truncated?: boolean;
 };
 
 /** How much of a long output the tool kept. */

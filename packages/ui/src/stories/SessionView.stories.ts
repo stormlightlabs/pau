@@ -399,6 +399,34 @@ export const ToolCallGroups: Story = {
 		await expect(canvas.getByText('+1 −1')).not.toBeVisible();
 	}
 };
+export const ShellCommands: Story = {
+	args: { workspaces: sessionFixtures.shellCommands, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByText(/^Not in context/)).toBeVisible();
+		await expect(canvas.getByText('Exit 1')).toBeVisible();
+		await expect(canvas.getByText('Stopped', { exact: true })).toBeVisible();
+	}
+};
+export const ShellCommandRunning: Story = {
+	args: { workspaces: sessionFixtures.shellCommandRunning, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByText('In progress')).toBeVisible();
+		await userEvent.click(canvas.getByRole('textbox', { name: 'Prompt' }));
+		await userEvent.keyboard('{Escape}');
+		await expect(await canvas.findByText('session-idle: stop shell commands')).toBeInTheDocument();
+	}
+};
+export const RunShellCommand: Story = {
+	args: { workspaces: sessionFixtures.idle, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), '!!ls src{Enter}');
+		await expect(await canvas.findByText(/^Not in context/)).toBeVisible();
+		await expect(canvas.getByRole('button', { name: /Stop command/ })).toBeVisible();
+	}
+};
 export const FailedTurn: Story = {
 	args: { workspaces: sessionFixtures.failedTurn, initialSessionId: 'session-idle' },
 	play: async ({ canvasElement }) => {

@@ -1,0 +1,42 @@
+/*
+ * Transcript disclosures: thinking, tool calls, tool groups, and compaction
+ * markers. A `<details class="pau-disclosure">` whose summary holds a
+ * `chevronRight` icon marked `pau-disclosure__chevron` gets one treatment.
+ * The chevron sits in a `space/5` gutter at the entry's left edge and turns
+ * down while the entry is open. Summary text starts after the gutter, on the
+ * inset that user messages and tool bodies share, and hover lifts it from
+ * muted to normal text.
+ *
+ * Entries drawn with a left rule set `--disclosure-rule` to its width, so the
+ * rule counts toward the gutter and the text still lands on the shared inset.
+ * Components own the summary's layout, height, and the body's other padding.
+ */
+.pau-disclosure > summary {
+	position: relative;
+	padding-left: calc(var(--pau-space-5) - var(--disclosure-rule, 0px));
+	color: var(--pau-text-muted);
+	list-style: none;
+	cursor: pointer;
+	transition: color var(--pau-duration-feedback) var(--pau-ease-standard);
+}
+
+/* WebKit draws its own disclosure triangle unless the marker is hidden. */
+.pau-disclosure > summary::-webkit-details-marker {
+	display: none;
+}
+
+.pau-disclosure > summary:hover {
+	color: var(--pau-text);
+}
+
+.pau-disclosure__chevron {
+	position: absolute;
+	top: 50%;
+	left: calc((var(--pau-space-5) - var(--disclosure-rule, 0px) - 0.875rem) / 2);
+	translate: 0 -50%;
+	transition: rotate var(--pau-duration-feedback) var(--pau-ease-standard);
+}
+
+.pau-disclosure[open] > summary > .pau-disclosure__chevron {
+	rotate: 90deg;
+}

@@ -1,6 +1,7 @@
 <script lang="ts">
-	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
+	import Icon from './Icon.svelte';
+	import MetaText from './MetaText.svelte';
 	import { formatDuration, outputLines, readRange, resultSummary, truncationNotice } from './tool-call-format';
 	import ToolOutput from './ToolOutput.svelte';
 	import type { TranscriptTool } from './types/session';
@@ -52,14 +53,15 @@
 </script>
 
 <details
-	class={`tool-call tool-call--${tool.status}`}
+	class={`pau-disclosure tool-call tool-call--${tool.status}`}
 	{open}
 	ontoggle={handleToggle}
 	data-entry-id={tool.id}
 	data-found={found || undefined}>
 	<summary>
-		<span class="tool-call__name">{tool.name}</span><code><MetaText text={summary} /></code><small title={outcome}
-			><MetaText text={outcome} /></small>
+		<Icon name="chevronRight" class="pau-disclosure__chevron" size={14} /><span class="tool-call__name"
+			>{tool.name}</span
+		><code><MetaText text={summary} /></code><small title={outcome}><MetaText text={outcome} /></small>
 	</summary>
 	{#if open}
 		<div class="tool-call__body">
@@ -123,7 +125,8 @@
 
 <style>
 	.tool-call {
-		border-left: 1px solid var(--pau-border);
+		--disclosure-rule: 1px;
+		border-left: var(--disclosure-rule) solid var(--pau-border);
 	}
 
 	/*
@@ -142,17 +145,11 @@
 		align-items: center;
 		gap: var(--pau-space-3);
 		min-height: var(--pau-size-row-md);
-		padding: var(--pau-space-1) var(--pau-space-3);
-		color: var(--pau-text-muted);
-		list-style-position: outside;
-		cursor: pointer;
+		padding-block: var(--pau-space-1);
+		padding-right: var(--pau-space-3);
 	}
 
-	.tool-call summary::marker {
-		color: var(--pau-info);
-	}
-
-	.tool-call--failed summary::marker,
+	.tool-call--failed :global(.pau-disclosure__chevron),
 	.tool-call--failed small {
 		color: var(--pau-danger);
 	}
@@ -183,7 +180,8 @@
 	.tool-call__body {
 		display: grid;
 		gap: var(--pau-space-2);
-		padding: var(--pau-space-1) var(--pau-space-4) var(--pau-space-3);
+		/* The body text starts on the summary's inset, after the rule and the chevron gutter. */
+		padding: var(--pau-space-1) var(--pau-space-4) var(--pau-space-3) calc(var(--pau-space-5) - var(--disclosure-rule));
 	}
 
 	.tool-call__command {

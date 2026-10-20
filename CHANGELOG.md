@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- Thinking, tool calls, and tool groups now open and close with the same chevron
+  and highlight on hover, transcript text lines up on one edge, and the session
+  rail's status marks and buttons are spaced and sized evenly.
 - Buttons in Diagnostics, Processes, MCP, sandbox settings, and the file editor
   now share one size, and the context menu uses the standard focus ring.
 - Every main view now uses the same title size with its status on the title

@@ -95,7 +95,31 @@ test('gives the workspace icon buttons a resting border and a 44px hit area', as
 	const after = getComputedStyle(start, '::after');
 	expect(Number(after.width.replace('px', ''))).toBeGreaterThanOrEqual(44);
 	expect(Number(after.height.replace('px', ''))).toBeGreaterThanOrEqual(44);
-	expect(rect(start).height).toBe(28);
+	// The rail's buttons share one height, the Open workspace button's.
+	const open = page.getByRole('button', { name: 'Open workspace…' }).element();
+	expect(rect(start).height).toBe(32);
+	expect(rect(start).width).toBe(32);
+	expect(rect(open).height).toBe(32);
+});
+
+test('sets the rail status mark one spacing step from the name, as in the header', async () => {
+	await render(SessionView, { workspaces: sessionFixtures.idle, activeSessionId: 'session-idle' });
+
+	const row = page.getByRole('button', { name: /Fix diff gutter/ }).element();
+	const mark = rect(row.querySelector('.session-status-mark')!);
+	const name = rect(row.querySelector('.session-rail__name')!);
+	expect(name.left - mark.right).toBe(8);
+
+	const header = document.querySelector('.session-view__status')!;
+	const headerMark = rect(header.querySelector('.session-status-mark')!);
+	const headerLabel = rect(header.querySelector('span')!);
+	expect(headerLabel.left - headerMark.right).toBe(8);
+
+	// Names start where the shell's context rail starts its labels: 20px row inset, 8px dot column, 8px gap.
+	const rail = rect(document.querySelector('.session-rail')!);
+	expect(name.left - rail.left).toBe(36);
+	// The mark lines up with the workspace name above it.
+	expect(mark.left).toBe(inset(page.getByRole('heading', { name: 'Pau' }).element()));
 });
 
 test('truncates long session names on one line and keeps the full name', async () => {

@@ -222,19 +222,3 @@ Verification:
   query emulated.
 - Check every shipped theme in Storybook.
 
-### 2.270 Transcript and session rail rhythm
-
-Status: planned
-Blocked by: none
-
-Give the session rail status mark the same column and gap as the header mark.
-Use one disclosure treatment, a chevron with a hover state, for thinking, tool
-rows, and tool groups. Put message text, tool labels, tool bodies, and group
-summaries on one leading edge. Size the rail buttons alike, and make the
-attached image's Remove a quiet button.
-
-Verification:
-
-- Measure the shared leading edge and the 8px mark gap, and screenshot a tool
-  row hover and expanded tool groups.
-

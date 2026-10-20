@@ -2357,12 +2357,15 @@
 								</article>
 							{:else if entry.kind === 'thinking'}
 								<details
-									class="session-thinking"
+									class="pau-disclosure session-thinking"
 									open={entryOpen(entry)}
 									ontoggle={(event) => recordDisclosure(entry, event.currentTarget.open)}
 									data-entry-id={entry.id}
 									data-found={entry.id === foundEntryKey || undefined}>
-									<summary>{entry.complete ? 'Thinking' : 'Thinking…'}</summary>
+									<summary>
+										<Icon name="chevronRight" class="pau-disclosure__chevron" size={14} />
+										{entry.complete ? 'Thinking' : 'Thinking…'}
+									</summary>
 									<p>{entry.body}</p>
 								</details>
 							{:else if entry.kind === 'tool'}
@@ -2379,11 +2382,12 @@
 								</ToolCallGroup>
 							{:else if entry.kind === 'compaction'}
 								<details
-									class="session-compaction"
+									class="pau-disclosure session-compaction"
 									aria-label="Compacted context"
 									data-entry-id={entry.id}
 									data-found={entry.id === foundEntryKey || undefined}>
 									<summary>
+										<Icon name="chevronRight" class="pau-disclosure__chevron" size={14} />
 										<span>Context compacted{entry.reason === 'manual' ? '' : ' automatically'}</span>
 										{#if compactionSizes(entry)}<small>{compactionSizes(entry)}</small>{/if}
 									</summary>
@@ -2528,7 +2532,11 @@
 									{#each images as image (image.id)}
 										<li>
 											<img src={image.previewUrl} alt={image.name} />
-											<button type="button" aria-label={`Remove ${image.name}`} onclick={() => removeImage(image.id)}>
+											<button
+												type="button"
+												class="pau-button pau-button--quiet"
+												aria-label={`Remove ${image.name}`}
+												onclick={() => removeImage(image.id)}>
 												Remove
 											</button>
 										</li>
@@ -2742,9 +2750,9 @@
 		flex: none;
 		align-items: center;
 		justify-content: center;
-		width: var(--pau-size-row-sm);
+		width: var(--pau-size-row-md);
 		min-height: 0;
-		height: var(--pau-size-row-sm);
+		height: var(--pau-size-row-md);
 		padding: 0;
 		color: var(--pau-text);
 		border: 1px solid var(--pau-border);
@@ -2754,7 +2762,7 @@
 	.session-rail .session-rail__icon-button::after {
 		content: '';
 		position: absolute;
-		inset: calc((var(--pau-size-row-sm) - var(--pau-size-target-touch)) / 2 - 1px);
+		inset: calc((var(--pau-size-row-md) - var(--pau-size-target-touch)) / 2 - 1px);
 	}
 
 	.session-rail .session-rail__icon-button[aria-pressed='true'] {
@@ -2793,9 +2801,15 @@
 		list-style: none;
 	}
 
+	/*
+	 * The status mark gets its own 0.75rem column and sits one spacing step
+	 * from the name, as it does beside the status in the session header. The
+	 * mark lines up with the workspace name above it, and the session name
+	 * starts where the shell's context rail starts its labels.
+	 */
 	.session-rail button {
 		display: grid;
-		grid-template-columns: 0.5rem minmax(0, 1fr) auto;
+		grid-template-columns: 0.75rem minmax(0, 1fr) auto;
 		align-items: center;
 		gap: var(--pau-space-2);
 		width: 100%;
@@ -3173,8 +3187,13 @@
 		}
 	}
 
+	/*
+	 * Message text inside the rule starts on the transcript's inset edge, the
+	 * same `space/5` from the entry's left edge as disclosure summaries and
+	 * tool bodies (see `disclosure.css`).
+	 */
 	.session-message--user {
-		padding-left: var(--pau-space-4);
+		padding-left: calc(var(--pau-space-5) - 2px);
 		border-left: 2px solid var(--pau-accent);
 	}
 
@@ -3219,12 +3238,13 @@
 	}
 
 	.session-thinking summary {
+		display: flex;
+		align-items: center;
 		min-height: var(--pau-size-row-md);
-		cursor: pointer;
 	}
 
 	.session-thinking p {
-		padding-left: var(--pau-space-4);
+		padding-left: var(--pau-space-5);
 		font-size: var(--pau-type-sm);
 	}
 
@@ -3240,7 +3260,6 @@
 		align-items: center;
 		gap: var(--pau-space-3);
 		min-height: var(--pau-size-row-md);
-		cursor: pointer;
 	}
 
 	.session-compaction small {
@@ -3250,7 +3269,7 @@
 
 	.session-compaction p {
 		margin: var(--pau-space-2) 0 0;
-		padding-left: var(--pau-space-4);
+		padding-left: var(--pau-space-5);
 		font-size: var(--pau-type-sm);
 		line-height: 1.65;
 		white-space: pre-wrap;
@@ -3503,17 +3522,6 @@
 		object-fit: cover;
 		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
-	}
-
-	.session-composer__images button {
-		padding: 0;
-		color: var(--pau-text-muted);
-		background: none;
-		border: 0;
-		font: inherit;
-		font-size: var(--pau-type-xs);
-		text-decoration: underline;
-		cursor: pointer;
 	}
 
 	/*

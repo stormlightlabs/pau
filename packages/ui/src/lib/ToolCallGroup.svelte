@@ -26,8 +26,8 @@
 	}
 </script>
 
-<details class="tool-group" {open} ontoggle={handleToggle} data-group-id={id}>
-	<summary><Icon name={open ? 'chevronDown' : 'chevronRight'} size={14} />{count} tool calls</summary>
+<details class="pau-disclosure tool-group" {open} ontoggle={handleToggle} data-group-id={id}>
+	<summary><Icon name="chevronRight" class="pau-disclosure__chevron" size={14} />{count} tool calls</summary>
 	<div class="tool-group__calls">
 		{@render children()}
 	</div>
@@ -35,7 +35,8 @@
 
 <style>
 	.tool-group {
-		border-left: 1px solid var(--pau-border);
+		--disclosure-rule: 1px;
+		border-left: var(--disclosure-rule) solid var(--pau-border);
 	}
 
 	/* Matches the compact spacing between consecutive tool call rows. */
@@ -47,21 +48,9 @@
 	.tool-group summary {
 		display: flex;
 		align-items: center;
-		gap: var(--pau-space-2);
 		min-height: var(--pau-size-row-md);
-		padding: var(--pau-space-1) var(--pau-space-3);
-		color: var(--pau-text-muted);
-		list-style: none;
-		cursor: pointer;
-	}
-
-	/* WebKit draws its own disclosure triangle unless the marker is hidden. */
-	.tool-group summary::-webkit-details-marker {
-		display: none;
-	}
-
-	.tool-group summary :global(svg) {
-		color: var(--pau-info);
+		padding-block: var(--pau-space-1);
+		padding-right: var(--pau-space-3);
 	}
 
 	/*
@@ -71,7 +60,16 @@
 	.tool-group__calls {
 		display: grid;
 		gap: var(--pau-space-5);
-		padding-left: var(--pau-space-4);
+	}
+
+	/*
+	 * Grouped calls hang under the group's own rule, so their chevrons and
+	 * labels line up with the group summary instead of stepping inward. They
+	 * keep `--disclosure-rule` because the group's rule still sits to their
+	 * left.
+	 */
+	.tool-group__calls > :global(.tool-call) {
+		border-left: 0;
 	}
 
 	@media (pointer: coarse) {

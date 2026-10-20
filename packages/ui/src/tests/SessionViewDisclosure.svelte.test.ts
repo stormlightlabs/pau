@@ -201,3 +201,77 @@ test('keeps three finished calls as rows and opens a group with Ctrl+O', async (
 	await userEvent.keyboard('{Control>}o{/Control}');
 	await expect.poll(() => group()?.open).toBe(false);
 });
+
+/** The left edge of an element's first line of text. */
+function textLeft(element: Element): number {
+	const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+		acceptNode: (node) => (node.textContent?.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP)
+	});
+	const range = document.createRange();
+	range.selectNodeContents(walker.nextNode()!);
+	return range.getClientRects()[0]!.left;
+}
+
+const contentLeft = (element: Element) =>
+	element.getBoundingClientRect().left + Number(getComputedStyle(element).paddingLeft.replace('px', ''));
+
+const turn = (summary: Element) => getComputedStyle(summary.querySelector('.pau-disclosure__chevron')!).rotate;
+
+const disclosureTranscript: TranscriptEntry[] = [
+	prompt('p1'),
+	{ id: 'think', kind: 'thinking', body: 'Check the wrap tests first.', complete: true },
+	{ id: 'squash', kind: 'compaction', reason: 'manual', summary: 'Earlier work.', tokensBefore: 900, tokensAfter: 90 },
+	...['a', 'b', 'c', 'd'].map((id) => tool(id, 'complete')),
+	tool('broke', 'failed')
+];
+
+test('puts message text, disclosure summaries, and tool bodies on one leading edge', async () => {
+	await page.viewport(1440, 900);
+	await render(SessionView, { workspaces: workspaces(disclosureTranscript, 'idle'), activeSessionId: baseSession.id });
+	await userEvent.click(page.getByText('4 tool calls'));
+	for (const id of ['think', 'a', 'broke']) {
+		if (!details(id).open) await userEvent.click(details(id).querySelector('summary')!);
+		await expect.poll(() => details(id).open).toBe(true);
+	}
+
+	const edge = textLeft(document.querySelector('.session-message--user p')!);
+	const edges = {
+		eyebrow: textLeft(document.querySelector('.session-message--user h2')!),
+		thinking: textLeft(details('think').querySelector('summary')!),
+		thinkingBody: textLeft(details('think').querySelector('p')!),
+		compaction: textLeft(details('squash').querySelector('summary')!),
+		group: textLeft(group()!.querySelector('summary')!),
+		grouped: textLeft(details('a').querySelector('.tool-call__name')!),
+		groupedBody: contentLeft(details('a').querySelector('.tool-call__body')!),
+		tool: textLeft(details('broke').querySelector('.tool-call__name')!),
+		toolBody: contentLeft(details('broke').querySelector('.tool-call__body')!)
+	};
+	for (const [name, left] of Object.entries(edges)) expect({ name, left }).toEqual({ name, left: edge });
+	// The inset sits one gutter in from the transcript's left edge, where assistant prose starts.
+	expect(edge - document.querySelector('.session-message--user')!.getBoundingClientRect().left).toBe(24);
+});
+
+test('marks every disclosure with a chevron that turns when it opens', async () => {
+	await render(SessionView, { workspaces: workspaces(disclosureTranscript, 'idle'), activeSessionId: baseSession.id });
+	await userEvent.click(page.getByText('4 tool calls'));
+
+	const summaries = [...document.querySelectorAll('.session-view__transcript summary')];
+	expect(summaries).toHaveLength(8);
+	for (const summary of summaries) {
+		await expect.element(summary.querySelector<HTMLElement>(':scope > .pau-disclosure__chevron')).toBeVisible();
+		expect(getComputedStyle(summary).listStyleType).toBe('none');
+	}
+	await expect.poll(() => turn(group()!.querySelector('summary')!)).toBe('90deg');
+	expect(turn(details('a').querySelector('summary')!)).toBe('none');
+});
+
+test('lifts a tool summary to the normal text color on hover', async () => {
+	await render(SessionView, { workspaces: workspaces(disclosureTranscript, 'idle'), activeSessionId: baseSession.id });
+	const summary = details('broke').querySelector('summary')!;
+	const label = summary.querySelector('.tool-call__name')!;
+	const rest = getComputedStyle(label).color;
+
+	await userEvent.hover(summary);
+	await expect.poll(() => getComputedStyle(label).color).not.toBe(rest);
+	await expect.poll(() => getComputedStyle(label).color).toBe(getComputedStyle(summary.querySelector('code')!).color);
+});

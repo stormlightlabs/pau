@@ -14,7 +14,17 @@
 		recordPrompt,
 		type HistoryCursor
 	} from './composer-history';
-	import { encodeImage, imageAccept, imageRejection, type ComposerImage, type PromptImage } from './composer-images';
+	import {
+		encodeImage,
+		imageAccept,
+		imageDragKind,
+		imageRejection,
+		imageTypeRule,
+		isImageType,
+		type ComposerImage,
+		type ImageDragKind,
+		type PromptImage
+	} from './composer-images';
 	import { announcementSnapshot, describeChanges, type AnnouncementSnapshot } from './transcript-announcements';
 	import { copyText, findMessage, lastAssistantReply, type CopyResult } from './clipboard';
 	import CopyButton from './CopyButton.svelte';
@@ -471,7 +481,14 @@
 	let imagePicker = $state<HTMLInputElement>();
 	let images = $state<ComposerImage[]>([]);
 	let imageError = $state<string>();
-	let draggingImages = $state(false);
+	/**
+	 * The drop target over the composer: what the dragged files are, or
+	 * `rejected` for a moment after a drop that attached nothing.
+	 */
+	let dropTarget = $state<ImageDragKind | 'rejected'>();
+	/** Drag enters minus leaves, so crossing onto a child keeps the target. */
+	let dragDepth = 0;
+	let dropRejectionTimer: ReturnType<typeof setTimeout> | undefined;
 	let startingWorkspaceId = $state<string>();
 	let startFailure = $state<{ workspaceId: string; workspaceName: string; message: string }>();
 	let controlError = $state<string>();
@@ -1284,15 +1301,73 @@
 		for (const image of images) URL.revokeObjectURL(image.previewUrl);
 	});
 
+	/** How long the reason stays over the composer after a drop that attached nothing. */
+	const dropRejectionMs = 2500;
+
+	type DropCopy = { accepts: boolean; title: string; detail: string };
+
+	/** Copy for each drop target, and whether a drop there would attach anything. */
+	const dropCopies: Record<ImageDragKind | 'rejected', DropCopy> = {
+		images: { accepts: true, title: 'Drop to attach', detail: 'PNG, JPEG, GIF, or WebP, up to 5 MiB each' },
+		unknown: { accepts: true, title: 'Drop to attach images', detail: imageTypeRule },
+		mixed: { accepts: true, title: 'Drop to attach the images', detail: `Other files are skipped. ${imageTypeRule}` },
+		unsupported: { accepts: false, title: 'These files cannot be attached', detail: imageTypeRule },
+		rejected: { accepts: false, title: 'Nothing was attached', detail: imageTypeRule }
+	};
+
+	const dropCopy = $derived.by((): DropCopy | undefined => {
+		if (dropTarget === undefined) return;
+		if (composerUnavailable !== undefined) {
+			return { accepts: false, title: 'Images cannot be attached now', detail: composerUnavailable };
+		}
+		return dropCopies[dropTarget];
+	});
+
+	onDestroy(() => clearTimeout(dropRejectionTimer));
+
 	function hasFiles(event: DragEvent): boolean {
 		return event.dataTransfer?.types.includes('Files') ?? false;
 	}
 
+	function handleImageDragEnter(event: DragEvent): void {
+		if (!hasFiles(event)) return;
+		event.preventDefault();
+		clearTimeout(dropRejectionTimer);
+		dragDepth += 1;
+		dropTarget = imageDragKind(event.dataTransfer);
+	}
+
+	function handleImageDragOver(event: DragEvent): void {
+		if (!hasFiles(event)) return;
+		// Without this the browser opens a dropped file in place of the app.
+		event.preventDefault();
+		if (event.dataTransfer) event.dataTransfer.dropEffect = composerUnavailable === undefined ? 'copy' : 'none';
+	}
+
+	function handleImageDragLeave(event: DragEvent): void {
+		if (!hasFiles(event)) return;
+		dragDepth = Math.max(0, dragDepth - 1);
+		if (dragDepth === 0) dropTarget = undefined;
+	}
+
+	/**
+	 * Attaches dropped images like Attach image. A drop with no supported
+	 * image keeps the reason over the composer briefly instead of adding an
+	 * error row, because the target already showed it before the drop.
+	 */
 	function handleImageDrop(event: DragEvent): void {
 		if (!hasFiles(event)) return;
 		event.preventDefault();
-		draggingImages = false;
-		if (composerUnavailable === undefined) attachImages(event.dataTransfer?.files ?? []);
+		dragDepth = 0;
+		dropTarget = undefined;
+		if (composerUnavailable !== undefined) return;
+		const files = [...(event.dataTransfer?.files ?? [])];
+		if (files.length > 0 && files.every((file) => !isImageType(file.type))) {
+			dropTarget = 'rejected';
+			dropRejectionTimer = setTimeout(() => (dropTarget = undefined), dropRejectionMs);
+			return;
+		}
+		attachImages(files);
 	}
 
 	function handleComposerPaste(event: ClipboardEvent): void {
@@ -2520,14 +2595,11 @@
 					{:else}
 						<form
 							class="session-composer"
-							class:session-composer--dragging={draggingImages}
+							data-drop={dropCopy ? (dropCopy.accepts ? 'accept' : 'reject') : undefined}
 							aria-label="Prompt composer"
-							ondragover={(event) => {
-								if (!hasFiles(event)) return;
-								event.preventDefault();
-								draggingImages = true;
-							}}
-							ondragleave={() => (draggingImages = false)}
+							ondragenter={handleImageDragEnter}
+							ondragover={handleImageDragOver}
+							ondragleave={handleImageDragLeave}
 							ondrop={handleImageDrop}
 							onsubmit={(event) => {
 								event.preventDefault();
@@ -2714,6 +2786,12 @@
 							{/if}
 							{#if imageError || error}
 								<p class="session-composer__error" role="alert">{[imageError, error].filter(Boolean).join(' ')}</p>
+							{/if}
+							{#if dropCopy}
+								<div class="session-composer__drop" role="status">
+									<strong>{dropCopy.title}</strong>
+									<span>{dropCopy.detail}</span>
+								</div>
 							{/if}
 						</form>
 					{/if}
@@ -3464,9 +3542,49 @@
 		outline-offset: var(--pau-focus-offset-inset);
 	}
 
-	.session-composer--dragging {
-		border-color: var(--pau-focus);
+	/* Only the border color and style change, so the composer keeps its size. */
+	.session-composer[data-drop] {
 		border-style: dashed;
+	}
+
+	.session-composer[data-drop='accept'] {
+		border-color: var(--pau-focus);
+	}
+
+	.session-composer[data-drop='reject'] {
+		border-color: var(--pau-danger);
+	}
+
+	/*
+	 * The target covers the composer's own box and ignores the pointer, so
+	 * drag events keep reaching the fields underneath and the layout around
+	 * the composer stays put.
+	 */
+	.session-composer__drop {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		display: grid;
+		place-content: center;
+		gap: var(--pau-space-1);
+		padding: var(--pau-space-3);
+		text-align: center;
+		pointer-events: none;
+		background: var(--pau-surface-raised);
+	}
+
+	.session-composer__drop strong {
+		color: var(--pau-text);
+		font-weight: var(--pau-weight-semibold);
+	}
+
+	.session-composer__drop span {
+		color: var(--pau-text-muted);
+		font-size: var(--pau-type-sm);
+	}
+
+	.session-composer[data-drop='reject'] .session-composer__drop strong {
+		color: var(--pau-danger);
 	}
 
 	.session-composer__images {

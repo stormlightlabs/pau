@@ -35,6 +35,10 @@
   with Save and Revert. An unavailable Revert no longer outweighs Save, and
   Markdown files show fold arrows only on headings, lists, quotes, code blocks,
   and tables.
+- Dragging files over the composer now shows whether they can be attached
+  before you let go. Pau attaches PNG, JPEG, GIF, and WebP images and tells
+  you when a file is not one of them. Dropping images onto the composer also
+  works in the desktop app now.
 
 ## 2026-10-18
 

@@ -19,19 +19,6 @@ Verification:
   `/compact`, and an unavailable command with its reason.
 - Run `/new`, `/name`, and `/compact` in a self-hosted session.
 
-### 2.188 Drop target feedback
-
-Status: planned
-Blocked by: none
-
-Show a drop target on the composer without resizing it, and reject unsupported
-files before the drop with a reason.
-
-Verification:
-
-- Component-test entering, leaving, dropping an image, and dragging an
-  unsupported file.
-
 ### 2.189 Composer external editor
 
 Status: planned

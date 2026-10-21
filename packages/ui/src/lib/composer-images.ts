@@ -23,6 +23,29 @@ export type ComposerImage = {
 /** Value for the file picker's `accept` attribute. */
 export const imageAccept = imageTypes.join(',');
 
+/** The type rule, for copy that explains why a file cannot attach. */
+export const imageTypeRule = 'Only PNG, JPEG, GIF, and WebP images can be attached.';
+
+/** Whether a file's MIME type is one the backend accepts. */
+export function isImageType(type: string): boolean {
+	return (imageTypes as readonly string[]).includes(type);
+}
+
+/**
+ * What a file drag carries, judged before the drop. Browsers that hide the
+ * file types until the drop, such as WebKit, give `unknown`.
+ */
+export type ImageDragKind = 'images' | 'mixed' | 'unsupported' | 'unknown';
+
+/** Classifies the files in a drag from the MIME types its items expose. */
+export function imageDragKind(transfer: DataTransfer | null): ImageDragKind {
+	const types = [...(transfer?.items ?? [])].filter((item) => item.kind === 'file').map((item) => item.type);
+	if (types.length === 0 || types.includes('')) return 'unknown';
+	const supported = types.filter((type) => isImageType(type)).length;
+	if (supported === types.length) return 'images';
+	return supported === 0 ? 'unsupported' : 'mixed';
+}
+
 /**
  * Checks one file against the image limits. Returns operator-facing copy that
  * names the file, or `undefined` when the file can attach.
@@ -30,7 +53,7 @@ export const imageAccept = imageTypes.join(',');
  * @param attachedBytes Bytes already attached, counted against the request limit.
  */
 export function imageRejection(file: File, attachedBytes: number): string | undefined {
-	if (!(imageTypes as readonly string[]).includes(file.type)) {
+	if (!isImageType(file.type)) {
 		return `${file.name} is not a supported image. Attach a PNG, JPEG, GIF, or WebP file.`;
 	}
 	if (file.size > maxImageBytes) {

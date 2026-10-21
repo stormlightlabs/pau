@@ -132,7 +132,7 @@ or in vanilla Pi.
 | Pi capability                          | Pau control                                                        | Status    | Notes                                                  |
 | -------------------------------------- | ------------------------------------------------------------------ | --------- | ------------------------------------------------------ |
 | Paste an image (`Ctrl+V`)              | Composer paste, `composer-images.ts`, sent as `images` on `prompt` | Supported | PNG, JPEG, GIF, and WebP up to 10 MiB per request.     |
-| Drag an image in                       | Composer drop target                                               | Supported | Drop feedback is 2.188.                                |
+| Drag an image in                       | Composer drop target                                               | Supported | Rejects unsupported files before the drop.             |
 | Pick an image file                     | Image file input in the composer                                   | Supported | No Pi equivalent.                                      |
 | Paste copied files on macOS (`Ctrl+V`) | None                                                               | Missing   | Pau ignores pasted files that are not images. No unit. |
 

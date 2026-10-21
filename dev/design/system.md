@@ -87,6 +87,11 @@ context meter shows only the share used, and its details still list the
 window and token totals. Completion lists open as a popover above the
 composer, so the composer keeps its height and the transcript does not move.
 
+While files are dragged over the composer, a drop target covers the
+composer's own box and dashes its border: focus color when the drop would
+attach images, danger color with the reason when it would not. The composer
+and the status line keep their size and place.
+
 The status line under the composer starts and ends with the composer's
 controls and sets the folder, branch, and figures in the mono metadata role.
 Figures that are still zero stay hidden. When space runs short, the path loses

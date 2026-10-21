@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'vitest';
 
-import { encodeImage, imageRejection, maxImageBytes, maxRequestImageBytes } from '../lib/composer-images';
+import {
+	encodeImage,
+	imageDragKind,
+	imageRejection,
+	maxImageBytes,
+	maxRequestImageBytes
+} from '../lib/composer-images';
 
 function file(name: string, type: string, size = 4): File {
 	return new File([new Uint8Array(size)], name, { type });
@@ -34,5 +40,23 @@ describe('encodeImage', () => {
 	test('returns base64 data without the data URL prefix', async () => {
 		const png = new File([new Uint8Array([104, 105])], 'a.png', { type: 'image/png' });
 		expect(await encodeImage(png)).toEqual({ mimeType: 'image/png', data: 'aGk=' });
+	});
+});
+
+describe('imageDragKind', () => {
+	/** Node has no DataTransfer, so the test passes only the items the classifier reads. */
+	const transfer = (...types: string[]) =>
+		({ items: types.map((type) => ({ kind: 'file', type })) }) as unknown as DataTransfer;
+
+	test('tells images, unsupported files, and a mix apart', () => {
+		expect(imageDragKind(transfer('image/png', 'image/webp'))).toBe('images');
+		expect(imageDragKind(transfer('application/pdf'))).toBe('unsupported');
+		expect(imageDragKind(transfer('image/png', 'application/pdf'))).toBe('mixed');
+	});
+
+	test('gives unknown when the browser hides the file types', () => {
+		expect(imageDragKind(transfer(''))).toBe('unknown');
+		expect(imageDragKind(transfer())).toBe('unknown');
+		expect(imageDragKind(null)).toBe('unknown');
 	});
 });

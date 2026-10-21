@@ -152,6 +152,10 @@ fn main() {
                 .min_inner_size(WINDOW_MIN_SIZE.0, WINDOW_MIN_SIZE.1)
                 .center()
                 .visible(false)
+                // Tauri's own handler consumes file drags before the page sees
+                // them. The composer attaches dropped images through HTML5 drag
+                // and drop, so the page must receive the events.
+                .disable_drag_drop_handler()
                 .build();
             match window {
                 Ok(window) => {

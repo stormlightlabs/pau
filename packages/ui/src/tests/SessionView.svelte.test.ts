@@ -560,13 +560,65 @@ test('keeps images after a failed send', async () => {
 	await expect.element(page.getByRole('img', { name: 'shot.png' })).toBeVisible();
 });
 
-test('attaches images dropped on the composer and pasted into it', async () => {
+/** Fires one drag event carrying `files` at `target`. */
+function drag(target: Element, type: string, files: File[]): void {
+	const dataTransfer = new DataTransfer();
+	for (const file of files) dataTransfer.items.add(file);
+	target.dispatchEvent(new DragEvent(type, { dataTransfer, bubbles: true, cancelable: true }));
+}
+
+const pdfFile = () => new File(['x'], 'notes.pdf', { type: 'application/pdf' });
+
+test('shows the drop target while images are dragged over the composer, including its children', async () => {
 	await renderRunning();
-	const composer = page.getByRole('form', { name: 'Prompt composer' }).element();
-	const dropped = new DataTransfer();
-	dropped.items.add(pngFile('dropped.png'));
-	composer.dispatchEvent(new DragEvent('drop', { dataTransfer: dropped, bubbles: true, cancelable: true }));
+	const form = page.getByRole('form', { name: 'Prompt composer' });
+	const composer = form.element();
+	const field = page.getByRole('textbox', { name: 'Prompt' }).element();
+
+	drag(composer, 'dragenter', [pngFile()]);
+	await expect.element(form.getByRole('status')).toHaveTextContent('Drop to attach');
+	await expect.element(form).toHaveAttribute('data-drop', 'accept');
+
+	// Entering a child fires before leaving the composer, which must not clear the target.
+	drag(field, 'dragenter', [pngFile()]);
+	drag(composer, 'dragleave', [pngFile()]);
+	await expect.element(form.getByRole('status')).toHaveTextContent('Drop to attach');
+
+	drag(field, 'dragleave', [pngFile()]);
+	await expect.element(form.getByRole('status')).not.toBeInTheDocument();
+	await expect.element(form).not.toHaveAttribute('data-drop');
+});
+
+test('attaches a dropped image and clears the drop target', async () => {
+	await renderRunning();
+	const form = page.getByRole('form', { name: 'Prompt composer' });
+
+	drag(form.element(), 'dragenter', [pngFile('dropped.png')]);
+	drag(form.element(), 'drop', [pngFile('dropped.png')]);
+
 	await expect.element(page.getByRole('img', { name: 'dropped.png' })).toBeVisible();
+	await expect.element(form.getByRole('status')).not.toBeInTheDocument();
+});
+
+test('explains before and after the drop that an unsupported file cannot attach', async () => {
+	await renderRunning();
+	const form = page.getByRole('form', { name: 'Prompt composer' });
+
+	drag(form.element(), 'dragenter', [pdfFile()]);
+	await expect.element(form).toHaveAttribute('data-drop', 'reject');
+	await expect
+		.element(form.getByRole('status'))
+		.toHaveTextContent('These files cannot be attached Only PNG, JPEG, GIF, and WebP images can be attached.');
+
+	drag(form.element(), 'drop', [pdfFile()]);
+	await expect.element(form.getByRole('status')).toHaveTextContent('Nothing was attached');
+	await expect.element(page.getByRole('list', { name: 'Attached images' })).not.toBeInTheDocument();
+	await expect.element(page.getByRole('alert')).not.toBeInTheDocument();
+	await expect.element(form.getByRole('status'), { timeout: 4000 }).not.toBeInTheDocument();
+});
+
+test('attaches images pasted into the composer', async () => {
+	await renderRunning();
 
 	const pasted = new DataTransfer();
 	pasted.items.add(pngFile('pasted.png'));

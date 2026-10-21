@@ -198,21 +198,3 @@ Verification:
   query emulated.
 - Check every shipped theme in Storybook.
 
-### 2.280 Files view alignment
-
-Status: planned
-Blocked by: none
-
-Line up the Files view on shared leading edges and center lines. Today the
-"Files" label sits 5px right of the other rail headings, the view title and
-the open file name start at different edges, and the editor actions read as
-equal weight, with "Check for changes" heavier than Save. Save is the primary
-action and Revert is secondary. Show folding chevrons only on lines that fold
-a section, such as headings and lists, not on every paragraph.
-
-Verification:
-
-- Measure the rail headings, branch row, search field, and tree rows to one
-  leading edge, and the open file name and editor actions to one center line.
-- Screenshot the Files view in the application shell at 1440×900 and 900px
-  with a long Markdown file, a clean file, an edited file, and no open file.

@@ -8,6 +8,11 @@
   when you click outside them, press Escape, or switch windows, and focus goes
   back to the control that opened them. Clicking another dropdown opens it
   with one click.
+- The Files view now lines up its sidebar labels, branch, search, and file tree
+  on one edge, starts the open file's name under the view title, and centers it
+  with Save and Revert. An unavailable Revert no longer outweighs Save, and
+  Markdown files show fold arrows only on headings, lists, quotes, code blocks,
+  and tables.
 - Thinking, tool calls, and tool groups now open and close with the same chevron
   and highlight on hover, transcript text lines up on one edge, and the session
   rail's status marks and buttons are spaced and sized evenly.

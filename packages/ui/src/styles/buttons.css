@@ -62,6 +62,15 @@
 	border-color: var(--pau-surface-raised);
 }
 
+/*
+ * A secondary button is the base outline. Disabled, its outline fades, so in
+ * a row where every action is unavailable the primary's fill still ranks it
+ * first and the secondary does not read as the heavier control.
+ */
+.pau-button--secondary:disabled {
+	border-color: color-mix(in srgb, var(--pau-border) 50%, transparent);
+}
+
 /* Quiet buttons show no border until hover, for utilities beside content. */
 .pau-button--quiet {
 	color: var(--pau-text-muted);

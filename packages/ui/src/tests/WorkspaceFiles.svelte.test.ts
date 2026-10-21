@@ -4,6 +4,7 @@ import { render } from 'vitest-browser-svelte';
 
 import { workspaceFileFixtures } from '../fixtures/workspace-files';
 import WorkspaceFiles from '../lib/WorkspaceFiles.svelte';
+import type { FileEditorSource } from '../lib/types/file-editor';
 import type { WorkspaceFileSource, WorkspaceSearchMatch } from '../lib/types/workspace-files';
 
 function source(overrides: Partial<WorkspaceFileSource> = {}): WorkspaceFileSource {
@@ -292,3 +293,61 @@ test('offers only path actions for a folder and reports a failed action', async 
 	await expect.element(page.getByRole('alert')).toHaveTextContent('Clipboard is unavailable.');
 	writeText.mockRestore();
 });
+
+/** Where an element's text starts, which a label's box does not show when it stretches. */
+function textLeft(element: Element): number {
+	const range = document.createRange();
+	range.selectNodeContents(element);
+	return range.getBoundingClientRect().left;
+}
+
+function centerY(element: Element): number {
+	const box = element.getBoundingClientRect();
+	return box.top + box.height / 2;
+}
+
+for (const width of [1440, 900]) {
+	test(`lines the Files view up on shared edges at ${width}px`, async () => {
+		await page.viewport(width, 900);
+		const editorSource: FileEditorSource = {
+			read: async (path) => ({ path, content: '# Notes\n\nText.\n', revision: 'r1', writable: true }),
+			write: async (path, content) => ({ path, content, revision: 'r2', writable: true })
+		};
+		const { container } = await render(WorkspaceFiles, {
+			workspaceId: 'pau',
+			workspaceName: 'pau',
+			source: source(),
+			editorSource
+		});
+		await expect.element(page.getByText('feature/git-status')).toBeInTheDocument();
+		const one = (selector: string): Element => container.querySelector(selector)!;
+
+		const railEdges = [
+			textLeft(one('.app-shell__context-rail .app-shell__rail-heading span')),
+			one('.workspace-files__git-branch > :first-child').getBoundingClientRect().left,
+			one('.workspace-files__git li button > :first-child').getBoundingClientRect().left,
+			textLeft(one('.workspace-files__search label')),
+			one('.workspace-files__search > div').getBoundingClientRect().left,
+			one('.workspace-files__visibility input').getBoundingClientRect().left,
+			textLeft(one('.workspace-files__tree-header span')),
+			one('[role="treeitem"] .workspace-files__disclosure').getBoundingClientRect().left
+		];
+		for (const edge of railEdges) expect(edge).toBeCloseTo(railEdges[0]!, 0);
+
+		await userEvent.click(page.getByRole('treeitem', { name: 'README.md' }));
+		await expect.element(page.getByRole('textbox')).toHaveTextContent('Notes');
+		const name = one('.file-editor__header p');
+		expect(textLeft(name)).toBeCloseTo(textLeft(one('#workspace-files-title')), 0);
+		expect(textLeft(name)).toBeCloseTo(textLeft(one('.workspace-files__surface > header p')), 0);
+
+		const actionCenters = () =>
+			[...container.querySelectorAll(':scope .file-editor__actions button')].map((button) => centerY(button));
+		for (const center of actionCenters()) expect(center).toBeCloseTo(centerY(name), 0);
+
+		// The unsaved-changes state joins the name's line instead of pushing it up.
+		await userEvent.click(page.getByRole('textbox'));
+		await userEvent.keyboard('x');
+		await expect.element(page.getByText('Unsaved changes')).toBeInTheDocument();
+		for (const center of actionCenters()) expect(center).toBeCloseTo(centerY(name), 0);
+	});
+}

@@ -290,8 +290,8 @@
 	.terminal-surface {
 		display: grid;
 		grid-template-rows: auto auto minmax(0, 1fr);
-		height: calc(100% + 2 * clamp(var(--pau-space-4), 3vw, var(--pau-space-6)));
-		margin: calc(-1 * clamp(var(--pau-space-4), 3vw, var(--pau-space-6)));
+		height: calc(100% + 2 * var(--shell-main-padding));
+		margin: calc(-1 * var(--shell-main-padding));
 	}
 
 	.terminal-surface__bar {

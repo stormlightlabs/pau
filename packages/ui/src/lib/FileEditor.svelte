@@ -8,6 +8,7 @@
 	import { onMount, tick } from 'svelte';
 
 	import { revealLabel } from './context-menu';
+	import { sectionFolding } from './editor-folding';
 	import EmptyState from './EmptyState.svelte';
 	import type { EditorFileContent, FileEditorSource } from './types/file-editor';
 
@@ -110,7 +111,7 @@
 		const description =
 			LanguageDescription.matchFilename(languages, pathname) ??
 			(fallback ? LanguageDescription.matchLanguageName(languages, fallback) : null);
-		return description ? description.load() : [];
+		return description ? sectionFolding(await description.load()) : [];
 	}
 
 	function editorTheme(): Extension {
@@ -325,7 +326,7 @@
 		justify-content: space-between;
 		gap: var(--pau-space-3);
 		min-height: var(--pau-size-row-lg);
-		padding: var(--pau-space-1) var(--pau-space-3);
+		padding: var(--pau-space-1) var(--file-editor-inset);
 		border-bottom: 1px solid var(--pau-border);
 		background: var(--pau-surface);
 	}
@@ -335,11 +336,17 @@
 		margin: 0;
 	}
 
+	/* The file states follow the name on its line, so the name keeps the actions' center line. */
 	.file-editor__header > div:first-child {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		column-gap: var(--pau-space-3);
 		min-width: 0;
 	}
 
 	.file-editor__header > div:first-child > p {
+		min-width: 0;
 		overflow: hidden;
 		font: var(--pau-type-xs)/1.35 var(--pau-font-code);
 		text-overflow: ellipsis;
@@ -373,7 +380,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--pau-space-4);
-		padding: var(--pau-space-2) var(--pau-space-3);
+		padding: var(--pau-space-2) var(--file-editor-inset);
 		border-bottom: 1px solid var(--pau-warning);
 		background: color-mix(in srgb, var(--pau-warning) 12%, var(--pau-surface));
 		font-size: var(--pau-type-xs);
@@ -390,9 +397,13 @@
 		grid-row: 3;
 	}
 
-	/* Blocked and loading states start under the header's path, top-aligned like every other empty state. */
+	/*
+	 * Bars and blocked states start on the shell's inset, under the view title,
+	 * and blocked states sit at the top like every other empty state.
+	 */
 	.file-editor {
-		--empty-state-inset: var(--pau-space-3);
+		--file-editor-inset: var(--shell-inset, var(--pau-space-4));
+		--empty-state-inset: var(--file-editor-inset);
 	}
 
 	.file-editor__code {

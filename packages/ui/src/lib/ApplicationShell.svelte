@@ -391,7 +391,7 @@
 			aria-label={contextLabel}
 			onkeydown={(event) => contextOpen && closeOnEscape(event, closeContext)}
 			bind:offsetWidth={contextWidth}>
-			<div class="app-shell__rail-heading">
+			<div class="app-shell__rail-heading pau-section-label">
 				<span>{contextLabel}</span>
 				<button type="button" aria-label="Close navigation" onclick={closeContext}>
 					<Icon name="close" size={18} />
@@ -446,7 +446,7 @@
 			aria-label="Inspector"
 			onkeydown={(event) => !inspectorDocked && closeOnEscape(event, closeInspector)}
 			bind:offsetWidth={inspectorWidth}>
-			<div class="app-shell__rail-heading">
+			<div class="app-shell__rail-heading pau-section-label">
 				<span>Inspector</span>
 				<button type="button" aria-label="Close inspector" onclick={closeInspector}>
 					<Icon name="close" size={18} />
@@ -489,6 +489,18 @@
 		--shell-focus: var(--pau-focus);
 		--shell-context-width: var(--pau-size-rail-context);
 		--shell-inspector-width: var(--pau-size-rail-inspector);
+		/*
+		 * The main surface's padding. A view that runs edge to edge, such as
+		 * Files or Terminals, cancels it with this value, so the two never drift
+		 * apart at a breakpoint.
+		 */
+		--shell-main-padding: var(--pau-space-6);
+		/*
+		 * Where content starts inside a rail or an edge-to-edge view: rail
+		 * headings, rail rows, view titles, and the bars under them. Sharing it
+		 * keeps every label in a column on one leading edge.
+		 */
+		--shell-inset: var(--pau-space-4);
 		display: grid;
 		grid-template-areas:
 			'command command command'
@@ -734,12 +746,7 @@
 		align-items: center;
 		justify-content: space-between;
 		height: var(--pau-size-row-lg);
-		padding-inline: var(--pau-space-4) var(--pau-space-2);
-		color: var(--shell-muted);
-		font-size: var(--pau-type-label);
-		font-weight: var(--pau-weight-semibold);
-		letter-spacing: 0.055em;
-		text-transform: uppercase;
+		padding-inline: var(--shell-inset) var(--pau-space-2);
 	}
 
 	.app-shell__rail-heading span {
@@ -861,7 +868,7 @@
 
 	.app-shell__main-content {
 		min-height: 0;
-		padding: var(--pau-space-6);
+		padding: var(--shell-main-padding);
 		overflow: auto;
 	}
 
@@ -947,14 +954,14 @@
 			display: none;
 		}
 
-		.app-shell__main-content {
-			padding: var(--pau-space-5);
+		.app-shell {
+			--shell-main-padding: var(--pau-space-5);
 		}
 	}
 
 	@media (max-width: 48rem) {
-		.app-shell__main-content {
-			padding: var(--pau-space-4);
+		.app-shell {
+			--shell-main-padding: var(--pau-space-4);
 		}
 
 		.app-shell,

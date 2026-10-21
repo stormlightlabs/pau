@@ -2397,7 +2397,7 @@
 							{:else}
 								<article class="session-denial" aria-label="Sandbox denial">
 									<div>
-										<p class="session-denial__label">Sandbox denial</p>
+										<p class="session-denial__label pau-section-label">Sandbox denial</p>
 										<h2>{denialTitle(entry)}</h2>
 									</div>
 									{#if entry.target === 'file'}
@@ -2447,7 +2447,7 @@
 				{#if queuedCount > 0 || pendingQueue.length > 0}
 					<section class="session-queue" aria-label="Queued messages">
 						<header>
-							<h2>Queued <span>{queuedCount + pendingQueue.length}</span></h2>
+							<h2 class="pau-section-label">Queued <span>{queuedCount + pendingQueue.length}</span></h2>
 							{#if queuedCount > 0}
 								<button
 									type="button"
@@ -3342,10 +3342,6 @@
 	.session-denial .session-denial__label {
 		margin-bottom: var(--pau-space-1);
 		color: var(--pau-danger);
-		font-size: var(--pau-type-label);
-		font-weight: var(--pau-weight-semibold);
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
 	}
 
 	.session-denial code {
@@ -3387,10 +3383,6 @@
 
 	.session-queue h2 {
 		margin: 0;
-		color: var(--pau-text-muted);
-		font-size: var(--pau-type-label);
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
 	}
 
 	.session-queue h2 span {

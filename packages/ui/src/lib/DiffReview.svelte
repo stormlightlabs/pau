@@ -195,7 +195,7 @@
 		align-items: center;
 		gap: var(--pau-space-2);
 		min-height: var(--pau-size-target-touch);
-		padding: var(--pau-space-2) var(--pau-space-3);
+		padding: var(--pau-space-2) var(--shell-inset, var(--pau-space-4));
 		border-bottom: 1px solid var(--pau-border);
 		background: var(--pau-surface);
 	}

@@ -510,7 +510,7 @@
 					event.preventDefault();
 					void runSearch();
 				}}>
-				<label for={`workspace-search-${workspaceId}`}>Search files</label>
+				<label class="pau-section-label" for={`workspace-search-${workspaceId}`}>Search files</label>
 				<div>
 					<Icon name="search" size={16} />
 					<input id={`workspace-search-${workspaceId}`} type="search" bind:value={query} placeholder="Text in files" />
@@ -519,14 +519,14 @@
 
 			<fieldset class="workspace-files__visibility">
 				<legend>File visibility</legend>
-				<label>
+				<label class="pau-choice">
 					<input
 						type="checkbox"
 						checked={includeHidden}
 						onchange={(event) => setVisibility('hidden', event.currentTarget.checked)} />
 					Show hidden files
 				</label>
-				<label>
+				<label class="pau-choice">
 					<input
 						type="checkbox"
 						checked={includeIgnored}
@@ -535,7 +535,7 @@
 				</label>
 			</fieldset>
 
-			<div class="workspace-files__tree-header">
+			<div class="workspace-files__tree-header pau-section-label">
 				<span>Workspace</span>
 				{#if root && !root.loading}<small>{root.entries.length}</small>{/if}
 			</div>
@@ -727,7 +727,7 @@
 	.workspace-files__git {
 		display: grid;
 		gap: var(--pau-space-1);
-		padding: 0 var(--pau-space-3) var(--pau-space-3);
+		padding: 0 var(--shell-inset) var(--pau-space-3);
 		border-bottom: 1px solid var(--shell-border);
 	}
 
@@ -795,7 +795,7 @@
 	.workspace-files__git ul {
 		display: grid;
 		max-height: 10rem;
-		margin: 0 calc(-1 * var(--pau-space-3));
+		margin: 0 calc(-1 * var(--shell-inset));
 		padding: 0;
 		overflow: auto;
 		list-style: none;
@@ -808,7 +808,7 @@
 		gap: var(--pau-space-2);
 		width: 100%;
 		min-height: var(--pau-size-row-sm);
-		padding: var(--pau-space-1) var(--pau-space-3);
+		padding: var(--pau-space-1) var(--shell-inset);
 		color: var(--shell-text);
 		background: transparent;
 		border: 0;
@@ -907,21 +907,8 @@
 	.workspace-files__search {
 		display: grid;
 		gap: var(--pau-space-1);
-		padding: var(--pau-space-3) var(--pau-space-3) var(--pau-space-3);
+		padding: var(--pau-space-3) var(--shell-inset);
 		border-bottom: 1px solid var(--shell-border);
-	}
-
-	.workspace-files__search label {
-		text-transform: uppercase;
-	}
-
-	.workspace-files__search label,
-	.workspace-files__visibility legend,
-	.workspace-files__tree-header {
-		color: var(--shell-muted);
-		font-size: var(--pau-type-label);
-		font-weight: var(--pau-weight-semibold);
-		letter-spacing: 0.04em;
 	}
 
 	.workspace-files__search > div {
@@ -958,7 +945,7 @@
 		grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
 		gap: var(--pau-space-1) var(--pau-space-3);
 		margin: 0;
-		padding: var(--pau-space-3) var(--pau-space-3);
+		padding: var(--pau-space-3) var(--shell-inset);
 		border: 0;
 		border-bottom: 1px solid var(--shell-border);
 	}
@@ -974,7 +961,6 @@
 	.workspace-files__visibility label {
 		display: flex;
 		align-items: center;
-		gap: var(--pau-space-1);
 		min-height: 1.5rem;
 		color: var(--shell-muted);
 		white-space: nowrap;
@@ -989,8 +975,7 @@
 		align-items: center;
 		justify-content: space-between;
 		min-height: var(--pau-size-row-md);
-		padding: var(--pau-space-3) var(--pau-space-3) var(--pau-space-1);
-		text-transform: uppercase;
+		padding: var(--pau-space-3) var(--shell-inset) var(--pau-space-1);
 	}
 
 	.workspace-files__tree-header small {
@@ -998,7 +983,9 @@
 		font-variant-numeric: tabular-nums;
 	}
 
+	/* Each level puts its chevron under the parent's icon, up to three levels deep. */
 	.workspace-files__tree {
+		--tree-indent: calc(0.875rem + var(--pau-space-1));
 		display: grid;
 		min-width: 0;
 		padding-bottom: var(--pau-space-3);
@@ -1011,7 +998,8 @@
 		gap: var(--pau-space-1);
 		min-width: 0;
 		min-height: var(--pau-size-row-md);
-		padding: 0.25rem 0.65rem 0.25rem min(calc(0.65rem + var(--tree-depth) * 0.8rem), 4rem);
+		padding: var(--pau-space-1) var(--shell-inset) var(--pau-space-1)
+			calc(var(--shell-inset) + min(var(--tree-depth), 3) * var(--tree-indent));
 		color: var(--shell-muted);
 		background: transparent;
 		border: 0;
@@ -1052,7 +1040,7 @@
 	.workspace-files__state,
 	.workspace-files__branch-state {
 		margin: 0;
-		padding: var(--pau-space-3);
+		padding: var(--pau-space-3) var(--shell-inset);
 		color: var(--shell-muted);
 	}
 
@@ -1083,19 +1071,19 @@
 		display: grid;
 		grid-template-rows: auto minmax(0, 1fr);
 		min-height: 100%;
-		margin: calc(-1 * clamp(var(--pau-space-4), 3vw, var(--pau-space-6)));
+		margin: calc(-1 * var(--shell-main-padding));
 	}
 
 	/* The editor scrolls inside itself, so the surface takes the pane height instead of the content height. */
 	.workspace-files__surface--editing {
-		height: calc(100% + 2 * clamp(var(--pau-space-4), 3vw, var(--pau-space-6)));
+		height: calc(100% + 2 * var(--shell-main-padding));
 		min-height: 0;
 		overflow: hidden;
 	}
 
 	/* Line the empty state up with the header's title. */
 	.workspace-files__surface {
-		--empty-state-inset: var(--pau-space-4);
+		--empty-state-inset: var(--shell-inset);
 	}
 
 	/* The match count centers on the title line, as in the shared view header. */
@@ -1105,7 +1093,7 @@
 		align-items: center;
 		column-gap: var(--pau-space-4);
 		min-height: 3.5rem;
-		padding: var(--pau-space-3) var(--pau-space-4);
+		padding: var(--pau-space-3) var(--shell-inset);
 		border-bottom: 1px solid var(--shell-border);
 	}
 
@@ -1163,7 +1151,7 @@
 		gap: var(--pau-space-2);
 		width: 100%;
 		min-width: 0;
-		padding: var(--pau-space-3) var(--pau-space-4);
+		padding: var(--pau-space-3) var(--shell-inset);
 		color: var(--shell-text);
 		background: transparent;
 		border: 0;

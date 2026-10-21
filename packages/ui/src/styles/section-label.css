@@ -1,0 +1,14 @@
+/*
+ * The one role for labels that name a stable pane region, such as a rail
+ * heading, "Search files", or "Workspace" above the file tree. Every such
+ * label shares this size, weight, tracking, and case, so labels in one column
+ * read as one set. Components own the label's position and padding, and may
+ * recolor it for a state such as a denial, but must not change its type.
+ */
+.pau-section-label {
+	color: var(--pau-text-muted);
+	font-size: var(--pau-type-label);
+	font-weight: var(--pau-weight-semibold);
+	letter-spacing: 0.055em;
+	text-transform: uppercase;
+}

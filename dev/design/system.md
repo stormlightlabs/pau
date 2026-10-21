@@ -99,6 +99,13 @@ and rail values. `packages/ui` mirrors those names as CSS custom properties, so
 `--pau-size-row-md`. Type sizes use `--pau-type-*` because `--pau-text` names
 the text color.
 
+Content in a rail, and in a view that runs edge to edge such as Files, starts
+`space/4` in from the column's edge. Rail headings, section labels, the branch
+row, the search field, top-level tree rows, the view title, and the bars under
+it share that leading edge. An edge-to-edge view cancels the main surface's
+padding with the shell's own value at every width, so it never overhangs the
+column.
+
 - Desktop window: opens at 1440×900, within 90% of the screen, and never
   smaller than 800×560, so the context rail always fits beside the session.
 - Product rail: about 48–56px.
@@ -145,6 +152,9 @@ weights 400, 500, and 600. Fold any heavier weight into 600.
   Diagnostics, MCP, Sandbox, the saved-session picker, and an empty state that
   fills the surface. A count or status chip beside the title centers on the
   title line.
+- Labels that name a pane region, such as rail headings, "Search files", and
+  "Queued", use the one section label role (`pau-section-label`): 11px/600,
+  uppercase, and tracked, in muted text unless a state recolors it.
 - Markdown headings descend one step per level, all at 600: h1 18px, h2 16px,
   h3 14px, and h4–h6 13px, with h5 and h6 muted.
 - Use weight and spacing before large size jumps.
@@ -194,10 +204,11 @@ quiet. A notice inside a surface, such as the Pi readiness notice, uses
 secondary buttons so it never competes with the surface's primary. Actions that
 remove or end something use the danger variant. A disabled primary drops the
 accent fill for the raised surface and muted text, and never relies on
-opacity, so it cannot read as enabled. The shared `pau-button` variants in
-`packages/ui` own these colors and the size: a `row-md` (32px) height and
-`type-md` (14px) text in every view, toolbars and banners included. Components
-place and space buttons but do not resize them.
+opacity, so it cannot read as enabled. A disabled secondary fades its outline,
+so a row of unavailable actions still ranks the primary first. The shared
+`pau-button` variants in `packages/ui` own these colors and the size: a
+`row-md` (32px) height and `type-md` (14px) text in every view, toolbars and
+banners included. Components place and space buttons but do not resize them.
 
 Controls that show or hide a rail, sidebar, or inspector belong in the top app
 bar. Keep task-specific actions in the task surface.

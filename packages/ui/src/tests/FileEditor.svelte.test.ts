@@ -188,3 +188,23 @@ test('keeps the retry for a read that can succeed later', async () => {
 	await expect.poll(() => source.read).toHaveBeenCalledTimes(2);
 	await expect.element(page.getByRole('button', { name: /Reveal in Finder|Show in folder/ })).not.toBeInTheDocument();
 });
+
+test('shows Markdown fold markers on sections but not on paragraphs', async () => {
+	const content = ['# Notes', '', 'A paragraph that', 'spans two lines.', '', '## Next', '', '- One', '- Two', ''].join(
+		'\n'
+	);
+	const editorSource = source(file({ path: 'notes.md', content }));
+	const { container } = await render(FileEditor, { path: 'notes.md', source: editorSource, pollInterval: 60_000 });
+	await expect.element(page.getByRole('textbox')).toHaveTextContent('Notes');
+
+	const lines = [...container.querySelectorAll('.cm-line')];
+	const foldedLines = () =>
+		// The gutter keeps a hidden marker to measure its width.
+		[...container.querySelectorAll(':scope .cm-foldGutter [title]')]
+			.filter((marker) => getComputedStyle(marker).visibility !== 'hidden')
+			.map((marker) => {
+				const top = marker.getBoundingClientRect().top;
+				return lines.find((line) => Math.abs(line.getBoundingClientRect().top - top) < 4)?.textContent;
+			});
+	await expect.poll(foldedLines).toEqual(['# Notes', '## Next']);
+});

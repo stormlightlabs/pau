@@ -85,3 +85,7 @@ Cloud sandboxes and hosted execution are not planned.
 ## Parking Lot
 
 - We don't need an h1 (`#`) on svx pages (it makes the title redundant)
+- Finish rebuilding `pau.fig` from `dev/design`. A partial rebuild holds new
+  variables, shared components, and the session frames, including the status
+  line and a filtered, grouped model list. A copy of the earlier file sits
+  beside it as `pau.before-rebuild.fig`.

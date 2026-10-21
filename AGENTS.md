@@ -156,8 +156,8 @@ bounded visual verification. For each changed surface:
 - List the screenshot paths and measurements in the handoff so a reviewer can
   check them.
 
-When `pau.fig` draws the surface, build to its frame and report each place
-where the result differs.
+Treat `pau.fig` and the prototype pages as guidance, not a specification.
+`dev/design` owns the decisions where they disagree.
 
 Storybook indexes no stories from worktrees under `.claude/`, so take those
 screenshots from a temporary Vitest browser test and delete it afterwards.

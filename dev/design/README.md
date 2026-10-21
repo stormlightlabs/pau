@@ -12,10 +12,11 @@ and implementation policy remain defined by [`PLAN.md`](../PLAN.md).
   commitments.
 
 The OpenPencil design file `pau.fig` and the HTML screens in
-[`dev/prototype`](../prototype/README.md) draw these decisions. Update the owning
-brief, the affected frames, and their HTML pages together when a durable design
-decision changes. A visual-only adjustment does not need a prose change unless
-it changes the recorded system or surface contract.
+[`dev/prototype`](../prototype/README.md) draw these decisions as guidance.
+Where a frame or page disagrees with these documents, the documents win.
+Update the owning brief, the affected frames, and their HTML pages together
+when a durable design decision changes. A visual-only adjustment does not need
+a prose change unless it changes the recorded system or surface contract.
 
 ## Settled direction
 

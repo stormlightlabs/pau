@@ -2,41 +2,6 @@
 
 ## Polish and motion
 
-### 2.236 Design file rebuild
-
-Status: planned
-Blocked by: none
-
-Clear `pau.fig` and rebuild it from `dev/design`. Until this unit is complete,
-the prototype HTML pages are the visual reference wherever the file disagrees.
-
-- Save a copy of the current file before clearing it.
-- Recreate the Theme, Site, and Scale variable collections from
-  `dev/prototype/styles/tokens.css`, using Overpass and Overpass Mono and the
-  type scale in `dev/design/system.md`.
-- Build the shared components first: the top bar, product rail, context rail,
-  buttons, fields, the dropdown and its list, chips, tabs, section labels,
-  disclosure rows, the composer footer, and the Pau and agent marks. Bind
-  every color, type size, spacing, and radius to a variable.
-- Build each screen in `dev/design/surfaces.md` from those components at
-  1440×900, with a 900px frame for each surface that recomposes when narrow.
-- Draw the session states that the prototype lacks: pending and "Not sent"
-  prompts, an open model list, and a long transcript.
-- Draw the session status line from 2.278 and record its layout in
-  `dev/design/system.md`.
-- Drop the old prototype site chrome: the workbench sidebar, page header, and
-  hub card.
-- Update `dev/prototype/README.md` to describe the rebuilt file.
-
-Verification:
-
-- Run the OpenPencil lint and overlap analysis on every page and fix each
-  finding.
-- Measure each frame's rows: controls in a row share a center line, and
-  stacked content shares a leading edge.
-- Compare each frame's structure and copy against its HTML page, and list
-  every place where the shipped application differs from the frame.
-
 ### 2.221 Busy indicator timing
 
 Status: planned
@@ -197,4 +162,3 @@ Verification:
 - Component-test computed rule width and focus ring width with each media
   query emulated.
 - Check every shipped theme in Storybook.
-

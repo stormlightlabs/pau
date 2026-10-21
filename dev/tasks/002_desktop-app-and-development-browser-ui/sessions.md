@@ -90,10 +90,10 @@ Verification:
 ### 2.278 Session status line
 
 Status: planned
-Blocked by: 2.236
+Blocked by: none
 
-Add one status line under the composer, as the frame in `pau.fig` draws it,
-with what Pi's terminal footer shows and the composer does not: the working
+Add one status line under the composer, using the session frames in `pau.fig`
+as guidance, with what Pi's terminal footer shows and the composer does not: the working
 directory and branch, input and output tokens, cache reads and writes, and
 session cost from `get_session_stats`, followed by extension statuses. Move
 extension statuses out of their current block into the line. Refresh the

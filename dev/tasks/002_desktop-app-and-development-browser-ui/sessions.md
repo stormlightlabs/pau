@@ -87,6 +87,26 @@ Verification:
 
 ## Session status and attention
 
+### 2.278 Session status line
+
+Status: planned
+Blocked by: 2.236
+
+Add one status line under the composer, as the frame in `pau.fig` draws it,
+with what Pi's terminal footer shows and the composer does not: the working
+directory and branch, input and output tokens, cache reads and writes, and
+session cost from `get_session_stats`, followed by extension statuses. Move
+extension statuses out of their current block into the line. Refresh the
+numbers after each turn, and truncate the path from the left before dropping
+any number in a narrow window.
+
+Verification:
+
+- Component-test the line with no usage, a long path, several extension
+  statuses, and missing stats.
+- Screenshot it in the application shell at 1440×900 and 900px and measure
+  it against the composer's leading edge.
+
 ### 2.206 Attention navigation
 
 Status: planned

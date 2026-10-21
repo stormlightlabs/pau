@@ -2,64 +2,40 @@
 
 ## Polish and motion
 
-### 2.235 Typography scale and Overpass
-
-Status: in progress
-Status note: Implemented and tested. The visual review in each theme at 1440
-and 900px remains.
-Blocked by: none
-
-Make Overpass Variable the default UI font and Overpass Mono the code font,
-both bundled from Fontsource. Keep IBM Plex Sans as a selectable UI font and
-drop IBM Plex Mono. Adopt this starting scale:
-
-| Element                              | Size    | Weight |
-| ------------------------------------ | ------- | ------ |
-| Main task heading                    | 18px    | 600    |
-| Application body                     | 14px    | 400    |
-| Workspace names and inspector values | 13px    | 500    |
-| Commands, paths, and metadata        | 12–13px | 400    |
-| Section labels                       | 11px    | 600    |
-
-Replace the 20px step with 18px, add weight tokens for 400, 500, and 600, and
-fold ad hoc 650 and 700 weights into 600. Allow 11px only for uppercase,
-letter-spaced section labels, and record that exception where the 12px floor
-is stated. Move body text that sits at 12px today to 14px, and leave true
-metadata at 12–13px. Update `dev/design/system.md` and the prototype styles
-and pages together. 2.236 carries the change into `pau.fig`.
-
-Verification:
-
-- Component-test that the default preference resolves to Overpass, that IBM
-  Plex Sans remains selectable, and that code uses Overpass Mono.
-- Confirm no product text other than section labels renders below 12px.
-- Review the session view, inspector, Diagnostics, and an overlay in each
-  shipped theme at 1440 and 900px widths.
-
-### 2.236 Design file cleanup
+### 2.236 Design file rebuild
 
 Status: planned
-Blocked by: 2.235
+Blocked by: none
 
-Bring `pau.fig` back in line with `dev/design` and the prototype pages. Until
-this unit is complete, the prototype HTML pages are the current visual
-reference wherever the two disagree.
+Clear `pau.fig` and rebuild it from `dev/design`. Until this unit is complete,
+the prototype HTML pages are the visual reference wherever the file disagrees.
 
-- Fix overlapping and clipped text in every frame.
-- Delete the components left from the old prototype site chrome, including
-  the workbench sidebar, page header, and hub card, and rebuild the `index`
-  page without them.
-- Rebuild screens from the shared components and bind colors, type, spacing,
-  and radii to the token variables.
-- Apply the Overpass fonts and the type scale from 2.235.
-- Add the pending and "Not sent" prompt states to the session frames.
-- Update `dev/prototype/README.md` to match the file.
+- Save a copy of the current file before clearing it.
+- Recreate the Theme, Site, and Scale variable collections from
+  `dev/prototype/styles/tokens.css`, using Overpass and Overpass Mono and the
+  type scale in `dev/design/system.md`.
+- Build the shared components first: the top bar, product rail, context rail,
+  buttons, fields, the dropdown and its list, chips, tabs, section labels,
+  disclosure rows, the composer footer, and the Pau and agent marks. Bind
+  every color, type size, spacing, and radius to a variable.
+- Build each screen in `dev/design/surfaces.md` from those components at
+  1440×900, with a 900px frame for each surface that recomposes when narrow.
+- Draw the session states that the prototype lacks: pending and "Not sent"
+  prompts, an open model list, and a long transcript.
+- Draw the session status line from 2.278 and record its layout in
+  `dev/design/system.md`.
+- Drop the old prototype site chrome: the workbench sidebar, page header, and
+  hub card.
+- Update `dev/prototype/README.md` to describe the rebuilt file.
 
 Verification:
 
 - Run the OpenPencil lint and overlap analysis on every page and fix each
   finding.
-- Compare each frame's structure and copy against its HTML page.
+- Measure each frame's rows: controls in a row share a center line, and
+  stacked content shares a leading edge.
+- Compare each frame's structure and copy against its HTML page, and list
+  every place where the shipped application differs from the frame.
 
 ### 2.221 Busy indicator timing
 
@@ -221,3 +197,40 @@ Verification:
 - Component-test computed rule width and focus ring width with each media
   query emulated.
 - Check every shipped theme in Storybook.
+
+### 2.279 Overlay dismissal
+
+Status: planned
+Blocked by: none
+
+Close every dropdown, list, and details panel the same way: a pointer press
+outside it, Escape, or a window blur closes it and returns focus to its
+trigger. The model list ignores outside presses today because each overlay
+handles dismissal itself. Move the shared behavior into one helper and use it
+in Select, ModelPicker, ContextMeter, SessionPicker, and ContextMenu.
+
+Verification:
+
+- Component-test outside press, Escape, and focus return for each overlay,
+  including a press on another overlay's trigger.
+- Open the model list with a full provider list in the application shell at
+  1440×900 and 900px, and screenshot it open and after an outside press.
+
+### 2.280 Files view alignment
+
+Status: planned
+Blocked by: none
+
+Line up the Files view on shared leading edges and center lines. Today the
+"Files" label sits 5px right of the other rail headings, the view title and
+the open file name start at different edges, and the editor actions read as
+equal weight, with "Check for changes" heavier than Save. Save is the primary
+action and Revert is secondary. Show folding chevrons only on lines that fold
+a section, such as headings and lists, not on every paragraph.
+
+Verification:
+
+- Measure the rail headings, branch row, search field, and tree rows to one
+  leading edge, and the open file name and editor actions to one center line.
+- Screenshot the Files view in the application shell at 1440×900 and 900px
+  with a long Markdown file, a clean file, an edited file, and no open file.

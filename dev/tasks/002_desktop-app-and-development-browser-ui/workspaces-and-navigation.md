@@ -131,6 +131,28 @@ Verification:
 - Cover ranked name matches, ignored and hidden files, a result limit, and a
   large fixture tree.
 
+### 2.281 Workspace file watching
+
+Status: planned
+Blocked by: none
+
+Watch each open workspace for file changes in the server, using the `notify`
+crate, and push them to the client. The file tree, the branch and change
+count, and the open file update on their own, so "Check for changes" goes
+away. A clean open file reloads in place. An edited file keeps the user's
+changes and says the file changed on disk, with Reload and Keep mine. Batch
+bursts such as a branch switch into one update, and honor the same ignore
+rules as the tree.
+
+Verification:
+
+- Cover create, change, rename, and delete events, a burst of changes, an
+  ignored path, and stopping the watcher when the workspace closes.
+- Component-test a clean file reloading and an edited file keeping its
+  changes.
+- Edit, add, and delete a file outside Pau in a self-hosted workspace and
+  confirm the Files view follows without a refresh.
+
 ## Worktrees
 
 ### 2.27 Worktree attachment

@@ -147,6 +147,17 @@ bounded visual verification. For each changed surface:
   edge.
 - Check each state the surface can reach, including empty, long content,
   disabled, and error.
+- Use real data volumes, such as a full model list or a large workspace, not
+  two-item fixtures.
+- Walk the whole path with the mouse and the keyboard. Open and dismiss each
+  overlay by an outside press and Escape, and confirm where focus returns.
+- Fix broken tasks and missing states before visual drift, and visual drift
+  before cleanup.
+- List the screenshot paths and measurements in the handoff so a reviewer can
+  check them.
+
+When `pau.fig` draws the surface, build to its frame and report each place
+where the result differs.
 
 Storybook indexes no stories from worktrees under `.claude/`, so take those
 screenshots from a temporary Vitest browser test and delete it afterwards.

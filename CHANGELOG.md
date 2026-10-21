@@ -8,11 +8,6 @@
   and changed-file count update on their own, and an open file reloads in
   place. If you have unsaved edits, Pau keeps them and offers Keep mine or
   Reload.
-
-## 2026-10-18
-
-### Desktop
-
 - The model list, dropdowns, the usage details, and context menus now close
   when you click outside them, press Escape, or switch windows, and focus goes
   back to the control that opened them. Clicking another dropdown opens it
@@ -22,6 +17,11 @@
   with Save and Revert. An unavailable Revert no longer outweighs Save, and
   Markdown files show fold arrows only on headings, lists, quotes, code blocks,
   and tables.
+
+## 2026-10-18
+
+### Desktop
+
 - Thinking, tool calls, and tool groups now open and close with the same chevron
   and highlight on hover, transcript text lines up on one edge, and the session
   rail's status marks and buttons are spaced and sized evenly.

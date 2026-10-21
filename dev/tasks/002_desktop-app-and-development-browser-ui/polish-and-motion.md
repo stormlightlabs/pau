@@ -198,24 +198,6 @@ Verification:
   query emulated.
 - Check every shipped theme in Storybook.
 
-### 2.279 Overlay dismissal
-
-Status: planned
-Blocked by: none
-
-Close every dropdown, list, and details panel the same way: a pointer press
-outside it, Escape, or a window blur closes it and returns focus to its
-trigger. The model list ignores outside presses today because each overlay
-handles dismissal itself. Move the shared behavior into one helper and use it
-in Select, ModelPicker, ContextMeter, SessionPicker, and ContextMenu.
-
-Verification:
-
-- Component-test outside press, Escape, and focus return for each overlay,
-  including a press on another overlay's trigger.
-- Open the model list with a full provider list in the application shell at
-  1440×900 and 900px, and screenshot it open and after an outside press.
-
 ### 2.280 Files view alignment
 
 Status: planned

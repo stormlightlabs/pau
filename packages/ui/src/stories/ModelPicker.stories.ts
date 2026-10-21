@@ -34,6 +34,21 @@ export const OpenList: Story = {
 	}
 };
 
+export const FullList: Story = {
+	args: { load: async () => modelFixtures.full },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const trigger = await canvas.findByRole('button', { name: 'Model: Claude Sonnet 4.5' });
+		await userEvent.click(trigger);
+		const list = canvas.getByRole('group', { name: 'Models' });
+		// The list scrolls inside its cap instead of growing past the window.
+		await expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+		await userEvent.click(document.body);
+		await waitFor(() => expect(canvas.queryByRole('group', { name: 'Models' })).toBeNull());
+		await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+	}
+};
+
 export const SelectionPending: Story = {
 	args: { onSelect: () => new Promise<void>(() => {}) },
 	play: async ({ canvasElement }) => {

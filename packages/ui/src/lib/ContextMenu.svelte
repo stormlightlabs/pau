@@ -3,6 +3,7 @@
 	import { onMount, tick } from 'svelte';
 
 	import type { ContextMenuRequest } from './context-menu';
+	import { dismissible } from './dismissal';
 	import { returnFocus } from './focus-return';
 
 	type Props = {
@@ -55,7 +56,7 @@
 		items()[index]?.focus();
 	}
 
-	/** Closes the menu. Focus returns to the invoker unless the operator moved it elsewhere with the pointer. */
+	/** Closes the menu. Focus returns to the invoker unless a press outside the menu moved it elsewhere. */
 	function close(restoreFocus = true): void {
 		if (closed) return;
 		closed = true;
@@ -96,7 +97,7 @@
 	}
 
 	function handleKeydown(event: KeyboardEvent): void {
-		if (event.key === 'Escape' || event.key === 'Tab') {
+		if (event.key === 'Tab') {
 			event.preventDefault();
 			event.stopPropagation();
 			close();
@@ -114,16 +115,10 @@
 		event.preventDefault();
 		focusItem(next);
 	}
-
-	function handlePointerdown(event: PointerEvent): void {
-		if (menu && !menu.contains(event.target as Node)) close(false);
-	}
 </script>
 
 <svelte:window
-	onpointerdowncapture={handlePointerdown}
 	onresize={() => close(false)}
-	onblur={() => close(false)}
 	onwheelcapture={(event) => {
 		if (menu && !menu.contains(event.target as Node)) close(false);
 	}} />
@@ -139,6 +134,11 @@
 	style:left={`${left}px`}
 	style:top={`${top}px`}
 	style:transform-origin={origin}
+	{@attach dismissible({
+		close: () => close(false),
+		// Closing unmounts the menu before a press restores focus, so the invoker is read now.
+		restoreFocus: returnFocus.bind(undefined, request.invoker)
+	})}
 	onkeydown={handleKeydown}
 	oncontextmenu={(event) => event.preventDefault()}>
 	{#each request.items as item, index (item.id)}

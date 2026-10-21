@@ -3,6 +3,7 @@ import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import Select, { type SelectOption } from '../lib/Select.svelte';
+import { dismissals } from './dismiss-actions';
 
 type Fruit = 'apple' | 'apricot' | 'banana' | 'blueberry' | 'cherry';
 
@@ -108,6 +109,35 @@ test('Escape closes without a change and returns focus to the trigger', async ()
 	await expect.element(trigger()).toHaveAttribute('aria-expanded', 'false');
 	expect(onChange).not.toHaveBeenCalled();
 	expect(document.activeElement).toBe(trigger().element());
+});
+
+test.each(dismissals)('%s closes the list and returns focus to the trigger', async (_, dismiss) => {
+	const { onChange } = await renderSelect();
+	await userEvent.click(trigger());
+	await expect.element(option('Cherry')).toBeVisible();
+
+	await dismiss();
+
+	await expect.element(trigger()).toHaveAttribute('aria-expanded', 'false');
+	await expect.poll(() => document.activeElement).toBe(trigger().element());
+	expect(onChange).not.toHaveBeenCalled();
+});
+
+test('a press on another control closes the list and leaves focus on that control', async () => {
+	await renderSelect();
+	const field = document.createElement('input');
+	field.ariaLabel = 'Other field';
+	field.style.cssText = 'position: fixed; top: 0; right: 0;';
+	document.body.append(field);
+	await userEvent.click(trigger());
+
+	await userEvent.click(page.getByRole('textbox', { name: 'Other field' }));
+
+	await expect.element(trigger()).toHaveAttribute('aria-expanded', 'false');
+	// Focus return waits for the press to settle, so give it the same chance before checking.
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(document.activeElement).toBe(field);
+	field.remove();
 });
 
 test('Tab closes the list and moves on', async () => {

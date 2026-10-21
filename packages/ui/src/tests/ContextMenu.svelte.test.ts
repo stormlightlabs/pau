@@ -4,6 +4,7 @@ import { render } from 'vitest-browser-svelte';
 
 import { contextMenuRequest, isContextMenuKey, revealLabel, type ContextMenuItem } from '../lib/context-menu';
 import ContextMenu from '../lib/ContextMenu.svelte';
+import { dismissals } from './dismiss-actions';
 import '../styles/tokens.css';
 import { applyTheme } from './apply-theme';
 
@@ -99,6 +100,16 @@ test('closes on Escape and returns focus to the invoker', async () => {
 	expect(onClose).toHaveBeenCalledOnce();
 	expect(onSelect).not.toHaveBeenCalled();
 	expect(document.activeElement).toBe(invoker);
+});
+
+test.each(dismissals)('%s closes the menu and returns focus to the invoker', async (_, dismiss) => {
+	const { onSelect, onClose, invoker } = await renderMenu();
+
+	await dismiss();
+
+	expect(onClose).toHaveBeenCalledOnce();
+	expect(onSelect).not.toHaveBeenCalled();
+	await expect.poll(() => document.activeElement).toBe(invoker);
 });
 
 test('recognizes the menu keys and opens a keyboard menu below its element', () => {

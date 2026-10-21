@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 
 	import { anchorBox, placeAgainst } from './anchored-placement';
+	import { dismissible } from './dismissal';
 	import { createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
 	import type { ModelOption } from './types/session';
@@ -139,29 +140,26 @@
 		}
 	}
 
-	/** Closes the list and returns focus to the trigger, or the composer when the trigger is disabled. */
-	function close(): void {
+	/**
+	 * Closes the list. Focus returns to the trigger, or the composer when the
+	 * trigger is disabled, unless a press outside the list moved it elsewhere.
+	 */
+	function close(restoreFocus = true): void {
 		if (!open) return;
 		open = false;
-		focusReturn.restore();
+		if (restoreFocus) focusReturn.restore();
 	}
 
 	function handleScroll(event: Event): void {
 		if (!panel?.contains(event.target as Node)) place();
 	}
-
-	function handleKeydown(event: KeyboardEvent): void {
-		if (!open || event.key !== 'Escape') return;
-		event.stopPropagation();
-		close();
-	}
 </script>
 
 <svelte:window onscrollcapture={handleScroll} onresize={place} />
 
-<!-- Escape bubbles from the trigger and the list. -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="model-picker" onkeydown={handleKeydown}>
+<div
+	class="model-picker"
+	{@attach open && dismissible({ close: () => close(false), restoreFocus: () => focusReturn.restore() })}>
 	<button
 		bind:this={trigger}
 		type="button"

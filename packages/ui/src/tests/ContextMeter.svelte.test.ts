@@ -5,6 +5,7 @@ import { render } from 'vitest-browser-svelte';
 import { sessionFixtures } from '../fixtures/sessions';
 import { usageFixtures } from '../fixtures/usage';
 import ContextMeter from '../lib/ContextMeter.svelte';
+import { dismissals } from './dismiss-actions';
 import SessionView from '../lib/SessionView.svelte';
 
 const meter = () => page.getByRole('button', { name: /Context|Usage/ });
@@ -18,6 +19,18 @@ test('shows context use and opens the usage details', async () => {
 	await expect.element(details()).toHaveTextContent('Cost $1.23');
 	await userEvent.keyboard('{Escape}');
 	await expect.element(details()).not.toBeInTheDocument();
+});
+
+test.each(dismissals)('%s closes the usage details and returns focus to the meter', async (_, dismiss) => {
+	await render(ContextMeter, { usage: usageFixtures.normal });
+	await meter().click();
+	await expect.element(details()).toBeVisible();
+
+	await dismiss();
+
+	await expect.element(details()).not.toBeInTheDocument();
+	await expect.element(meter()).toHaveAttribute('aria-expanded', 'false');
+	await expect.poll(() => document.activeElement).toBe(meter().element());
 });
 
 test('uses the Select trigger with a chevron and opens upward from its left edge', async () => {

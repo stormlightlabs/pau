@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { dismissible } from './dismissal';
+	import { createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
 	import MetaText from './MetaText.svelte';
 	import {
@@ -23,7 +25,8 @@
 	let open = $state(false);
 	/** A keyboard open appears at once. A pointer open fades in, as Select's list does. */
 	let keyboardOpen = $state(false);
-	let root = $state<HTMLDivElement>();
+	let trigger = $state<HTMLButtonElement>();
+	const focusReturn = createFocusReturn();
 
 	const context = $derived(usage?.context);
 	const level = $derived<ContextLevel>(context ? contextLevel(context) : 'unknown');
@@ -43,29 +46,29 @@
 		return;
 	});
 
-	function closeOutside(event: PointerEvent): void {
-		if (open && root && !root.contains(event.target as Node)) open = false;
+	function toggle(event: MouseEvent): void {
+		if (open) {
+			open = false;
+			return;
+		}
+		focusReturn.capture(trigger);
+		// Assistive technology and keyboard clicks report no pointer detail.
+		keyboardOpen = event.detail === 0;
+		open = true;
 	}
 </script>
 
-<svelte:window
-	onpointerdown={closeOutside}
-	onkeydown={(event) => {
-		if (event.key === 'Escape') open = false;
-	}} />
-
 {#if supported && usage}
-	<div class="context-meter" bind:this={root}>
+	<div
+		class="context-meter"
+		{@attach open && dismissible({ close: () => (open = false), restoreFocus: () => focusReturn.restore() })}>
 		<button
+			bind:this={trigger}
 			type="button"
 			class={`context-meter__button context-meter__button--${level}`}
 			aria-expanded={open}
 			aria-controls="context-meter-details"
-			onclick={(event) => {
-				// Assistive technology and keyboard clicks report no pointer detail.
-				keyboardOpen = event.detail === 0;
-				open = !open;
-			}}>
+			onclick={toggle}>
 			<span class="context-meter__label">
 				<!--
 					The bar and the details name the context window, so the label shows only the figures.

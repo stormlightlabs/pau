@@ -373,6 +373,10 @@ Interaction rules:
   expand, collapse, or when notices appear.
 - Every overlay returns focus to its invoker, or to the composer if the
   invoker is gone.
+- Dropdowns, lists, details panels, and menus close on a press outside them,
+  Escape, or the window losing focus. A press on another control's trigger
+  closes the open overlay and opens that one in the same press. A press that
+  lands on a focusable element keeps focus there.
 - Prompts, renames, and queue edits update locally first and roll back on
   error. Process control waits for the process.
 - Waits under 400ms show no indicator. Waits over 10s show elapsed time or

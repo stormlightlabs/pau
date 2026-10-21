@@ -5,9 +5,13 @@ import { render } from 'vitest-browser-svelte';
 
 import { modelFixtures } from '../fixtures/models';
 import { sessionFixtures } from '../fixtures/sessions';
+import { usageFixtures } from '../fixtures/usage';
+import ContextMeter from '../lib/ContextMeter.svelte';
 import ModelPicker from '../lib/ModelPicker.svelte';
+import Select from '../lib/Select.svelte';
 import SessionView from '../lib/SessionView.svelte';
 import type { SessionWorkspace } from '../lib/types/session';
+import { dismissals } from './dismiss-actions';
 
 type PickerProps = ComponentProps<typeof ModelPicker>;
 
@@ -67,6 +71,52 @@ test('uses the Select surface: a chevron on the trigger and a check on the curre
 	const anchor = trigger.element().getBoundingClientRect();
 	expect(list.left).toBe(anchor.left);
 	expect(list.bottom).toBeLessThanOrEqual(anchor.top);
+});
+
+test.each(dismissals)('%s closes the list and returns focus to the trigger', async (_, dismiss) => {
+	const onSelect = vi.fn();
+	await renderPicker({ load: async () => modelFixtures.full, onSelect });
+	const trigger = page.getByRole('button', { name: 'Model: Claude Sonnet 4.5' });
+	await userEvent.click(trigger);
+	await expect.element(page.getByRole('group', { name: 'Models' })).toBeVisible();
+
+	await dismiss();
+
+	await expect.element(page.getByRole('group', { name: 'Models' })).not.toBeInTheDocument();
+	await expect.element(trigger).toHaveAttribute('aria-expanded', 'false');
+	await expect.poll(() => document.activeElement).toBe(trigger.element());
+	expect(onSelect).not.toHaveBeenCalled();
+});
+
+test('one press on another overlay trigger closes the open overlay and opens that one', async () => {
+	await renderPicker({ load: async () => modelFixtures.full, onSelect: vi.fn() });
+	await render(ContextMeter, { usage: usageFixtures.normal });
+	await render(Select, {
+		label: 'Thinking level',
+		options: [
+			{ value: 'low', label: 'Low' },
+			{ value: 'high', label: 'High' }
+		],
+		value: 'low'
+	});
+	const models = page.getByRole('group', { name: 'Models' });
+	const usage = page.getByRole('group', { name: 'Session usage' });
+	const level = page.getByRole('combobox', { name: 'Thinking level' });
+
+	await userEvent.click(page.getByRole('button', { name: 'Model: Claude Sonnet 4.5' }));
+	await expect.element(models).toBeVisible();
+
+	await userEvent.click(page.getByRole('button', { name: /Context/ }));
+	await expect.element(models).not.toBeInTheDocument();
+	await expect.element(usage).toBeVisible();
+
+	await userEvent.click(level);
+	await expect.element(usage).not.toBeInTheDocument();
+	await expect.element(level).toHaveAttribute('aria-expanded', 'true');
+
+	await userEvent.click(page.getByRole('button', { name: 'Model: Claude Sonnet 4.5' }));
+	await expect.element(level).toHaveAttribute('aria-expanded', 'false');
+	await expect.element(models).toBeVisible();
 });
 
 test('keeps the list open and explains a rejected selection', async () => {

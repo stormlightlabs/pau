@@ -17,6 +17,7 @@
 	import { tick } from 'svelte';
 
 	import { anchorBox, placeAgainst, type AnchoredSide } from './anchored-placement';
+	import { dismissible } from './dismissal';
 	import { createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
 
@@ -152,7 +153,7 @@
 		revealActive();
 	}
 
-	/** Closes the list. Focus returns to the trigger unless the pointer or Tab moved it elsewhere. */
+	/** Closes the list. Focus returns to the trigger unless a press outside the list or Tab moved it elsewhere. */
 	function close(restoreFocus = true): void {
 		if (!open) return;
 		open = false;
@@ -257,12 +258,6 @@
 			close(false);
 			return;
 		}
-		if (event.key === 'Escape') {
-			event.preventDefault();
-			event.stopPropagation();
-			close();
-			return;
-		}
 		if (isTypeaheadKey(event)) {
 			event.preventDefault();
 			const match = matchTypeahead(event.key);
@@ -336,12 +331,6 @@
 		else void show(event.detail === 0);
 	}
 
-	function handleOutsidePointer(event: PointerEvent): void {
-		if (!open) return;
-		const target = event.target as Node;
-		if (!list?.contains(target) && !trigger?.contains(target)) close(false);
-	}
-
 	function handleScroll(event: Event): void {
 		if (open && !list?.contains(event.target as Node)) place();
 		placeError();
@@ -349,15 +338,16 @@
 </script>
 
 <svelte:window
-	onpointerdowncapture={handleOutsidePointer}
 	onscrollcapture={handleScroll}
 	onresize={() => {
 		close(false);
 		placeError();
-	}}
-	onblur={() => close(false)} />
+	}} />
 
-<div class="select" class:select--block={block}>
+<div
+	class="select"
+	class:select--block={block}
+	{@attach open && dismissible({ close: () => close(false), restoreFocus: () => focusReturn.restore() })}>
 	<button
 		bind:this={trigger}
 		{id}

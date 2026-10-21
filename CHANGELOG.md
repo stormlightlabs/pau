@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- Pau now reopens its window at the size and place you left it, maximized if
+  it was. If that place is on a display that is no longer connected, the
+  window opens centered on your main screen instead.
 - The Files view now follows changes made outside Pau. The file tree, branch,
   and changed-file count update on their own, and an open file reloads in
   place. If you have unsaved edits, Pau keeps them and offers Keep mine or

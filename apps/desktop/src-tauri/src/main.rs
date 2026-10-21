@@ -2,6 +2,7 @@
 mod login_path;
 mod menu;
 mod startup;
+mod window_state;
 
 use pau_core::startup::StartupProgress;
 use pau_server::ServerOptions;
@@ -21,6 +22,9 @@ const WINDOW_SCREEN_SHARE: f64 = 0.9;
 
 /// Returns [`WINDOW_SIZE`] scaled down to fit the primary screen's work area,
 /// but never below [`WINDOW_MIN_SIZE`].
+///
+/// The window opens at this size, centered, on first launch and whenever
+/// [`window_state::restore`] leaves the saved state unused.
 fn window_size(app: &tauri::App) -> (f64, f64) {
     let Ok(Some(monitor)) = app.primary_monitor() else {
         return WINDOW_SIZE;
@@ -121,6 +125,12 @@ fn main() {
     let application = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(window_state::FLAGS)
+                .skip_initial_state(MAIN_WINDOW)
+                .build(),
+        )
         .manage(StartupState::new(login_step))
         .manage(PauLauncher::new(None, ServerOptions { diagnostics }))
         .invoke_handler(tauri::generate_handler![startup_progress])
@@ -133,9 +143,14 @@ fn main() {
                 .inner_size(width, height)
                 .min_inner_size(WINDOW_MIN_SIZE.0, WINDOW_MIN_SIZE.1)
                 .center()
+                .visible(false)
                 .build();
             match window {
-                Ok(_) => {
+                Ok(window) => {
+                    window_state::restore(&window);
+                    if let Err(error) = window.show().and_then(|()| window.set_focus()) {
+                        tracing::error!(%error, "Pau could not show its window");
+                    }
                     tauri::async_runtime::spawn(run_startup(app.handle().clone()));
                 }
                 Err(error) => {

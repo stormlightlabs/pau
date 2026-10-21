@@ -106,8 +106,11 @@ it share that leading edge. An edge-to-edge view cancels the main surface's
 padding with the shell's own value at every width, so it never overhangs the
 column.
 
-- Desktop window: opens at 1440×900, within 90% of the screen, and never
+- Desktop window: first opens at 1440×900, within 90% of the screen, and never
   smaller than 800×560, so the context rail always fits beside the session.
+  Later launches restore the last size, position, and maximized state. If the
+  saved position is off every connected display, the window opens centered at
+  the first-launch size.
 - Product rail: about 48–56px.
 - Context rail: about 224–256px.
 - Inspector: about 288–320px.

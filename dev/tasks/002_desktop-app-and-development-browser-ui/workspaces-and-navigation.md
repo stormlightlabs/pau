@@ -16,7 +16,9 @@ Verification:
 
 ### 2.177 Window size and position persistence
 
-Status: planned
+Status: in progress
+Status note: Implemented and tested. The relaunch check in the installed app
+remains.
 Blocked by: none
 
 Restore the main window's size, position, and maximized state on launch, and

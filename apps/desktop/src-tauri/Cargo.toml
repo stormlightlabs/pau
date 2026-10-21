@@ -12,9 +12,12 @@ tauri-build = { version = "2.5.6", features = [] }
 [dependencies]
 pau-core = { path = "../../../crates/core" }
 pau-server = { path = "../../../crates/server" }
+serde.workspace = true
+serde_json.workspace = true
 tauri = { version = "2.11.5", features = [] }
 tauri-plugin-dialog = "2.7.3"
 tauri-plugin-opener = "2.5.5"
+tauri-plugin-window-state = "~2.4.1"
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

@@ -55,7 +55,7 @@ test('submits input, editor text, and cancellation', async () => {
 	expect(editorResponse).toHaveBeenCalledWith({ id: 'editor', cancelled: true });
 });
 
-test('shows notifications, status text, and string widgets', async () => {
+test('shows notifications and string widgets but leaves status text to the status line', async () => {
 	await render(ExtensionUi, {
 		state: {
 			notifications: [{ id: 'notice', message: 'Command blocked', level: 'warning' }],
@@ -65,7 +65,7 @@ test('shows notifications, status text, and string widgets', async () => {
 	});
 
 	await expect.element(page.getByText('Command blocked')).toBeVisible();
-	await expect.element(page.getByText('Connecting')).toBeVisible();
+	await expect.element(page.getByText('Connecting')).not.toBeInTheDocument();
 	await expect.element(page.getByRole('region', { name: 'Extension widget: details' })).toHaveTextContent('Tools: 3');
 });
 

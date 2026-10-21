@@ -325,6 +325,8 @@ export type SessionWorkspace = {
 	name: string;
 	/** The workspace folder, when known. Path actions in the rail need it. */
 	path?: string;
+	/** The current Git branch. Absent outside a repository, on a detached HEAD, or until it is read. */
+	branch?: string;
 	sessions: SessionViewModel[];
 };
 

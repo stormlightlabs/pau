@@ -31,6 +31,7 @@ import {
 	getSessionMessages,
 	getSessionQueue,
 	getSessionUsage,
+	getWorkspaceGitStatus,
 	interruptSession,
 	listNativeSessions,
 	listSessionCommands,
@@ -258,6 +259,12 @@ export class LiveSessions {
 	/** Estimated context size after each manual compaction, by session and first kept entry. Compaction events omit it. */
 	#compactionEstimates = $state<Record<string, Record<string, number>>>({});
 	#usages = $state<Record<string, SessionUsage>>({});
+	/**
+	 * Current branch by workspace, for the session status line. The store reads
+	 * it on load and reconnect, and after each run settles, since the agent may
+	 * have switched branches during the run.
+	 */
+	#branches = $state<Record<string, string>>({});
 	/** Names sent to Pi that it has not confirmed yet, by session. The rail shows them meanwhile. */
 	#pendingNames = $state<Record<string, string>>({});
 	/** The session the operator is looking at. Changes to it never raise a marker. */
@@ -336,12 +343,24 @@ export class LiveSessions {
 
 	/** Reads the messages, extension UI, and message queue of every live session. */
 	#refresh(): void {
+		for (const workspace of this.#workspaces) void this.#readBranch(workspace.id);
 		for (const session of Object.values(this.#sessions)) {
 			if (!isLive(session)) continue;
 			void this.#readHistory(session.id);
 			void this.#readExtensionUi(session.id);
 			void this.#readQueue(session.id);
 			void this.#readUsage(session.id);
+		}
+	}
+
+	/** Reads a workspace's branch. A detached HEAD or a folder outside a repository has none. */
+	async #readBranch(workspaceId: string): Promise<void> {
+		try {
+			const { branch } = await getWorkspaceGitStatus(workspaceId, this.#fetcher);
+			if (branch) this.#branches[workspaceId] = branch;
+			else delete this.#branches[workspaceId];
+		} catch {
+			// The status line leaves the branch out until a later read succeeds.
 		}
 	}
 
@@ -490,13 +509,17 @@ export class LiveSessions {
 		}
 		for (const changed of state.events) {
 			if (changed.kind === 'workspace_changed') {
-				this.#rememberWorkspace(JSON.parse(changed.payload) as Workspace);
+				const workspace = JSON.parse(changed.payload) as Workspace;
+				if (this.#workspaces.every((known) => known.id !== workspace.id)) void this.#readBranch(workspace.id);
+				this.#rememberWorkspace(workspace);
 				continue;
 			}
 			if (changed.kind !== 'session_changed') continue;
 			const session = JSON.parse(changed.payload) as AgentSession;
 			const known = Object.hasOwn(this.#sessions, session.id);
-			this.#markUnseen(this.#sessions[session.id], session);
+			const previous = this.#sessions[session.id];
+			if (previous?.status === 'running' && session.status !== 'running') void this.#readBranch(session.workspace_id);
+			this.#markUnseen(previous, session);
 			this.#sessions[session.id] = session;
 			if (!known && !this.loading && isLive(session)) void this.#readHistory(session.id);
 			if (!known && isLive(session)) void this.#readUsage(session.id);
@@ -616,7 +639,8 @@ export class LiveSessions {
 		const known = this.#workspaces.map((workspace) => ({
 			id: workspace.id,
 			name: workspaceName(workspace),
-			path: workspace.path
+			path: workspace.path,
+			branch: this.#branches[workspace.id]
 		}));
 		const unknown = sessions
 			.map((session) => session.workspace_id)

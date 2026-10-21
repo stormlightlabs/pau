@@ -144,7 +144,7 @@ export const Rejected: Story = {
 	}
 };
 
-export const NotificationsStatusesAndWidgets: Story = {
+export const NotificationsAndWidgets: Story = {
 	args: {
 		state: {
 			notifications: [
@@ -152,10 +152,7 @@ export const NotificationsStatusesAndWidgets: Story = {
 				{ id: 'blocked', message: 'Command blocked by policy.', level: 'warning' },
 				{ id: 'failed', message: 'The MCP server stopped.', level: 'error' }
 			],
-			statuses: [
-				{ key: 'mcp', text: 'Connecting' },
-				{ key: 'index', text: '42 files' }
-			],
+			statuses: [],
 			widgets: [
 				{ key: 'plan', lines: ['1. Read the spec', '2. Write the test'], placement: 'above-editor' },
 				{ key: 'details', lines: ['Server: local', 'Tools: 3'], placement: 'below-editor' }
@@ -165,7 +162,6 @@ export const NotificationsStatusesAndWidgets: Story = {
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
 		await expect(canvas.getByRole('alert')).toHaveTextContent('The MCP server stopped.');
-		await expect(canvas.getByText('Connecting')).toBeVisible();
 		await expect(canvas.getByRole('region', { name: 'Extension widget: details' })).toHaveTextContent('Tools: 3');
 	}
 };

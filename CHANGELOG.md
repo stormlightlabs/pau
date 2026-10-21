@@ -12,6 +12,9 @@
 - You can now search terminal output, including lines that have scrolled away.
   Press ⌘F on macOS or Ctrl+Shift+F elsewhere, step through matches with Enter
   and Shift+Enter, and press Escape to go back to the shell.
+- A status line under the composer shows the session's folder and branch,
+  input and output tokens, cache reads and writes, and cost, and updates after
+  each turn. Extension status text moved into it.
 - The Files view now follows changes made outside Pau. The file tree, branch,
   and changed-file count update on their own, and an open file reloads in
   place. If you have unsaved edits, Pau keeps them and offers Keep mine or

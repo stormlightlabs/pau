@@ -226,6 +226,8 @@ export const sessionFixtures = {
 		{
 			id: 'pau',
 			name: 'Pau',
+			path: '/Users/operator/projects/pau',
+			branch: 'main',
 			sessions: [
 				session('running', {
 					title: 'Fix diff gutter',

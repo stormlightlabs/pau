@@ -87,6 +87,12 @@ context meter shows only the share used, and its details still list the
 window and token totals. Completion lists open as a popover above the
 composer, so the composer keeps its height and the transcript does not move.
 
+The status line under the composer starts and ends with the composer's
+controls and sets the folder, branch, and figures in the mono metadata role.
+Figures that are still zero stay hidden. When space runs short, the path loses
+its start first, the branch keeps its name up to a cap, the figures never
+shrink, and extension statuses wrap to a second row.
+
 ## Spatial system
 
 The spacing scale uses 4, 8, 12, 16, 24, and 32px steps, named `space/1` to

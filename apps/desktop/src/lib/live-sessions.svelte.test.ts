@@ -188,3 +188,48 @@ test('offers the thinking levels Pi reports for the current model', async () => 
 	report(['off'], 2);
 	await vi.waitFor(() => expect(levels()).toEqual(['off']));
 });
+
+test('reads the workspace branch on load and again after a run settles', async () => {
+	const socket = new FakeEventSocket('ws://test');
+	let branch: string | null = 'main';
+	const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+		const url = String(input);
+		if (url.endsWith('/api/sessions')) return Response.json([session]);
+		if (url.endsWith('/api/workspaces')) return Response.json([{ id: 'pau', name: 'Pau', path: '/work/pau' }]);
+		if (url.endsWith('/api/workspaces/pau/git/status')) return Response.json({ repository: true, branch, head: null });
+		return Response.json([]);
+	});
+	const sessions = new LiveSessions({
+		browserOrigin: 'http://localhost',
+		fetcher: fetcher as unknown as typeof fetch,
+		socketFactory: () => socket,
+		scheduleFrame: () => {}
+	});
+	sessions.connect();
+	socket.open();
+	await vi.waitFor(() => expect(sessions.workspaces[0]).toMatchObject({ path: '/work/pau', branch: 'main' }));
+
+	const change = (status: AgentSession['status'], sequence: number) =>
+		socket.receive({
+			type: 'event',
+			event: {
+				sequence,
+				timestamp: '2026-04-01T12:00:02Z',
+				workspace_id: 'pau',
+				session_id: 'session-1',
+				kind: 'session_changed',
+				payload: JSON.stringify({ ...session, status })
+			}
+		});
+	branch = 'feature';
+	change('running', 1);
+	expect(sessions.workspaces[0]?.branch).toBe('main');
+	change('idle', 2);
+	await vi.waitFor(() => expect(sessions.workspaces[0]?.branch).toBe('feature'));
+
+	// A detached HEAD has no branch to show.
+	branch = null;
+	change('running', 3);
+	change('idle', 4);
+	await vi.waitFor(() => expect(sessions.workspaces[0]?.branch).toBeUndefined());
+});

@@ -7,6 +7,7 @@
 	import type { ExtensionUiResponse, ExtensionUiState } from './types/session';
 
 	type Props = {
+		/** Extension UI to render. Its statuses belong to the session status line, so this ignores them. */
 		state: ExtensionUiState;
 		onRespond?: (response: ExtensionUiResponse) => void | Promise<void>;
 		onTimeout?: (requestId: string) => void;
@@ -159,14 +160,6 @@
 	</section>
 {/each}
 
-{#if extensionState.statuses.length > 0}
-	<div class="extension-ui__statuses" aria-label="Extension status">
-		{#each extensionState.statuses as status (status.key)}
-			<span><strong>{status.key}</strong> {status.text}</span>
-		{/each}
-	</div>
-{/if}
-
 {#if dialog}
 	<dialog
 		bind:this={dialogSurface}
@@ -316,22 +309,6 @@
 		font-size: var(--pau-type-xs);
 		line-height: 1.5;
 		white-space: pre-wrap;
-	}
-
-	.extension-ui__statuses {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--pau-space-2) var(--pau-space-4);
-		padding: var(--pau-space-2) var(--pau-space-3);
-		color: var(--pau-text-muted);
-		background: var(--pau-canvas);
-		border-inline: 1px solid var(--pau-border);
-		font-size: var(--pau-type-xs);
-	}
-
-	.extension-ui__statuses strong {
-		color: var(--pau-text);
-		font-weight: var(--pau-weight-semibold);
 	}
 
 	.extension-ui__dialog {

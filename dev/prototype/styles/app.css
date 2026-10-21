@@ -1387,6 +1387,35 @@ pre {
 	font-family: var(--pau-font-code);
 }
 
+/* Pi's terminal footer under the composer: folder, branch, totals, extension statuses. */
+.status-line {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--pau-space-1) var(--pau-space-4);
+	padding: 0 var(--pau-space-3) var(--pau-space-2);
+	color: var(--pau-text-muted);
+	font-size: var(--pau-type-xs);
+}
+
+.status-line__item,
+.status-line__figures {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--pau-space-1);
+	font-family: var(--pau-font-code);
+	white-space: nowrap;
+}
+
+.status-line__figures {
+	gap: var(--pau-space-3);
+	margin-inline-start: auto;
+}
+
+.status-line__extensions {
+	margin-inline-start: auto;
+}
+
 .inspector-section {
 	display: flex;
 	flex-direction: column;

@@ -34,6 +34,7 @@
 	import { builtinInvocation, withBuiltins, type BuiltinAction, type BuiltinInvocation } from './builtin-commands';
 	import { commandName, commandQuery, filterCommands } from './command-completion';
 	import ExtensionUi from './ExtensionUi.svelte';
+	import SessionStatusLine from './SessionStatusLine.svelte';
 	import { insertMention, mentionAt } from './file-mention';
 	import MentionCompletion from './MentionCompletion.svelte';
 	import { settlePendingPrompts, userMessageIds, type PendingPrompt } from './pending-prompts';
@@ -2712,6 +2713,12 @@
 						</form>
 					{/if}
 				</ExtensionUi>
+				<SessionStatusLine
+					path={activeWorkspace?.path}
+					branch={activeWorkspace?.branch}
+					usage={activeSession.usage}
+					usageSupported={activeSession.capabilities.usage ?? false}
+					statuses={activeSession.extensionUi?.statuses} />
 			</div>
 		</section>
 	{:else}

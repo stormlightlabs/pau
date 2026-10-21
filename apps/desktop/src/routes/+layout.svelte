@@ -8,6 +8,7 @@
 	import AppKeymap from '$lib/AppKeymap.svelte';
 	import { createDesktopNativeCapabilities, desktopNativeCapabilitiesContext } from '$lib/native-capabilities';
 	import { interfacePreferences } from '$lib/interface-preferences.svelte';
+	import { SessionAttention, sessionAttentionContext } from '$lib/session-attention';
 	import {
 		agentReadinessContext,
 		agentReadinessProblem,
@@ -21,6 +22,13 @@
 
 	const native = setContext(desktopNativeCapabilitiesContext, createDesktopNativeCapabilities());
 	setContext(externalLinkContext, native.openLink);
+	const { notify, setBadgeCount } = native;
+	const attention = setContext(
+		sessionAttentionContext,
+		notify && setBadgeCount
+			? new SessionAttention({ browserOrigin: location.origin, notifier: { notify, setBadgeCount } })
+			: undefined
+	);
 
 	// The browser development server has no startup to follow: its backend is
 	// already running behind the Vite proxy.
@@ -58,6 +66,16 @@
 		if (!ready) return;
 		untrack(() => interfacePreferences.connect());
 		return stopPreferences;
+	});
+
+	$effect(() => {
+		if (!ready || !attention) return;
+		attention.connect();
+		const stopFocus = native.onWindowFocusChange?.((focused) => attention.focus(focused));
+		return () => {
+			stopFocus?.();
+			attention.close();
+		};
 	});
 </script>
 

@@ -4,6 +4,10 @@
 
 ### Desktop
 
+- Pau now sends a system notification and badges its Dock icon when a session
+  waits for your input, asks a question, or exits unexpectedly while you are
+  in another window, view, or session. The notification names the session,
+  and the badge clears once you open it.
 - Pau now reopens its window at the size and place you left it, maximized if
   it was. If that place is on a display that is no longer connected, the
   window opens centered on your main screen instead.

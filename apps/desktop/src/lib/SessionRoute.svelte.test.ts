@@ -13,6 +13,7 @@ import { DESKTOP_CONNECTION_GLOBAL } from './api';
 import { productNavigation } from './app-navigation';
 import { desktopNativeCapabilitiesContext } from './native-capabilities';
 import { FakeEventSocket } from './fake-event-socket';
+import { SessionAttention, sessionAttentionContext } from './session-attention';
 import SessionRoute from './SessionRoute.svelte';
 
 const workspace: Workspace = {
@@ -1083,4 +1084,45 @@ test('branches from a user message in the transcript', async () => {
 	await expect.poll(() => branch.mock.calls.length).toBe(1);
 	expect(branch).toHaveBeenCalledWith(expect.objectContaining({ body: '{"entry_id":"u2"}' }));
 	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toHaveValue('Add a test.');
+});
+
+function changed(status: AgentSession['status']): ServerEvent {
+	return sessionChanged({ ...idleSession, status }).event;
+}
+
+test('reports the session on screen so its notifications use the rail title and its badge clears', async () => {
+	const notifier = {
+		notify: vi.fn().mockResolvedValue(undefined),
+		setBadgeCount: vi.fn().mockResolvedValue(undefined)
+	};
+	const attentionSockets: FakeEventSocket[] = [];
+	const attention = new SessionAttention({
+		browserOrigin: 'http://localhost:5173',
+		notifier,
+		socketFactory: (url) => {
+			const socket = new FakeEventSocket(url);
+			attentionSockets.push(socket);
+			return socket;
+		}
+	});
+	attention.connect();
+	attentionSockets[0]?.receive({ type: 'snapshot', snapshot: { sequence: 0, events: [changed('idle')] } });
+	const { props, sockets } = setup({ 'GET /api/sessions': () => json([idleSession]) });
+	const view = await render(SessionRoute, { props, context: new Map([[sessionAttentionContext, attention]]) });
+	sockets[0]?.open();
+	sockets[0]?.receive(output({ type: 'message_start', message: { role: 'user', content: 'Fix the gutter' } }));
+	await expect.element(page.getByRole('heading', { name: 'Fix the gutter' })).toBeVisible();
+
+	attention.focus(false);
+	attentionSockets[0]?.receive({ type: 'event', event: changed('waiting') });
+	expect(notifier.notify).toHaveBeenCalledWith({ title: 'Fix the gutter', body: 'Pi is waiting for your input.' });
+	expect(notifier.setBadgeCount).toHaveBeenLastCalledWith(1);
+
+	attention.focus(true);
+	expect(notifier.setBadgeCount).toHaveBeenLastCalledWith(undefined);
+
+	await view.unmount();
+	attentionSockets[0]?.receive({ type: 'event', event: changed('failed') });
+	expect(notifier.notify).toHaveBeenLastCalledWith({ title: 'Pi session', body: 'Pi exited unexpectedly.' });
+	attention.close();
 });

@@ -124,6 +124,7 @@ fn main() {
 
     let application = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         // Links open through the shared UI handler, which checks the scheme.
         // The plugin's own click script would open `tel:` links and any
         // `target="_blank"` anchor outside that check.

@@ -7,6 +7,7 @@
 	import { LiveSessions } from './live-sessions.svelte';
 	import { interfacePreferences } from './interface-preferences.svelte';
 	import { desktopNativeCapabilitiesContext, type DesktopNativeCapabilities } from './native-capabilities';
+	import { sessionAttentionContext, type SessionAttention } from './session-attention';
 	import { agentReadinessContext, type AgentReadinessSource } from './startup';
 
 	let {
@@ -48,7 +49,21 @@
 	/** Absent in the browser development server, which has no launch check. */
 	const agentReadiness = getContext<AgentReadinessSource | undefined>(agentReadinessContext);
 
+	/** Absent in the browser development server, which has no native notifications. */
+	const attention = getContext<SessionAttention | undefined>(sessionAttentionContext);
+
 	$effect(() => sessions.view(activeSessionId));
+	$effect(() => {
+		const sessionId = activeSessionId;
+		attention?.view(sessionId);
+		return () => attention?.leave(sessionId);
+	});
+	$effect(() =>
+		attention?.useTitles(
+			(sessionId) =>
+				workspaces.flatMap((workspace) => workspace.sessions).find((session) => session.id === sessionId)?.title
+		)
+	);
 
 	onMount(() => {
 		sessions.connect();

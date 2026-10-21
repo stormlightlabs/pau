@@ -72,6 +72,13 @@ export type EventStreamOptions = {
 	 * whenever it connects.
 	 */
 	watch?: string;
+	/**
+	 * Whether the first connection replays every event the server holds.
+	 * A stream that only reacts to new changes passes `false` and starts from
+	 * a snapshot. Later connections resume from the last applied sequence
+	 * either way.
+	 */
+	replay?: boolean;
 };
 
 /**
@@ -102,8 +109,9 @@ export class EventStreamClient {
 	/** Opens the stream or resumes it after a disconnect. */
 	connect(): void {
 		this.#stopped = false;
-		const { browserOrigin, watch } = this.#options;
-		const configuration = resolveEventSocket(browserOrigin, watch ? undefined : this.#state.sequence, watch);
+		const { browserOrigin, watch, replay = true } = this.#options;
+		const fromSnapshot = Boolean(watch) || (!replay && this.#state.sequence === 0);
+		const configuration = resolveEventSocket(browserOrigin, fromSnapshot ? undefined : this.#state.sequence, watch);
 		const socket = this.#socketFactory(configuration.url, configuration.protocols);
 		this.#socket = socket;
 		socket.addEventListener('open', () => {

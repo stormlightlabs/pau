@@ -2,6 +2,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import { openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 import { expect, test, vi } from 'vitest';
 
@@ -11,6 +12,11 @@ vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
 vi.mock('@tauri-apps/api/webview', () => ({ getCurrentWebview: vi.fn() }));
 vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: vi.fn() }));
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
+vi.mock('@tauri-apps/plugin-notification', () => ({
+	isPermissionGranted: vi.fn(),
+	requestPermission: vi.fn(),
+	sendNotification: vi.fn()
+}));
 vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn(), revealItemInDir: vi.fn() }));
 
 test('does not expose native window controls in development browser mode', () => {
@@ -79,5 +85,57 @@ test('forwards app menu choices until the listener stops', async () => {
 
 	expect(listen).toHaveBeenCalledWith(MENU_ACTION_EVENT, expect.any(Function));
 	expect(listener).toHaveBeenCalledWith('session.new');
+	expect(unlisten).toHaveBeenCalledOnce();
+});
+
+test('asks for notification permission on the first notification, not before', async () => {
+	vi.mocked(isPermissionGranted).mockResolvedValue(false);
+	vi.mocked(requestPermission).mockResolvedValue('granted');
+	const capabilities = createDesktopNativeCapabilities({ __TAURI_INTERNALS__: {} });
+	expect(isPermissionGranted).not.toHaveBeenCalled();
+
+	await capabilities.notify?.({ title: 'Fix the login bug', body: 'Pi is waiting for your input.' });
+	await capabilities.notify?.({ title: 'Fix the login bug', body: 'Pi exited unexpectedly.' });
+
+	expect(requestPermission).toHaveBeenCalledOnce();
+	expect(sendNotification).toHaveBeenCalledTimes(2);
+	expect(sendNotification).toHaveBeenCalledWith({ title: 'Fix the login bug', body: 'Pi is waiting for your input.' });
+});
+
+test('drops notifications the operator refused', async () => {
+	vi.mocked(sendNotification).mockClear();
+	vi.mocked(isPermissionGranted).mockResolvedValue(false);
+	vi.mocked(requestPermission).mockResolvedValue('denied');
+
+	await createDesktopNativeCapabilities({ __TAURI_INTERNALS__: {} }).notify?.({ title: 'Session', body: 'Body' });
+
+	expect(sendNotification).not.toHaveBeenCalled();
+});
+
+test('badges the app icon and follows window focus', async () => {
+	const setBadgeCount = vi.fn().mockResolvedValue(undefined);
+	const unlisten = vi.fn();
+	let emit: ((event: { payload: boolean }) => void) | undefined;
+	const onFocusChanged = vi.fn((handler: typeof emit) => {
+		emit = handler;
+		return Promise.resolve(unlisten);
+	});
+	const isFocused = vi.fn().mockResolvedValue(true);
+	vi.mocked(getCurrentWindow).mockReturnValue({ setBadgeCount, onFocusChanged, isFocused } as unknown as ReturnType<
+		typeof getCurrentWindow
+	>);
+	const capabilities = createDesktopNativeCapabilities({ __TAURI_INTERNALS__: {} });
+
+	await capabilities.setBadgeCount?.(3);
+	await capabilities.setBadgeCount?.(undefined);
+	const listener = vi.fn();
+	const stop = capabilities.onWindowFocusChange?.(listener);
+	await Promise.resolve();
+	emit?.({ payload: false });
+	stop?.();
+	await Promise.resolve();
+
+	expect(setBadgeCount.mock.calls).toEqual([[3], [undefined]]);
+	expect(listener.mock.calls).toEqual([[true], [false]]);
 	expect(unlisten).toHaveBeenCalledOnce();
 });

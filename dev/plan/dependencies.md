@@ -39,6 +39,20 @@ application, because the webview renders agent-generated content and an opened
 file could be an executable. Pau turns off the plugin's own link-click script,
 which would also open `tel:` links outside that handler.
 
+## Desktop notification dependency selection
+
+Use `tauri-plugin-notification` 2.4.0 and the matching
+`@tauri-apps/plugin-notification` package to tell the operator when a session
+out of view waits, asks a question, or fails. The plugin is MIT or Apache-2.0
+licensed and maintained in the Tauri plugins workspace. Releases from 2.5
+require Tauri 2.12. The Dock badge uses the window `setBadgeCount` API in Tauri
+itself and adds no dependency.
+
+The main window may check and request notification permission and send a
+notification. It gets no permission to schedule, list, or cancel them. On
+desktop the plugin reports no notification clicks, so a click focuses the app
+through the operating system and does not open the session.
+
 ## Development settings
 
 The browser development server loads the repository's `.env` with `dotenvy`

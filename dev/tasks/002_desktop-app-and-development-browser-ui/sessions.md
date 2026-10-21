@@ -156,7 +156,9 @@ Verification:
 
 ### 2.153 Attention notifications
 
-Status: planned
+Status: in progress
+Status note: Implemented and tested. Triggering a notification from a
+self-hosted Pi session remains.
 Blocked by: none
 
 Send a native notification and badge the app icon when a session waits for

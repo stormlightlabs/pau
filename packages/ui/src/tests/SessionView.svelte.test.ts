@@ -31,6 +31,60 @@ test.each(stateCases)('shows the %s state', async (_name, workspaces, activeSess
 	await expect.element(page.getByText(expectedText, { exact: false }).last()).toBeVisible();
 });
 
+test('offers Resume for a restored session and explains a failed resume', async () => {
+	const onResumeSession = vi.fn(async () => {
+		throw new Error('Pi could not open the session file.');
+	});
+	await render(SessionView, {
+		workspaces: sessionFixtures.idle,
+		restoredSession: { workspaceId: 'pau', id: 'native-3', title: 'Review the sandbox policy' },
+		onResumeSession
+	});
+
+	await expect.element(page.getByRole('heading', { level: 1, name: 'Review the sandbox policy' })).toBeVisible();
+	expect(onResumeSession).not.toHaveBeenCalled();
+	await userEvent.click(page.getByRole('button', { name: 'Resume', exact: true }));
+
+	expect(onResumeSession).toHaveBeenCalledWith('pau', 'native-3');
+	await expect.element(page.getByRole('alert')).toHaveTextContent('Pi could not open the session file.');
+});
+
+/** The top bar's breadcrumb text, which names the open workspace. */
+function identity(): string | null | undefined {
+	return document.querySelector('.app-shell__identity')?.textContent;
+}
+
+test('lists a restored session in the rail and names its workspace in the top bar', async () => {
+	const onOpenRestoredSession = vi.fn();
+	const workspaces = [{ id: 'ankify', name: 'ankify', sessions: [] }, ...sessionFixtures.idle];
+	const restoredSession = { workspaceId: 'ankify', id: 'native-3', title: 'Review the sandbox policy' };
+	const view = await render(SessionView, { workspaces, restoredSession, onOpenRestoredSession });
+
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	const row = page.getByRole('button', { name: /Review the sandbox policy/ });
+	await expect.element(row).toHaveAttribute('aria-current', 'page');
+	await expect.element(row).toHaveTextContent('Stopped');
+	await expect.element(page.getByText('No sessions yet')).not.toBeInTheDocument();
+	expect(identity()).toContain('ankify');
+
+	await view.rerender({ workspaces, restoredSession, onOpenRestoredSession, activeSessionId: 'session-idle' });
+	await expect.element(row).not.toHaveAttribute('aria-current');
+	expect(identity()).not.toContain('ankify');
+	await userEvent.click(row);
+	expect(onOpenRestoredSession).toHaveBeenCalledOnce();
+});
+
+test('disables Resume for a restored session while disconnected', async () => {
+	await render(SessionView, {
+		workspaces: sessionFixtures.idle,
+		disconnected: true,
+		restoredSession: { workspaceId: 'pau', id: 'native-3', title: 'Review the sandbox policy' },
+		onResumeSession: vi.fn()
+	});
+
+	await expect.element(page.getByRole('button', { name: 'Resume', exact: true })).toBeDisabled();
+});
+
 test('sends a prompt and interrupts a running session from the keyboard', async () => {
 	const onSend = vi.fn();
 	const onInterrupt = vi.fn();

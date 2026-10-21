@@ -615,6 +615,16 @@ export class LiveSessions {
 		};
 	}
 
+	/** The saved Pi session a session runs, once Pi has saved one. */
+	savedSessionId(sessionId: string): string | undefined {
+		return this.#sessions[sessionId]?.native_session_id ?? undefined;
+	}
+
+	/** The ID of the live session that runs a saved Pi session, if one does. */
+	liveSessionId(workspaceId: string, savedSessionId: string): string | undefined {
+		return this.#liveSessionFor(workspaceId, savedSessionId)?.id;
+	}
+
 	/** Records which session the operator is looking at and clears its marker. */
 	view(sessionId: string | undefined): void {
 		this.#viewed = sessionId;

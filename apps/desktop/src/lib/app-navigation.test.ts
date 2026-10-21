@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { NO_WORKSPACE_REASON, productNavigation } from './app-navigation';
+import { NO_WORKSPACE_REASON, productNavigation, workspaceViewRoute } from './app-navigation';
 
 function destinations(routeId: string | null, workspaceId?: string) {
 	return Object.fromEntries(
@@ -37,4 +37,15 @@ test('disables workspace views until a workspace is open', () => {
 test('marks Sessions active on a session route and nothing on an unknown route', () => {
 	expect(destinations('/workspaces/[workspaceId]/sessions/[sessionId]', 'pau').sessions?.active).toBe(true);
 	expect(Object.values(destinations(null, 'pau')).some((item) => item.active)).toBe(false);
+});
+
+test('describes workspace views to restore and leaves other routes out', () => {
+	expect(workspaceViewRoute('/workspaces/[workspaceId]/editor', 'pau')).toEqual({
+		workspace_id: 'pau',
+		view: 'files',
+		session_id: null,
+		saved_session_id: null
+	});
+	expect(workspaceViewRoute('/workspaces/[workspaceId]/sessions/[sessionId]', 'pau')).toBeUndefined();
+	expect(workspaceViewRoute('/diagnostics', undefined)).toBeUndefined();
 });

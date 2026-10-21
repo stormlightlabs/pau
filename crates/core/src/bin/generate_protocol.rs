@@ -12,7 +12,7 @@ use pau_core::{
     },
     persistence::{McpEnablement, Workspace},
     preferences::{
-        LastRoute, MotionPreference, NotificationPolicy, PaneWidths, ThemePreference,
+        LastRoute, LastView, MotionPreference, NotificationPolicy, PaneWidths, ThemePreference,
         UiFontPreference, UiPreferences,
     },
     readiness::{AgentReadiness, AgentReadinessReport},
@@ -75,6 +75,7 @@ fn main() {
         NotificationPolicy::decl(&config),
         MotionPreference::decl(&config),
         PaneWidths::decl(&config),
+        LastView::decl(&config),
         LastRoute::decl(&config),
         UiPreferences::decl(&config),
         FileEntryKind::decl(&config),

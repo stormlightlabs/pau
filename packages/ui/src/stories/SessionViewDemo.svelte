@@ -9,6 +9,7 @@
 		MessageQueue,
 		ModelOption,
 		PromptQueue,
+		SavedSession,
 		SavedSessionList,
 		SessionWorkspace,
 		TranscriptEntry
@@ -38,6 +39,7 @@
 		openFailure,
 		replyOnSend = false,
 		savedSessions,
+		restoredSession,
 		productItems,
 		agentReadiness,
 		models,
@@ -89,6 +91,8 @@
 		replyOnSend?: boolean;
 		/** Saved sessions each workspace lists. When set, the rail offers the saved-session picker. */
 		savedSessions?: SavedSessionList;
+		/** A stopped session the rail lists and the view offers to resume, until it resumes. */
+		restoredSession?: SavedSession & { workspaceId: string };
 		productItems?: ShellNavItem[];
 		/** Models the session can switch to. When set, the composer offers the model and thinking pickers. */
 		models?: ModelOption[];
@@ -118,6 +122,7 @@
 	}
 
 	let activeSessionId = $state<string>();
+	let restoredDismissed = $state(false);
 	let lastAction = $state('No action sent');
 
 	$effect.pre(() => {
@@ -190,9 +195,11 @@
 	{loading}
 	{disconnected}
 	onLoadSavedSessions={savedSessions ? async () => savedSessions : undefined}
-	onResumeSession={savedSessions
+	restoredSession={restoredDismissed ? undefined : restoredSession}
+	onResumeSession={savedSessions || restoredSession
 		? (workspaceId, savedSessionId) => {
 				lastAction = `${workspaceId}: resume ${savedSessionId}`;
+				restoredDismissed = true;
 			}
 		: undefined}
 	onStartSession={startSession}
@@ -200,6 +207,7 @@
 		lastAction = `${sessionId}: start again`;
 	}}
 	onSelectSession={(sessionId) => (activeSessionId = sessionId)}
+	onOpenRestoredSession={() => (activeSessionId = undefined)}
 	onSend={send}
 	onLoadModels={models ? async () => models : undefined}
 	onSelectModel={(sessionId, model) => {

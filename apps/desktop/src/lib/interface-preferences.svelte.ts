@@ -1,4 +1,4 @@
-import type { MotionPreference, UiPreferences } from '@stormlightlabs/pau-protocol';
+import type { LastRoute, MotionPreference, UiPreferences } from '@stormlightlabs/pau-protocol';
 import type { ShellPaneWidths } from '@stormlightlabs/pau-ui';
 
 import { getUiPreferences, updateUiPreferences } from './api';
@@ -32,9 +32,15 @@ export type InterfacePreferencesOptions = {
  * reduced-motion query decides. Every save writes the whole document built
  * from the latest loaded copy, so a motion change keeps the saved widths and
  * a resize keeps the motion setting.
+ *
+ * The view the operator has open is saved too, through
+ * {@link InterfacePreferences.rememberRoute}, so the next launch can return
+ * to it.
  */
 export class InterfacePreferences {
 	#saved: UiPreferences | undefined;
+	/** The view this window last opened. Unset until it opens one, so a save keeps the stored view. */
+	#route: LastRoute | undefined;
 	#timer: ReturnType<typeof setTimeout> | undefined;
 	#saving: Promise<void> | undefined;
 	#stream: EventStreamClient | undefined;
@@ -65,7 +71,12 @@ export class InterfacePreferences {
 			const base = this.#saved ?? (await getUiPreferences(this.#options.fetcher));
 			const { contextRail, inspector } = this.widths;
 			this.#saved = await updateUiPreferences(
-				{ ...base, motion: this.motion, pane_widths: { context_rail: contextRail, inspector } },
+				{
+					...base,
+					motion: this.motion,
+					pane_widths: { context_rail: contextRail, inspector },
+					last_route: this.#route ?? base.last_route
+				},
 				this.#options.fetcher
 			);
 		} catch {
@@ -129,12 +140,29 @@ export class InterfacePreferences {
 		void this.#flush();
 	}
 
+	/** Saves the view the operator opened, unless it is already the saved one. */
+	rememberRoute(route: LastRoute): void {
+		const current = this.#route ?? this.#saved?.last_route;
+		if (current && sameRoute(current, route)) return;
+		this.#route = route;
+		void this.#flush();
+	}
+
 	/** Applies widths the operator chose and schedules saving them. */
 	resize(widths: ShellPaneWidths): void {
 		this.widths = widths;
 		clearTimeout(this.#timer);
 		this.#timer = setTimeout(() => void this.#flush(), this.#options.saveDelayMs ?? SAVE_DELAY_MS);
 	}
+}
+
+function sameRoute(left: LastRoute, right: LastRoute): boolean {
+	return (
+		left.workspace_id === right.workspace_id &&
+		left.view === right.view &&
+		left.session_id === right.session_id &&
+		left.saved_session_id === right.saved_session_id
+	);
 }
 
 /** The pane widths shared by every route in this window. */

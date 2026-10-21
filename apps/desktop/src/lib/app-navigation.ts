@@ -1,3 +1,4 @@
+import type { LastRoute, LastView } from '@stormlightlabs/pau-protocol';
 import type { ShellNavItem } from '@stormlightlabs/pau-ui';
 
 /** Explains workspace views while no workspace is open. */
@@ -40,4 +41,39 @@ export function productNavigation(routeId: string | null, workspaceId: string | 
 		{ id: 'diagnostics', label: 'Diagnostics', icon: 'diagnostics', href: '/diagnostics' }
 	];
 	return items.map((item) => (item.id === active ? { ...item, active: true } : item));
+}
+
+/** Route IDs of the workspace views other than sessions. */
+export const WORKSPACE_VIEW_ROUTES = {
+	files: '/workspaces/[workspaceId]/editor',
+	terminal: '/workspaces/[workspaceId]/terminal',
+	processes: '/workspaces/[workspaceId]/processes',
+	sandbox: '/workspaces/[workspaceId]/sandbox'
+} as const satisfies Record<Exclude<LastView, 'session'>, string>;
+
+/**
+ * Describes a workspace view to save as the view to open on the next launch.
+ * Sessions describe themselves, since the URL alone does not say which saved
+ * Pi session they run. Views outside a workspace, such as diagnostics, return
+ * `undefined` and leave the saved view as it was.
+ */
+export function workspaceViewRoute(routeId: string | null, workspaceId: string | undefined): LastRoute | undefined {
+	if (workspaceId === undefined) return undefined;
+	const view = (Object.keys(WORKSPACE_VIEW_ROUTES) as (keyof typeof WORKSPACE_VIEW_ROUTES)[]).find(
+		(candidate) => WORKSPACE_VIEW_ROUTES[candidate] === routeId
+	);
+	return view && { workspace_id: workspaceId, view, session_id: null, saved_session_id: null };
+}
+
+const launchRoute = { claimed: false };
+
+/**
+ * Returns `true` the first time this window asks, and `false` after. Only the
+ * first view a window opens returns to the saved view, so coming back to
+ * Sessions later shows the session list as usual.
+ */
+export function claimLaunchRoute(): boolean {
+	if (launchRoute.claimed) return false;
+	launchRoute.claimed = true;
+	return true;
 }

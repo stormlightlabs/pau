@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 
 	import { productNavigation } from '$lib/app-navigation';
+	import { interfacePreferences } from '$lib/interface-preferences.svelte';
 	import SessionRoute from '$lib/SessionRoute.svelte';
 
 	function updateSessionRoute(workspaceId: string, sessionId: string): void {
@@ -15,6 +16,7 @@
 
 <SessionRoute
 	initialSessionId={page.params.sessionId}
+	onRouteChange={(route) => interfacePreferences.rememberRoute(route)}
 	onSessionChange={updateSessionRoute}
 	onOpenTerminal={(workspaceId) => void goto(resolve('/workspaces/[workspaceId]/terminal', { workspaceId }))}
 	navigation={(workspaceId) => productNavigation(page.route.id, workspaceId)} />

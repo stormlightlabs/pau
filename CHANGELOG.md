@@ -11,6 +11,10 @@
 - Loading messages no longer flash when something loads quickly. They appear
   only after a wait of 400ms, then stay for at least half a second so they
   don't flicker.
+- Pau now opens on the workspace view you had open when you quit: a session,
+  Files, Terminal, Processes, or Agent sandbox. A session that stopped when
+  Pau quit shows its name and a Resume button, and Pi starts only when you
+  click it. If the workspace or session is gone, Pau opens the session list.
 - Pau now reopens its window at the size and place you left it, maximized if
   it was. If that place is on a display that is no longer connected, the
   window opens centered on your main screen instead.

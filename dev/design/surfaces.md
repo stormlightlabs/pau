@@ -88,6 +88,15 @@ the state, shows the failure reason, and offers Start again, which resumes the
 saved conversation when Pi kept one. An unsent draft returns to the composer
 once the session runs. Compact and Stop stay hidden until then.
 
+On launch, Pau returns to the workspace view that was open last. A session
+that is still running opens as it was. A session that ended with the app shows
+its name, a Stopped status, and the same notice under the header with Resume.
+The session rail lists it as the selected row under its workspace and keeps it
+like other stopped sessions until it resumes. Pau never resumes it on its own,
+because resuming starts Pi. When the
+workspace or saved session no longer exists, launch opens the session list
+without an error.
+
 Each workspace in the session rail has a start control. When a session cannot
 start, the task surface names the cause and offers a retry. While the backend
 connection is down, the session stays readable but sending, starting, and

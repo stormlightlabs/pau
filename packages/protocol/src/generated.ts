@@ -206,15 +206,25 @@ context_rail: number | null,
  */
 inspector: number | null, };
 
+export type LastView = "session" | "files" | "terminal" | "processes" | "sandbox";
+
 export type LastRoute = {
 /**
  * Workspace that was open.
  */
 workspace_id: string,
 /**
+ * View that was open in the workspace.
+ */
+view: LastView,
+/**
  * Session that was open in the workspace, if any.
  */
-session_id: string | null, };
+session_id: string | null,
+/**
+ * Saved Pi session that the open session ran, if Pi had saved one.
+ */
+saved_session_id: string | null, };
 
 export type UiPreferences = {
 /**

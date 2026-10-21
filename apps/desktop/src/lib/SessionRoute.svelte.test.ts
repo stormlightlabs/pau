@@ -1,6 +1,7 @@
 import type {
 	AgentSession,
 	ExtensionDialog,
+	LastRoute,
 	ServerEvent,
 	SessionExtensionUi,
 	Workspace
@@ -1125,4 +1126,142 @@ test('reports the session on screen so its notifications use the rail title and 
 	attentionSockets[0]?.receive({ type: 'event', event: changed('failed') });
 	expect(notifier.notify).toHaveBeenLastCalledWith({ title: 'Pi session', body: 'Pi exited unexpectedly.' });
 	attention.close();
+});
+
+/** Preferences that saved `lastRoute` as the view to restore. */
+function savedPreferences(lastRoute: LastRoute): Route {
+	return () =>
+		json({
+			version: 1,
+			theme: 'eldritch',
+			ui_font: 'overpass',
+			notifications: 'attention',
+			motion: 'system',
+			pane_widths: { context_rail: null, inspector: null },
+			last_route: lastRoute
+		});
+}
+
+test('reopens the live session that was open last', async () => {
+	const other: AgentSession = { ...idleSession, id: 'session-2', started_at: '2026-04-01T12:01:00Z', name: 'Docs' };
+	const changes: string[] = [];
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession, other]),
+		'GET /api/preferences': savedPreferences({
+			workspace_id: 'pau',
+			view: 'session',
+			session_id: 'session-2',
+			saved_session_id: null
+		})
+	});
+	await render(SessionRoute, {
+		...props,
+		restoreLastRoute: true,
+		onSessionChange: (_workspace: string, id: string) => {
+			changes.push(id);
+		}
+	});
+
+	await expect.element(page.getByRole('heading', { level: 1, name: 'Docs' })).toBeVisible();
+	expect(changes).toEqual(['session-2']);
+});
+
+test('shows a stopped session with Resume and starts it only when asked', async () => {
+	const start = vi.fn(() => json({ ...idleSession, status: 'starting' }, 201));
+	const routes: LastRoute[] = [];
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/workspaces/pau/pi-sessions': () => json(savedList),
+		'GET /api/preferences': savedPreferences({
+			workspace_id: 'pau',
+			view: 'session',
+			session_id: 'gone',
+			saved_session_id: 'native-1'
+		}),
+		'POST /api/sessions': start
+	});
+	await render(SessionRoute, { ...props, restoreLastRoute: true, onRouteChange: (route) => void routes.push(route) });
+
+	await expect.element(page.getByRole('heading', { level: 1, name: 'Fix the gutter' })).toBeVisible();
+	await expect.element(page.getByText('Resume it to load the conversation and continue.')).toBeVisible();
+	expect(start).not.toHaveBeenCalled();
+	expect(routes).toEqual([{ workspace_id: 'pau', view: 'session', session_id: null, saved_session_id: 'native-1' }]);
+
+	// Resume is reachable with Tab from the start of the page.
+	const resume = page.getByRole('button', { name: 'Resume', exact: true });
+	for (let step = 0; step < 20 && document.activeElement !== resume.element(); step += 1) await userEvent.tab();
+	await expect.element(resume).toHaveFocus();
+	await userEvent.keyboard('{Enter}');
+
+	await expect.element(page.getByText('Starting the agent process…')).toBeVisible();
+	expect(start).toHaveBeenCalledWith(expect.objectContaining({ body: expect.stringContaining('"native-1"') }));
+	expect(routes.at(-1)).toMatchObject({ view: 'session', session_id: 'session-1' });
+});
+
+/** The top bar's breadcrumb text, which names the open workspace. */
+function identity(): string | null | undefined {
+	return document.querySelector('.app-shell__identity')?.textContent;
+}
+
+test('keeps the restored session in the rail and names its workspace in the top bar', async () => {
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/workspaces/pau/pi-sessions': () => json(savedList),
+		'GET /api/preferences': savedPreferences({
+			workspace_id: 'pau',
+			view: 'session',
+			session_id: null,
+			saved_session_id: 'native-1'
+		})
+	});
+	await render(SessionRoute, { ...props, restoreLastRoute: true });
+
+	await expect.element(page.getByText('Resume it to load the conversation and continue.')).toBeVisible();
+	expect(identity()).toContain('Pau');
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	const restored = page.getByRole('button', { name: /Fix the gutter/ });
+	await expect.element(restored).toHaveAttribute('aria-current', 'page');
+
+	await userEvent.click(document.getElementById('session-row-session-1')!);
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeVisible();
+	await expect.element(restored).not.toHaveAttribute('aria-current');
+	await userEvent.click(restored);
+	await expect.element(page.getByText('Resume it to load the conversation and continue.')).toBeVisible();
+});
+
+test.each([
+	['a removed workspace', { workspace_id: 'removed', view: 'session', session_id: 's', saved_session_id: 'n' }],
+	[
+		'a saved session Pi no longer has',
+		{ workspace_id: 'pau', view: 'session', session_id: 's', saved_session_id: 'n' }
+	],
+	['a removed workspace view', { workspace_id: 'removed', view: 'files', session_id: null, saved_session_id: null }]
+] satisfies [string, LastRoute][])('falls back to the default view for %s', async (_name, lastRoute) => {
+	const onOpenView = vi.fn();
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/workspaces/pau/pi-sessions': () => json(savedList),
+		'GET /api/preferences': savedPreferences(lastRoute)
+	});
+	await render(SessionRoute, { ...props, restoreLastRoute: true, onOpenView });
+
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeVisible();
+	expect(page.getByRole('alert').elements()).toEqual([]);
+	expect(onOpenView).not.toHaveBeenCalled();
+});
+
+test('opens the workspace view that was open last', async () => {
+	const onOpenView = vi.fn();
+	const { props } = setup({
+		'GET /api/preferences': savedPreferences({
+			workspace_id: 'pau',
+			view: 'terminal',
+			session_id: null,
+			saved_session_id: null
+		})
+	});
+	await render(SessionRoute, { ...props, restoreLastRoute: true, onOpenView });
+
+	await vi.waitFor(() => expect(onOpenView).toHaveBeenCalledWith('terminal', 'pau'));
+	await expect.element(page.getByRole('heading', { name: 'Loading sessions…' })).toBeVisible();
 });

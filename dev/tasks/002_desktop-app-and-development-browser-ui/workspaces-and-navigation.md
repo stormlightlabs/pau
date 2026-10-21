@@ -2,18 +2,6 @@
 
 ## Shell and navigation
 
-### 2.176 Restore last view on launch
-
-Status: planned
-Blocked by: none
-
-Reopen the last workspace and session route on launch, showing a stopped
-session from history with a **Resume** action instead of resuming it.
-
-Verification:
-
-- Component-test a live session, a stopped session, and a removed workspace.
-
 ### 2.177 Window size and position persistence
 
 Status: in progress

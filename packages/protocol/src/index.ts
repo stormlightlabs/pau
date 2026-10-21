@@ -30,6 +30,7 @@ export type {
 	ExtensionWidgetPlacement,
 	HealthResponse,
 	LastRoute,
+	LastView,
 	MotionPreference,
 	NotificationPolicy,
 	PaneWidths,

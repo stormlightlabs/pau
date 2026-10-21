@@ -110,6 +110,20 @@ export const WorkspaceWithoutSessions: Story = {
 		await expect(canvas.getByRole('button', { name: 'Saved sessions in ankify' })).toBeEnabled();
 	}
 };
+export const RestoredStoppedSession: Story = {
+	args: {
+		workspaces: sessionFixtures.idle,
+		initialSessionId: undefined,
+		restoredSession: { workspaceId: 'pau', id: 'native-3', title: 'Review the sandbox policy' }
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByRole('heading', { level: 1, name: 'Review the sandbox policy' })).toBeInTheDocument();
+		await expect(canvas.getByText('Resume it to load the conversation and continue.')).toBeInTheDocument();
+		await userEvent.click(canvas.getByRole('button', { name: /^Resume$/ }));
+		await expect(await canvas.findByText('pau: resume native-3')).toBeInTheDocument();
+	}
+};
 export const SavedSessionPicker: Story = {
 	args: {
 		workspaces: [{ id: 'ankify', name: 'ankify', path: '/Users/operator/projects/ankify', sessions: [] }],

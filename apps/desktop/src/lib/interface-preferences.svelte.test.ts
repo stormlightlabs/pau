@@ -51,6 +51,19 @@ describe('interface preferences', () => {
 		expect(panes.widths).toEqual({ contextRail: 300, inspector: null });
 	});
 
+	test('saves the open view once and keeps the widths', async () => {
+		const server = backend(preferences(300, null));
+		const panes = new InterfacePreferences({ fetcher: server.fetcher });
+		await panes.load();
+		const route = { workspace_id: 'pau', view: 'files', session_id: null, saved_session_id: null } as const;
+
+		panes.rememberRoute(route);
+		await vi.waitFor(() => expect(server.puts).toHaveLength(1));
+		panes.rememberRoute({ ...route });
+
+		expect(server.puts).toEqual([{ ...preferences(300, null), last_route: route }]);
+	});
+
 	test('saves once after resizing stops and keeps the other preferences', async () => {
 		vi.useFakeTimers();
 		const server = backend(preferences(null, null));

@@ -79,6 +79,7 @@
 		ThinkingLevel,
 		PromptQueue,
 		SandboxDenial,
+		SavedSession,
 		SavedSessionList,
 		SessionBranchOutcome,
 		SessionSearchHit,
@@ -174,8 +175,22 @@
 		 * offers a session picker for each workspace.
 		 */
 		onLoadSavedSessions?: (workspaceId: string) => Promise<SavedSessionList>;
-		/** Resumes a saved session. A rejected promise shows its message in the picker. */
+		/**
+		 * Resumes a saved session. A rejected promise shows its message in the
+		 * picker, or beside Resume for `restoredSession`.
+		 */
 		onResumeSession?: (workspaceId: string, savedSessionId: string) => void | Promise<void>;
+		/**
+		 * A stopped session that has no live session behind it, such as the
+		 * session that was open when Pau last closed. The rail lists it under its
+		 * workspace like other stopped sessions. It is open while no
+		 * `activeSessionId` is passed, and the view then names it and offers
+		 * Resume through `onResumeSession`. It never starts the agent on its
+		 * own, because resuming starts a process.
+		 */
+		restoredSession?: SavedSession & { workspaceId: string };
+		/** Opens `restoredSession` when the operator picks its rail row. */
+		onOpenRestoredSession?: () => void;
 		/**
 		 * Starts a stopped or failed session again, from its saved conversation
 		 * when the agent kept one. Without it, an ended session offers no way to
@@ -308,6 +323,8 @@
 		onStartSession,
 		onLoadSavedSessions,
 		onResumeSession,
+		restoredSession,
+		onOpenRestoredSession,
 		onRestartSession,
 		onLoadSessionTree,
 		onSearchSession,
@@ -495,6 +512,9 @@
 	/** The ended session whose restart is in flight, so its button cannot start it twice. */
 	let restartingSessionId = $state<string>();
 	let restartError = $state<string>();
+	/** Whether the restored session's resume is in flight, so Resume cannot start it twice. */
+	let resumingRestored = $state(false);
+	let resumeError = $state<string>();
 	/** The open context menu, if any. */
 	let contextMenu = $state<ContextMenuRequest>();
 	/** Why the last rail action from a context menu failed. */
@@ -531,8 +551,14 @@
 	/** Prompts that join the transcript. Queued prompts wait in the queue list instead. */
 	const pendingTranscript = $derived(activePending.filter((prompt) => !prompt.queue));
 	const pendingQueue = $derived(activePending.filter((prompt) => prompt.queue));
+	/** Whether the restored session is the one open, which happens while no live session is. */
+	const restoredOpen = $derived(restoredSession !== undefined && activeSession === undefined);
 	const activeWorkspace = $derived(
-		workspaces.find((workspace) => workspace.sessions.some((session) => session.id === activeSessionId))
+		workspaces.find((workspace) =>
+			restoredOpen
+				? workspace.id === restoredSession?.workspaceId
+				: workspace.sessions.some((session) => session.id === activeSessionId)
+		)
 	);
 	const canQueue = $derived(
 		activeSession ? activeSession.capabilities.steer || activeSession.capabilities.followUp : false
@@ -1005,6 +1031,20 @@
 		}
 	}
 
+	/** Resumes the restored session. Only the operator's click calls this. */
+	async function resumeRestored(restored: SavedSession & { workspaceId: string }): Promise<void> {
+		if (!onResumeSession || resumingRestored) return;
+		resumingRestored = true;
+		resumeError = undefined;
+		try {
+			await onResumeSession(restored.workspaceId, restored.id);
+		} catch (cause) {
+			resumeError = cause instanceof Error ? cause.message : 'The session could not resume. Try again.';
+		} finally {
+			resumingRestored = false;
+		}
+	}
+
 	/** Starts the ended session again. The draft stays in the composer for the new run. */
 	async function restart(sessionId: string): Promise<void> {
 		if (!onRestartSession || restartingSessionId) return;
@@ -1032,6 +1072,15 @@
 		draftTyped = false;
 		historyCursor = idleHistoryCursor;
 		onSelectSession(sessionId);
+	}
+
+	/** Opens the restored session from its rail row. */
+	function openRestored(): void {
+		pickerWorkspaceId = undefined;
+		openedWorkspaceId = undefined;
+		closeOpenForm();
+		startFailure = undefined;
+		onOpenRestoredSession?.();
 	}
 
 	function moveSession(sessionId: string, offset: number): void {
@@ -1992,6 +2041,7 @@
 				<p class="session-rail__empty">No workspaces yet</p>
 			{:else}
 				{#each workspaces as workspace (workspace.id)}
+					{@const restored = restoredSession?.workspaceId === workspace.id ? restoredSession : undefined}
 					<section aria-labelledby={`workspace-${workspace.id}`}>
 						<!-- The heading row hosts the workspace menu for the heading and its controls. -->
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -2033,12 +2083,27 @@
 								</button>
 							{/if}
 						</div>
-						{#if workspace.sessions.length === 0}
+						{#if workspace.sessions.length === 0 && !restored}
 							<p class="session-rail__empty">
 								{startingWorkspaceId === workspace.id ? 'Starting a session…' : 'No sessions yet'}
 							</p>
 						{/if}
 						<ul>
+							{#if restored}
+								<li>
+									<button
+										type="button"
+										id="session-row-restored"
+										class:active={restoredOpen}
+										title={restored.title}
+										aria-current={restoredOpen ? 'page' : undefined}
+										onclick={openRestored}>
+										<SessionStatusMark status="stopped" label="Stopped" />
+										<span class="session-rail__name">{restored.title}</span>
+										<span class="session-rail__state"><small aria-hidden="true">Stopped</small></span>
+									</button>
+								</li>
+							{/if}
 							{#each workspace.sessions as session (session.id)}
 								<li>
 									{#if renamingSessionId === session.id}
@@ -2239,6 +2304,46 @@
 				<EmptyState level={1} role="status" titleId="loading-title" title="Loading sessions…" />
 			</section>
 		{/if}
+	{:else if restoredSession && restoredOpen}
+		<section class="session-view" aria-labelledby="restored-session-title">
+			<header class="session-view__header">
+				<div>
+					<p>Pi</p>
+					<h1 class="pau-view-title" id="restored-session-title">{restoredSession.title}</h1>
+				</div>
+				<div class="session-view__header-actions">
+					<div class="session-view__status session-view__status--stopped">
+						<SessionStatusMark status="stopped" label="Stopped" />
+						<span aria-hidden="true">Stopped</span>
+					</div>
+				</div>
+			</header>
+			<div class="session-view__notices">
+				{#if disconnected}
+					<p class="session-view__notice session-view__notice--attention" role="status">
+						<strong>Disconnected.</strong>
+						Pau lost its connection to the backend and is reconnecting.
+					</p>
+				{/if}
+				<section class="session-ended" aria-label="Session stopped">
+					<div class="session-ended__text">
+						<p class="session-ended__state" role="status">
+							<strong>Session stopped.</strong> Resume it to load the conversation and continue.
+						</p>
+						{#if resumeError}<p class="session-ended__error" role="alert">{resumeError}</p>{/if}
+					</div>
+					{#if onResumeSession}
+						<button
+							type="button"
+							class="pau-button pau-button--primary"
+							disabled={disconnected || resumingRestored}
+							onclick={() => void resumeRestored(restoredSession)}>
+							{resumingRestored ? 'Resuming…' : 'Resume'}
+						</button>
+					{/if}
+				</section>
+			</div>
+		</section>
 	{:else if activeSession}
 		<section class="session-view" aria-labelledby="session-title">
 			<header class="session-view__header">

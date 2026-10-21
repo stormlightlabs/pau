@@ -98,14 +98,42 @@ pub struct PaneWidths {
     pub inspector: Option<u32>,
 }
 
+/// A workspace view the operator can return to on launch.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum LastView {
+    /// A session, or the session list when no session was open.
+    #[default]
+    Session,
+    /// The workspace's files.
+    Files,
+    /// The workspace's terminals.
+    Terminal,
+    /// The workspace's processes.
+    Processes,
+    /// The workspace's agent sandbox settings.
+    Sandbox,
+}
+
 /// The view to restore on launch.
+///
+/// A live session ends when Pau quits, so `session_id` only matches a session
+/// that kept running in a backend the window reconnects to. `saved_session_id`
+/// names the Pi session file behind it, which outlives the process and lets
+/// the next launch offer to resume the conversation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct LastRoute {
     /// Workspace that was open.
     pub workspace_id: String,
+    /// View that was open in the workspace.
+    #[serde(default)]
+    pub view: LastView,
     /// Session that was open in the workspace, if any.
     pub session_id: Option<String>,
+    /// Saved Pi session that the open session ran, if Pi had saved one.
+    pub saved_session_id: Option<String>,
 }
 
 /// Every interface preference.
@@ -159,7 +187,8 @@ impl UiPreferences {
         }
         if let Some(route) = &self.last_route
             && (route.workspace_id.is_empty()
-                || route.session_id.as_deref().is_some_and(str::is_empty))
+                || route.session_id.as_deref().is_some_and(str::is_empty)
+                || route.saved_session_id.as_deref().is_some_and(str::is_empty))
         {
             return Err("last_route ids must not be empty".to_owned());
         }
@@ -226,7 +255,9 @@ mod tests {
         preferences.pane_widths.inspector = Some(420);
         preferences.last_route = Some(LastRoute {
             workspace_id: "w1".to_owned(),
-            session_id: None,
+            view: LastView::Session,
+            session_id: Some("s1".to_owned()),
+            saved_session_id: Some("pi-1".to_owned()),
         });
         preferences.validate().unwrap();
         store
@@ -261,6 +292,18 @@ mod tests {
         preferences.pane_widths.context_rail = None;
         preferences.version = UI_PREFERENCES_VERSION + 1;
         assert!(preferences.validate().is_err());
+        preferences.version = UI_PREFERENCES_VERSION;
+        preferences.last_route = Some(LastRoute {
+            workspace_id: "w1".to_owned(),
+            view: LastView::Files,
+            session_id: None,
+            saved_session_id: Some(String::new()),
+        });
+        assert!(preferences.validate().is_err());
+
+        let route = r#"{"workspace_id":"w1","session_id":null,"saved_session_id":null}"#;
+        let parsed = serde_json::from_str::<LastRoute>(route).unwrap();
+        assert_eq!(parsed.view, LastView::Session);
     }
 
     #[tokio::test]

@@ -1,6 +1,9 @@
 <script lang="ts">
-	import { SessionView, type ShellNavItem } from '@stormlightlabs/pau-ui';
-	import { getContext, onMount } from 'svelte';
+	import type { LastRoute, LastView } from '@stormlightlabs/pau-protocol';
+	import { SessionView, type SavedSession, type ShellNavItem } from '@stormlightlabs/pau-ui';
+	import { getContext, onMount, untrack } from 'svelte';
+
+	import { getUiPreferences } from './api';
 
 	import type { EventSocketFactory } from './event-stream';
 	import { searchFileMentions } from './file-mentions';
@@ -16,9 +19,23 @@
 		fetcher,
 		socketFactory,
 		navigation,
-		onOpenTerminal
+		onOpenTerminal,
+		restoreLastRoute = false,
+		onRouteChange,
+		onOpenView
 	}: {
 		initialSessionId?: string;
+		/**
+		 * Returns to the view saved in the interface preferences once the
+		 * sessions load. A live session opens as it is. A session that stopped
+		 * shows with a Resume action and is never resumed on its own. A saved
+		 * view whose workspace or session is gone leaves the default view.
+		 */
+		restoreLastRoute?: boolean;
+		/** Called with the session the operator is looking at, to save as the view to restore. */
+		onRouteChange?: (route: LastRoute) => void;
+		/** Opens a saved workspace view other than sessions. */
+		onOpenView?: (view: Exclude<LastView, 'session'>, workspaceId: string) => void;
 		/** Builds the product rail for the workspace the operator is working in. */
 		navigation?: (workspaceId: string | undefined) => ShellNavItem[];
 		onSessionChange?: (workspaceId: string, sessionId: string) => void;
@@ -35,13 +52,29 @@
 	// svelte-ignore state_referenced_locally
 	let selectedSessionId = $state(initialSessionId);
 
+	/** Whether the saved view is still being read and resolved. The view shows loading meanwhile. */
+	// svelte-ignore state_referenced_locally
+	let restoring = $state(restoreLastRoute);
+	/** The saved view, `null` when there is none or it could not be read. Unset until read. */
+	let savedRoute = $state<LastRoute | null>();
+	/**
+	 * The stopped session restored from the saved view. The rail keeps listing
+	 * it like other stopped sessions until the operator resumes it.
+	 */
+	let restoredSession = $state<SavedSession & { workspaceId: string }>();
+	/** Whether the restored session is the one open, rather than a live session. */
+	let restoredOpen = $state(false);
+
 	const workspaces = $derived(sessions.workspaces);
-	const activeSessionId = $derived(selectedSessionId ?? workspaces.flatMap((workspace) => workspace.sessions)[0]?.id);
+	const activeSessionId = $derived(
+		restoredOpen ? undefined : (selectedSessionId ?? workspaces.flatMap((workspace) => workspace.sessions)[0]?.id)
+	);
 	/** A workspace opened since the operator last chose a session. */
 	let openedWorkspaceId = $state<string>();
 	/** The workspace that the rail's workspace views open. */
 	const currentWorkspaceId = $derived(
 		openedWorkspaceId ??
+			(restoredOpen ? restoredSession?.workspaceId : undefined) ??
 			workspaces.find((workspace) => workspace.sessions.some((session) => session.id === activeSessionId))?.id ??
 			workspaces[0]?.id
 	);
@@ -65,12 +98,92 @@
 		)
 	);
 
+	$effect(() => {
+		if (restoring) return;
+		if (restoredOpen && restoredSession) {
+			const route: LastRoute = {
+				workspace_id: restoredSession.workspaceId,
+				view: 'session',
+				session_id: null,
+				saved_session_id: restoredSession.id
+			};
+			untrack(() => onRouteChange?.(route));
+			return;
+		}
+		if (!activeSessionId) return;
+		const workspaceId = workspaces.find((workspace) =>
+			workspace.sessions.some((session) => session.id === activeSessionId)
+		)?.id;
+		if (!workspaceId) return;
+		const route: LastRoute = {
+			workspace_id: workspaceId,
+			view: 'session',
+			session_id: activeSessionId,
+			saved_session_id: sessions.savedSessionId(activeSessionId) ?? null
+		};
+		untrack(() => onRouteChange?.(route));
+	});
+
+	$effect(() => {
+		if (savedRoute === undefined || !restoring || sessions.loading) return;
+		const route = savedRoute;
+		untrack(() => void restore(route));
+	});
+
 	onMount(() => {
 		sessions.connect();
+		if (restoreLastRoute) void readSavedRoute();
 		return () => sessions.close();
 	});
 
+	async function readSavedRoute(): Promise<void> {
+		try {
+			const preferences = await getUiPreferences(fetcher);
+			savedRoute = preferences.last_route;
+		} catch {
+			savedRoute = null;
+		}
+	}
+
+	/**
+	 * Opens the saved view. Every failure falls back to the default view
+	 * without a message: a workspace removed since, a session Pi no longer
+	 * has, or a saved list that cannot be read.
+	 */
+	async function restore(route: LastRoute | null): Promise<void> {
+		let leaving = false;
+		try {
+			const workspace = workspaces.find((candidate) => candidate.id === route?.workspace_id);
+			if (!route || !workspace) return;
+			if (route.view !== 'session') {
+				if (!onOpenView) return;
+				// The page navigates away, so the view keeps loading until it does.
+				leaving = true;
+				onOpenView(route.view, workspace.id);
+				return;
+			}
+			const liveId =
+				workspace.sessions.find((session) => session.id === route.session_id)?.id ??
+				(route.saved_session_id ? sessions.liveSessionId(workspace.id, route.saved_session_id) : undefined);
+			if (liveId) {
+				selectSession(liveId);
+				return;
+			}
+			if (!route.saved_session_id) return;
+			const list = await sessions.listSaved(workspace.id);
+			const saved = list.sessions.find((candidate) => candidate.id === route.saved_session_id);
+			if (!saved) return;
+			restoredSession = { ...saved, workspaceId: workspace.id };
+			restoredOpen = true;
+		} catch {
+			// The default view is the fallback.
+		} finally {
+			if (!leaving) restoring = false;
+		}
+	}
+
 	function selectSession(sessionId: string): void {
+		restoredOpen = false;
 		selectedSessionId = sessionId;
 		openedWorkspaceId = undefined;
 		const workspace = workspaces.find((candidate) => candidate.sessions.some((session) => session.id === sessionId));
@@ -79,6 +192,7 @@
 
 	async function startSession(workspaceId: string): Promise<void> {
 		const sessionId = await sessions.start(workspaceId);
+		restoredOpen = false;
 		selectedSessionId = sessionId;
 		openedWorkspaceId = undefined;
 		onSessionChange?.(workspaceId, sessionId);
@@ -86,12 +200,16 @@
 
 	async function openWorkspace(path: string): Promise<string> {
 		const workspaceId = await sessions.open(path);
+		restoredOpen = false;
 		openedWorkspaceId = workspaceId;
 		return workspaceId;
 	}
 
 	async function resumeSession(workspaceId: string, savedSessionId: string): Promise<void> {
 		const sessionId = await sessions.resume(workspaceId, savedSessionId);
+		// The live session takes the restored row's place once it runs the same conversation.
+		if (restoredSession?.id === savedSessionId) restoredSession = undefined;
+		restoredOpen = false;
 		selectedSessionId = sessionId;
 		openedWorkspaceId = undefined;
 		onSessionChange?.(workspaceId, sessionId);
@@ -102,6 +220,7 @@
 			candidate.sessions.some((session) => session.id === endedSessionId)
 		);
 		const sessionId = await sessions.restart(endedSessionId);
+		restoredOpen = false;
 		selectedSessionId = sessionId;
 		openedWorkspaceId = undefined;
 		if (workspace) onSessionChange?.(workspace.id, sessionId);
@@ -111,7 +230,9 @@
 <SessionView
 	{workspaces}
 	{activeSessionId}
-	loading={sessions.loading}
+	loading={sessions.loading || restoring}
+	{restoredSession}
+	onOpenRestoredSession={() => (restoredOpen = true)}
 	disconnected={sessions.disconnected}
 	productItems={navigation?.(currentWorkspaceId)}
 	paneWidths={interfacePreferences.widths}

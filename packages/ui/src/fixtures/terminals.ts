@@ -6,6 +6,8 @@ export type TerminalFixtureOptions = {
 	exitOnConnect?: TerminalExit;
 	/** Rejects terminal creation with this message. */
 	createError?: string;
+	/** Earlier output that each new terminal prints before its ready line. */
+	history?: readonly string[];
 };
 
 /** An in-memory terminal source and the input and sizes it received. */
@@ -44,6 +46,8 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 				events.exit(status);
 			};
 			queueMicrotask(() => {
+				const history = options.history ?? [];
+				for (const output of history) send(`${output}\r\n`);
 				send(`Terminal ready: 界 🙂\r\n${PROMPT}`);
 				if (options.exitOnConnect) exit(options.exitOnConnect);
 			});

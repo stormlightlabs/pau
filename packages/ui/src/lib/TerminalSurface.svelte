@@ -217,6 +217,14 @@
 				<button
 					type="button"
 					class="terminal-surface__icon-button"
+					aria-label="Find in terminal"
+					disabled={!activeTab}
+					onclick={() => activeId && void views[activeId]?.openSearch()}>
+					<Icon name="search" size={16} />
+				</button>
+				<button
+					type="button"
+					class="terminal-surface__icon-button"
 					aria-label="Copy selection"
 					disabled={!activeTab?.hasSelection}
 					onclick={() => void copySelection()}>

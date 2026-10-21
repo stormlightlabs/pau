@@ -9,6 +9,8 @@ export const ICONS = {
 	check: 'i-tabler-check',
 	chevronDown: 'i-tabler-chevron-down',
 	chevronRight: 'i-tabler-chevron-right',
+	arrowUp: 'i-tabler-arrow-up',
+	arrowDown: 'i-tabler-arrow-down',
 	file: 'i-tabler-file',
 	files: 'i-tabler-folder',
 	folderPlus: 'i-tabler-folder-plus',

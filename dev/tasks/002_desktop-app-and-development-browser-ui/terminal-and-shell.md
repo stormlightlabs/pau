@@ -48,17 +48,6 @@ Verification:
 
 - Cover both layouts at desktop and narrow widths.
 
-### 2.97 Terminal search
-
-Status: planned
-Blocked by: none
-
-Add search within terminal output.
-
-Verification:
-
-- Cover matches, no matches, and search across scrollback in Playwright.
-
 ### 2.98 Terminal links
 
 Status: planned

@@ -2,12 +2,15 @@
 	import '../styles/tokens.css';
 	import '@xterm/xterm/css/xterm.css';
 	import { FitAddon } from '@xterm/addon-fit';
+	import { SearchAddon, type ISearchOptions, type ISearchResultChangeEvent } from '@xterm/addon-search';
 	import { Unicode11Addon } from '@xterm/addon-unicode11';
 	import { Terminal } from '@xterm/xterm';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 
 	import { terminalTheme, THEMES, type ThemeName } from '../theme';
 	import { useExternalLinks } from './external-links';
+	import Icon from './Icon.svelte';
+	import { detectPlatform, type KeyPlatform } from './keymap.svelte';
 	import type { TerminalConnection, TerminalConnectionEvents, TerminalExit } from './types/terminal';
 
 	type Props = {
@@ -20,18 +23,44 @@
 		onexit?: (status: TerminalExit) => void;
 		ondisconnect?: () => void;
 		onselectionchange?: (hasSelection: boolean) => void;
+		/** Platform whose find shortcut opens search. Tests set it. */
+		platform?: KeyPlatform;
 	};
 
-	let { label, theme = 'eldritch', active = true, connect, onexit, ondisconnect, onselectionchange }: Props = $props();
+	let {
+		label,
+		theme = 'eldritch',
+		active = true,
+		connect,
+		onexit,
+		ondisconnect,
+		onselectionchange,
+		platform = detectPlatform()
+	}: Props = $props();
 
 	/** Installed monospace faces that xterm can measure before the bundled code font loads. */
 	const SYSTEM_MONO = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 
 	const links = useExternalLinks();
+	/** The search addon stops counting and highlighting past this many matches. */
+	const MATCH_LIMIT = 1000;
 
 	let host: HTMLDivElement;
 	let terminal = $state.raw<Terminal>();
 	let fitAddon: FitAddon | undefined;
+	let searchAddon: SearchAddon | undefined;
+
+	let searching = $state(false);
+	let query = $state('');
+	let results = $state<ISearchResultChangeEvent>();
+	let searchInput = $state<HTMLInputElement>();
+
+	const matchCount = $derived.by(() => {
+		if (!query || !results) return '';
+		if (results.resultCount === 0) return 'No matches';
+		if (results.resultIndex < 0) return `${MATCH_LIMIT}+ matches`;
+		return `${results.resultIndex + 1} of ${results.resultCount}`;
+	});
 
 	/** Fits the grid to the container. A hidden container has no size to measure. */
 	function fit(): void {
@@ -57,6 +86,80 @@
 		terminal?.focus();
 	}
 
+	/**
+	 * ⌘F on macOS. Elsewhere Ctrl+F belongs to the shell, so search follows
+	 * the Ctrl+Shift convention of copy and paste.
+	 */
+	function isFindChord(event: KeyboardEvent): boolean {
+		if (event.key.toLowerCase() !== 'f' || event.altKey) return false;
+		return platform === 'mac'
+			? event.metaKey && !event.ctrlKey && !event.shiftKey
+			: event.ctrlKey && event.shiftKey && !event.metaKey;
+	}
+
+	/** Match colors come from the theme's terminal palette, in the `#RRGGBB` form the addon requires. */
+	function searchOptions(): ISearchOptions {
+		const { selection, cursor } = THEMES[theme].terminal;
+		return {
+			decorations: {
+				matchBackground: selection,
+				matchOverviewRuler: selection,
+				activeMatchBackground: selection,
+				activeMatchBorder: cursor,
+				activeMatchColorOverviewRuler: cursor
+			}
+		};
+	}
+
+	/**
+	 * Moves to the next or previous match across the scrollback. Typing
+	 * searches incrementally, so the current match grows with the query.
+	 */
+	function find(direction: 'next' | 'previous', incremental = false): void {
+		if (!searchAddon) return;
+		if (!query) {
+			searchAddon.clearDecorations();
+			results = undefined;
+			return;
+		}
+		if (direction === 'next') searchAddon.findNext(query, { ...searchOptions(), incremental });
+		else searchAddon.findPrevious(query, searchOptions());
+	}
+
+	/**
+	 * Opens the find bar, or focuses it when it is already open. The field
+	 * keeps the previous query selected, so typing replaces it.
+	 */
+	export async function openSearch(): Promise<void> {
+		const reopening = !searching;
+		searching = true;
+		await tick();
+		searchInput?.focus();
+		searchInput?.select();
+		if (reopening && query) find('next', true);
+	}
+
+	/** Closes the find bar, clears the highlights, and returns focus to the terminal. */
+	function closeSearch(): void {
+		searching = false;
+		results = undefined;
+		searchAddon?.clearDecorations();
+		terminal?.focus();
+	}
+
+	function handleSearchKeydown(event: KeyboardEvent): void {
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			closeSearch();
+		} else if (event.key === 'Enter' && event.target === searchInput) {
+			event.preventDefault();
+			find(event.shiftKey ? 'previous' : 'next');
+		} else if (isFindChord(event)) {
+			event.preventDefault();
+			void openSearch();
+		}
+	}
+
 	onMount(() => {
 		const instance = new Terminal({
 			allowProposedApi: true,
@@ -72,6 +175,8 @@
 		instance.loadAddon(fitter);
 		instance.loadAddon(new Unicode11Addon());
 		instance.unicode.activeVersion = '11';
+		const search = new SearchAddon({ highlightLimit: MATCH_LIMIT });
+		instance.loadAddon(search);
 		// The clipboard addon's bundle reads `self` when it loads, so importing it
 		// at module scope breaks Node consumers of the package index.
 		void import('@xterm/addon-clipboard').then(({ ClipboardAddon }) => {
@@ -80,7 +185,13 @@
 		// macOS copy and paste shortcuts reach xterm.js as native clipboard events.
 		// Elsewhere Ctrl+C belongs to the shell, so use the Ctrl+Shift convention.
 		instance.attachCustomKeyEventHandler((event) => {
-			if (event.type !== 'keydown' || !event.ctrlKey || !event.shiftKey) return true;
+			if (event.type !== 'keydown') return true;
+			if (isFindChord(event)) {
+				event.preventDefault();
+				void openSearch();
+				return false;
+			}
+			if (!event.ctrlKey || !event.shiftKey) return true;
 			const key = event.key.toLowerCase();
 			if (key !== 'c' && key !== 'v') return true;
 			event.preventDefault();
@@ -89,6 +200,7 @@
 		});
 		instance.open(host);
 		fitAddon = fitter;
+		searchAddon = search;
 		terminal = instance;
 		fit();
 		// xterm measures its cell grid only when the font option changes, so it
@@ -120,7 +232,9 @@
 				connection.write(Uint8Array.from(data, (character) => character.codePointAt(0) ?? 0))
 			),
 			instance.onResize(({ cols, rows }) => connection.resize(cols, rows)),
-			instance.onSelectionChange(() => onselectionchange?.(instance.hasSelection()))
+			instance.onSelectionChange(() => onselectionchange?.(instance.hasSelection())),
+			// The addon reports counts only for searches that draw decorations.
+			search.onDidChangeResults((change) => (results = change))
 		];
 		const observer = new ResizeObserver(() => fit());
 		observer.observe(host);
@@ -132,6 +246,7 @@
 			instance.dispose();
 			terminal = undefined;
 			fitAddon = undefined;
+			searchAddon = undefined;
 		};
 	});
 
@@ -146,26 +261,146 @@
 	});
 </script>
 
-<div
-	class="terminal-view"
-	role="group"
-	aria-label={label}
-	data-theme={theme}
-	style:background={THEMES[theme].terminal.background}
-	bind:this={host}>
+<div class="terminal-view">
+	<div
+		class="terminal-view__screen"
+		role="group"
+		aria-label={label}
+		data-theme={theme}
+		style:background={THEMES[theme].terminal.background}
+		bind:this={host}>
+	</div>
+	{#if searching}
+		<!-- Escape is handled on the bar so it closes from the buttons too. -->
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+		<div class="terminal-view__search" role="search" aria-label="Find in terminal" onkeydown={handleSearchKeydown}>
+			<div class="terminal-view__field">
+				<Icon name="search" size={16} />
+				<input
+					bind:this={searchInput}
+					bind:value={query}
+					oninput={() => find('next', true)}
+					type="text"
+					placeholder="Find in terminal"
+					aria-label="Find in terminal"
+					autocomplete="off"
+					spellcheck="false" />
+				<span class={['terminal-view__count', { empty: results?.resultCount === 0 }]} role="status">
+					{matchCount}
+				</span>
+			</div>
+			<button
+				type="button"
+				class="pau-button pau-button--quiet"
+				aria-label="Previous match"
+				disabled={!results?.resultCount}
+				onclick={() => find('previous')}>
+				<Icon name="arrowUp" size={16} />
+			</button>
+			<button
+				type="button"
+				class="pau-button pau-button--quiet"
+				aria-label="Next match"
+				disabled={!results?.resultCount}
+				onclick={() => find('next')}>
+				<Icon name="arrowDown" size={16} />
+			</button>
+			<button type="button" class="pau-button pau-button--quiet" aria-label="Close find" onclick={closeSearch}>
+				<Icon name="close" size={16} />
+			</button>
+		</div>
+	{/if}
 </div>
 
 <style>
 	.terminal-view {
+		position: relative;
+		min-height: 0;
+	}
+
+	.terminal-view__screen {
 		width: 100%;
 		height: 100%;
-		min-height: 0;
 		overflow: hidden;
 	}
 
 	/* Fit subtracts the terminal element's padding, not the container's. */
-	.terminal-view :global(.xterm) {
+	.terminal-view__screen :global(.xterm) {
 		height: 100%;
 		padding: var(--pau-space-2);
+	}
+
+	/*
+	 * The bar floats over the top of the output instead of taking a row, so
+	 * opening it never resizes the PTY or reflows the lines being searched.
+	 * It is not a dismissible overlay: selecting output or switching windows
+	 * keeps the query and highlights until Escape or Close.
+	 */
+	.terminal-view__search {
+		position: absolute;
+		top: var(--pau-space-2);
+		right: var(--pau-space-4);
+		display: flex;
+		align-items: center;
+		gap: var(--pau-space-1);
+		max-width: calc(100% - 2 * var(--pau-space-4));
+		padding: var(--pau-space-1);
+		background: var(--pau-surface-raised);
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-surface);
+		box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 28%);
+	}
+
+	.terminal-view__field {
+		display: flex;
+		flex: 0 1 auto;
+		align-items: center;
+		/* A fixed width keeps the buttons still while the count changes. */
+		width: 20rem;
+		gap: var(--pau-space-2);
+		min-width: 0;
+		min-height: var(--pau-size-row-md);
+		padding-inline: var(--pau-space-2);
+		color: var(--pau-text-muted);
+		background: var(--pau-canvas);
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-control);
+	}
+
+	.terminal-view__field:focus-within {
+		border-color: var(--pau-focus);
+		box-shadow: 0 0 0 1px var(--pau-focus);
+	}
+
+	.terminal-view__field input {
+		flex: 1;
+		min-width: 0;
+		color: var(--pau-text);
+		background: transparent;
+		border: 0;
+		outline: 0;
+		font: inherit;
+		font-size: var(--pau-type-md);
+	}
+
+	.terminal-view__field input::placeholder {
+		color: var(--pau-text-muted);
+	}
+
+	.terminal-view__count {
+		flex: none;
+		font-size: var(--pau-type-xs);
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+
+	.terminal-view__count.empty {
+		color: var(--pau-danger);
+	}
+
+	@media (pointer: coarse) {
+		.terminal-view__field {
+			min-height: var(--pau-size-target-touch);
+		}
 	}
 </style>

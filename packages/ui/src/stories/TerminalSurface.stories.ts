@@ -37,6 +37,35 @@ export const Tabs: Story = {
 	}
 };
 
+export const Find: Story = {
+	args: {
+		history: [
+			'error: could not compile `pau-core`',
+			...Array.from({ length: 120 }, (_, index) => `   Compiling crate-${index + 1} v0.1.0`),
+			'error: could not compile `pau-server`'
+		]
+	},
+	play: async (context) => {
+		await openTerminal(context);
+		const canvas = within(context.canvasElement);
+		await userEvent.click(canvas.getByRole('button', { name: 'Find in terminal' }));
+		await userEvent.keyboard('error:');
+		const bar = within(await canvas.findByRole('search', { name: 'Find in terminal' }));
+		await expect(await bar.findByText('1 of 2')).toBeInTheDocument();
+	}
+};
+
+export const FindNoMatches: Story = {
+	play: async (context) => {
+		await openTerminal(context);
+		const canvas = within(context.canvasElement);
+		await userEvent.click(canvas.getByRole('button', { name: 'Find in terminal' }));
+		await userEvent.keyboard('warning');
+		const bar = within(await canvas.findByRole('search', { name: 'Find in terminal' }));
+		await expect(await bar.findByText('No matches')).toBeInTheDocument();
+	}
+};
+
 export const Exited: Story = {
 	args: { exitOnConnect: { exitCode: 1, signal: null } },
 	play: async ({ canvasElement }) => {

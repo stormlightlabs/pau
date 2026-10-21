@@ -9,6 +9,9 @@
   window opens centered on your main screen instead.
 - Links in agent replies and terminal hyperlinks now open in your default
   browser or mail app. Pau opens only web and email links.
+- You can now search terminal output, including lines that have scrolled away.
+  Press ⌘F on macOS or Ctrl+Shift+F elsewhere, step through matches with Enter
+  and Shift+Enter, and press Escape to go back to the shell.
 - The Files view now follows changes made outside Pau. The file tree, branch,
   and changed-file count update on their own, and an open file reloads in
   place. If you have unsaved edits, Pau keeps them and offers Keep mine or

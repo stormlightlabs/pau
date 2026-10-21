@@ -211,6 +211,14 @@ The terminal canvas leads and uses the active theme's ANSI palette. On narrow
 screens, use a full-surface terminal. Keep tab switching and session state
 reachable without shrinking the character grid unnecessarily.
 
+Find in the terminal opens with ⌘F on macOS and Ctrl+Shift+F elsewhere, since
+Ctrl+F belongs to the shell. The find bar floats over the top right of the
+output on the raised surface, so opening it never resizes the PTY. It searches
+the whole scrollback and shows the current match and the total. Enter and
+Shift+Enter step through matches. The bar is not a dismissible overlay: clicks
+in the output and window switches keep it open, and only Escape or Close end
+the search and return focus to the terminal.
+
 ## Processes
 
 The workspace Processes view lists each Pau-owned process tree with current CPU,

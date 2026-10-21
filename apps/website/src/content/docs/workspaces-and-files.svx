@@ -100,6 +100,12 @@ shortcut. On macOS that is Command-C and Command-V. On Linux and Windows, use
 Ctrl+Shift+C and Ctrl+Shift+V so Ctrl+C still interrupts the running program.
 Pasting needs clipboard permission.
 
+To search the output, including lines that have scrolled away, press
+Command-F on macOS or Ctrl+Shift+F on Linux and Windows while the terminal has
+focus, or choose the search button. The bar shows which match is selected and
+how many there are. Press Enter for the next match and Shift+Enter for the
+previous one. Escape closes the bar and returns to the shell.
+
 The terminal follows the active theme's ANSI colors and refits its grid when
 the window changes size. When the shell exits, the tab keeps its output and
 shows the exit code or the signal that ended it.

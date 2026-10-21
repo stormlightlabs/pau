@@ -4,8 +4,8 @@
  * `chevronRight` icon marked `pau-disclosure__chevron` gets one treatment.
  * The chevron sits in a `space/5` gutter at the entry's left edge and turns
  * down while the entry is open. Summary text starts after the gutter, on the
- * inset that user messages and tool bodies share, and hover lifts it from
- * muted to normal text.
+ * inset that user messages and tool bodies share. Hover lifts it from muted
+ * to normal text, and press also tints the row, as `states.css` describes.
  *
  * Entries drawn with a left rule set `--disclosure-rule` to its width, so the
  * rule counts toward the gutter and the text still lands on the shared inset.
@@ -25,8 +25,21 @@
 	display: none;
 }
 
-.pau-disclosure > summary:hover {
+@media (hover: hover) {
+	.pau-disclosure > summary:hover {
+		color: var(--pau-text);
+	}
+}
+
+/* The transcript scrolls, so the ring sits inside the row to stay uncut. */
+.pau-disclosure > summary:focus-visible {
+	outline: var(--pau-focus-width) solid var(--pau-focus);
+	outline-offset: var(--pau-focus-offset-inset);
+}
+
+.pau-disclosure > summary:active {
 	color: var(--pau-text);
+	background-image: linear-gradient(var(--pau-press), var(--pau-press));
 }
 
 .pau-disclosure__chevron {

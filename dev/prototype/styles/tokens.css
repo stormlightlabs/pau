@@ -218,6 +218,19 @@
 }
 
 /*
+ * Hover and press colors, mixed from each theme's text and accent as
+ * themeCssProperties does in packages/ui. They resolve on the element that
+ * carries the theme.
+ */
+:root,
+[data-theme] {
+	--pau-hover: color-mix(in srgb, var(--pau-text) 5%, transparent);
+	--pau-press: color-mix(in srgb, var(--pau-text) 8%, transparent);
+	--pau-accent-hover: color-mix(in srgb, var(--pau-text) 25%, var(--pau-accent));
+	--pau-accent-press: color-mix(in srgb, var(--pau-text) 45%, var(--pau-accent));
+}
+
+/*
  * Public site palette, from the Site collection in pau.fig. Light is the
  * default; `data-site='dark'` on a site root switches to the dark scheme,
  * which reuses the Eldritch application colors.

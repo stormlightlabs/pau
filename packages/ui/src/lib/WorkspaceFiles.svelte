@@ -530,7 +530,7 @@
 						<ul aria-label="Changed files">
 							{#each gitStatus.files as file (file.path)}
 								<li>
-									<button type="button" title={file.path} onclick={() => void openDiff(file.path)}>
+									<button type="button" class="pau-row" title={file.path} onclick={() => void openDiff(file.path)}>
 										<Icon name={gitFileIcon(file)} size={14} />
 										<span class="workspace-files__git-path">
 											{#if dirname(file.path)}<span class="workspace-files__git-dir"
@@ -589,7 +589,7 @@
 			{:else if root.error}
 				<div class="workspace-files__state workspace-files__state--error" role="alert">
 					<p>{root.error}</p>
-					<button type="button" onclick={() => reloadTree()}>Try again</button>
+					<button type="button" class="pau-button pau-button--secondary" onclick={() => reloadTree()}>Try again</button>
 				</div>
 			{:else if root.entries.length === 0}
 				<p class="workspace-files__state">No visible files in this workspace.</p>
@@ -604,7 +604,7 @@
 							aria-selected={selectedPath === entry.path}
 							tabindex={activePath === entry.path ? 0 : -1}
 							title={entry.path}
-							class="workspace-files__tree-row"
+							class="workspace-files__tree-row pau-row"
 							class:workspace-files__tree-row--selected={selectedPath === entry.path}
 							style:--tree-depth={entry.depth - 1}
 							onfocus={() => (activePath = entry.path)}
@@ -651,8 +651,16 @@
 					<small>{gitStatus?.files.length ?? 0} changed {gitStatus?.files.length === 1 ? 'file' : 'files'}</small>
 				</div>
 				<div>
-					<button type="button" aria-label="Previous changed file" onclick={() => moveChangedFile(-1)}>↑</button>
-					<button type="button" aria-label="Next changed file" onclick={() => moveChangedFile(1)}>↓</button>
+					<button
+						type="button"
+						class="pau-utility-button"
+						aria-label="Previous changed file"
+						onclick={() => moveChangedFile(-1)}>↑</button>
+					<button
+						type="button"
+						class="pau-utility-button"
+						aria-label="Next changed file"
+						onclick={() => moveChangedFile(1)}>↓</button>
 				</div>
 			</header>
 			{#if gitStatusLoading.active}
@@ -669,6 +677,7 @@
 						<li>
 							<button
 								type="button"
+								class="pau-row"
 								aria-pressed={selectedDiffPath === file.path}
 								title={file.path}
 								onkeydown={(event) => handleChangedFileKeydown(event, index)}
@@ -719,6 +728,7 @@
 					<li>
 						<button
 							type="button"
+							class="pau-row"
 							title={`${result.path}:${result.line}`}
 							onclick={() => openFile(result.path, result.line)}>
 							<span class="workspace-files__result-location">
@@ -859,16 +869,10 @@
 		min-height: var(--pau-size-row-sm);
 		padding: var(--pau-space-1) var(--shell-inset);
 		color: var(--shell-text);
-		background: transparent;
 		border: 0;
 		text-align: start;
 		font: inherit;
 		cursor: pointer;
-	}
-
-	.workspace-files__git li button:hover,
-	.workspace-files__git li button:focus-visible {
-		background: var(--shell-surface-raised);
 	}
 
 	.workspace-files__git li button:focus-visible {
@@ -905,7 +909,7 @@
 		width: 1.75rem;
 		height: var(--pau-size-row-sm);
 		color: var(--shell-text);
-		background: var(--shell-surface-raised);
+		background-color: var(--shell-surface-raised);
 		border: 1px solid var(--shell-border);
 		cursor: pointer;
 	}
@@ -925,7 +929,6 @@
 		min-height: var(--pau-size-row-lg);
 		padding: var(--pau-space-1) var(--pau-space-4);
 		color: var(--shell-text);
-		background: transparent;
 		border: 0;
 		border-left: 2px solid transparent;
 		text-align: start;
@@ -934,7 +937,7 @@
 
 	.workspace-files__review li button[aria-pressed='true'] {
 		border-left-color: var(--shell-accent);
-		background: var(--shell-surface-raised);
+		background-color: var(--shell-surface-raised);
 	}
 
 	.workspace-files__review li span,
@@ -1049,19 +1052,15 @@
 		min-height: var(--pau-size-row-md);
 		padding: var(--pau-space-1) var(--shell-inset) var(--pau-space-1)
 			calc(var(--shell-inset) + min(var(--tree-depth), 3) * var(--tree-indent));
-		color: var(--shell-muted);
-		background: transparent;
 		border: 0;
 		text-align: start;
 		font: inherit;
 		cursor: pointer;
 	}
 
-	.workspace-files__tree-row:hover,
-	.workspace-files__tree-row:focus-visible,
 	.workspace-files__tree-row--selected {
 		color: var(--shell-text);
-		background: var(--shell-surface-raised);
+		background-color: var(--shell-surface-raised);
 	}
 
 	.workspace-files__tree-row:focus-visible {
@@ -1100,15 +1099,6 @@
 
 	.workspace-files__state p {
 		margin: 0 0 var(--pau-space-2);
-	}
-
-	.workspace-files__state button {
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
-		color: var(--shell-text);
-		background: var(--shell-surface-raised);
-		border: 1px solid var(--shell-border);
-		font: inherit;
 	}
 
 	.workspace-files__branch-state {
@@ -1202,15 +1192,9 @@
 		min-width: 0;
 		padding: var(--pau-space-3) var(--shell-inset);
 		color: var(--shell-text);
-		background: transparent;
 		border: 0;
 		text-align: start;
 		cursor: pointer;
-	}
-
-	.workspace-files__results button:hover,
-	.workspace-files__results button:focus-visible {
-		background: var(--shell-surface-raised);
 	}
 
 	.workspace-files__results button:focus-visible {

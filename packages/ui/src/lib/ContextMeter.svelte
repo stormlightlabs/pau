@@ -65,7 +65,7 @@
 		<button
 			bind:this={trigger}
 			type="button"
-			class={`context-meter__button context-meter__button--${level}`}
+			class={`context-meter__button context-meter__button--${level} pau-field`}
 			aria-expanded={open}
 			aria-controls="context-meter-details"
 			onclick={toggle}>
@@ -160,16 +160,14 @@
 		align-items: center;
 		min-height: var(--pau-size-row-sm);
 		padding: var(--pau-space-1);
-		color: var(--pau-text);
 		text-align: start;
-		background: transparent;
+		background-color: transparent;
 		/* Quiet like the other composer footer controls until usage nears the limit. */
 		border: 1px solid transparent;
 		border-radius: var(--pau-radius-control);
 		font: inherit;
 		font-variant-numeric: tabular-nums;
 		cursor: pointer;
-		transition: border-color var(--pau-duration-feedback) var(--pau-ease-standard);
 	}
 
 	.context-meter__button:focus-visible {
@@ -219,15 +217,14 @@
 		color: var(--pau-text-muted);
 	}
 
-	.context-meter__button:hover:not(.context-meter__button--warning, .context-meter__button--danger) {
-		border-color: var(--pau-accent);
-	}
-
-	.context-meter__button--warning {
+	/* Near the limit, the state border outranks the shared hover border. */
+	.context-meter__button.context-meter__button--warning,
+	.context-meter__button.context-meter__button--warning:hover {
 		border-color: var(--pau-warning);
 	}
 
-	.context-meter__button--danger {
+	.context-meter__button.context-meter__button--danger,
+	.context-meter__button.context-meter__button--danger:hover {
 		border-color: var(--pau-danger);
 	}
 

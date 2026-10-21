@@ -234,7 +234,9 @@
 	{:else if loadError}
 		<div class="session-tree__error" role="alert">
 			<p>{loadError}</p>
-			<button type="button" onclick={() => void fetchTree(tree === undefined)}>Try again</button>
+			<button type="button" class="pau-button pau-button--secondary" onclick={() => void fetchTree(tree === undefined)}>
+				Try again
+			</button>
 		</div>
 	{:else if !tree || treeLoading.active}
 		{#if treeLoading.visible}<p class="session-tree__note" role="status">Loading session tree…</p>{/if}
@@ -262,7 +264,7 @@
 				<!-- The tree element handles every row's keys, as the ARIA tree pattern expects. -->
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<div
-					class="session-tree__row"
+					class="session-tree__row pau-row"
 					class:session-tree__row--path={row.onPath}
 					class:session-tree__row--run={row.kind === 'run'}
 					role="treeitem"
@@ -318,6 +320,7 @@
 					{/if}
 					<button
 						type="button"
+						class="pau-button pau-button--secondary"
 						disabled={branching || !branchTarget.onPath || branchUnavailable !== undefined}
 						onclick={() => void branch(branchTarget.item.id)}>
 						{branching ? 'Branching…' : 'Branch from here'}
@@ -404,7 +407,6 @@
 		height: var(--pau-size-row-sm);
 		padding-inline: calc(var(--pau-space-1) + min(var(--depth), 6) * var(--pau-space-3)) var(--pau-space-2);
 		border-left: 2px solid transparent;
-		color: var(--pau-text-muted);
 		font-size: var(--pau-type-sm);
 		white-space: nowrap;
 		cursor: pointer;
@@ -416,7 +418,7 @@
 	}
 
 	.session-tree__row[aria-selected='true'] {
-		background: var(--pau-surface-raised);
+		background-color: var(--pau-surface-raised);
 	}
 
 	.session-tree__row:focus-visible {
@@ -492,25 +494,6 @@
 
 	button {
 		justify-self: start;
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
-		color: var(--pau-text);
-		background: var(--pau-surface-raised);
-		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-control);
-		font: inherit;
-		font-size: var(--pau-type-sm);
-		cursor: pointer;
-	}
-
-	button:disabled {
-		cursor: not-allowed;
-		opacity: 0.5;
-	}
-
-	button:focus-visible {
-		outline: var(--pau-focus-width) solid var(--pau-focus);
-		outline-offset: var(--pau-focus-offset);
 	}
 
 	.session-tree__sr-only {

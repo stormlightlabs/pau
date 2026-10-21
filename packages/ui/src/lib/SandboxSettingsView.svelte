@@ -562,7 +562,6 @@
 	.sandbox__choice input,
 	.sandbox__check input {
 		margin-top: var(--pau-space-1);
-		accent-color: var(--pau-focus);
 	}
 
 	.sandbox__choice strong,

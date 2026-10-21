@@ -108,19 +108,6 @@ Verification:
 - Component-test switching between tabs with scrollback and returning to the
   previous scroll position and focus.
 
-### 2.230 Hover and press states
-
-Status: planned
-Blocked by: none
-
-Use token-driven color changes for hover and press on every control, with no
-press movement in dense rows.
-
-Verification:
-
-- Confirm each control class in Storybook has hover, press, focus, and
-  disabled states, and that hover is absent under `(hover: none)`.
-
 ### 2.231 Desktop pointer and selection
 
 Status: planned

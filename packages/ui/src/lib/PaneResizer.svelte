@@ -143,9 +143,14 @@
 		content: '';
 	}
 
-	.pane-resizer:hover::after,
 	.pane-resizer.dragging::after {
 		background: var(--pau-accent);
+	}
+
+	@media (hover: hover) {
+		.pane-resizer:hover::after {
+			background: var(--pau-accent);
+		}
 	}
 
 	.pane-resizer:focus-visible {

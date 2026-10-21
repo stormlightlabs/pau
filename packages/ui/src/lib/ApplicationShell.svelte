@@ -303,7 +303,7 @@
 			{#if hasContext}
 				<button
 					type="button"
-					class="app-shell__icon-button"
+					class="app-shell__icon-button pau-utility-button"
 					aria-label={contextToggleLabel}
 					aria-expanded={narrow.current ? contextOpen : !contextHidden}
 					title={withShortcut(contextToggleLabel, 'panel.context')}
@@ -314,7 +314,7 @@
 			{#if inspector}
 				<button
 					type="button"
-					class="app-shell__icon-button"
+					class="app-shell__icon-button pau-utility-button"
 					aria-label={inspectorToggleLabel}
 					aria-expanded={inspectorVisible}
 					title={withShortcut(inspectorToggleLabel, 'panel.inspector')}
@@ -326,7 +326,7 @@
 
 		<button
 			type="button"
-			class="app-shell__command-input"
+			class="app-shell__command-input pau-field"
 			aria-haspopup="dialog"
 			onclick={(event) => {
 				// A click from Enter or Space reports no pointer detail and opens at once.
@@ -353,6 +353,7 @@
 						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the app owner resolves rail destinations -->
 						<a
 							href={item.href}
+							class="pau-row"
 							class:active={item.active}
 							aria-current={item.active ? 'page' : undefined}
 							aria-label={item.label}
@@ -365,7 +366,7 @@
 						{@const reason = item.unavailable ?? 'Coming soon'}
 						<button
 							type="button"
-							class="app-shell__unavailable"
+							class="app-shell__unavailable pau-row"
 							class:active={item.active}
 							aria-current={item.active ? 'page' : undefined}
 							aria-disabled="true"
@@ -393,7 +394,7 @@
 			bind:offsetWidth={contextWidth}>
 			<div class="app-shell__rail-heading pau-section-label">
 				<span>{contextLabel}</span>
-				<button type="button" aria-label="Close navigation" onclick={closeContext}>
+				<button type="button" class="pau-utility-button" aria-label="Close navigation" onclick={closeContext}>
 					<Icon name="close" size={18} />
 				</button>
 			</div>
@@ -404,7 +405,11 @@
 					{#each contextItems as item (item.id)}
 						<li>
 							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the app owner resolves rail destinations -->
-							<a href={item.href} class:active={item.active} aria-current={item.active ? 'page' : undefined}>
+							<a
+								href={item.href}
+								class="pau-row"
+								class:active={item.active}
+								aria-current={item.active ? 'page' : undefined}>
 								<span class:attention={item.attention} class="app-shell__item-dot"></span>
 								<span>{item.label}</span>
 								{#if item.status}<small>{item.status}</small>{/if}
@@ -448,7 +453,7 @@
 			bind:offsetWidth={inspectorWidth}>
 			<div class="app-shell__rail-heading pau-section-label">
 				<span>Inspector</span>
-				<button type="button" aria-label="Close inspector" onclick={closeInspector}>
+				<button type="button" class="pau-utility-button" aria-label="Close inspector" onclick={closeInspector}>
 					<Icon name="close" size={18} />
 				</button>
 			</div>
@@ -630,7 +635,7 @@
 		padding-inline: var(--pau-space-3);
 		border: 1px solid var(--shell-border);
 		border-radius: var(--pau-radius-control);
-		background: var(--shell-surface);
+		background-color: var(--shell-surface);
 		color: inherit;
 		font: inherit;
 		cursor: pointer;
@@ -661,10 +666,6 @@
 		text-align: start;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-
-	.app-shell__command-input:hover {
-		border-color: var(--shell-muted);
 	}
 
 	.app-shell__command-input kbd {
@@ -698,25 +699,17 @@
 		height: var(--pau-size-target-touch);
 		margin-inline: auto;
 		padding: 0;
-		color: var(--shell-muted);
-		background: transparent;
 		border: 0;
 		text-decoration: none;
 	}
 
-	.app-shell__product-rail a:hover {
-		color: var(--shell-text);
-		background: var(--shell-surface-raised);
-	}
-
 	.app-shell__product-rail .active {
 		color: var(--shell-accent);
-		background: var(--shell-surface-raised);
+		background-color: var(--shell-surface-raised);
 	}
 
 	.app-shell__product-rail .app-shell__unavailable {
 		cursor: not-allowed;
-		opacity: 0.45;
 	}
 
 	.app-shell__attention {
@@ -771,14 +764,12 @@
 		gap: var(--pau-space-2);
 		min-height: var(--pau-size-row-md);
 		padding-inline: var(--pau-space-3);
-		color: var(--shell-muted);
 		text-decoration: none;
 	}
 
-	.app-shell__context-rail a:hover,
 	.app-shell__context-rail a.active {
 		color: var(--shell-text);
-		background: var(--shell-surface-raised);
+		background-color: var(--shell-surface-raised);
 	}
 
 	@media (pointer: coarse) {
@@ -827,7 +818,7 @@
 	/* An open pane shows as a pressed toggle, as in the design prototype. */
 	.app-shell__panel-toggles .app-shell__icon-button[aria-expanded='true'] {
 		color: var(--shell-accent);
-		background: var(--shell-surface-raised);
+		background-color: var(--shell-surface-raised);
 	}
 
 	.app-shell__icon-button,
@@ -836,16 +827,8 @@
 		width: 2.75rem;
 		height: var(--pau-size-target-touch);
 		padding: 0;
-		color: var(--shell-muted);
-		background: transparent;
 		border: 0;
 		cursor: pointer;
-	}
-
-	.app-shell__icon-button:hover,
-	.app-shell__rail-heading button:hover {
-		color: var(--shell-text);
-		background: var(--shell-surface-raised);
 	}
 
 	.app-shell__connection {

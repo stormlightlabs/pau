@@ -68,6 +68,7 @@
 					<div class="process-row__identity" role="cell">
 						<button
 							type="button"
+							class="pau-row"
 							aria-label={`${expanded === process.processId ? 'Collapse' : 'Expand'} ${process.label} process tree`}
 							aria-expanded={expanded === process.processId}
 							onclick={() => toggle(process.processId)}>
@@ -196,7 +197,6 @@
 		min-width: 0;
 		padding: var(--pau-space-1) 0;
 		color: inherit;
-		background: transparent;
 		border: 0;
 		font: inherit;
 		text-align: start;

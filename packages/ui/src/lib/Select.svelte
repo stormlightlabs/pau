@@ -353,7 +353,7 @@
 		{id}
 		type="button"
 		role="combobox"
-		class="select__trigger"
+		class="select__trigger pau-field"
 		class:select__trigger--quiet={variant === 'quiet'}
 		aria-label={label}
 		aria-labelledby={labelledby}
@@ -400,8 +400,9 @@
 			<div
 				id={optionId(index)}
 				role="option"
-				class="select__option"
+				class="select__option pau-option"
 				class:select__option--active={index === activeIndex}
+				class:pau-option--active={index === activeIndex}
 				aria-selected={index === selectedIndex}
 				aria-labelledby={labelId}
 				aria-disabled={option.disabled || undefined}
@@ -455,27 +456,21 @@
 		width: 100%;
 		min-height: var(--pau-size-row-md);
 		padding-inline: var(--pau-space-3) var(--pau-space-2);
-		color: var(--pau-text);
 		font: inherit;
 		font-size: var(--pau-type-md);
 		text-align: start;
-		background: var(--pau-canvas);
+		background-color: var(--pau-canvas);
 		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
 		cursor: pointer;
-		transition: border-color var(--pau-duration-feedback) var(--pau-ease-standard);
 	}
 
 	.select__trigger--quiet {
 		min-height: var(--pau-size-row-sm);
 		padding-inline: var(--pau-space-1);
 		font-size: inherit;
-		background: transparent;
+		background-color: transparent;
 		border-color: transparent;
-	}
-
-	.select__trigger:hover:not(:disabled, [aria-disabled='true']) {
-		border-color: var(--pau-accent);
 	}
 
 	.select__trigger:focus-visible {
@@ -484,7 +479,6 @@
 	}
 
 	.select__trigger:disabled {
-		color: var(--pau-text-muted);
 		cursor: not-allowed;
 	}
 
@@ -563,18 +557,6 @@
 		padding: var(--pau-space-1) var(--pau-space-3) var(--pau-space-1) var(--pau-space-2);
 		border-radius: var(--pau-radius-control);
 		cursor: default;
-	}
-
-	.select__option--active {
-		background: var(--pau-selection);
-	}
-
-	.select__option--active:active:not([aria-disabled='true']) {
-		background: var(--pau-surface);
-	}
-
-	.select__option[aria-disabled='true'] {
-		color: var(--pau-text-muted);
 	}
 
 	.select__option :global(.select__check) {

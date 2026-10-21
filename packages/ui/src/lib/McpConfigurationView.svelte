@@ -87,8 +87,9 @@
 						{#each configuration.servers as server (server.name)}
 							<li>
 								<button
-									class="mcp__server-row"
+									class="mcp__server-row pau-row"
 									class:selected={selected?.name === server.name}
+									aria-current={selected?.name === server.name ? 'true' : undefined}
 									type="button"
 									onclick={() => (selectedName = server.name)}>
 									<span
@@ -291,8 +292,6 @@
 		width: 100%;
 		min-height: 3.25rem;
 		padding: var(--pau-space-2) var(--pau-space-3);
-		color: var(--pau-text-muted);
-		background: transparent;
 		border: 0;
 		border-left: 2px solid transparent;
 		font: inherit;
@@ -302,7 +301,7 @@
 
 	.mcp__server-row.selected {
 		color: var(--pau-text);
-		background: var(--pau-surface-raised);
+		background-color: var(--pau-surface-raised);
 		border-left-color: var(--pau-focus);
 	}
 

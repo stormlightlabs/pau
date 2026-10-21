@@ -2139,7 +2139,7 @@
 							{#if onStartSession}
 								<button
 									type="button"
-									class="session-rail__icon-button"
+									class="session-rail__icon-button pau-utility-button"
 									aria-label={`New session in ${workspace.name}`}
 									title={`New session in ${workspace.name}`}
 									disabled={disconnected || startingWorkspaceId !== undefined}
@@ -2150,7 +2150,7 @@
 							{#if onLoadSavedSessions && onResumeSession}
 								<button
 									type="button"
-									class="session-rail__icon-button"
+									class="session-rail__icon-button pau-utility-button"
 									aria-label={`Saved sessions in ${workspace.name}`}
 									aria-pressed={pickerWorkspaceId === workspace.id}
 									title={`Saved sessions in ${workspace.name}`}
@@ -2203,6 +2203,7 @@
 										<button
 											type="button"
 											id={`session-row-${session.id}`}
+											class="pau-row"
 											class:active={session.id === activeSessionId}
 											title={session.title}
 											aria-current={session.id === activeSessionId ? 'page' : undefined}
@@ -2717,7 +2718,7 @@
 				<!-- Mouse down must not move focus out of the composer. -->
 				<button
 					type="button"
-					class="session-view__jump"
+					class="session-view__jump pau-button pau-button--secondary"
 					title="Jump to latest (Ctrl+End)"
 					onmousedown={(event) => event.preventDefault()}
 					onclick={scrollToLatest}
@@ -2736,7 +2737,7 @@
 							{#if queuedCount > 0}
 								<button
 									type="button"
-									class="session-queue__clear"
+									class="pau-button pau-button--secondary"
 									disabled={disconnected}
 									onclick={() => void clearQueue()}>
 									Clear queue
@@ -3061,12 +3062,11 @@
 
 	.session-rail .session-rail__icon-button[aria-pressed='true'] {
 		color: var(--pau-accent);
-		background: var(--pau-surface-raised);
+		background-color: var(--pau-surface-raised);
 	}
 
 	.session-rail .session-rail__icon-button:disabled {
 		cursor: not-allowed;
-		opacity: 0.5;
 	}
 
 	.session-rail section + section {
@@ -3109,22 +3109,16 @@
 		width: 100%;
 		min-height: var(--pau-size-row-md);
 		padding: 0 var(--pau-space-3) 0 var(--pau-space-4);
-		color: var(--pau-text-muted);
-		background: transparent;
+		background-color: transparent;
 		border: 0;
 		font: inherit;
 		text-align: left;
 		cursor: pointer;
 	}
 
-	.session-rail button:hover,
 	.session-rail button.active {
 		color: var(--pau-text);
-		background: var(--pau-surface-raised);
-	}
-
-	.session-rail button.active {
-		background: var(--pau-selection);
+		background-color: var(--pau-selection);
 		box-shadow: inset 2px 0 0 var(--pau-accent);
 	}
 
@@ -3448,24 +3442,16 @@
 		border: 0;
 	}
 
+	/* A secondary button that floats over the transcript, so it needs a fill. */
 	.session-view__jump {
 		grid-area: transcript;
 		z-index: 1;
 		align-self: end;
 		justify-self: center;
-		display: inline-flex;
-		align-items: center;
 		gap: var(--pau-space-2);
-		min-height: var(--pau-size-row-md);
 		margin-bottom: var(--pau-space-3);
-		padding-inline: var(--pau-space-3);
-		color: var(--pau-text);
-		background: var(--pau-surface);
-		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-control);
+		background-color: var(--pau-surface);
 		box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 24%);
-		font: inherit;
-		cursor: pointer;
 	}
 
 	.session-view__jump small {
@@ -3747,22 +3733,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-
-	.session-queue__clear {
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
-		border-radius: var(--pau-radius-control);
-		color: var(--pau-text);
-		background: transparent;
-		border: 1px solid var(--pau-border);
-		font: inherit;
-		cursor: pointer;
-	}
-
-	.session-queue__clear:disabled {
-		cursor: not-allowed;
-		opacity: 0.5;
 	}
 
 	/*

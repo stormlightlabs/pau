@@ -26,6 +26,7 @@
 				<li
 					id="{id}-option-{index}"
 					role="option"
+					class="pau-row"
 					aria-selected={index === selected}
 					aria-disabled={command.unavailable ? 'true' : undefined}
 					class:command-completion__option--selected={index === selected}
@@ -76,7 +77,7 @@
 	}
 
 	.command-completion__option--selected {
-		background: var(--pau-canvas);
+		background-color: var(--pau-canvas);
 		box-shadow: inset 2px 0 0 var(--pau-accent);
 	}
 

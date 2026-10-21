@@ -14,7 +14,11 @@
 		</div>
 		<p>{capability.description}</p>
 	</div>
-	<button type="button" aria-pressed={enabled} onclick={() => (enabled = !enabled)}>
+	<button
+		type="button"
+		class="pau-button pau-button--primary"
+		aria-pressed={enabled}
+		onclick={() => (enabled = !enabled)}>
 		{enabled ? 'Disable' : 'Enable'}
 	</button>
 </article>
@@ -77,32 +81,6 @@
 
 	button {
 		min-width: 5.25rem;
-		min-height: var(--pau-size-target-touch);
-		padding: var(--pau-space-2) var(--pau-space-3);
-		color: var(--pau-canvas);
-		background: var(--pau-accent);
-		border: 1px solid transparent;
-		border-radius: var(--pau-radius-control);
-		font: inherit;
-		font-size: var(--pau-type-sm);
-		font-weight: var(--pau-weight-semibold);
-		cursor: pointer;
-		transition:
-			background var(--pau-duration-feedback) var(--pau-ease-standard),
-			transform var(--pau-duration-feedback) var(--pau-ease-standard);
-	}
-
-	button:hover {
-		background: var(--pau-info);
-	}
-
-	button:active {
-		transform: translateY(1px);
-	}
-
-	button:focus-visible {
-		outline: var(--pau-focus-width) solid var(--pau-focus);
-		outline-offset: var(--pau-focus-offset);
 	}
 
 	@media (max-width: 30rem) {

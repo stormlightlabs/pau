@@ -166,7 +166,7 @@
 	<button
 		bind:this={trigger}
 		type="button"
-		class="model-picker__trigger"
+		class="model-picker__trigger pau-field"
 		aria-label={`Model: ${label}`}
 		aria-haspopup="true"
 		aria-expanded={open}
@@ -194,7 +194,8 @@
 			{#if selectError}<p class="model-picker__error" role="alert">{selectError}</p>{/if}
 			{#if loadError}
 				<p class="model-picker__error" role="alert">{loadError}</p>
-				<button type="button" onclick={() => void fetchModels()}>Try again</button>
+				<button type="button" class="pau-button pau-button--secondary" onclick={() => void fetchModels()}
+					>Try again</button>
 			{:else if !models || modelsLoading.active}
 				{#if modelsLoading.visible}<p class="model-picker__note" role="status">Loading models…</p>{/if}
 			{:else if models.length === 0}
@@ -205,6 +206,7 @@
 						<li>
 							<button
 								type="button"
+								class="pau-option"
 								aria-current={model.current ? 'true' : undefined}
 								disabled={pendingId !== undefined}
 								onclick={() => void select(model)}>
@@ -236,7 +238,7 @@
 
 	button {
 		color: var(--pau-text);
-		background: transparent;
+		background-color: transparent;
 		border: 1px solid transparent;
 		border-radius: var(--pau-radius-control);
 		font: inherit;
@@ -261,11 +263,6 @@
 		min-height: var(--pau-size-row-sm);
 		padding-inline: var(--pau-space-1);
 		text-align: start;
-		transition: border-color var(--pau-duration-feedback) var(--pau-ease-standard);
-	}
-
-	.model-picker__trigger:hover:not(:disabled) {
-		border-color: var(--pau-accent);
 	}
 
 	.model-picker__value {
@@ -348,13 +345,8 @@
 		cursor: default;
 	}
 
-	li button:hover:not(:disabled),
 	li button:focus-visible {
-		background: var(--pau-selection);
-	}
-
-	li button:active:not(:disabled) {
-		background: var(--pau-surface);
+		background-color: var(--pau-selection);
 	}
 
 	li button :global(.model-picker__check) {
@@ -390,7 +382,6 @@
 		justify-self: start;
 		min-height: var(--pau-size-row-md);
 		margin: 0 var(--pau-space-2) var(--pau-space-2);
-		padding-inline: var(--pau-space-3);
 		border-color: var(--pau-border);
 	}
 

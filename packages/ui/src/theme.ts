@@ -393,9 +393,23 @@ export const THEMES = {
 	})
 } as const satisfies Record<ThemeName, PauTheme>;
 
+/**
+ * How far hover and press move a control from rest, as a percentage of the
+ * theme's text color.
+ *
+ * `hover` and `press` tint whatever surface a control sits on: the shared
+ * control rules lay them over the control's own background, so one value
+ * works on the canvas, the surface, and a button with a fill. `accentHover`
+ * and `accentPress` mix text into the accent for the primary button. Press
+ * stays low enough that muted and danger text keep 4.5:1 on the pressed
+ * canvas and surface in every bundled theme, which the theme tests check.
+ */
+export const STATE_MIX = { hover: 5, press: 8, accentHover: 25, accentPress: 45 } as const;
+
 /** Converts a bundled theme and font choice into the CSS properties used by Pau components. */
 export function themeCssProperties(themeName: ThemeName, fontName: UiFontName): Record<string, string> {
 	const { colors, syntax } = THEMES[themeName];
+	const tint = (base: string, percent: number) => `color-mix(in srgb, ${colors.text} ${percent}%, ${base})`;
 	return {
 		'--pau-canvas': colors.canvas,
 		'--pau-surface': colors.surface,
@@ -410,6 +424,10 @@ export function themeCssProperties(themeName: ThemeName, fontName: UiFontName): 
 		'--pau-danger': colors.danger,
 		'--pau-info': colors.info,
 		'--pau-selection': colors.selection,
+		'--pau-hover': tint('transparent', STATE_MIX.hover),
+		'--pau-press': tint('transparent', STATE_MIX.press),
+		'--pau-accent-hover': tint(colors.accent, STATE_MIX.accentHover),
+		'--pau-accent-press': tint(colors.accent, STATE_MIX.accentPress),
 		'--pau-syntax-comment': syntax.comment,
 		'--pau-syntax-keyword': syntax.keyword,
 		'--pau-syntax-string': syntax.string,

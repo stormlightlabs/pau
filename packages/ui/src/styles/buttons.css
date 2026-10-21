@@ -12,6 +12,9 @@
  * A disabled button of any variant drops to muted text, and a disabled
  * primary also loses the accent fill for the raised surface. Opacity is not
  * used, because a faded accent still reads as an enabled primary.
+ *
+ * Hover and press follow the rules in `states.css`: color only, with the
+ * tint drawn as a background image so it lies over the button's own fill.
  */
 .pau-button {
 	display: inline-flex;
@@ -21,17 +24,17 @@
 	min-height: var(--pau-size-row-md);
 	padding-inline: var(--pau-space-3);
 	color: var(--pau-text);
-	background: transparent;
+	background-color: transparent;
 	border: 1px solid var(--pau-border);
 	border-radius: var(--pau-radius-control);
 	font: inherit;
 	font-size: var(--pau-type-md);
 	font-weight: var(--pau-weight-medium);
 	cursor: pointer;
-}
-
-.pau-button:hover:not(:disabled) {
-	border-color: var(--pau-text-muted);
+	transition:
+		color var(--pau-duration-feedback) var(--pau-ease-standard),
+		background-color var(--pau-duration-feedback) var(--pau-ease-standard),
+		border-color var(--pau-duration-feedback) var(--pau-ease-standard);
 }
 
 .pau-button:focus-visible {
@@ -46,19 +49,14 @@
 
 .pau-button--primary {
 	color: var(--pau-canvas);
-	background: var(--pau-accent);
+	background-color: var(--pau-accent);
 	border-color: var(--pau-accent);
 	font-weight: var(--pau-weight-semibold);
 }
 
-.pau-button--primary:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--pau-accent) 85%, var(--pau-text));
-	border-color: color-mix(in srgb, var(--pau-accent) 85%, var(--pau-text));
-}
-
 .pau-button--primary:disabled {
 	color: var(--pau-text-muted);
-	background: var(--pau-surface-raised);
+	background-color: var(--pau-surface-raised);
 	border-color: var(--pau-surface-raised);
 }
 
@@ -71,23 +69,89 @@
 	border-color: color-mix(in srgb, var(--pau-border) 50%, transparent);
 }
 
-/* Quiet buttons show no border until hover, for utilities beside content. */
+/*
+ * Quiet buttons show no border until hover, for utilities beside content.
+ * They rest in muted text, so a disabled one fades that text further.
+ */
 .pau-button--quiet {
 	color: var(--pau-text-muted);
 	border-color: transparent;
 }
 
-.pau-button--quiet:hover:not(:disabled) {
-	color: var(--pau-text);
-	border-color: var(--pau-border);
+.pau-button--quiet:disabled {
+	color: color-mix(in srgb, var(--pau-text-muted) 55%, transparent);
 }
 
 .pau-button--danger {
 	color: var(--pau-danger);
 }
 
-.pau-button--danger:hover:not(:disabled) {
-	border-color: var(--pau-danger);
+@media (hover: hover) {
+	.pau-button:hover:not(:disabled) {
+		background-image: linear-gradient(var(--pau-hover), var(--pau-hover));
+		border-color: var(--pau-text-muted);
+	}
+
+	.pau-button--quiet:hover:not(:disabled) {
+		color: var(--pau-text);
+		border-color: var(--pau-border);
+	}
+
+	.pau-button--danger:hover:not(:disabled) {
+		border-color: var(--pau-danger);
+	}
+
+	/* The primary keeps a solid fill and moves its accent toward text. */
+	.pau-button--primary:hover:not(:disabled) {
+		background-color: var(--pau-accent-hover);
+		background-image: none;
+		border-color: var(--pau-accent-hover);
+	}
+}
+
+.pau-button:active:not(:disabled) {
+	background-image: linear-gradient(var(--pau-press), var(--pau-press));
+}
+
+.pau-button--primary:active:not(:disabled) {
+	background-color: var(--pau-accent-press);
+	background-image: none;
+	border-color: var(--pau-accent-press);
+}
+
+/*
+ * Compact utilities: icon buttons in rails and toolbars, and small text
+ * actions beside content such as Copy. Components own the size, border,
+ * and any toggled-on look such as `aria-pressed`. These rules
+ * own the muted rest color and the hover and press tint, so components set a
+ * rest `color` only when it differs and never use the `background` shorthand.
+ */
+.pau-utility-button {
+	color: var(--pau-text-muted);
+	background-color: transparent;
+	transition: color var(--pau-duration-feedback) var(--pau-ease-standard);
+}
+
+@media (hover: hover) {
+	.pau-utility-button:hover:not(:disabled, [aria-disabled='true']) {
+		color: var(--pau-text);
+		background-image: linear-gradient(var(--pau-hover), var(--pau-hover));
+	}
+}
+
+.pau-utility-button:active:not(:disabled, [aria-disabled='true']) {
+	color: var(--pau-text);
+	background-image: linear-gradient(var(--pau-press), var(--pau-press));
+}
+
+.pau-utility-button:focus-visible {
+	outline: var(--pau-focus-width) solid var(--pau-focus);
+	outline-offset: var(--pau-focus-offset);
+}
+
+/* A disabled utility fades whole, because its rest color is already muted. */
+.pau-utility-button:is(:disabled, [aria-disabled='true']) {
+	opacity: 0.5;
 }
 
 @media (pointer: coarse) {

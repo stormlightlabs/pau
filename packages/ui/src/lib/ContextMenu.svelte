@@ -147,7 +147,7 @@
 			type="button"
 			role="menuitem"
 			tabindex="-1"
-			class="context-menu__item"
+			class="context-menu__item pau-option"
 			aria-disabled={item.disabled ? 'true' : undefined}
 			aria-labelledby={`${menuId}-${item.id}-label`}
 			aria-describedby={item.disabled && item.reason ? `${menuId}-${item.id}-reason` : undefined}
@@ -190,10 +190,8 @@
 		gap: 2px;
 		min-height: var(--pau-size-row-sm);
 		padding: var(--pau-space-1) var(--pau-space-2);
-		color: inherit;
 		font: inherit;
 		text-align: left;
-		background: transparent;
 		border: 0;
 		border-radius: var(--pau-radius-control);
 		cursor: default;
@@ -205,16 +203,12 @@
 
 	.context-menu__item:focus-visible,
 	.context-menu__item:focus {
-		background: var(--pau-selection);
+		background-color: var(--pau-selection);
 	}
 
 	.context-menu__item:focus-visible {
 		outline: var(--pau-focus-width) solid var(--pau-focus);
 		outline-offset: var(--pau-focus-offset-inset);
-	}
-
-	.context-menu__item[aria-disabled='true'] {
-		color: var(--pau-text-muted);
 	}
 
 	.context-menu__item small {

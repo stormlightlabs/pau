@@ -20,7 +20,7 @@
 </script>
 
 {#snippet more()}
-	<button type="button" class="tool-output__more" onclick={() => (shown += toolOutputLineStep)}>
+	<button type="button" class="tool-output__more pau-utility-button" onclick={() => (shown += toolOutputLineStep)}>
 		{from === 'tail' ? `Show ${next} earlier lines` : `Show ${next} more lines`}
 	</button>
 {/snippet}
@@ -93,18 +93,11 @@
 		min-height: var(--pau-size-row-sm);
 		margin-block: var(--pau-space-1);
 		padding: 0 var(--pau-space-2);
-		color: var(--pau-text-muted);
 		font: inherit;
 		font-size: var(--pau-type-xs);
-		background: transparent;
 		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
 		cursor: pointer;
-		transition: color var(--pau-duration-feedback) var(--pau-ease-standard);
-	}
-
-	.tool-output__more:hover {
-		color: var(--pau-text);
 	}
 
 	.tool-output__more:focus-visible {

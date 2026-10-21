@@ -178,13 +178,14 @@
 			<div class="extension-ui__actions">
 				<button
 					type="button"
-					class="secondary"
+					class="pau-button pau-button--secondary"
 					data-initial-focus={onOpenTerminal ? undefined : ''}
 					onclick={() => void respond({ id: dialog.id, cancelled: true })}>
 					Dismiss
 				</button>
 				{#if onOpenTerminal}
-					<button type="button" class="primary" data-initial-focus onclick={onOpenTerminal}>Open Pi in terminal</button>
+					<button type="button" class="pau-button pau-button--primary" data-initial-focus onclick={onOpenTerminal}
+						>Open Pi in terminal</button>
 				{/if}
 			</div>
 		{:else}
@@ -208,12 +209,12 @@
 				<div class="extension-ui__actions">
 					<button
 						type="button"
-						class="secondary"
+						class="pau-button pau-button--secondary"
 						disabled={responding}
 						onclick={() => void respond({ id: dialog.id, confirmed: false })}>No</button>
 					<button
 						type="button"
-						class="primary"
+						class="pau-button pau-button--primary"
 						data-initial-focus
 						disabled={responding}
 						onclick={() => void respond({ id: dialog.id, confirmed: true })}>Yes</button>
@@ -223,7 +224,7 @@
 				<form onsubmit={(event) => submitChoice(event, dialog.id, options)}>
 					<fieldset class="extension-ui__options" aria-labelledby={`extension-dialog-${dialog.id}`}>
 						{#each options as option, index (`${index}-${option}`)}
-							<label class="extension-ui__option">
+							<label class="extension-ui__option pau-row">
 								<input
 									type="radio"
 									name={`extension-option-${dialog.id}`}
@@ -240,11 +241,13 @@
 					<div class="extension-ui__actions">
 						<button
 							type="button"
-							class="secondary"
+							class="pau-button pau-button--secondary"
 							disabled={responding}
 							onclick={() => void respond({ id: dialog.id, cancelled: true })}>Cancel</button>
-						<button type="submit" class="primary" disabled={responding || selectedOption < 0 || options.length === 0}
-							>Select</button>
+						<button
+							type="submit"
+							class="pau-button pau-button--primary"
+							disabled={responding || selectedOption < 0 || options.length === 0}>Select</button>
 					</div>
 				</form>
 			{:else}
@@ -260,10 +263,10 @@
 					<div class="extension-ui__actions">
 						<button
 							type="button"
-							class="secondary"
+							class="pau-button pau-button--secondary"
 							disabled={responding}
 							onclick={() => void respond({ id: dialog.id, cancelled: true })}>Cancel</button>
-						<button type="submit" class="primary" disabled={responding}>Submit</button>
+						<button type="submit" class="pau-button pau-button--primary" disabled={responding}>Submit</button>
 					</div>
 				</form>
 			{/if}
@@ -407,7 +410,7 @@
 	}
 
 	.extension-ui__option:has(input:checked) {
-		background: var(--pau-surface-raised);
+		background-color: var(--pau-surface-raised);
 	}
 
 	.extension-ui__option:has(input:checked) :global(.extension-ui__check) {
@@ -483,31 +486,6 @@
 	.extension-ui__dialog button:focus-visible {
 		outline: var(--pau-focus-width) solid var(--pau-focus);
 		outline-offset: var(--pau-focus-offset);
-	}
-
-	.extension-ui__dialog button {
-		min-height: var(--pau-size-target-touch);
-		padding-inline: var(--pau-space-3);
-		color: var(--pau-text);
-		background: transparent;
-		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-control);
-		font: inherit;
-		font-weight: var(--pau-weight-semibold);
-		cursor: pointer;
-	}
-
-	/* The accent marks the one action that confirms the request. */
-	.extension-ui__dialog button.primary {
-		color: var(--pau-canvas);
-		background: var(--pau-accent);
-		border-color: transparent;
-	}
-
-	.extension-ui__dialog button:disabled {
-		color: var(--pau-text-muted);
-		background: var(--pau-surface-raised);
-		cursor: not-allowed;
 	}
 
 	.extension-ui__actions {

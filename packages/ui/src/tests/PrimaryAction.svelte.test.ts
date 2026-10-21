@@ -109,7 +109,8 @@ test('a disabled primary drops the accent for muted text on the raised surface',
 	await userEvent.click(editor);
 	await userEvent.keyboard('{End} // changed');
 	await expect.element(save).toBeEnabled();
-	expect(getComputedStyle(save.element()).color).toBe(tokenColor('--pau-canvas'));
+	// Buttons fade between state colors, so wait for the enabled color to land.
+	await expect.poll(() => getComputedStyle(save.element()).color).toBe(tokenColor('--pau-canvas'));
 	expect(accentButtons(container)).toHaveLength(1);
 	expect(accentButtons(container)[0]).toBe(save.element());
 });

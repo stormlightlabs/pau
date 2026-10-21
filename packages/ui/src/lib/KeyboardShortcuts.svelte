@@ -86,7 +86,11 @@
 	}}>
 	<header>
 		<h2 id="keyboard-shortcuts-title">Keyboard shortcuts</h2>
-		<button type="button" aria-label="Close keyboard shortcuts" onclick={() => (open = false)}>
+		<button
+			type="button"
+			class="pau-utility-button"
+			aria-label="Close keyboard shortcuts"
+			onclick={() => (open = false)}>
 			<Icon name="close" size={18} />
 		</button>
 	</header>
@@ -201,21 +205,14 @@
 		width: var(--pau-size-target-compact);
 		height: var(--pau-size-target-compact);
 		padding: 0;
-		color: var(--pau-text-muted);
-		background: transparent;
 		border: 0;
 		border-radius: var(--pau-radius-control);
 		cursor: pointer;
 	}
 
-	header button:hover {
-		color: var(--pau-text);
-		background: var(--pau-surface-raised);
-	}
-
 	header button:focus-visible {
-		outline: 2px solid var(--pau-focus);
-		outline-offset: 1px;
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset);
 	}
 
 	.keyboard-shortcuts__note {

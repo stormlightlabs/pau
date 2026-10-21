@@ -1,0 +1,153 @@
+/*
+ * Hover and press for rows, list options, dropdown triggers, and links.
+ * Buttons, choices, and disclosures follow the same rule in their own files.
+ *
+ * Hover and press change color only. Nothing translates or scales, so a
+ * pressed row never shifts its neighbors. Hover rules sit inside
+ * `@media (hover: hover)`, so a touch screen never leaves a tapped control
+ * looking hovered. Disabled controls match neither rule and keep one
+ * disabled look, and focus keeps its own ring.
+ *
+ * The hover and press tints (`--pau-hover`, `--pau-press`) are translucent
+ * text color, drawn as a background image. They lie over whatever fill a
+ * component gives its control at rest, so components set `background-color`,
+ * never the `background` shorthand, which would clear the tint.
+ */
+
+/*
+ * Rail rows, tree rows, tabs, and result rows. The shared rule owns the muted
+ * rest color, so components set `color` only for a different rest color or a
+ * selected state. A selected row, marked with `aria-current`,
+ * `aria-selected`, or `aria-pressed`, keeps its selection fill under the
+ * pointer. A disabled row fades, because its rest color is already muted.
+ */
+.pau-row {
+	color: var(--pau-text-muted);
+	background-color: transparent;
+}
+
+@media (hover: hover) {
+	.pau-row:hover:not(
+			:disabled,
+			[aria-disabled='true'],
+			[aria-current='page'],
+			[aria-current='true'],
+			[aria-selected='true'],
+			[aria-pressed='true'],
+			:has(input:disabled)
+		) {
+		color: var(--pau-text);
+		background-image: linear-gradient(var(--pau-hover), var(--pau-hover));
+	}
+}
+
+.pau-row:active:not(
+		:disabled,
+		[aria-disabled='true'],
+		[aria-current='page'],
+		[aria-current='true'],
+		[aria-selected='true'],
+		[aria-pressed='true'],
+		:has(input:disabled)
+	) {
+	color: var(--pau-text);
+	background-image: linear-gradient(var(--pau-press), var(--pau-press));
+}
+
+.pau-row:is(:disabled, [aria-disabled='true'], :has(input:disabled)) {
+	opacity: 0.5;
+}
+
+/* Rows run edge to edge inside scrolling rails, so the ring sits inside. */
+.pau-row:focus-visible {
+	outline: var(--pau-focus-width) solid var(--pau-focus);
+	outline-offset: var(--pau-focus-offset-inset);
+}
+
+/*
+ * Options in a popover list on the raised surface. Hover uses the selection
+ * fill that keyboard movement also shows, and press steps down to the
+ * surface, so muted descriptions keep their contrast. A list that tracks the
+ * active option itself marks it with `pau-option--active`. The shared rule
+ * owns the rest color and fill, so components must not set them.
+ */
+.pau-option {
+	color: inherit;
+	background-color: transparent;
+}
+
+@media (hover: hover) {
+	.pau-option:hover:not(:disabled, [aria-disabled='true']) {
+		background-color: var(--pau-selection);
+	}
+}
+
+.pau-option--active {
+	background-color: var(--pau-selection);
+}
+
+.pau-option:active:not(:disabled, [aria-disabled='true']) {
+	background-color: var(--pau-surface);
+}
+
+.pau-option:is(:disabled, [aria-disabled='true']) {
+	color: var(--pau-text-muted);
+}
+
+.pau-option:focus-visible {
+	outline: var(--pau-focus-width) solid var(--pau-focus);
+	outline-offset: var(--pau-focus-offset-inset);
+}
+
+/*
+ * Dropdown triggers: the `Select` field, the model picker, and the context
+ * meter. Hover draws the accent border that marks a field the operator can
+ * open, and press tints it. A quiet trigger in the composer has a
+ * transparent border at rest and gets the same hover border. The shared
+ * rule owns the text color, so the disabled color always wins.
+ */
+.pau-field {
+	color: var(--pau-text);
+	transition: border-color var(--pau-duration-feedback) var(--pau-ease-standard);
+}
+
+@media (hover: hover) {
+	.pau-field:hover:not(:disabled, [aria-disabled='true']) {
+		border-color: var(--pau-accent);
+	}
+}
+
+.pau-field:active:not(:disabled, [aria-disabled='true']) {
+	background-image: linear-gradient(var(--pau-press), var(--pau-press));
+}
+
+.pau-field:is(:disabled, [aria-disabled='true']) {
+	color: var(--pau-text-muted);
+}
+
+.pau-field:focus-visible {
+	outline: var(--pau-focus-width) solid var(--pau-focus);
+	outline-offset: var(--pau-focus-offset);
+}
+
+/* Inline links in prose. Hover and press move the accent toward text. */
+.pau-link {
+	color: var(--pau-accent);
+	text-underline-offset: 2px;
+}
+
+@media (hover: hover) {
+	.pau-link:hover {
+		color: var(--pau-accent-hover);
+	}
+}
+
+.pau-link:active {
+	color: var(--pau-accent-press);
+}
+
+.pau-link:focus-visible {
+	outline: var(--pau-focus-width) solid var(--pau-focus);
+	outline-offset: var(--pau-focus-offset);
+	border-radius: var(--pau-radius-control);
+}

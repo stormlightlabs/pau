@@ -130,7 +130,11 @@
 			aria-label="Search transcript"
 			autocomplete="off"
 			spellcheck="false" />
-		<button type="button" class="transcript-search__close" aria-label="Close search" onclick={onClose}>
+		<button
+			type="button"
+			class="transcript-search__close pau-utility-button"
+			aria-label="Close search"
+			onclick={onClose}>
 			<Icon name="close" />
 		</button>
 	</div>
@@ -142,7 +146,7 @@
 	{:else if phase === 'failed'}
 		<p class="transcript-search__status transcript-search__status--failed" role="alert">
 			{failure}
-			<button type="button" onclick={() => retries++}>Try again</button>
+			<button type="button" class="pau-link" onclick={() => retries++}>Try again</button>
 		</p>
 	{:else if phase === 'searching' && hits.length === 0}
 		<!-- A fast search shows its results without a “Searching…” flash. -->
@@ -156,6 +160,7 @@
 				<li>
 					<button
 						type="button"
+						class="pau-option"
 						tabindex="-1"
 						aria-current={index === active ? 'true' : undefined}
 						onclick={() => select(index)}>
@@ -224,7 +229,6 @@
 	}
 
 	button {
-		color: inherit;
 		font: inherit;
 		cursor: pointer;
 	}
@@ -232,7 +236,6 @@
 	.transcript-search__close {
 		min-width: var(--pau-size-row-md);
 		min-height: var(--pau-size-row-md);
-		background: transparent;
 		border: 0;
 		border-radius: var(--pau-radius-control);
 	}
@@ -250,7 +253,6 @@
 	.transcript-search__status button {
 		margin-left: var(--pau-space-2);
 		padding: 0;
-		color: var(--pau-text);
 		background: transparent;
 		border: 0;
 		text-decoration: underline;
@@ -277,15 +279,12 @@
 		padding: var(--pau-space-2);
 		color: var(--pau-text);
 		text-align: left;
-		background: transparent;
 		border: 0;
 		border-radius: var(--pau-radius-control);
-		transition: background-color var(--pau-duration-feedback) var(--pau-ease-standard);
 	}
 
-	.transcript-search__results button:hover,
 	.transcript-search__results button[aria-current='true'] {
-		background: var(--pau-surface);
+		background-color: var(--pau-surface);
 	}
 
 	.transcript-search__meta {

@@ -168,6 +168,7 @@
 					<li>
 						<button
 							type="button"
+							class="pau-row"
 							class:active={tab.id === activeId}
 							aria-current={tab.id === activeId ? 'true' : undefined}
 							onclick={() => (activeId = tab.id)}>
@@ -188,7 +189,7 @@
 					<button
 						type="button"
 						role="tab"
-						class={['terminal-surface__tab', { active: tab.id === activeId }]}
+						class={['terminal-surface__tab', 'pau-row', { active: tab.id === activeId }]}
 						id={`terminal-tab-${tab.id}`}
 						aria-selected={tab.id === activeId}
 						aria-controls={`terminal-panel-${tab.id}`}
@@ -207,7 +208,7 @@
 			</div>
 			<button
 				type="button"
-				class="terminal-surface__icon-button"
+				class="terminal-surface__icon-button pau-utility-button"
 				aria-label="New terminal"
 				disabled={creating || disconnected}
 				onclick={() => void openTerminal()}>
@@ -216,7 +217,7 @@
 			<div class="terminal-surface__actions">
 				<button
 					type="button"
-					class="terminal-surface__icon-button"
+					class="terminal-surface__icon-button pau-utility-button"
 					aria-label="Find in terminal"
 					disabled={!activeTab}
 					onclick={() => activeId && void views[activeId]?.openSearch()}>
@@ -224,7 +225,7 @@
 				</button>
 				<button
 					type="button"
-					class="terminal-surface__icon-button"
+					class="terminal-surface__icon-button pau-utility-button"
 					aria-label="Copy selection"
 					disabled={!activeTab?.hasSelection}
 					onclick={() => void copySelection()}>
@@ -232,7 +233,7 @@
 				</button>
 				<button
 					type="button"
-					class="terminal-surface__icon-button"
+					class="terminal-surface__icon-button pau-utility-button"
 					aria-label="Paste"
 					disabled={activeTab?.state !== 'running'}
 					onclick={() => void paste()}>
@@ -240,7 +241,7 @@
 				</button>
 				<button
 					type="button"
-					class="terminal-surface__icon-button"
+					class="terminal-surface__icon-button pau-utility-button"
 					aria-label={activeTab ? `Close ${activeTab.title}` : 'Close terminal'}
 					disabled={!activeTab}
 					onclick={() => activeTab && void closeTerminal(activeTab.id)}>
@@ -319,8 +320,6 @@
 	.terminal-surface__tab,
 	.terminal-surface__icon-button,
 	.terminal-surface__list button {
-		color: var(--shell-muted);
-		background: transparent;
 		border: 0;
 		font: inherit;
 		cursor: pointer;
@@ -340,7 +339,7 @@
 
 	.terminal-surface__tab.active {
 		color: var(--shell-text);
-		background: var(--shell-surface);
+		background-color: var(--shell-surface);
 		box-shadow: inset 0 -2px 0 var(--shell-accent);
 	}
 
@@ -367,12 +366,6 @@
 
 	.terminal-surface__icon-button:disabled {
 		cursor: default;
-		opacity: 0.45;
-	}
-
-	.terminal-surface button:hover:not(:disabled),
-	.terminal-surface__list button:hover {
-		color: var(--shell-text);
 	}
 
 	.terminal-surface button:focus-visible,
@@ -448,7 +441,7 @@
 
 	.terminal-surface__list button.active {
 		color: var(--shell-text);
-		background: var(--shell-surface);
+		background-color: var(--shell-surface);
 		box-shadow: inset 2px 0 0 var(--shell-accent);
 	}
 

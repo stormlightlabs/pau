@@ -3,6 +3,10 @@
  * spacing step from the label text. Browsers add a few pixels of margin around
  * native inputs, which pushes the gap off the spacing scale, so the input's
  * margin is cleared here. Components still own the row's layout and alignment.
+ *
+ * The input stays native and fills with the accent. Hover and press on the
+ * row move that fill toward text, as `states.css` describes for other
+ * controls, and a disabled input mutes the whole row.
  */
 .pau-choice {
 	gap: var(--pau-space-2);
@@ -11,4 +15,25 @@
 .pau-choice > input {
 	flex: none;
 	margin: 0;
+	accent-color: var(--pau-accent);
+}
+
+@media (hover: hover) {
+	.pau-choice:hover > input:not(:disabled) {
+		accent-color: var(--pau-accent-hover);
+	}
+}
+
+.pau-choice:active > input:not(:disabled) {
+	accent-color: var(--pau-accent-press);
+}
+
+.pau-choice > input:focus-visible {
+	outline: var(--pau-focus-width) solid var(--pau-focus);
+	outline-offset: var(--pau-focus-offset);
+}
+
+.pau-choice:has(> input:disabled) {
+	color: var(--pau-text-muted);
+	cursor: not-allowed;
 }

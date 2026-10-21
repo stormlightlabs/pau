@@ -125,9 +125,11 @@
 		</div>
 		<div class="diff-review__controls">
 			<div class="diff-review__segmented" aria-label="Diff view">
-				<button type="button" aria-pressed={mode === 'file'} onclick={() => (mode = 'file')}>File</button>
+				<button type="button" class="pau-utility-button" aria-pressed={mode === 'file'} onclick={() => (mode = 'file')}
+					>File</button>
 				<button
 					type="button"
+					class="pau-utility-button"
 					aria-pressed={mode === 'hunk'}
 					disabled={chunks.length === 0}
 					onclick={() => (mode = 'hunk')}>Hunk</button>
@@ -153,6 +155,7 @@
 			<nav class="diff-review__hunk-nav" aria-label="Diff hunks">
 				<button
 					type="button"
+					class="pau-utility-button"
 					aria-label="Previous hunk"
 					aria-keyshortcuts="Alt+ArrowUp"
 					onkeydown={handleKeydown}
@@ -161,11 +164,16 @@
 				<code>{hunkLabel(activeChunk)}</code>
 				<button
 					type="button"
+					class="pau-utility-button"
 					aria-label="Next hunk"
 					aria-keyshortcuts="Alt+ArrowDown"
 					onkeydown={handleKeydown}
 					onclick={() => moveHunk(1)}>Next</button>
-				<button type="button" aria-pressed={reviewed.has(currentHunk)} onclick={toggleReviewed}>
+				<button
+					type="button"
+					class="pau-utility-button"
+					aria-pressed={reviewed.has(currentHunk)}
+					onclick={toggleReviewed}>
 					{reviewed.has(currentHunk) ? 'Reviewed' : 'Mark reviewed'}
 				</button>
 			</nav>
@@ -242,7 +250,7 @@
 		min-height: var(--pau-size-row-sm);
 		padding: var(--pau-space-1) var(--pau-space-2);
 		color: var(--pau-text);
-		background: var(--pau-surface-raised);
+		background-color: var(--pau-surface-raised);
 		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
 		font: inherit;
@@ -262,7 +270,6 @@
 
 	.diff-review button:disabled {
 		cursor: not-allowed;
-		opacity: 0.5;
 	}
 
 	.diff-review__hunk-nav {

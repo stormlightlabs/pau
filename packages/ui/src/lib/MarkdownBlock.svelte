@@ -31,6 +31,7 @@
 			{@const href = safeHref(link.href)}
 			{#if href}
 				<a
+					class="pau-link"
 					{href}
 					title={link.title ?? undefined}
 					target="_blank"
@@ -188,11 +189,6 @@
 		padding-left: var(--pau-space-3);
 		border-left: 2px solid var(--pau-border);
 		color: var(--pau-text-muted);
-	}
-
-	a {
-		color: var(--pau-accent);
-		text-underline-offset: 2px;
 	}
 
 	code {

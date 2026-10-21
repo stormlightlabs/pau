@@ -32,7 +32,12 @@
 
 <button
 	type="button"
-	class={['copy-button', className, result && (result.ok ? 'copy-button--copied' : 'copy-button--failed')]}
+	class={[
+		'copy-button',
+		'pau-utility-button',
+		className,
+		result && (result.ok ? 'copy-button--copied' : 'copy-button--failed')
+	]}
 	aria-label={label}
 	onclick={() => void copy()}>
 	{result ? (result.ok ? 'Copied' : 'Copy failed') : 'Copy'}
@@ -44,32 +49,27 @@
 		padding: var(--pau-space-1) var(--pau-space-2);
 		border: var(--pau-border-thin) solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
-		background: var(--pau-surface-raised);
-		color: var(--pau-text-muted);
+		background-color: var(--pau-surface-raised);
 		font: inherit;
 		font-size: var(--pau-type-xs);
 		cursor: pointer;
-		transition:
-			color var(--pau-duration-feedback) var(--pau-ease-standard),
-			border-color var(--pau-duration-feedback) var(--pau-ease-standard);
 	}
 
-	.copy-button:hover,
 	.copy-button:focus-visible {
 		color: var(--pau-text);
-	}
-
-	.copy-button:focus-visible {
 		outline: var(--pau-focus-width) solid var(--pau-focus);
 		outline-offset: var(--pau-focus-offset);
 	}
 
-	.copy-button--copied {
+	/* The result color outranks the shared hover and press text color. */
+	.copy-button.copy-button--copied,
+	.copy-button.copy-button--copied:is(:hover, :active) {
 		border-color: var(--pau-success);
 		color: var(--pau-success);
 	}
 
-	.copy-button--failed {
+	.copy-button.copy-button--failed,
+	.copy-button.copy-button--failed:is(:hover, :active) {
 		border-color: var(--pau-danger);
 		color: var(--pau-danger);
 	}

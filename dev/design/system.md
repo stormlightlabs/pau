@@ -275,6 +275,35 @@ start at the same offset as the shell context rail's labels, and the mark lines
 up with the workspace name above it. The rail's icon buttons match the
 `size/row-md` height of its Open workspace button.
 
+Hover and press change color only. No control moves, scales, or resizes when
+pressed, so a pressed row never shifts its neighbors. The shared rules in
+`packages/ui/src/styles` own these states for each control class:
+
+- Buttons: secondary, quiet, and danger buttons tint their fill and strengthen
+  the border on hover, and tint further on press. The primary moves its accent
+  toward the text color, a quarter on hover and nearly half on press.
+- Utility buttons (`pau-utility-button`), such as rail icons, toolbar icons,
+  and Copy: muted rest, normal text and a tint on hover, a stronger tint on
+  press.
+- Rows (`pau-row`): rail rows, tree rows, tabs, result rows, and completion
+  options use the same tints and turn muted text to normal text. A selected
+  row keeps its selection fill under the pointer.
+- Popover options (`pau-option`) on the raised surface take the selection fill
+  on hover, as keyboard movement shows it, and step down to the surface on
+  press.
+- Dropdown triggers (`pau-field`), including the composer's quiet triggers,
+  draw the accent border on hover and tint on press.
+- Choice rows move the native input's accent fill, disclosure summaries lift to
+  normal text and tint on press, and links move the accent toward text.
+
+The hover and press tints are 5% and 8% of the theme's text color laid over
+the control's own fill, so one value works on the canvas and the surface. Press
+stays at 8% so muted and danger text keep 4.5:1 in every theme. Hover rules
+apply only under `(hover: hover)`, so a tap on a touch screen never leaves a
+control looking hovered. Disabled controls ignore hover and press. A disabled
+row or utility button fades to half opacity, because its rest color is already
+muted, and a disabled quiet button fades its muted text further.
+
 Every relevant control state needs a visible treatment. Icon-only controls need
 an accessible name and, where meaning is not obvious, a tooltip or adjacent
 label. Destructive actions name the object and preserve a cancel or recovery

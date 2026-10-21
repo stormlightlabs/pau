@@ -9,6 +9,10 @@
 		"core:window:allow-close",
 		"core:webview:allow-set-webview-zoom",
 		"dialog:allow-open",
-		"opener:allow-reveal-item-in-dir"
+		"opener:allow-reveal-item-in-dir",
+		{
+			"identifier": "opener:allow-open-url",
+			"allow": [{ "url": "http://*" }, { "url": "https://*" }, { "url": "mailto:*" }]
+		}
 	]
 }

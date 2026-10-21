@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { StartupProgress } from '@stormlightlabs/pau-protocol';
-	import { LaunchSplash } from '@stormlightlabs/pau-ui';
+	import { externalLinkContext, LaunchSplash } from '@stormlightlabs/pau-ui';
 	import { onMount, setContext, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -20,6 +20,7 @@
 	let { children } = $props();
 
 	const native = setContext(desktopNativeCapabilitiesContext, createDesktopNativeCapabilities());
+	setContext(externalLinkContext, native.openLink);
 
 	// The browser development server has no startup to follow: its backend is
 	// already running behind the Vite proxy.

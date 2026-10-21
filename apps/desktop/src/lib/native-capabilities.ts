@@ -2,7 +2,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
-import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 
 /** Desktop window operations that shared feature views may request from their app owner. */
 export interface DesktopWindowCapability {
@@ -14,7 +14,8 @@ export interface DesktopWindowCapability {
  *
  * `pickFolder` shows the system folder picker and resolves to the chosen path,
  * or `undefined` when the operator cancels. `revealPath` selects a file or
- * folder in the system file manager. `setZoom` scales the whole page, where 1
+ * folder in the system file manager. `openLink` opens an http, https, or
+ * mailto URL in the operator's default browser or mail app. `setZoom` scales the whole page, where 1
  * is actual size. `onMenuAction` calls the listener with the key map action ID
  * of each app menu item the operator chooses, and returns a function that
  * stops listening.
@@ -23,6 +24,7 @@ export type DesktopNativeCapabilities = {
 	window?: DesktopWindowCapability;
 	pickFolder?: () => Promise<string | undefined>;
 	revealPath?: (path: string) => Promise<void>;
+	openLink?: (url: string) => Promise<void>;
 	setZoom?: (factor: number) => Promise<void>;
 	onMenuAction?: (listener: (actionId: string) => void) => () => void;
 };
@@ -45,6 +47,7 @@ export function createDesktopNativeCapabilities(
 		window: { close: async () => getCurrentWindow().close() },
 		pickFolder: async () => (await open({ directory: true, multiple: false, title: 'Open workspace' })) ?? undefined,
 		revealPath: (path) => revealItemInDir(path),
+		openLink: (url) => openUrl(url),
 		setZoom: (factor) => getCurrentWebview().setZoom(factor),
 		onMenuAction: (listener) => {
 			const subscription = listen<string>(MENU_ACTION_EVENT, (event) => listener(event.payload));

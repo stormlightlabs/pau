@@ -7,6 +7,7 @@
 	import { onMount } from 'svelte';
 
 	import { terminalTheme, THEMES, type ThemeName } from '../theme';
+	import { useExternalLinks } from './external-links';
 	import type { TerminalConnection, TerminalConnectionEvents, TerminalExit } from './types/terminal';
 
 	type Props = {
@@ -25,6 +26,8 @@
 
 	/** Installed monospace faces that xterm can measure before the bundled code font loads. */
 	const SYSTEM_MONO = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+
+	const links = useExternalLinks();
 
 	let host: HTMLDivElement;
 	let terminal = $state.raw<Terminal>();
@@ -60,6 +63,9 @@
 			cursorBlink: true,
 			fontFamily: SYSTEM_MONO,
 			fontSize: 13,
+			// Programs mark hyperlinks with OSC 8. The shared handler checks the
+			// scheme, so mailto links can pass xterm's own http-only filter.
+			linkHandler: { activate: (_event, uri) => links.open(uri), allowNonHttpProtocols: true },
 			theme: terminalTheme(theme)
 		});
 		const fitter = new FitAddon();

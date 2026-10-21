@@ -2,7 +2,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
-import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 import { expect, test, vi } from 'vitest';
 
 import { createDesktopNativeCapabilities, MENU_ACTION_EVENT } from './native-capabilities';
@@ -11,7 +11,7 @@ vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
 vi.mock('@tauri-apps/api/webview', () => ({ getCurrentWebview: vi.fn() }));
 vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: vi.fn() }));
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
-vi.mock('@tauri-apps/plugin-opener', () => ({ revealItemInDir: vi.fn() }));
+vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn(), revealItemInDir: vi.fn() }));
 
 test('does not expose native window controls in development browser mode', () => {
 	expect(createDesktopNativeCapabilities({})).toEqual({});
@@ -44,6 +44,14 @@ test('reveals a path in the file manager', async () => {
 	await capabilities.revealPath?.('/Users/operator/project/README.md');
 
 	expect(revealItemInDir).toHaveBeenCalledWith('/Users/operator/project/README.md');
+});
+
+test('opens a link in the default browser', async () => {
+	const capabilities = createDesktopNativeCapabilities({ __TAURI_INTERNALS__: {} });
+
+	await capabilities.openLink?.('https://example.com/docs');
+
+	expect(openUrl).toHaveBeenCalledWith('https://example.com/docs');
 });
 
 test('zooms the webview', async () => {

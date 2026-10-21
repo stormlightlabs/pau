@@ -7,6 +7,7 @@ export { default as ExtensionUi } from './lib/ExtensionUi.svelte';
 export { default as DiagnosticsView } from './lib/DiagnosticsView.svelte';
 export { default as DiffReview } from './lib/DiffReview.svelte';
 export { default as FileEditor } from './lib/FileEditor.svelte';
+export { externalLinkContext, type ExternalLinkOpener } from './lib/external-links';
 export { COMPOSER_ATTRIBUTE, createFocusReturn, returnFocus, type FocusReturn } from './lib/focus-return';
 export type { PromptImage } from './lib/composer-images';
 export type { EditorFileContent, FileEditorSource } from './lib/types/file-editor';

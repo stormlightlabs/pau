@@ -243,7 +243,9 @@ Verification:
 
 ### 2.233 External links
 
-Status: planned
+Status: in progress
+Status note: Implemented and tested. Opening a link from a self-hosted session
+remains.
 Blocked by: none
 
 Open links from transcripts and other views in the operator's default browser

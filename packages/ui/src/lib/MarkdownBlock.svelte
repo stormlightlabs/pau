@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Token, Tokens } from 'marked';
 	import CopyButton from './CopyButton.svelte';
+	import { useExternalLinks } from './external-links';
 	import { safeHref } from './markdown';
 
 	type Props = {
@@ -9,6 +10,8 @@
 	};
 
 	let { token }: Props = $props();
+
+	const links = useExternalLinks();
 </script>
 
 {#snippet inline(tokens: Token[] | undefined)}
@@ -27,8 +30,12 @@
 			{@const link = node as Tokens.Link}
 			{@const href = safeHref(link.href)}
 			{#if href}
-				<a {href} title={link.title ?? undefined} target="_blank" rel="noopener noreferrer"
-					>{@render inline(link.tokens)}</a>
+				<a
+					{href}
+					title={link.title ?? undefined}
+					target="_blank"
+					rel="noopener noreferrer"
+					onclick={(event) => links.click(event, href)}>{@render inline(link.tokens)}</a>
 			{:else}
 				{@render inline(link.tokens)}
 			{/if}

@@ -177,6 +177,11 @@ arrow-key navigation and preserve full paths through accessible labels when
 visible names must truncate. The code surface remains
 wider than either rail.
 
+The tree, Git status, and open file follow changes on disk without a refresh
+control. A clean file reloads in place and keeps its cursor and scroll
+position. An edited file keeps the operator's text and shows a notice under
+the header with **Keep mine** and **Reload**.
+
 Diff color combines background, foreground, and markers. Diagnostics, dirty
 state, external changes, read-only files, binary files, and oversized files need
 explicit states.

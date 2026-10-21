@@ -40,6 +40,16 @@ describe('event stream reducer', () => {
 
 		expect(reduceServerMessage(state, { type: 'event', event: output })).toEqual({ sequence: 8, events: [event(7)] });
 	});
+
+	test('advances past workspace file changes without keeping them as state', () => {
+		const state: EventStreamState = { sequence: 7, events: [event(7)] };
+		const changed = {
+			...event(8, '{"paths":[],"git":true,"truncated":false}'),
+			kind: 'workspace_files_changed' as const
+		};
+
+		expect(reduceServerMessage(state, { type: 'event', event: changed })).toEqual({ sequence: 8, events: [event(7)] });
+	});
 });
 
 test('reconnects from the last applied sequence after streamed output disconnects', () => {
@@ -89,4 +99,42 @@ test('reconnects from the last applied sequence after streamed output disconnect
 
 	client.stop();
 	expect(sockets[1]?.closed).toBe(true);
+});
+
+test('asks the server to watch a workspace and starts each connection from a snapshot', () => {
+	const sockets: FakeEventSocket[] = [];
+	const retries: Array<() => void> = [];
+	const applied: Array<ServerEvent | undefined> = [];
+	const client = new EventStreamClient({
+		browserOrigin: 'http://localhost:5173',
+		watch: 'workspace-1',
+		onState: (_state, applyingEvent) => {
+			applied.push(applyingEvent);
+		},
+		socketFactory: (url) => {
+			const socket = new FakeEventSocket(url);
+			sockets.push(socket);
+			return socket;
+		},
+		scheduleRetry: (retry) => {
+			retries.push(retry);
+		}
+	});
+	const changed = {
+		...event(2, '{"paths":["src/main.ts"],"git":false,"truncated":false}'),
+		kind: 'workspace_files_changed' as const
+	};
+
+	client.connect();
+	sockets[0]?.receive({ type: 'snapshot', snapshot: { sequence: 1, events: [event(1)] } });
+	sockets[0]?.receive({ type: 'event', event: changed });
+	sockets[0]?.disconnect();
+	retries[0]?.();
+
+	expect(sockets.map((socket) => socket.url)).toEqual([
+		'ws://localhost:5173/api/events?watch=workspace-1',
+		'ws://localhost:5173/api/events?watch=workspace-1'
+	]);
+	expect(applied).toEqual([undefined, changed]);
+	client.stop();
 });

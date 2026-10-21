@@ -812,7 +812,8 @@ fn reject_sensitive(path: &str) -> Result<(), WorkspaceError> {
     }
 }
 
-fn is_sensitive(path: &str) -> bool {
+/// Whether a path names a credential file that file listings and searches skip.
+pub(crate) fn is_sensitive(path: &str) -> bool {
     Path::new(path).components().any(|component| {
         let name = component.as_os_str().to_string_lossy();
         name == ".env"

@@ -1,4 +1,4 @@
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
@@ -68,9 +68,11 @@ test('view actions share the button height and text size', async () => {
 	for (const { view, minimum } of views) expectSharedSize(view.container, minimum);
 });
 
-test('editor header and external-change banner buttons use the shared size', async () => {
+test('editor header and changed-on-disk notice buttons use the shared size', async () => {
 	const { container } = await render(FileEditorDemo, { state: 'external-change' });
-	await page.getByRole('button', { name: 'Check for changes' }).click();
+	await page.getByRole('textbox').click();
+	await userEvent.keyboard('{End} // mine');
+	await page.getByRole('button', { name: 'Change the file on disk' }).click();
 	await expect.element(page.getByText('File changed on disk')).toBeVisible();
 
 	expectSharedSize(container, 4);

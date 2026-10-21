@@ -36,7 +36,7 @@ async function editorText(): Promise<string> {
 
 test('opens, edits, reverts, and saves a text file', async () => {
 	const editorSource = source();
-	await render(FileEditor, { path: editorSource.current.path, source: editorSource, pollInterval: 60_000 });
+	await render(FileEditor, { path: editorSource.current.path, source: editorSource });
 
 	await expect.element(page.getByRole('textbox')).toHaveTextContent('const value = 1;');
 	await userEvent.click(page.getByRole('textbox'));
@@ -54,21 +54,52 @@ test('opens, edits, reverts, and saves a text file', async () => {
 	await expect.element(page.getByText('Saved')).toBeInTheDocument();
 });
 
-test('detects an external modification without discarding unsaved work', async () => {
+test('reloads a clean file in place when it changes on disk', async () => {
 	const editorSource = source();
-	await render(FileEditor, { path: editorSource.current.path, source: editorSource, pollInterval: 60_000 });
+	const view = await render(FileEditor, { path: editorSource.current.path, source: editorSource });
+	await expect.element(page.getByRole('textbox')).toHaveTextContent('const value = 1;');
+	editorSource.current = file({ content: 'const value = 9;\n', revision: 'revision-external' });
+
+	await view.rerender({ diskChanges: 1 });
+	await expect.poll(editorText).toContain('const value = 9;');
+	expect(page.getByRole('alert').query()).toBeNull();
+	expect(page.getByText('Unsaved changes').query()).toBeNull();
+	await expect.element(page.getByRole('button', { name: 'Check for changes' })).not.toBeInTheDocument();
+
+	// Saving afterwards sends the reloaded revision.
+	await userEvent.click(page.getByRole('textbox'));
+	await userEvent.keyboard('{End} // next');
+	await userEvent.click(page.getByRole('button', { name: 'Save' }));
+	await expect.poll(() => editorSource.write).toHaveBeenCalledOnce();
+	expect(vi.mocked(editorSource.write).mock.calls[0]?.[2]).toBe('revision-external');
+});
+
+test('keeps edits when the file changes on disk and offers Reload or Keep mine', async () => {
+	const editorSource = source();
+	const view = await render(FileEditor, { path: editorSource.current.path, source: editorSource });
 	await userEvent.click(page.getByRole('textbox'));
 	await userEvent.keyboard('{End} // mine');
 	editorSource.current = file({ content: 'const value = 9;\n', revision: 'revision-external' });
 
-	await userEvent.click(page.getByRole('button', { name: 'Check for changes' }));
+	await view.rerender({ diskChanges: 1 });
 	const alert = page.getByRole('alert');
 	await expect.element(alert).toHaveTextContent('File changed on disk');
 	await expect.element(alert).toHaveTextContent('Your unsaved changes are still in the editor.');
 	await expect.element(page.getByRole('textbox')).toHaveTextContent('// mine');
 
-	await userEvent.click(page.getByRole('button', { name: 'Reload from disk' }));
-	await expect.poll(editorText).toContain('const value = 9;');
+	await userEvent.click(page.getByRole('button', { name: 'Keep mine' }));
+	await expect.element(alert).not.toBeInTheDocument();
+	await expect.element(page.getByRole('textbox')).toHaveTextContent('// mine');
+	await userEvent.click(page.getByRole('button', { name: 'Save' }));
+	await expect.poll(() => editorSource.write).toHaveBeenCalledOnce();
+	expect(vi.mocked(editorSource.write).mock.calls[0]?.[2]).toBe('revision-external');
+
+	await userEvent.click(page.getByRole('textbox'));
+	await userEvent.keyboard('{End} // again');
+	editorSource.current = file({ content: 'const value = 10;\n', revision: 'revision-later' });
+	await view.rerender({ diskChanges: 2 });
+	await userEvent.click(page.getByRole('button', { name: 'Reload' }));
+	await expect.poll(editorText).toContain('const value = 10;');
 	await expect.element(page.getByText('Unsaved changes')).not.toBeInTheDocument();
 });
 
@@ -78,7 +109,7 @@ test.each([
 	['Panel.svelte', '<p>Hello</p>\n', 'html']
 ])('loads syntax support for %s from the language catalog', async (path, content, language) => {
 	const editorSource = source(file({ path, content }));
-	const view = await render(FileEditor, { path, source: editorSource, pollInterval: 60_000 });
+	const view = await render(FileEditor, { path, source: editorSource });
 
 	await expect.element(page.getByRole('textbox')).toHaveAttribute('data-language', language);
 	view.unmount();
@@ -86,7 +117,7 @@ test.each([
 
 test('fills the pane height for a short file, with the gutter spanning it', async () => {
 	const editorSource = source();
-	await render(FileEditor, { path: editorSource.current.path, source: editorSource, pollInterval: 60_000 });
+	await render(FileEditor, { path: editorSource.current.path, source: editorSource });
 	await expect.element(page.getByRole('textbox')).toBeInTheDocument();
 	const section = document.querySelector<HTMLElement>('.file-editor')!;
 	section.parentElement!.style.height = '480px';
@@ -98,7 +129,7 @@ test('fills the pane height for a short file, with the gutter spanning it', asyn
 
 test('scrolls a long file inside the editor instead of growing the pane', async () => {
 	const editorSource = source(file({ content: Array.from({ length: 200 }, (_, i) => `line ${i}`).join('\n') }));
-	await render(FileEditor, { path: editorSource.current.path, source: editorSource, pollInterval: 60_000 });
+	await render(FileEditor, { path: editorSource.current.path, source: editorSource });
 	await expect.element(page.getByRole('textbox')).toBeInTheDocument();
 	const section = document.querySelector<HTMLElement>('.file-editor')!;
 	section.parentElement!.style.height = '480px';
@@ -111,7 +142,7 @@ test('scrolls a long file inside the editor instead of growing the pane', async 
 test('centers the file name with the header actions', async () => {
 	await page.viewport(1024, 768);
 	const editorSource = source();
-	await render(FileEditor, { path: editorSource.current.path, source: editorSource, pollInterval: 60_000 });
+	await render(FileEditor, { path: editorSource.current.path, source: editorSource });
 	const name = document.querySelector<HTMLElement>('.file-editor__header p')!.getBoundingClientRect();
 	const actions = document.querySelector<HTMLElement>('.file-editor__actions')!.getBoundingClientRect();
 	expect(Math.abs(name.top + name.height / 2 - (actions.top + actions.height / 2))).toBeLessThanOrEqual(1);
@@ -131,7 +162,7 @@ test('highlights Markdown headings and inline code', async () => {
 	const properties = Object.entries(themeCssProperties('eldritch', 'overpass'));
 	for (const [name, value] of properties) document.documentElement.style.setProperty(name, value);
 	const editorSource = source(file({ path: 'TODO.md', content: '# Study plan\n\nRun `miss::` cards\n' }));
-	await render(FileEditor, { path: 'TODO.md', source: editorSource, pollInterval: 60_000 });
+	await render(FileEditor, { path: 'TODO.md', source: editorSource });
 	await expect.element(page.getByRole('textbox')).toBeInTheDocument();
 	const plain = getComputedStyle(document.querySelector('.cm-content')!).color;
 	await expect.poll(() => colorOf('Study plan')).not.toBe('');
@@ -143,7 +174,7 @@ test('highlights Markdown headings and inline code', async () => {
 
 test('opens a read-only file without editable or save controls', async () => {
 	const editorSource = source(file({ writable: false }));
-	await render(FileEditor, { path: editorSource.current.path, source: editorSource, pollInterval: 60_000 });
+	await render(FileEditor, { path: editorSource.current.path, source: editorSource });
 
 	await expect.element(page.getByText('Read-only')).toBeInTheDocument();
 	await expect.element(page.getByRole('textbox')).toHaveAttribute('contenteditable', 'false');
@@ -165,7 +196,7 @@ test.each([
 	['invalid_encoding', 'not valid UTF-8']
 ])('offers to reveal the file for %s and no retry', async (code, message) => {
 	const onReveal = vi.fn(async () => {});
-	await render(FileEditor, { path: 'unsupported.dat', source: failingSource(code), pollInterval: 60_000, onReveal });
+	await render(FileEditor, { path: 'unsupported.dat', source: failingSource(code), onReveal });
 
 	await expect.element(page.getByRole('alert')).toHaveTextContent(message);
 	await expect.element(page.getByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
@@ -174,7 +205,7 @@ test.each([
 });
 
 test('shows no action for an unopenable file when the app cannot reveal paths', async () => {
-	await render(FileEditor, { path: 'a.bin', source: failingSource('binary_file'), pollInterval: 60_000 });
+	await render(FileEditor, { path: 'a.bin', source: failingSource('binary_file') });
 
 	await expect.element(page.getByRole('alert')).toHaveTextContent('found binary data');
 	await expect.element(page.getByRole('button', { name: /Reveal|Show in folder|Try again/ })).not.toBeInTheDocument();
@@ -182,7 +213,7 @@ test('shows no action for an unopenable file when the app cannot reveal paths', 
 
 test('keeps the retry for a read that can succeed later', async () => {
 	const source = failingSource('permission_denied');
-	await render(FileEditor, { path: 'a.txt', source, pollInterval: 60_000, onReveal: async () => {} });
+	await render(FileEditor, { path: 'a.txt', source, onReveal: async () => {} });
 
 	await userEvent.click(page.getByRole('button', { name: 'Try again' }));
 	await expect.poll(() => source.read).toHaveBeenCalledTimes(2);
@@ -194,7 +225,7 @@ test('shows Markdown fold markers on sections but not on paragraphs', async () =
 		'\n'
 	);
 	const editorSource = source(file({ path: 'notes.md', content }));
-	const { container } = await render(FileEditor, { path: 'notes.md', source: editorSource, pollInterval: 60_000 });
+	const { container } = await render(FileEditor, { path: 'notes.md', source: editorSource });
 	await expect.element(page.getByRole('textbox')).toHaveTextContent('Notes');
 
 	const lines = [...container.querySelectorAll('.cm-line')];

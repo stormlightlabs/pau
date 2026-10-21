@@ -1,11 +1,11 @@
 import { page, userEvent } from 'vitest/browser';
-import { expect, test, vi } from 'vitest';
+import { expect, onTestFinished, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { workspaceFileFixtures } from '../fixtures/workspace-files';
 import WorkspaceFiles from '../lib/WorkspaceFiles.svelte';
 import type { FileEditorSource } from '../lib/types/file-editor';
-import type { WorkspaceFileSource, WorkspaceSearchMatch } from '../lib/types/workspace-files';
+import type { WorkspaceFileChanges, WorkspaceFileSource, WorkspaceSearchMatch } from '../lib/types/workspace-files';
 
 function source(overrides: Partial<WorkspaceFileSource> = {}): WorkspaceFileSource {
 	return {
@@ -308,6 +308,8 @@ function centerY(element: Element): number {
 
 for (const width of [1440, 900]) {
 	test(`lines the Files view up on shared edges at ${width}px`, async () => {
+		const [initialWidth, initialHeight] = [window.innerWidth, window.innerHeight];
+		onTestFinished(() => page.viewport(initialWidth, initialHeight));
 		await page.viewport(width, 900);
 		const editorSource: FileEditorSource = {
 			read: async (path) => ({ path, content: '# Notes\n\nText.\n', revision: 'r1', writable: true }),
@@ -351,3 +353,48 @@ for (const width of [1440, 900]) {
 		for (const center of actionCenters()) expect(center).toBeCloseTo(centerY(name), 0);
 	});
 }
+
+test('follows changes on disk in the tree, branch, and open file, and stops when closed', async () => {
+	let notify: ((changes: WorkspaceFileChanges) => void) | undefined;
+	const stop = vi.fn();
+	let tree = structuredClone(workspaceFileFixtures.tree);
+	let status = structuredClone(workspaceFileFixtures.gitStatus);
+	let readme = { path: 'README.md', content: '# Pau\n', revision: 'r1', writable: true };
+	const listDirectory = vi.fn(async (path: string) => structuredClone(tree[path] ?? []));
+	const view = await render(WorkspaceFiles, {
+		workspaceId: 'pau',
+		workspaceName: 'pau',
+		source: source({
+			listDirectory,
+			gitStatus: async () => structuredClone(status),
+			watch: (onChange) => {
+				notify = onChange;
+				return stop;
+			}
+		}),
+		editorSource: { read: async () => structuredClone(readme), write: async () => structuredClone(readme) }
+	});
+	await openNavigation();
+	await userEvent.click(page.getByRole('treeitem', { name: 'dev', exact: true }));
+	await expect.element(page.getByRole('treeitem', { name: 'ROADMAP.md' })).toBeInTheDocument();
+	await userEvent.click(page.getByRole('treeitem', { name: 'README.md' }));
+	await expect.element(page.getByRole('textbox', { name: 'README.md editor' })).toHaveTextContent('# Pau');
+
+	tree = { ...tree, dev: [...(tree.dev ?? []), { path: 'dev/NOTES.md', kind: 'file', size: 10 }] };
+	status = { ...status, branch: 'main', files: [] };
+	readme = { ...readme, content: '# Pau, edited outside\n', revision: 'r2' };
+	listDirectory.mockClear();
+	notify?.({ paths: ['README.md', 'dev/NOTES.md'], git: true, truncated: false });
+
+	await expect.element(page.getByRole('treeitem', { name: 'NOTES.md' })).toBeInTheDocument();
+	await expect.element(page.getByRole('treeitem', { name: 'ROADMAP.md' })).toBeInTheDocument();
+	await expect.element(page.getByText('main', { exact: true })).toBeInTheDocument();
+	await expect.element(page.getByRole('textbox', { name: 'README.md editor' })).toHaveTextContent('edited outside');
+	expect(listDirectory.mock.calls.map(([path]) => path).sort((left, right) => left.localeCompare(right))).toEqual([
+		'',
+		'dev'
+	]);
+
+	view.unmount();
+	expect(stop).toHaveBeenCalledOnce();
+});

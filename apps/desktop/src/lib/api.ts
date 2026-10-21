@@ -745,10 +745,19 @@ function socketHandshake(browserOrigin: string, path: string): { url: URL; proto
 	return { url, protocols: token === undefined ? ['pau'] : ['pau', `pau.bearer.${token}`] };
 }
 
-/** Builds an authenticated browser WebSocket handshake for the event stream. */
-export function resolveEventSocket(browserOrigin: string, after?: number): { url: string; protocols: string[] } {
+/**
+ * Builds an authenticated browser WebSocket handshake for the event stream.
+ * With `watch`, the server watches that workspace's files while the stream
+ * stays connected.
+ */
+export function resolveEventSocket(
+	browserOrigin: string,
+	after?: number,
+	watch?: string
+): { url: string; protocols: string[] } {
 	const { url, protocols } = socketHandshake(browserOrigin, '/api/events');
 	if (after !== undefined) url.searchParams.set('after', String(after));
+	if (watch !== undefined) url.searchParams.set('watch', watch);
 	return { url: url.href, protocols };
 }
 

@@ -57,6 +57,17 @@ summary logic because those rules belong to Pau's process owners. Treat
 per-process disk totals as unavailable on macOS until the platform backend can
 report them reliably.
 
+## File watching dependency selection
+
+Use `notify` 8.2.0 to watch open workspaces. The crate is CC0-1.0 licensed,
+actively maintained, and uses FSEvents on macOS and inotify on Linux behind one
+API. The 9.0 line is still a release candidate. Pau batches events itself
+instead of using `notify-debouncer-full`: that debouncer releases each path
+once it has been quiet for the timeout, so a branch switch arrives as several
+updates. Pau waits until the whole workspace has been quiet for 150 ms, or at
+most 2 seconds, and sends one update. Ignore rules come from the `ignore`
+crate's `.gitignore` matchers, the same rules the file tree uses.
+
 ## Terminal dependency selection
 
 Use `portable-pty` 0.9.0 for PTY ownership. The crate is MIT-licensed and is

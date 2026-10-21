@@ -46,4 +46,16 @@ export type WorkspaceFileSource = {
 	search: (query: string, options: WorkspaceTraversalOptions) => Promise<WorkspaceSearchMatch[]>;
 	gitStatus: () => Promise<WorkspaceGitStatus>;
 	gitDiff: (path: string) => Promise<WorkspaceGitDiff>;
+	/**
+	 * Follows changes on disk until the returned function is called. Omit it
+	 * when the application cannot watch the workspace.
+	 */
+	watch?: (onChange: (changes: WorkspaceFileChanges) => void) => () => void;
 };
+
+/**
+ * Paths that changed on disk in one burst. `truncated` means more changed than
+ * one update lists, or that updates may have been missed, so everything shown
+ * reloads.
+ */
+export type WorkspaceFileChanges = { paths: string[]; git: boolean; truncated: boolean };

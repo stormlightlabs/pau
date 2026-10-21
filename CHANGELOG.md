@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-21
+
+### Desktop
+
+- The Files view now follows changes made outside Pau. The file tree, branch,
+  and changed-file count update on their own, and an open file reloads in
+  place. If you have unsaved edits, Pau keeps them and offers Keep mine or
+  Reload.
+
 ## 2026-10-18
 
 ### Desktop

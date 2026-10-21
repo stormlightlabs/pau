@@ -29,9 +29,13 @@ export const ExternalChange: Story = {
 	args: { state: 'external-change' },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await canvas.findByRole('textbox', undefined, { timeout: 5000 });
-		await userEvent.click(canvas.getByRole('button', { name: 'Check for changes' }));
+		const editor = await canvas.findByRole('textbox', undefined, { timeout: 5000 });
+		await userEvent.click(editor);
+		await userEvent.keyboard('{End}export const mine = true;');
+		await userEvent.click(canvas.getByRole('button', { name: 'Change the file on disk' }));
 		await expect(await canvas.findByText('File changed on disk')).toBeInTheDocument();
+		await expect(canvas.getByRole('button', { name: 'Keep mine' })).toBeInTheDocument();
+		await expect(canvas.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
 	}
 };
 

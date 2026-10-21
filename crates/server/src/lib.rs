@@ -52,9 +52,11 @@ use tracing::instrument::WithSubscriber;
 mod build_info;
 mod sessions;
 mod terminals;
+mod watches;
 
 use build_info::Channel;
 use sessions::SessionApi;
+use watches::{WatchLease, WorkspaceWatches};
 
 /// Version returned by every Pau backend implementation: the workspace version
 /// for tagged releases, `<version>-dev+<commit>` otherwise.
@@ -138,6 +140,7 @@ struct ApiState {
     sandbox: Option<SandboxApi>,
     sessions: Option<SessionApi>,
     terminals: terminals::TerminalRegistry,
+    watches: WorkspaceWatches,
 }
 
 /// Sandbox selections and the host facts needed to describe a profile.
@@ -594,6 +597,7 @@ fn router_with_services(
             sandbox,
             sessions,
             terminals: terminals::TerminalRegistry::default(),
+            watches: WorkspaceWatches::default(),
         })
 }
 
@@ -1194,20 +1198,37 @@ fn describe(
 #[derive(Deserialize)]
 struct EventQuery {
     after: Option<u64>,
+    /// Workspace whose files the client shows. The server watches it for
+    /// changes while this connection stays open.
+    watch: Option<String>,
 }
 
 async fn websocket(
     State(state): State<ApiState>,
     Query(query): Query<EventQuery>,
     upgrade: WebSocketUpgrade,
-) -> Response {
+) -> Result<Response, ApiError> {
+    let lease = match &query.watch {
+        Some(workspace_id) => {
+            let root = workspace_service(&state)?.root(workspace_id).await?;
+            Some(state.watches.acquire(workspace_id, &root, &state.events)?)
+        }
+        None => None,
+    };
     let subscription = state.events.subscribe(query.after);
-    upgrade
+    Ok(upgrade
         .protocols(["pau"])
-        .on_upgrade(move |socket| stream_events(socket, subscription))
+        .on_upgrade(move |socket| stream_events(socket, subscription, lease)))
 }
 
-async fn stream_events(mut socket: WebSocket, mut subscription: EventSubscription) {
+/// Sends events until the client disconnects. A watch lease lives exactly as
+/// long as this task, so the stream also reads the socket to notice a client
+/// that closed while no events were flowing.
+async fn stream_events(
+    mut socket: WebSocket,
+    mut subscription: EventSubscription,
+    _lease: Option<WatchLease>,
+) {
     for message in subscription.initial.drain(..) {
         if send_stream_message(&mut socket, &message).await.is_err() {
             return;
@@ -1215,7 +1236,14 @@ async fn stream_events(mut socket: WebSocket, mut subscription: EventSubscriptio
     }
 
     loop {
-        match subscription.receiver.recv().await {
+        let received = tokio::select! {
+            received = subscription.receiver.recv() => received,
+            incoming = socket.recv() => match incoming {
+                Some(Ok(Message::Close(_)) | Err(_)) | None => return,
+                Some(Ok(_)) => continue,
+            },
+        };
+        match received {
             Ok(event) if event.sequence > subscription.boundary => {
                 subscription.boundary = event.sequence;
                 if send_stream_message(&mut socket, &ServerStreamMessage::Event { event })

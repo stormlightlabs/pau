@@ -366,6 +366,23 @@ binary: boolean,
  */
 too_large: boolean, };
 
+export type WorkspaceFileChanges = {
+/**
+ * Workspace-relative paths that were created, changed, renamed, or
+ * removed, in sorted order. Empty when `truncated` is set.
+ */
+paths: Array<string>,
+/**
+ * Whether Git's branch, index, or refs changed, so branch and
+ * changed-file state may differ even when `paths` is empty.
+ */
+git: boolean,
+/**
+ * Whether more paths changed than one update lists. Clients reload every
+ * listing and file they show.
+ */
+truncated: boolean, };
+
 export type ProcessIdentity = {
 /**
  * Operating-system process identifier.
@@ -518,7 +535,7 @@ disk_read_bytes: number | null,
  */
 disk_write_bytes: number | null, };
 
-export type ServerEventKind = "workspace_changed" | "session_changed" | "session_output" | "terminal_changed" | "preferences_changed";
+export type ServerEventKind = "workspace_changed" | "session_changed" | "session_output" | "terminal_changed" | "preferences_changed" | "workspace_files_changed";
 
 export type ServerEvent = {
 /**

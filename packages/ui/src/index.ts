@@ -76,6 +76,7 @@ export type {
 	TransportDiagnostic
 } from './lib/types/diagnostics';
 export type {
+	WorkspaceFileChanges,
 	WorkspaceFileEntry,
 	WorkspaceFileKind,
 	WorkspaceFileSource,

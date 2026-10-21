@@ -133,7 +133,8 @@ Verification:
 
 ### 2.281 Workspace file watching
 
-Status: planned
+Status: in progress
+Status note: Only the self-hosted check remains.
 Blocked by: none
 
 Watch each open workspace for file changes in the server, using the `notify`

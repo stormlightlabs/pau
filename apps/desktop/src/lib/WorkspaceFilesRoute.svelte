@@ -3,6 +3,7 @@
 		WorkspaceFiles,
 		type FileEditorSource,
 		type ShellNavItem,
+		type WorkspaceFileChanges,
 		type WorkspaceFileSource
 	} from '@stormlightlabs/pau-ui';
 	import { getContext, onMount } from 'svelte';
@@ -16,6 +17,7 @@
 		searchWorkspaceFiles,
 		writeWorkspaceFile
 	} from './api';
+	import { EventStreamClient } from './event-stream';
 	import { desktopNativeCapabilitiesContext, type DesktopNativeCapabilities } from './native-capabilities';
 	import { interfacePreferences } from './interface-preferences.svelte';
 
@@ -30,7 +32,24 @@
 		listDirectory: (path, options) => listWorkspaceFiles(workspaceId, path, options),
 		search: (query, options) => searchWorkspaceFiles(workspaceId, query, options),
 		gitStatus: () => getWorkspaceGitStatus(workspaceId),
-		gitDiff: (path) => getWorkspaceGitDiff(workspaceId, path)
+		gitDiff: (path) => getWorkspaceGitDiff(workspaceId, path),
+		watch: (onChange) => {
+			const stream = new EventStreamClient({
+				browserOrigin: location.origin,
+				watch: workspaceId,
+				onState: (_state, event) => {
+					if (event?.kind === 'workspace_files_changed' && event.workspace_id === workspaceId) {
+						onChange(JSON.parse(event.payload) as WorkspaceFileChanges);
+					}
+				},
+				// Changes made while the stream was down, or before the watch started, have no event.
+				onConnectionChange: (connected) => {
+					if (connected) onChange({ paths: [], git: true, truncated: true });
+				}
+			});
+			stream.connect();
+			return () => stream.stop();
+		}
 	};
 	const editorSource: FileEditorSource = {
 		read: (path) => readWorkspaceFile(workspaceId, path),

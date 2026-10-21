@@ -5,7 +5,7 @@
 	import { EditorState, type Extension } from '@codemirror/state';
 	import { tags } from '@lezer/highlight';
 	import { basicSetup, EditorView } from 'codemirror';
-	import { onMount, tick } from 'svelte';
+	import { onDestroy, onMount, tick, untrack } from 'svelte';
 
 	import { revealLabel } from './context-menu';
 	import { sectionFolding } from './editor-folding';
@@ -16,7 +16,13 @@
 		path: string;
 		source: FileEditorSource;
 		line?: number;
-		pollInterval?: number;
+		/**
+		 * Counts the times the workspace watcher reported this file changed on
+		 * disk. Each new count reads the file again: a clean buffer reloads in
+		 * place, and an edited one keeps the operator's text and offers Reload
+		 * or Keep mine.
+		 */
+		diskChanges?: number;
 		/**
 		 * Shows the file in the system file manager. Files the editor can never
 		 * open offer it in place of a retry. Omit it when the app cannot reveal
@@ -25,7 +31,7 @@
 		onReveal?: () => Promise<void>;
 	};
 
-	let { path, source, line, pollInterval = 2000, onReveal }: Props = $props();
+	let { path, source, line, diskChanges = 0, onReveal }: Props = $props();
 	let host = $state<HTMLElement>();
 	let view: EditorView | undefined;
 	let file = $state<EditorFileContent>();
@@ -38,6 +44,9 @@
 	let retryable = $state(true);
 	let revealFailed = $state(false);
 	let notice = $state('');
+	/** A change reported during a save, read again once the save settles. */
+	let changedWhileSaving = false;
+	let seenDiskChanges = untrack(() => diskChanges);
 
 	const syntaxTheme = HighlightStyle.define([
 		{ tag: tags.comment, color: 'var(--pau-syntax-comment)' },
@@ -67,13 +76,13 @@
 		{ tag: [tags.angleBracket, tags.punctuation], color: 'var(--pau-text-muted)' }
 	]);
 
-	onMount(() => {
-		void load();
-		const poll = setInterval(() => void checkForExternalChange(), pollInterval);
-		return () => {
-			clearInterval(poll);
-			view?.destroy();
-		};
+	onMount(() => void load());
+	onDestroy(() => view?.destroy());
+
+	$effect(() => {
+		if (diskChanges === seenDiskChanges) return;
+		seenDiskChanges = diskChanges;
+		void untrack(followDiskChange);
 	});
 
 	function errorCode(value: unknown): string | undefined {
@@ -210,7 +219,7 @@
 			notice = 'Saved';
 		} catch (caught) {
 			if (errorCode(caught) === 'file_changed') {
-				await checkForExternalChange();
+				await followDiskChange();
 				notice = 'The file changed on disk before it could be saved.';
 			} else if (errorCode(caught) === 'read_only') {
 				notice = 'This file is read-only and cannot be saved.';
@@ -219,21 +228,54 @@
 			}
 		} finally {
 			saving = false;
+			if (changedWhileSaving) {
+				changedWhileSaving = false;
+				void followDiskChange();
+			}
 		}
 	}
 
 	function revert(): void {
-		if (file) void showFile(file);
+		// Discarding edits shows the newest version, including one that changed on disk meanwhile.
+		const latest = externalFile ?? file;
+		if (latest) void showFile(latest);
 	}
 
-	async function checkForExternalChange(): Promise<void> {
-		if (!file || loading || saving || externalFile) return;
-		try {
-			const current = await source.read(path);
-			if (current.revision !== file.revision) externalFile = current;
-		} catch {
-			// The current buffer stays usable while a transient refresh fails.
+	/**
+	 * Reads the file after it changed on disk. A clean buffer takes the new
+	 * text in place, keeping the cursor and scroll position. An edited buffer
+	 * stays as it is, and the newest disk version waits behind the notice.
+	 */
+	async function followDiskChange(): Promise<void> {
+		if (!file || loading) return;
+		if (saving) {
+			changedWhileSaving = true;
+			return;
 		}
+		let current: EditorFileContent;
+		try {
+			current = await source.read(path);
+		} catch {
+			// The buffer stays usable when the file vanished or a read failed.
+			return;
+		}
+		if (current.revision === file.revision) {
+			externalFile = undefined;
+			return;
+		}
+		if (dirty) externalFile = current;
+		else if (view && current.writable === file.writable) reloadInPlace(current);
+		else await showFile(current);
+	}
+
+	function reloadInPlace(next: EditorFileContent): void {
+		if (!view) return;
+		const { scrollTop } = view.scrollDOM;
+		const anchor = Math.min(view.state.selection.main.head, next.content.length);
+		file = next;
+		externalFile = undefined;
+		view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next.content }, selection: { anchor } });
+		view.scrollDOM.scrollTop = scrollTop;
 	}
 
 	function keepLocalVersion(): void {
@@ -255,11 +297,6 @@
 			</div>
 		</div>
 		<div class="file-editor__actions">
-			<button
-				class="pau-button pau-button--secondary"
-				type="button"
-				onclick={() => void checkForExternalChange()}
-				disabled={loading}>Check for changes</button>
 			<button class="pau-button pau-button--secondary" type="button" onclick={revert} disabled={!dirty}>Revert</button>
 			<button
 				class="pau-button pau-button--primary"
@@ -275,14 +312,12 @@
 		<div class="file-editor__external" role="alert">
 			<div>
 				<strong>File changed on disk</strong>
-				<p>{dirty ? 'Your unsaved changes are still in the editor.' : 'Reload to view the current version.'}</p>
+				<p>Your unsaved changes are still in the editor.</p>
 			</div>
 			<div>
-				{#if dirty}<button class="pau-button pau-button--secondary" type="button" onclick={keepLocalVersion}
-						>Keep my version</button
-					>{/if}
+				<button class="pau-button pau-button--secondary" type="button" onclick={keepLocalVersion}>Keep mine</button>
 				<button class="pau-button pau-button--secondary" type="button" onclick={() => void showFile(externalFile!)}
-					>Reload from disk</button>
+					>Reload</button>
 			</div>
 		</div>
 	{/if}
@@ -390,7 +425,7 @@
 		color: var(--pau-text-muted);
 	}
 
-	/* The external-change banner is optional, so pin the body to the flexible row. */
+	/* The changed-on-disk notice is optional, so pin the body to the flexible row. */
 	.file-editor__code,
 	.file-editor__state,
 	.file-editor > :global(.empty-state) {

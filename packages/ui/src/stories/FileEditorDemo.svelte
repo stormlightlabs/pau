@@ -3,7 +3,7 @@
 	import type { EditorFileContent, FileEditorSource } from '../lib/types/file-editor';
 
 	type State = 'default' | 'read-only' | 'binary' | 'oversized' | 'invalid-encoding' | 'external-change' | 'markdown';
-	let { state = 'default' }: { state?: State } = $props();
+	let { state: scenario = 'default' }: { state?: State } = $props();
 
 	const original: EditorFileContent = {
 		path: 'src/session/state.ts',
@@ -19,32 +19,38 @@
 		writable: true
 	};
 	let current = structuredClone(original);
-	let reads = 0;
+	let diskChanges = $state(0);
 
 	const source: FileEditorSource = {
 		read: async () => {
-			if (state === 'binary') throw Object.assign(new Error('binary'), { code: 'binary_file' });
-			if (state === 'oversized') throw Object.assign(new Error('large'), { code: 'file_too_large' });
-			if (state === 'invalid-encoding') throw Object.assign(new Error('encoding'), { code: 'invalid_encoding' });
-			if (state === 'markdown') return structuredClone(markdown);
-			reads += 1;
-			if (state === 'external-change' && reads > 1) {
-				return { ...original, content: "export const source = 'external';\n", revision: 'external' };
-			}
-			return { ...structuredClone(current), writable: state !== 'read-only' };
+			if (scenario === 'binary') throw Object.assign(new Error('binary'), { code: 'binary_file' });
+			if (scenario === 'oversized') throw Object.assign(new Error('large'), { code: 'file_too_large' });
+			if (scenario === 'invalid-encoding') throw Object.assign(new Error('encoding'), { code: 'invalid_encoding' });
+			if (scenario === 'markdown') return structuredClone(markdown);
+			return { ...structuredClone(current), writable: scenario !== 'read-only' };
 		},
 		write: async (path, content) => {
 			current = { path, content, revision: 'saved', writable: true };
 			return structuredClone(current);
 		}
 	};
+
+	/** Stands in for the workspace watcher reporting an edit made outside Pau. */
+	function changeOnDisk(): void {
+		const count = diskChanges + 1;
+		current = { ...original, content: `export const source = 'external ${count}';\n`, revision: `external-${count}` };
+		diskChanges = count;
+	}
 </script>
 
+{#if scenario === 'external-change'}
+	<button class="editor-story__simulate" type="button" onclick={changeOnDisk}>Change the file on disk</button>
+{/if}
 <div class="editor-story">
 	<FileEditor
-		path={state === 'markdown' ? markdown.path : original.path}
+		path={scenario === 'markdown' ? markdown.path : original.path}
 		{source}
-		pollInterval={60_000}
+		{diskChanges}
 		onReveal={async () => {}} />
 </div>
 
@@ -53,5 +59,9 @@
 		width: min(72rem, 100vw);
 		height: min(44rem, 100vh);
 		border: 1px solid var(--pau-border);
+	}
+
+	.editor-story__simulate {
+		margin: var(--pau-space-2);
 	}
 </style>

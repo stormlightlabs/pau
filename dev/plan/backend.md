@@ -32,6 +32,15 @@ are disconnected and recover through replay rather than blocking agent output.
 Native agent output is transient: replay delivers it, but snapshots hold only
 the latest state-bearing event for each workspace, session, and kind.
 
+A client showing a workspace's files connects with `?watch=<workspace_id>`.
+The server watches that workspace while at least one such connection is open
+and stops when the last one closes. Each connection starts from a snapshot,
+and the client reloads what it shows on every connection. Changes arrive as
+transient `workspace_files_changed` events with the changed paths, a flag for
+Git branch, index, or ref changes, and a `truncated` flag when one burst
+changes more than 500 paths. The watcher drops ignored paths, credential files,
+and Git's internal files other than `HEAD`, the index, and refs.
+
 Do not force native events into one large enum too early. Use a small stable
 envelope plus adapter-owned typed payloads. Promote fields into common events
 only when at least two adapters use the same semantics.

@@ -7,6 +7,7 @@
 	import type { IconKind } from '../icons';
 	import type { ThemeName, UiFontName } from '../theme';
 	import type {
+		WorkspaceFileChanges,
 		WorkspaceFileEntry,
 		WorkspaceFileSource,
 		WorkspaceGitDiff,
@@ -110,6 +111,8 @@
 	let contextMenu = $state<ContextMenuRequest>();
 	/** Why the last file tree action from a context menu failed. */
 	let treeActionError = $state('');
+	/** Changes on disk to the open file, counted for the editor to follow. */
+	let openFileDiskChanges = $state(0);
 
 	let traversalOptions = $derived<WorkspaceTraversalOptions>({ includeHidden, includeIgnored });
 	let root = $derived(directories['']);
@@ -139,7 +142,24 @@
 	onMount(() => {
 		void reloadTree();
 		void loadGitStatus();
+		return source.watch?.(followDiskChanges);
 	});
+
+	/**
+	 * Brings the tree, Git status, and open file up to date after a change on
+	 * disk. Listings refresh in place, so expanded folders and focus stay put.
+	 */
+	function followDiskChanges(changes: WorkspaceFileChanges): void {
+		void loadGitStatus(true);
+		const loaded = Object.keys(directories);
+		const stale = changes.truncated
+			? loaded
+			: loaded.filter((directory) =>
+					changes.paths.some((path) => path === directory || parentPath(path) === directory)
+				);
+		for (const directory of stale) void refreshDirectory(directory);
+		if (selectedPath && (changes.truncated || changes.paths.includes(selectedPath))) openFileDiskChanges += 1;
+	}
 
 	function errorCode(error: unknown): string | undefined {
 		return typeof error === 'object' && error !== null && 'code' in error
@@ -154,11 +174,12 @@
 		return error instanceof Error ? error.message : 'Pau could not load this folder.';
 	}
 
-	async function loadGitStatus(): Promise<void> {
-		gitLoading = true;
-		gitError = '';
+	/** Reads Git status. A quiet refresh keeps the current status on screen until the new one arrives. */
+	async function loadGitStatus(quiet = false): Promise<void> {
+		if (!quiet) gitLoading = true;
 		try {
 			gitStatus = await source.gitStatus();
+			gitError = '';
 		} catch {
 			gitError = 'Pau could not read Git status.';
 		} finally {
@@ -176,6 +197,24 @@
 		} catch (error) {
 			if (version !== requestVersion) return;
 			directories[path] = { entries: [], error: errorMessage(error), loading: false };
+		}
+	}
+
+	/** Replaces a loaded listing without a loading state. A folder that is gone collapses. */
+	async function refreshDirectory(path: string): Promise<void> {
+		const version = requestVersion;
+		try {
+			const entries = await source.listDirectory(path, traversalOptions);
+			if (version === requestVersion && Object.hasOwn(directories, path))
+				directories[path] = { entries, loading: false };
+		} catch (error) {
+			if (version !== requestVersion) return;
+			if (path && errorCode(error) === 'not_found') {
+				delete directories[path];
+				expanded.delete(path);
+			} else {
+				directories[path] = { entries: [], error: errorMessage(error), loading: false };
+			}
 		}
 	}
 
@@ -702,6 +741,7 @@
 					path={selectedPath}
 					source={editorSource}
 					line={selectedLine}
+					diskChanges={openFileDiskChanges}
 					onReveal={revealPath && fullPath ? () => revealPath(fullPath) : undefined} />
 			{/key}
 		{:else if selectedPath}

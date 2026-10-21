@@ -14,6 +14,7 @@ pub mod session;
 pub mod startup;
 pub mod terminal;
 pub mod workspace;
+pub mod workspace_watch;
 
 /// Response returned by the backend health endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -50,13 +51,19 @@ pub enum ServerEventKind {
     /// Interface preferences were saved. The payload is a
     /// [`preferences::UiPreferences`].
     PreferencesChanged,
+    /// Files changed on disk in a watched workspace. The payload is a
+    /// [`workspace_watch::WorkspaceFileChanges`].
+    ///
+    /// Like output, changes are transient: snapshots omit them, and clients
+    /// reload what they show after reconnecting.
+    WorkspaceFilesChanged,
 }
 
 impl ServerEventKind {
     /// Whether the latest event of this kind describes current state and so
     /// belongs in a snapshot.
     pub fn is_state(self) -> bool {
-        !matches!(self, Self::SessionOutput)
+        !matches!(self, Self::SessionOutput | Self::WorkspaceFilesChanged)
     }
 }
 

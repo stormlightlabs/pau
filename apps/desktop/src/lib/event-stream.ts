@@ -14,13 +14,16 @@ function sameProjection(left: ServerEvent, right: ServerEvent): boolean {
 /**
  * Applies snapshots and events while ignoring duplicate event delivery.
  *
- * `session_output` events advance the sequence but stay out of `events`: they
- * form a stream rather than state, and the server leaves them out of snapshots.
+ * `session_output` and `workspace_files_changed` events advance the sequence
+ * but stay out of `events`: they form a stream rather than state, and the
+ * server leaves them out of snapshots.
  */
 export function reduceServerMessage(state: EventStreamState, message: ServerStreamMessage): EventStreamState {
 	if (message.type === 'snapshot') return applySnapshot(message.snapshot);
 	if (message.event.sequence <= state.sequence) return state;
-	if (message.event.kind === 'session_output') return { sequence: message.event.sequence, events: state.events };
+	if (message.event.kind === 'session_output' || message.event.kind === 'workspace_files_changed') {
+		return { sequence: message.event.sequence, events: state.events };
+	}
 
 	return {
 		sequence: message.event.sequence,
@@ -62,6 +65,13 @@ export type EventStreamOptions = {
 	onConnectionChange?: (connected: boolean) => void;
 	socketFactory?: EventSocketFactory;
 	scheduleRetry?: RetryScheduler;
+	/**
+	 * Workspace whose files this stream follows. The server watches it while
+	 * the stream is connected. Such a stream starts every connection from a
+	 * snapshot instead of replay, because a files view reloads what it shows
+	 * whenever it connects.
+	 */
+	watch?: string;
 };
 
 /**
@@ -92,7 +102,8 @@ export class EventStreamClient {
 	/** Opens the stream or resumes it after a disconnect. */
 	connect(): void {
 		this.#stopped = false;
-		const configuration = resolveEventSocket(this.#options.browserOrigin, this.#state.sequence);
+		const { browserOrigin, watch } = this.#options;
+		const configuration = resolveEventSocket(browserOrigin, watch ? undefined : this.#state.sequence, watch);
 		const socket = this.#socketFactory(configuration.url, configuration.protocols);
 		this.#socket = socket;
 		socket.addEventListener('open', () => {

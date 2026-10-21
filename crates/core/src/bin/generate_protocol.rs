@@ -51,6 +51,7 @@ use pau_core::{
         FileContent, FileEntry, FileEntryKind, FileSearchMatch, GitDiff, GitFileState,
         GitFileStatus, GitStatus,
     },
+    workspace_watch::WorkspaceFileChanges,
 };
 use ts_rs::{Config, TS};
 
@@ -84,6 +85,7 @@ fn main() {
         GitFileStatus::decl(&config),
         GitStatus::decl(&config),
         GitDiff::decl(&config),
+        WorkspaceFileChanges::decl(&config),
         ProcessIdentity::decl(&config),
         ProcessResourceNode::decl(&config),
         ProcessResourceSnapshot::decl(&config),

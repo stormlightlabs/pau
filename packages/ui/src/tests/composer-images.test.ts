@@ -43,11 +43,11 @@ describe('encodeImage', () => {
 	});
 });
 
-describe('imageDragKind', () => {
-	/** Node has no DataTransfer, so the test passes only the items the classifier reads. */
-	const transfer = (...types: string[]) =>
-		({ items: types.map((type) => ({ kind: 'file', type })) }) as unknown as DataTransfer;
+/** Node has no DataTransfer, so the test passes only the items the classifier reads. */
+const transfer = (...types: string[]) =>
+	({ items: types.map((type) => ({ kind: 'file', type })) }) as unknown as DataTransfer;
 
+describe('imageDragKind', () => {
 	test('tells images, unsupported files, and a mix apart', () => {
 		expect(imageDragKind(transfer('image/png', 'image/webp'))).toBe('images');
 		expect(imageDragKind(transfer('application/pdf'))).toBe('unsupported');

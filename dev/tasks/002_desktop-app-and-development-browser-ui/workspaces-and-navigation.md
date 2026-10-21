@@ -46,19 +46,6 @@ Verification:
 - Component-test confirmation, cancellation, and the refusal message with its
   stop action.
 
-### 2.180 Recent saved sessions in the rail
-
-Status: planned
-Blocked by: none
-
-List each workspace's most recent saved sessions under its live sessions in the
-rail and resume one from there.
-
-Verification:
-
-- Component-test the list, a saved session that is already live, an empty
-  history, and a load failure.
-
 ### 2.181 Settings view
 
 Status: planned

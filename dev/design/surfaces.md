@@ -97,6 +97,13 @@ because resuming starts Pi. When the
 workspace or saved session no longer exists, launch opens the session list
 without an error.
 
+Under its live and stopped sessions, each workspace in the session rail lists
+its three newest saved Pi sessions that no row above already shows, with a
+Stopped status. Clicking one resumes it, as Resume does in the picker that the
+workspace's history button opens. A workspace with neither shows "No sessions
+yet". When the saved list cannot load, the rail says so under the workspace
+and offers Try again.
+
 Each workspace in the session rail has a start control. When a session cannot
 start, the task surface names the cause and offers a retry. While the backend
 connection is down, the session stays readable but sending, starting, and

@@ -289,6 +289,11 @@ export type MessageQueue = {
 export type SessionViewModel = {
 	id: string;
 	workspaceId: string;
+	/**
+	 * The saved Pi session this session runs, once Pi has one. The rail leaves
+	 * it out of the workspace's recent saved sessions, so it is listed once.
+	 */
+	savedSessionId?: string;
 	title: string;
 	agent: string;
 	model?: string;

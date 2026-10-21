@@ -124,6 +124,18 @@ export const RestoredStoppedSession: Story = {
 		await expect(await canvas.findByText('pau: resume native-3')).toBeInTheDocument();
 	}
 };
+export const RecentSavedSessions: Story = {
+	args: {
+		workspaces: sessionFixtures.idle,
+		initialSessionId: 'session-idle',
+		savedSessions: savedSessionFixtures.populated
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(await canvas.findByRole('button', { name: /Fix the flaky terminal test/ }));
+		await expect(await canvas.findByText('pau: resume native-2')).toBeInTheDocument();
+	}
+};
 export const SavedSessionPicker: Story = {
 	args: {
 		workspaces: [{ id: 'ankify', name: 'ankify', path: '/Users/operator/projects/ankify', sessions: [] }],

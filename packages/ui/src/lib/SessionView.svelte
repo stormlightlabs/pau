@@ -171,13 +171,15 @@
 		 */
 		onStartSession?: (workspaceId: string) => void | Promise<void>;
 		/**
-		 * Lists a workspace's saved sessions. With `onResumeSession`, the rail
-		 * offers a session picker for each workspace.
+		 * Lists a workspace's saved sessions, newest first. With
+		 * `onResumeSession`, the rail lists each workspace's newest saved
+		 * sessions under its live ones and offers a picker for the rest.
 		 */
 		onLoadSavedSessions?: (workspaceId: string) => Promise<SavedSessionList>;
 		/**
 		 * Resumes a saved session. A rejected promise shows its message in the
-		 * picker, or beside Resume for `restoredSession`.
+		 * picker, under the rail for a recent saved session, or beside Resume
+		 * for `restoredSession`.
 		 */
 		onResumeSession?: (workspaceId: string, savedSessionId: string) => void | Promise<void>;
 		/**
@@ -354,6 +356,20 @@
 
 	/** Times the session-list loading state so a fast first load shows nothing. */
 	const sessionsLoading = new BusyIndicator(() => loading);
+
+	/**
+	 * How many saved sessions the rail lists under each workspace's live
+	 * sessions. The picker behind the history button lists the rest.
+	 */
+	const recentSessionLimit = 3;
+	/** A workspace's saved sessions for the rail: loading, loaded, or failed. */
+	type RecentSessions = { status: 'loading' } | { status: 'ready'; sessions: SavedSession[] } | { status: 'failed' };
+	/** Each workspace's saved sessions for the rail, by workspace ID. Absent until the first load starts. */
+	let recentSessions = $state<Record<string, RecentSessions>>({});
+	/** Times the recent saved-session loads, which run together when the rail first shows. */
+	const recentLoading = new BusyIndicator(() =>
+		Object.values(recentSessions).some((recent) => recent.status === 'loading')
+	);
 	let transcriptElement = $state<HTMLElement>();
 
 	/** Scrolls the transcript to its newest content and resumes following. */
@@ -512,8 +528,11 @@
 	/** The ended session whose restart is in flight, so its button cannot start it twice. */
 	let restartingSessionId = $state<string>();
 	let restartError = $state<string>();
-	/** Whether the restored session's resume is in flight, so Resume cannot start it twice. */
-	let resumingRestored = $state(false);
+	/**
+	 * The saved session whose resume is in flight, from the rail or the
+	 * restored session's Resume, so no click can start a second one.
+	 */
+	let resumingSavedId = $state<string>();
 	let resumeError = $state<string>();
 	/** The open context menu, if any. */
 	let contextMenu = $state<ContextMenuRequest>();
@@ -540,6 +559,13 @@
 	let openedWorkspaceId = $state<string>();
 
 	const pickerWorkspace = $derived(workspaces.find((workspace) => workspace.id === pickerWorkspaceId));
+	// Each workspace loads its recent saved sessions once, when the rail first lists it.
+	$effect(() => {
+		if (!onLoadSavedSessions || !onResumeSession || sessionsLoading.active) return;
+		for (const workspace of workspaces) {
+			if (!untrack(() => recentSessions[workspace.id])) void loadRecent(workspace.id);
+		}
+	});
 	const openedWorkspace = $derived(workspaces.find((workspace) => workspace.id === openedWorkspaceId));
 	const sessions = $derived(workspaces.flatMap((workspace) => workspace.sessions));
 	const activeSession = $derived(sessions.find((session) => session.id === activeSessionId));
@@ -1031,18 +1057,60 @@
 		}
 	}
 
-	/** Resumes the restored session. Only the operator's click calls this. */
-	async function resumeRestored(restored: SavedSession & { workspaceId: string }): Promise<void> {
-		if (!onResumeSession || resumingRestored) return;
-		resumingRestored = true;
-		resumeError = undefined;
+	/**
+	 * Resumes a saved session and returns why it failed, if it did. Only the
+	 * operator's click calls this, because resuming starts the agent.
+	 */
+	async function resumeSaved(workspaceId: string, savedSessionId: string): Promise<string | undefined> {
+		if (!onResumeSession || resumingSavedId) return;
+		resumingSavedId = savedSessionId;
 		try {
-			await onResumeSession(restored.workspaceId, restored.id);
+			await onResumeSession(workspaceId, savedSessionId);
 		} catch (cause) {
-			resumeError = cause instanceof Error ? cause.message : 'The session could not resume. Try again.';
+			return cause instanceof Error ? cause.message : 'The session could not resume. Try again.';
 		} finally {
-			resumingRestored = false;
+			resumingSavedId = undefined;
 		}
+	}
+
+	/** Resumes the restored session from its Resume button. */
+	async function resumeRestored(restored: SavedSession & { workspaceId: string }): Promise<void> {
+		resumeError = undefined;
+		resumeError = await resumeSaved(restored.workspaceId, restored.id);
+	}
+
+	/** Resumes a recent saved session from its rail row, as the picker does. */
+	async function resumeRecent(workspaceId: string, savedSessionId: string): Promise<void> {
+		pickerWorkspaceId = undefined;
+		openedWorkspaceId = undefined;
+		closeOpenForm();
+		startFailure = undefined;
+		railError = undefined;
+		railError = await resumeSaved(workspaceId, savedSessionId);
+	}
+
+	/** Loads a workspace's saved sessions for the rail. A failure offers Try again. */
+	async function loadRecent(workspaceId: string): Promise<void> {
+		if (!onLoadSavedSessions) return;
+		recentSessions[workspaceId] = { status: 'loading' };
+		try {
+			const list = await onLoadSavedSessions(workspaceId);
+			recentSessions[workspaceId] = { status: 'ready', sessions: list.sessions };
+		} catch {
+			recentSessions[workspaceId] = { status: 'failed' };
+		}
+	}
+
+	/**
+	 * The workspace's newest saved sessions that the rail does not already
+	 * list as a live, stopped, or restored session.
+	 */
+	function recentRows(workspace: SessionWorkspace): SavedSession[] {
+		const recent = recentSessions[workspace.id];
+		if (recent?.status !== 'ready') return [];
+		const listed = workspace.sessions.map((session) => session.savedSessionId);
+		if (restoredSession?.workspaceId === workspace.id) listed.push(restoredSession.id);
+		return recent.sessions.filter((saved) => !saved.live && !listed.includes(saved.id)).slice(0, recentSessionLimit);
 	}
 
 	/** Starts the ended session again. The draft stays in the composer for the new run. */
@@ -1997,6 +2065,13 @@
 	}
 </script>
 
+<!-- A saved session without a live session behind it reads as stopped in the rail. -->
+{#snippet savedRowContent(title: string, state: string)}
+	<SessionStatusMark status="stopped" label="Stopped" />
+	<span class="session-rail__name">{title}</span>
+	<span class="session-rail__state"><small aria-hidden="true">{state}</small></span>
+{/snippet}
+
 {#snippet readinessNotice(workspaceId?: string)}
 	{#if agentReadiness}
 		<AgentReadinessNotice
@@ -2042,6 +2117,8 @@
 			{:else}
 				{#each workspaces as workspace (workspace.id)}
 					{@const restored = restoredSession?.workspaceId === workspace.id ? restoredSession : undefined}
+					{@const recentStatus = recentSessions[workspace.id]?.status}
+					{@const recent = recentRows(workspace)}
 					<section aria-labelledby={`workspace-${workspace.id}`}>
 						<!-- The heading row hosts the workspace menu for the heading and its controls. -->
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -2083,10 +2160,10 @@
 								</button>
 							{/if}
 						</div>
-						{#if workspace.sessions.length === 0 && !restored}
-							<p class="session-rail__empty">
-								{startingWorkspaceId === workspace.id ? 'Starting a session…' : 'No sessions yet'}
-							</p>
+						{#if workspace.sessions.length === 0 && startingWorkspaceId === workspace.id}
+							<p class="session-rail__empty">Starting a session…</p>
+						{:else if workspace.sessions.length === 0 && !restored && recent.length === 0 && (!recentStatus || recentStatus === 'ready')}
+							<p class="session-rail__empty">No sessions yet</p>
 						{/if}
 						<ul>
 							{#if restored}
@@ -2098,9 +2175,7 @@
 										title={restored.title}
 										aria-current={restoredOpen ? 'page' : undefined}
 										onclick={openRestored}>
-										<SessionStatusMark status="stopped" label="Stopped" />
-										<span class="session-rail__name">{restored.title}</span>
-										<span class="session-rail__state"><small aria-hidden="true">Stopped</small></span>
+										{@render savedRowContent(restored.title, 'Stopped')}
 									</button>
 								</li>
 							{/if}
@@ -2158,7 +2233,31 @@
 									{/if}
 								</li>
 							{/each}
+							{#each recent as saved (saved.id)}
+								<li>
+									<button
+										type="button"
+										class="session-rail__saved"
+										title={saved.title}
+										disabled={disconnected || resumingSavedId !== undefined}
+										onclick={() => void resumeRecent(workspace.id, saved.id)}>
+										{@render savedRowContent(saved.title, resumingSavedId === saved.id ? 'Resuming…' : 'Stopped')}
+									</button>
+								</li>
+							{/each}
 						</ul>
+						{#if recentStatus === 'loading' && recentLoading.visible}
+							<p class="session-rail__empty" role="status">Loading saved sessions…</p>
+						{:else if recentStatus === 'failed'}
+							<div class="session-rail__recent-failure">
+								<p>Saved sessions did not load.</p>
+								<button
+									type="button"
+									class="pau-button pau-button--secondary session-rail__retry"
+									disabled={disconnected}
+									onclick={() => void loadRecent(workspace.id)}>Try again</button>
+							</div>
+						{/if}
 					</section>
 				{/each}
 			{/if}
@@ -2336,9 +2435,9 @@
 						<button
 							type="button"
 							class="pau-button pau-button--primary"
-							disabled={disconnected || resumingRestored}
+							disabled={disconnected || resumingSavedId !== undefined}
 							onclick={() => void resumeRestored(restoredSession)}>
-							{resumingRestored ? 'Resuming…' : 'Resume'}
+							{resumingSavedId === restoredSession.id ? 'Resuming…' : 'Resume'}
 						</button>
 					{/if}
 				</section>
@@ -3142,6 +3241,44 @@
 		margin: 0;
 		padding: var(--pau-space-2) var(--pau-space-3) var(--pau-space-2) var(--pau-space-4);
 		color: var(--pau-text-muted);
+	}
+
+	.session-rail .session-rail__saved:disabled {
+		cursor: not-allowed;
+	}
+
+	.session-rail .session-rail__saved:disabled:hover {
+		color: var(--pau-text-muted);
+		background: transparent;
+	}
+
+	/* The message and its retry start at the workspace name's inset, like the empty note. */
+	.session-rail__recent-failure {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--pau-space-2);
+		padding: var(--pau-space-2) var(--pau-space-3) var(--pau-space-2) var(--pau-space-4);
+	}
+
+	.session-rail__recent-failure p {
+		margin: 0;
+		color: var(--pau-danger);
+	}
+
+	/* The retry is a shared secondary button, not a session row. */
+	.session-rail .session-rail__retry {
+		display: inline-flex;
+		width: auto;
+		padding: 0 var(--pau-space-3);
+		color: var(--pau-text);
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-control);
+	}
+
+	.session-rail .session-rail__retry:disabled {
+		color: var(--pau-text-muted);
+		cursor: not-allowed;
 	}
 
 	.session-rail__rename {

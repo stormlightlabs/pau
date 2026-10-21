@@ -4,6 +4,9 @@
 
 ### Desktop
 
+- The session rail now lists each workspace's three newest saved sessions
+  under the running ones. Click one to resume it. The history button still
+  opens the full list.
 - Pau now sends a system notification and badges its Dock icon when a session
   waits for your input, asks a question, or exits unexpectedly while you are
   in another window, view, or session. The notification names the session,

@@ -540,6 +540,32 @@ test('resumes a saved session from the picker and selects it', async () => {
 	expect(changes).toEqual(['session-1']);
 });
 
+test('resumes a recent saved session from the rail and lists it once', async () => {
+	const start = vi.fn(() => json({ ...idleSession, status: 'starting', native_session_id: 'native-1' }, 201));
+	const changes: string[] = [];
+	const { props } = setup({
+		'GET /api/workspaces/pau/pi-sessions': () => json(savedList),
+		'POST /api/sessions': start
+	});
+	await render(SessionRoute, {
+		...props,
+		onSessionChange: (_workspace: string, id: string) => {
+			changes.push(id);
+		}
+	});
+
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	await userEvent.click(page.getByRole('button', { name: /Fix the gutter/ }));
+
+	await expect.element(page.getByText('Starting the agent process…')).toBeVisible();
+	expect(start).toHaveBeenCalledWith(
+		expect.objectContaining({ body: '{"workspace_id":"pau","model":null,"native_session_id":"native-1"}' })
+	);
+	expect(changes).toEqual(['session-1']);
+	// The live session takes the saved row's place.
+	expect(document.querySelectorAll('.session-rail__saved')).toHaveLength(0);
+});
+
 test.each([
 	['resumes the saved conversation', 'native-1', '"native_session_id":"native-1"'],
 	['starts fresh when Pi saved nothing', null, '"native_session_id":null']

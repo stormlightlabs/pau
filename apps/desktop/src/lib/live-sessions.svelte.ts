@@ -576,6 +576,7 @@ export class LiveSessions {
 		return {
 			id: session.id,
 			workspaceId: session.workspace_id,
+			savedSessionId: session.native_session_id ?? undefined,
 			title: this.#pendingNames[session.id] ?? session.name ?? sessionTitle(transcript),
 			agent: 'Pi',
 			status: session.status,

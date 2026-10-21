@@ -10,6 +10,7 @@ import { sessionFixtures } from '../fixtures/sessions';
 import { Keymap, keymapContext } from '../lib/keymap.svelte';
 import SessionView from '../lib/SessionView.svelte';
 import SessionViewDemo from '../stories/SessionViewDemo.svelte';
+import type { SavedSessionList } from '../lib/types/session';
 
 const stateCases = [
 	['starting', sessionFixtures.starting, 'session-starting', 'Starting the agent process…'],
@@ -72,6 +73,99 @@ test('lists a restored session in the rail and names its workspace in the top ba
 	expect(identity()).not.toContain('ankify');
 	await userEvent.click(row);
 	expect(onOpenRestoredSession).toHaveBeenCalledOnce();
+});
+
+/** Saved sessions newest first, as a workspace lists them. */
+function savedList(...titles: string[]): SavedSessionList {
+	return { sessions: titles.map((title, index) => ({ id: `native-${index + 1}`, title })), warnings: [] };
+}
+
+/** The titles of the rail's recent saved-session rows, in order. */
+function recentTitles(): (string | null)[] {
+	return [...document.querySelectorAll('.session-rail__saved .session-rail__name')].map((name) => name.textContent);
+}
+
+test('lists the newest saved sessions under the live ones and resumes one', async () => {
+	const onResumeSession = vi.fn();
+	const live = { ...sessionFixtures.idle[0]!.sessions[0]!, savedSessionId: 'native-1' };
+	await render(SessionView, {
+		workspaces: [{ id: 'pau', name: 'Pau', sessions: [live] }],
+		activeSessionId: live.id,
+		onLoadSavedSessions: async () =>
+			savedList('Fix diff gutter', 'Wire the picker', 'Draft notes', 'Tidy the rail styles', 'Older work'),
+		onResumeSession
+	});
+
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	// The live session's saved conversation shows once, as the live row.
+	await vi.waitFor(() => expect(recentTitles()).toEqual(['Wire the picker', 'Draft notes', 'Tidy the rail styles']));
+
+	await userEvent.click(page.getByRole('button', { name: /Draft notes/ }));
+	expect(onResumeSession).toHaveBeenCalledWith('pau', 'native-3');
+});
+
+test('leaves out saved sessions that are live or restored', async () => {
+	const list = savedList('Review the sandbox policy', 'Running elsewhere', 'Wire the picker');
+	list.sessions[1] = { ...list.sessions[1]!, live: true };
+	await render(SessionView, {
+		workspaces: [{ id: 'ankify', name: 'ankify', sessions: [] }],
+		restoredSession: { workspaceId: 'ankify', id: 'native-1', title: 'Review the sandbox policy' },
+		onLoadSavedSessions: async () => list,
+		onResumeSession: vi.fn()
+	});
+
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	await vi.waitFor(() => expect(recentTitles()).toEqual(['Wire the picker']));
+	const names = [...document.querySelectorAll('.session-rail__name')].map((name) => name.textContent);
+	expect(names).toEqual(['Review the sandbox policy', 'Wire the picker']);
+});
+
+test('shows nothing extra for a workspace without saved sessions', async () => {
+	const onLoadSavedSessions = vi.fn(async () => savedList());
+	await render(SessionView, {
+		workspaces: [{ id: 'ankify', name: 'ankify', sessions: [] }],
+		onLoadSavedSessions,
+		onResumeSession: vi.fn()
+	});
+
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	await expect.element(page.getByText('No sessions yet')).toBeVisible();
+	expect(onLoadSavedSessions).toHaveBeenCalledWith('ankify');
+	expect(recentTitles()).toEqual([]);
+});
+
+test('explains a failed saved-session load and tries again', async () => {
+	const onLoadSavedSessions = vi
+		.fn<() => Promise<SavedSessionList>>()
+		.mockRejectedValueOnce(new Error('Pau could not read the session folder.'))
+		.mockResolvedValue(savedList('Wire the picker'));
+	await render(SessionView, {
+		workspaces: [{ id: 'ankify', name: 'ankify', sessions: [] }],
+		onLoadSavedSessions,
+		onResumeSession: vi.fn()
+	});
+
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	await expect.element(page.getByText('Saved sessions did not load.')).toBeVisible();
+	await expect.element(page.getByText('No sessions yet')).not.toBeInTheDocument();
+	await userEvent.click(page.getByRole('button', { name: 'Try again' }));
+
+	await vi.waitFor(() => expect(recentTitles()).toEqual(['Wire the picker']));
+	await expect.element(page.getByText('Saved sessions did not load.')).not.toBeInTheDocument();
+});
+
+test('reports a failed resume from the rail', async () => {
+	await render(SessionView, {
+		workspaces: [{ id: 'ankify', name: 'ankify', sessions: [] }],
+		onLoadSavedSessions: async () => savedList('Wire the picker'),
+		onResumeSession: async () => {
+			throw new Error('Pi could not open the session file.');
+		}
+	});
+
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	await userEvent.click(page.getByRole('button', { name: /Wire the picker/ }));
+	await expect.element(page.getByRole('alert')).toHaveTextContent('Pi could not open the session file.');
 });
 
 test('disables Resume for a restored session while disconnected', async () => {

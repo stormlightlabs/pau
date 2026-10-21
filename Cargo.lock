@@ -2949,7 +2949,7 @@ dependencies = [
 
 [[package]]
 name = "pau-agent"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "jsonc-parser",
  "libc",
@@ -2961,11 +2961,11 @@ dependencies = [
 
 [[package]]
 name = "pau-cli"
-version = "0.8.6"
+version = "0.8.7"
 
 [[package]]
 name = "pau-core"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "cap-std",
  "ignore",
@@ -2984,7 +2984,7 @@ dependencies = [
 
 [[package]]
 name = "pau-desktop"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "pau-core",
  "pau-server",
@@ -3005,7 +3005,7 @@ dependencies = [
 
 [[package]]
 name = "pau-pi"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "globset",
  "jsonc-parser",
@@ -3021,14 +3021,14 @@ dependencies = [
 
 [[package]]
 name = "pau-sandbox-denial-preload"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "libc",
 ]
 
 [[package]]
 name = "pau-server"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -3056,7 +3056,7 @@ dependencies = [
 
 [[package]]
 name = "pau-term"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "async-trait",
  "axum",

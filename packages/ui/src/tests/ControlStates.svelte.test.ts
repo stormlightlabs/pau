@@ -93,6 +93,16 @@ async function lookWhileFocused(element: HTMLElement): Promise<string> {
 /** Touch emulation makes the page report `(hover: none)`, as a touch screen does. */
 async function emulateTouch(enabled: boolean) {
 	await cdp().send('Emulation.setTouchEmulationEnabled', { enabled, maxTouchPoints: 1 });
+	// Touch emulation alone updates matchMedia but can leave styles computed for
+	// a hover-capable pointer, so the media features are emulated directly too.
+	await cdp().send('Emulation.setEmulatedMedia', {
+		features: enabled
+			? [
+					{ name: 'hover', value: 'none' },
+					{ name: 'pointer', value: 'coarse' }
+				]
+			: []
+	});
 }
 
 /** Transitions would leave a read mid-fade, so the test reads end states. */

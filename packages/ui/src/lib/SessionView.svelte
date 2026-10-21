@@ -44,6 +44,7 @@
 	import { detectPlatform, eventChord, formatChord, getKeymap, useKeyActions } from './keymap.svelte';
 	import Markdown from './Markdown.svelte';
 	import { isReducedMotion, motion } from '../motion';
+	import { BusyIndicator } from './busy-indicator.svelte';
 	import ModelPicker from './ModelPicker.svelte';
 	import ContextMeter from './ContextMeter.svelte';
 	import ThinkingLevelPicker from './ThinkingLevelPicker.svelte';
@@ -324,6 +325,8 @@
 		following = $bindable(true)
 	}: Props = $props();
 
+	/** Times the session-list loading state so a fast first load shows nothing. */
+	const sessionsLoading = new BusyIndicator(() => loading);
 	let transcriptElement = $state<HTMLElement>();
 
 	/** Scrolls the transcript to its newest content and resumes following. */
@@ -1908,8 +1911,8 @@
 					<span>{opening ? 'Opening…' : 'Open workspace…'}</span>
 				</button>
 			{/if}
-			{#if loading}
-				<p class="session-rail__empty">Loading…</p>
+			{#if sessionsLoading.active}
+				{#if sessionsLoading.visible}<p class="session-rail__empty">Loading…</p>{/if}
 			{:else if workspaces.length === 0}
 				<p class="session-rail__empty">No workspaces yet</p>
 			{:else}
@@ -2095,8 +2098,8 @@
 				{@render readinessNotice(startFailure.workspaceId)}
 			</EmptyState>
 		</section>
-	{:else if onOpenWorkspace && (openFormVisible || openError || (!loading && workspaces.length === 0))}
-		{@const firstRun = !loading && workspaces.length === 0}
+	{:else if onOpenWorkspace && (openFormVisible || openError || (!sessionsLoading.active && workspaces.length === 0))}
+		{@const firstRun = !sessionsLoading.active && workspaces.length === 0}
 		<section class="session-view session-view--empty" aria-labelledby="open-workspace-title">
 			<EmptyState
 				level={1}
@@ -2155,10 +2158,12 @@
 				{@render readinessNotice(openedWorkspace.id)}
 			</EmptyState>
 		</section>
-	{:else if loading && !activeSession}
-		<section class="session-view session-view--empty" aria-labelledby="loading-title">
-			<EmptyState level={1} role="status" titleId="loading-title" title="Loading sessions…" />
-		</section>
+	{:else if sessionsLoading.active && !activeSession}
+		{#if sessionsLoading.visible}
+			<section class="session-view session-view--empty" aria-labelledby="loading-title">
+				<EmptyState level={1} role="status" titleId="loading-title" title="Loading sessions…" />
+			</section>
+		{/if}
 	{:else if activeSession}
 		<section class="session-view" aria-labelledby="session-title">
 			<header class="session-view__header">

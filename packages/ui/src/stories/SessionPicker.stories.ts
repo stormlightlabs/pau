@@ -43,7 +43,7 @@ export const Populated: Story = {
 export const Loading: Story = {
 	args: { load: () => new Promise(() => {}) },
 	play: async ({ canvasElement }) => {
-		await expect(within(canvasElement).getByRole('status')).toHaveTextContent('Loading saved sessions…');
+		await expect(await within(canvasElement).findByRole('status')).toHaveTextContent('Loading saved sessions…');
 	}
 };
 

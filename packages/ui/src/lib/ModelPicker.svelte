@@ -4,6 +4,7 @@
 	import { anchorBox, placeAgainst } from './anchored-placement';
 	import { dismissible } from './dismissal';
 	import { createFocusReturn } from './focus-return';
+	import { BusyIndicator } from './busy-indicator.svelte';
 	import Icon from './Icon.svelte';
 	import type { ModelOption } from './types/session';
 
@@ -29,8 +30,10 @@
 
 	let models = $state<ModelOption[]>();
 	let loadError = $state<string>();
-	let selectError = $state<string>();
 	let open = $state(false);
+	/** Times from the list opening, since a load that finishes before then keeps nobody waiting. */
+	const modelsLoading = new BusyIndicator(() => open && !models && !loadError);
+	let selectError = $state<string>();
 	let trigger = $state<HTMLButtonElement>();
 	const focusReturn = createFocusReturn();
 	let pendingId = $state<string>();
@@ -124,7 +127,7 @@
 
 	// The list joins the top layer, like Select's, and moves when a message or the models change its height.
 	$effect(() => {
-		void [models, loadError, selectError, pendingId];
+		void [models, loadError, selectError, pendingId, modelsLoading.visible];
 		if (!open || !panel) return;
 		if (!panel.matches(':popover-open')) panel.showPopover();
 		place();
@@ -192,8 +195,8 @@
 			{#if loadError}
 				<p class="model-picker__error" role="alert">{loadError}</p>
 				<button type="button" onclick={() => void fetchModels()}>Try again</button>
-			{:else if !models}
-				<p class="model-picker__note" role="status">Loading models…</p>
+			{:else if !models || modelsLoading.active}
+				{#if modelsLoading.visible}<p class="model-picker__note" role="status">Loading models…</p>{/if}
 			{:else if models.length === 0}
 				<p class="model-picker__note">No models are available. Sign in to a provider in Pi, then reopen this list.</p>
 			{:else}

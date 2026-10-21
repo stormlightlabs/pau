@@ -50,7 +50,7 @@ Verification:
 ### 2.201 Transcript history placeholder
 
 Status: planned
-Blocked by: 2.221
+Blocked by: none
 
 Show a static placeholder in transcript layout while history takes longer than
 the busy delay to load.
@@ -141,7 +141,7 @@ Verification:
 ### 2.210 Long-operation progress
 
 Status: planned
-Blocked by: 2.221
+Blocked by: none
 
 Show elapsed time for a running turn in the session header's status slot and
 for compaction and session start, and the attempt number and next attempt time

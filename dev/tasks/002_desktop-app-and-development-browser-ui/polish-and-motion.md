@@ -2,21 +2,6 @@
 
 ## Polish and motion
 
-### 2.221 Busy indicator timing
-
-Status: planned
-Blocked by: none
-
-Delay loading and busy indicators by 400ms and keep them visible for at least
-500ms once shown.
-
-Verification:
-
-- Unit-test the timing with fake timers, including a wait that ends before the
-  delay and one that ends during the minimum display.
-- Apply it to the session-list loading state and confirm a fast load shows no
-  indicator.
-
 ### 2.222 Disclosure motion
 
 Status: planned

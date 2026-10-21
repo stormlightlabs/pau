@@ -60,6 +60,8 @@ describe.each([1440, 900])('at %ipx', (width) => {
 		const edge = await transcriptLeft();
 		await render(SessionView, props);
 
+		// The loading state appears only after its delay, so wait for each heading.
+		await expect.element(page.getByRole('heading', { name: title })).toBeVisible();
 		const heading = page.getByRole('heading', { name: title }).element();
 		expect(left(heading)).toBe(edge);
 		expectTopAligned(heading);

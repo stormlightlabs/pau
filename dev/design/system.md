@@ -358,8 +358,13 @@ from its edge.
 - `linear` is for progress and spinners only.
 - Exits use the next shorter duration than their entrance.
 
-The busy-indicator rules use two TypeScript constants: show after 400ms and
-stay visible for at least 500ms.
+`busyIndicatorTiming` in `motion.ts` holds the busy-indicator timing: show
+after 400ms and stay visible for at least 500ms. `BusyIndicator` in
+`packages/ui` applies it. While a shown indicator waits out its 500ms, the
+content that replaces it waits too, and a `role="status"` indicator renders
+only once shown, so screen readers announce what sighted operators see.
+Indicators for an operation already visible in progress, such as a running
+tool row or session status, are not delayed.
 
 ### Rules by component class
 

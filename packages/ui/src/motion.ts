@@ -15,6 +15,13 @@ export const motion = {
 	scaleEnter: 0.98
 } as const;
 
+/**
+ * Timing for loading and busy indicators, in milliseconds. Waits shorter than
+ * `delay` show no indicator, and a shown indicator stays for `minimumVisible`
+ * so it never flickers.
+ */
+export const busyIndicatorTiming = { delay: 400, minimumVisible: 500 } as const;
+
 /** How the interface moves: follow the OS, always reduce, or always animate. */
 export type MotionSetting = 'system' | 'reduce' | 'full';
 

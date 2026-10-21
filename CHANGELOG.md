@@ -8,6 +8,9 @@
   waits for your input, asks a question, or exits unexpectedly while you are
   in another window, view, or session. The notification names the session,
   and the badge clears once you open it.
+- Loading messages no longer flash when something loads quickly. They appear
+  only after a wait of 400ms, then stay for at least half a second so they
+  don't flicker.
 - Pau now reopens its window at the size and place you left it, maximized if
   it was. If that place is on a display that is no longer connected, the
   window opens centered on your main screen instead.

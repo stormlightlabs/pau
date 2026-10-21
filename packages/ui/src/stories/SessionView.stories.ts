@@ -92,7 +92,7 @@ export const Loading: Story = {
 	args: { workspaces: sessionFixtures.empty, initialSessionId: undefined, loading: true },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await expect(canvas.getByRole('heading', { name: 'Loading sessions…' })).toBeInTheDocument();
+		await expect(await canvas.findByRole('heading', { name: 'Loading sessions…' })).toBeInTheDocument();
 	}
 };
 export const WorkspaceWithoutSessions: Story = {

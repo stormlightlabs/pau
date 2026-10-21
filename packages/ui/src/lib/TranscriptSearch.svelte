@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 
+	import { BusyIndicator } from './busy-indicator.svelte';
 	import Icon from './Icon.svelte';
 	import { formatRelativeTime } from './relative-time';
 	import type { SessionSearchHit, SessionSearchOutcome } from './types/session';
@@ -38,6 +39,7 @@
 
 	const trimmed = $derived(query.trim());
 	const hits = $derived(outcome?.hits ?? []);
+	const searching = new BusyIndicator(() => phase === 'searching');
 
 	onMount(() => focus());
 
@@ -135,13 +137,15 @@
 
 	{#if phase === 'idle'}
 		<p class="transcript-search__status">Type to search this conversation.</p>
-	{:else if phase === 'searching'}
+	{:else if searching.visible}
 		<p class="transcript-search__status" role="status">Searching…</p>
 	{:else if phase === 'failed'}
 		<p class="transcript-search__status transcript-search__status--failed" role="alert">
 			{failure}
 			<button type="button" onclick={() => retries++}>Try again</button>
 		</p>
+	{:else if phase === 'searching' && hits.length === 0}
+		<!-- A fast search shows its results without a “Searching…” flash. -->
 	{:else if hits.length === 0}
 		<p class="transcript-search__status" role="status">No matches for “{trimmed}”.</p>
 	{:else}

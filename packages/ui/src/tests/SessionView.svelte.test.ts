@@ -1,5 +1,6 @@
 import { page, userEvent } from 'vitest/browser';
-import { expect, test, vi } from 'vitest';
+import { tick } from 'svelte';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { commandFixtures } from '../fixtures/commands';
@@ -165,10 +166,53 @@ test('toggles every tool row with Ctrl+O and keeps a row the operator opened', a
 	await expect.element(page.getByLabelText('bash output')).not.toBeInTheDocument();
 });
 
-test('shows the loading state before sessions arrive', async () => {
-	await render(SessionView, { workspaces: [], loading: true });
+/** The main-pane and rail session-list loading indicators, or null where absent. */
+function loadingIndicators() {
+	return [
+		page.getByRole('heading', { name: 'Loading sessions…' }).query(),
+		page.getByText('Loading…', { exact: true }).query()
+	];
+}
 
-	await expect.element(page.getByRole('heading', { name: 'Loading sessions…' })).toBeVisible();
+async function advanceTimers(ms: number): Promise<void> {
+	vi.advanceTimersByTime(ms);
+	await tick();
+}
+
+describe('session list loading', () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	test('a fast load shows no loading indicator', async () => {
+		const screen = await render(SessionView, { workspaces: [], loading: true });
+		await advanceTimers(399);
+		expect(loadingIndicators()).toEqual([null, null]);
+
+		await screen.rerender({ workspaces: sessionFixtures.idle, loading: false });
+		await advanceTimers(1000);
+		expect(loadingIndicators()).toEqual([null, null]);
+		expect(page.getByRole('heading', { name: 'No session selected' }).query()).not.toBeNull();
+	});
+
+	test('a slow load shows the indicator for at least 500ms', async () => {
+		const screen = await render(SessionView, { workspaces: [], loading: true });
+		await advanceTimers(400);
+		expect(loadingIndicators()).not.toContain(null);
+
+		await advanceTimers(100);
+		await screen.rerender({ workspaces: sessionFixtures.idle, loading: false });
+		await advanceTimers(399);
+		expect(loadingIndicators()).not.toContain(null);
+
+		await advanceTimers(1);
+		expect(loadingIndicators()).toEqual([null, null]);
+		expect(page.getByRole('heading', { name: 'No session selected' }).query()).not.toBeNull();
+	});
 });
 
 test('explains a failed start and retries it', async () => {

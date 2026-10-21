@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { BusyIndicator } from './busy-indicator.svelte';
 	import { formatRelativeTime } from './relative-time';
 	import type { SavedSessionList } from './types/session';
 
@@ -20,6 +21,7 @@
 
 	let list = $state<SavedSessionList>();
 	let loadError = $state<string>();
+	const listLoading = new BusyIndicator(() => !list && !loadError);
 	let actionError = $state<string>();
 	let busyId = $state<string>();
 	/** The newest saved session's Resume takes the accent once there is one, so New session steps back. */
@@ -78,8 +80,8 @@
 			<p class="session-picker__error">{loadError}</p>
 			<button type="button" class="pau-button pau-button--secondary" onclick={() => void fetchList()}>Try again</button>
 		</div>
-	{:else if !list}
-		<p class="session-picker__note" role="status">Loading saved sessions…</p>
+	{:else if !list || listLoading.active}
+		{#if listLoading.visible}<p class="session-picker__note" role="status">Loading saved sessions…</p>{/if}
 	{:else if list.sessions.length === 0}
 		<p class="session-picker__note">Start a new session to begin. Saved Pi sessions in this workspace appear here.</p>
 	{:else}

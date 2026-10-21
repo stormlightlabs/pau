@@ -26,6 +26,7 @@
 		type ContextMenuItem,
 		type ContextMenuRequest
 	} from './context-menu';
+	import { BusyIndicator } from './busy-indicator.svelte';
 	import DiffReview from './DiffReview.svelte';
 	import EmptyState from './EmptyState.svelte';
 	import FileEditor from './FileEditor.svelte';
@@ -116,11 +117,15 @@
 
 	let traversalOptions = $derived<WorkspaceTraversalOptions>({ includeHidden, includeIgnored });
 	let root = $derived(directories['']);
+	const treeLoading = new BusyIndicator(() => !root || root.loading);
+	const gitStatusLoading = new BusyIndicator(() => gitLoading);
+	const searching = new BusyIndicator(() => searchLoading);
+	const diffOpening = new BusyIndicator(() => diffLoading);
 	let showsEditor = $derived(
-		!searchLoading &&
+		!searching.active &&
 			!searchError &&
 			!submittedQuery &&
-			!diffLoading &&
+			!diffOpening.active &&
 			!diffError &&
 			!selectedDiff &&
 			!!selectedPath &&
@@ -507,8 +512,8 @@
 	{#snippet context()}
 		<section class="workspace-files__browser" aria-label="Workspace files">
 			<section class="workspace-files__git" aria-label="Git status" aria-live="polite">
-				{#if gitLoading}
-					<p>Reading Git status…</p>
+				{#if gitStatusLoading.active}
+					{#if gitStatusLoading.visible}<p>Reading Git status…</p>{/if}
 				{:else if gitError}
 					<p class="workspace-files__git-error">{gitError}</p>
 				{:else if gitStatus && !gitStatus.repository}
@@ -579,8 +584,8 @@
 				{#if root && !root.loading}<small>{root.entries.length}</small>{/if}
 			</div>
 
-			{#if !root || root.loading}
-				<p class="workspace-files__state" role="status">Loading workspace files…</p>
+			{#if !root || treeLoading.active}
+				{#if treeLoading.visible}<p class="workspace-files__state" role="status">Loading workspace files…</p>{/if}
 			{:else if root.error}
 				<div class="workspace-files__state workspace-files__state--error" role="alert">
 					<p>{root.error}</p>
@@ -650,8 +655,8 @@
 					<button type="button" aria-label="Next changed file" onclick={() => moveChangedFile(1)}>↓</button>
 				</div>
 			</header>
-			{#if gitLoading}
-				<p role="status">Reading changed files…</p>
+			{#if gitStatusLoading.active}
+				{#if gitStatusLoading.visible}<p role="status">Reading changed files…</p>{/if}
 			{:else if gitError}
 				<p class="workspace-files__review-error" role="alert">{gitError}</p>
 			{:else if !gitStatus?.repository}
@@ -695,13 +700,15 @@
 			<h1 class="pau-view-title" id="workspace-files-title">
 				{submittedQuery ? `Search: ${submittedQuery}` : workspaceName}
 			</h1>
-			{#if submittedQuery && !searchLoading && !searchError}
+			{#if submittedQuery && !searching.active && !searchError}
 				<span>{searchResults.length} {searchResults.length === 1 ? 'match' : 'matches'}</span>
 			{/if}
 		</header>
 
-		{#if searchLoading}
-			<p class="workspace-files__surface-state" role="status">Searching workspace files…</p>
+		{#if searching.active}
+			{#if searching.visible}
+				<p class="workspace-files__surface-state" role="status">Searching workspace files…</p>
+			{/if}
 		{:else if searchError}
 			<p class="workspace-files__surface-state workspace-files__surface-state--error" role="alert">{searchError}</p>
 		{:else if submittedQuery && searchResults.length === 0}
@@ -723,8 +730,10 @@
 					</li>
 				{/each}
 			</ol>
-		{:else if diffLoading}
-			<p class="workspace-files__surface-state" role="status">Loading diff for {selectedDiffPath}…</p>
+		{:else if diffOpening.active}
+			{#if diffOpening.visible}
+				<p class="workspace-files__surface-state" role="status">Loading diff for {selectedDiffPath}…</p>
+			{/if}
 		{:else if diffError}
 			<p class="workspace-files__surface-state workspace-files__surface-state--error" role="alert">{diffError}</p>
 		{:else if selectedDiff}

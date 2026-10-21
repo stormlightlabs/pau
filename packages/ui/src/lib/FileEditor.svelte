@@ -9,6 +9,7 @@
 
 	import { revealLabel } from './context-menu';
 	import { sectionFolding } from './editor-folding';
+	import { BusyIndicator } from './busy-indicator.svelte';
 	import EmptyState from './EmptyState.svelte';
 	import type { EditorFileContent, FileEditorSource } from './types/file-editor';
 
@@ -37,6 +38,7 @@
 	let file = $state<EditorFileContent>();
 	let externalFile = $state<EditorFileContent>();
 	let loading = $state(true);
+	const opening = new BusyIndicator(() => loading);
 	let saving = $state(false);
 	let dirty = $state(false);
 	let error = $state('');
@@ -190,6 +192,8 @@
 		try {
 			const opened = await source.read(path);
 			loading = false;
+			// The editor mounts where the indicator was, so it waits for the indicator to go.
+			await opening.hidden();
 			await showFile(opened);
 		} catch (caught) {
 			error = openError(caught);
@@ -322,8 +326,8 @@
 		</div>
 	{/if}
 
-	{#if loading}
-		<p class="file-editor__state" role="status">Opening {path}…</p>
+	{#if opening.active}
+		{#if opening.visible}<p class="file-editor__state" role="status">Opening {path}…</p>{/if}
 	{:else if error}
 		<EmptyState role="alert" title="Cannot open file">
 			<p>{error}</p>

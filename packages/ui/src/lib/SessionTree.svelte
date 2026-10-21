@@ -3,6 +3,7 @@
 	import { tick, untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 
+	import { BusyIndicator } from './busy-indicator.svelte';
 	import { entryLabel, flattenSessionTree, type SessionTreeRow } from './session-tree';
 	import type { SessionBranchOutcome, SessionTreeSnapshot } from './types/session';
 
@@ -34,6 +35,7 @@
 
 	let tree = $state<SessionTreeSnapshot>();
 	let loadError = $state<string>();
+	const treeLoading = new BusyIndicator(() => supported && !loadError && tree === undefined);
 	let branchError = $state<string>();
 	let branchNotice = $state<string>();
 	let branching = $state(false);
@@ -70,6 +72,8 @@
 			tree = next;
 			if (initial || activeKey === undefined || next.entries.every((entry) => entry.id !== activeKey)) {
 				activeKey = next.leafId ?? next.entries.at(-1)?.id;
+				// The tree mounts where the loading note was.
+				await treeLoading.hidden();
 				await tick();
 				revealActive('center');
 			}
@@ -232,8 +236,8 @@
 			<p>{loadError}</p>
 			<button type="button" onclick={() => void fetchTree(tree === undefined)}>Try again</button>
 		</div>
-	{:else if !tree}
-		<p class="session-tree__note" role="status">Loading session tree…</p>
+	{:else if !tree || treeLoading.active}
+		{#if treeLoading.visible}<p class="session-tree__note" role="status">Loading session tree…</p>{/if}
 	{:else if tree.entries.length === 0}
 		<p class="session-tree__note">No entries yet. Send a prompt to start the tree.</p>
 	{:else}

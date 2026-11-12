@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Linux build dependencies
+      - name: Install Linux build and sandbox dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes build-essential curl file libayatana-appindicator3-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev librsvg2-dev patchelf wget
+          sudo apt-get install --yes build-essential bubblewrap curl file libayatana-appindicator3-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev librsvg2-dev patchelf ripgrep socat wget
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt

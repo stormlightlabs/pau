@@ -29,7 +29,10 @@ fn window_size(app: &tauri::App) -> (f64, f64) {
     let Ok(Some(monitor)) = app.primary_monitor() else {
         return WINDOW_SIZE;
     };
-    let area = monitor.work_area().size.to_logical::<f64>(monitor.scale_factor());
+    let area = monitor
+        .work_area()
+        .size
+        .to_logical::<f64>(monitor.scale_factor());
     let fit = |preferred: f64, available: f64, min: f64| {
         preferred.min(available * WINDOW_SCREEN_SHARE).max(min)
     };

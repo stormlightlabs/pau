@@ -171,6 +171,12 @@ mod linux {
         result
     }
 
+    /// libc declares `open` as variadic. On x86_64 and aarch64 Linux a variadic
+    /// integer argument arrives in the same register as a named one, so `mode`
+    /// reads correctly, and the kernel ignores it without `O_CREAT`. A variadic
+    /// Rust definition would need a newer toolchain than some Linux shells
+    /// provide. `unknown_lints` keeps toolchains that predate the lint quiet.
+    #[allow(unknown_lints, invalid_runtime_symbol_definitions)]
     #[unsafe(no_mangle)]
     pub unsafe extern "C" fn open(path: *const c_char, flags: c_int, mode: libc::mode_t) -> c_int {
         // SAFETY: the arguments have the libc open ABI.
@@ -357,8 +363,10 @@ mod linux {
                 let segments = inet
                     .sin6_addr
                     .s6_addr
-                    .chunks_exact(2)
-                    .map(|bytes| u16::from_be_bytes([bytes[0], bytes[1]]))
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|&bytes| u16::from_be_bytes(bytes))
                     .collect::<Vec<_>>();
                 Some((
                     format!(
@@ -408,11 +416,13 @@ mod linux {
         // SAFETY: arguments have the Linux connect syscall ABI.
         let result = unsafe { libc::syscall(libc::SYS_connect, socket, address, length) as c_int };
         let error = errno();
-        if result < 0 && denied(error, true) && stream_socket(socket) {
-            if let Some((target, kind)) = target {
-                report("connect", kind, target.as_bytes());
-                set_errno(error);
-            }
+        if result < 0
+            && denied(error, true)
+            && stream_socket(socket)
+            && let Some((target, kind)) = target
+        {
+            report("connect", kind, target.as_bytes());
+            set_errno(error);
         }
         result
     }

@@ -11,7 +11,8 @@ use serde_json::{Value, json};
 use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
-use tokio::sync::{Mutex, broadcast};
+use std::sync::atomic::{AtomicU64, Ordering};
+use tokio::sync::{Mutex, broadcast, mpsc};
 
 /// Controls supported by the verified Pi RPC protocol.
 pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
@@ -220,11 +221,22 @@ pub struct PiBashResult {
 }
 
 /// Owns the controls and observed lifecycle state for one Pi RPC process.
+///
+/// Command responses and Pi's events both change the status and the message
+/// queue, but they reach the session on different tasks, so an event can be
+/// applied after a response that Pi wrote later. Pi answers `prompt` before it
+/// emits `agent_start`, for example, and an interrupt can finish before the
+/// lifecycle task sees that event. Each field therefore keeps the stdout
+/// position of the record that last set it, and a record from an earlier
+/// position is ignored. A position is read and written only while its value's
+/// lock is held.
 pub struct PiSession {
     process: Arc<PiProcess>,
     capabilities: AgentCapabilities,
     status: Arc<Mutex<AgentSessionStatus>>,
+    status_position: Arc<AtomicU64>,
     queue: Arc<Mutex<AgentMessageQueue>>,
+    queue_position: Arc<AtomicU64>,
 }
 
 impl PiSession {
@@ -237,15 +249,20 @@ impl PiSession {
     /// Wraps a started process with the capabilities advertised for that process.
     pub fn from_process(process: PiProcess, capabilities: AgentCapabilities) -> Self {
         let process = Arc::new(process);
-        let status = Arc::new(Mutex::new(AgentSessionStatus::Idle));
-        let queue = Arc::new(Mutex::new(AgentMessageQueue::default()));
-        observe_lifecycle(process.subscribe(), Arc::clone(&status), Arc::clone(&queue));
-        Self {
-            process,
+        let session = Self {
             capabilities,
-            status,
-            queue,
-        }
+            status: Arc::new(Mutex::new(AgentSessionStatus::Idle)),
+            status_position: Arc::default(),
+            queue: Arc::new(Mutex::new(AgentMessageQueue::default())),
+            queue_position: Arc::default(),
+            process,
+        };
+        let events = session
+            .process
+            .sequenced_events()
+            .expect("a session owns its process, so nothing else reads its sequenced events");
+        observe_lifecycle(events, session.process.subscribe(), &session);
+        session
     }
 
     /// Returns the controls available for this session.
@@ -543,7 +560,7 @@ impl PiSession {
             _ => return Err(not_ready(control, *status)),
         };
         PiImage::attach(&mut command, images);
-        let response = self.command(control, command).await?;
+        let (position, response) = self.command_at(control, command).await?;
         // An extension command or input handler can consume the prompt, and
         // then no run starts. Pi releases before 0.99 do not report a
         // disposition, so treat a missing one as a started run.
@@ -552,7 +569,7 @@ impl PiSession {
             .and_then(|data| data.get("disposition"))
             .and_then(Value::as_str);
         if disposition != Some("handled") {
-            *status = AgentSessionStatus::Running;
+            self.set_status(&mut status, AgentSessionStatus::Running, position);
         }
         Ok(())
     }
@@ -590,8 +607,8 @@ impl PiSession {
     pub async fn clear_message_queue(&self) -> Result<AgentMessageQueue, PiSessionError> {
         let control = AgentControl::MessageQueue;
         self.require_capability(control)?;
-        let response = self
-            .command(control, json!({"type": "clear_queue"}))
+        let (position, response) = self
+            .command_at(control, json!({"type": "clear_queue"}))
             .await?;
         let cleared = response
             .get("data")
@@ -602,7 +619,11 @@ impl PiSession {
                     message: "Pi returned an invalid queue response".to_owned(),
                 })
             })?;
-        *self.queue.lock().await = AgentMessageQueue::default();
+        let mut queue = self.queue.lock().await;
+        if position > self.queue_position.load(Ordering::Relaxed) {
+            *queue = AgentMessageQueue::default();
+            self.queue_position.store(position, Ordering::Relaxed);
+        }
         Ok(cleared)
     }
 
@@ -627,8 +648,8 @@ impl PiSession {
             ));
         }
         let cleared = self.clear_message_queue().await.unwrap_or_default();
-        self.command(control, json!({"type": "abort"})).await?;
-        *status = AgentSessionStatus::Idle;
+        let (position, _) = self.command_at(control, json!({"type": "abort"})).await?;
+        self.set_status(&mut status, AgentSessionStatus::Idle, position);
         Ok(cleared)
     }
 
@@ -811,9 +832,10 @@ impl PiSession {
         let message = failed_turn_prompt(messages).map_err(|message| {
             PiSessionError::Control(AgentControlError::Rejected { control, message })
         })?;
-        self.command(control, json!({"type": "prompt", "message": message}))
+        let (position, _) = self
+            .command_at(control, json!({"type": "prompt", "message": message}))
             .await?;
-        *status = AgentSessionStatus::Running;
+        self.set_status(&mut status, AgentSessionStatus::Running, position);
         Ok(())
     }
 
@@ -989,8 +1011,30 @@ impl PiSession {
         control: AgentControl,
         command: Value,
     ) -> Result<Value, PiSessionError> {
-        let response = self.process.command(command).await?;
-        command_response(control, response)
+        let (_, response) = self.command_at(control, command).await?;
+        Ok(response)
+    }
+
+    /// Sends a command and returns its successful response with the
+    /// response's stdout position.
+    async fn command_at(
+        &self,
+        control: AgentControl,
+        command: Value,
+    ) -> Result<(u64, Value), PiSessionError> {
+        let (position, response) = self
+            .process
+            .command_at(self.process.next_command_id(), command)
+            .await?;
+        Ok((position, command_response(control, response)?))
+    }
+
+    /// Sets the status that a command response at `position` established, so
+    /// that lifecycle events Pi wrote before that response no longer apply.
+    /// `status` must be the guard of `self.status`.
+    fn set_status(&self, status: &mut AgentSessionStatus, next: AgentSessionStatus, position: u64) {
+        *status = next;
+        self.status_position.fetch_max(position, Ordering::Relaxed);
     }
 }
 
@@ -1176,49 +1220,69 @@ fn queue_from_value(value: &Value) -> Option<AgentMessageQueue> {
     })
 }
 
+/// Applies Pi's lifecycle and queue events, and the process exit, to the
+/// session's state.
+///
+/// Events come from [`PiProcess::sequenced_events`] so that each one can be
+/// dropped when a command response Pi wrote later has already set the same
+/// field. The broadcast subscription only reports the exit.
 fn observe_lifecycle(
+    mut events: mpsc::UnboundedReceiver<(u64, Value)>,
     mut output: broadcast::Receiver<PiProcessOutput>,
-    status: Arc<Mutex<AgentSessionStatus>>,
-    queue: Arc<Mutex<AgentMessageQueue>>,
+    session: &PiSession,
 ) {
+    let status = Arc::clone(&session.status);
+    let status_position = Arc::clone(&session.status_position);
+    let queue = Arc::clone(&session.queue);
+    let queue_position = Arc::clone(&session.queue_position);
     tokio::spawn(async move {
         loop {
-            match output.recv().await {
-                Ok(PiProcessOutput::Event(event)) => {
-                    if event.get("type").and_then(Value::as_str) == Some("queue_update")
+            tokio::select! {
+                // Apply the events Pi wrote before it exited, then the exit.
+                biased;
+                Some((position, event)) = events.recv() => {
+                    let kind = event.get("type").and_then(Value::as_str);
+                    if kind == Some("queue_update")
                         && let Some(update) = queue_from_value(&event)
                     {
-                        *queue.lock().await = update;
+                        let mut current = queue.lock().await;
+                        if position > queue_position.load(Ordering::Relaxed) {
+                            *current = update;
+                            queue_position.store(position, Ordering::Relaxed);
+                        }
                     }
-                    let next = match event.get("type").and_then(Value::as_str) {
-                        Some("agent_start") => Some(AgentSessionStatus::Running),
-                        Some("agent_settled") => Some(AgentSessionStatus::Idle),
-                        _ => None,
+                    let next = match kind {
+                        Some("agent_start") => AgentSessionStatus::Running,
+                        Some("agent_settled") => AgentSessionStatus::Idle,
+                        _ => continue,
                     };
-                    if let Some(next) = next {
-                        let mut current = status.lock().await;
-                        if !matches!(
+                    let mut current = status.lock().await;
+                    if position > status_position.load(Ordering::Relaxed)
+                        && !matches!(
                             *current,
                             AgentSessionStatus::Stopping
                                 | AgentSessionStatus::Stopped
                                 | AgentSessionStatus::Failed
-                        ) {
-                            *current = next;
-                        }
+                        )
+                    {
+                        *current = next;
+                        status_position.store(position, Ordering::Relaxed);
                     }
                 }
-                Ok(PiProcessOutput::Exit(exit)) => {
-                    let mut current = status.lock().await;
-                    *current = if exit.requested || *current == AgentSessionStatus::Stopping {
-                        AgentSessionStatus::Stopped
-                    } else {
-                        AgentSessionStatus::Failed
-                    };
-                    break;
-                }
-                Ok(PiProcessOutput::Diagnostic(_)) => {}
-                Err(broadcast::error::RecvError::Lagged(_)) => {}
-                Err(broadcast::error::RecvError::Closed) => break,
+                record = output.recv() => match record {
+                    Ok(PiProcessOutput::Exit(exit)) => {
+                        let mut current = status.lock().await;
+                        *current = if exit.requested || *current == AgentSessionStatus::Stopping {
+                            AgentSessionStatus::Stopped
+                        } else {
+                            AgentSessionStatus::Failed
+                        };
+                        break;
+                    }
+                    Ok(PiProcessOutput::Event(_) | PiProcessOutput::Diagnostic(_))
+                    | Err(broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(broadcast::error::RecvError::Closed) => break,
+                },
             }
         }
     });

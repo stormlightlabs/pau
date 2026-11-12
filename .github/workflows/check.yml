@@ -7,8 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  rust:
-    name: Rust
+  gate:
+    name: Gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,18 +20,6 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
-      - name: Check formatting
-        run: cargo fmt --all --check
-      - name: Run Clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-      - name: Run tests
-        run: cargo test --workspace --all-targets
-
-  typescript:
-    name: TypeScript and browser tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
           version: 12.3.4
@@ -39,17 +27,11 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
       - run: pnpm install --frozen-lockfile
       - name: Install browser
         run: pnpm --filter @stormlightlabs/pau-ui exec playwright install --with-deps chromium
-      - name: Check formatting
-        run: pnpm format:check
-      - name: Check types and lint
-        run: pnpm check
-      - name: Run Vitest, browser, and Storybook tests
-        run: pnpm --recursive --if-present test
+      - name: Run the gate
+        run: pnpm gate
       - name: Build Storybook
         run: pnpm build:ui
       - uses: actions/upload-artifact@v4

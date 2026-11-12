@@ -62,14 +62,16 @@ then `.env` if it exists. On macOS it only loads `.env`.
 
 ### Checks
 
-Install dependencies and run the workspace checks from the repository root:
+Install dependencies and run the gate from the repository root:
 
 ```sh
 pnpm install
-pnpm format:check
-pnpm check
-cargo check --workspace
+pnpm gate
 ```
+
+The gate checks formatting, types, lints, and generated code, then runs the
+Rust and TypeScript tests, including the browser tests. CI runs the same
+command. `pnpm gate:rust` and `pnpm gate:ts` run each half on its own.
 
 Build the documentation site and Pagefind index:
 

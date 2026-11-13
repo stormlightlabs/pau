@@ -17,7 +17,7 @@ use axum::{
     Json,
     extract::{
         Path as AxumPath, State, WebSocketUpgrade,
-        ws::{Message, WebSocket},
+        ws::{CloseFrame, Message, WebSocket, close_code},
     },
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -317,9 +317,18 @@ async fn serve_stream(mut socket: WebSocket, managed: Arc<ManagedTerminal>) {
                         return;
                     }
                 }
-                // Closing lets the client reattach and catch up from the
-                // scrollback.
-                AttachedOutput::Lagged => return,
+                // Close code 1013 (try again later) tells the client to
+                // reattach and catch up from the scrollback, where a dropped
+                // socket would look like a network failure.
+                AttachedOutput::Lagged => {
+                    let _ = socket
+                        .send(Message::Close(Some(CloseFrame {
+                            code: close_code::AGAIN,
+                            reason: "output fell behind; reattach".into(),
+                        })))
+                        .await;
+                    return;
+                }
                 AttachedOutput::Ended => {
                     let _ = send_exited(&mut socket, &managed).await;
                     return;

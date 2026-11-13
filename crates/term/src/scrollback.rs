@@ -20,16 +20,26 @@ use crate::TerminalOutput;
 /// The limit counts bytes rather than lines, so memory stays at 1 MiB per
 /// terminal however long its lines are. That holds about 10,000 lines of
 /// 100 plain characters, fewer when output carries colors and other escape
-/// sequences. When output passes the limit, the oldest bytes are dropped first. The cut ignores character
-/// and escape sequence boundaries, so a replay can start partway through one.
+/// sequences. When output passes the limit, the oldest bytes are dropped first.
+///
+/// After a cut, the scrollback also drops bytes up to and including the first
+/// newline, so a replay starts at the beginning of a line rather than inside
+/// an escape sequence or a UTF-8 character. When the first
+/// [`LINE_SEARCH_BYTES`] retained bytes hold no newline, as with full-screen
+/// programs and very long lines, it drops only up to the next UTF-8 character
+/// boundary, and the replay can still start inside an escape sequence.
 pub const SCROLLBACK_BYTES: usize = 1024 * 1024;
+
+/// Bytes searched for a newline after a cut before the scrollback settles for
+/// a UTF-8 character boundary.
+const LINE_SEARCH_BYTES: usize = 4 * 1024;
 
 /// Output chunks an attached view may fall behind before it receives
 /// [`AttachedOutput::Lagged`].
 ///
 /// The terminal never waits for a view, so a slow view loses its live output
 /// instead of stalling the child or growing server memory.
-const LIVE_CHUNKS: usize = 256;
+pub const LIVE_CHUNKS: usize = 256;
 
 /// Recent output of one terminal and the live feed to its attached views.
 ///
@@ -100,10 +110,15 @@ impl TerminalScrollback {
     fn push(&self, chunk: Vec<u8>) {
         let mut shared = self.0.lock().expect("terminal scrollback lock poisoned");
         let limit = shared.limit;
+        let cut = shared.retained.len() + chunk.len() > limit;
         let kept = &chunk[chunk.len().saturating_sub(limit)..];
         let overflow = (shared.retained.len() + kept.len()).saturating_sub(limit);
         shared.retained.drain(..overflow);
         shared.retained.extend(kept);
+        if cut {
+            let start = replay_start(&shared.retained);
+            shared.retained.drain(..start);
+        }
         if let Some(live) = &shared.live {
             // Sending fails only when no view is attached.
             let _ = live.send(Bytes::from(chunk));
@@ -119,6 +134,28 @@ impl TerminalScrollback {
     }
 }
 
+/// Returns how many leading bytes to drop after a cut so that a replay starts
+/// on a line boundary, or failing that on a UTF-8 character boundary.
+///
+/// A UTF-8 character has at most three continuation bytes, so the fallback
+/// drops at most three bytes and never empties the scrollback.
+fn replay_start(retained: &VecDeque<u8>) -> usize {
+    retained
+        .iter()
+        .take(LINE_SEARCH_BYTES)
+        .position(|&byte| byte == b'\n')
+        .map_or_else(
+            || {
+                retained
+                    .iter()
+                    .take(3)
+                    .take_while(|&&byte| byte & 0xC0 == 0x80)
+                    .count()
+            },
+            |newline| newline + 1,
+        )
+}
+
 /// One view's connection to a terminal's output. Dropping it detaches the
 /// view; the terminal keeps running and retaining output.
 #[derive(Debug)]
@@ -132,8 +169,8 @@ pub struct TerminalAttachment {
 pub enum AttachedOutput {
     /// Output written after the attachment's replay.
     Output(Bytes),
-    /// The view fell more than 256 chunks behind and missed output. Attach
-    /// again to recover from the scrollback.
+    /// The view fell more than [`LIVE_CHUNKS`] chunks behind and missed
+    /// output. Attach again to recover from the scrollback.
     Lagged,
     /// No process holds the terminal open, so no more output will arrive.
     Ended,
@@ -208,6 +245,33 @@ mod tests {
             scrollback.attach().replay(),
             Bytes::from_static(b"23456789")
         );
+    }
+
+    #[test]
+    fn starts_the_replay_after_the_first_newline_once_output_is_cut() {
+        let scrollback = TerminalScrollback::with_limit(16);
+        scrollback.push(b"\x1b[38;5;196mred\nnext\n".to_vec());
+        scrollback.push(b"more".to_vec());
+        assert_eq!(
+            scrollback.attach().replay(),
+            Bytes::from_static(b"next\nmore")
+        );
+    }
+
+    #[test]
+    fn starts_the_replay_on_a_character_boundary_without_a_newline() {
+        let scrollback = TerminalScrollback::with_limit(5);
+        // The cut leaves the continuation byte of the second `é`.
+        scrollback.push("éééé".as_bytes().to_vec());
+        assert_eq!(scrollback.attach().replay(), "éé".as_bytes());
+
+        // The only newline lies past the search window, so it is kept.
+        let mut long_line = vec![b'x'; LINE_SEARCH_BYTES];
+        long_line.extend(b"\ny");
+        let scrollback = TerminalScrollback::with_limit(long_line.len());
+        scrollback.push(b"\n".to_vec());
+        scrollback.push(long_line.clone());
+        assert_eq!(scrollback.attach().replay(), long_line);
     }
 
     #[tokio::test]

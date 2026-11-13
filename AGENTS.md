@@ -88,9 +88,10 @@ Every task follows these rules:
   `src/tests`.
 - Run the task's verification, starting with the narrowest relevant checks. Do
   not invoke paid agents or remote services from default tests.
-- When a platform check is unavailable, the task may close if portable
-  coverage passes and the check is not an explicit release gate. Record the
-  unavailable check as a new Backlog issue.
+- A release's gates are the tasks in its milestone in the tracker. When a
+  platform check is unavailable, the task may close if portable coverage
+  passes and the check's task is not in that milestone. Record the unavailable
+  check as a new Backlog issue.
 - Fix every finding from the task's required verification, including unrelated
   pre-existing findings. Do not defer or report those findings as separate
   follow-up work. Keep defects found outside required checks separate unless

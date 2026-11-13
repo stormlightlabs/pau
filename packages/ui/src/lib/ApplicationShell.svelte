@@ -118,6 +118,8 @@
 	/** Whether the operator hid the contextual rail on wide windows. */
 	let contextHidden = $state(false);
 	let hasContext = $derived(Boolean(context) || contextItems.length > 0);
+	/** Whether any rail item has a state to mark. Then every item keeps the dot column, so all labels share one edge. */
+	let contextMarked = $derived(contextItems.some((item) => item.status !== undefined || item.attention));
 
 	/** Narrow windows show the contextual rail as an overlay instead of a column. */
 	const narrow = new MediaQuery('max-width: 48rem');
@@ -401,7 +403,7 @@
 			{#if context}
 				<div class="app-shell__context-content">{@render context()}</div>
 			{:else}
-				<ul>
+				<ul class:app-shell__context-list--marked={contextMarked}>
 					{#each contextItems as item (item.id)}
 						<li>
 							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the app owner resolves rail destinations -->
@@ -409,12 +411,13 @@
 								href={item.href}
 								class="pau-row"
 								class:active={item.active}
-								class:app-shell__context-link--marked={item.status !== undefined || item.attention}
 								aria-current={item.active ? 'page' : undefined}
 								onclick={() => contextOpen && closeContext()}>
-								<!-- The dot marks an item's state, so an item without one, such as a Settings section, has none. -->
-								{#if item.status !== undefined || item.attention}
-									<span class:attention={item.attention} class="app-shell__item-dot"></span>
+								<!-- The dot marks an item's state. An item without one, such as a Settings section, gets an empty cell in a rail that shows dots, and no cell otherwise. -->
+								{#if contextMarked}
+									<span
+										class:app-shell__item-dot={item.status !== undefined || item.attention}
+										class:attention={item.attention}></span>
 								{/if}
 								<span>{item.label}</span>
 								{#if item.status}<small>{item.status}</small>{/if}
@@ -772,7 +775,7 @@
 		text-decoration: none;
 	}
 
-	.app-shell__context-rail a.app-shell__context-link--marked {
+	.app-shell__context-list--marked a {
 		grid-template-columns: 0.5rem minmax(0, 1fr) auto;
 	}
 

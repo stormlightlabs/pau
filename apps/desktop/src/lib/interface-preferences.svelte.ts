@@ -154,8 +154,11 @@ export class InterfacePreferences {
 
 	/**
 	 * Applies a motion setting the operator chose and saves it at once. When
-	 * the save fails, the previous setting comes back and the promise rejects
-	 * with the reason, so Settings can show it.
+	 * the save fails, the saved setting comes back and the promise rejects
+	 * with the reason, so Settings can show it. A failure that a later choice
+	 * has already replaced changes nothing: that choice's own write decides
+	 * what is saved, so rolling back here would leave the screen disagreeing
+	 * with the stored value.
 	 */
 	async setMotion(motion: MotionPreference): Promise<void> {
 		const previous = this.motion;
@@ -163,7 +166,7 @@ export class InterfacePreferences {
 		try {
 			await this.#flush();
 		} catch (error) {
-			this.#applyMotion(previous);
+			if (this.motion === motion) this.#applyMotion(this.#saved?.motion ?? previous);
 			throw error;
 		}
 	}

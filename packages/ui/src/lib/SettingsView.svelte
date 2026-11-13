@@ -25,8 +25,9 @@
 		/** The saved motion setting. */
 		motion: MotionSetting;
 		/**
-		 * Saves a motion setting the operator picked. A rejection keeps the
-		 * previous choice selected and shows the reason under the setting.
+		 * Saves a motion setting the operator picked. A rejection selects
+		 * `motion` again and shows the reason under the setting, unless the
+		 * operator has picked another choice since.
 		 */
 		onMotionChange: (value: MotionSetting) => Promise<void> | void;
 	};
@@ -42,15 +43,23 @@
 	/** The selected choice, which leads `motion` while a save is in flight and falls back to it when one fails. */
 	let selectedMotion = $derived(motion);
 	let motionError = $state<string>();
+	/**
+	 * The operator's latest pick. A failed save is reported only while it is
+	 * still the latest, because a later pick's own save decides what is saved.
+	 * `selectedMotion` cannot answer that: the owner may already have rolled
+	 * `motion` back, which resets the derived value before the rejection lands.
+	 */
+	let latestMotion: MotionSetting | undefined;
 
 	async function changeMotion(value: MotionSetting): Promise<void> {
-		const previous = selectedMotion;
+		latestMotion = value;
 		selectedMotion = value;
 		motionError = undefined;
 		try {
 			await onMotionChange(value);
 		} catch (error) {
-			selectedMotion = previous;
+			if (latestMotion !== value) return;
+			selectedMotion = motion;
 			motionError = error instanceof Error ? error.message : String(error);
 		}
 	}
@@ -113,7 +122,7 @@
 				{@render setting(
 					'Motion',
 					'motion',
-					'Reduce fades instead of sliding or scaling. System follows the operating system.',
+					'System follows the operating system. Reduce uses fades instead of slides and scaling. Full always animates.',
 					'All workspaces',
 					motionControl,
 					motionError

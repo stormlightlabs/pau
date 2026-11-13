@@ -49,6 +49,25 @@ test('keeps the previous choice and explains a failed save', async () => {
 	await expect.element(page.getByRole('alert')).not.toBeInTheDocument();
 });
 
+test('keeps a later choice when an earlier save fails', async () => {
+	let saved: MotionSetting = 'full';
+	const firstSave = Promise.withResolvers<void>();
+	const onMotionChange = vi.fn<(value: MotionSetting) => Promise<void>>();
+	onMotionChange.mockReturnValueOnce(firstSave.promise);
+	onMotionChange.mockImplementationOnce(async (value) => {
+		saved = value;
+	});
+	await render(SettingsView, { motion: 'full', onMotionChange });
+
+	await userEvent.click(page.getByRole('radio', { name: 'Reduce' }));
+	await userEvent.click(page.getByRole('radio', { name: 'System' }));
+	firstSave.reject(new Error('The Pau backend returned HTTP 500.'));
+
+	await expect.element(page.getByRole('radio', { name: 'System' })).toBeChecked();
+	await expect.element(page.getByRole('alert')).not.toBeInTheDocument();
+	expect(saved).toBe('system');
+});
+
 test.each([1440, 900])('starts the title, section headings, and setting names on one edge at %ipx', async (width) => {
 	await page.viewport(width, 900);
 	await render(SettingsViewDemo);

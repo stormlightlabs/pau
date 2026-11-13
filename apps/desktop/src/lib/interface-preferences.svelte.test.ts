@@ -167,6 +167,26 @@ describe('interface preferences', () => {
 			expect(root.dataset.motion).toBe('full');
 		});
 
+		test('keeps a later choice when an earlier save fails', async () => {
+			const root = document.createElement('div');
+			const server = backend(preferences(null, null, 'full'));
+			const settings = new InterfacePreferences({ fetcher: server.fetcher, root });
+			await settings.load();
+			const firstPut = Promise.withResolvers<Response>();
+			vi.mocked(server.fetcher).mockReturnValueOnce(firstPut.promise);
+
+			const first = settings.setMotion('reduce');
+			await vi.waitFor(() => expect(server.fetcher).toHaveBeenCalledTimes(2));
+			const second = settings.setMotion('system');
+			firstPut.resolve(Response.json({ message: 'The database is read-only.' }, { status: 500 }));
+
+			await expect(first).rejects.toThrow('The database is read-only.');
+			await second;
+			expect(settings.motion).toBe('system');
+			expect(root.dataset.motion).toBeUndefined();
+			expect(server.puts).toEqual([preferences(null, null, 'system')]);
+		});
+
 		test('a resize keeps the motion setting', async () => {
 			vi.useFakeTimers();
 			const server = backend(preferences(null, null, 'full'));

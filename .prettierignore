@@ -12,3 +12,13 @@ flake.lock
 packages/pi-permissions/src/vendor
 packages/protocol/src/generated.ts
 packages/ui/src/styles/icons.css
+
+# Files fabrial installs and checks for drift; `fab update` owns them.
+.claude/skills/fab-*
+.claude/agents
+.github/actions
+.github/storm
+.github/workflows/branch-pr.yml
+.github/workflows/branch-pr-open.yml
+.github/workflows/comment.yml
+.github/workflows/review.yml

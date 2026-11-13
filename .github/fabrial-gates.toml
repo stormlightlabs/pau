@@ -1,0 +1,21 @@
+# The checks `fab gates` runs, by the paths a change touches. It runs each
+# scope whose `paths` match a changed file. Documentation and planning
+# records run nothing unless a scope names them. `unmatched` says what a
+# changed file no scope names runs: "full" or "skip". `fab gates --full`
+# runs `full`. Each command runs with `sh -c` at the repository root. This
+# repository owns the file: `fab update` and `fab check` leave it alone.
+
+full = "pnpm gate"
+unmatched = "full"
+
+# Rust changes can change the generated TypeScript protocol, so this scope
+# also checks that the generated files are current.
+[[scoped]]
+name = "rust"
+paths = ["crates/**", "apps/desktop/src-tauri/**", "packages/sandbox/native/**", "Cargo.toml", "Cargo.lock"]
+run = "pnpm gate:rust && pnpm check:generated"
+
+[[scoped]]
+name = "typescript"
+paths = ["apps/*/src/**", "packages/*/src/**", "apps/*/*.ts", "apps/*/*.js", "packages/*/*.ts", "packages/*/*.js", "apps/*/package.json", "packages/*/package.json", "package.json", "pnpm-lock.yaml", "eslint.config.*", ".prettierrc*", "tsconfig*.json"]
+run = "pnpm gate:ts"

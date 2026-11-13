@@ -5,11 +5,12 @@
 !/.pi/settings.json
 !/.pi/prompts/
 !/.pi/prompts/*.md
-!/.pi/skills/
 /.claude/*
 !/.claude/commands/
 !/.claude/commands/*.md
-!/.claude/skills
+!/.claude/skills/
+!/.claude/agents/
+!/.claude/agents/*.md
 .direnv/
 .env
 .env.*

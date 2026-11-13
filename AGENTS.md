@@ -70,40 +70,37 @@ built artifact.
 ## Tasks
 
 The installed skills read this section for the tracker's steps. Linear is the
-tracker for agent work, and the roadmap files under `dev/tasks/` are being
-retired. Tasks live in the Linear team PAU. Agents reach it through the
-session's Linear connector tools, such as `get_issue` with relations,
-`save_issue`, `save_comment`, and `save_document`. Subagents run inside that
-session and need no Linear access of their own.
+tracker for agent work. Until Work units is replaced, a `PAU-<n>` ID is a
+Linear task and follows this section, and a dotted ID such as `2.185` is a
+roadmap unit and follows Work units. Tasks live in the Linear team PAU. Agents
+reach it through the session's Linear connector tools, such as `get_issue` with
+relations, `save_issue`, `save_comment`, and `save_document`. Subagents run
+inside that session and need no Linear access of their own.
 
-| Step                                     | In Linear                                                                                                                              |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Read a task                              | The PAU issue, its comments, its relations, and its project                                                                            |
-| Check readiness                          | Status Todo, and every blocked-by issue Done                                                                                           |
-| Start                                    | Set In Progress and work on the branch `claude/<issue id, lowercase>`, such as `claude/pau-1`, in a worktree under `../pau-worktrees/` |
-| Open the PR                              | Link the PR on the issue and set In Review                                                                                             |
-| Complete                                 | After the PR merges, set Done with the comment `Done in #<n> at <sha>: <summary>`. Never close an issue without a PR                   |
-| Hand off                                 | Comment the handoff note and set Backlog                                                                                               |
-| Pick up                                  | Read the handoff comment and set In Progress                                                                                           |
-| Record new work                          | A new PAU issue in the right project, with its blocked-by links set when it is created                                                 |
-| Record an idea or spec                   | A Linear document on the team or the project                                                                                           |
-| Record a report, review or resource list | One Linear document on the issue, with links and screenshots, kept current. Not comments, and not one link resource per item           |
+| Step                                     | In Linear                                                                                                                                                                                                                                           |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Read a task                              | The PAU issue, its comments, its relations, and its project                                                                                                                                                                                         |
+| Check readiness                          | Status Todo, and every blocked-by issue Done                                                                                                                                                                                                        |
+| Start                                    | Set In Progress, which claims the task in place of `fab claim`. Work on the branch `claude/<issue id, lowercase>`, such as `claude/pau-1`, in a worktree under `../pau-worktrees/`. Linear's default `gitBranchName`, `<user>/pau-n-…`, is not used |
+| Open the PR                              | Link the PR on the issue and set In Review                                                                                                                                                                                                          |
+| Complete                                 | After the PR merges, set Done with the comment `Done in #<n> at <sha>: <summary>`. Never close an issue without a PR                                                                                                                                |
+| Hand off                                 | Comment the handoff note and set Todo, so readiness picks it up again                                                                                                                                                                               |
+| Pick up                                  | Read the latest handoff note and set In Progress                                                                                                                                                                                                    |
+| Record new work                          | A new PAU issue in the right project, in Todo when it is ready to work or Backlog when it is untriaged, with its blocked-by links set when it is created                                                                                            |
+| Record an idea or spec                   | A Linear document on the team or the project                                                                                                                                                                                                        |
+| Record a report, review or resource list | One Linear document on the issue, with links and screenshots, kept current. Not comments, and not one link resource per item                                                                                                                        |
 
-`fab-decompose` writes these primitives:
+`fab-decompose` writes these primitives with `save_issue`:
 
-| Primitive  | In Linear         |
-| ---------- | ----------------- |
-| Collection | A project         |
-| Run unit   | A parent issue    |
-| Task       | A sub-issue       |
-| Dependency | A blocked-by link |
+| Primitive  | In Linear         | Written as                       |
+| ---------- | ----------------- | -------------------------------- |
+| Collection | A project         | `project` on each issue          |
+| Run unit   | A parent issue    | An issue in that project         |
+| Task       | A sub-issue       | `parentId` set to the run unit   |
+| Dependency | A blocked-by link | `blockedBy` with the blocker IDs |
 
 Blocked-by links decide what can run in parallel. List the Todo issues, drop
-any with an open blocker, and give each worktree one ready issue. Every new
-issue gets its blocked-by links when it is created.
-
-Linear's default `gitBranchName`, `<user>/pau-n-…`, is not used. Branches are
-`claude/pau-n`.
+any with an open blocker, and give each worktree one ready issue.
 
 ## Dogfood Pau
 

@@ -812,6 +812,9 @@ enum ApiError {
     PiUnavailable(String),
     /// The workspace selects a sandbox, which session launches cannot apply.
     SandboxedSessionUnsupported,
+    /// A session request named an unknown agent, or a session of an agent
+    /// other than Pi failed, with its status, code, and message.
+    Agent(StatusCode, &'static str, String),
     /// A session control or lifecycle operation failed.
     Session(Box<pau_pi::PiSessionRegistryError>),
     /// The requested native session cannot be resumed.
@@ -855,7 +858,9 @@ impl IntoResponse for ApiError {
                 };
                 (status, code, error.to_string())
             }
-            Self::ExtensionRequest(status, code, message) => (status, code, message),
+            Self::ExtensionRequest(status, code, message) | Self::Agent(status, code, message) => {
+                (status, code, message)
+            }
             Self::InvalidPreferences(message) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "invalid_preferences",

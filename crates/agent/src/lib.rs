@@ -1,10 +1,13 @@
 //! Agent adapter contracts and shared process supervision.
 
+mod agents;
 mod claude;
 mod controls;
+mod discovery;
 mod events;
 mod mcp;
 
+pub use agents::AgentKind;
 pub use claude::{
     CLAUDE_BRIDGE_CAPABILITIES, CLAUDE_BRIDGE_PROTOCOL_VERSION, ClaudeAdapterDiagnostic,
     ClaudeBridgeCommandError, ClaudeBridgeDecodeError, ClaudeBridgeDiagnostic,
@@ -17,6 +20,10 @@ pub use claude::{
 pub use controls::{
     AgentCapabilities, AgentControl, AgentControlError, AgentMessageQueue, PromptQueueChoice,
     ThinkingLevel,
+};
+pub use discovery::{
+    CLAUDE_BRIDGE_COMMAND, ClaudeDiscovery, ClaudeDiscoveryError, ClaudeDiscoveryErrorCode,
+    DiscoverClaudeOptions, MIN_SUPPORTED_CLAUDE_VERSION, discover_claude,
 };
 pub use events::{AgentEvent, AgentEventKind, AgentSessionStatus};
 pub use mcp::{

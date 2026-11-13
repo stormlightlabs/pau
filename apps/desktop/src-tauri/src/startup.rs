@@ -242,10 +242,16 @@ pub async fn run<L: Launcher>(
     Ok(())
 }
 
-/// Describes the first agent that cannot start a session, if any.
+/// Describes why Pi cannot start a session, if it cannot.
+///
+/// The desktop starts Pi sessions only, so another agent that is not ready
+/// does not fail the step.
 fn readiness_failure(report: &AgentReadinessReport) -> Option<StepFailure> {
-    let agent = report.agents.iter().find(|agent| !agent.ready)?;
-    let action = (agent.agent == "pi").then_some(if !agent.found {
+    let agent = report
+        .agents
+        .iter()
+        .find(|agent| agent.agent == "pi" && !agent.ready)?;
+    let action = Some(if !agent.found {
         StartupAction::InstallPi
     } else if !agent.version_supported {
         StartupAction::UpdatePi
@@ -256,7 +262,7 @@ fn readiness_failure(report: &AgentReadinessReport) -> Option<StepFailure> {
         reason: agent
             .reason
             .clone()
-            .unwrap_or_else(|| format!("{} cannot start a session.", agent.agent)),
+            .unwrap_or_else(|| "Pi cannot start a session.".to_owned()),
         action,
     })
 }

@@ -6,16 +6,28 @@ HTTP handles finite operations such as opening a workspace, starting a session,
 reading a file, or changing settings. Commands return after validation and
 acceptance; long-running progress arrives as events.
 
+## Agent sessions
+
+`POST /api/sessions` names its agent as `pi` or `claude`, and Pi starts when
+the request names none. `pau-agent` lists the supported agents. Pi sessions
+run through `pau-pi`. Claude sessions run through `pau-agent`'s Claude bridge
+client, which starts the `pau-claude-bridge` host for the discovered Claude
+Code. Every session reports its agent and the controls it accepts. A route
+for a control the agent lacks answers `501 unsupported_control`. An unknown
+agent is refused with `400 unknown_agent`, and an agent that cannot start
+with its discovery reason.
+
 ## Agent readiness
 
 `GET /api/agents/readiness` reports, for each supported agent, whether Pau
 found the executable, its version, whether that version is supported, and a
 reason when the agent cannot start a session. For Pi it also starts a
 short-lived `pi --mode rpc` to count the models Pi reports; that check is
-limited to 10 seconds and creates no session. Discovery uses the backend's
-`PATH` as it is. The report is read-only, reused for 30 seconds, and
-`?refresh=true` runs the checks again. Claude is not yet in the report because
-only the TypeScript bridge discovers it.
+limited to 10 seconds and creates no session. Claude is ready when Claude
+Code runs a supported version, with `claude --version` limited to 5 seconds,
+and `pau-claude-bridge` is installed. Discovery uses the backend's `PATH` as
+it is. The report is read-only, reused for 30 seconds, and `?refresh=true`
+runs the checks again.
 
 ## Events
 

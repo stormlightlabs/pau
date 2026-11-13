@@ -142,6 +142,26 @@ async fn reports_a_missing_pi_and_still_opens() {
 }
 
 #[tokio::test]
+async fn ignores_another_agent_that_is_not_ready() {
+    let claude = AgentReadiness {
+        agent: "claude".to_owned(),
+        reason: Some("Claude Code was not found.".to_owned()),
+        ..pi(false)
+    };
+    let state = StartupState::new(Ok(()));
+    let launcher = FakeLauncher {
+        agents: vec![pi(true), claude],
+    };
+
+    run_recorded(&launcher, &state).await.0.unwrap();
+
+    let step = state.snapshot();
+    let step = step.step(StartupStepId::AgentReadiness);
+    assert_eq!(step.state, StartupStepState::Done);
+    assert_eq!(step.reason, None);
+}
+
+#[tokio::test]
 async fn offers_a_pi_update_or_a_pi_run_for_other_readiness_failures() {
     let mut outdated = pi(false);
     outdated.found = true;

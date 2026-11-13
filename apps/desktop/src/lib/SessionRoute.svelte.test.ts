@@ -27,6 +27,7 @@ const workspace: Workspace = {
 
 const idleSession: AgentSession = {
 	id: 'session-1',
+	agent: 'pi',
 	workspace_id: 'pau',
 	status: 'idle',
 	started_at: '2026-04-01T12:00:00Z',
@@ -535,7 +536,7 @@ test('resumes a saved session from the picker and selects it', async () => {
 
 	await expect.element(page.getByText('Starting the agent process…')).toBeVisible();
 	expect(start).toHaveBeenCalledWith(
-		expect.objectContaining({ body: '{"workspace_id":"pau","model":null,"native_session_id":"native-1"}' })
+		expect.objectContaining({ body: '{"agent":"pi","workspace_id":"pau","model":null,"native_session_id":"native-1"}' })
 	);
 	expect(changes).toEqual(['session-1']);
 });
@@ -559,7 +560,7 @@ test('resumes a recent saved session from the rail and lists it once', async () 
 
 	await expect.element(page.getByText('Starting the agent process…')).toBeVisible();
 	expect(start).toHaveBeenCalledWith(
-		expect.objectContaining({ body: '{"workspace_id":"pau","model":null,"native_session_id":"native-1"}' })
+		expect.objectContaining({ body: '{"agent":"pi","workspace_id":"pau","model":null,"native_session_id":"native-1"}' })
 	);
 	expect(changes).toEqual(['session-1']);
 	// The live session takes the saved row's place.

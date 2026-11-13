@@ -1,9 +1,20 @@
-//! Live Pi sessions over HTTP and the event stream.
+//! Live agent sessions over HTTP and the event stream.
 //!
-//! HTTP routes start, control, and stop sessions and return once Pi accepts or
-//! rejects the request. Session progress arrives on `/api/events`:
+//! HTTP routes start, control, and stop sessions and return once the agent
+//! accepts or rejects the request. Session progress arrives on `/api/events`:
 //! `session_changed` carries an [`AgentSession`] whenever the lifecycle state
-//! changes, and `session_output` carries each native Pi event.
+//! changes, and `session_output` carries each native agent event.
+//!
+//! # Agents
+//!
+//! A start request names its agent by the identifier the readiness report
+//! uses, and Pi starts when it names none. Pi sessions run through `pau-pi`
+//! and offer every route below. Claude sessions run through the Claude bridge
+//! in `pau-agent` and offer the controls in
+//! [`pau_agent::CLAUDE_BRIDGE_CAPABILITIES`]: prompt, interrupt, and stop. A
+//! route for any other control answers `501 unsupported_control` for them.
+//! Their `session_output` events are the bridge's events, as
+//! `{"sequence", "event", "payload"}`. See the `claude` module.
 //!
 //! # Usage
 //!
@@ -71,8 +82,8 @@ use axum::{
 };
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use pau_agent::{
-    AgentCapabilities, AgentControl, AgentControlError, AgentMessageQueue, AgentSessionStatus,
-    PromptQueueChoice, ThinkingLevel,
+    AgentCapabilities, AgentControl, AgentControlError, AgentKind, AgentMessageQueue,
+    AgentSessionStatus, ClaudeSession, DiscoverClaudeOptions, PromptQueueChoice, ThinkingLevel,
 };
 use pau_core::readiness::AgentReadinessReport;
 use pau_core::{
@@ -115,9 +126,10 @@ const DEFAULT_SEARCH_MATCHES: usize = 50;
 /// turns, and the response stays small enough to parse on every reconnect.
 pub(crate) const MAX_SESSION_MESSAGES: usize = 2000;
 
-/// What the API needs to describe a live session beyond the Pi process.
+/// What the API needs to describe a live session beyond its process.
 #[derive(Clone)]
 struct SessionRecord {
+    agent: AgentKind,
     workspace_id: String,
     started_at: String,
     capabilities: AgentCapabilities,
@@ -140,13 +152,17 @@ struct NativeState {
     name: Option<String>,
 }
 
-/// Starts Pi sessions and publishes their lifecycle and output events.
+/// Starts agent sessions and publishes their lifecycle and output events.
 #[derive(Clone)]
 pub(crate) struct SessionApi {
     registry: Arc<PiSessionRegistry>,
     /// Pi discovery settings captured at startup. Each launch replaces the
     /// working directory with the workspace root.
     discovery: DiscoverPiOptions,
+    /// Claude Code and bridge discovery settings captured at startup.
+    claude_discovery: DiscoverClaudeOptions,
+    /// Live Claude sessions. Pi sessions live in `registry`.
+    claude: Arc<Mutex<HashMap<String, Arc<ClaudeSession>>>>,
     /// Sessions this API started. A record is inserted before its process
     /// starts, so output that races the start response still has a session to
     /// describe, and is removed when the process exits.
@@ -176,6 +192,8 @@ impl SessionApi {
         let api = Self {
             registry: Arc::new(registry),
             discovery,
+            claude_discovery: DiscoverClaudeOptions::default(),
+            claude: Arc::default(),
             records: Arc::default(),
             extension_ui: Arc::default(),
             events,
@@ -185,8 +203,17 @@ impl SessionApi {
         api
     }
 
+    /// Replaces the Claude discovery settings, which otherwise search the
+    /// server's `PATH`.
+    #[cfg(test)]
+    pub(crate) fn with_claude_discovery(mut self, discovery: DiscoverClaudeOptions) -> Self {
+        self.claude_discovery = discovery;
+        self
+    }
+
     /// Stops every live session through staged shutdown.
     pub(crate) async fn stop_all(&self) {
+        self.stop_all_claude().await;
         for id in self.registry.active_ids().await {
             if let Err(error) = self.registry.stop(&id, diagnostic_timestamp()).await {
                 tracing::warn!(
@@ -224,6 +251,9 @@ impl SessionApi {
     }
 
     async fn summary(&self, id: &str) -> Result<AgentSession, ApiError> {
+        if let Some(summary) = self.claude_summary(id).await {
+            return Ok(summary);
+        }
         let (record, session) = self.live(id).await?;
         Ok(describe(
             id,
@@ -232,7 +262,12 @@ impl SessionApi {
         ))
     }
 
+    /// Returns a live Pi session. A Claude session with this ID is refused as
+    /// an unsupported control, since only Pi offers the routes that call this.
     async fn live(&self, id: &str) -> Result<(SessionRecord, Arc<PiSession>), ApiError> {
+        if self.claude_session(id).is_some() {
+            return Err(claude::unsupported());
+        }
         let not_found = || ApiError::from(PiSessionRegistryError::NotFound(id.to_owned()));
         let record = self.record(id).ok_or_else(not_found)?;
         let session = self.registry.get(id).await.ok_or_else(not_found)?;
@@ -607,6 +642,7 @@ fn describe(id: &str, record: &SessionRecord, status: SessionStatus) -> AgentSes
         .clone();
     AgentSession {
         id: id.to_owned(),
+        agent: record.agent.id().to_owned(),
         workspace_id: record.workspace_id.clone(),
         status,
         started_at: record.started_at.clone(),
@@ -795,7 +831,13 @@ pub(crate) async fn list_sessions(
 ) -> Result<Json<Vec<AgentSession>>, ApiError> {
     let api = session_api(&state)?;
     let mut sessions = Vec::new();
-    for id in api.registry.active_ids().await {
+    for id in api
+        .registry
+        .active_ids()
+        .await
+        .into_iter()
+        .chain(api.claude_ids())
+    {
         if let Ok(session) = api.summary(&id).await {
             sessions.push(session);
         }
@@ -853,13 +895,21 @@ pub(crate) async fn list_native_sessions(
     }))
 }
 
-/// Starts an unsandboxed Pi session in a registered workspace, resuming a
-/// stored Pi session when the request names one.
+/// Starts an unsandboxed session of the requested agent in a registered
+/// workspace, resuming a stored native session when the request names one.
+///
+/// An unknown agent is `400 unknown_agent`. A missing or unsupported Pi is
+/// `503 pi_unavailable`, and any other agent that cannot start is
+/// `503 agent_unavailable`, each with discovery's corrective message.
 pub(crate) async fn start_session(
     State(state): State<ApiState>,
     Json(request): Json<StartSessionRequest>,
 ) -> Result<(StatusCode, Json<AgentSession>), ApiError> {
     let api = session_api(&state)?;
+    let agent = match request.agent.as_deref() {
+        None => AgentKind::Pi,
+        Some(id) => AgentKind::from_id(id).ok_or_else(|| unknown_agent(id))?,
+    };
     let root = workspace_service(&state)?
         .root(&request.workspace_id)
         .await?;
@@ -874,6 +924,10 @@ pub(crate) async fn start_session(
         if selection.effective().settings().is_some() {
             return Err(ApiError::SandboxedSessionUnsupported);
         }
+    }
+    if agent == AgentKind::Claude {
+        let summary = api.start_claude(request, root).await?;
+        return Ok((StatusCode::CREATED, Json(summary)));
     }
 
     // Resolve the stored session before launching Pi. Only the workspace's own
@@ -901,6 +955,7 @@ pub(crate) async fn start_session(
 
     let id = uuid::Uuid::new_v4().to_string();
     let record = SessionRecord {
+        agent: AgentKind::Pi,
         workspace_id: request.workspace_id.clone(),
         started_at: diagnostic_timestamp(),
         capabilities: pau_pi::PI_RPC_CAPABILITIES,
@@ -955,6 +1010,16 @@ pub(crate) async fn start_session(
     Ok((StatusCode::CREATED, Json(summary)))
 }
 
+/// The refusal of a start request that names an agent Pau does not support.
+fn unknown_agent(id: &str) -> ApiError {
+    let supported = AgentKind::ALL.map(AgentKind::id).join(", ");
+    ApiError::Agent(
+        StatusCode::BAD_REQUEST,
+        "unknown_agent",
+        format!("Pau does not support the agent `{id}`. Choose one of: {supported}."),
+    )
+}
+
 /// Returns one live session.
 pub(crate) async fn get_session(
     State(state): State<ApiState>,
@@ -969,6 +1034,10 @@ pub(crate) async fn stop_session(
     AxumPath(session_id): AxumPath<String>,
 ) -> Result<StatusCode, ApiError> {
     let api = session_api(&state)?;
+    if let Some(session) = api.claude_session(&session_id) {
+        session.stop().await.map_err(claude::session_error)?;
+        return Ok(StatusCode::NO_CONTENT);
+    }
     api.live(&session_id).await?;
     api.registry
         .stop(&session_id, diagnostic_timestamp())
@@ -1063,6 +1132,11 @@ pub(crate) async fn prompt_session(
     Json(request): Json<SessionPromptRequest>,
 ) -> Result<StatusCode, ApiError> {
     let api = session_api(&state)?;
+    if let Some(session) = api.claude_session(&session_id) {
+        claude::prompt(&session, request).await?;
+        api.publish_current(&session_id).await;
+        return Ok(StatusCode::ACCEPTED);
+    }
     let (_, session) = api.live(&session_id).await?;
     let queue = request.queue.map(|queue| match queue {
         SessionQueue::Steer => PromptQueueChoice::Steer,
@@ -1106,6 +1180,12 @@ pub(crate) async fn interrupt_session(
     AxumPath(session_id): AxumPath<String>,
 ) -> Result<Json<SessionMessageQueue>, ApiError> {
     let api = session_api(&state)?;
+    if let Some(session) = api.claude_session(&session_id) {
+        // The bridge has no message queues, so an interrupt clears nothing.
+        session.interrupt().await.map_err(claude::session_error)?;
+        api.publish_current(&session_id).await;
+        return Ok(Json(SessionMessageQueue::default()));
+    }
     let (record, session) = api.live(&session_id).await?;
     let cleared = session.interrupt().await?;
     api.clear_dialogs(&session_id, &record.workspace_id, "interrupted");
@@ -1551,6 +1631,7 @@ pub(crate) async fn abort_session_shell_commands(
     Ok(StatusCode::NO_CONTENT)
 }
 
+mod claude;
 pub(crate) mod readiness;
 
 #[cfg(all(test, unix))]

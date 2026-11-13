@@ -450,7 +450,12 @@ export async function startSession(
 	fetcher: typeof fetch = fetch,
 	nativeSessionId: string | null = null
 ): Promise<AgentSession> {
-	const request: StartSessionRequest = { workspace_id: workspaceId, model: null, native_session_id: nativeSessionId };
+	const request: StartSessionRequest = {
+		agent: 'pi',
+		workspace_id: workspaceId,
+		model: null,
+		native_session_id: nativeSessionId
+	};
 	const response = await fetcher(sessionUrl(''), {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', ...authorization() },

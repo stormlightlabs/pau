@@ -979,6 +979,10 @@ export type AgentSession = {
  */
 id: string,
 /**
+ * The agent the session runs, such as `pi` or `claude`.
+ */
+agent: string,
+/**
  * Workspace in which the agent runs.
  */
 workspace_id: string,
@@ -999,9 +1003,10 @@ ended_at: string | null,
  */
 exit_code: number | null,
 /**
- * Identifier of the native Pi session the process is running, which
- * matches a saved session's `id`. It changes when the session branches.
- * Absent until Pi reports it.
+ * Identifier of the native session the agent is running. For Pi it
+ * matches a saved session's `id` and changes when the session branches.
+ * Absent until the agent reports it; Claude reports it after its first
+ * turn.
  */
 native_session_id: string | null,
 /**
@@ -1388,6 +1393,11 @@ provider: string,
 model_id: string, };
 
 export type StartSessionRequest = {
+/**
+ * The agent to start, by its readiness identifier, such as `pi` or
+ * `claude`. Pi starts when this is absent.
+ */
+agent: string | null,
 /**
  * Workspace in which the agent runs.
  */

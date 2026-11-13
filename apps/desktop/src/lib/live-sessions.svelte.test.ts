@@ -7,6 +7,7 @@ import { LiveSessions } from './live-sessions.svelte';
 
 const session = {
 	id: 'session-1',
+	agent: 'pi',
 	workspace_id: 'pau',
 	status: 'idle',
 	started_at: '2026-04-01T12:00:00Z',

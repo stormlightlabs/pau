@@ -1,5 +1,6 @@
 use std::{fs, os::unix::fs::PermissionsExt, path::Path, path::PathBuf};
 
+use pau_agent::DiscoverClaudeOptions;
 use pau_core::persistence::Database;
 use tempfile::TempDir;
 
@@ -114,4 +115,87 @@ async fn reports_an_unsupported_version_without_starting_pi() {
     assert_eq!(readiness.model_count, None);
     assert!(readiness.reason.unwrap().contains("unsupported"));
     assert_eq!(launches(&directory), 0);
+}
+
+/// The report of every agent, with Claude Code and its bridge found only on
+/// `path`.
+async fn report_with_claude_path(directory: &TempDir, path: &Path) -> AgentReadinessReport {
+    let missing_pi = directory.path().join("missing");
+    api(directory, missing_pi)
+        .await
+        .with_claude_discovery(DiscoverClaudeOptions {
+            executable_path: None,
+            bridge_path: None,
+            path: path.as_os_str().to_owned(),
+        })
+        .readiness(false)
+        .await
+}
+
+fn write_executable(directory: &Path, name: &str, body: &str) -> PathBuf {
+    let path = directory.join(name);
+    fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    path
+}
+
+#[tokio::test]
+async fn lists_every_agent_and_reports_each_missing_executable() {
+    let directory = tempfile::tempdir().unwrap();
+    let empty = directory.path().join("empty");
+    fs::create_dir(&empty).unwrap();
+    let report = report_with_claude_path(&directory, &empty).await;
+
+    let agents: Vec<&str> = report
+        .agents
+        .iter()
+        .map(|agent| agent.agent.as_str())
+        .collect();
+    assert_eq!(agents, ["pi", "claude"]);
+    for agent in &report.agents {
+        assert!(!agent.found && !agent.ready, "{agent:?}");
+    }
+    let claude = &report.agents[1];
+    assert_eq!(claude.executable_path, None);
+    assert!(
+        claude
+            .reason
+            .as_deref()
+            .unwrap()
+            .contains("Claude Code was not found")
+    );
+}
+
+#[tokio::test]
+async fn reports_a_ready_claude_and_a_missing_bridge() {
+    let directory = tempfile::tempdir().unwrap();
+    let bin = directory.path().join("bin");
+    fs::create_dir(&bin).unwrap();
+    let claude = write_executable(&bin, "claude", "echo '2.1.281 (Claude Code)'");
+
+    let missing_bridge = report_with_claude_path(&directory, &bin)
+        .await
+        .agents
+        .remove(1);
+    assert!(missing_bridge.found && missing_bridge.version_supported);
+    assert!(!missing_bridge.ready);
+    assert_eq!(missing_bridge.version.as_deref(), Some("2.1.281"));
+    assert!(
+        missing_bridge
+            .reason
+            .as_deref()
+            .unwrap()
+            .contains("pau-claude-bridge")
+    );
+
+    write_executable(&bin, "pau-claude-bridge", "exit 0");
+    let ready = report_with_claude_path(&directory, &bin)
+        .await
+        .agents
+        .remove(1);
+    assert_eq!(ready.agent, "claude");
+    assert!(ready.found && ready.version_supported && ready.ready);
+    assert_eq!(ready.executable_path, Some(claude.display().to_string()));
+    assert_eq!(ready.model_count, None);
+    assert_eq!(ready.reason, None);
 }

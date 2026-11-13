@@ -2953,6 +2953,7 @@ version = "0.8.7"
 dependencies = [
  "jsonc-parser",
  "libc",
+ "semver",
  "serde",
  "serde_json",
  "tempfile",

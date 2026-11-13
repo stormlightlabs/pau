@@ -5,6 +5,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 fn write_script(directory: &Path, name: &str, body: &str) -> PathBuf {
     let path = directory.join(name);
@@ -102,4 +103,26 @@ fn reports_a_missing_bridge_after_a_supported_claude() {
     assert_eq!(error.code(), ClaudeDiscoveryErrorCode::BridgeNotFound);
     assert_eq!(error.executable_path(), Some(claude.as_path()));
     assert!(error.to_string().contains("pau-claude-bridge"));
+}
+
+#[test]
+fn reads_the_version_when_a_background_process_holds_its_output() {
+    let directory = tempfile::tempdir().unwrap();
+    write_script(directory.path(), "pau-claude-bridge", "exit 0");
+    write_script(
+        directory.path(),
+        "claude",
+        "sleep 12 &\necho '2.1.281 (Claude Code)'",
+    );
+
+    let started = Instant::now();
+    let discovery = discover_claude(&on_path(directory.path())).unwrap();
+    assert_eq!(discovery.version.to_string(), "2.1.281");
+    // The background `sleep` keeps the output open for 12 seconds. Discovery
+    // stops waiting at its 5-second deadline.
+    assert!(
+        started.elapsed() < Duration::from_secs(8),
+        "{:?}",
+        started.elapsed()
+    );
 }

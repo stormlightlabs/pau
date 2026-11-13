@@ -41,6 +41,13 @@ pub const CLAUDE_BRIDGE_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     stop: true,
 };
 
+/// Time a new bridge host has to answer the `status` handshake.
+///
+/// The host answers once it has checked the Claude Code version, which takes
+/// a few seconds at most. A host that has not answered by then is killed and
+/// the start fails, so a hung host cannot leave the start request pending.
+pub const CLAUDE_BRIDGE_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Time allowed for each stage of bridge-host shutdown.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ClaudeBridgeShutdownTimeouts {
@@ -319,6 +326,8 @@ pub enum ClaudeBridgeProcessError {
     Rejected(ClaudeBridgeCommandError),
     /// The host exited before responding.
     Exited(ClaudeBridgeExit),
+    /// The host did not answer the `status` handshake in time and was killed.
+    HandshakeTimeout(Duration),
     /// The host survived the forced-kill deadline.
     KillTimeout,
     /// A platform signal failed.
@@ -340,6 +349,11 @@ impl fmt::Display for ClaudeBridgeProcessError {
             Self::Exited(exit) => write!(
                 formatter,
                 "Claude bridge exited before responding: {exit:?}"
+            ),
+            Self::HandshakeTimeout(deadline) => write!(
+                formatter,
+                "Claude bridge did not answer within {} seconds of starting",
+                deadline.as_secs()
             ),
             Self::KillTimeout => {
                 formatter.write_str("Claude bridge did not exit after the kill deadline")
@@ -659,12 +673,30 @@ pub struct ClaudeSession {
 }
 
 impl ClaudeSession {
-    /// Starts and handshakes with one package bridge host.
+    /// Starts and handshakes with one package bridge host, killing it when it
+    /// does not answer within [`CLAUDE_BRIDGE_HANDSHAKE_TIMEOUT`].
     pub async fn start(
         options: StartClaudeBridgeOptions,
     ) -> Result<Self, ClaudeBridgeProcessError> {
+        Self::start_within(options, CLAUDE_BRIDGE_HANDSHAKE_TIMEOUT).await
+    }
+
+    async fn start_within(
+        options: StartClaudeBridgeOptions,
+        handshake_timeout: Duration,
+    ) -> Result<Self, ClaudeBridgeProcessError> {
         let process = Arc::new(ClaudeBridgeProcess::start(options)?);
-        let state = process.command("status", None).await?;
+        let state =
+            match tokio::time::timeout(handshake_timeout, process.command("status", None)).await {
+                Ok(state) => state?,
+                Err(_) => {
+                    let _ = process.kill.send(()).await;
+                    wait_for_exit_for(process.exit.clone(), process.shutdown_timeouts.kill).await;
+                    return Err(ClaudeBridgeProcessError::HandshakeTimeout(
+                        handshake_timeout,
+                    ));
+                }
+            };
         let native_session_id = state
             .get("nativeSessionId")
             .and_then(Value::as_str)
@@ -742,11 +774,14 @@ impl ClaudeSession {
     pub async fn stop(&self) -> Result<ClaudeBridgeExit, ClaudeSessionError> {
         {
             let mut status = self.status.lock().await;
+            // A failed session is accepted so its host can always be ended,
+            // even when it exited on its own.
             if !matches!(
                 *status,
                 AgentSessionStatus::Idle
                     | AgentSessionStatus::Running
                     | AgentSessionStatus::Waiting
+                    | AgentSessionStatus::Failed
             ) {
                 return Err(invalid_state(
                     AgentControl::Stop,
@@ -817,20 +852,15 @@ fn observe_session(
                     {
                         *native_session_id.lock().await = Some(id.to_owned());
                     }
+                    // Every finished turn leaves the session idle, failed ones
+                    // included: a failed API call ends the turn, not the bridge,
+                    // so the next prompt must still be accepted.
                     let mut current = status.lock().await;
                     if !matches!(
                         *current,
                         AgentSessionStatus::Stopping | AgentSessionStatus::Stopped
                     ) {
-                        *current = if payload
-                            .and_then(|value| value.get("status"))
-                            .and_then(Value::as_str)
-                            == Some("failed")
-                        {
-                            AgentSessionStatus::Failed
-                        } else {
-                            AgentSessionStatus::Idle
-                        };
+                        *current = AgentSessionStatus::Idle;
                     }
                 }
                 Ok(ClaudeBridgeOutput::Exit(exit)) => {
@@ -960,4 +990,45 @@ fn terminate_signal() -> i32 {
 #[cfg(not(unix))]
 fn terminate_signal() -> i32 {
     0
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn kills_a_bridge_that_never_answers_the_handshake() {
+        let directory = tempfile::tempdir().unwrap();
+        let bridge = directory.path().join("pau-claude-bridge");
+        std::fs::write(&bridge, "#!/bin/sh\necho $$ > pid\nexec sleep 600\n").unwrap();
+        std::fs::set_permissions(&bridge, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let options = StartClaudeBridgeOptions {
+            executable_path: bridge,
+            working_directory: directory.path().to_path_buf(),
+            arguments: Vec::new(),
+            shutdown_timeouts: ClaudeBridgeShutdownTimeouts::default(),
+        };
+
+        let error = ClaudeSession::start_within(options, Duration::from_millis(500))
+            .await
+            .err()
+            .expect("the start should fail");
+        assert!(
+            matches!(error, ClaudeBridgeProcessError::HandshakeTimeout(_)),
+            "{error}"
+        );
+        assert!(error.to_string().contains("did not answer"), "{error}");
+        let pid: i32 = std::fs::read_to_string(directory.path().join("pid"))
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        assert_eq!(
+            unsafe { libc::kill(pid, 0) },
+            -1,
+            "the bridge is still running"
+        );
+    }
 }

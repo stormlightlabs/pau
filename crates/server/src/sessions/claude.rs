@@ -3,9 +3,11 @@
 //! The bridge owns Claude's native protocol, so the API only starts the host,
 //! sends prompts, interrupts, and stops it. Each bridge event is published
 //! unchanged as a `session_output` event. A `turn.completed` event also
-//! publishes the session as idle, or failed when the turn failed, and records
-//! the Claude session ID it carries. Bridge diagnostics stay out of the event
-//! stream, as Pi's stderr does.
+//! publishes the session as idle and records the Claude session ID it
+//! carries. A failed turn leaves the session idle too, because a failed API
+//! call ends the turn and not the session. Its error reaches clients in that
+//! event and the server log. Bridge diagnostics stay out of the event stream,
+//! as Pi's stderr does.
 
 use std::sync::Arc;
 
@@ -78,7 +80,9 @@ impl SessionApi {
     /// resuming the Claude session the request names.
     ///
     /// The bridge cannot select a model, so a request that names one is
-    /// refused before anything starts.
+    /// refused before anything starts. So is a native session ID that is not
+    /// a hyphenated UUID, the form Claude Code gives its sessions, because
+    /// the ID reaches the bridge's command line as the `--resume` value.
     pub(super) async fn start_claude(
         &self,
         request: StartSessionRequest,
@@ -90,6 +94,15 @@ impl SessionApi {
                     control: AgentControl::SelectModel,
                 },
             )));
+        }
+        if let Some(id) = request.native_session_id.as_deref()
+            && (id.len() != 36 || uuid::Uuid::try_parse(id).is_err())
+        {
+            return Err(ApiError::Agent(
+                StatusCode::BAD_REQUEST,
+                "invalid_native_session_id",
+                format!("`{id}` is not a Claude Code session ID."),
+            ));
         }
         let options = self.claude_discovery.clone();
         let discovery = tokio::task::spawn_blocking(move || discover_claude(&options))
@@ -179,18 +192,25 @@ impl SessionApi {
                                 .expect("native state lock poisoned")
                                 .session_id = Some(native_id.to_owned());
                         }
-                        // The payload decides the state, because the session's
-                        // own observer may not have applied it yet.
-                        let failed = payload
+                        if payload
                             .and_then(|payload| payload.get("status"))
                             .and_then(serde_json::Value::as_str)
-                            == Some("failed");
-                        let status = if failed {
-                            SessionStatus::Failed
-                        } else {
-                            SessionStatus::Idle
-                        };
-                        self.publish(&describe(&id, &record, status));
+                            == Some("failed")
+                        {
+                            let error = payload
+                                .and_then(|payload| payload.get("error"))
+                                .and_then(serde_json::Value::as_str)
+                                .unwrap_or("no error reported");
+                            tracing::warn!(
+                                event = "session.turn_failed",
+                                session_id = %id,
+                                error,
+                                "a Claude turn failed"
+                            );
+                        }
+                        // Published directly, because the session's own
+                        // observer may not have applied the change yet.
+                        self.publish(&describe(&id, &record, SessionStatus::Idle));
                     }
                 }
                 ClaudeBridgeOutput::Diagnostic(_) => {}

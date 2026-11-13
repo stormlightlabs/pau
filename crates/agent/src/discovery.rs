@@ -7,6 +7,7 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use crate::{ClaudeBridgeShutdownTimeouts, StartClaudeBridgeOptions};
@@ -21,6 +22,10 @@ pub const CLAUDE_BRIDGE_COMMAND: &str = "pau-claude-bridge";
 
 /// How long `claude --version` may run before discovery gives up on it.
 const VERSION_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The most `claude --version` output discovery reads. A version line is a
+/// few dozen bytes, so anything past this is not a version.
+const VERSION_OUTPUT_LIMIT: u64 = 64 * 1024;
 
 /// Overrides used while locating Claude Code and the Claude bridge.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -311,7 +316,13 @@ fn is_executable_file(metadata: &fs::Metadata) -> bool {
 }
 
 /// Runs `claude --version` and returns its standard output, or a reason for
-/// the failure. The process is killed after [`VERSION_TIMEOUT`].
+/// the failure.
+///
+/// Output is read on a separate thread while [`VERSION_TIMEOUT`] runs, and at
+/// most [`VERSION_OUTPUT_LIMIT`] bytes of it are kept. A background process
+/// that inherited standard output can hold it open after `claude` exits, so
+/// the deadline bounds the wait, not the end of output. The process is killed
+/// when it is still running at the deadline.
 fn read_version(executable_path: &Path) -> Result<String, String> {
     let mut child = spawn_retrying_busy(|| {
         Command::new(executable_path)
@@ -323,6 +334,23 @@ fn read_version(executable_path: &Path) -> Result<String, String> {
     })
     .map_err(|error| error.to_string())?;
     let deadline = Instant::now() + VERSION_TIMEOUT;
+    let mut output = Vec::new();
+    if let Some(stdout) = child.stdout.take() {
+        let (sender, chunks) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut stdout = stdout.take(VERSION_OUTPUT_LIMIT);
+            let mut buffer = [0; 4096];
+            while let Ok(read @ 1..) = stdout.read(&mut buffer) {
+                if sender.send(buffer[..read].to_vec()).is_err() {
+                    break;
+                }
+            }
+        });
+        let remaining = || deadline.saturating_duration_since(Instant::now());
+        while let Ok(chunk) = chunks.recv_timeout(remaining()) {
+            output.extend(chunk);
+        }
+    }
     let status = loop {
         match child.try_wait().map_err(|error| error.to_string())? {
             Some(status) => break status,
@@ -340,13 +368,7 @@ fn read_version(executable_path: &Path) -> Result<String, String> {
     if !status.success() {
         return Err(status.to_string());
     }
-    let mut output = String::new();
-    if let Some(mut stdout) = child.stdout.take() {
-        stdout
-            .read_to_string(&mut output)
-            .map_err(|error| error.to_string())?;
-    }
-    Ok(output)
+    Ok(String::from_utf8_lossy(&output).into_owned())
 }
 
 /// Retries a spawn that fails because the executable was just written and is

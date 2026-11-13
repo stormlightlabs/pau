@@ -24,7 +24,7 @@ const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 /// A Claude bridge host stand-in. It records its arguments in the working
 /// directory, answers `status`, `prompt`, and `interrupt`, streams one text
 /// delta and a completed turn for each prompt, and exits when its input
-/// closes.
+/// closes. The prompt `fail` gets a failed turn instead.
 const FAKE_BRIDGE: &str = r#"#!/bin/sh
 printf '%s\n' "$*" > "$PWD/bridge-args.txt"
 while IFS= read -r line; do
@@ -32,6 +32,10 @@ while IFS= read -r line; do
     case "$line" in
         *'"command":"status"'*)
             printf '{"version":1,"type":"response","id":"%s","ok":true,"result":{"capabilities":{"prompt":true,"interrupt":true,"stop":true},"nativeSessionId":null}}\n' "$id"
+            ;;
+        *'"text":"fail"'*)
+            printf '{"version":1,"type":"response","id":"%s","ok":true,"result":{"accepted":true}}\n' "$id"
+            printf '{"version":1,"type":"event","sequence":0,"event":"turn.completed","payload":{"status":"failed","error":"overloaded","sessionId":"claude-native"}}\n'
             ;;
         *'"command":"prompt"'*)
             printf '{"version":1,"type":"response","id":"%s","ok":true,"result":{"accepted":true}}\n' "$id"
@@ -270,5 +274,74 @@ async fn refuses_an_unknown_or_unavailable_agent_with_its_reason() {
     assert_eq!(
         fixture.call("GET", "/api/sessions", None).await.1,
         json!([])
+    );
+}
+
+#[tokio::test]
+async fn a_failed_turn_leaves_the_session_ready_for_the_next_prompt() {
+    let fixture = Fixture::new(true).await;
+    let mut stream = fixture.events.subscribe(None);
+    let (_, session) = fixture.start(json!({"agent": "claude"})).await;
+    let base = format!("/api/sessions/{}", session["id"].as_str().unwrap());
+
+    let (status, _) = fixture
+        .call(
+            "POST",
+            &format!("{base}/prompt"),
+            Some(json!({"message": "fail"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
+    let failed = next_event(&mut stream, |event, payload| {
+        event.kind == ServerEventKind::SessionOutput && payload["event"] == "turn.completed"
+    })
+    .await;
+    assert_eq!(failed["payload"]["error"], "overloaded");
+    let settled = next_event(&mut stream, |event, _| {
+        event.kind == ServerEventKind::SessionChanged
+    })
+    .await;
+    assert_eq!(settled["status"], "idle");
+
+    // The session's own observer applies the same turn, so wait for it.
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while fixture.call("GET", &base, None).await.1["status"] != "idle" {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the session never became idle");
+    let (status, body) = fixture
+        .call(
+            "POST",
+            &format!("{base}/prompt"),
+            Some(json!({"message": "again"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{body}");
+    let (status, body) = fixture.call("DELETE", &base, None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+}
+
+#[tokio::test]
+async fn refuses_a_native_session_id_that_is_not_a_uuid() {
+    let fixture = Fixture::new(true).await;
+    let (status, error) = fixture
+        .start(json!({"agent": "claude", "native_session_id": "--dangerously-skip-permissions"}))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{error}");
+    assert_eq!(error["code"], "invalid_native_session_id");
+    assert!(!fixture.workspace_root.join("bridge-args.txt").exists());
+
+    let (status, session) = fixture
+        .start(
+            json!({"agent": "claude", "native_session_id": "0b5e8a3c-6f1d-4c2a-9e7b-3d4f5a6b7c8d"}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{session}");
+    let arguments = fs::read_to_string(fixture.workspace_root.join("bridge-args.txt")).unwrap();
+    assert!(
+        arguments.ends_with("--resume 0b5e8a3c-6f1d-4c2a-9e7b-3d4f5a6b7c8d\n"),
+        "{arguments}"
     );
 }

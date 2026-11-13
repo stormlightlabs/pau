@@ -80,12 +80,14 @@ At narrower widths:
 Do not scale the desktop composition down. Recompose it.
 
 The composer footer holds two groups: quiet options (delivery mode, model,
-thinking, permission, context) and the actions. At 1440×900 with the context
-rail open, both share one row. When they no longer fit, the actions keep the
-first row under the field and the options wrap below them. In a narrow footer, the
-context meter shows only the share used, and its details still list the
-window and token totals. Completion lists open as a popover above the
-composer, so the composer keeps its height and the transcript does not move.
+thinking, permission, context) and the actions. They share one row when both
+fit, such as at 1440×900 with the session rail hidden. When they no longer
+fit, including at 1440×900 with both the session rail and the context rail
+open, the actions keep the first row under the field and the options wrap
+below them. In a narrow footer, the context meter shows only the share used,
+and its details still list the window and token totals. Completion lists open
+as a popover above the composer, so the composer keeps its height and the
+transcript does not move.
 
 While files are dragged over the composer, a drop target covers the
 composer's own box and dashes its border: focus color when the drop would

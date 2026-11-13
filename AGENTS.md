@@ -67,6 +67,41 @@ built artifact.
 - Write commit messages and pull request descriptions without agent
   attribution. Omit `Co-Authored-By` trailers and generated-by lines.
 
+## Tasks
+
+The installed skills read this section for the tracker's steps. Linear is the
+tracker for agent work. Until Work units is replaced, a `PAU-<n>` ID is a
+Linear task and follows this section, and a dotted ID such as `2.185` is a
+roadmap unit and follows Work units. Tasks live in the Linear team PAU. Agents
+reach it through the session's Linear connector tools, such as `get_issue` with
+relations, `save_issue`, `save_comment`, and `save_document`. Subagents run
+inside that session and need no Linear access of their own.
+
+| Step                                     | In Linear                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Read a task                              | The PAU issue, its comments, its relations, and its project                                                                                                                                                                                                                                                                                                                                         |
+| Check readiness                          | Status Todo, not a run unit, and every blocked-by issue Done, Canceled or Duplicate                                                                                                                                                                                                                                                                                                                 |
+| Start                                    | Set In Progress and comment `Claimed on claude/<issue id>`, then re-read the comments. The earliest claim comment holds the claim, in place of `fab claim`; if it names another branch or run, stop and report. Work on the branch `claude/<issue id, lowercase>`, such as `claude/pau-1`, in a worktree under `../pau-worktrees/`. Linear's default `gitBranchName`, `<user>/pau-n-…`, is not used |
+| Open the PR                              | Link the PR on the issue and set In Review                                                                                                                                                                                                                                                                                                                                                          |
+| Complete                                 | After the PR merges, set Done with the comment `Done in #<n> at <sha>: <summary>`. Never close an issue without a PR, except a run unit                                                                                                                                                                                                                                                             |
+| Hand off                                 | Before any push, comment the handoff note and `Released`, and set Todo. Once a PR exists, comment the handoff note and leave the issue In Review with the PR linked                                                                                                                                                                                                                                 |
+| Pick up                                  | Read the latest handoff note. Continue the linked PR when there is one, and otherwise claim the issue as Start does                                                                                                                                                                                                                                                                                 |
+| Record new work                          | A new PAU issue in the right project, in Todo when it is ready to work or Backlog when it is untriaged, with its blocked-by links set when it is created                                                                                                                                                                                                                                            |
+| Record an idea or spec                   | A Linear document on the team or the project                                                                                                                                                                                                                                                                                                                                                        |
+| Record a report, review or resource list | One Linear document on the issue, with links and screenshots, kept current. Not comments, and not one link resource per item                                                                                                                                                                                                                                                                        |
+
+`fab-decompose` writes these primitives with `save_issue`:
+
+| Primitive  | In Linear         | Written as                                                                                                                                                   |
+| ---------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Collection | A project         | `project` on each issue                                                                                                                                      |
+| Run unit   | A parent issue    | An issue in that project. It is never dispatched to a worktree, goes In Progress when its first sub-issue starts, and goes Done when every sub-issue is Done |
+| Task       | A sub-issue       | `parentId` set to the run unit                                                                                                                               |
+| Dependency | A blocked-by link | `blockedBy` with the blocker IDs                                                                                                                             |
+
+Blocked-by links decide what can run in parallel. List the Todo issues, skip
+run units, drop any that are not ready, and give each worktree one ready issue.
+
 ## Dogfood Pau
 
 Follow the [dogfooding policy](dev/plan/dogfooding.md). Keep the released local

@@ -23,7 +23,9 @@ An adversarial review of Pau also tries credential and secret leakage, path and
 symlink tricks, process exit and orphaned children, and resource exhaustion,
 most of all around the sandbox and agent processes.
 
-`cargo clean` regularly to keep the disk clean.
+Each worktree builds its own `target/` of several gigabytes. Run `cargo clean`
+in a worktree once its task's Cargo checks pass, before handing it off or
+removing it, and in the main checkout after pulling a merge.
 
 On macOS, do not enter the Nix shell or use direnv. Use the Homebrew and rustup
 toolchain described in `README.md`, and keep local settings in `.env`. The flake

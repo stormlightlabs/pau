@@ -42,7 +42,10 @@ export class InterfacePreferences {
 	/** The view this window last opened. Unset until it opens one, so a save keeps the stored view. */
 	#route: LastRoute | undefined;
 	#timer: ReturnType<typeof setTimeout> | undefined;
-	#saving: Promise<Error | undefined> | undefined;
+	/** The last write queued. Each write starts once this one settles, so writes reach the server in order. */
+	#saving: Promise<unknown> = Promise.resolve();
+	/** Writes queued or in flight. While any remain, a loaded copy does not replace local changes. */
+	#pending = 0;
 	#stream: EventStreamClient | undefined;
 	readonly #options: InterfacePreferencesOptions;
 
@@ -56,20 +59,40 @@ export class InterfacePreferences {
 		this.#options = options;
 	}
 
-	/** Writes the current preferences after any write already in flight, and rejects when this write fails. */
-	async #flush(): Promise<void> {
+	/**
+	 * Queues a write of the current preferences behind every write already
+	 * queued, and rejects when this write fails.
+	 *
+	 * Each write reads the preferences when it starts, so a later write
+	 * carries every change made before it. A failed write therefore restores
+	 * the saved motion setting only when no later write is queued and the
+	 * screen still shows the setting it sent. Otherwise the later write
+	 * decides what is saved, and restoring here would leave the screen
+	 * disagreeing with the stored value. `fallback` is used when no saved
+	 * copy has loaded.
+	 */
+	async #flush(fallback?: MotionPreference): Promise<void> {
 		clearTimeout(this.#timer);
 		this.#timer = undefined;
-		await this.#saving;
-		this.#saving = this.#write();
-		const failure = await this.#saving;
-		this.#saving = undefined;
-		if (failure) throw failure;
+		this.#pending += 1;
+		const previous = this.#saving;
+		const write = (async () => {
+			await previous;
+			return this.#write();
+		})();
+		this.#saving = write;
+		const { sent, failure } = await write;
+		this.#pending -= 1;
+		if (!failure) return;
+		const restore = this.#saved?.motion ?? fallback;
+		if (restore && this.#pending === 0 && this.motion === sent) this.#applyMotion(restore);
+		throw failure;
 	}
 
 	/**
 	 * Saves widths and the open view. A failure leaves them applied in this
-	 * window, and the next resize or view change saves again.
+	 * window, and the next resize or view change saves again. A motion
+	 * setting this write failed to save is restored as {@link #flush} says.
 	 */
 	async #save(): Promise<void> {
 		try {
@@ -80,25 +103,27 @@ export class InterfacePreferences {
 	}
 
 	/**
-	 * Saves the whole document and resolves with the failure instead of
-	 * rejecting, so a write that waits on this one is not failed by it.
+	 * Saves the whole document and resolves with the motion setting it sent
+	 * and any failure instead of rejecting, so a write that waits on this one
+	 * is not failed by it.
 	 */
-	async #write(): Promise<Error | undefined> {
+	async #write(): Promise<{ sent: MotionPreference; failure?: Error }> {
+		const sent = this.motion;
 		try {
 			const base = this.#saved ?? (await getUiPreferences(this.#options.fetcher));
 			const { contextRail, inspector } = this.widths;
 			this.#saved = await updateUiPreferences(
 				{
 					...base,
-					motion: this.motion,
+					motion: sent,
 					pane_widths: { context_rail: contextRail, inspector },
 					last_route: this.#route ?? base.last_route
 				},
 				this.#options.fetcher
 			);
-			return undefined;
+			return { sent };
 		} catch (error) {
-			return error instanceof Error ? error : new Error(String(error));
+			return { sent, failure: error instanceof Error ? error : new Error(String(error)) };
 		}
 	}
 
@@ -147,8 +172,8 @@ export class InterfacePreferences {
 			return;
 		}
 		this.#saved = preferences;
-		if (this.#saving === undefined) this.#applyMotion(preferences.motion);
-		if (this.#timer !== undefined || this.#saving !== undefined) return;
+		if (this.#pending === 0) this.#applyMotion(preferences.motion);
+		if (this.#timer !== undefined || this.#pending > 0) return;
 		this.widths = { contextRail: preferences.pane_widths.context_rail, inspector: preferences.pane_widths.inspector };
 	}
 
@@ -156,19 +181,12 @@ export class InterfacePreferences {
 	 * Applies a motion setting the operator chose and saves it at once. When
 	 * the save fails, the saved setting comes back and the promise rejects
 	 * with the reason, so Settings can show it. A failure that a later choice
-	 * has already replaced changes nothing: that choice's own write decides
-	 * what is saved, so rolling back here would leave the screen disagreeing
-	 * with the stored value.
+	 * has already replaced changes nothing, as {@link #flush} explains.
 	 */
 	async setMotion(motion: MotionPreference): Promise<void> {
 		const previous = this.motion;
 		this.#applyMotion(motion);
-		try {
-			await this.#flush();
-		} catch (error) {
-			if (this.motion === motion) this.#applyMotion(this.#saved?.motion ?? previous);
-			throw error;
-		}
+		await this.#flush(previous);
 	}
 
 	/** Saves the view the operator opened, unless it is already the saved one. */

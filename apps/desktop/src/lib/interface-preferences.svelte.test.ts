@@ -187,6 +187,53 @@ describe('interface preferences', () => {
 			expect(server.puts).toEqual([preferences(null, null, 'system')]);
 		});
 
+		test.each([
+			['the first later save fails', [true, false]],
+			['the last save fails', [false, true]]
+		] as const)('matches the saved setting after quick picks when %s', async (_case, failOrder) => {
+			// Saved `full`, then Reduce, System and Full are picked while Reduce
+			// saves. Reduce succeeds, one later save fails and one succeeds. The
+			// later outcomes are released last-request-first, so writes sent at
+			// once would finish out of order.
+			const root = document.createElement('div');
+			let stored = preferences(null, null, 'full');
+			const outcomes = [true, ...failOrder.map((fails) => !fails)].map(() => Promise.withResolvers<boolean>());
+			let putCount = 0;
+			const fetcher = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+				if (init?.method !== 'PUT') return json(stored);
+				if (!(await outcomes[putCount++].promise)) {
+					return Response.json({ message: 'The database is read-only.' }, { status: 500 });
+				}
+				stored = JSON.parse(init.body as string) as UiPreferences;
+				return json(stored);
+			}) as unknown as typeof fetch;
+			const settings = new InterfacePreferences({ fetcher, root });
+			await settings.load();
+			const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+			// A failed pick rejects for Settings to show. This test checks the state.
+			const pick = async (motion: MotionPreference) => {
+				try {
+					await settings.setMotion(motion);
+				} catch {
+					// Expected for the pick whose save fails.
+				}
+			};
+			const picks = [pick('reduce')];
+			await vi.waitFor(() => expect(putCount).toBe(1));
+			picks.push(pick('system'), pick('full'));
+			outcomes[0].resolve(true);
+			await settle();
+			outcomes[2].resolve(!failOrder[1]);
+			await settle();
+			outcomes[1].resolve(!failOrder[0]);
+			await Promise.all(picks);
+
+			expect(stored.motion).toBe('full');
+			expect(settings.motion).toBe('full');
+			expect(root.dataset.motion).toBe('full');
+		});
+
 		test('a resize keeps the motion setting', async () => {
 			vi.useFakeTimers();
 			const server = backend(preferences(null, null, 'full'));

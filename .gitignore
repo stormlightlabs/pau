@@ -3,11 +3,7 @@
 !CLAUDE.md
 /.pi/*
 !/.pi/settings.json
-!/.pi/prompts/
-!/.pi/prompts/*.md
 /.claude/*
-!/.claude/commands/
-!/.claude/commands/*.md
 !/.claude/skills/
 !/.claude/agents/
 !/.claude/agents/*.md

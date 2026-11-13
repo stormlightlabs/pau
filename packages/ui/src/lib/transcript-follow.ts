@@ -75,9 +75,9 @@ export function scrollToPrompt(node: HTMLElement, direction: 1 | -1): void {
  * explicitly after every size change of the container or its content, which
  * runs before the browser paints. Scrolling away from the bottom stops
  * following, but the action's own pins never do, even when output grows
- * before the browser reports them. Returning to the bottom resumes it. A change of `key` starts at
- * the bottom. Returning to a key restores the follow mode or reading anchor
- * it had when it was last shown, held in memory only.
+ * before the browser reports them. Returning to the bottom resumes it. A
+ * change of `key` starts at the bottom. Returning to a key restores the follow
+ * mode or reading anchor it had when it was last shown, held in memory only.
  *
  * While following is off, the first entry in view keeps its position when
  * content above it grows or shrinks, such as a tool block that finishes or
@@ -101,7 +101,9 @@ export function followTranscript(node: HTMLElement, options: TranscriptFollowOpt
 	 * The scroll position the last pin produced. The browser reports that
 	 * scroll on a later frame, after new output may have grown the content,
 	 * so the position no longer reads as the bottom. A scroll event at this
-	 * position is the pin's own and must not stop following.
+	 * position is the pin's own and must not stop following. The next scroll
+	 * event or a change of `key` clears it, so a later scroll by the operator
+	 * to the same position still counts.
 	 */
 	let pinnedAt: number | undefined;
 	node.style.overflowAnchor = 'none';
@@ -123,7 +125,9 @@ export function followTranscript(node: HTMLElement, options: TranscriptFollowOpt
 	}
 
 	function onScroll() {
-		if (following && node.scrollTop === pinnedAt) return;
+		const ownPin = following && node.scrollTop === pinnedAt;
+		pinnedAt = undefined;
+		if (ownPin) return;
 		setFollowing(atBottom(node));
 		captureAnchor();
 	}
@@ -148,6 +152,7 @@ export function followTranscript(node: HTMLElement, options: TranscriptFollowOpt
 			onChange = next.onChange;
 			if (next.key === key) return;
 			key = next.key;
+			pinnedAt = undefined;
 			const anchor = positions.get(key);
 			if (anchor && restoreAnchor(node, anchor)) {
 				setFollowing(false);

@@ -285,7 +285,7 @@ pub(crate) async fn stream_terminal(
 
 async fn serve_stream(mut socket: WebSocket, managed: Arc<ManagedTerminal>) {
     let mut attachment = managed.scrollback.attach();
-    let replay = attachment.replay();
+    let replay = attachment.take_replay();
     if !replay.is_empty() && socket.send(Message::Binary(replay)).await.is_err() {
         return;
     }
@@ -319,7 +319,9 @@ async fn serve_stream(mut socket: WebSocket, managed: Arc<ManagedTerminal>) {
                 }
                 // Close code 1013 (try again later) tells the client to
                 // reattach and catch up from the scrollback, where a dropped
-                // socket would look like a network failure.
+                // socket would look like a network failure. If output keeps
+                // outrunning the link, each reattach lags again, so the
+                // client must back off between attempts.
                 AttachedOutput::Lagged => {
                     let _ = socket
                         .send(Message::Close(Some(CloseFrame {

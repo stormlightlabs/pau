@@ -28,6 +28,11 @@ use crate::TerminalOutput;
 /// [`LINE_SEARCH_BYTES`] retained bytes hold no newline, as with full-screen
 /// programs and very long lines, it drops only up to the next UTF-8 character
 /// boundary, and the replay can still start inside an escape sequence.
+///
+/// A replay holds output bytes, not terminal state. Modes a program set
+/// before the cut, such as the alternate screen, mouse tracking and bracketed
+/// paste, are missing from it, so a view that reattaches to a full-screen
+/// program after a cut can draw on the main screen and ignore the mouse.
 pub const SCROLLBACK_BYTES: usize = 1024 * 1024;
 
 /// Bytes searched for a newline after a cut before the scrollback settles for
@@ -98,6 +103,10 @@ impl TerminalScrollback {
     /// attachments already received, so a view should clear its screen before
     /// writing it. After output ends, an attachment still replays the retained
     /// output and then reports [`AttachedOutput::Ended`].
+    ///
+    /// Once more than [`SCROLLBACK_BYTES`] of output has been written, the
+    /// replay can miss terminal modes the program set before the cut, as
+    /// [`SCROLLBACK_BYTES`] describes.
     pub fn attach(&self) -> TerminalAttachment {
         let shared = self.0.lock().expect("terminal scrollback lock poisoned");
         let (front, back) = shared.retained.as_slices();
@@ -113,9 +122,18 @@ impl TerminalScrollback {
         let cut = shared.retained.len() + chunk.len() > limit;
         let kept = &chunk[chunk.len().saturating_sub(limit)..];
         let overflow = (shared.retained.len() + kept.len()).saturating_sub(limit);
+        // The last byte the cut drops, which comes from the chunk itself when
+        // the chunk alone exceeds the limit.
+        let dropped = if kept.len() < chunk.len() {
+            chunk.get(chunk.len() - kept.len() - 1).copied()
+        } else {
+            overflow.checked_sub(1).map(|last| shared.retained[last])
+        };
         shared.retained.drain(..overflow);
         shared.retained.extend(kept);
-        if cut {
+        // A cut right after a newline already leaves the replay on a line
+        // start.
+        if cut && dropped != Some(b'\n') {
             let start = replay_start(&shared.retained);
             shared.retained.drain(..start);
         }
@@ -160,6 +178,8 @@ fn replay_start(retained: &VecDeque<u8>) -> usize {
 /// view; the terminal keeps running and retaining output.
 #[derive(Debug)]
 pub struct TerminalAttachment {
+    /// Emptied by [`TerminalAttachment::take_replay`], so an attachment does
+    /// not hold a second copy of the scrollback while its view stays open.
     replay: Bytes,
     live: Option<broadcast::Receiver<Bytes>>,
 }
@@ -177,9 +197,10 @@ pub enum AttachedOutput {
 }
 
 impl TerminalAttachment {
-    /// Returns the output retained when the view attached, oldest first.
-    pub fn replay(&self) -> Bytes {
-        self.replay.clone()
+    /// Returns the output retained when the view attached, oldest first, and
+    /// releases the attachment's copy. Later calls return no bytes.
+    pub fn take_replay(&mut self) -> Bytes {
+        std::mem::take(&mut self.replay)
     }
 
     /// Waits for the next live event. Live output follows the replay with no
@@ -207,7 +228,7 @@ mod tests {
         let mut attachment = scrollback.attach();
         scrollback.push(b"after".to_vec());
 
-        assert_eq!(attachment.replay(), Bytes::from_static(b"before "));
+        assert_eq!(attachment.take_replay(), Bytes::from_static(b"before "));
         assert_eq!(
             attachment.recv().await,
             AttachedOutput::Output(Bytes::from_static(b"after"))
@@ -226,8 +247,8 @@ mod tests {
         drop(first);
 
         scrollback.push(b"missed".to_vec());
-        let second = scrollback.attach();
-        assert_eq!(second.replay(), Bytes::from_static(b"seen missed"));
+        let mut second = scrollback.attach();
+        assert_eq!(second.take_replay(), Bytes::from_static(b"seen missed"));
     }
 
     #[test]
@@ -236,13 +257,13 @@ mod tests {
         scrollback.push(b"abcdef".to_vec());
         scrollback.push(b"ghij".to_vec());
         assert_eq!(
-            scrollback.attach().replay(),
+            scrollback.attach().take_replay(),
             Bytes::from_static(b"cdefghij")
         );
 
         scrollback.push(b"0123456789".to_vec());
         assert_eq!(
-            scrollback.attach().replay(),
+            scrollback.attach().take_replay(),
             Bytes::from_static(b"23456789")
         );
     }
@@ -253,9 +274,91 @@ mod tests {
         scrollback.push(b"\x1b[38;5;196mred\nnext\n".to_vec());
         scrollback.push(b"more".to_vec());
         assert_eq!(
-            scrollback.attach().replay(),
+            scrollback.attach().take_replay(),
             Bytes::from_static(b"next\nmore")
         );
+    }
+
+    #[test]
+    fn keeps_the_next_line_when_the_cut_falls_on_a_line_start() {
+        let scrollback = TerminalScrollback::with_limit(10);
+        for line in [b"aaaa\n", b"bbbb\n", b"cccc\n"] {
+            scrollback.push(line.to_vec());
+        }
+        assert_eq!(
+            scrollback.attach().take_replay(),
+            Bytes::from_static(b"bbbb\ncccc\n")
+        );
+
+        // The same holds when one chunk alone exceeds the limit.
+        let scrollback = TerminalScrollback::with_limit(10);
+        scrollback.push(b"aaaa\nbbbb\ncccc\n".to_vec());
+        assert_eq!(
+            scrollback.attach().take_replay(),
+            Bytes::from_static(b"bbbb\ncccc\n")
+        );
+    }
+
+    #[test]
+    fn releases_the_replay_once_taken() {
+        let scrollback = TerminalScrollback::with_limit(64);
+        scrollback.push(b"output".to_vec());
+        let mut attachment = scrollback.attach();
+
+        let replay = attachment.take_replay();
+        assert_eq!(replay, Bytes::from_static(b"output"));
+        assert!(replay.is_unique());
+        assert!(attachment.take_replay().is_empty());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn delivers_each_chunk_once_to_views_attaching_during_output() {
+        const CHUNKS: usize = LIVE_CHUNKS - 1;
+        const VIEWS_PER_THREAD: usize = 64;
+        let scrollback = TerminalScrollback::with_limit(SCROLLBACK_BYTES);
+        let start = Arc::new(std::sync::Barrier::new(5));
+
+        let attachers: Vec<_> = (0..4)
+            .map(|_| {
+                let scrollback = scrollback.clone();
+                let start = Arc::clone(&start);
+                std::thread::spawn(move || {
+                    start.wait();
+                    (0..VIEWS_PER_THREAD)
+                        .map(|_| {
+                            std::thread::yield_now();
+                            scrollback.attach()
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        start.wait();
+        let mut expected = Vec::new();
+        for index in 0..CHUNKS {
+            let chunk = format!("{index};").into_bytes();
+            expected.extend(&chunk);
+            scrollback.push(chunk);
+            std::thread::yield_now();
+        }
+        scrollback.end();
+
+        for attacher in attachers {
+            for mut attachment in attacher.join().expect("attacher panicked") {
+                let mut received = attachment.take_replay().to_vec();
+                loop {
+                    match attachment.recv().await {
+                        AttachedOutput::Output(chunk) => received.extend(&chunk),
+                        AttachedOutput::Ended => break,
+                        AttachedOutput::Lagged => panic!("view lagged"),
+                    }
+                }
+                assert_eq!(
+                    String::from_utf8(received).unwrap(),
+                    String::from_utf8(expected.clone()).unwrap()
+                );
+            }
+        }
     }
 
     #[test]
@@ -263,15 +366,15 @@ mod tests {
         let scrollback = TerminalScrollback::with_limit(5);
         // The cut leaves the continuation byte of the second `é`.
         scrollback.push("éééé".as_bytes().to_vec());
-        assert_eq!(scrollback.attach().replay(), "éé".as_bytes());
+        assert_eq!(scrollback.attach().take_replay(), "éé".as_bytes());
 
         // The only newline lies past the search window, so it is kept.
         let mut long_line = vec![b'x'; LINE_SEARCH_BYTES];
         long_line.extend(b"\ny");
         let scrollback = TerminalScrollback::with_limit(long_line.len());
-        scrollback.push(b"\n".to_vec());
+        scrollback.push(b"x".to_vec());
         scrollback.push(long_line.clone());
-        assert_eq!(scrollback.attach().replay(), long_line);
+        assert_eq!(scrollback.attach().take_replay(), long_line);
     }
 
     #[tokio::test]
@@ -287,7 +390,7 @@ mod tests {
         );
         assert_eq!(current.recv().await, AttachedOutput::Ended);
         let mut later = scrollback.attach();
-        assert_eq!(later.replay(), Bytes::from_static(b"last"));
+        assert_eq!(later.take_replay(), Bytes::from_static(b"last"));
         assert_eq!(later.recv().await, AttachedOutput::Ended);
     }
 

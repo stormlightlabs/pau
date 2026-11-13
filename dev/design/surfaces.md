@@ -197,8 +197,8 @@ open separately. Do not compress code between two narrow rails.
 
 ## Embedded editor study
 
-This fixture preserves a possible deep Neovim integration for later research. It
-is not part of the first release and must not shape the common editor contract.
+This brief records a possible deep Neovim integration for later research. It is
+not part of the first release and must not shape the common editor contract.
 The first release uses CodeMirror for built-in editing, opens terminal editors
 in persistent terminals, and hands files or workspaces to a preferred external
 editor.

@@ -560,9 +560,8 @@ gaps have proposed units in the next section.
 
 ## Proposed units
 
-These units follow the format in
-[deliverable 2](../tasks/002_desktop-app-and-development-browser-ui/README.md)
-and the layer split in [`ROADMAP.md`](../ROADMAP.md). They are now roadmap
+These units follow the format in deliverable 2 and the layer split in
+[`ROADMAP.md`](../ROADMAP.md). They are now roadmap
 units with real IDs, listed under [Decisions](#decisions). The roadmap entries
 are authoritative and include the changes those decisions made.
 

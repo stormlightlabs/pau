@@ -319,6 +319,28 @@ focus, and yellow or cyan highlights. The dark scheme uses the application
 palette directly; the light scheme keeps the same roles at reading contrast.
 Both schemes are available from an explicit theme control.
 
+Light is the default scheme. The site uses these colors:
+
+| Role                    | Light     | Dark      |
+| ----------------------- | --------- | --------- |
+| Ink, body text          | `#202536` | `#e6e9f2` |
+| Muted text              | `#5d667e` | `#9aa3bd` |
+| Line, rules and borders | `#dce1eb` | `#293044` |
+| Paper, page background  | `#f5f7fc` | `#12151d` |
+| Deep paper, bands       | `#e9edf6` | `#171b27` |
+| Raised, cards           | `#ffffff` | `#202536` |
+| Accent                  | `#087a55` | `#38ef9d` |
+| Strong accent           | `#055e43` | `#66f3b7` |
+| Focus                   | `#7651c5` | `#a48cf2` |
+| Highlight               | `#087c99` | `#f1fc79` |
+| Code background         | `#171b27` | `#0e1118` |
+| Code line               | `#293044` | `#293044` |
+| Code text               | `#e6e9f2` | `#e6e9f2` |
+| Code prompt             | `#f1fc79` | `#f1fc79` |
+
+Code blocks are dark in both schemes. Only their background changes; the
+dark scheme keeps the light code line, text, and prompt colors.
+
 At narrow widths, the hero, previews, feature status, and reference rows become
 single-column compositions. Documentation navigation moves out of the reading
 column rather than reducing the article measure.

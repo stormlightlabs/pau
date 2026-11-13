@@ -106,8 +106,8 @@ The spacing scale uses 4, 8, 12, 16, 24, and 32px steps, named `space/1` to
 `space/6`. Use tight intervals within controls and rows, medium intervals within
 a section, and larger intervals between distinct tasks.
 
-The design tokens give the spacing, type, radius, border, row, and rail values
-slash-separated names. `packages/ui` mirrors those names as CSS custom
+The spacing, type, radius, border, row, and rail values have slash-separated
+token names. `packages/ui/src/styles/tokens.css` records them as CSS custom
 properties, so `space/3` becomes `--pau-space-3` and `size/row-md` becomes
 `--pau-size-row-md`. Type sizes use `--pau-type-*` because `--pau-text` names
 the text color.

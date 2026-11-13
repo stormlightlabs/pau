@@ -1,0 +1,32 @@
+# fabrial's settings for this repository. The Branch PR workflow, the Review
+# gate and the skills read them. Each value is one line: key = "value".
+
+# GitHub login of the person who approves pull requests; `fab init` writes
+# CODEOWNERS from it.
+owner = "desertthunder"
+
+# The slug of the GitHub App the workflows act as, from its page
+# github.com/apps/<slug>. Its comments come from <slug>[bot].
+app = "stormlight-thunderbot"
+
+# The prefix of the secrets holding the App's ID and key: the workflows
+# read THUNDERBOT_APP_ID and THUNDERBOT_PRIVATE_KEY.
+secret_prefix = "THUNDERBOT"
+
+# The Co-authored-by trailer on every squash commit.
+trailer = "Owais Jamil <jamil.owais@gmail.com>"
+
+# The command agents run before pushing.
+gates = "pnpm gate"
+
+# Ignored paths fab cleanup may delete with a merged worktree, beside
+# target/: caches a tool rebuilds.
+disposable = ["node_modules/", "apps/desktop/node_modules/", "apps/web/node_modules/", "apps/website/node_modules/", "packages/claude-bridge/node_modules/", "packages/pi-permissions/node_modules/", "packages/protocol/node_modules/", "packages/sandbox/node_modules/", "packages/ui/node_modules/", "apps/desktop/.svelte-kit/", "apps/web/.svelte-kit/", "apps/website/.svelte-kit/", "apps/desktop/build/", "apps/website/build/", "apps/desktop/src-tauri/gen/", "packages/claude-bridge/dist/", "packages/pi-permissions/dist/", "packages/ui/storybook-static/", "apps/desktop/.vitest-attachments/", "packages/ui/.vitest-attachments/", "packages/ui/src/tests/__screenshots__/"]
+
+# Directories whose Markdown and TOML files are planning records, which
+# fab review-depth reviews as it does documentation.
+planning = ["dev/"]
+
+# The fabrial version that wrote the installed files. `fab check`
+# compares it with its own.
+version = "0.9.2"

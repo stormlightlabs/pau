@@ -83,8 +83,10 @@ asked to do so.
 
 Before writing or editing project prose, load and follow the `writing`,
 `writing-docs`, or equivalent available skill. This includes documentation,
-prompts, UI copy, error messages, comments, and release text. Load the skill
-before drafting, not only when polishing the result.
+prompts, UI copy, error messages, comments, release text, commit messages, and
+pull request descriptions. Load the skill before drafting, not only when
+polishing the result. A delegated agent that writes any of these gets the same
+instruction in its prompt.
 
 Always audit changed prose against that skill before finishing. Remove AI
 writing tropes, stock transitions, repetition, inflated claims, and other

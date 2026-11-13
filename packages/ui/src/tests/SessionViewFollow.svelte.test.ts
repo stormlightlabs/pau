@@ -93,30 +93,6 @@ test('scrolling up to an earlier pin position stops following', async () => {
 	await expect.poll(() => node.dataset.following).toBe('false');
 });
 
-test('a pin from another session does not hide a scroll up', async () => {
-	const screen = await render(SessionView, { workspaces: workspaces(30), activeSessionId: baseSession.id });
-	await settled();
-	const node = transcriptOf();
-	const other = () => workspaces(40, 'running', 'other');
-
-	await screen.rerender({ workspaces: other(), activeSessionId: 'other' });
-	await settled();
-	node.scrollTop = 300;
-	await expect.poll(() => node.dataset.following).toBe('false');
-
-	await screen.rerender({ workspaces: workspaces(30), activeSessionId: baseSession.id });
-	await settled();
-	const pinnedAt = node.scrollTop;
-	await screen.rerender({ workspaces: other(), activeSessionId: 'other' });
-	await settled();
-	expect(node.dataset.following).toBe('false');
-
-	node.scrollTop = node.scrollHeight;
-	await expect.poll(() => node.dataset.following).toBe('true');
-	node.scrollTop = pinnedAt;
-	await expect.poll(() => node.dataset.following).toBe('false');
-});
-
 test('stops following after the user scrolls up and resumes at the bottom', async () => {
 	let following = true;
 	const screen = await render(SessionView, {

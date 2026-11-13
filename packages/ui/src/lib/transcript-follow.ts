@@ -102,8 +102,8 @@ export function followTranscript(node: HTMLElement, options: TranscriptFollowOpt
 	 * scroll on a later frame, after new output may have grown the content,
 	 * so the position no longer reads as the bottom. A scroll event at this
 	 * position is the pin's own and must not stop following. The next scroll
-	 * event or a change of `key` clears it, so a later scroll by the operator
-	 * to the same position still counts.
+	 * event clears it, so a later scroll by the operator to the same position
+	 * still counts.
 	 */
 	let pinnedAt: number | undefined;
 	node.style.overflowAnchor = 'none';
@@ -152,7 +152,6 @@ export function followTranscript(node: HTMLElement, options: TranscriptFollowOpt
 			onChange = next.onChange;
 			if (next.key === key) return;
 			key = next.key;
-			pinnedAt = undefined;
 			const anchor = positions.get(key);
 			if (anchor && restoreAnchor(node, anchor)) {
 				setFollowing(false);

@@ -184,9 +184,8 @@ bounded visual verification. For each changed surface:
   overlay by an outside press and Escape, and confirm where focus returns.
 - Fix broken tasks and missing states before visual drift, and visual drift
   before cleanup.
-- For a `PAU-<n>` task, put the screenshot paths and measurements on the
-  Linear issue's document; a dotted roadmap unit has no Linear issue, so it
-  lists them in its handoff.
+- Put the screenshot paths and measurements on the task's Linear issue
+  document.
 
 `dev/design` owns design decisions. Where a visual reference disagrees with
 it, `dev/design` wins.

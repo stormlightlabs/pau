@@ -74,9 +74,10 @@ export function scrollToPrompt(node: HTMLElement, direction: 1 | -1): void {
  * bottom. WebKit has no scroll anchoring before Safari 27, so the action pins
  * explicitly after every size change of the container or its content, which
  * runs before the browser paints. Scrolling away from the bottom stops
- * following. Returning to the bottom resumes it. A change of `key` starts at
- * the bottom. Returning to a key restores the follow mode or reading anchor
- * it had when it was last shown, held in memory only.
+ * following, but the action's own pins never do, even when output grows
+ * before the browser reports them. Returning to the bottom resumes it. A
+ * change of `key` starts at the bottom. Returning to a key restores the follow
+ * mode or reading anchor it had when it was last shown, held in memory only.
  *
  * While following is off, the first entry in view keeps its position when
  * content above it grows or shrinks, such as a tool block that finishes or
@@ -96,10 +97,20 @@ export function followTranscript(node: HTMLElement, options: TranscriptFollowOpt
 	 * yet, so the anchor is stale.
 	 */
 	let anchoredAt = node.scrollTop;
+	/**
+	 * The scroll position the last pin produced. The browser reports that
+	 * scroll on a later frame, after new output may have grown the content,
+	 * so the position no longer reads as the bottom. A scroll event at this
+	 * position is the pin's own and must not stop following. The next scroll
+	 * event clears it, so a later scroll by the operator to the same position
+	 * still counts.
+	 */
+	let pinnedAt: number | undefined;
 	node.style.overflowAnchor = 'none';
 
 	function pin() {
 		node.scrollTop = node.scrollHeight;
+		pinnedAt = node.scrollTop;
 	}
 
 	function captureAnchor() {
@@ -114,6 +125,9 @@ export function followTranscript(node: HTMLElement, options: TranscriptFollowOpt
 	}
 
 	function onScroll() {
+		const ownPin = following && node.scrollTop === pinnedAt;
+		pinnedAt = undefined;
+		if (ownPin) return;
 		setFollowing(atBottom(node));
 		captureAnchor();
 	}

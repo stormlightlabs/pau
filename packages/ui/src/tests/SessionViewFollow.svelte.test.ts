@@ -24,6 +24,15 @@ function transcriptOf(): HTMLElement {
 
 const distanceFromBottom = (node: HTMLElement) => node.scrollHeight - node.clientHeight - node.scrollTop;
 
+/** The first entry in view and how far its top sits below the viewport top. */
+function readingPosition(node: HTMLElement): { entryId: string; offset: number } {
+	const top = node.getBoundingClientRect().top;
+	const entry = [...node.querySelectorAll<HTMLElement>('[data-entry-id]')].find(
+		(candidate) => candidate.getBoundingClientRect().bottom > top
+	)!;
+	return { entryId: entry.dataset.entryId!, offset: Math.round(entry.getBoundingClientRect().top - top) };
+}
+
 async function settled(): Promise<void> {
 	await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 }
@@ -38,6 +47,50 @@ test('stays at the bottom while output streams', async () => {
 	await settled();
 
 	expect(distanceFromBottom(transcriptOf())).toBeLessThanOrEqual(1);
+});
+
+test('keeps following when output grows before its own scroll event arrives', async () => {
+	const screen = await render(SessionView, { workspaces: workspaces(30), activeSessionId: baseSession.id });
+	await settled();
+	const node = transcriptOf();
+
+	// The follow action pins the transcript from a resize observer, and the
+	// browser reports that scroll on the next frame. Output that lands in
+	// between must not read as the operator scrolling up.
+	const pinned = new Promise<void>((resolve) => {
+		const observer = new ResizeObserver(() => {
+			observer.disconnect();
+			resolve();
+		});
+		observer.observe(node.firstElementChild!);
+	});
+	await screen.rerender({ workspaces: workspaces(40), activeSessionId: baseSession.id });
+	await pinned;
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	await screen.rerender({ workspaces: workspaces(50), activeSessionId: baseSession.id });
+	await settled();
+
+	expect(node.dataset.following).toBe('true');
+	expect(distanceFromBottom(node)).toBeLessThanOrEqual(1);
+});
+
+test('scrolling up to an earlier pin position stops following', async () => {
+	const screen = await render(SessionView, { workspaces: workspaces(30), activeSessionId: baseSession.id });
+	await settled();
+	const node = transcriptOf();
+	const pinnedAt = node.scrollTop;
+
+	node.scrollTop = 200;
+	await expect.poll(() => node.dataset.following).toBe('false');
+	const height = node.scrollHeight;
+	await screen.rerender({ workspaces: workspaces(40), activeSessionId: baseSession.id });
+	await expect.poll(() => node.scrollHeight).toBeGreaterThan(height);
+	await settled();
+	node.scrollTop = node.scrollHeight;
+	await expect.poll(() => node.dataset.following).toBe('true');
+
+	node.scrollTop = pinnedAt;
+	await expect.poll(() => node.dataset.following).toBe('false');
 });
 
 test('stops following after the user scrolls up and resumes at the bottom', async () => {
@@ -57,13 +110,17 @@ test('stops following after the user scrolls up and resumes at the bottom', asyn
 
 	node.scrollTop = 200;
 	await expect.poll(() => following).toBe(false);
+	const reading = readingPosition(node);
 
 	const height = node.scrollHeight;
 	await screen.rerender({ workspaces: workspaces(40), activeSessionId: baseSession.id });
 	// Wait for the new entries to lay out before asserting that the position held.
 	await expect.poll(() => node.scrollHeight).toBeGreaterThan(height);
 	await settled();
-	expect(node.scrollTop).toBe(200);
+	// The entry in view holds its place. The scroll offset itself may change
+	// when content above it reflows, such as when a font finishes loading.
+	expect(readingPosition(node)).toEqual(reading);
+	expect(following).toBe(false);
 
 	node.scrollTop = node.scrollHeight;
 	await expect.poll(() => following).toBe(true);
@@ -102,10 +159,7 @@ test('returning to a session restores its follow mode or reading position', asyn
 	const screen = await render(SessionView, { workspaces: workspaces(30), activeSessionId: baseSession.id });
 	await settled();
 	const node = transcriptOf();
-	const firstVisible = () =>
-		[...node.querySelectorAll<HTMLElement>('[data-entry-id]')].find(
-			(entry) => entry.getBoundingClientRect().bottom > node.getBoundingClientRect().top
-		)!.dataset.entryId;
+	const firstVisible = () => readingPosition(node).entryId;
 
 	await screen.rerender({ workspaces: workspaces(30, 'running', 'other'), activeSessionId: 'other' });
 	await settled();

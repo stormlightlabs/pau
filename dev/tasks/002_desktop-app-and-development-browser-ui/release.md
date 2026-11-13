@@ -2,11 +2,11 @@
 
 ## Release surfaces
 
-Website units apply the approved public-site direction from the `docs` page of
-the `pau.fig` design file and its exports in `dev/prototype` to
-`apps/website`. Keep available behavior distinct from planned work, and keep
-the prototype's view switcher out of the public navigation. Review each website
-unit at desktop and narrow widths in light and dark themes.
+Website units apply the public-site direction in the website and documentation
+brief of [`surfaces.md`](../../design/surfaces.md) to `apps/website`. Keep
+available behavior distinct from planned work, and keep any switcher between
+the design's views out of the public navigation. Review each website unit at
+desktop and narrow widths in light and dark themes.
 
 ### 2.49 Website landing page
 

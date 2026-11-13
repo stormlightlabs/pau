@@ -106,9 +106,9 @@ The spacing scale uses 4, 8, 12, 16, 24, and 32px steps, named `space/1` to
 `space/6`. Use tight intervals within controls and rows, medium intervals within
 a section, and larger intervals between distinct tasks.
 
-The Scale collection in `pau.fig` names the spacing, type, radius, border, row,
-and rail values. `packages/ui` mirrors those names as CSS custom properties, so
-`space/3` becomes `--pau-space-3` and `size/row-md` becomes
+The spacing, type, radius, border, row, and rail values have slash-separated
+token names. `packages/ui/src/styles/tokens.css` records them as CSS custom
+properties, so `space/3` becomes `--pau-space-3` and `size/row-md` becomes
 `--pau-size-row-md`. Type sizes use `--pau-type-*` because `--pau-text` names
 the text color.
 
@@ -177,9 +177,6 @@ weights 400, 500, and 600. Fold any heavier weight into 600.
 - Use monospace for code, commands, paths, identifiers, terminal output, and
   aligned counts. Do not use it as a general technical accent.
 - Use tabular numerals for durations, counts, and diff statistics.
-
-The prototype workbench outside the mock application may use a larger title, but
-it should still read as a design tool rather than a marketing page.
 
 ## Color and themes
 

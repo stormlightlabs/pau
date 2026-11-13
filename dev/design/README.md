@@ -5,18 +5,15 @@ Product behavior remains defined by [`SPEC.md`](../SPEC.md), and architecture
 and implementation policy remain defined by [`PLAN.md`](../PLAN.md).
 
 - [`system.md`](system.md) defines the visual and interaction system.
-- [`surfaces.md`](surfaces.md) maps each product surface to its prototype page
-  and states its purpose, hierarchy, and responsive behavior.
+- [`surfaces.md`](surfaces.md) states each product surface's purpose,
+  hierarchy, and responsive behavior.
 - [`icons.md`](icons.md) assigns icon families by role.
 - The PNG files in this directory are early sketches, not implementation
   commitments.
 
-The OpenPencil design file `pau.fig` and the HTML screens in
-[`dev/prototype`](../prototype/README.md) draw these decisions as guidance.
-Where a frame or page disagrees with these documents, the documents win.
-Update the owning brief, the affected frames, and their HTML pages together
-when a durable design decision changes. A visual-only adjustment does not need
-a prose change unless it changes the recorded system or surface contract.
+Update the owning document when a durable design decision changes. A
+visual-only adjustment does not need a prose change unless it changes the
+recorded system or surface contract.
 
 ## Settled direction
 

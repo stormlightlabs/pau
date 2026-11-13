@@ -74,8 +74,9 @@ its upstream repository with its license and attribution. Set code in Overpass
 Mono Variable from its Fontsource package. The documentation site uses IBM
 Plex Sans Variable for body copy, Google Sans Variable for headings, and Google
 Sans Code Variable for code. Self-host every font file; do not fetch fonts at
-runtime. Preserve the compact rhythm in the application mockups while keeping
-interactive targets large enough through invisible padding and keyboard access.
+runtime. Preserve the compact rhythm of the spatial system in
+`dev/design/system.md` while keeping interactive targets large enough through
+invisible padding and keyboard access.
 
 Follow `dev/design/icons.md`: Tabler for general interface actions, Octicons
 for Git, Catppuccin for file types, and Simple Icons for named services. Load

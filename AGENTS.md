@@ -148,14 +148,9 @@ sentence. Leave sentence fragments unpunctuated.
 Prefer TypeScript type aliases for data shapes and unions. Use interfaces only
 for method-only contracts or types that classes implement.
 
-Keep `dev/design`, the `pau.fig` design file, and the HTML screens in
-`dev/prototype` synchronized. When a durable visual, interaction, or responsive
-decision changes, update the owning design document, the affected frames, and
-their HTML pages together. Visual-only polish needs a document change only
-when it changes the recorded system or surface contract.
-
-In `pau.fig`, build screens from the shared components and bind colors, type
-sizes, spacing, and radii to the token variables instead of raw values.
+When a durable visual, interaction, or responsive decision changes, update
+the owning document in `dev/design`. Visual-only polish needs a document change
+only when it changes the recorded system or surface contract.
 
 Use kebab-case for TypeScript filenames, including `.svelte.ts` modules. Keep
 Svelte component filenames in PascalCase, and preserve that component name in
@@ -193,8 +188,8 @@ bounded visual verification. For each changed surface:
 - List the screenshot paths and measurements in the handoff so a reviewer can
   check them.
 
-Treat `pau.fig` and the prototype pages as guidance, not a specification.
-`dev/design` owns the decisions where they disagree.
+`dev/design` owns design decisions. Where a visual reference disagrees with
+it, `dev/design` wins.
 
 Storybook indexes no stories from worktrees under `.claude/`, so take those
 screenshots from a temporary Vitest browser test and delete it afterwards.

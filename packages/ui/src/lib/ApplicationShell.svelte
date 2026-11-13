@@ -815,7 +815,7 @@
 		border-radius: var(--pau-radius-control);
 	}
 
-	/* An open pane shows as a pressed toggle, as in the design prototype. */
+	/* An open pane shows as a pressed toggle, as in the design. */
 	.app-shell__panel-toggles .app-shell__icon-button[aria-expanded='true'] {
 		color: var(--shell-accent);
 		background-color: var(--shell-surface-raised);

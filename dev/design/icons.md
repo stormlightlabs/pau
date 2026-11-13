@@ -9,7 +9,7 @@ We want to use uno's icon plugin or unplugin here.
 | Catppuccin   | `catppuccin:`   | Colourful file and folder icons in the Catppuccin palette                         | File tree, editor tabs, review file list                                                          | ✅ File tree and editor tabs           |
 | Simple Icons | `simple-icons:` | Single-colour brand logos, 3k+                                                    | MCP servers and named services such as Linear, Postgres, and Playwright                           | ✅ MCP servers in the resource browser |
 | Logos        | `logos:`        | Product-specific color marks                                                      | Agent products whose mark differs from their parent company, including Claude Code                | ✅ Claude Code                         |
-| Pi press kit | Local SVG       | Official color vector from [`pi.dev/press-kit`](https://pi.dev/press-kit)         | Pi agent identity in session lists, status, and public examples                                   | ✅ Harness mark component in `pau.fig` |
+| Pi press kit | Local SVG       | Official color vector from [`pi.dev/press-kit`](https://pi.dev/press-kit)         | Pi agent identity in session lists, status, and public examples                                   | ✅ Harness mark component              |
 
 Use the product mark when it exists. Do not substitute a parent-company mark,
 such as Anthropic, for the Claude product mark.

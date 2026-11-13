@@ -1,41 +1,28 @@
 # Surface briefs
 
-These briefs keep the prototype design file and product direction aligned.
-Every page in `pau.fig` maps to one brief below, and each frame on a page is one
-state of that surface. Update the brief, the frames, and their HTML pages
-together when purpose, hierarchy, responsive behavior, or a durable interaction
-changes. [`dev/prototype`](../prototype/README.md) describes the file and the
-pages.
+These briefs record each product surface's purpose, hierarchy, and responsive
+behavior. Update the brief when purpose, hierarchy, responsive behavior, or a
+durable interaction changes.
 
 ## Surface index
 
-| Surface               | Page                    | Frames                                                                                                                                                                                                                                                                                                                   | Primary task                                       |
-| --------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
-| Prototype hub         | `index`                 | [default](../prototype/index.html)                                                                                                                                                                                                                                                                                       | Choose a design fixture                            |
-| Dashboard             | `screens/dashboard`     | [default](../prototype/screens-dashboard-default.html), [activity](../prototype/screens-dashboard-activity.html)                                                                                                                                                                                                         | Find active work or a blocking decision            |
-| Session               | `screens/session`       | [default](../prototype/screens-session-default.html), [focused](../prototype/screens-session-focused.html)                                                                                                                                                                                                               | Direct one agent session and inspect its work      |
-| Harness control       | `screens/orchestration` | [default](../prototype/screens-orchestration-default.html), [details](../prototype/screens-orchestration-details.html)                                                                                                                                                                                                   | Supervise concurrent native sessions               |
-| Scratchpad            | `screens/scratchpad`    | [default](../prototype/screens-scratchpad-default.html)                                                                                                                                                                                                                                                                  | Capture notes and send selected context            |
-| Editor and review     | `screens/editor`        | [default](../prototype/screens-editor-default.html)                                                                                                                                                                                                                                                                      | Edit a file and review changes                     |
-| Embedded editor study | `screens/neovim`        | [default](../prototype/screens-neovim-default.html)                                                                                                                                                                                                                                                                      | Record a deferred deep-integration direction       |
-| Terminal              | `screens/terminal`      | [default](../prototype/screens-terminal-default.html)                                                                                                                                                                                                                                                                    | Use persistent PTY sessions                        |
-| Processes             | `screens/processes`     | [default](../prototype/screens-processes-default.html)                                                                                                                                                                                                                                                                   | Inspect workspace and session machine resource use |
-| Diagnostics           | `screens/diagnostics`   | [default](../prototype/screens-diagnostics-default.html)                                                                                                                                                                                                                                                                 | Inspect and export redacted support data           |
-| Resources             | `screens/resources`     | [default](../prototype/screens-resources-default.html)                                                                                                                                                                                                                                                                   | Inspect scope, trust, and capability               |
-| Agent sandbox         | `screens/sandbox`       | [sandboxed](../prototype/screens-sandbox-sandboxed.html), [unsandboxed](../prototype/screens-sandbox-unsandboxed.html)                                                                                                                                                                                                   | Choose containment and review access before launch |
-| Settings              | `screens/settings`      | [default](../prototype/screens-settings-default.html)                                                                                                                                                                                                                                                                    | Change product and editor preferences              |
-| Website and docs      | `docs`                  | [overview](../prototype/docs-overview.html), [guide](../prototype/docs-guide.html), [reference-dark](../prototype/docs-reference-dark.html)                                                                                                                                                                              | Evaluate Pau, learn a task, or check its status    |
-| Launch                | `splash/launch`         | [starting](../prototype/splash-launch-starting.html), [service](../prototype/splash-launch-service.html), [checking](../prototype/splash-launch-checking.html), [attention](../prototype/splash-launch-attention.html), [failed](../prototype/splash-launch-failed.html), [ready](../prototype/splash-launch-ready.html) | Understand current startup work                    |
-| Reconnect             | `splash/reconnect`      | [offline](../prototype/splash-reconnect-offline.html), [trying](../prototype/splash-reconnect-trying.html), [restored](../prototype/splash-reconnect-restored.html)                                                                                                                                                      | Recover UI connectivity without implying lost work |
-
-## Prototype hub
-
-The hub is a workbench index, not a product dashboard or marketing page. It
-lists every fixture in a stable order and explains that fixtures may explore
-unimplemented behavior. Flat bordered cells suit the system better than cards.
-
-At narrow widths, the index becomes one column. The fixture navigation remains
-horizontally available without reducing labels to icons.
+| Surface               | States                                                | Primary task                                       |
+| --------------------- | ----------------------------------------------------- | -------------------------------------------------- |
+| Dashboard             | default, activity                                     | Find active work or a blocking decision            |
+| Session               | default, focused                                      | Direct one agent session and inspect its work      |
+| Harness control       | default, details                                      | Supervise concurrent native sessions               |
+| Scratchpad            | default                                               | Capture notes and send selected context            |
+| Editor and review     | default                                               | Edit a file and review changes                     |
+| Embedded editor study | default                                               | Record a deferred deep-integration direction       |
+| Terminal              | default                                               | Use persistent PTY sessions                        |
+| Processes             | default                                               | Inspect workspace and session machine resource use |
+| Diagnostics           | default                                               | Inspect and export redacted support data           |
+| Resources             | default                                               | Inspect scope, trust, and capability               |
+| Agent sandbox         | sandboxed, unsandboxed                                | Choose containment and review access before launch |
+| Settings              | default                                               | Change product and editor preferences              |
+| Website and docs      | overview, guide, reference (dark)                     | Evaluate Pau, learn a task, or check its status    |
+| Launch                | starting, service, checking, attention, failed, ready | Understand current startup work                    |
+| Reconnect             | offline, trying, restored                             | Recover UI connectivity without implying lost work |
 
 ## Dashboard
 
@@ -313,10 +300,9 @@ collapses before controls lose their labels or descriptions.
 ## Website and documentation
 
 The public site combines **Persuade** and **Read** modes without importing the
-desktop application's dense shell. The `docs` page holds one frame each for
-the landing page, a documentation reading view, and the capability reference.
-Their shared view switcher belongs to the design study, not proposed public
-navigation.
+desktop application's dense shell. The design covers three views: the landing
+page, a documentation reading view, and the capability reference. A switcher
+between them is a design aid, not proposed public navigation.
 
 The landing page presents Pau as a local IDE and session orchestrator for
 developers using Pi and other coding agents. It explains that position through

@@ -1,6 +1,6 @@
 /*
- * Theme-independent scale tokens. Names mirror the Scale collection in
- * pau.fig: `space/1` becomes `--pau-space-1`, `text/xs` becomes `--pau-type-xs`,
+ * Theme-independent scale tokens. Names mirror the design token names:
+ * `space/1` becomes `--pau-space-1`, `text/xs` becomes `--pau-type-xs`,
  * and `size/row-md` becomes `--pau-size-row-md`. Type uses `--pau-type-*`
  * because `--pau-text` is the theme's text color. Colors and the UI font come
  * from `themeCssProperties` because they change with the operator's choice.

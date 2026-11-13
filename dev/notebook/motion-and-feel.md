@@ -577,8 +577,6 @@ Inconsistencies and defects:
   so fast loads flash.
 - No component honors `prefers-contrast`, although `dev/design/system.md`
   calls for 1px rules under increased contrast.
-- `CLAUDE.md` refers to `packages/prototype`, which does not exist in this
-  checkout. Prototype screenshots live in `dev/prototype`.
 
 ## Proposed specification
 

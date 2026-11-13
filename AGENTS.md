@@ -96,8 +96,8 @@ Every task follows these rules:
   pre-existing findings. Do not defer or report those findings as separate
   follow-up work. Keep defects found outside required checks separate unless
   they block verification.
-- When a task changes user-facing behavior, add a concise changelog entry in
-  the same change.
+- Do not write CHANGELOG entries in a task's pull request. Changelog updates
+  are being automated from the squash commits on `main`.
 - Write commit messages and pull request descriptions without agent
   attribution. Omit `Co-Authored-By` trailers and generated-by lines.
 

@@ -4,8 +4,6 @@
 
 ### Desktop
 
-- The transcript keeps following a reply as it streams. Fast output no longer
-  stops it, and only scrolling up does.
 - The session rail now lists each workspace's three newest saved sessions
   under the running ones. Click one to resume it. The history button still
   opens the full list.

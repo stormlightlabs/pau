@@ -13,9 +13,11 @@ architecture decision changes.
 
 ## Commands
 
-The fabrial skills run the agent workflow. `/fab-implement` works one task on
-its own branch, `/fab-review` and `/fab-adv-rev` review a pull request or
-branch, and `/fab-storm` takes a task through implementation and review.
+The `fab-implement`, `fab-review`, `fab-adv-rev` and `fab-storm` skills run
+the agent workflow. `fab-implement` works one task on its own branch,
+`fab-review` and `fab-adv-rev` review a pull request or branch, and
+`fab-storm` takes a task through implementation and review. Claude Code runs
+them as `/fab-implement`, and Pi as `/skill:fab-implement`.
 
 An adversarial review of Pau also tries credential and secret leakage, path and
 symlink tricks, process exit and orphaned children, and resource exhaustion,

@@ -17,6 +17,10 @@ The fabrial skills run the agent workflow. `/fab-implement` works one task on
 its own branch, `/fab-review` and `/fab-adv-rev` review a pull request or
 branch, and `/fab-storm` takes a task through implementation and review.
 
+An adversarial review of Pau also tries credential and secret leakage, path and
+symlink tricks, process exit and orphaned children, and resource exhaustion,
+most of all around the sandbox and agent processes.
+
 `cargo clean` regularly to keep the disk clean.
 
 On macOS, do not enter the Nix shell or use direnv. Use the Homebrew and rustup
@@ -184,9 +188,9 @@ bounded visual verification. For each changed surface:
   overlay by an outside press and Escape, and confirm where focus returns.
 - Fix broken tasks and missing states before visual drift, and visual drift
   before cleanup.
-- Put the screenshots and measurements on the Linear issue's document so a
-  reviewer can check them. Keep them out of the repository and the pull
-  request.
+- For a `PAU-<n>` task, put the screenshot paths and measurements on the
+  Linear issue's document; a dotted roadmap unit has no Linear issue, so it
+  lists them in its handoff.
 
 `dev/design` owns design decisions. Where a visual reference disagrees with
 it, `dev/design` wins.

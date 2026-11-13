@@ -13,10 +13,15 @@ architecture decision changes.
 
 ## Commands
 
-Project prompts live in `.pi/prompts/`, with Claude Code equivalents in
-`.claude/commands/`: `/implement <unit-id>`, `/review [focus]`, and
-`/adv-review [focus]`. Keep equivalent commands synchronized when their workflow
-changes.
+The `fab-implement`, `fab-review`, `fab-adv-rev` and `fab-storm` skills run
+the agent workflow. `fab-implement` works one task on its own branch,
+`fab-review` and `fab-adv-rev` review a pull request or branch, and
+`fab-storm` takes a task through implementation and review. Claude Code runs
+them as `/fab-implement`, and Pi as `/skill:fab-implement`.
+
+An adversarial review of Pau also tries credential and secret leakage, path and
+symlink tricks, process exit and orphaned children, and resource exhaustion,
+most of all around the sandbox and agent processes.
 
 `cargo clean` regularly to keep the disk clean.
 
@@ -29,12 +34,12 @@ package script. Do not use `npx`.
 
 Do not start Docker Desktop or another container or virtual-machine runtime
 without explicit user approval. Use an already-running runtime only when the
-active unit requires it.
+active task requires it.
 
 Run heavyweight verification serially. Do not run `pnpm check`, browser tests,
 Storybook or website builds, and Cargo builds at the same time. Resource
 contention can cause false timeouts in process and interaction tests. Run a full
-application or repository build only when the active unit requires it or the
+application or repository build only when the active task requires it or the
 change affects that build boundary. After a follow-up edit, rerun the narrowest
 check that covers the changed code; rebuild only when the edit can affect the
 built artifact.
@@ -185,8 +190,9 @@ bounded visual verification. For each changed surface:
   overlay by an outside press and Escape, and confirm where focus returns.
 - Fix broken tasks and missing states before visual drift, and visual drift
   before cleanup.
-- List the screenshot paths and measurements in the handoff so a reviewer can
-  check them.
+- For a `PAU-<n>` task, put the screenshot paths and measurements on the
+  Linear issue's document; a dotted roadmap unit has no Linear issue, so it
+  lists them in its handoff.
 
 `dev/design` owns design decisions. Where a visual reference disagrees with
 it, `dev/design` wins.
@@ -197,11 +203,11 @@ screenshots from a temporary Vitest browser test and delete it afterwards.
 ## Keep agent configuration current
 
 Treat direct user corrections to project workflows as configuration changes.
-Update the smallest owning rule in `AGENTS.md` or `.pi/prompts/` in the same
-change, even when the active prompt otherwise prohibits edits. This exception
-applies only to workflow configuration. Replace stale guidance instead of
-adding a contradictory exception. Do not store one-off task notes, secrets,
-machine paths, or duplicated product and architecture decisions here.
+Update the smallest owning rule in `AGENTS.md` in the same change, even when
+the active prompt otherwise prohibits edits. This exception applies only to
+workflow configuration. Replace stale guidance instead of adding a
+contradictory exception. Do not store one-off task notes, secrets, machine
+paths, or duplicated product and architecture decisions here.
 
 <!-- prettier-ignore-start -->
 <!-- fabrial:begin -->

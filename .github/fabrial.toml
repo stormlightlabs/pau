@@ -14,7 +14,7 @@ app = "stormlight-thunderbot"
 secret_prefix = "THUNDERBOT"
 
 # The Co-authored-by trailer on every squash commit.
-trailer = "Owais Jamil <jamil.owais@gmail.com>"
+trailer = "Owais Jamil <71664048+desertthunder@users.noreply.github.com>"
 
 # The command agents run before pushing.
 gates = "pnpm gate"

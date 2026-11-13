@@ -338,7 +338,7 @@ fn read_version(executable_path: &Path) -> Result<String, String> {
         }
     };
     if !status.success() {
-        return Err(format!("exit status {status}"));
+        return Err(status.to_string());
     }
     let mut output = String::new();
     if let Some(mut stdout) = child.stdout.take() {

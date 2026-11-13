@@ -97,11 +97,9 @@ impl SessionApi {
             .map_err(|error| unavailable(error.to_string()))?
             .map_err(|error| unavailable(error.to_string()))?;
         let launch = discovery.bridge_options(root, request.native_session_id.as_deref());
-        let session = ClaudeSession::start(launch).await.map_err(|error| {
-            unavailable(format!(
-                "Claude Code could not start through the Claude bridge: {error}."
-            ))
-        })?;
+        let session = ClaudeSession::start(launch)
+            .await
+            .map_err(|error| unavailable(error.to_string()))?;
         // Subscribe before the session is visible, so no prompt's output can
         // be missed.
         let output = session.subscribe();

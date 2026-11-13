@@ -69,13 +69,17 @@ impl SessionApi {
         {
             return report.clone();
         }
-        let mut agents = Vec::new();
-        for agent in AgentKind::ALL {
-            agents.push(match agent {
-                AgentKind::Pi => check_pi(self.discovery.clone()).await,
-                AgentKind::Claude => check_claude(self.claude_discovery.clone()).await,
-            });
-        }
+        // Check concurrently so one slow agent does not delay the others.
+        let (pi, claude) = tokio::join!(
+            check_pi(self.discovery.clone()),
+            check_claude(self.claude_discovery.clone()),
+        );
+        let agents = AgentKind::ALL
+            .map(|agent| match agent {
+                AgentKind::Pi => pi.clone(),
+                AgentKind::Claude => claude.clone(),
+            })
+            .to_vec();
         let report = AgentReadinessReport { agents };
         *cache = Some((Instant::now(), report.clone()));
         report

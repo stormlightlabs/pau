@@ -372,7 +372,7 @@ fn read_version(executable_path: &Path) -> Result<Version, PiDiscoveryError> {
     if !output.status.success() {
         let diagnostic = String::from_utf8_lossy(&output.stderr).trim().to_owned();
         let reason = if diagnostic.is_empty() {
-            format!("exit status {}", output.status)
+            output.status.to_string()
         } else {
             diagnostic
         };

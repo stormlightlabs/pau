@@ -14,8 +14,8 @@ run through `pau-pi`. Claude sessions run through `pau-agent`'s Claude bridge
 client, which starts the `pau-claude-bridge` host for the discovered Claude
 Code. Every session reports its agent and the controls it accepts. A route
 for a control the agent lacks answers `501 unsupported_control`. An unknown
-agent is refused with `400 unknown_agent`, and an agent that cannot start
-with its discovery reason.
+agent is refused with `400 unknown_agent`. An agent that cannot start is
+refused with `503 agent_unavailable` and its discovery reason.
 
 ## Agent readiness
 

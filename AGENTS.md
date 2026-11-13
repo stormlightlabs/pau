@@ -48,10 +48,10 @@ built artifact.
 
 The installed skills read this section for the tracker's steps. Linear is the
 tracker for all work, and a `PAU-<n>` ID is a Linear task. Tasks live in the
-Linear team PAU. Agents
-reach it through the session's Linear connector tools, such as `get_issue` with
-relations, `save_issue`, `save_comment`, and `save_document`. Subagents run
-inside that session and need no Linear access of their own.
+Linear team PAU. Agents reach it through the session's Linear connector tools,
+such as `get_issue` with relations, `save_issue`, `save_comment`, and
+`save_document`. Subagents run inside that session and need no Linear access
+of their own.
 
 | Step                                     | In Linear                                                                                                                                                                                                                                                                                                                                                                                           |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -80,15 +80,17 @@ run units, drop any that are not ready, and give each worktree one ready issue.
 
 Every task follows these rules:
 
-- Work on one task at a time unless the user explicitly combines tasks.
+- Work on one task per branch and session unless the user explicitly combines
+  tasks. Parallel worktrees may each work a different task.
 - Keep implementation, tests, Storybook stories, and user documentation required
   by the task in the same change.
 - In `packages/ui`, keep stories under `src/stories` and tests under
   `src/tests`.
 - Run the task's verification, starting with the narrowest relevant checks. Do
   not invoke paid agents or remote services from default tests.
-- When a platform check is unavailable, record it as new work if portable
-  coverage passes and the check is not an explicit release gate.
+- When a platform check is unavailable, the task may close if portable
+  coverage passes and the check is not an explicit release gate. Record the
+  unavailable check as a new Backlog issue.
 - Fix every finding from the task's required verification, including unrelated
   pre-existing findings. Do not defer or report those findings as separate
   follow-up work. Keep defects found outside required checks separate unless

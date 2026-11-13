@@ -96,9 +96,9 @@ lockfiles and record versions exercised by a release. Add minimum-version
 guarantees only after compatibility evidence justifies them.
 
 The Cargo workspace version is the desktop app's only version source. Each
-completed batch of roadmap work raises the minor version and receives an
-annotated `vX.Y.0` tag. Fixes found while using a tagged build raise the
-patch version. Only tagged builds are installed for dogfooding. Untagged builds
+completed project milestone raises the minor version and receives an annotated
+`vX.Y.0` tag. Patch releases between milestones carry fixes found while using
+a tagged build. Only tagged builds are installed for dogfooding. Untagged builds
 report a `-dev` version with the commit, use the `org.stormlightlabs.pau.dev`
 bundle identifier and the product name "Pau Dev", and keep their own data
 directory so they never migrate the installed app's database. Before 1.0.0,

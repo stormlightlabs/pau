@@ -131,11 +131,12 @@ spike.
 
 Write the description or prose body of each issue, document, and pull request
 for the item it describes, and never carry a fixed sentence from one to the
-next. The formats the Tasks section prescribes, such as
-`Claimed on claude/<issue id>` and `Done in #<n> at <sha>: <summary>`, are the
-exception. Process rules, such as how a parent issue closes or how a claim
-works, belong once in the Tasks section. When you brief another agent, say
-what each item must cover, not the words to use.
+next. A format that `AGENTS.md`, a skill, or a workflow prescribes is not
+boilerplate: copy it word for word, such as `Closes #<n>` and the
+`<!-- fabrial:footer` block in a pull request body. Process rules, such as how
+a parent issue closes or how a claim works, belong once in the Tasks section.
+When you brief another agent, say what each item must cover, not the words to
+use, and pass any prescribed format word for word.
 
 Wrap prose at about 80 columns. A few trailing characters are acceptable when a
 clean break would hurt readability. Do not wrap tables, long links, indivisible

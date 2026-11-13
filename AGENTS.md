@@ -124,14 +124,18 @@ instruction in its prompt.
 
 Always audit changed prose against that skill before finishing. Remove AI
 writing tropes, stock transitions, repetition, inflated claims, and other
-formulaic language. Write each issue, document, and pull request for the item
-it describes, and never carry a fixed sentence from one to the next. Process
-rules, such as how a parent issue closes or how a claim works, belong once in
-the Tasks section. When you brief another agent, say what each item must
-cover, not the words to use. Keep task IDs, task boundaries, and
-implementation phases out of user-facing or published documentation. Name
-packages, scripts, and files for what they do, not for the task phase that
-created them, such as a spike.
+formulaic language. Keep task IDs, task boundaries, and implementation phases
+out of user-facing or published documentation. Name packages, scripts, and
+files for what they do, not for the task phase that created them, such as a
+spike.
+
+Write the description or prose body of each issue, document, and pull request
+for the item it describes, and never carry a fixed sentence from one to the
+next. The formats the Tasks section prescribes, such as
+`Claimed on claude/<issue id>` and `Done in #<n> at <sha>: <summary>`, are the
+exception. Process rules, such as how a parent issue closes or how a claim
+works, belong once in the Tasks section. When you brief another agent, say
+what each item must cover, not the words to use.
 
 Wrap prose at about 80 columns. A few trailing characters are acceptable when a
 clean break would hurt readability. Do not wrap tables, long links, indivisible

@@ -3,7 +3,6 @@
 	import {
 		ApplicationShell,
 		DiagnosticsView,
-		MotionSettingControl,
 		diagnosticFixtures,
 		type DiagnosticBundleView
 	} from '@stormlightlabs/pau-ui';
@@ -18,7 +17,6 @@
 		updateDiagnosticSettings
 	} from '$lib/api';
 	import { productNavigation } from '$lib/app-navigation';
-	import { interfacePreferences } from '$lib/interface-preferences.svelte';
 
 	let bundle = $state<DiagnosticBundleView>(diagnosticFixtures.disabled);
 	let error = $state<string>();
@@ -116,11 +114,6 @@
 	{#if error}<p class="diagnostics-route__message diagnostics-route__message--error" role="alert">{error}</p>{/if}
 	{#if notice}<p class="diagnostics-route__message" role="status">{notice}</p>{/if}
 	<div class="diagnostics-route">
-		<div class="diagnostics-route__motion">
-			<MotionSettingControl
-				value={interfacePreferences.motion}
-				onChange={(value) => interfacePreferences.setMotion(value)} />
-		</div>
 		<DiagnosticsView
 			{bundle}
 			onSettingsChange={(enabled, level) => void changeSettings(enabled, level)}
@@ -136,11 +129,6 @@
 		gap: 1.5rem;
 		color: var(--pau-text, #e7e9f7);
 		background: var(--pau-surface, #1c1e2d);
-	}
-
-	/* Match the view header's inset so the control starts on the title's edge. */
-	.diagnostics-route__motion {
-		padding-inline: var(--pau-space-3);
 	}
 
 	.diagnostics-route__message {

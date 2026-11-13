@@ -96,6 +96,7 @@ export const APP_KEY_ACTIONS: readonly KeyAction[] = [
 		palette: false
 	},
 	{ id: 'app.shortcuts', label: 'Show keyboard shortcuts', group: 'General', keys: ['mod+/'], whileTyping: true },
+	{ id: 'app.settings', label: 'Open settings', group: 'General', keys: ['mod+,'], whileTyping: true },
 	{
 		id: 'workspace.open',
 		label: 'Open workspace',

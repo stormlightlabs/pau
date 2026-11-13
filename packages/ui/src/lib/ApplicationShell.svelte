@@ -409,8 +409,13 @@
 								href={item.href}
 								class="pau-row"
 								class:active={item.active}
-								aria-current={item.active ? 'page' : undefined}>
-								<span class:attention={item.attention} class="app-shell__item-dot"></span>
+								class:app-shell__context-link--marked={item.status !== undefined || item.attention}
+								aria-current={item.active ? 'page' : undefined}
+								onclick={() => contextOpen && closeContext()}>
+								<!-- The dot marks an item's state, so an item without one, such as a Settings section, has none. -->
+								{#if item.status !== undefined || item.attention}
+									<span class:attention={item.attention} class="app-shell__item-dot"></span>
+								{/if}
 								<span>{item.label}</span>
 								{#if item.status}<small>{item.status}</small>{/if}
 							</a>
@@ -759,12 +764,16 @@
 
 	.app-shell__context-rail a {
 		display: grid;
-		grid-template-columns: 0.5rem minmax(0, 1fr) auto;
+		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
 		gap: var(--pau-space-2);
 		min-height: var(--pau-size-row-md);
 		padding-inline: var(--pau-space-3);
 		text-decoration: none;
+	}
+
+	.app-shell__context-rail a.app-shell__context-link--marked {
+		grid-template-columns: 0.5rem minmax(0, 1fr) auto;
 	}
 
 	.app-shell__context-rail a.active {

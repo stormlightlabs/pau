@@ -92,7 +92,10 @@
 </script>
 
 {#snippet app()}
-	<AppKeymap {native} onOpenSessionView={() => void goto(resolve('/'))}>
+	<AppKeymap
+		{native}
+		onOpenSessionView={() => void goto(resolve('/'))}
+		onOpenSettings={() => void goto(resolve('/settings'))}>
 		{@render children()}
 	</AppKeymap>
 {/snippet}

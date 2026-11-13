@@ -152,6 +152,21 @@ describe('interface preferences', () => {
 			await vi.waitFor(() => expect(server.puts).toEqual([preferences(300, 420, 'reduce')]));
 		});
 
+		test('restores the previous setting when the save fails', async () => {
+			const root = document.createElement('div');
+			const server = backend(preferences(null, null, 'full'));
+			const settings = new InterfacePreferences({ fetcher: server.fetcher, root });
+			await settings.load();
+			vi.mocked(server.fetcher).mockResolvedValueOnce(
+				Response.json({ message: 'The database is read-only.' }, { status: 500 })
+			);
+
+			await expect(settings.setMotion('reduce')).rejects.toThrow('The database is read-only.');
+
+			expect(settings.motion).toBe('full');
+			expect(root.dataset.motion).toBe('full');
+		});
+
 		test('a resize keeps the motion setting', async () => {
 			vi.useFakeTimers();
 			const server = backend(preferences(null, null, 'full'));

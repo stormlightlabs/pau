@@ -77,6 +77,21 @@ test('opens the shortcut list from the keyboard and the app menu', async () => {
 	await expect.element(dialog).toBeVisible();
 });
 
+test('opens Settings with ⌘, and from the app menu', async () => {
+	const { native, chooseMenuItem } = nativeHost();
+	const onOpenSettings = vi.fn();
+	await render(AppKeymap, { native, fetcher: keybindings(), platform: 'mac', onOpenSettings });
+
+	const event = press({ key: ',', code: 'Comma', metaKey: true });
+	expect(event.defaultPrevented).toBe(true);
+	expect(onOpenSettings).toHaveBeenCalledOnce();
+
+	// A menu event straight after the key press counts as the same press.
+	await new Promise((settled) => setTimeout(settled, 200));
+	chooseMenuItem('app.settings');
+	expect(onOpenSettings).toHaveBeenCalledTimes(2);
+});
+
 test('opens the session view for a menu action only it can run', async () => {
 	const { native, chooseMenuItem } = nativeHost();
 	const onOpenSessionView = vi.fn();

@@ -26,6 +26,7 @@
 		fetcher,
 		platform,
 		onOpenSessionView = () => {},
+		onOpenSettings = () => {},
 		children
 	}: {
 		native?: DesktopNativeCapabilities;
@@ -34,6 +35,8 @@
 		platform?: KeyPlatform;
 		/** Navigates to the session view so a menu action it owns can run. */
 		onOpenSessionView?: () => void;
+		/** Navigates to Settings, from ⌘, or the app menu. */
+		onOpenSettings?: () => void;
 		children?: Snippet;
 	} = $props();
 
@@ -76,6 +79,7 @@
 
 		const unregister = [
 			keymap.register('app.shortcuts', () => (shortcutsOpen = !shortcutsOpen)),
+			keymap.register('app.settings', () => onOpenSettings()),
 			keymap.register('navigate.back', () => history.back()),
 			keymap.register('navigate.forward', () => history.forward())
 		];

@@ -12,6 +12,7 @@ const SECTION_ROUTES: Record<string, string> = {
 	'/workspaces/[workspaceId]/terminal': 'terminal',
 	'/workspaces/[workspaceId]/processes': 'processes',
 	'/workspaces/[workspaceId]/sandbox': 'sandbox',
+	'/settings': 'settings',
 	'/diagnostics': 'diagnostics'
 };
 
@@ -37,7 +38,7 @@ export function productNavigation(routeId: string | null, workspaceId: string | 
 		{ id: 'processes', label: 'Processes', icon: 'processes' },
 		{ id: 'sandbox', label: 'Agent sandbox', icon: 'sandbox', href: workspacePath('sandbox'), unavailable },
 		{ id: 'resources', label: 'Resources', icon: 'resources' },
-		{ id: 'settings', label: 'Settings', icon: 'settings' },
+		{ id: 'settings', label: 'Settings', icon: 'settings', href: '/settings' },
 		{ id: 'diagnostics', label: 'Diagnostics', icon: 'diagnostics', href: '/diagnostics' }
 	];
 	return items.map((item) => (item.id === active ? { ...item, active: true } : item));

@@ -293,6 +293,14 @@ Settings group durable choices by user intent. Scope and consequence appear next
 to each setting. Theme, font, agent discovery, preferred editor, and terminal
 editor launch behavior remain distinct choices.
 
+Settings opens from the app menu, the product rail, and ⌘, (Ctrl+, on Linux).
+The context rail lists the sections: Appearance, Notifications, Keyboard,
+Editor, and Shell. Choosing one moves focus to it. A section with nothing to
+set yet says so. Each setting saves when it changes. A failed save keeps the
+previous choice and shows the reason under the setting. Settings that belong
+to one view, such as the agent sandbox, MCP servers, and diagnostics, stay in
+that view.
+
 Pau themes apply only to Pau surfaces. External and terminal editors retain
 their own configuration and colors. At narrow widths, section navigation
 collapses before controls lose their labels or descriptions.

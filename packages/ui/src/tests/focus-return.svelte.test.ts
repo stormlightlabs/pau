@@ -197,7 +197,10 @@ test.each([
 
 	await userEvent.click(toggle);
 	await expect.element(toggle).toHaveAttribute('aria-expanded', 'true');
-	await userEvent.click(page.getByRole('link', { name: 'One' }));
+	// Focus moves into the rail without following the link, which would close the rail itself.
+	const link = page.getByRole('link', { name: 'One' });
+	await expect.element(link).toBeVisible();
+	link.element().focus();
 	await close();
 
 	await expect.element(toggle).toHaveAttribute('aria-expanded', 'false');

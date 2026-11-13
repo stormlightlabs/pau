@@ -42,7 +42,7 @@ export class InterfacePreferences {
 	/** The view this window last opened. Unset until it opens one, so a save keeps the stored view. */
 	#route: LastRoute | undefined;
 	#timer: ReturnType<typeof setTimeout> | undefined;
-	#saving: Promise<void> | undefined;
+	#saving: Promise<Error | undefined> | undefined;
 	#stream: EventStreamClient | undefined;
 	readonly #options: InterfacePreferencesOptions;
 
@@ -56,17 +56,34 @@ export class InterfacePreferences {
 		this.#options = options;
 	}
 
+	/** Writes the current preferences after any write already in flight, and rejects when this write fails. */
 	async #flush(): Promise<void> {
 		clearTimeout(this.#timer);
 		this.#timer = undefined;
 		await this.#saving;
 		this.#saving = this.#write();
-		await this.#saving;
+		const failure = await this.#saving;
 		this.#saving = undefined;
+		if (failure) throw failure;
 	}
 
-	/** Saves the current widths. A failure leaves them applied; the next resize saves again. */
-	async #write(): Promise<void> {
+	/**
+	 * Saves widths and the open view. A failure leaves them applied in this
+	 * window, and the next resize or view change saves again.
+	 */
+	async #save(): Promise<void> {
+		try {
+			await this.#flush();
+		} catch {
+			// Nothing to roll back.
+		}
+	}
+
+	/**
+	 * Saves the whole document and resolves with the failure instead of
+	 * rejecting, so a write that waits on this one is not failed by it.
+	 */
+	async #write(): Promise<Error | undefined> {
 		try {
 			const base = this.#saved ?? (await getUiPreferences(this.#options.fetcher));
 			const { contextRail, inspector } = this.widths;
@@ -79,8 +96,9 @@ export class InterfacePreferences {
 				},
 				this.#options.fetcher
 			);
-		} catch {
-			// Nothing to roll back: the widths stay applied in this window.
+			return undefined;
+		} catch (error) {
+			return error instanceof Error ? error : new Error(String(error));
 		}
 	}
 
@@ -117,7 +135,7 @@ export class InterfacePreferences {
 	stop(): void {
 		this.#stream?.stop();
 		this.#stream = undefined;
-		if (this.#timer !== undefined) void this.#flush();
+		if (this.#timer !== undefined) void this.#save();
 	}
 
 	/** Reads the saved preferences. Failing to read leaves the default widths. */
@@ -134,10 +152,20 @@ export class InterfacePreferences {
 		this.widths = { contextRail: preferences.pane_widths.context_rail, inspector: preferences.pane_widths.inspector };
 	}
 
-	/** Applies a motion setting the operator chose and saves it at once. */
-	setMotion(motion: MotionPreference): void {
+	/**
+	 * Applies a motion setting the operator chose and saves it at once. When
+	 * the save fails, the previous setting comes back and the promise rejects
+	 * with the reason, so Settings can show it.
+	 */
+	async setMotion(motion: MotionPreference): Promise<void> {
+		const previous = this.motion;
 		this.#applyMotion(motion);
-		void this.#flush();
+		try {
+			await this.#flush();
+		} catch (error) {
+			this.#applyMotion(previous);
+			throw error;
+		}
 	}
 
 	/** Saves the view the operator opened, unless it is already the saved one. */
@@ -145,14 +173,14 @@ export class InterfacePreferences {
 		const current = this.#route ?? this.#saved?.last_route;
 		if (current && sameRoute(current, route)) return;
 		this.#route = route;
-		void this.#flush();
+		void this.#save();
 	}
 
 	/** Applies widths the operator chose and schedules saving them. */
 	resize(widths: ShellPaneWidths): void {
 		this.widths = widths;
 		clearTimeout(this.#timer);
-		this.#timer = setTimeout(() => void this.#flush(), this.#options.saveDelayMs ?? SAVE_DELAY_MS);
+		this.#timer = setTimeout(() => void this.#save(), this.#options.saveDelayMs ?? SAVE_DELAY_MS);
 	}
 }
 

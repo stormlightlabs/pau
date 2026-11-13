@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStderr, ChildStdout, Command};
-use tokio::sync::{Mutex, broadcast, oneshot, watch};
+use tokio::sync::{Mutex, broadcast, mpsc, oneshot, watch};
 
 /// Time allowed for each stage of Pi process shutdown.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -134,13 +134,20 @@ impl Error for PiProcessError {
     }
 }
 
-type PendingCommands = Arc<Mutex<HashMap<String, oneshot::Sender<Value>>>>;
+/// Commands waiting for Pi's answer. Each response arrives with its stdout
+/// position: its 1-based index among the JSON records Pi wrote to stdout.
+type PendingCommands = Arc<Mutex<HashMap<String, oneshot::Sender<(u64, Value)>>>>;
+
+/// The receiver of every Pi event paired with its stdout position, installed
+/// by [`PiProcess::sequenced_events`].
+type SequencedEvents = Arc<std::sync::OnceLock<mpsc::UnboundedSender<(u64, Value)>>>;
 
 /// Owns one supervised `pi --mode rpc` child process.
 pub struct PiProcess {
     stdin: Mutex<Option<tokio::process::ChildStdin>>,
     pending: PendingCommands,
     output: broadcast::Sender<PiProcessOutput>,
+    sequenced_events: SequencedEvents,
     exit: watch::Receiver<Option<PiProcessExit>>,
     kill: tokio::sync::mpsc::Sender<()>,
     next_command_id: AtomicU64,
@@ -179,11 +186,17 @@ impl PiProcess {
         let stderr = child.stderr.take().ok_or_else(|| missing_pipe("stderr"))?;
         let pending = Arc::new(Mutex::new(HashMap::new()));
         let (output, _) = broadcast::channel(256);
+        let sequenced_events = SequencedEvents::default();
         let (exit_sender, exit) = watch::channel(None);
         let (kill_sender, mut kill_receiver) = tokio::sync::mpsc::channel(1);
         let shutdown_requested = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
-        tokio::spawn(read_stdout(stdout, Arc::clone(&pending), output.clone()));
+        tokio::spawn(read_stdout(
+            stdout,
+            Arc::clone(&pending),
+            output.clone(),
+            Arc::clone(&sequenced_events),
+        ));
         tokio::spawn(read_stderr(stderr, output.clone()));
 
         let watcher_output = output.clone();
@@ -217,6 +230,7 @@ impl PiProcess {
             stdin: Mutex::new(Some(stdin)),
             pending,
             output,
+            sequenced_events,
             exit,
             kill: kill_sender,
             next_command_id: AtomicU64::new(1),
@@ -234,6 +248,18 @@ impl PiProcess {
     /// Subscribes to events, diagnostics, and process exit notifications.
     pub fn subscribe(&self) -> broadcast::Receiver<PiProcessOutput> {
         self.output.subscribe()
+    }
+
+    /// Returns every later Pi event paired with its stdout position.
+    ///
+    /// Broadcast subscribers see events in order, but not in order with the
+    /// responses that [`Self::command`] returns, because each side runs on its
+    /// own task. Comparing these positions with the one from
+    /// [`Self::command_at`] tells which of an event and a response Pi wrote
+    /// first. Only the first caller gets a receiver.
+    pub(crate) fn sequenced_events(&self) -> Option<mpsc::UnboundedReceiver<(u64, Value)>> {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        self.sequenced_events.set(sender).ok().map(|()| receiver)
     }
 
     /// Allocates a command ID that no other command to this process uses.
@@ -259,6 +285,18 @@ impl PiProcess {
         id: String,
         command: Value,
     ) -> Result<Value, PiProcessError> {
+        let (_, response) = self.command_at(id, command).await?;
+        Ok(response)
+    }
+
+    /// Sends one command like [`Self::command_with_id`] and also returns the
+    /// response's stdout position for comparison with
+    /// [`Self::sequenced_events`].
+    pub(crate) async fn command_at(
+        &self,
+        id: String,
+        command: Value,
+    ) -> Result<(u64, Value), PiProcessError> {
         let mut command = match command {
             Value::Object(command) if command.get("type").and_then(Value::as_str).is_some() => {
                 command
@@ -394,9 +432,11 @@ async fn read_stdout(
     stdout: ChildStdout,
     pending: PendingCommands,
     output: broadcast::Sender<PiProcessOutput>,
+    sequenced_events: SequencedEvents,
 ) {
     let mut reader = BufReader::new(stdout);
     let mut bytes = Vec::new();
+    let mut position = 0;
     loop {
         bytes.clear();
         match reader.read_until(b'\n', &mut bytes).await {
@@ -404,7 +444,10 @@ async fn read_stdout(
             Ok(_) => {
                 trim_record_ending(&mut bytes);
                 match serde_json::from_slice::<Value>(&bytes) {
-                    Ok(record) => route_record(record, &pending, &output).await,
+                    Ok(record) => {
+                        position += 1;
+                        route_record(record, position, &pending, &output, &sequenced_events).await;
+                    }
                     Err(error) => {
                         let _ = output.send(PiProcessOutput::Diagnostic(PiDiagnostic {
                             source: PiDiagnosticSource::Protocol,
@@ -426,8 +469,10 @@ async fn read_stdout(
 
 async fn route_record(
     record: Value,
+    position: u64,
     pending: &PendingCommands,
     output: &broadcast::Sender<PiProcessOutput>,
+    sequenced_events: &SequencedEvents,
 ) {
     let is_response = record.get("type").and_then(Value::as_str) == Some("response");
     let id = record.get("id").and_then(Value::as_str);
@@ -435,7 +480,7 @@ async fn route_record(
         && let Some(id) = id
         && let Some(sender) = pending.lock().await.remove(id)
     {
-        let _ = sender.send(record);
+        let _ = sender.send((position, record));
         return;
     }
 
@@ -445,6 +490,9 @@ async fn route_record(
             message: "Pi returned a response without a matching command ID".to_owned(),
         }));
     } else {
+        if let Some(events) = sequenced_events.get() {
+            let _ = events.send((position, record.clone()));
+        }
         let _ = output.send(PiProcessOutput::Event(record));
     }
 }

@@ -147,6 +147,29 @@ async fn interrupt_clears_the_queue_before_aborting() {
 }
 
 #[tokio::test]
+async fn ignores_lifecycle_events_that_pi_wrote_before_an_interrupt() {
+    let fixture = FakePi::new(CONTROL_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+    session
+        .prompt("slow start", Vec::new(), None)
+        .await
+        .unwrap();
+    assert_eq!(session.status().await, AgentSessionStatus::Running);
+
+    // `agent_start` and `agent_settled` reach the session after the interrupt
+    // has begun, but Pi wrote both before it answered the abort.
+    session.interrupt().await.unwrap();
+    assert_eq!(session.status().await, AgentSessionStatus::Idle);
+
+    // The earlier `agent_settled` must not end the run this prompt starts.
+    session.prompt("start", Vec::new(), None).await.unwrap();
+    assert_eq!(session.status().await, AgentSessionStatus::Running);
+    session.interrupt().await.unwrap();
+    assert_eq!(session.status().await, AgentSessionStatus::Idle);
+    session.stop().await.unwrap();
+}
+
+#[tokio::test]
 async fn interrupt_aborts_when_clearing_the_queue_fails() {
     let fixture = FakePi::new(CONTROL_FIXTURE);
     let session = PiSession::start(fixture.options()).unwrap();
@@ -899,6 +922,13 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
             printf '{"type":"agent_start"}\n'
             ;;
+        *'"message":"slow start"'*)
+            # Pi answers a prompt before it emits `agent_start`. The pause
+            # lets the caller start an interrupt before the event arrives.
+            printf '{"id":"%s","type":"response","command":"prompt","success":true,"data":{"disposition":"started"}}\n' "$id"
+            sleep 0.2
+            printf '{"type":"agent_start"}\n'
+            ;;
         *'"message":"/handled"'*)
             printf '{"id":"%s","type":"response","command":"prompt","success":true,"data":{"disposition":"handled"}}\n' "$id"
             ;;
@@ -929,8 +959,9 @@ while IFS= read -r command; do
             fi
             ;;
         *'"type":"abort"'*)
-            printf '{"id":"%s","type":"response","command":"abort","success":true}\n' "$id"
+            # Pi waits for the run to settle before it answers an abort.
             printf '{"type":"agent_settled"}\n'
+            printf '{"id":"%s","type":"response","command":"abort","success":true}\n' "$id"
             ;;
         *'"modelId":"missing"'*)
             printf '{"id":"%s","type":"response","command":"set_model","success":false,"error":"Model not found: fixture/missing"}\n' "$id"

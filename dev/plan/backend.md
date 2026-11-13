@@ -55,6 +55,10 @@ timeout.
 PTY processes use a cross-platform Rust PTY library. Structured protocols use
 pipes, never a PTY, so framing and diagnostics stay separate.
 
+A PTY terminal keeps reading output while no view is attached. It retains the
+last 1 MiB, dropping the oldest bytes first, and replays it to each view that
+attaches before sending live output.
+
 ## Resource monitoring
 
 Every process owner reports the operating-system process identifier, process

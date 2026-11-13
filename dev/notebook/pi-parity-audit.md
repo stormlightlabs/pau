@@ -189,7 +189,7 @@ or in vanilla Pi.
 
 These are Missing or Partial rows that a Pi user hits in routine work and that
 no unit in the dogfood gate (2.40 and its blockers 2.156, 2.185, 2.235, 2.237)
-covers.
+covered when this audit was written.
 
 - Shell commands. `!cmd` and `!!cmd` are missing, and a `!` draft reaches the
   model as a prompt. Suggested unit: make 2.115 and 2.116 block 2.40, with

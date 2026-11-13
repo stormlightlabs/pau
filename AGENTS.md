@@ -5,8 +5,8 @@ Read these indexes and every document they link before changing the project:
 - [SPEC.md](dev/SPEC.md) indexes product behavior and scope.
 - [PLAN.md](dev/PLAN.md) indexes architecture, package ownership, design,
   documentation, and testing policy.
-- [ROADMAP.md](dev/ROADMAP.md) indexes the deliverable files in `dev/tasks/`,
-  which define each work unit's status, blockers, scope, and verification.
+- [ROADMAP.md](dev/ROADMAP.md) sets the rules for splitting work into tasks.
+  The tasks themselves live in Linear, as [Tasks](#tasks) describes.
 
 Do not repeat their content here. Update the owning document when a product or
 architecture decision changes.
@@ -44,43 +44,14 @@ change affects that build boundary. After a follow-up edit, rerun the narrowest
 check that covers the changed code; rebuild only when the edit can affect the
 built artifact.
 
-## Work units
-
-- Work on one ready roadmap unit at a time unless the user explicitly combines
-  units.
-- Trust roadmap statuses instead of re-auditing implementation to infer whether
-  a blocker is done.
-- Before implementation, confirm each blocker is `complete` and set the unit to
-  `in progress`. Set it to `complete` after available verification passes. An
-  unavailable platform check may move to the backlog when portable coverage
-  passes and it is not an explicit release gate. Use `blocked` with a short
-  status note when implementation cannot continue.
-- Keep implementation, tests, Storybook stories, and user documentation required
-  by that unit in the same change.
-- In `packages/ui`, keep stories under `src/stories` and tests under
-  `src/tests`.
-- Run the unit's verification, starting with the narrowest relevant checks. Do
-  not invoke paid agents or remote services from default tests.
-- Fix every finding from the unit's required verification, including unrelated
-  pre-existing findings. Do not defer or report those findings as separate
-  follow-up work. Keep defects found outside required checks separate unless
-  they block verification.
-- When a unit is complete, add a concise user-facing changelog entry when it
-  changes user-facing behavior, remove it from every blocker list, and delete
-  the unit from its deliverable or area file. Delete a subsection, area file,
-  or deliverable when it has no units left.
-- Write commit messages and pull request descriptions without agent
-  attribution. Omit `Co-Authored-By` trailers and generated-by lines.
-
 ## Tasks
 
 The installed skills read this section for the tracker's steps. Linear is the
-tracker for agent work. Until Work units is replaced, a `PAU-<n>` ID is a
-Linear task and follows this section, and a dotted ID such as `2.185` is a
-roadmap unit and follows Work units. Tasks live in the Linear team PAU. Agents
-reach it through the session's Linear connector tools, such as `get_issue` with
-relations, `save_issue`, `save_comment`, and `save_document`. Subagents run
-inside that session and need no Linear access of their own.
+tracker for all work, and a `PAU-<n>` ID is a Linear task. Tasks live in the
+Linear team PAU. Agents reach it through the session's Linear connector tools,
+such as `get_issue` with relations, `save_issue`, `save_comment`, and
+`save_document`. Subagents run inside that session and need no Linear access
+of their own.
 
 | Step                                     | In Linear                                                                                                                                                                                                                                                                                                                                                                                           |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -107,6 +78,29 @@ inside that session and need no Linear access of their own.
 Blocked-by links decide what can run in parallel. List the Todo issues, skip
 run units, drop any that are not ready, and give each worktree one ready issue.
 
+Every task follows these rules:
+
+- Work on one task per branch and session unless the user explicitly combines
+  tasks. Parallel worktrees may each work a different task.
+- Keep implementation, tests, Storybook stories, and user documentation required
+  by the task in the same change.
+- In `packages/ui`, keep stories under `src/stories` and tests under
+  `src/tests`.
+- Run the task's verification, starting with the narrowest relevant checks. Do
+  not invoke paid agents or remote services from default tests.
+- A release's gates are the tasks in its milestone in the tracker. When a
+  platform check is unavailable, the task may close if portable coverage
+  passes and the check's task is not in that milestone. Record the unavailable
+  check as a new Backlog issue.
+- Fix every finding from the task's required verification, including unrelated
+  pre-existing findings. Do not defer or report those findings as separate
+  follow-up work. Keep defects found outside required checks separate unless
+  they block verification.
+- When a task changes user-facing behavior, add a concise changelog entry in
+  the same change.
+- Write commit messages and pull request descriptions without agent
+  attribution. Omit `Co-Authored-By` trailers and generated-by lines.
+
 ## Dogfood Pau
 
 Follow the [dogfooding policy](dev/plan/dogfooding.md). Keep the released local
@@ -130,9 +124,9 @@ instruction in its prompt.
 
 Always audit changed prose against that skill before finishing. Remove AI
 writing tropes, stock transitions, repetition, inflated claims, and other
-formulaic language. Keep roadmap terms, unit boundaries, and implementation
+formulaic language. Keep task IDs, task boundaries, and implementation
 phases out of user-facing or published documentation. Name packages, scripts,
-and files for what they do, not for the unit phase that created them, such as
+and files for what they do, not for the task phase that created them, such as
 a spike.
 
 Wrap prose at about 80 columns. A few trailing characters are acceptable when a
@@ -190,9 +184,8 @@ bounded visual verification. For each changed surface:
   overlay by an outside press and Escape, and confirm where focus returns.
 - Fix broken tasks and missing states before visual drift, and visual drift
   before cleanup.
-- For a `PAU-<n>` task, put the screenshot paths and measurements on the
-  Linear issue's document; a dotted roadmap unit has no Linear issue, so it
-  lists them in its handoff.
+- Put the screenshot paths and measurements on the task's Linear issue
+  document.
 
 `dev/design` owns design decisions. Where a visual reference disagrees with
 it, `dev/design` wins.

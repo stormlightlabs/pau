@@ -560,14 +560,12 @@ gaps have proposed units in the next section.
 
 ## Proposed units
 
-These units follow the format in
-[deliverable 2](../tasks/002_desktop-app-and-development-browser-ui/README.md)
-and the layer split in [`ROADMAP.md`](../ROADMAP.md). They are now roadmap
-units with real IDs, listed under [Decisions](#decisions). The roadmap entries
-are authoritative and include the changes those decisions made.
+These units were filed as tasks in the issue tracker, which now holds their
+current scope and the changes made under [Decisions](#decisions). The units
+below and the ID mapping under Decisions are a historical record.
 
-The P0 units 2.NEW-1 through 2.NEW-6 and the tool views 2.NEW-7 and 2.NEW-8
-block the 2.40 dogfood gate.
+When filed, the P0 units 2.NEW-1 through 2.NEW-6 and the tool views 2.NEW-7
+and 2.NEW-8 blocked the 2.40 dogfood gate.
 
 ### 2.NEW-1 Application keyboard map
 

@@ -92,19 +92,23 @@ async function lookWhileFocused(element: HTMLElement): Promise<string> {
 
 /**
  * Touch emulation makes the page report `(hover: none)`, as a touch screen
- * does. Turning it off emulates a mouse rather than clearing the emulation:
- * cleared, headless Chromium on Linux reports the runner's own pointer, which
- * has no hover, and every later hover read would fail.
+ * does. Turning it off when it is already off makes headless Chromium on Linux
+ * report a pointer with no hover for the rest of the file, so `afterEach` turns
+ * it off only after a test that turned it on.
  */
+let touching = false;
 async function emulateTouch(enabled: boolean) {
+	touching = enabled;
 	await cdp().send('Emulation.setTouchEmulationEnabled', { enabled, maxTouchPoints: 1 });
 	// Touch emulation alone updates matchMedia but can leave styles computed for
 	// a hover-capable pointer, so the media features are emulated directly too.
 	await cdp().send('Emulation.setEmulatedMedia', {
-		features: [
-			{ name: 'hover', value: enabled ? 'none' : 'hover' },
-			{ name: 'pointer', value: enabled ? 'coarse' : 'fine' }
-		]
+		features: enabled
+			? [
+					{ name: 'hover', value: 'none' },
+					{ name: 'pointer', value: 'coarse' }
+				]
+			: []
 	});
 }
 
@@ -120,7 +124,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
 	instant.remove();
-	await emulateTouch(false);
+	if (touching) await emulateTouch(false);
 });
 
 describe.each(controls)('%s', (control) => {

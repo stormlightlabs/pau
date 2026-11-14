@@ -96,9 +96,9 @@ async function lookWhileFocused(element: HTMLElement): Promise<string> {
  * already off, leaves the page with no hover until it reloads. So `afterEach`
  * turns it off only after a test that turned it on, and those tests run last.
  */
-let touching = false;
+const touch = { on: false };
 async function emulateTouch(enabled: boolean) {
-	touching = enabled;
+	touch.on = enabled;
 	await cdp().send('Emulation.setTouchEmulationEnabled', { enabled, maxTouchPoints: 1 });
 	// Touch emulation alone updates matchMedia but can leave styles computed for
 	// a hover-capable pointer, so the media features are emulated directly too.
@@ -124,7 +124,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
 	instant.remove();
-	if (touching) await emulateTouch(false);
+	if (touch.on) await emulateTouch(false);
 });
 
 describe.each(controls)('%s', (control) => {

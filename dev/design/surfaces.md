@@ -230,6 +230,26 @@ Shift+Enter step through matches. The bar is not a dismissible overlay: clicks
 in the output and window switches keep it open, and only Escape or Close end
 the search and return focus to the terminal.
 
+Terminals sit in one of two places. The Terminal view gives them the whole
+main surface, with a status rail of open terminals. In Sessions, a dock under
+the transcript holds the same terminals, so the operator can watch a build
+while reading the agent's work. The dock opens from the top bar toggle or
+`` Ctrl+` ``, which also works from inside a docked terminal, and starts at 40% of
+the main column. Its top edge resizes it and leaves the transcript at least
+160px. On narrow windows an open dock takes the whole main surface instead of
+a strip. Each bar has a button that moves the terminals to the other place.
+They keep running through the move, and focus lands in the active terminal.
+Hiding the dock returns focus to whatever opened it.
+
+A background tab that prints output shows an accent dot, and its rail row
+reads "New output", until the operator opens it. An exited tab shows its exit
+badge in place of the dot.
+
+Plain-text web addresses and workspace file paths in the output open on
+click, as OSC 8 links do. A file path becomes a link only when the workspace
+confirms it names a file, and it opens in Files at the line the output gave.
+Absolute paths, parent-directory paths, and version-like text stay plain.
+
 ## Processes
 
 The workspace Processes view lists each Pau-owned process tree with current CPU,

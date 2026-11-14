@@ -7,7 +7,7 @@
 	import { themeCssProperties, type ThemeName, type UiFontName } from '../theme';
 	import type { PaletteEntry } from './command-palette';
 	import CommandPalette from './CommandPalette.svelte';
-	import { createFocusReturn } from './focus-return';
+	import { createFocusReturn, returnFocus } from './focus-return';
 	import Icon from './Icon.svelte';
 	import { getKeymap, useKeyActions } from './keymap.svelte';
 	import PaneResizer from './PaneResizer.svelte';
@@ -67,6 +67,20 @@
 		children?: Snippet;
 		context?: Snippet;
 		inspector?: Snippet;
+		/**
+		 * Terminals docked below the main surface content. With it, the top bar
+		 * offers a toggle and the key map's dock shortcut works. Narrow windows
+		 * give an open dock the whole main surface instead of a strip.
+		 */
+		dock?: Snippet;
+		/** Whether the dock shows. The app owns it, so the dock can stay open across views. */
+		dockOpen?: boolean;
+		/** Called when the operator shows or hides the dock. */
+		onDockToggle?: (open: boolean) => void;
+		/** Operator-chosen dock height in CSS pixels. `null` keeps the default. */
+		dockHeight?: number | null;
+		/** Called with the new height after the operator resizes the dock, or `null` after a reset. */
+		onDockResize?: (height: number | null) => void;
 	};
 
 	let {
@@ -83,7 +97,12 @@
 		paletteEntries = [],
 		children,
 		context,
-		inspector
+		inspector,
+		dock,
+		dockOpen = false,
+		onDockToggle,
+		dockHeight = null,
+		onDockResize
 	}: Props = $props();
 
 	const keymap = getKeymap();
@@ -136,6 +155,7 @@
 
 	const contextFocus = createFocusReturn();
 	const inspectorFocus = createFocusReturn();
+	const dockFocus = createFocusReturn();
 
 	/** Opens or closes the overlay rail. Closing returns focus to whatever opened it. */
 	function toggleContextOverlay(): void {
@@ -183,6 +203,32 @@
 		inspectorFocus.restore();
 	}
 
+	/** Shows or hides the dock. The terminal takes focus as it opens. */
+	function toggleDock(): void {
+		if (!dockOpen) dockFocus.capture();
+		onDockToggle?.(!dockOpen);
+	}
+
+	/**
+	 * However the dock closes, from the toggle, its shortcut or a control
+	 * inside it, focus goes back to whatever opened it. A dock that was
+	 * already open when the view mounted has no opener, so focus goes to the
+	 * composer, or to the dock toggle in a view without one.
+	 */
+	let dockWasOpen = false;
+	let dockToggle = $state<HTMLButtonElement>();
+	$effect(() => {
+		const open = Boolean(dock && dockOpen);
+		if (dockWasOpen && !open) {
+			dockFocus.restore();
+			if (!document.activeElement || document.activeElement === document.body) returnFocus(null);
+			if (!document.activeElement || document.activeElement === document.body) dockToggle?.focus();
+		}
+		dockWasOpen = open;
+	});
+
+	const dockToggleLabel = $derived(dockOpen ? 'Hide terminal dock' : 'Show terminal dock');
+
 	/** Closes an open overlay rail on Escape. */
 	function closeOnEscape(event: KeyboardEvent, close: () => void): void {
 		if (event.key !== 'Escape' || event.defaultPrevented) return;
@@ -202,6 +248,35 @@
 			if (inspector) toggleInspector();
 		}
 	});
+
+	// The dock shortcut exists only while there is a dock to toggle. A shell
+	// without one leaves Ctrl+` to the program in a terminal, where it sends NUL.
+	$effect(() => {
+		if (dock) return keymap?.register('panel.dock', toggleDock);
+	});
+
+	/** Shortest the dock may be, enough for its tab bar and a few lines. */
+	const MIN_DOCK_HEIGHT = 120;
+	/** Height the content above an open dock keeps. */
+	const MIN_ABOVE_DOCK = 160;
+	let mainHeight = $state(0);
+	let dockMeasured = $state(0);
+	let dockDragging = $state(false);
+	let maxDockHeight = $derived(Math.max(MIN_DOCK_HEIGHT, mainHeight - MIN_ABOVE_DOCK));
+	/** The kept height, shrunk when the window can no longer fit it. */
+	let appliedDockHeight = $derived(
+		dockHeight === null || mainHeight === 0
+			? dockHeight
+			: Math.min(Math.max(dockHeight, MIN_DOCK_HEIGHT), maxDockHeight)
+	);
+	let mainElement = $state<HTMLElement>();
+
+	/** Puts the dock back at its kept height after a cancelled drag. */
+	function restoreDockHeight(): void {
+		if (appliedDockHeight === null) mainElement?.style.removeProperty('--shell-dock-height');
+		else mainElement?.style.setProperty('--shell-dock-height', `${appliedDockHeight}px`);
+	}
+
 	/** Narrowest a resizable pane may be. */
 	const MIN_PANE_WIDTH = 160;
 	/** Width the main surface keeps, matching the `minmax(24rem, 1fr)` grid track. */
@@ -281,6 +356,7 @@
 	class:app-shell--with-inspector={inspectorVisible && inspector}
 	class:app-shell--without-context={!hasContext || contextHidden}
 	class:app-shell--resizing={contextDragging || inspectorDragging}
+	class:app-shell--resizing-rows={dockDragging}
 	bind:this={shell}
 	bind:offsetWidth={shellWidth}
 	class="app-shell"
@@ -313,6 +389,19 @@
 					title={withShortcut(contextToggleLabel, 'panel.context')}
 					onclick={toggleContext}>
 					<Icon name="sidebar" size={18} />
+				</button>
+			{/if}
+			{#if dock}
+				<button
+					type="button"
+					class="app-shell__icon-button pau-utility-button"
+					aria-label={dockToggleLabel}
+					aria-expanded={dockOpen}
+					aria-controls={dockOpen ? 'shell-dock' : undefined}
+					title={withShortcut(dockToggleLabel, 'panel.dock')}
+					bind:this={dockToggle}
+					onclick={toggleDock}>
+					<Icon name="dock" size={18} />
 				</button>
 			{/if}
 			{#if inspector}
@@ -448,11 +537,40 @@
 		</div>
 	{/if}
 
-	<main id="main-surface" class="app-shell__main" tabindex="-1">
+	<main
+		id="main-surface"
+		class="app-shell__main"
+		class:app-shell__main--docked={dock && dockOpen}
+		tabindex="-1"
+		style:--shell-dock-height={dock && dockOpen && appliedDockHeight !== null ? `${appliedDockHeight}px` : undefined}
+		bind:this={mainElement}
+		bind:clientHeight={mainHeight}>
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<div class="app-shell__main-content" role="region" aria-label="Main surface content" tabindex="0">
 			{#if children}{@render children()}{/if}
 		</div>
+		{#if dock && dockOpen}
+			<div class="app-shell__resizer app-shell__resizer--dock">
+				<PaneResizer
+					label="Resize terminal dock"
+					controls="shell-dock"
+					orientation="horizontal"
+					value={dockMeasured}
+					min={MIN_DOCK_HEIGHT}
+					max={maxDockHeight}
+					direction={-1}
+					bind:dragging={dockDragging}
+					onPreview={(height) => mainElement?.style.setProperty('--shell-dock-height', `${height}px`)}
+					onCommit={(height) => {
+						if (height === null) mainElement?.style.removeProperty('--shell-dock-height');
+						onDockResize?.(height);
+					}}
+					onCancel={() => restoreDockHeight()} />
+			</div>
+			<section id="shell-dock" class="app-shell__dock" aria-label="Terminal dock" bind:offsetHeight={dockMeasured}>
+				{@render dock()}
+			</section>
+		{/if}
 	</main>
 
 	{#if inspector && inspectorVisible}
@@ -577,9 +695,25 @@
 		justify-self: start;
 	}
 
+	/* The dock's handle overlaps the top edge of the dock, inside the main column. */
+	.app-shell__resizer--dock {
+		grid-row: 2;
+		height: 0;
+		align-self: start;
+	}
+
+	.app-shell__resizer--dock :global(.pane-resizer) {
+		translate: 0 -50%;
+	}
+
 	/* Dragging must follow the pointer exactly, so nothing animates or selects. */
 	.app-shell--resizing {
 		cursor: col-resize;
+		user-select: none;
+	}
+
+	.app-shell--resizing-rows {
+		cursor: row-resize;
 		user-select: none;
 	}
 
@@ -883,9 +1017,22 @@
 	}
 
 	.app-shell__main-content {
+		grid-row: 1;
 		min-height: 0;
 		padding: var(--shell-main-padding);
 		overflow: auto;
+	}
+
+	/* A percentage row resolves against the main surface's height. */
+	.app-shell__main--docked {
+		grid-template-rows: minmax(0, 1fr) 0 var(--shell-dock-height, 40%);
+	}
+
+	.app-shell__dock {
+		grid-row: 3;
+		min-height: 0;
+		border-top: 1px solid var(--shell-border);
+		background: var(--shell-bg);
 	}
 
 	.app-shell__inspector {
@@ -989,6 +1136,20 @@
 
 		.app-shell__resizer--context {
 			display: none;
+		}
+
+		/* A narrow window gives an open dock the whole main surface instead of a strip. */
+		.app-shell__main--docked {
+			grid-template-rows: 0 0 minmax(0, 1fr);
+		}
+
+		.app-shell__main--docked > .app-shell__main-content,
+		.app-shell__resizer--dock {
+			display: none;
+		}
+
+		.app-shell__dock {
+			border-top: 0;
 		}
 
 		.app-shell__context-rail {

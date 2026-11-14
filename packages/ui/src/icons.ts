@@ -45,7 +45,9 @@ export const ICONS = {
 	diagnostics: 'i-tabler-stethoscope',
 	settings: 'i-tabler-adjustments-horizontal',
 	sidebar: 'i-tabler-layout-sidebar',
-	warning: 'i-tabler-alert-triangle'
+	warning: 'i-tabler-alert-triangle',
+	dock: 'i-tabler-layout-bottombar',
+	maximize: 'i-tabler-arrows-maximize'
 } as const;
 
 /** A semantic icon kind supported by Pau's shared icon component. */

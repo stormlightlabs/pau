@@ -113,4 +113,24 @@ previous one. Escape closes the bar and returns to the shell.
 
 The terminal follows the active theme's ANSI colors and refits its grid when
 the window changes size. When the shell exits, the tab keeps its output and
-shows the exit code or the signal that ended it.
+shows the exit code or the signal that ended it. A tab in the background that
+prints something shows a dot until you open it.
+
+Click a web address or a workspace file path in the output to open it. Web
+addresses open in your browser, and file paths open in Files at the line the
+output names, such as `src/main.rs:12`. A path counts only when it names a
+file in the workspace, relative to the workspace root, and includes a folder.
+A bare file name such as `README.md` stays plain text, since the shell may have
+changed to another folder.
+
+Full-screen programs such as Vim, Neovim, and Helix run in the terminal with
+their own configuration, including mouse support when the program turns it
+on.
+
+### Keep terminals under a session
+
+In Sessions, the terminal dock shows your terminals under the transcript.
+Press `` Ctrl+` `` or choose the dock button in the top bar to show or hide
+it, and drag its top edge to change its height. On a narrow window the dock
+fills the main area. The move button in the terminal bar switches between the
+dock and the Terminal view. Your terminals keep running when you move them.

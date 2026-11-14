@@ -98,8 +98,23 @@ export const Reattached: Story = {
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
 		await expect(await canvas.findByRole('tab', { name: 'zsh' })).toHaveAttribute('aria-selected', 'true');
-		await expect(canvas.getByRole('tab', { name: 'zsh 3' })).toBeInTheDocument();
+		// The background tabs printed their ready line after reattaching, so they show new output.
+		await expect(await canvas.findByRole('tab', { name: 'zsh 3 New output' })).toBeInTheDocument();
 	}
+};
+
+export const Links: Story = {
+	args: {
+		history: [
+			'   Compiling pau-term v0.1.0',
+			'error[E0308]: mismatched types',
+			'  --> crates/term/src/modes.rs:48:9',
+			'   = help: see https://doc.rust-lang.org/error_codes/E0308.html',
+			'note: v1.2.3 of src/missing.rs is not a link'
+		],
+		linkedFiles: ['crates/term/src/modes.rs']
+	},
+	play: openTerminal
 };
 
 export const ReattachFailed: Story = {

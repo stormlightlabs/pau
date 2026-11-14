@@ -13,6 +13,8 @@
 		history?: string[];
 		running?: number;
 		listError?: string;
+		/** Workspace files that paths in the output link to. */
+		linkedFiles?: string[];
 	};
 
 	let {
@@ -23,10 +25,18 @@
 		createError,
 		history,
 		running,
-		listError
+		listError,
+		linkedFiles
 	}: Props = $props();
 
 	const { source } = $derived(createTerminalFixture({ exitOnConnect, createError, history, running, listError }));
+	const fileLinks = $derived(
+		linkedFiles && {
+			files: async (directory: string) =>
+				linkedFiles.filter((path) => path.slice(0, Math.max(path.lastIndexOf('/'), 0)) === directory),
+			open: () => {}
+		}
+	);
 </script>
 
-<TerminalSurface workspaceName="pau" {source} {theme} {uiFont} {disconnected} />
+<TerminalSurface workspaceName="pau" {source} {theme} {uiFont} {disconnected} {fileLinks} onMoveToDock={() => {}} />

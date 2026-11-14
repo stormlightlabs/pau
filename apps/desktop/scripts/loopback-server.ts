@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { access, constants, mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -10,6 +10,25 @@ import type { TestProject } from 'vitest/node';
 
 const repository = fileURLToPath(new URL('../../..', import.meta.url));
 const binary = path.join(process.env.CARGO_TARGET_DIR ?? path.join(repository, 'target'), 'debug', 'pau-server');
+
+/** Terminal editors that the full-screen program tests drive when they are installed. */
+const EDITORS = ['vim', 'nvim', 'hx'] as const;
+
+/** Finds an executable on the `PATH` the server's terminals inherit, as a shell would. */
+async function findExecutable(name: string): Promise<string | null> {
+	const directories = (process.env.PATH ?? '').split(path.delimiter);
+	for (const directory of directories) {
+		if (!directory) continue;
+		const candidate = path.join(directory, name);
+		try {
+			await access(candidate, constants.X_OK);
+			return candidate;
+		} catch {
+			// Not in this directory.
+		}
+	}
+	return null;
+}
 
 async function freePort(): Promise<number> {
 	return new Promise((resolve, reject) => {
@@ -81,6 +100,14 @@ export default async function setup(project: TestProject): Promise<() => Promise
 		throw new Error(`Opening the integration workspace failed with HTTP ${response.status}.`);
 	}
 	const workspace = (await response.json()) as { id: string };
-	project.provide('pauApi', { connection: { apiOrigin: origin, token }, workspaceId: workspace.id });
+	const editors = Object.fromEntries(
+		await Promise.all(EDITORS.map(async (name) => [name, await findExecutable(name)] as const))
+	) as Record<(typeof EDITORS)[number], string | null>;
+	project.provide('pauApi', {
+		connection: { apiOrigin: origin, token },
+		workspaceId: workspace.id,
+		workspacePath: root,
+		editors
+	});
 	return stop;
 }

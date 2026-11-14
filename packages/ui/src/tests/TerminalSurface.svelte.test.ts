@@ -1,9 +1,9 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 
 import { createTerminalFixture } from '../fixtures/terminals';
-import { detectPlatform } from '../lib/keymap.svelte';
+import { detectPlatform, Keymap, keymapContext } from '../lib/keymap.svelte';
 import TerminalSurface from '../lib/TerminalSurface.svelte';
 import TerminalView from '../lib/TerminalView.svelte';
 import type { TerminalConnectionEvents } from '../lib/types/terminal';
@@ -63,6 +63,25 @@ test('reattaches open terminals when the surface mounts again', async () => {
 
 	await userEvent.click(page.getByRole('button', { name: 'Close zsh', exact: true }));
 	await expect.poll(() => fixture.source.list()).toEqual([{ id: 'fixture-2', title: 'zsh 2' }]);
+});
+
+test('keeps hidden tabs at their size and unmarked when the terminals move to another surface', async () => {
+	await page.viewport(1200, 800);
+	const fixture = createTerminalFixture();
+	const first = await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+	await userEvent.click(page.getByRole('button', { name: 'Open a terminal' }));
+	await userEvent.click(page.getByRole('button', { name: 'New terminal' }));
+	await userEvent.click(page.getByRole('tab', { name: 'zsh', exact: true }));
+	await expect.poll(() => fixture.sizes.get('fixture-2')?.cols ?? 0).toBeGreaterThan(80);
+	const size = fixture.sizes.get('fixture-2');
+	first.unmount();
+
+	await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+	const hidden = page.getByRole('tab', { name: /^zsh 2/ });
+	await expect.poll(() => screenText('zsh terminal')).toContain('Terminal ready');
+	await expect.element(hidden).toHaveAttribute('aria-selected', 'false');
+	expect(fixture.sizes.get('fixture-2')).toEqual(size);
+	await expect.element(hidden).not.toHaveTextContent('New output');
 });
 
 test('waits for the open terminals before opening another, so titles keep opening order', async () => {
@@ -211,6 +230,10 @@ test('applies each theme to the terminal background and ANSI palette', async () 
 		const prompt = view.querySelector(':scope .xterm-rows span.xterm-fg-12')!;
 		await expect.poll(() => getComputedStyle(prompt).color).toBe(rgb(terminal.ansi[12]));
 		expect(getComputedStyle(view).backgroundColor).toBe(rgb(terminal.background));
+		// Nothing inside paints another color over the padding around the grid.
+		for (const layer of view.querySelectorAll(':scope .xterm, :scope .xterm-viewport, :scope .xterm-screen')) {
+			expect(['rgba(0, 0, 0, 0)', rgb(terminal.background)]).toContain(getComputedStyle(layer).backgroundColor);
+		}
 		expect(view.dataset.theme).toBe(name);
 	}
 });
@@ -290,4 +313,94 @@ test('leaves Ctrl+F to the shell outside macOS', async () => {
 
 	await userEvent.keyboard('{Control>}{Shift>}F{/Shift}{/Control}');
 	await expect.element(page.getByRole('textbox', { name: 'Find in terminal' })).toHaveFocus();
+});
+
+test('leaves Ctrl+` to the terminal when there is no dock to toggle', async () => {
+	const keymap = new Keymap({ platform: 'mac' });
+	const prevented: boolean[] = [];
+	const listen = (event: KeyboardEvent) => {
+		keymap.handleKeydown(event);
+		if (event.key === '`') prevented.push(event.defaultPrevented);
+	};
+	addEventListener('keydown', listen);
+	try {
+		const fixture = createTerminalFixture();
+		await render(TerminalSurface, {
+			props: { workspaceName: 'pau', source: fixture.source },
+			context: new Map([[keymapContext, keymap]])
+		});
+		await userEvent.click(page.getByRole('button', { name: 'Open a terminal' }));
+		await expect.poll(() => screenText('zsh terminal')).toContain('Terminal ready');
+
+		await userEvent.keyboard('{Control>}`{/Control}');
+		expect(prevented).toEqual([false]);
+		expect(keymap.canRun('panel.dock')).toBe(false);
+	} finally {
+		removeEventListener('keydown', listen);
+	}
+});
+
+test('marks background tabs that print while another tab shows, until the operator opens them', async () => {
+	const fixture = createTerminalFixture();
+	await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+	await userEvent.click(page.getByRole('button', { name: 'Open a terminal' }));
+	await userEvent.click(page.getByRole('button', { name: 'New terminal' }));
+	await userEvent.click(page.getByRole('button', { name: 'New terminal' }));
+	const first = page.getByRole('tab', { name: /^zsh/ }).first();
+	const idle = page.getByRole('tab', { name: /^zsh 2/ });
+	const active = page.getByRole('tab', { name: /^zsh 3/ });
+	const status = page.getByRole('list', { name: 'Terminal status' });
+	await expect.element(active).toHaveAttribute('aria-selected', 'true');
+	await expect.poll(() => screenText('zsh 3 terminal')).toContain('Terminal ready');
+
+	// Each tab's own ready line arrived while it was the one showing.
+	for (const tab of [first, idle, active]) await expect.element(tab).not.toHaveTextContent('New output');
+
+	fixture.print('fixture-1', 'build finished\r\n');
+	fixture.print('fixture-3', 'still here\r\n');
+	await expect.element(first).toHaveTextContent('New output');
+	await expect.element(status.getByRole('button', { name: /^zsh New output/ })).toBeVisible();
+	await expect.element(idle).not.toHaveTextContent('New output');
+	await expect.element(active).not.toHaveTextContent('New output');
+
+	await userEvent.click(first);
+	await expect.element(first).not.toHaveTextContent('New output');
+	await expect.poll(() => screenText('zsh terminal')).toContain('build finished');
+	await expect.element(status.getByRole('button', { name: /^zsh Running/ })).toBeVisible();
+});
+
+test('shows an exited background tab by its exit status instead of new output', async () => {
+	const fixture = createTerminalFixture();
+	await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+	await userEvent.click(page.getByRole('button', { name: 'Open a terminal' }));
+	await expect.poll(() => screenText('zsh terminal')).toContain('Terminal ready');
+	await userEvent.click(page.getByRole('button', { name: 'New terminal' }));
+	await expect.element(page.getByRole('tab', { name: /^zsh 2/ })).toHaveAttribute('aria-selected', 'true');
+
+	fixture.print('fixture-1', 'last words\r\n');
+	const background = page.getByRole('tab', { name: /^zsh/ }).first();
+	await expect.element(background).toHaveTextContent('New output');
+
+	await userEvent.click(background);
+	await userEvent.keyboard('exit 3{Enter}');
+	await userEvent.click(page.getByRole('tab', { name: /^zsh 2/ }));
+	await expect.element(background).toHaveTextContent('exit 3');
+	await expect.element(background).not.toHaveTextContent('New output');
+	await expect
+		.element(
+			page.getByRole('list', { name: 'Terminal status' }).getByRole('button', { name: /^zsh Exited with code 3/ })
+		)
+		.toBeVisible();
+});
+
+test('offers a move to the dock only when the app supplies one', async () => {
+	const fixture = createTerminalFixture({ running: 1 });
+	const onMoveToDock = vi.fn();
+	const surface = await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+	await expect.element(page.getByRole('tab', { name: 'zsh' })).toBeVisible();
+	expect(page.getByRole('button', { name: 'Move to dock' }).query()).toBeNull();
+
+	await surface.rerender({ onMoveToDock });
+	await userEvent.click(page.getByRole('button', { name: 'Move to dock' }));
+	expect(onMoveToDock).toHaveBeenCalledOnce();
 });

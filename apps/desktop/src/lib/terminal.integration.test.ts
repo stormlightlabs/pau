@@ -8,11 +8,17 @@ import { createTerminalSource } from './terminal-source';
 
 declare module 'vitest' {
 	export interface ProvidedContext {
-		pauApi: { connection: { apiOrigin: string; token: string }; workspaceId: string };
+		pauApi: {
+			connection: { apiOrigin: string; token: string };
+			workspaceId: string;
+			workspacePath: string;
+			/** Where each terminal editor is installed, or `null` when it is not on the `PATH`. */
+			editors: Record<'vim' | 'nvim' | 'hx', string | null>;
+		};
 	}
 }
 
-const { connection, workspaceId } = inject('pauApi');
+const { connection, workspaceId, editors } = inject('pauApi');
 
 // Connect the way the desktop shell does, through a frozen global that exists
 // before the client reads it.
@@ -56,6 +62,16 @@ async function openShell(label: string): Promise<void> {
 	const empty = page.getByRole('button', { name: 'Open a terminal' });
 	await userEvent.click(empty.query() ? empty : page.getByRole('button', { name: 'New terminal' }));
 	await expect.poll(() => screenText(label), { timeout: 10_000 }).toContain('pau$');
+}
+
+/**
+ * Clicks a row of the terminal at `x` pixels from its left edge. The rows
+ * redraw as the cursor blinks, so the click targets the screen under them.
+ */
+async function clickRow(row: HTMLElement, x: number): Promise<void> {
+	const screen = row.closest('.xterm')!.querySelector<HTMLElement>('.xterm-screen')!;
+	const offset = row.getBoundingClientRect().top - screen.getBoundingClientRect().top;
+	await userEvent.click(screen, { position: { x, y: offset + row.offsetHeight / 2 } });
 }
 
 async function run(label: string, command: string, expected: string | RegExp): Promise<void> {
@@ -141,4 +157,74 @@ test('shows exit state and the ANSI palette in each theme', async () => {
 
 	await userEvent.click(page.getByRole('button', { name: 'Close sh 5' }));
 	await expect.element(page.getByRole('tab', { name: /^sh 5/ })).not.toBeInTheDocument();
+});
+
+test('switches to the alternate screen and back without losing the shell output', async () => {
+	await renderSurface();
+	await openShell('sh terminal');
+	await run('sh terminal', 'echo main-screen-marker', /^main-screen-marker$/m);
+
+	await run(
+		'sh terminal',
+		String.raw`printf '\033[?1049h\033[H\033[2Jon-alt-screen\n'; read reply; printf '\033[?1049l'`,
+		/^on-alt-screen$/m
+	);
+	expect(screenText('sh terminal')).not.toMatch(/^main-screen-marker$/m);
+
+	await userEvent.keyboard('{Enter}');
+	await expect.poll(() => screenText('sh terminal'), { timeout: 10_000 }).toMatch(/^main-screen-marker$/m);
+	expect(screenText('sh terminal')).not.toMatch(/^on-alt-screen$/m);
+});
+
+test('reports mouse clicks to a program that asks for them', async () => {
+	await renderSurface();
+	await openShell('sh terminal');
+
+	// Raw mode with a five-second read timeout, so `od` prints what the
+	// clicks sent and ends once input stops.
+	await run(
+		'sh terminal',
+		String.raw`printf '\033[?1000h\033[?1006h'; stty raw -echo min 0 time 50; printf 'ready\r\n'; od -An -c; stty sane; printf '\033[?1000l\033[?1006l'`,
+		/^ready$/m
+	);
+	await clickRow(terminalRows('sh terminal')[2]!, 40);
+
+	// A left press in SGR form: ESC [ < 0 ; column ; row M, then its release.
+	await expect
+		.poll(() => screenText('sh terminal'), { timeout: 15_000 })
+		.toMatch(/033\s+\[\s+<\s+0\s+;(?:\s+\d)+\s+;(?:\s+\d)+\s+M/);
+	// `od` ends after five quiet seconds. Raw mode drops the carriage return, so the prompt may be indented.
+	await expect.poll(() => screenText('sh terminal'), { timeout: 10_000 }).toMatch(/pau\$\s*$/);
+});
+
+/** Opens `command` on a three-line file, edits its last line with a click and keys, and saves. */
+async function editWithMouse(command: string, file: string, keys: string): Promise<void> {
+	await renderSurface();
+	await openShell('sh terminal');
+	await run('sh terminal', String.raw`printf 'one\ntwo\nthree\n' > ${file}`, /^pau\$$/m);
+	await userEvent.keyboard([command, file].join(' ') + '{Enter}');
+
+	// The editor takes the alternate screen, which hides the shell prompt.
+	await expect
+		.poll(() => screenText('sh terminal'), { timeout: 15_000 })
+		.toSatisfy((text: string) => /three/.test(text) && !text.includes('pau$'));
+	const row = terminalRows('sh terminal').find((candidate) => candidate.textContent?.includes('three'))!;
+	await clickRow(row, row.offsetWidth - 24);
+	await userEvent.keyboard(keys);
+
+	// Leaving the editor brings back the shell screen as it was.
+	await expect.poll(() => screenText('sh terminal'), { timeout: 15_000 }).toContain(`pau$ ${command} ${file}`);
+	await run('sh terminal', `cat ${file}`, /^one\ntwo\nXthree$/m);
+}
+
+test.skipIf(!editors.vim)('edits a file in Vim with the mouse (skipped when vim is not on the PATH)', async () => {
+	await editWithMouse(`vim -u NONE -N -c 'set mouse=a'`, 'vim.txt', 'IX{Escape}:wq{Enter}');
+});
+
+test.skipIf(!editors.nvim)('edits a file in Neovim with the mouse (skipped when nvim is not on the PATH)', async () => {
+	await editWithMouse('nvim --clean', 'nvim.txt', 'IX{Escape}:wq{Enter}');
+});
+
+test.skipIf(!editors.hx)('edits a file in Helix with the mouse (skipped when hx is not on the PATH)', async () => {
+	await editWithMouse('hx -c /dev/null', 'hx.txt', 'IX{Escape}:wq{Enter}');
 });

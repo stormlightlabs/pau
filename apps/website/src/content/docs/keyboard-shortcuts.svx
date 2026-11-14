@@ -23,6 +23,7 @@ also under **Help > Keyboard Shortcuts**. On Linux, read `⌘` as `Ctrl` and
 | `⌘[`, `⌘]`                         | Go back or forward                  |
 | `⌘B`                               | Show or hide the session rail       |
 | `⌥⌘B`                              | Show or hide the inspector          |
+| `` Ctrl+` ``                       | Show or hide the terminal dock      |
 | `⌘=`, `⌘-`, `⌘0`                   | Zoom in, zoom out, or reset to 100% |
 
 The **File** menu has **New Session** and **Open Workspace**, and the **View**
@@ -138,6 +139,7 @@ items still work.
 ## Where shortcuts do not run
 
 Shortcuts do not run while the terminal, a code editor, or a dialog has
-focus, so those keys reach the program or the dialog. In the composer and
-other text fields, shortcuts that editing could use, such as `⌘[` and `⌘L`,
-do not run either.
+focus, so those keys reach the program or the dialog. The one exception is
+`` Ctrl+` ``, which hides the terminal dock from inside a docked terminal. In
+the composer and other text fields, shortcuts that editing could use, such as
+`⌘[` and `⌘L`, do not run either.

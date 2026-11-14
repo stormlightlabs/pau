@@ -1,7 +1,7 @@
 <script lang="ts">
 	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 
 	import type { IconKind } from '../icons';
@@ -44,6 +44,10 @@
 		disconnected?: boolean;
 		editorSource?: FileEditorSource;
 		onOpenFile?: (path: string, line?: number) => void;
+		/** A file to show when the view opens, such as one linked from terminal output. */
+		openPath?: string;
+		/** The line of `openPath` to show. */
+		openLine?: number;
 		/** The workspace folder. Copying a full path and revealing an entry need it. */
 		workspacePath?: string;
 		/**
@@ -77,6 +81,8 @@
 		disconnected = false,
 		editorSource,
 		onOpenFile,
+		openPath,
+		openLine,
 		workspacePath,
 		revealPath,
 		productItems = defaultProductItems,
@@ -257,6 +263,12 @@
 		if (line === undefined) onOpenFile?.(path);
 		else onOpenFile?.(path, line);
 	}
+
+	$effect(() => {
+		if (!openPath) return;
+		const [path, line] = [openPath, openLine];
+		untrack(() => openFile(path, line));
+	});
 
 	async function openDiff(path: string): Promise<void> {
 		const version = ++diffRequestVersion;

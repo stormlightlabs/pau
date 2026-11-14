@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import { NO_WORKSPACE_REASON, productNavigation, workspaceViewRoute } from './app-navigation';
+import { NO_WORKSPACE_REASON, openFileQuery, productNavigation, workspaceViewRoute } from './app-navigation';
 
 function destinations(routeId: string | null, workspaceId?: string) {
 	return Object.fromEntries(
@@ -52,4 +52,9 @@ test('describes workspace views to restore and leaves other routes out', () => {
 	expect(workspaceViewRoute('/workspaces/[workspaceId]/resources/[[kind]]', 'pau')?.view).toBe('resources');
 	expect(workspaceViewRoute('/workspaces/[workspaceId]/sessions/[sessionId]', 'pau')).toBeUndefined();
 	expect(workspaceViewRoute('/diagnostics', undefined)).toBeUndefined();
+});
+
+test('builds the query that opens a file in Files, with its line when known', () => {
+	expect(openFileQuery('src/main.rs', 12)).toBe('?path=src%2Fmain.rs&line=12');
+	expect(openFileQuery('docs/a b.md')).toBe('?path=docs%2Fa+b.md');
 });

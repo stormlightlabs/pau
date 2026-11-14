@@ -34,8 +34,8 @@ use pau_core::{
         SandboxSelection, WorkspaceSandbox, resolve_sandbox, validate_selection,
     },
     workspace::{
-        FileContent, FileEntry, FileSearchMatch, GitDiff, GitStatus, TraversalOptions,
-        WorkspaceError, WorkspaceService,
+        FileContent, FileEntry, FileSearchMatch, GitDiff, GitStatus, NameSearchResult,
+        TraversalOptions, WorkspaceError, WorkspaceService,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -1073,7 +1073,7 @@ async fn search_names(
     State(state): State<ApiState>,
     AxumPath(workspace_id): AxumPath<String>,
     Query(query): Query<SearchFilesQuery>,
-) -> Result<Json<Vec<FileEntry>>, ApiError> {
+) -> Result<Json<NameSearchResult>, ApiError> {
     let service = workspace_service(&state)?;
     let traversal = TraversalOptions {
         include_hidden: query.include_hidden,
@@ -2241,11 +2241,12 @@ mod tests {
             .unwrap();
         let response = app.clone().oneshot(names).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        let names: Vec<FileEntry> =
+        let names: NameSearchResult =
             serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
-        assert_eq!(names.len(), 1);
-        assert_eq!(names[0].path, "note.txt");
+        assert_eq!(names.entries.len(), 1);
+        assert_eq!(names.entries[0].path, "note.txt");
+        assert!(!names.truncated);
 
         let git_status = Request::builder()
             .uri(format!("/api/workspaces/{}/git/status", workspace.id))

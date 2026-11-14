@@ -33,6 +33,7 @@
 		commands = [],
 		files = [],
 		searchFailure = false,
+		searchTruncated = false,
 		sendFailure,
 		holdSend = false,
 		openable = false,
@@ -68,6 +69,8 @@
 		files?: FileMention[];
 		/** When set, searching files fails. */
 		searchFailure?: boolean;
+		/** When set, file searches report that they stopped early. */
+		searchTruncated?: boolean;
 		/** When set, sending a prompt fails with this message. */
 		sendFailure?: string;
 		/** Whether sends never get an answer, which leaves the prompt pending. */
@@ -224,7 +227,8 @@
 	onLoadCommands={async () => commands}
 	onSearchFiles={async (_workspaceId, query) => {
 		if (searchFailure) throw new Error('Search failed');
-		return files.filter((file) => file.path.toLowerCase().includes(query.toLowerCase()));
+		const matches = files.filter((file) => file.path.toLowerCase().includes(query.toLowerCase()));
+		return { files: matches, truncated: searchTruncated };
 	}}
 	onInterrupt={async (sessionId) => {
 		lastAction = `${sessionId}: interrupt`;

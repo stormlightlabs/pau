@@ -37,6 +37,7 @@ export type {
 	ThemePreference,
 	UiFontPreference,
 	UiPreferences,
+	NameSearchResult,
 	NativeSessionList,
 	NativeSessionSummary,
 	NativeSessionWarning,

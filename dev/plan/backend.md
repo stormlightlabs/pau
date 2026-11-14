@@ -9,15 +9,19 @@ acceptance; long-running progress arrives as events.
 ## Workspace files
 
 File endpoints reject any path that resolves outside the canonical workspace
-root, and directory walks never follow links. Listings and searches apply Git and ignore-file rules, skip
-credential files, and hide empty sandbox placeholders of running processes.
+root, and directory walks never follow links. Listings and searches apply Git
+and ignore-file rules, skip credential files, and hide empty sandbox
+placeholders of running processes.
 
 `GET /api/workspaces/{id}/names` serves `@` mentions in the composer. It walks
 the whole workspace for a name, or only the folder before the last slash, and
 ranks prefix, substring, then in-order letter matches, folders first. The walk
 runs on a blocking thread and stops after 200,000 entries, so a huge tree costs
-a partial answer instead of a stalled request. A link is offered only when its
-target resolves inside the root. `GET /api/workspaces/{id}/search` searches
+a partial answer instead of a stalled request. One walk runs per workspace: a
+newer search stops the older one, and a dropped request stops its own. A walk
+that stops early sets `truncated`, and the composer says so instead of
+reporting no match. A link is offered only when its target resolves inside the
+root and is not a credential file. `GET /api/workspaces/{id}/search` searches
 file content instead.
 
 ## Agent sessions

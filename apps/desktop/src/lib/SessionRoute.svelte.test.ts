@@ -815,7 +815,7 @@ test('completes an @ mention from the name search, however deep the file sits', 
 	const { props, fetcher } = setup({
 		'GET /api/sessions': () => json([idleSession]),
 		'GET /api/workspaces/pau/names?query=needle': () =>
-			json([{ path: 'pkg250/src/deep/nested/needle.rs', kind: 'file', size: 12 }])
+			json({ entries: [{ path: 'pkg250/src/deep/nested/needle.rs', kind: 'file', size: 12 }], truncated: false })
 	});
 	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
 	const prompt = page.getByRole('textbox', { name: 'Prompt' });
@@ -829,8 +829,34 @@ test('completes an @ mention from the name search, however deep the file sits', 
 	expect(requested.filter((url) => url.includes('/files'))).toEqual([]);
 });
 
+test('aborts a name search the next keystroke made stale and ignores its late answer', async () => {
+	let stale: AbortSignal | undefined;
+	let answerStale: ((response: Response) => void) | undefined;
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/workspaces/pau/names?query=ne': (init) => {
+			stale = init?.signal ?? undefined;
+			return new Promise((resolve) => (answerStale = resolve));
+		},
+		'GET /api/workspaces/pau/names?query=needle': () =>
+			json({ entries: [{ path: 'needle.rs', kind: 'file', size: 1 }], truncated: false })
+	});
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+
+	await userEvent.type(prompt, '@ne');
+	await expect.poll(() => stale).toBeDefined();
+	await userEvent.type(prompt, 'edle');
+	expect(stale?.aborted).toBe(true);
+	await expect.element(page.getByRole('option', { name: /needle\.rs/ })).toBeVisible();
+
+	answerStale?.(json({ entries: [{ path: 'network.rs', kind: 'file', size: 1 }], truncated: false }));
+	await expect.element(page.getByRole('option', { name: /network\.rs/ })).not.toBeInTheDocument();
+});
+
 test.each([
-	['nothing matches', () => json([]), 'No matching files'],
+	['nothing matches', () => json({ entries: [], truncated: false }), 'No matching files'],
+	['the search stopped early', () => json({ entries: [], truncated: true }), /Search stopped early/],
 	['the search fails', () => json({ code: 'internal', message: 'down' }, 500), 'Files could not be searched']
 ])('says so when %s', async (_case, names, message) => {
 	const { props } = setup({

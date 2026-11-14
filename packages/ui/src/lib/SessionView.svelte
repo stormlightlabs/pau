@@ -73,6 +73,7 @@
 		CommandOption,
 		CompactionReason,
 		FileMention,
+		FileMentionSearch,
 		ExtensionUiResponse,
 		ExtensionUiState,
 		ModelOption,
@@ -127,7 +128,8 @@
 		 * `@` in the composer. Folders end with a slash. A rejection shows that the
 		 * search failed. Without it, `@` does not open completion.
 		 */
-		onSearchFiles?: (workspaceId: string, query: string) => Promise<FileMention[]>;
+		/** Searches for `@` mentions. The view aborts `signal` once a newer search starts. */
+		onSearchFiles?: (workspaceId: string, query: string, signal: AbortSignal) => Promise<FileMentionSearch>;
 		/**
 		 * Interrupts the running turn. Pi drops any queued messages on interrupt,
 		 * so return what the queue held and the view puts that text back in the
@@ -500,6 +502,8 @@
 	/** The caret in the draft, which decides whether an `@` mention is open. */
 	let caret = $state(0);
 	let mentionResults = $state<FileMention[]>();
+	/** Whether the last file search stopped early. */
+	let mentionTruncated = $state(false);
 	let mentionFailed = $state(false);
 	let mentionSelected = $state(0);
 	/** The draft that Escape closed file completion for. */
@@ -724,18 +728,21 @@
 	async function searchMentions(
 		search: NonNullable<typeof onSearchFiles>,
 		workspaceId: string,
-		query: string
+		query: string,
+		signal: AbortSignal
 	): Promise<void> {
 		const run = mentionRun;
 		try {
-			const files = await search(workspaceId, query);
+			const { files, truncated } = await search(workspaceId, query, signal);
 			if (run !== mentionRun) return;
 			mentionResults = files;
+			mentionTruncated = truncated;
 			mentionFailed = false;
 			mentionSelected = 0;
 		} catch {
 			if (run !== mentionRun) return;
 			mentionResults = [];
+			mentionTruncated = false;
 			mentionFailed = true;
 		}
 	}
@@ -750,8 +757,15 @@
 			mentionFailed = false;
 			return;
 		}
-		const timer = setTimeout(() => void searchMentions(search, workspaceId, query), mentionDebounceMs);
-		return () => clearTimeout(timer);
+		const controller = new AbortController();
+		const timer = setTimeout(
+			() => void searchMentions(search, workspaceId, query, controller.signal),
+			mentionDebounceMs
+		);
+		return () => {
+			clearTimeout(timer);
+			controller.abort();
+		};
 	});
 
 	$effect(() => {
@@ -2885,6 +2899,7 @@
 										files={mentionResults ?? []}
 										selected={mentionSelected}
 										failed={mentionFailed}
+										truncated={mentionTruncated}
 										onAccept={acceptMention} />
 								</div>
 							{/if}

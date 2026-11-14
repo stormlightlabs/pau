@@ -82,6 +82,13 @@ export type FileMention = {
 	directory: boolean;
 };
 
+/** The files a mention search found. */
+export type FileMentionSearch = {
+	files: FileMention[];
+	/** Whether the search stopped early, so a missing name may still exist. */
+	truncated: boolean;
+};
+
 /** Thinking levels in the order the control lists them. The model may clamp a level it does not support. */
 export const thinkingLevels = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 

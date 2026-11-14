@@ -1,4 +1,4 @@
-import type { FileMention } from '@stormlightlabs/pau-ui';
+import type { FileMentionSearch } from '@stormlightlabs/pau-ui';
 
 import { searchWorkspaceNames } from './api';
 
@@ -8,16 +8,19 @@ import { searchWorkspaceNames } from './api';
  * The server's name search ranks the matches and leaves out ignored files.
  * Hidden entries appear only when the name after the last slash starts with a
  * dot. Folder paths end in a slash so accepting one keeps completion open.
+ * Aborting `signal` cancels a search the next keystroke made stale.
  */
 export async function searchFileMentions(
 	workspaceId: string,
 	query: string,
+	signal?: AbortSignal,
 	fetcher: typeof fetch = fetch
-): Promise<FileMention[]> {
+): Promise<FileMentionSearch> {
 	const name = query.slice(query.lastIndexOf('/') + 1);
 	const options = { includeHidden: name.startsWith('.'), includeIgnored: false };
-	const entries = await searchWorkspaceNames(workspaceId, query, options, fetcher);
-	return entries.map((entry) =>
+	const { entries, truncated } = await searchWorkspaceNames(workspaceId, query, options, fetcher, signal);
+	const files = entries.map((entry) =>
 		entry.kind === 'directory' ? { path: `${entry.path}/`, directory: true } : { path: entry.path, directory: false }
 	);
+	return { files, truncated };
 }

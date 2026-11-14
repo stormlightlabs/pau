@@ -128,6 +128,7 @@ export type {
 	ExtensionUiResponse,
 	CommandOption,
 	FileMention,
+	FileMentionSearch,
 	MessageQueue,
 	ModelOption,
 	ExtensionUiState,

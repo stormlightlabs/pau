@@ -1,8 +1,13 @@
 //! Workspace registration and root-confined file operations.
 
 use std::{
+    collections::HashMap,
     fmt, fs, io,
     path::{Component, Path, PathBuf},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use cap_std::{ambient_authority, fs::Dir};
@@ -128,6 +133,16 @@ pub struct FileEntry {
     pub size: Option<u64>,
 }
 
+/// Files and folders a name search matched, best match first.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct NameSearchResult {
+    /// Matching entries, at most the requested limit.
+    pub entries: Vec<FileEntry>,
+    /// Whether the search stopped before visiting every entry it could, so a
+    /// name missing from `entries` may still exist.
+    pub truncated: bool,
+}
+
 /// UTF-8 file content and the revision required for a later write.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct FileContent {
@@ -225,6 +240,9 @@ pub struct GitDiff {
 pub struct WorkspaceService {
     workspaces: WorkspaceRepository,
     processes: Option<ProcessMetadataRepository>,
+    /// The stop flag of the latest name search per workspace. Clones share
+    /// it, so a newer search stops an older walk in the same workspace.
+    name_searches: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
 }
 
 impl WorkspaceService {
@@ -233,6 +251,7 @@ impl WorkspaceService {
         Self {
             workspaces,
             processes: None,
+            name_searches: Arc::default(),
         }
     }
 
@@ -571,15 +590,22 @@ impl WorkspaceService {
     /// Names match case-insensitively as a prefix, then a substring, then
     /// letters in order. Folders come before files of the same rank, then
     /// shorter paths. Links are never followed, and a link appears only when
-    /// its target stays inside the root.
+    /// its target stays inside the root and is not a credential file.
+    ///
+    /// One walk runs per workspace. A newer search stops the older walk, and
+    /// dropping the returned future stops its own, so abandoned keystrokes do
+    /// not pile up blocking threads. A walk stopped either way, or by the
+    /// entry budget, returns what it found with `truncated` set.
     pub async fn search_names(
         &self,
         workspace_id: &str,
         query: &str,
         options: TraversalOptions,
         limit: Option<usize>,
-    ) -> Result<Vec<FileEntry>, WorkspaceError> {
+    ) -> Result<NameSearchResult, WorkspaceError> {
         let root = self.root(workspace_id).await?;
+        let stop = StopOnDrop(self.begin_name_search(workspace_id));
+        let walk_stop = Arc::clone(&stop.0);
         let limit = limit
             .unwrap_or(DEFAULT_NAME_SEARCH_LIMIT)
             .clamp(1, MAX_SEARCH_LIMIT);
@@ -593,10 +619,25 @@ impl WorkspaceService {
                 limit,
                 MAX_NAME_SEARCH_ENTRIES,
                 &hidden,
+                &walk_stop,
             )
         })
         .await
         .map_err(|error| io::Error::other(error.to_string()))?
+    }
+
+    /// Registers a name search for a workspace and stops the one before it.
+    fn begin_name_search(&self, workspace_id: &str) -> Arc<AtomicBool> {
+        let stop = Arc::new(AtomicBool::new(false));
+        let previous = self
+            .name_searches
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(workspace_id.to_owned(), Arc::clone(&stop));
+        if let Some(previous) = previous {
+            previous.store(true, Ordering::Relaxed);
+        }
+        stop
     }
 
     /// Returns workspace-relative placeholders of running sandboxed processes
@@ -650,8 +691,19 @@ fn is_hidden(hidden: &[String], relative: &str) -> bool {
     })
 }
 
+/// Sets a name search's stop flag when the request that owns it is dropped,
+/// whether it finished or was abandoned.
+struct StopOnDrop(Arc<AtomicBool>);
+
+impl Drop for StopOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
+}
+
 /// Runs [`WorkspaceService::search_names`] under a canonical root, visiting at
-/// most `budget` entries. Tests pass a small budget to exercise the cut-off.
+/// most `budget` entries and stopping early once `stop` is set. Tests pass a
+/// small budget to exercise the cut-off.
 fn search_names_in(
     root: &Path,
     query: &str,
@@ -659,18 +711,32 @@ fn search_names_in(
     limit: usize,
     budget: usize,
     hidden: &[String],
-) -> Result<Vec<FileEntry>, WorkspaceError> {
+    stop: &AtomicBool,
+) -> Result<NameSearchResult, WorkspaceError> {
     let (folder, name) = query.rsplit_once('/').unwrap_or(("", query));
     let needle = name.to_lowercase();
     let start = match confined_existing(root, folder) {
         Ok(path) if path.is_dir() => path,
-        Ok(_) | Err(WorkspaceError::NotFound) => return Ok(Vec::new()),
+        Ok(_) | Err(WorkspaceError::NotFound) => {
+            return Ok(NameSearchResult {
+                entries: Vec::new(),
+                truncated: false,
+            });
+        }
         Err(error) => return Err(error),
     };
     let depth = (query.contains('/') || needle.is_empty()).then_some(1);
     let mut found = Vec::new();
-    // An unreadable folder costs its own entries, not the whole search.
-    for item in walker(&start, options, depth).take(budget).flatten() {
+    let mut truncated = false;
+    for (visited, item) in walker(&start, options, depth).enumerate() {
+        if visited == budget || stop.load(Ordering::Relaxed) {
+            truncated = true;
+            break;
+        }
+        // An unreadable folder costs its own entries, not the whole search.
+        let Ok(item) = item else {
+            continue;
+        };
         if item.depth() == 0 {
             continue;
         }
@@ -692,8 +758,12 @@ fn search_names_in(
             FileEntryKind::Directory
         } else if file_type.is_symlink() {
             // A mention of a link that leaves the root would hand the agent a
-            // path to files outside the workspace.
-            if !fs::canonicalize(item.path()).is_ok_and(|target| target.starts_with(root)) {
+            // path to files outside the workspace, and one to a credential
+            // file would hand it the secret under another name.
+            let target = fs::canonicalize(item.path());
+            if !target.is_ok_and(|target| {
+                relative_display(root, &target).is_ok_and(|target| !is_sensitive(&target))
+            }) {
                 continue;
             }
             FileEntryKind::Symlink
@@ -719,7 +789,7 @@ fn search_names_in(
             .then_with(|| left.path.cmp(&right.path))
     });
     found.truncate(limit);
-    Ok(found
+    let entries = found
         .into_iter()
         .map(|(_, mut entry)| {
             if entry.kind == FileEntryKind::File {
@@ -729,7 +799,8 @@ fn search_names_in(
             }
             entry
         })
-        .collect())
+        .collect();
+    Ok(NameSearchResult { entries, truncated })
 }
 
 /// Ranks a name against a lowercase needle: 0 for a prefix, 1 for a
@@ -1448,8 +1519,12 @@ mod tests {
         fs::write(path, "").unwrap();
     }
 
-    fn paths(entries: &[FileEntry]) -> Vec<&str> {
-        entries.iter().map(|entry| entry.path.as_str()).collect()
+    fn paths(result: &NameSearchResult) -> Vec<&str> {
+        result
+            .entries
+            .iter()
+            .map(|entry| entry.path.as_str())
+            .collect()
     }
 
     #[tokio::test]
@@ -1481,16 +1556,17 @@ mod tests {
             paths(&found),
             ["apple", "src/App.svelte", "snapper.rs", "docs/map-plan.md"]
         );
-        assert_eq!(found[0].kind, FileEntryKind::Directory);
-        assert_eq!(found[1].size, Some(0));
+        assert_eq!(found.entries[0].kind, FileEntryKind::Directory);
+        assert_eq!(found.entries[1].size, Some(0));
+        assert!(!found.truncated);
         assert_eq!(
             paths(&search("src/").await.unwrap()),
             ["src/lib", "src/App.svelte"]
         );
         assert_eq!(paths(&search("src/ap").await.unwrap()), ["src/App.svelte"]);
         assert_eq!(paths(&search("").await.unwrap()).len(), 5);
-        assert!(search("missing/").await.unwrap().is_empty());
-        assert!(search("zzz").await.unwrap().is_empty());
+        assert!(search("missing/").await.unwrap().entries.is_empty());
+        assert!(search("zzz").await.unwrap().entries.is_empty());
         assert!(matches!(
             search("../").await,
             Err(WorkspaceError::InvalidPath)
@@ -1542,7 +1618,8 @@ mod tests {
             .search_names(&workspace.id, "note", options, None)
             .await
             .unwrap();
-        assert_eq!(default.len(), DEFAULT_NAME_SEARCH_LIMIT);
+        assert_eq!(default.entries.len(), DEFAULT_NAME_SEARCH_LIMIT);
+        assert!(!default.truncated);
     }
 
     #[tokio::test]
@@ -1562,10 +1639,47 @@ mod tests {
 
         let canonical = fs::canonicalize(&root).unwrap();
         let options = TraversalOptions::default();
-        let all = search_names_in(&canonical, "mod", options, 1_000, usize::MAX, &[]).unwrap();
-        assert_eq!(all.len(), 300);
-        let cut = search_names_in(&canonical, "mod", options, 1_000, 100, &[]).unwrap();
-        assert!(!cut.is_empty() && cut.len() < 50);
+        let running = AtomicBool::new(false);
+        let search = |budget| {
+            search_names_in(&canonical, "mod", options, 1_000, budget, &[], &running).unwrap()
+        };
+        let all = search(usize::MAX);
+        assert_eq!(all.entries.len(), 300);
+        assert!(!all.truncated);
+        let cut = search(100);
+        assert!(!cut.entries.is_empty() && cut.entries.len() < 50);
+        assert!(cut.truncated);
+    }
+
+    #[tokio::test]
+    async fn a_newer_or_dropped_search_stops_the_walk() {
+        let (directory, service, workspace) = fixture().await;
+        let root = fs::canonicalize(directory.path().join("project")).unwrap();
+        touch(&root, "needle.rs");
+        let options = TraversalOptions::default();
+
+        let stopped = AtomicBool::new(true);
+        let result = search_names_in(&root, "needle", options, 50, usize::MAX, &[], &stopped);
+        assert_eq!(
+            result.unwrap(),
+            NameSearchResult {
+                entries: Vec::new(),
+                truncated: true
+            }
+        );
+
+        let older = service.begin_name_search(&workspace.id);
+        let other = service.begin_name_search("another workspace");
+        let newer = service.begin_name_search(&workspace.id);
+        assert!(older.load(Ordering::Relaxed));
+        assert!(!other.load(Ordering::Relaxed));
+        assert!(!newer.load(Ordering::Relaxed));
+
+        // A request future dropped before its walk ends stops that walk.
+        let request = StopOnDrop(newer);
+        let walk = Arc::clone(&request.0);
+        drop(request);
+        assert!(walk.load(Ordering::Relaxed));
     }
 
     #[cfg(unix)]
@@ -1586,12 +1700,28 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(paths(&found), ["plan-in", "docs/plan.md"]);
-        assert_eq!(found[0].kind, FileEntryKind::Symlink);
+        assert_eq!(found.entries[0].kind, FileEntryKind::Symlink);
         assert!(matches!(
             service
                 .search_names(&workspace.id, "escape/", options, None)
                 .await,
             Err(WorkspaceError::InvalidPath)
         ));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn never_offers_a_link_to_a_credential_file() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+        touch(&root, ".env");
+        touch(&root, "env-guide.md");
+        std::os::unix::fs::symlink(root.join(".env"), root.join("env-notes")).unwrap();
+
+        let found = service
+            .search_names(&workspace.id, "env", TraversalOptions::default(), None)
+            .await
+            .unwrap();
+        assert_eq!(paths(&found), ["env-guide.md"]);
     }
 }

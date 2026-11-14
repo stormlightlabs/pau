@@ -370,6 +370,15 @@ export const FileMentionNoMatches: Story = {
 		await expect(await canvas.findByText('No matching files')).toBeInTheDocument();
 	}
 };
+export const FileMentionStoppedEarly: Story = {
+	args: { files: fileMentionFixtures.populated, searchTruncated: true },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), '@zzz');
+		await expect(await canvas.findByText(/Search stopped early/)).toBeInTheDocument();
+		await expect(canvas.queryByText('No matching files')).not.toBeInTheDocument();
+	}
+};
 export const FileMentionMidDraft: Story = {
 	args: { files: fileMentionFixtures.populated },
 	play: async ({ canvasElement }) => {

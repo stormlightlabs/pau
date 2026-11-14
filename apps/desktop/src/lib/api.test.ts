@@ -248,7 +248,7 @@ test('lists and searches workspace files and names with traversal options', asyn
 	expect(fetcher).toHaveBeenNthCalledWith(
 		3,
 		'http://127.0.0.1:43127/api/workspaces/workspace%20%2F%20one/names?query=src%2F.en&include_hidden=true',
-		{ headers: { Authorization: `Bearer ${TOKEN}` } }
+		{ headers: { Authorization: `Bearer ${TOKEN}` }, signal: undefined }
 	);
 });
 

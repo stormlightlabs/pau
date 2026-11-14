@@ -10,10 +10,12 @@
 		selected: number;
 		/** Whether the last search failed. */
 		failed: boolean;
+		/** Whether the last search stopped early, so a missing name may still exist. */
+		truncated?: boolean;
 		onAccept: (file: FileMention) => void;
 	};
 
-	let { id, files, selected, failed, onAccept }: Props = $props();
+	let { id, files, selected, failed, truncated = false, onAccept }: Props = $props();
 
 	/** Splits a path into the folder part and the name shown first. */
 	function parts(file: FileMention): { folder: string; name: string } {
@@ -26,30 +28,39 @@
 <div class="mention-completion">
 	{#if failed}
 		<p class="mention-completion__empty" role="status">Files could not be searched</p>
-	{:else if files.length === 0}
+	{:else if files.length === 0 && !truncated}
 		<p class="mention-completion__empty" role="status">No matching files</p>
 	{:else}
-		<ul {id} role="listbox" aria-label="Files">
-			{#each files as file, index (file.path)}
-				{@const { folder, name } = parts(file)}
-				<!-- The composer keeps focus and handles the keyboard. -->
-				<li
-					id="{id}-option-{index}"
-					role="option"
-					class="pau-row"
-					aria-selected={index === selected}
-					class:mention-completion__option--selected={index === selected}
-					onmousedown={(event) => {
-						event.preventDefault();
-						onAccept(file);
-					}}>
-					<span class="mention-completion__name">{name}</span>
-					{#if folder}
-						<span class="mention-completion__folder">{folder}</span>
-					{/if}
-				</li>
-			{/each}
-		</ul>
+		{#if files.length > 0}
+			<ul {id} role="listbox" aria-label="Files">
+				{#each files as file, index (file.path)}
+					{@const { folder, name } = parts(file)}
+					<!-- The composer keeps focus and handles the keyboard. -->
+					<li
+						id="{id}-option-{index}"
+						role="option"
+						class="pau-row"
+						aria-selected={index === selected}
+						class:mention-completion__option--selected={index === selected}
+						title={file.path}
+						onmousedown={(event) => {
+							event.preventDefault();
+							onAccept(file);
+						}}>
+						<span class="mention-completion__name">{name}</span>
+						{#if folder}
+							<!-- Right-to-left flow puts the ellipsis at the folder's start, so the end stays visible. -->
+							<span class="mention-completion__folder"><span dir="ltr">{folder}</span></span>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		{/if}
+		{#if truncated}
+			<p class="mention-completion__empty" role="status">
+				Search stopped early in this large workspace. Type a folder path to narrow it.
+			</p>
+		{/if}
 	{/if}
 </div>
 
@@ -89,7 +100,10 @@
 	}
 
 	.mention-completion__folder {
+		min-width: 0;
 		overflow: hidden;
+		direction: rtl;
+		text-align: left;
 		color: var(--pau-text-muted);
 		font-family: var(--pau-font-code);
 		font-size: var(--pau-type-xs);

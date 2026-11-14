@@ -784,14 +784,15 @@ test.each([
 	await expect.element(page.getByRole('alert')).toHaveTextContent(expected);
 });
 
-test('hides the picker when the session cannot select models', async () => {
+test('hides only the model picker when the session can change thinking but not models', async () => {
+	const capabilities = { ...idleSession.capabilities, model_selection: false, thinking_level: true };
 	const { props } = setup({
-		'GET /api/sessions': () =>
-			json([{ ...idleSession, capabilities: { ...idleSession.capabilities, model_selection: false } }])
+		'GET /api/sessions': () => json([{ ...idleSession, thinking_level: 'low', capabilities }])
 	});
 	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
 
 	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeEnabled();
+	await expect.element(page.getByRole('combobox', { name: 'Thinking level' })).toHaveTextContent('Low');
 	await expect.element(page.getByRole('button', { name: /^Model/ })).not.toBeInTheDocument();
 });
 

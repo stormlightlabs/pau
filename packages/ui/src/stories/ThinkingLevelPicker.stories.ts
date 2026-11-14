@@ -90,15 +90,6 @@ export const ModelWithoutThinkingLevels: Story = {
 	}
 };
 
-export const Unsupported: Story = {
-	args: { supported: false },
-	play: async ({ canvasElement }) => {
-		const select = within(canvasElement).getByRole('combobox', { name: 'Thinking level' });
-		await expect(select).toBeDisabled();
-		await expect(select).toHaveAccessibleDescription(/does not support changing the thinking level/);
-	}
-};
-
 export const DuringRun: Story = {
 	args: { unavailableReason: 'Wait for this run to finish before changing the thinking level.' },
 	play: async ({ canvasElement }) => {

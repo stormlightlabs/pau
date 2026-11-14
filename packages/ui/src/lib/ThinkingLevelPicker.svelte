@@ -22,8 +22,6 @@
 		level?: ThinkingLevel;
 		/** Selects a level. A rejection shows its message and keeps the previous level. */
 		onSelect: (level: ThinkingLevel) => void | Promise<void>;
-		/** Whether the agent can change the thinking level at all. */
-		supported?: boolean;
 		/** Whether the current model reasons. Absent means the model is not known yet. */
 		reasoning?: boolean;
 		/**
@@ -35,7 +33,7 @@
 		unavailableReason?: string;
 	};
 
-	let { level, onSelect, supported = true, reasoning, levels = thinkingLevels, unavailableReason }: Props = $props();
+	let { level, onSelect, reasoning, levels = thinkingLevels, unavailableReason }: Props = $props();
 
 	/**
 	 * The model's levels. A current level the model does not offer stays
@@ -54,7 +52,6 @@
 	);
 
 	const explanation = $derived.by(() => {
-		if (!supported) return 'This agent does not support changing the thinking level in a session.';
 		// Pi reports only `off` for a model without reasoning.
 		if (reasoning === false || levels.every((candidate) => candidate === 'off')) {
 			return 'This model does not offer thinking levels.';

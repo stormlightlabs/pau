@@ -44,8 +44,10 @@ and cannot be pointed at another origin. During desktop development, the desktop
 may run in a normal browser against this local endpoint. This is a development
 path for `apps/desktop`, not the remote web product. Tokens must not be written
 to normal logs. The browser development server reads its token from standard
-input with `--token-stdin`, from `PAU_API_TOKEN` in `.env`, or from
-`PAU_API_TOKEN` in its launch environment, in that order. Processes run by the
+input with `--token-stdin`, from `PAU_API_TOKEN` in `.env` in the directory
+the server starts from, or from `PAU_API_TOKEN` in its launch environment, in
+that order. It does not search parent directories for `.env`, and it prints a
+note when `.env` overrides an exported token. Processes run by the
 same user can read a launch environment with `ps eww` or
 `/proc/<pid>/environ`, so the server prints a warning when it uses a token from
 there. It removes the variable before it starts any child, so agents, terminals

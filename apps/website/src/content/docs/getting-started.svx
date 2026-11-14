@@ -101,7 +101,8 @@ pnpm --filter @stormlightlabs/pau-desktop dev
 For browser development, generate a token with `openssl rand -hex 32` and set
 it as `PAU_API_TOKEN` in the repository's `.env` file. The Rust server and the
 Vite development server both read it there, and Vite adds it to proxied API
-requests. Do not commit the token.
+requests. The Rust server reads `.env` only in the directory it starts from, so
+start it from the repository root. Do not commit the token.
 
 ```bash
 cargo run -p pau-server
@@ -116,7 +117,8 @@ printf '%s\n' "$TOKEN" | cargo run -p pau-server -- --token-stdin
 ```
 
 The server also accepts `PAU_API_TOKEN` exported in its environment, and prints
-a warning when it does. Other processes run by the same user, including the
+a warning when it uses it. A token in `.env` wins over an exported one, with a
+note saying so. Other processes run by the same user, including the
 agents and commands the server starts, can read a process's environment.
 `.env` and `--token-stdin` keep the token out of it.
 

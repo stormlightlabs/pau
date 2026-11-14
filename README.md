@@ -44,7 +44,8 @@ cp .env.example .env
 ```
 
 The desktop app, the browser development servers, and the macOS release script
-read `.env`. Variables already set in your shell take precedence.
+read `.env`. Variables already set in your shell take precedence, except
+`PAU_API_TOKEN` for the local API, described below.
 [Signed macOS builds](dev/macos-signing.md) covers the signing and notarization
 settings.
 
@@ -118,8 +119,9 @@ configuration under `<workspace>/.pi`, and session storage under
 ## Run the local application
 
 For browser development, set `PAU_API_TOKEN` in `.env` to the output of
-`openssl rand -hex 32`. Then start the local API and the web app in separate
-terminals:
+`openssl rand -hex 32`. The local API reads `.env` in the directory it starts
+from, so run it from the repository root. Then start the local API and the web
+app in separate terminals:
 
 ```sh
 cargo run -p pau-server
@@ -127,8 +129,10 @@ pnpm dev:desktop:browser
 ```
 
 The server can also read the token from standard input with `--token-stdin`,
-or from `PAU_API_TOKEN` exported in your shell. It warns about an exported
-token, because agents and commands the server starts can read it there.
+or from `PAU_API_TOKEN` exported in your shell. A token in `.env` wins over an
+exported one, and the server prints a note when that happens. It warns when it
+uses an exported token, because agents and commands the server starts can read
+it there.
 
 The development server authenticates and forwards `/api` requests to the local
 API at `127.0.0.1:3001`. All endpoints reject requests without the launch

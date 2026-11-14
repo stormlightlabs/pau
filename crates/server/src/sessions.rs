@@ -79,11 +79,13 @@
 //! by their native identity to apply it once. At most
 //! [`MAX_SESSION_MESSAGES`] of the newest messages return.
 //!
-//! `POST` on the same path saves the whole conversation as Pi's HTML export,
-//! the page Pi's own `/export` command writes, to the absolute path in a
-//! [`SessionExportRequest`]. See [`PiSession::export_html`] for how the file is
-//! written. A destination Pau cannot write is `400 invalid_destination`, and a
-//! failed write is `500 export_failed`.
+//! `POST /api/sessions/{id}/export` saves the whole conversation as Pi's HTML
+//! export, the page Pi's own `/export` command writes, to the absolute path in
+//! a [`SessionExportRequest`]. See [`PiSession::export_html`] for how the file is
+//! written. An unusable destination is `400 invalid_destination`. A folder Pau
+//! may not write is `403 permission_denied`, a read-only disk `403 read_only`,
+//! and a full disk `507 storage_full`. Any other failed write is
+//! `500 export_failed`.
 
 use std::{
     collections::HashMap,
@@ -809,10 +811,19 @@ pub(crate) fn error_status(error: &PiSessionRegistryError) -> (StatusCode, &'sta
                 (StatusCode::SERVICE_UNAVAILABLE, "pi_unavailable")
             }
             PiSessionError::Process(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
-            PiSessionError::Export(error) if error.kind() == std::io::ErrorKind::InvalidInput => {
-                (StatusCode::BAD_REQUEST, "invalid_destination")
-            }
-            PiSessionError::Export(_) => (StatusCode::INTERNAL_SERVER_ERROR, "export_failed"),
+            PiSessionError::Export(error) => match error.kind() {
+                std::io::ErrorKind::InvalidInput => {
+                    (StatusCode::BAD_REQUEST, "invalid_destination")
+                }
+                std::io::ErrorKind::PermissionDenied => {
+                    (StatusCode::FORBIDDEN, "permission_denied")
+                }
+                std::io::ErrorKind::ReadOnlyFilesystem => (StatusCode::FORBIDDEN, "read_only"),
+                std::io::ErrorKind::StorageFull => {
+                    (StatusCode::INSUFFICIENT_STORAGE, "storage_full")
+                }
+                _ => (StatusCode::INTERNAL_SERVER_ERROR, "export_failed"),
+            },
         },
     }
 }
@@ -1346,7 +1357,7 @@ pub(crate) async fn get_session_messages(
 
 /// Saves the whole conversation to the requested file in Pi's HTML export
 /// format. See the module documentation.
-pub(crate) async fn export_session_messages(
+pub(crate) async fn export_session(
     State(state): State<ApiState>,
     AxumPath(session_id): AxumPath<String>,
     Json(request): Json<SessionExportRequest>,

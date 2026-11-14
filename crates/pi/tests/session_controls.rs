@@ -843,12 +843,16 @@ async fn exports_the_session_file_through_pi_into_the_chosen_file() {
         .collect();
     assert_eq!(names.len(), 2, "no staging file is left behind: {names:?}");
 
-    // Pi renders into its own temporary file, never into the chosen one.
+    // Pi renders into a temporary file beside the chosen one, never into it.
     let commands = fixture.commands();
     assert_command(&commands[0], "export_html");
     let rendered = PathBuf::from(commands[0]["outputPath"].as_str().unwrap());
-    assert_ne!(rendered.parent(), Some(saved.path()));
-    assert!(!rendered.exists(), "the staging directory is removed");
+    assert_eq!(rendered.parent(), Some(saved.path()));
+    assert_ne!(rendered, destination);
+    assert!(
+        !rendered.exists(),
+        "the temporary file was renamed into place"
+    );
     session.stop().await.unwrap();
 }
 
@@ -870,6 +874,11 @@ async fn reports_a_failed_export_and_keeps_the_existing_file() {
         }) if message.starts_with("File not found")
     ));
     assert_eq!(fs::read_to_string(&destination).unwrap(), "earlier export");
+    let names: Vec<_> = fs::read_dir(saved.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(names.len(), 1, "the temporary file is removed: {names:?}");
 
     for (destination, problem) in [
         (PathBuf::from("transcript.html"), "relative path"),

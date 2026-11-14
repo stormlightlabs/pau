@@ -816,42 +816,32 @@ impl PiSession {
     ///
     /// Pi renders the export with its `export_html` command, the same page as
     /// its `/export` command and `pi --export`, so the file opens in a browser
-    /// with no Pau involved. Pi writes into a private temporary directory, and
-    /// this then copies the page into a new file beside `destination` and
-    /// renames it into place. Pi never opens `destination` itself, so a
-    /// symlink there is replaced rather than followed, and a failed export
-    /// leaves any existing file untouched. The file is readable only by its
-    /// owner, because a transcript can hold secrets from the conversation.
+    /// with no Pau involved. Pi writes into a new owner-only temporary file
+    /// beside `destination`, which is then renamed into place. Pi never opens
+    /// `destination` itself, so a symlink there is replaced rather than
+    /// followed, and a failed export removes the temporary file and leaves any
+    /// existing file untouched. The file is readable only by its owner,
+    /// because a transcript can hold secrets from the conversation.
     ///
     /// `destination` must be an absolute path whose parent directory exists.
     pub async fn export_html(&self, destination: PathBuf) -> Result<(), PiSessionError> {
         let control = AgentControl::ExportTranscript;
         self.require_capability(control)?;
         let directory = export_directory(&destination).map_err(PiSessionError::Export)?;
-        let staging = tempfile::Builder::new()
-            .prefix("pau-transcript-")
-            .tempdir()
+        let rendered = tempfile::Builder::new()
+            .prefix(".pau-transcript-")
+            .suffix(".html")
+            .tempfile_in(directory)
             .map_err(PiSessionError::Export)?;
-        let rendered = staging.path().join("transcript.html");
         self.command(
             control,
-            json!({"type": "export_html", "outputPath": rendered.to_string_lossy()}),
+            json!({"type": "export_html", "outputPath": rendered.path().to_string_lossy()}),
         )
         .await?;
-        tokio::task::spawn_blocking(move || -> io::Result<()> {
-            let mut source = std::fs::File::open(&rendered)?;
-            let mut target = tempfile::Builder::new()
-                .prefix(".pau-transcript-")
-                .tempfile_in(&directory)?;
-            io::copy(&mut source, target.as_file_mut())?;
-            target.as_file().sync_all()?;
-            target.persist(&destination).map_err(|error| error.error)?;
-            drop(staging);
-            Ok(())
-        })
-        .await
-        .map_err(|error| PiSessionError::Export(io::Error::other(error)))?
-        .map_err(PiSessionError::Export)
+        rendered
+            .persist(&destination)
+            .map(drop)
+            .map_err(|error| PiSessionError::Export(error.error))
     }
 
     /// Sends the last user prompt again as a new message after the assistant

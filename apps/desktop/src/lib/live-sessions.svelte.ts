@@ -126,11 +126,25 @@ export function sessionErrorMessage(
 	if (action === 'branch' && cause.code === 'control_rejected') {
 		return `Pi could not branch from that message: ${cause.message}`;
 	}
-	if (action === 'export' && cause.code === 'control_rejected') {
-		return `Pi could not export this session: ${cause.message}`;
-	}
-	if (cause.code === 'invalid_destination' || cause.code === 'export_failed') {
-		return `Pau could not save the transcript there: ${cause.message}. Choose another file and try again.`;
+	if (action === 'export') {
+		switch (cause.code) {
+			case 'control_rejected': {
+				return `Pi could not export this session: ${cause.message}`;
+			}
+			case 'permission_denied': {
+				return "Pau can't write to that folder. Choose another.";
+			}
+			case 'read_only': {
+				return 'That disk is read-only. Choose a folder on another disk.';
+			}
+			case 'storage_full': {
+				return 'The disk is full. Free some space or choose another disk.';
+			}
+			case 'invalid_destination':
+			case 'export_failed': {
+				return `Pau could not save the transcript there: ${cause.message}. Choose another file and try again.`;
+			}
+		}
 	}
 	switch (cause.code) {
 		case 'pi_unavailable': {

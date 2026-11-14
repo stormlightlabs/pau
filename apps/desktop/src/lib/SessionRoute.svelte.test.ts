@@ -1118,7 +1118,7 @@ test('exports a transcript to the file the save dialog returns', async () => {
 	const exported = vi.fn<Route>(() => new Response(null, { status: 204 }));
 	const { props, sockets } = setup({
 		'GET /api/sessions': () => json([idleSession]),
-		'POST /api/sessions/session-1/messages': exported
+		'POST /api/sessions/session-1/export': exported
 	});
 	const pickSaveFile = vi
 		.fn()
@@ -1148,14 +1148,10 @@ test('exports a transcript to the file the save dialog returns', async () => {
 	});
 
 	exported.mockImplementationOnce(() =>
-		json({ code: 'export_failed', message: 'Permission denied (os error 13)' }, 500)
+		json({ code: 'permission_denied', message: 'Permission denied (os error 13)' }, 403)
 	);
 	await userEvent.click(exportButton);
-	await expect
-		.element(page.getByRole('alert'))
-		.toHaveTextContent(
-			'Pau could not save the transcript there: Permission denied (os error 13). Choose another file and try again.'
-		);
+	await expect.element(page.getByRole('alert')).toHaveTextContent("Pau can't write to that folder. Choose another.");
 	await expect.element(page.getByText('Transcript saved')).not.toBeInTheDocument();
 });
 

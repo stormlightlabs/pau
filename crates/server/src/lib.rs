@@ -515,6 +515,10 @@ fn router_with_services(
             post(sessions::clone_session),
         )
         .route(
+            "/api/sessions/{session_id}/export",
+            post(sessions::export_session),
+        )
+        .route(
             "/api/sessions/{session_id}/retry",
             post(sessions::retry_session).delete(sessions::abort_session_retry),
         )
@@ -533,7 +537,7 @@ fn router_with_services(
         )
         .route(
             "/api/sessions/{session_id}/messages",
-            get(sessions::get_session_messages).post(sessions::export_session_messages),
+            get(sessions::get_session_messages),
         )
         .route(
             "/api/sessions/{session_id}/history",

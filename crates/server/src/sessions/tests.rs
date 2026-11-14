@@ -1166,14 +1166,14 @@ async fn exports_the_transcript_of_a_resumed_session_to_the_chosen_file() {
         )
         .await;
     assert_eq!(started["capabilities"]["export_transcript"], true);
-    let messages = format!("/api/sessions/{}/messages", started["id"].as_str().unwrap());
+    let export = format!("/api/sessions/{}/export", started["id"].as_str().unwrap());
     let saved = tempfile::tempdir().unwrap();
     let destination = saved.path().join("login fix.html");
 
     let (status, _) = fixture
         .call(
             "POST",
-            &messages,
+            &export,
             Some(json!({"destination": destination.to_str().unwrap()})),
         )
         .await;
@@ -1185,7 +1185,7 @@ async fn exports_the_transcript_of_a_resumed_session_to_the_chosen_file() {
     let (status, error) = fixture
         .call(
             "POST",
-            &messages,
+            &export,
             Some(json!({"destination": "relative.html"})),
         )
         .await;
@@ -1194,12 +1194,28 @@ async fn exports_the_transcript_of_a_resumed_session_to_the_chosen_file() {
         (StatusCode::BAD_REQUEST, Some("invalid_destination"))
     );
 
+    let locked = saved.path().join("locked");
+    fs::create_dir(&locked).unwrap();
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o500)).unwrap();
+    let (status, error) = fixture
+        .call(
+            "POST",
+            &export,
+            Some(json!({"destination": locked.join("a.html").to_str().unwrap()})),
+        )
+        .await;
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o700)).unwrap();
+    assert_eq!(
+        (status, error["code"].as_str()),
+        (StatusCode::FORBIDDEN, Some("permission_denied"))
+    );
+
     // A new session has no file, so the fake Pi refuses to export it.
     let (_, fresh) = fixture.start(None).await;
     let (status, error) = fixture
         .call(
             "POST",
-            &format!("/api/sessions/{}/messages", fresh["id"].as_str().unwrap()),
+            &format!("/api/sessions/{}/export", fresh["id"].as_str().unwrap()),
             Some(json!({"destination": saved.path().join("fresh.html").to_str().unwrap()})),
         )
         .await;

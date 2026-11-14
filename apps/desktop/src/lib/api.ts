@@ -631,7 +631,7 @@ export function exportSessionTranscript(
 	fetcher: typeof fetch = fetch
 ): Promise<void> {
 	const request: SessionExportRequest = { destination };
-	return sendSessionRequest(`/${encodeURIComponent(sessionId)}/messages`, 'POST', request, fetcher);
+	return sendSessionRequest(`/${encodeURIComponent(sessionId)}/export`, 'POST', request, fetcher);
 }
 
 /**

@@ -222,7 +222,7 @@ test('exports a session transcript and reports a refused destination', async () 
 		);
 
 	await exportSessionTranscript('session 1', '/Users/operator/Login fix.html', fetcher);
-	expect(fetcher).toHaveBeenCalledWith('http://127.0.0.1:43127/api/sessions/session%201/messages', {
+	expect(fetcher).toHaveBeenCalledWith('http://127.0.0.1:43127/api/sessions/session%201/export', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
 		body: JSON.stringify({ destination: '/Users/operator/Login fix.html' })

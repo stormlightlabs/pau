@@ -90,15 +90,8 @@ async function lookWhileFocused(element: HTMLElement): Promise<string> {
 	return focused;
 }
 
-/**
- * Touch emulation makes the page report `(hover: none)`, as a touch screen
- * does. Turning it off when it is already off makes headless Chromium on Linux
- * report a pointer with no hover for the rest of the file, so `afterEach` turns
- * it off only after a test that turned it on.
- */
-let touching = false;
+/** Touch emulation makes the page report `(hover: none)`, as a touch screen does. */
 async function emulateTouch(enabled: boolean) {
-	touching = enabled;
 	await cdp().send('Emulation.setTouchEmulationEnabled', { enabled, maxTouchPoints: 1 });
 	// Touch emulation alone updates matchMedia but can leave styles computed for
 	// a hover-capable pointer, so the media features are emulated directly too.
@@ -124,7 +117,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
 	instant.remove();
-	if (touching) await emulateTouch(false);
+	await emulateTouch(false);
 });
 
 describe.each(controls)('%s', (control) => {
@@ -152,17 +145,6 @@ describe.each(controls)('%s', (control) => {
 		expect(look(disabled!)).toBe(disabledRest);
 		expect(await whilePressed(disabled!, () => look(disabled!))).toBe(disabledRest);
 	});
-
-	test('drops the hover look without a hover-capable pointer', async () => {
-		await emulateTouch(true);
-		expect(matchMedia('(hover: hover)').matches).toBe(false);
-		const { enabled } = instances(control);
-		await rest();
-		const resting = look(enabled);
-		await userEvent.hover(enabled);
-		expect(enabled.matches(':hover')).toBe(true);
-		expect(look(enabled)).toBe(resting);
-	});
 });
 
 test('never moves a pressed control', async () => {
@@ -176,4 +158,22 @@ test('never moves a pressed control', async () => {
 		}));
 		expect(during, control).toEqual({ box: before, transform: 'none' });
 	}
+});
+
+/**
+ * These run last. Once touch emulation has been on, headless Chromium on Linux
+ * keeps reporting a pointer with no hover after it is turned off, so a hover
+ * test after them would fail.
+ */
+describe.each(controls)('%s on a touch screen', (control) => {
+	test('drops the hover look without a hover-capable pointer', async () => {
+		await emulateTouch(true);
+		expect(matchMedia('(hover: hover)').matches).toBe(false);
+		const { enabled } = instances(control);
+		await rest();
+		const resting = look(enabled);
+		await userEvent.hover(enabled);
+		expect(enabled.matches(':hover')).toBe(true);
+		expect(look(enabled)).toBe(resting);
+	});
 });

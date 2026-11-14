@@ -114,7 +114,9 @@ prints something shows a dot until you open it.
 Click a web address or a workspace file path in the output to open it. Web
 addresses open in your browser, and file paths open in Files at the line the
 output names, such as `src/main.rs:12`. A path counts only when it names a
-file in the workspace, relative to the workspace root.
+file in the workspace, relative to the workspace root, and includes a folder.
+A bare file name such as `README.md` stays plain text, since the shell may have
+changed to another folder.
 
 Full-screen programs such as Vim, Neovim, and Helix run in the terminal with
 their own configuration, including mouse support when the program turns it

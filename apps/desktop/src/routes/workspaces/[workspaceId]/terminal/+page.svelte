@@ -6,7 +6,7 @@
 	import { onMount } from 'svelte';
 
 	import { listWorkspaces } from '$lib/api';
-	import { openFileQuery, productNavigation } from '$lib/app-navigation';
+	import { openFileInEditor, productNavigation } from '$lib/app-navigation';
 	import { interfacePreferences } from '$lib/interface-preferences.svelte';
 	import { terminalDock } from '$lib/terminal-dock.svelte';
 	import { createTerminalFileLinks } from '$lib/terminal-file-links';
@@ -14,15 +14,10 @@
 
 	const workspaceId = page.params.workspaceId ?? '';
 	const source = createTerminalSource(location.origin, workspaceId);
-	const fileLinks = createTerminalFileLinks(workspaceId, openFile);
+	const fileLinks = createTerminalFileLinks(workspaceId, (path, line) => openFileInEditor(workspaceId, path, line));
 
 	let workspaceName = $state(workspaceId);
 	let disconnected = $state(false);
-
-	function openFile(path: string, line?: number): void {
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the route is resolved; only the query is added
-		void goto(resolve('/workspaces/[workspaceId]/editor', { workspaceId }) + openFileQuery(path, line));
-	}
 
 	/** Opens the dock under the session last shown in this workspace, or under the session list. */
 	function moveToDock(): void {

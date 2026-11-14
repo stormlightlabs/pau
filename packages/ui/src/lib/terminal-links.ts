@@ -18,13 +18,16 @@ export type TerminalPathMatch = {
 const TOKEN = /[^\s'"`()[\]{}<>,;|]+/g;
 
 /**
- * A relative path whose last segment has an extension starting with a letter,
- * with an optional `:line` or `:line:column` suffix. A segment may start with
+ * A relative path with at least one directory, whose last segment has an
+ * extension starting with a letter, with an optional `:line` or `:line:column`
+ * suffix. Paths resolve from the workspace root, not the shell's working
+ * directory, so a bare name such as `README.md` printed after a `cd` could
+ * name a different file and does not match. A segment may start with
  * one dot, as `.github` does, or with `@`, as a scoped package does, but never
  * with `..`. Absolute paths, home and variable prefixes, URLs and version
  * numbers such as `1.2.3` do not match.
  */
-const PATH = /^(?:\.\/)?((?:[.@]?[\w+-][\w.+-]*\/)*[.@]?[\w+-][\w.+-]*\.[A-Za-z][A-Za-z0-9]*)(?::(\d+)(?::(\d+))?)?$/;
+const PATH = /^(?:\.\/)?((?:[.@]?[\w+-][\w.+-]*\/)+[.@]?[\w+-][\w.+-]*\.[A-Za-z][A-Za-z0-9]*)(?::(\d+)(?::(\d+))?)?$/;
 
 /**
  * Finds text in one line of terminal output that may name a workspace file.
@@ -94,7 +97,7 @@ export function createTerminalPathLinks(terminal: Terminal, links: TerminalFileL
 	const exists = async (path: string): Promise<boolean> => {
 		const now = performance.now();
 		for (const [key, listing] of listings) if (now - listing.at >= LISTING_TTL_MS) listings.delete(key);
-		const directory = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+		const directory = path.slice(0, path.lastIndexOf('/'));
 		let listing = listings.get(directory);
 		if (!listing) {
 			listing = { at: now, files: list(directory) };

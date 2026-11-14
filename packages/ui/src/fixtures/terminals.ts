@@ -61,8 +61,18 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 		connect: (id, events) => {
 			let line = '';
 			let exited = false;
+			// Like the desktop source, a connection holds the last size its view
+			// reported and applies it each time its stream opens.
+			let size: { cols: number; rows: number } | undefined;
 			const send = (text: string) => events.output(encoder.encode(text));
 			printers.set(id, send);
+			const applySize = () => {
+				if (!size) return;
+				const previous = sizes.get(id);
+				sizes.set(id, size);
+				// A shell redraws its prompt when its window size changes.
+				if (previous && (previous.cols !== size.cols || previous.rows !== size.rows)) send(`\r${PROMPT}${line}`);
+			};
 			const exit = (status: TerminalExit) => {
 				exited = true;
 				events.exit(status);
@@ -79,6 +89,7 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 					events.replay(encoder.encode(history));
 					send(ready);
 				}
+				applySize();
 				if (options.exitOnConnect) exit(options.exitOnConnect);
 			});
 			return {
@@ -107,10 +118,8 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 					}
 				},
 				resize: (cols, rows) => {
-					const previous = sizes.get(id);
-					sizes.set(id, { cols, rows });
-					// A shell redraws its prompt when its window size changes.
-					if (previous && (previous.cols !== cols || previous.rows !== rows)) send(`\r${PROMPT}${line}`);
+					size = { cols, rows };
+					applySize();
 				},
 				close: () => {}
 			};

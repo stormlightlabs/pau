@@ -7,7 +7,6 @@ const paths = (text: string) => findTerminalPaths(text).map(({ path, line, colum
 describe('findTerminalPaths', () => {
 	test.each([
 		['src/main.rs', { path: 'src/main.rs' }],
-		['README.md', { path: 'README.md' }],
 		['./packages/ui/src/index.ts', { path: 'packages/ui/src/index.ts' }],
 		['.github/workflows/ci.yml', { path: '.github/workflows/ci.yml' }],
 		['node_modules/@xterm/xterm/package.json', { path: 'node_modules/@xterm/xterm/package.json' }],
@@ -50,7 +49,9 @@ describe('findTerminalPaths', () => {
 		['an email address', 'someone@example.com'],
 		['a file without an extension', 'src/Makefile'],
 		['a hidden file without an extension', '.env'],
-		['a Windows path', String.raw`C:\Users\me\file.txt`]
+		['a Windows path', String.raw`C:\Users\me\file.txt`],
+		['a bare file name', 'README.md'],
+		['a bare file name after ./', './README.md']
 	])('ignores %s', (_, text) => {
 		expect(paths(text)).toEqual([]);
 	});

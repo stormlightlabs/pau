@@ -1,3 +1,5 @@
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
 import type { LastRoute, LastView } from '@stormlightlabs/pau-protocol';
 import type { ShellNavItem } from '@stormlightlabs/pau-ui';
 
@@ -87,4 +89,10 @@ export function openFileQuery(path: string, line?: number): string {
 	const query = new URLSearchParams({ path });
 	if (line !== undefined) query.set('line', String(line));
 	return `?${query}`;
+}
+
+/** Shows a workspace file in the Files view, at `line` when one is given. */
+export function openFileInEditor(workspaceId: string, path: string, line?: number): void {
+	// eslint-disable-next-line svelte/no-navigation-without-resolve -- the route is resolved; only the query is added
+	void goto(resolve('/workspaces/[workspaceId]/editor', { workspaceId }) + openFileQuery(path, line));
 }

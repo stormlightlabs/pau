@@ -104,7 +104,21 @@ test('reconnects a stream that fell behind with a growing delay and clears the s
 
 	expect(delays).toEqual([250, 500, 1000, 2000, 4000, 8000, 8000]);
 	expect(recorded.log).toEqual(Array.from({ length: 7 }, () => 'reset'));
-	expect(FakeSocket.opened.at(-1)!.sent).toEqual([JSON.stringify({ type: 'resize', size: { cols: 80, rows: 24 } })]);
+});
+
+test('sends no size on open until the view reports one, then sends that size on each reconnect', () => {
+	const connection = createTerminalSource('http://localhost:5173', 'workspace').connect('terminal', events());
+	FakeSocket.opened[0]!.accept();
+	FakeSocket.opened[0]!.closeWith(1013);
+	vi.advanceTimersByTime(250);
+	FakeSocket.opened[1]!.accept();
+	expect(FakeSocket.opened.map((socket) => socket.sent)).toEqual([[], []]);
+
+	connection.resize(132, 40);
+	FakeSocket.opened[1]!.closeWith(1013);
+	vi.advanceTimersByTime(500);
+	FakeSocket.opened[2]!.accept();
+	expect(FakeSocket.opened[2]!.sent).toEqual([JSON.stringify({ type: 'resize', size: { cols: 132, rows: 40 } })]);
 });
 
 test('hands each stream its first binary frame as the replay', () => {

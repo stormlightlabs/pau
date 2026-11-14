@@ -114,6 +114,8 @@ pub enum LastView {
     Processes,
     /// The workspace's agent sandbox settings.
     Sandbox,
+    /// The agent resources found for the workspace.
+    Resources,
 }
 
 /// The view to restore on launch.

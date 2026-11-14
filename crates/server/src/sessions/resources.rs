@@ -63,8 +63,8 @@ impl SessionApi {
     }
 }
 
-/// Turns Pi's index into the wire index: loaded resources in lookup order,
-/// then skipped resources, then packages.
+/// Turns Pi's index into the wire index: ready resources in the order that
+/// decides duplicates, then skipped resources, then packages.
 fn describe(index: PiResourceIndex) -> AgentResourceIndex {
     let project_trust = match index.project_trust {
         PiProjectTrust::Trusted => AgentResourceTrust::Trusted,

@@ -201,23 +201,27 @@ export const resourceIndex: ResourceIndex = {
 	]
 };
 
+/**
+ * The same workspace without trust. Pi reads no project resource then, so a
+ * user resource that a project file shadowed when trusted loads instead.
+ */
+function withoutTrust(trust: 'untrusted' | 'undecided'): ResourceIndex {
+	return {
+		...resourceIndex,
+		project_trust: trust,
+		resources: resourceIndex.resources.map((resource) => {
+			if (resource.scope === 'project') return { ...resource, trust };
+			if (resource.winner?.startsWith(WORKSPACE)) return { ...resource, status: 'ready', winner: null, warnings: [] };
+			return resource;
+		})
+	};
+}
+
 /** The same workspace before the operator saves a trust decision. */
-export const undecidedResourceIndex: ResourceIndex = {
-	...resourceIndex,
-	project_trust: 'undecided',
-	resources: resourceIndex.resources.map((resource) =>
-		resource.scope === 'project' ? { ...resource, trust: 'undecided' } : resource
-	)
-};
+export const undecidedResourceIndex = withoutTrust('undecided');
 
 /** The same workspace after the operator declines to trust it. */
-export const untrustedResourceIndex: ResourceIndex = {
-	...resourceIndex,
-	project_trust: 'untrusted',
-	resources: resourceIndex.resources.map((resource) =>
-		resource.scope === 'project' ? { ...resource, trust: 'untrusted' } : resource
-	)
-};
+export const untrustedResourceIndex = withoutTrust('untrusted');
 
 /** A workspace where Pi finds nothing. */
 export const emptyResourceIndex: ResourceIndex = { project_trust: 'undecided', resources: [], warnings: [] };

@@ -121,8 +121,10 @@ pub struct AgentResourceWarning {
 /// Every resource the agent finds for a workspace.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct AgentResourceIndex {
-    /// Loaded resources in the agent's lookup order, which decides
-    /// duplicates, then resources that do not load, then packages.
+    /// Ready resources in the order that decides duplicates, then
+    /// duplicates and invalid files, then packages. Until the project is
+    /// trusted, user resources come first and a name collides only within
+    /// its own scope.
     pub resources: Vec<AgentResource>,
     /// Problems that belong to no single resource.
     pub warnings: Vec<AgentResourceWarning>,

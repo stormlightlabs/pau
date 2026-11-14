@@ -206,7 +206,7 @@ context_rail: number | null,
  */
 inspector: number | null, };
 
-export type LastView = "session" | "files" | "terminal" | "processes" | "sandbox";
+export type LastView = "session" | "files" | "terminal" | "processes" | "sandbox" | "resources";
 
 export type LastRoute = {
 /**
@@ -1575,8 +1575,10 @@ message: string, };
 
 export type AgentResourceIndex = {
 /**
- * Loaded resources in the agent's lookup order, which decides
- * duplicates, then resources that do not load, then packages.
+ * Ready resources in the order that decides duplicates, then
+ * duplicates and invalid files, then packages. Until the project is
+ * trusted, user resources come first and a name collides only within
+ * its own scope.
  */
 resources: Array<AgentResource>,
 /**

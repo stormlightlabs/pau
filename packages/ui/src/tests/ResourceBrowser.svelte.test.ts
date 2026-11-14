@@ -118,6 +118,36 @@ test('shows a duplicate with the resource that loads instead', async () => {
 	await expect.element(inspector()).toHaveTextContent('/Users/ada/src/pau/.pi/prompts/review.md');
 });
 
+test('never says a duplicate or invalid user resource loads', async () => {
+	await page.viewport(1440, 900);
+	const view = await renderBrowser('skill', { index: resourceIndex });
+
+	await userEvent.click(list('skill').getByRole('option').filter({ hasText: 'Duplicate' }));
+	await expect.element(inspector()).toHaveTextContent('Not loaded. Another skill named pau-release loads first.');
+	await expect.element(inspector()).toHaveTextContent('Trusted. Your own resources need no trust decision.');
+	await expect.element(inspector()).not.toHaveTextContent(/always load/);
+
+	const invalid = withInvalid('skill');
+	expect(invalid.resources.find((resource) => resource.status === 'invalid')?.scope).toBe('user');
+	await view.rerender({ index: invalid });
+	await userEvent.click(rowStarting(firstName('skill')));
+	await expect.element(inspector()).toHaveTextContent('Not loaded. The file has errors listed under Warnings.');
+	await expect.element(inspector()).not.toHaveTextContent(/always load/);
+});
+
+test('loads a user resource that only an untrusted project file shadows', async () => {
+	await page.viewport(1440, 900);
+	await renderBrowser('prompt', { index: untrustedResourceIndex });
+	const reviews = list('prompt')
+		.getByRole('option')
+		.filter({ hasText: /^review/ });
+
+	expect(reviews.elements().some((option) => option.textContent?.includes('Duplicate'))).toBe(false);
+	const project = reviews.filter({ hasText: 'Project' });
+	await userEvent.click(project);
+	await expect.element(inspector()).toHaveTextContent('Not loaded until you trust the workspace.');
+});
+
 test('links each view in the rail with its count', async () => {
 	await page.viewport(1440, 900);
 	await renderBrowser('skill', { index: resourceIndex });

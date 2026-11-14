@@ -49,6 +49,7 @@ test('describes workspace views to restore and leaves other routes out', () => {
 		session_id: null,
 		saved_session_id: null
 	});
+	expect(workspaceViewRoute('/workspaces/[workspaceId]/resources/[[kind]]', 'pau')?.view).toBe('resources');
 	expect(workspaceViewRoute('/workspaces/[workspaceId]/sessions/[sessionId]', 'pau')).toBeUndefined();
 	expect(workspaceViewRoute('/diagnostics', undefined)).toBeUndefined();
 });

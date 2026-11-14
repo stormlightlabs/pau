@@ -50,7 +50,8 @@ export const WORKSPACE_VIEW_ROUTES = {
 	files: '/workspaces/[workspaceId]/editor',
 	terminal: '/workspaces/[workspaceId]/terminal',
 	processes: '/workspaces/[workspaceId]/processes',
-	sandbox: '/workspaces/[workspaceId]/sandbox'
+	sandbox: '/workspaces/[workspaceId]/sandbox',
+	resources: '/workspaces/[workspaceId]/resources/[[kind]]'
 } as const satisfies Record<Exclude<LastView, 'session'>, string>;
 
 /**

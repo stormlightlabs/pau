@@ -51,6 +51,11 @@ decision in `trust.json`, or `defaultProjectTrust` when none applies. A
 `project_trust` extension or Pi's `--approve` flag can still decide
 differently inside a running Pi, and the index cannot see either.
 
+Until the project is trusted, Pi reads neither its resources nor its
+settings, so project entries never win a collision with user entries, and a
+project package entry never replaces the user entry for the same package.
+Collisions among project entries still resolve as they would once trusted.
+
 ## Events
 
 Every server event has:

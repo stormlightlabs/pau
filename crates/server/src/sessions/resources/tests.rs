@@ -188,6 +188,7 @@ async fn lists_invalid_and_duplicate_resources_without_hiding_the_rest() {
     f.write("project/.pi/prompts/review.md", "Project review\n");
     f.write(".pi/agent/prompts/review.md", "User review\n");
     f.write(".pi/agent/settings.json", r#"{"prompts": ["~/gone"]}"#);
+    f.trust_project(true);
 
     let index = f.index().await;
 
@@ -247,6 +248,53 @@ async fn project_resources_follow_the_saved_trust_decision() {
         "untrusted"
     );
     assert_eq!(resource(&declined, "prompt", "user")["trust"], "trusted");
+}
+
+#[tokio::test]
+async fn an_untrusted_project_never_shadows_user_resources() {
+    let f = Fixture::new().await;
+    f.write("project/.pi/prompts/review.md", "Project review\n");
+    f.write(".pi/agent/prompts/review.md", "User review\n");
+    f.write(
+        "project/.pi/settings.json",
+        r#"{"packages": ["npm:shared"]}"#,
+    );
+    f.write(".pi/agent/settings.json", r#"{"packages": ["npm:shared"]}"#);
+
+    for (decision, trust) in [(None, "undecided"), (Some(false), "untrusted")] {
+        if let Some(decision) = decision {
+            f.trust_project(decision);
+        }
+        let index = f.index().await;
+        let reviews: Vec<(&Value, &Value, &Value)> = index["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|resource| resource["name"] == "review")
+            .map(|resource| (&resource["scope"], &resource["status"], &resource["trust"]))
+            .collect();
+        assert_eq!(
+            reviews,
+            [
+                (&json!("user"), &json!("ready"), &json!("trusted")),
+                (&json!("project"), &json!("ready"), &json!(trust)),
+            ]
+        );
+        let packages: Vec<(&Value, &Value)> = index["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|resource| resource["kind"] == "package")
+            .map(|resource| (&resource["scope"], &resource["trust"]))
+            .collect();
+        assert_eq!(
+            packages,
+            [
+                (&json!("user"), &json!("trusted")),
+                (&json!("project"), &json!(trust)),
+            ]
+        );
+    }
 }
 
 #[tokio::test]

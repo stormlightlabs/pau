@@ -36,7 +36,7 @@ list. Press **Back** or Escape to return.
 ## Trust
 
 Pi loads project resources only after you trust the workspace. Your user
-resources always load. Until you decide, Pi sessions started from Pau skip
+resources need no trust. Until you decide, Pi sessions started from Pau skip
 the project resources, and the view says so above the list. Run `/trust` in
 Pi to save a decision. Pau reads it from `~/.pi/agent/trust.json`, or from
 the `defaultProjectTrust` setting when no decision applies.
@@ -53,7 +53,9 @@ account's permissions.
 - **Duplicate**: two skills, prompts, or themes share a name. Pi loads the
   first it finds, in this order: paths in project settings, project folders,
   paths in user settings, user folders, then packages. The detail names the
-  file that loads instead.
+  file that loads instead. Until you trust the workspace, Pi skips its project
+  resources, so a user resource loads even when a project file has the same
+  name.
 - **Not installed**: a package listed in settings is missing from disk.
 - **Warnings**: Pi loads the resource but reports a problem, such as a skill
   name with capital letters.

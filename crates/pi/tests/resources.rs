@@ -48,6 +48,16 @@ impl Fixture {
     fn discover(&self) -> PiResourceIndex {
         self.discover_in("work")
     }
+
+    /// Saves Pi's trust decision for the `work` workspace.
+    fn trust_work(&self, decision: bool) {
+        fs::create_dir_all(self.path("work")).unwrap();
+        let key = serde_json::to_string(&self.path("work").canonicalize().unwrap()).unwrap();
+        self.write(
+            "home/.pi/agent/trust.json",
+            &format!("{{{key}: {decision}}}"),
+        );
+    }
 }
 
 fn find<'a>(index: &'a PiResourceIndex, kind: PiResourceKind, name: &str) -> &'a PiResource {
@@ -205,6 +215,7 @@ fn duplicate_names_keep_the_first_discovery_and_warn() {
     f.write("home/.pi/agent/themes/b.json", r#"{"name":"t"}"#);
     f.write("work/.pi/extensions/dup.ts", "");
     f.write("home/.pi/agent/extensions/dup.ts", "");
+    f.trust_work(true);
 
     let index = f.discover();
 
@@ -308,6 +319,7 @@ fn settings_paths_resolve_by_scope_and_honor_exclusions() {
     );
     f.write("home/.pi/agent/ext/a.ts", "");
     f.write("home/.pi/agent/ext/b.ts", "");
+    f.trust_work(true);
 
     let index = f.discover();
 
@@ -396,12 +408,76 @@ fn project_package_entry_replaces_the_user_entry() {
         r#"{"packages":["npm:shared"]}"#,
     );
     f.write("work/.pi/settings.json", r#"{"packages":["npm:shared"]}"#);
+    f.trust_work(true);
 
     let index = f.discover();
 
     assert_eq!(index.packages.len(), 1);
     assert_eq!(index.packages[0].scope, PiResourceScope::Project);
     assert_eq!(names(&index, PiResourceKind::Prompt), ["project"]);
+}
+
+/// Pi reads no project resource or project setting until the project is
+/// trusted, so the user resources it loads win every collision.
+#[test]
+fn untrusted_project_resources_never_shadow_user_ones() {
+    for decision in [None, Some(false)] {
+        let f = Fixture::new();
+        f.write("work/.pi/prompts/review.md", "Project review\n");
+        f.write("work/.pi/prompts/other.md", "Other\n");
+        f.write("work/.pi/more/other.md", "Other again\n");
+        f.write(
+            "work/.pi/settings.json",
+            r#"{"prompts":["more"],"packages":["npm:shared"]}"#,
+        );
+        f.write("work/.pi/npm/node_modules/shared/package.json", "{}");
+        f.write("work/.pi/npm/node_modules/shared/prompts/shared.md", "p");
+        f.write("home/.pi/agent/prompts/review.md", "User review\n");
+        f.write("home/.pi/agent/npm/node_modules/shared/package.json", "{}");
+        f.write(
+            "home/.pi/agent/npm/node_modules/shared/prompts/shared.md",
+            "u",
+        );
+        f.write(
+            "home/.pi/agent/settings.json",
+            r#"{"packages":["npm:shared"]}"#,
+        );
+        if let Some(decision) = decision {
+            f.trust_work(decision);
+        }
+
+        let index = f.discover();
+
+        let ready = |name: &str| -> Vec<PiResourceScope> {
+            index
+                .resources
+                .iter()
+                .filter(|r| r.kind == PiResourceKind::Prompt && r.name == name)
+                .map(|r| r.scope)
+                .collect()
+        };
+        assert_eq!(
+            ready("review"),
+            [PiResourceScope::User, PiResourceScope::Project],
+            "{decision:?}"
+        );
+        assert_eq!(
+            ready("shared"),
+            [PiResourceScope::User, PiResourceScope::Project],
+            "{decision:?}"
+        );
+        let scopes: Vec<PiResourceScope> = index.packages.iter().map(|p| p.scope).collect();
+        assert_eq!(scopes, [PiResourceScope::User, PiResourceScope::Project]);
+        // Collisions inside the project still resolve as they would once it
+        // is trusted: the project settings path comes first.
+        assert_eq!(index.skipped.len(), 1, "{:#?}", index.skipped);
+        let skipped = &index.skipped[0];
+        assert_eq!(skipped.resource.path, f.path("work/.pi/prompts/other.md"));
+        assert_eq!(
+            skipped.winner.as_deref(),
+            Some(f.path("work/.pi/more/other.md").as_path())
+        );
+    }
 }
 
 #[test]

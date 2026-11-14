@@ -158,12 +158,14 @@
 			return `Not loaded. Another ${resource.kind} named ${resource.name} loads first.`;
 		if (resource.status === 'invalid') return 'Not loaded. The file has errors listed under Warnings.';
 		if (resource.status === 'missing') return "Not installed, so Pi can't load anything from it.";
-		return resource.kind === 'package' ? 'Installed' : 'Loads';
+		if (resource.kind === 'package') return 'Installed';
+		return resource.trust === 'trusted' ? 'Loads' : 'Not loaded until you trust the workspace.';
 	}
 
+	/** Describes the scope's trust only; whether the resource loads is the status line's job. */
 	function trustText(resource: ResourceEntry): string {
-		if (resource.scope === 'user') return 'Trusted. Your own resources always load.';
-		if (resource.trust === 'trusted') return "Trusted. Pi loads this workspace's project resources.";
+		if (resource.scope === 'user') return 'Trusted. Your own resources need no trust decision.';
+		if (resource.trust === 'trusted') return "Trusted. Pi reads this workspace's project resources.";
 		if (resource.trust === 'untrusted')
 			return 'Not trusted. You declined this workspace, so Pi skips its project resources.';
 		return 'Not decided. Pi skips project resources until you trust the workspace with /trust in Pi.';

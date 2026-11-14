@@ -21,7 +21,10 @@
 //! Pi only loads project `.pi` resources, project `.agents/skills`, and
 //! project settings once the project is trusted. This indexer always reads
 //! them so they stay inspectable, and reports the saved decision as
-//! [`PiResourceIndex::project_trust`] for the caller to present.
+//! [`PiResourceIndex::project_trust`] for the caller to present. Until the
+//! project is trusted, the user scope is indexed first and names collide only
+//! within one scope, so a project file never shadows the user resource Pi
+//! loads, and a project package entry never replaces the user entry.
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -211,10 +214,8 @@ struct SettingsFile {
 /// Indexes user and project Pi resources.
 pub fn discover_pi_resources(options: &DiscoverPiResourcesOptions) -> PiResourceIndex {
     let mut indexer = Indexer::default();
-    let project_pi = options.workspace.join(".pi");
-    let home = &options.home_directory;
     let files = [
-        (project_pi.clone(), PiResourceScope::Project),
+        (options.workspace.join(".pi"), PiResourceScope::Project),
         (options.agent_directory.clone(), PiResourceScope::User),
     ]
     .map(|(base, scope)| {
@@ -227,40 +228,46 @@ pub fn discover_pi_resources(options: &DiscoverPiResourcesOptions) -> PiResource
         }
     });
     let [project, user] = &files;
+    let trust = indexer.project_trust(options, user.value.as_ref());
+    indexer.index.project_trust = trust;
 
-    indexer.scan_setting_paths(project, home);
+    if trust == PiProjectTrust::Trusted {
+        scan_scope(&mut indexer, project, options);
+        scan_scope(&mut indexer, user, options);
+        indexer.scan_packages(&files);
+    } else {
+        // Pi loads only the user scope. Scanning it first lets a project file
+        // never shadow a user one, and keeps each project package entry from
+        // replacing the user entry for the same package.
+        indexer.isolate_scopes = true;
+        for file in [user, project] {
+            scan_scope(&mut indexer, file, options);
+            indexer.scan_packages(std::slice::from_ref(file));
+        }
+    }
+    indexer.index
+}
+
+/// Scans the paths one settings file lists, then its scope's conventional
+/// directories.
+fn scan_scope(indexer: &mut Indexer, file: &SettingsFile, options: &DiscoverPiResourcesOptions) {
+    let home = &options.home_directory;
+    indexer.scan_setting_paths(file, home);
     for kind in PiResourceKind::ALL {
-        indexer.scan_directory(
-            kind,
-            &project_pi.join(kind.directory()),
-            PiResourceScope::Project,
-        );
-        if kind == PiResourceKind::Skill {
+        indexer.scan_directory(kind, &file.base.join(kind.directory()), file.scope);
+        if kind == PiResourceKind::Skill && file.scope == PiResourceScope::Project {
             for root in project_agent_roots(&options.workspace, home) {
-                indexer.scan_directory(
-                    kind,
-                    &root.join(".agents/skills"),
-                    PiResourceScope::Project,
-                );
+                indexer.scan_directory(kind, &root.join(".agents/skills"), file.scope);
             }
         }
     }
-    indexer.scan_setting_paths(user, home);
-    for kind in PiResourceKind::ALL {
+    if file.scope == PiResourceScope::User {
         indexer.scan_directory(
-            kind,
-            &options.agent_directory.join(kind.directory()),
-            PiResourceScope::User,
+            PiResourceKind::Skill,
+            &home.join(".agents/skills"),
+            file.scope,
         );
     }
-    indexer.scan_directory(
-        PiResourceKind::Skill,
-        &home.join(".agents/skills"),
-        PiResourceScope::User,
-    );
-    indexer.scan_packages(&files);
-    indexer.index.project_trust = indexer.project_trust(options, user.value.as_ref());
-    indexer.index
 }
 
 /// Directories whose `.agents/skills` Pi reads for the project: the workspace
@@ -283,6 +290,9 @@ fn project_agent_roots(workspace: &Path, home: &Path) -> Vec<PathBuf> {
 struct Indexer {
     index: PiResourceIndex,
     seen_paths: HashSet<PathBuf>,
+    /// Set when the project is not trusted: names then collide only within
+    /// one scope, since Pi loads no project resource that could win.
+    isolate_scopes: bool,
 }
 
 impl Indexer {
@@ -439,7 +449,9 @@ impl Indexer {
                 .index
                 .resources
                 .iter()
-                .find(|r| r.kind == kind && r.name == name)
+                .find(|r| {
+                    r.kind == kind && r.name == name && (!self.isolate_scopes || r.scope == scope)
+                })
                 .map(|r| r.path.clone());
             if let Some(first) = first {
                 let message = format!(
@@ -649,7 +661,8 @@ impl Indexer {
     }
 
     fn scan_packages(&mut self, files: &[SettingsFile]) {
-        // Project comes first, so a user entry for the same package is dropped.
+        // When `files` holds both scopes, project comes first, so a user entry
+        // for the same package is dropped.
         let mut seen = HashSet::new();
         for file in files {
             let Some(entries) = file

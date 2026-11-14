@@ -807,6 +807,103 @@ async fn renames_and_clones_the_session() {
     assert_command(&commands[3], "get_state");
 }
 
+/// A Pi session file in Pi's own format, which the export fixture renders.
+const TRANSCRIPT_SESSION: &str = include_str!("fixtures/transcript-session.jsonl");
+
+#[tokio::test]
+async fn exports_the_session_file_through_pi_into_the_chosen_file() {
+    let fixture = FakePi::new(EXPORT_FIXTURE);
+    fs::write(
+        fixture.root.path().join("session.jsonl"),
+        TRANSCRIPT_SESSION,
+    )
+    .unwrap();
+    let session = PiSession::start(fixture.options()).unwrap();
+    let saved = tempfile::tempdir().unwrap();
+    let elsewhere = saved.path().join("elsewhere.html");
+    fs::write(&elsewhere, "keep").unwrap();
+    // The chosen name is a symlink. The export replaces the link and leaves
+    // the file it pointed to alone.
+    let destination = saved.path().join("transcript.html");
+    std::os::unix::fs::symlink(&elsewhere, &destination).unwrap();
+
+    session.export_html(destination.clone()).await.unwrap();
+
+    let html = fs::read_to_string(&destination).unwrap();
+    assert!(html.starts_with("<!DOCTYPE html>"));
+    assert!(html.contains("Fix the login bug"));
+    assert!(html.contains("The token check now runs before the redirect."));
+    let metadata = fs::symlink_metadata(&destination).unwrap();
+    assert!(metadata.is_file());
+    assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
+    assert_eq!(fs::read_to_string(&elsewhere).unwrap(), "keep");
+    let names: Vec<_> = fs::read_dir(saved.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(names.len(), 2, "no staging file is left behind: {names:?}");
+
+    // Pi renders into its own temporary file, never into the chosen one.
+    let commands = fixture.commands();
+    assert_command(&commands[0], "export_html");
+    let rendered = PathBuf::from(commands[0]["outputPath"].as_str().unwrap());
+    assert_ne!(rendered.parent(), Some(saved.path()));
+    assert!(!rendered.exists(), "the staging directory is removed");
+    session.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn reports_a_failed_export_and_keeps_the_existing_file() {
+    // With no session file, the fixture rejects the export as Pi does.
+    let fixture = FakePi::new(EXPORT_FIXTURE);
+    let session = PiSession::start(fixture.options()).unwrap();
+    let saved = tempfile::tempdir().unwrap();
+    let destination = saved.path().join("transcript.html");
+    fs::write(&destination, "earlier export").unwrap();
+
+    let rejected = session.export_html(destination.clone()).await.unwrap_err();
+    assert!(matches!(
+        rejected,
+        PiSessionError::Control(AgentControlError::Rejected {
+            control: AgentControl::ExportTranscript,
+            message,
+        }) if message.starts_with("File not found")
+    ));
+    assert_eq!(fs::read_to_string(&destination).unwrap(), "earlier export");
+
+    for (destination, problem) in [
+        (PathBuf::from("transcript.html"), "relative path"),
+        (
+            saved.path().join("missing/transcript.html"),
+            "missing folder",
+        ),
+        (saved.path().to_path_buf(), "folder"),
+    ] {
+        let error = session.export_html(destination).await.unwrap_err();
+        assert!(
+            matches!(&error, PiSessionError::Export(error) if error.kind() == std::io::ErrorKind::InvalidInput),
+            "{problem}: {error}"
+        );
+    }
+    // Pi is asked only for the export whose destination was usable.
+    assert_eq!(fixture.commands().len(), 1);
+    session.stop().await.unwrap();
+
+    let process = PiProcess::start(fixture.options()).unwrap();
+    let capabilities = AgentCapabilities {
+        export_transcript: false,
+        ..PI_RPC_CAPABILITIES
+    };
+    let unsupported = PiSession::from_process(process, capabilities);
+    assert!(matches!(
+        unsupported.export_html(destination).await.unwrap_err(),
+        PiSessionError::Control(AgentControlError::Unsupported {
+            control: AgentControl::ExportTranscript,
+        })
+    ));
+    unsupported.stop().await.unwrap();
+}
+
 #[tokio::test]
 async fn runs_shell_commands_and_streams_their_output() {
     let fixture = FakePi::new(BASH_FIXTURE);
@@ -1101,6 +1198,28 @@ while IFS= read -r command; do
         *'"type":"prompt"'*)
             printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
             printf '{"type":"agent_start"}\n'
+            ;;
+        *) exit 65 ;;
+    esac
+done
+"#;
+
+/// Answers `export_html` as Pi does: it renders `session.jsonl` in its working
+/// directory into an HTML page at `outputPath`, or fails when the file is
+/// missing.
+const EXPORT_FIXTURE: &str = r#"
+while IFS= read -r command; do
+    printf '%s\n' "$command" >> "$PWD/commands.jsonl"
+    id=$(printf '%s' "$command" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+    case "$command" in
+        *'"type":"export_html"'*)
+            output=$(printf '%s' "$command" | sed -n 's/.*"outputPath":"\([^"]*\)".*/\1/p')
+            if [ -f "$PWD/session.jsonl" ]; then
+                { printf '<!DOCTYPE html>\n<html><body><script type="application/json">'; cat "$PWD/session.jsonl"; printf '</script></body></html>\n'; } > "$output"
+                printf '{"id":"%s","type":"response","command":"export_html","success":true,"data":{"path":"%s"}}\n' "$id" "$output"
+            else
+                printf '{"id":"%s","type":"response","command":"export_html","success":false,"error":"File not found: %s/session.jsonl"}\n' "$id" "$PWD"
+            fi
             ;;
         *) exit 65 ;;
     esac

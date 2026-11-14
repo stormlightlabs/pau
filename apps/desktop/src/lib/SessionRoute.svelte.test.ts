@@ -52,6 +52,7 @@ const idleSession: AgentSession = {
 		retry: true,
 		rename: true,
 		clone_session: true,
+		export_transcript: true,
 		shell_commands: true,
 		stop: true
 	}
@@ -1113,6 +1114,51 @@ test('clones a session from the rail', async () => {
 	await expect.poll(() => clone.mock.calls.length).toBe(1);
 });
 
+test('exports a transcript to the file the save dialog returns', async () => {
+	const exported = vi.fn<Route>(() => new Response(null, { status: 204 }));
+	const { props, sockets } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'POST /api/sessions/session-1/messages': exported
+	});
+	const pickSaveFile = vi
+		.fn()
+		.mockResolvedValueOnce(undefined)
+		.mockResolvedValueOnce('/home/me/New Pi session.html')
+		.mockResolvedValueOnce('/home/me/locked/transcript.html');
+	await render(SessionRoute, { props, context: new Map([[desktopNativeCapabilitiesContext, { pickSaveFile }]]) });
+	sockets[0]?.open();
+	const exportButton = page.getByRole('button', { name: 'Export', exact: true });
+
+	// Cancelling the dialog saves nothing.
+	await userEvent.click(exportButton);
+	await expect.poll(() => pickSaveFile.mock.calls.length).toBe(1);
+	expect(pickSaveFile).toHaveBeenCalledWith({
+		title: 'Export transcript',
+		fileName: 'New Pi session.html',
+		fileType: { name: 'Web page', extensions: ['html'] }
+	});
+	expect(exported).not.toHaveBeenCalled();
+
+	await userEvent.click(exportButton);
+	await expect
+		.element(page.getByRole('status').filter({ hasText: 'Transcript saved' }))
+		.toHaveTextContent('Transcript saved to /home/me/New Pi session.html');
+	expect(JSON.parse(String(exported.mock.calls[0]?.[0]?.body))).toEqual({
+		destination: '/home/me/New Pi session.html'
+	});
+
+	exported.mockImplementationOnce(() =>
+		json({ code: 'export_failed', message: 'Permission denied (os error 13)' }, 500)
+	);
+	await userEvent.click(exportButton);
+	await expect
+		.element(page.getByRole('alert'))
+		.toHaveTextContent(
+			'Pau could not save the transcript there: Permission denied (os error 13). Choose another file and try again.'
+		);
+	await expect.element(page.getByText('Transcript saved')).not.toBeInTheDocument();
+});
+
 test('branches from a user message in the transcript', async () => {
 	const branch = vi.fn(() => json({ text: 'Add a test.', cancelled: false }));
 	const { props, sockets } = setup({
@@ -1402,6 +1448,7 @@ test('starts a Claude Code session and streams its reply', async () => {
 			retry: false,
 			rename: false,
 			clone_session: false,
+			export_transcript: false,
 			shell_commands: false
 		}
 	};

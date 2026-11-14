@@ -23,7 +23,9 @@ const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 /// controls the session API sends, and exits with status 3 without answering
 /// a prompt whose text is `exit`. Shell commands other than `echo hi` and
 /// `sleep 60`, which runs until `abort_bash`, fail. A resumed session answers `get_messages`
-/// with the messages of its file, after a summary once it has compacted.
+/// with the messages of its file, after a summary once it has compacted, and
+/// renders that file into `export_html`'s output path. A new session, which
+/// has no file, fails the export.
 const FAKE_PI: &str = r#"#!/bin/sh
 if [ "$1" = '--version' ]; then echo 1.0.0; exit 0; fi
 [ "$1" = '--mode' ] && [ "$2" = 'rpc' ] || exit 64
@@ -152,6 +154,15 @@ while IFS= read -r command; do
                 messages='{"role":"user","content":"failing prompt"},{"role":"assistant","content":[],"stopReason":"error","errorMessage":"529 overloaded"}'
             fi
             printf '{"id":"%s","type":"response","command":"get_messages","success":true,"data":{"messages":[%s%s]}}\n' "$id" "$summary" "$messages"
+            ;;
+        *'"type":"export_html"'*)
+            output=$(printf '%s' "$command" | sed -n 's/.*"outputPath":"\([^"]*\)".*/\1/p')
+            if [ -n "$session_file" ]; then
+                { printf '<!DOCTYPE html>\n<script type="application/json">'; cat "$session_file"; printf '</script>\n'; } > "$output"
+                printf '{"id":"%s","type":"response","command":"export_html","success":true,"data":{"path":"%s"}}\n' "$id" "$output"
+            else
+                printf '{"id":"%s","type":"response","command":"export_html","success":false,"error":"Nothing to export"}\n' "$id"
+            fi
             ;;
         *'"type":"set_auto_retry"'*)
             printf '{"id":"%s","type":"response","command":"set_auto_retry","success":true}\n' "$id"
@@ -1136,6 +1147,73 @@ async fn returns_the_conversation_of_a_resumed_and_compacted_session() {
         (status, error["code"].as_str()),
         (StatusCode::NOT_FOUND, Some("not_found"))
     );
+}
+
+#[tokio::test]
+async fn exports_the_transcript_of_a_resumed_session_to_the_chosen_file() {
+    let fixture = Fixture::new(None).await;
+    let file = [
+        native_header(&fixture, "resumed", None),
+        r#"{"type":"message","message":{"role":"user","content":"Fix the login bug"}}"#.to_owned(),
+    ]
+    .join("\n");
+    write_native_session(&fixture, "2026_resumed.jsonl", &file);
+    let (_, started) = fixture
+        .call(
+            "POST",
+            "/api/sessions",
+            Some(json!({"workspace_id": fixture.workspace_id, "native_session_id": "resumed"})),
+        )
+        .await;
+    assert_eq!(started["capabilities"]["export_transcript"], true);
+    let messages = format!("/api/sessions/{}/messages", started["id"].as_str().unwrap());
+    let saved = tempfile::tempdir().unwrap();
+    let destination = saved.path().join("login fix.html");
+
+    let (status, _) = fixture
+        .call(
+            "POST",
+            &messages,
+            Some(json!({"destination": destination.to_str().unwrap()})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let html = fs::read_to_string(&destination).unwrap();
+    assert!(html.starts_with("<!DOCTYPE html>"));
+    assert!(html.contains("Fix the login bug"));
+
+    let (status, error) = fixture
+        .call(
+            "POST",
+            &messages,
+            Some(json!({"destination": "relative.html"})),
+        )
+        .await;
+    assert_eq!(
+        (status, error["code"].as_str()),
+        (StatusCode::BAD_REQUEST, Some("invalid_destination"))
+    );
+
+    // A new session has no file, so the fake Pi refuses to export it.
+    let (_, fresh) = fixture.start(None).await;
+    let (status, error) = fixture
+        .call(
+            "POST",
+            &format!("/api/sessions/{}/messages", fresh["id"].as_str().unwrap()),
+            Some(json!({"destination": saved.path().join("fresh.html").to_str().unwrap()})),
+        )
+        .await;
+    assert_eq!(
+        (status, error["code"].as_str()),
+        (StatusCode::UNPROCESSABLE_ENTITY, Some("control_rejected"))
+    );
+    assert!(
+        error["message"]
+            .as_str()
+            .unwrap()
+            .contains("Nothing to export")
+    );
+    assert!(!saved.path().join("fresh.html").exists());
 }
 
 fn session_field(field: &'static str, value: &'static str) -> impl FnMut(&ServerEvent) -> bool {

@@ -533,7 +533,7 @@ fn router_with_services(
         )
         .route(
             "/api/sessions/{session_id}/messages",
-            get(sessions::get_session_messages),
+            get(sessions::get_session_messages).post(sessions::export_session_messages),
         )
         .route(
             "/api/sessions/{session_id}/history",

@@ -63,6 +63,8 @@ pub struct SessionCapabilities {
     pub rename: bool,
     /// Whether the session can be cloned into a new stored session.
     pub clone_session: bool,
+    /// Whether the session can export its conversation to a file.
+    pub export_transcript: bool,
     /// Whether the session can run shell commands outside a model turn and
     /// stop them.
     pub shell_commands: bool,
@@ -339,6 +341,13 @@ pub struct SessionAutoRetryRequest {
 pub struct SessionRenameRequest {
     /// The display name stored with the session.
     pub name: String,
+}
+
+/// Saves the session's transcript to a file the operator chose.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SessionExportRequest {
+    /// Absolute path of the file to write. A file already there is replaced.
+    pub destination: String,
 }
 
 /// The stored session a clone continues in.

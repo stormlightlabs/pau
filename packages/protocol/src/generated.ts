@@ -975,6 +975,10 @@ rename: boolean,
  */
 clone_session: boolean,
 /**
+ * Whether the session can export its conversation to a file.
+ */
+export_transcript: boolean,
+/**
  * Whether the session can run shell commands outside a model turn and
  * stop them.
  */
@@ -1728,6 +1732,12 @@ export type SessionRenameRequest = {
  * The display name stored with the session.
  */
 name: string, };
+
+export type SessionExportRequest = {
+/**
+ * Absolute path of the file to write. A file already there is replaced.
+ */
+destination: string, };
 
 export type SessionCompactRequest = {
 /**

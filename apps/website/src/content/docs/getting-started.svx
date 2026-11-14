@@ -73,6 +73,11 @@ its path. Message actions copy the text or the Markdown source, and a message
 you sent can start a branch. An action that is not available yet stays in the
 menu, disabled, with the reason underneath.
 
+**Export** in a Pi session's header saves the whole conversation as a web
+page, the same page Pi's `/export` command writes. The desktop app asks where
+to save it and replaces a file you choose to overwrite. Only your user account
+can read the saved file, because a transcript can contain secrets.
+
 ## Use configured Pi extensions
 
 Pau keeps the extensions that Pi loads from your user and project configuration.

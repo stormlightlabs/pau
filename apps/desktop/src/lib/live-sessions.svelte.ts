@@ -24,6 +24,7 @@ import {
 	branchSession,
 	cancelSessionRetry,
 	cloneSession,
+	exportSessionTranscript,
 	compactSession,
 	clearSessionQueue,
 	getSessionExtensionUi,
@@ -109,7 +110,7 @@ const NOTIFICATION_MS = 8000;
  */
 export function sessionErrorMessage(
 	cause: unknown,
-	action: 'start' | 'control' | 'resume' | 'retry' | 'branch' | 'compact',
+	action: 'start' | 'control' | 'resume' | 'retry' | 'branch' | 'compact' | 'export',
 	agent: SessionAgent = 'pi'
 ): string {
 	if (!(cause instanceof PauApiError)) {
@@ -124,6 +125,12 @@ export function sessionErrorMessage(
 	}
 	if (action === 'branch' && cause.code === 'control_rejected') {
 		return `Pi could not branch from that message: ${cause.message}`;
+	}
+	if (action === 'export' && cause.code === 'control_rejected') {
+		return `Pi could not export this session: ${cause.message}`;
+	}
+	if (cause.code === 'invalid_destination' || cause.code === 'export_failed') {
+		return `Pau could not save the transcript there: ${cause.message}. Choose another file and try again.`;
 	}
 	switch (cause.code) {
 		case 'pi_unavailable': {
@@ -621,6 +628,7 @@ export class LiveSessions {
 				compaction: session.capabilities.compaction,
 				rename: session.capabilities.rename,
 				cloneSession: session.capabilities.clone_session,
+				exportTranscript: session.capabilities.export_transcript,
 				shellCommands: session.capabilities.shell_commands
 			},
 			thinkingLevel: this.#pendingThinkingLevels[session.id] ?? session.thinking_level ?? undefined,
@@ -961,6 +969,15 @@ export class LiveSessions {
 		await this.#control(async () => {
 			await cloneSession(sessionId, this.#fetcher);
 		});
+	}
+
+	/** Saves a session's whole conversation to `destination` as Pi's HTML export. */
+	async exportTranscript(sessionId: string, destination: string): Promise<void> {
+		try {
+			await exportSessionTranscript(sessionId, destination, this.#fetcher);
+		} catch (cause) {
+			throw new Error(sessionErrorMessage(cause, 'export', this.#agent(sessionId)), { cause });
+		}
 	}
 
 	/**

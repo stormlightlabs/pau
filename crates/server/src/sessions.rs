@@ -78,6 +78,12 @@
 //! while it answers, so that message may arrive in both; clients key messages
 //! by their native identity to apply it once. At most
 //! [`MAX_SESSION_MESSAGES`] of the newest messages return.
+//!
+//! `POST` on the same path saves the whole conversation as Pi's HTML export,
+//! the page Pi's own `/export` command writes, to the absolute path in a
+//! [`SessionExportRequest`]. See [`PiSession::export_html`] for how the file is
+//! written. A destination Pau cannot write is `400 invalid_destination`, and a
+//! failed write is `500 export_failed`.
 
 use std::{
     collections::HashMap,
@@ -106,11 +112,12 @@ use pau_core::{
         SessionAutoCompactionRequest, SessionAutoRetryRequest, SessionBranchRequest,
         SessionBranchResult, SessionCapabilities, SessionCloneResult, SessionCommand,
         SessionCommandSource, SessionCompactRequest, SessionCompactionResult, SessionContextUsage,
-        SessionExtensionUi, SessionImage, SessionMessageQueue, SessionMessageRequest,
-        SessionMessages, SessionModel, SessionModelSelection, SessionPromptRequest, SessionQueue,
-        SessionRenameRequest, SessionSearchMatch, SessionSearchResult, SessionShellRequest,
-        SessionShellResult, SessionStatus, SessionThinkingLevel, SessionThinkingLevelRequest,
-        SessionTokenUsage, SessionTree, SessionTreeEntry, SessionUsage, StartSessionRequest,
+        SessionExportRequest, SessionExtensionUi, SessionImage, SessionMessageQueue,
+        SessionMessageRequest, SessionMessages, SessionModel, SessionModelSelection,
+        SessionPromptRequest, SessionQueue, SessionRenameRequest, SessionSearchMatch,
+        SessionSearchResult, SessionShellRequest, SessionShellResult, SessionStatus,
+        SessionThinkingLevel, SessionThinkingLevelRequest, SessionTokenUsage, SessionTree,
+        SessionTreeEntry, SessionUsage, StartSessionRequest,
     },
 };
 use pau_pi::{
@@ -709,6 +716,7 @@ fn session_capabilities(capabilities: AgentCapabilities) -> SessionCapabilities 
         retry: capabilities.retry,
         rename: capabilities.rename,
         clone_session: capabilities.clone_session,
+        export_transcript: capabilities.export_transcript,
         shell_commands: capabilities.shell_commands,
         stop: capabilities.stop,
     }
@@ -801,6 +809,10 @@ pub(crate) fn error_status(error: &PiSessionRegistryError) -> (StatusCode, &'sta
                 (StatusCode::SERVICE_UNAVAILABLE, "pi_unavailable")
             }
             PiSessionError::Process(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
+            PiSessionError::Export(error) if error.kind() == std::io::ErrorKind::InvalidInput => {
+                (StatusCode::BAD_REQUEST, "invalid_destination")
+            }
+            PiSessionError::Export(_) => (StatusCode::INTERNAL_SERVER_ERROR, "export_failed"),
         },
     }
 }
@@ -1330,6 +1342,18 @@ pub(crate) async fn get_session_messages(
         messages,
         truncated: excess > 0,
     }))
+}
+
+/// Saves the whole conversation to the requested file in Pi's HTML export
+/// format. See the module documentation.
+pub(crate) async fn export_session_messages(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+    Json(request): Json<SessionExportRequest>,
+) -> Result<StatusCode, ApiError> {
+    let (_, session) = session_api(&state)?.live(&session_id).await?;
+    session.export_html(request.destination.into()).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Sets the session's display name and publishes the updated session.

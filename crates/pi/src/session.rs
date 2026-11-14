@@ -10,6 +10,8 @@ use pau_agent::{
 use serde_json::{Value, json};
 use std::error::Error;
 use std::fmt;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::{Mutex, broadcast, mpsc};
@@ -30,6 +32,7 @@ pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     retry: true,
     rename: true,
     clone_session: true,
+    export_transcript: true,
     shell_commands: true,
     stop: true,
 };
@@ -43,6 +46,9 @@ pub enum PiSessionError {
     NativeSession(String),
     /// The RPC process failed while handling the operation.
     Process(PiProcessError),
+    /// A transcript export could not write its destination. An unusable
+    /// destination is [`std::io::ErrorKind::InvalidInput`].
+    Export(std::io::Error),
 }
 
 impl fmt::Display for PiSessionError {
@@ -51,6 +57,7 @@ impl fmt::Display for PiSessionError {
             Self::Control(error) => error.fmt(formatter),
             Self::NativeSession(message) => formatter.write_str(message),
             Self::Process(error) => error.fmt(formatter),
+            Self::Export(error) => error.fmt(formatter),
         }
     }
 }
@@ -61,6 +68,7 @@ impl Error for PiSessionError {
             Self::Control(error) => Some(error),
             Self::NativeSession(_) => None,
             Self::Process(error) => Some(error),
+            Self::Export(error) => Some(error),
         }
     }
 }
@@ -803,6 +811,49 @@ impl PiSession {
         self.native_session().await
     }
 
+    /// Writes Pi's HTML export of the session to `destination`, replacing a
+    /// file already there.
+    ///
+    /// Pi renders the export with its `export_html` command, the same page as
+    /// its `/export` command and `pi --export`, so the file opens in a browser
+    /// with no Pau involved. Pi writes into a private temporary directory, and
+    /// this then copies the page into a new file beside `destination` and
+    /// renames it into place. Pi never opens `destination` itself, so a
+    /// symlink there is replaced rather than followed, and a failed export
+    /// leaves any existing file untouched. The file is readable only by its
+    /// owner, because a transcript can hold secrets from the conversation.
+    ///
+    /// `destination` must be an absolute path whose parent directory exists.
+    pub async fn export_html(&self, destination: PathBuf) -> Result<(), PiSessionError> {
+        let control = AgentControl::ExportTranscript;
+        self.require_capability(control)?;
+        let directory = export_directory(&destination).map_err(PiSessionError::Export)?;
+        let staging = tempfile::Builder::new()
+            .prefix("pau-transcript-")
+            .tempdir()
+            .map_err(PiSessionError::Export)?;
+        let rendered = staging.path().join("transcript.html");
+        self.command(
+            control,
+            json!({"type": "export_html", "outputPath": rendered.to_string_lossy()}),
+        )
+        .await?;
+        tokio::task::spawn_blocking(move || -> io::Result<()> {
+            let mut source = std::fs::File::open(&rendered)?;
+            let mut target = tempfile::Builder::new()
+                .prefix(".pau-transcript-")
+                .tempfile_in(&directory)?;
+            io::copy(&mut source, target.as_file_mut())?;
+            target.as_file().sync_all()?;
+            target.persist(&destination).map_err(|error| error.error)?;
+            drop(staging);
+            Ok(())
+        })
+        .await
+        .map_err(|error| PiSessionError::Export(io::Error::other(error)))?
+        .map_err(PiSessionError::Export)
+    }
+
     /// Sends the last user prompt again as a new message after the assistant
     /// turn failed.
     ///
@@ -1035,6 +1086,25 @@ impl PiSession {
     fn set_status(&self, status: &mut AgentSessionStatus, next: AgentSessionStatus, position: u64) {
         *status = next;
         self.status_position.fetch_max(position, Ordering::Relaxed);
+    }
+}
+
+/// Returns the directory a transcript export writes into, or why
+/// `destination` cannot be a transcript file.
+fn export_directory(destination: &Path) -> io::Result<PathBuf> {
+    let invalid = |message: &str| io::Error::new(io::ErrorKind::InvalidInput, message.to_owned());
+    if !destination.is_absolute() {
+        return Err(invalid("choose a full path for the transcript"));
+    }
+    if destination.file_name().is_none() {
+        return Err(invalid("choose a file name for the transcript"));
+    }
+    if std::fs::symlink_metadata(destination).is_ok_and(|metadata| metadata.is_dir()) {
+        return Err(invalid("a folder has that name"));
+    }
+    match destination.parent() {
+        Some(parent) if parent.is_dir() => Ok(parent.to_owned()),
+        _ => Err(invalid("the folder for the transcript does not exist")),
     }
 }
 

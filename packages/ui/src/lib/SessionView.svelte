@@ -248,6 +248,13 @@
 		 * context menu offers Clone. A rejection shows its message in the rail.
 		 */
 		onCloneSession?: (sessionId: string) => void | Promise<void>;
+		/**
+		 * Saves a session's whole conversation to a file the operator chooses.
+		 * With it and the `exportTranscript` capability, the session header
+		 * offers Export. Resolves to the saved file's path, or `undefined` when
+		 * the operator cancels. A rejection shows its message in the notices.
+		 */
+		onExportTranscript?: (sessionId: string) => Promise<string | undefined>;
 		/** Opens a terminal in a workspace. With it, the workspace's context menu offers Open terminal. */
 		onOpenTerminal?: (workspaceId: string) => void;
 		/**
@@ -365,6 +372,7 @@
 		onBranchFromMessage,
 		onRenameSession,
 		onCloneSession,
+		onExportTranscript,
 		onOpenTerminal,
 		agentReadiness,
 		claudeReadiness,
@@ -560,6 +568,10 @@
 	let startingWorkspaceId = $state<string>();
 	let startFailure = $state<{ workspaceId: string; workspaceName: string; agent: SessionAgent; message: string }>();
 	let controlError = $state<string>();
+	/** The session whose transcript export is in flight, so Export cannot run twice. */
+	let exportingSessionId = $state<string>();
+	/** Where the last transcript export saved its file, until another action replaces the notice. */
+	let exportedTranscript = $state<{ sessionId: string; path: string }>();
 	/** The ended session whose restart is in flight, so its button cannot start it twice. */
 	let restartingSessionId = $state<string>();
 	let restartError = $state<string>();
@@ -1103,6 +1115,22 @@
 		}
 	}
 
+	/** Asks the app where to save the active session's transcript and reports the outcome. */
+	async function exportTranscript(session: SessionViewModel): Promise<void> {
+		if (!onExportTranscript) return;
+		controlError = undefined;
+		exportedTranscript = undefined;
+		exportingSessionId = session.id;
+		try {
+			const path = await onExportTranscript(session.id);
+			if (path) exportedTranscript = { sessionId: session.id, path };
+		} catch (cause) {
+			controlError = cause instanceof Error ? cause.message : 'Pau could not export the transcript. Try again.';
+		} finally {
+			exportingSessionId = undefined;
+		}
+	}
+
 	/**
 	 * Resumes a saved session and returns why it failed, if it did. Only the
 	 * operator's click calls this, because resuming starts the agent.
@@ -1179,6 +1207,7 @@
 		closeOpenForm();
 		startFailure = undefined;
 		controlError = undefined;
+		exportedTranscript = undefined;
 		restartError = undefined;
 		queueError = undefined;
 		error = undefined;
@@ -2580,6 +2609,18 @@
 							{/if}
 						</div>
 					{/if}
+					{#if onExportTranscript && activeSession.capabilities.exportTranscript && liveStatuses.has(activeSession.status)}
+						{@const exporting = exportingSessionId === activeSession.id}
+						<button
+							type="button"
+							class="pau-button pau-button--quiet"
+							aria-busy={exporting}
+							disabled={disconnected || exporting}
+							title={disconnected ? 'Pau is reconnecting to the backend.' : 'Save the conversation as a web page'}
+							onclick={() => void exportTranscript(activeSession)}>
+							Export
+						</button>
+					{/if}
 					{#if activeSession.capabilities.stop && liveStatuses.has(activeSession.status)}
 						<button
 							type="button"
@@ -2612,6 +2653,9 @@
 				{#if controlError}<p class="session-view__notice session-view__notice--failed" role="alert">
 						{controlError}
 					</p>{/if}
+				{#if exportedTranscript?.sessionId === activeSession.id}
+					<p class="session-view__notice" role="status">Transcript saved to {exportedTranscript.path}</p>
+				{/if}
 
 				{#if activeSession.status === 'starting'}
 					<p class="session-view__notice" role="status">Starting the agent process…</p>

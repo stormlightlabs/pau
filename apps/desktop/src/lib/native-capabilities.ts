@@ -1,7 +1,7 @@
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import { openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 
@@ -14,7 +14,9 @@ export interface DesktopWindowCapability {
  * Native services supplied by the desktop application rather than shared UI code.
  *
  * `pickFolder` shows the system folder picker and resolves to the chosen path,
- * or `undefined` when the operator cancels. `revealPath` selects a file or
+ * or `undefined` when the operator cancels. `pickSaveFile` shows the system
+ * save dialog, which asks before replacing a file, and resolves the same way.
+ * `revealPath` selects a file or
  * folder in the system file manager. `openLink` opens an http, https, or
  * mailto URL in the operator's default browser or mail app. `setZoom` scales the whole page, where 1
  * is actual size. `onMenuAction` calls the listener with the key map action ID
@@ -31,6 +33,7 @@ export interface DesktopWindowCapability {
 export type DesktopNativeCapabilities = {
 	window?: DesktopWindowCapability;
 	pickFolder?: () => Promise<string | undefined>;
+	pickSaveFile?: (request: SaveFileRequest) => Promise<string | undefined>;
 	revealPath?: (path: string) => Promise<void>;
 	openLink?: (url: string) => Promise<void>;
 	setZoom?: (factor: number) => Promise<void>;
@@ -39,6 +42,9 @@ export type DesktopNativeCapabilities = {
 	setBadgeCount?: (count: number | undefined) => Promise<void>;
 	onWindowFocusChange?: (listener: (focused: boolean) => void) => () => void;
 };
+
+/** What the save dialog shows: its title, the suggested file name, and the one file type it offers. */
+export type SaveFileRequest = { title: string; fileName: string; fileType: { name: string; extensions: string[] } };
 
 /** The event the desktop shell emits when the operator chooses an app menu item. */
 export const MENU_ACTION_EVENT = 'pau://menu-action';
@@ -64,6 +70,8 @@ export function createDesktopNativeCapabilities(
 	return {
 		window: { close: async () => getCurrentWindow().close() },
 		pickFolder: async () => (await open({ directory: true, multiple: false, title: 'Open workspace' })) ?? undefined,
+		pickSaveFile: async ({ title, fileName, fileType }) =>
+			(await save({ title, defaultPath: fileName, filters: [fileType] })) ?? undefined,
 		revealPath: (path) => revealItemInDir(path),
 		openLink: (url) => openUrl(url),
 		setZoom: (factor) => getCurrentWebview().setZoom(factor),

@@ -20,6 +20,7 @@ import type {
 	SessionBranchRequest,
 	SessionBranchResult,
 	SessionCloneResult,
+	SessionExportRequest,
 	SessionExtensionUi,
 	SessionCommand,
 	SessionCompactionResult,
@@ -617,6 +618,20 @@ export function stopSession(sessionId: string, fetcher: typeof fetch = fetch): P
 export function renameSession(sessionId: string, name: string, fetcher: typeof fetch = fetch): Promise<void> {
 	const request: SessionRenameRequest = { name };
 	return sendSessionRequest(`/${encodeURIComponent(sessionId)}/name`, 'PUT', request, fetcher);
+}
+
+/**
+ * Saves a live session's whole conversation to `destination`, an absolute
+ * path, as the HTML page Pi's own export writes. A file already there is
+ * replaced.
+ */
+export function exportSessionTranscript(
+	sessionId: string,
+	destination: string,
+	fetcher: typeof fetch = fetch
+): Promise<void> {
+	const request: SessionExportRequest = { destination };
+	return sendSessionRequest(`/${encodeURIComponent(sessionId)}/messages`, 'POST', request, fetcher);
 }
 
 /**

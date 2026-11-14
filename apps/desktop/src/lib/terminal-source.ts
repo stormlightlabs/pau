@@ -1,4 +1,4 @@
-import type { TerminalInfo, TerminalServerMessage } from '@stormlightlabs/pau-protocol';
+import type { TerminalInfo, TerminalServerMessage, TerminalSize } from '@stormlightlabs/pau-protocol';
 import type { TerminalSource, TerminalTab } from '@stormlightlabs/pau-ui';
 
 import { closeTerminal, createTerminal, listTerminals, resolveTerminalSocket } from './api';
@@ -40,7 +40,9 @@ export function createTerminalSource(browserOrigin: string, workspaceId: string)
 		},
 		create: async () => tab(await createTerminal(workspaceId, INITIAL_SIZE)),
 		connect: (id, events) => {
-			let size = INITIAL_SIZE;
+			// Unset until the view measures its grid. A hidden view never does, and
+			// sending the creation size on each open would shrink its program.
+			let size: TerminalSize | undefined;
 			let finished = false;
 			let replayed = false;
 			let awaitingReplay = false;
@@ -48,7 +50,9 @@ export function createTerminalSource(browserOrigin: string, workspaceId: string)
 			let retry: ReturnType<typeof setTimeout> | undefined;
 			let stable: ReturnType<typeof setTimeout> | undefined;
 			let socket: WebSocket;
-			const sendSize = () => socket.send(JSON.stringify({ type: 'resize', size }));
+			const sendSize = () => {
+				if (size) socket.send(JSON.stringify({ type: 'resize', size }));
+			};
 
 			const open = () => {
 				const { url, protocols } = resolveTerminalSocket(browserOrigin, id);

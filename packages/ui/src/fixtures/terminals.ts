@@ -19,13 +19,16 @@ export type TerminalFixture = {
 	source: TerminalSource;
 	sizes: Map<string, { cols: number; rows: number }>;
 	input: Map<string, string>;
+	/** Prints output to a connected terminal, as a program running in it would. */
+	print: (id: string, text: string) => void;
 };
 
 const PROMPT = '\u{1B}[1;34m~/pau\u{1B}[0m $ ';
 
 /**
  * Creates a line-echoing shell stand-in. Typed characters echo back, Enter
- * prints the line, and `exit [code]` ends the terminal with that code.
+ * prints the line, a size change redraws the prompt, and `exit [code]` ends
+ * the terminal with that code.
  * Terminals stay open until closed, so a surface rendered again with the same
  * fixture reattaches them, as after a route change.
  */
@@ -35,6 +38,8 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 	const encoder = new TextEncoder();
 	const decoder = new TextDecoder();
 	const open: TerminalTab[] = [];
+	const printers = new Map<string, (text: string) => void>();
+	const connected = new Set<string>();
 	let created = 0;
 	const openTerminal = (): TerminalTab => {
 		created += 1;
@@ -56,16 +61,35 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 		connect: (id, events) => {
 			let line = '';
 			let exited = false;
+			// Like the desktop source, a connection holds the last size its view
+			// reported and applies it each time its stream opens.
+			let size: { cols: number; rows: number } | undefined;
 			const send = (text: string) => events.output(encoder.encode(text));
+			printers.set(id, send);
+			const applySize = () => {
+				if (!size) return;
+				const previous = sizes.get(id);
+				sizes.set(id, size);
+				// A shell redraws its prompt when its window size changes.
+				if (previous && (previous.cols !== size.cols || previous.rows !== size.rows)) send(`\r${PROMPT}${line}`);
+			};
 			const exit = (status: TerminalExit) => {
 				exited = true;
 				events.exit(status);
 			};
 			queueMicrotask(() => {
 				// Like the server, every stream opens with the scrollback, empty or not.
-				const history = options.history ?? [];
-				events.replay(encoder.encode(history.map((output) => `${output}\r\n`).join('')));
-				send(`Terminal ready: 界 🙂\r\n${PROMPT}`);
+				// The ready line prints once; a reattach finds it in the scrollback.
+				const history = (options.history ?? []).map((output) => `${output}\r\n`).join('');
+				const ready = `Terminal ready: 界 🙂\r\n${PROMPT}`;
+				if (connected.has(id)) {
+					events.replay(encoder.encode(history + ready));
+				} else {
+					connected.add(id);
+					events.replay(encoder.encode(history));
+					send(ready);
+				}
+				applySize();
 				if (options.exitOnConnect) exit(options.exitOnConnect);
 			});
 			return {
@@ -93,7 +117,10 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 						}
 					}
 				},
-				resize: (cols, rows) => sizes.set(id, { cols, rows }),
+				resize: (cols, rows) => {
+					size = { cols, rows };
+					applySize();
+				},
 				close: () => {}
 			};
 		},
@@ -104,5 +131,5 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 			);
 		}
 	};
-	return { source, sizes, input };
+	return { source, sizes, input, print: (id, text) => printers.get(id)?.(text) };
 }

@@ -3,7 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 
-	import { claimLaunchRoute, productNavigation, WORKSPACE_VIEW_ROUTES } from '$lib/app-navigation';
+	import { claimLaunchRoute, openFileInEditor, productNavigation, WORKSPACE_VIEW_ROUTES } from '$lib/app-navigation';
 	import { interfacePreferences } from '$lib/interface-preferences.svelte';
 	import SessionRoute from '$lib/SessionRoute.svelte';
 
@@ -23,4 +23,5 @@
 		void goto(resolve(WORKSPACE_VIEW_ROUTES[view], { workspaceId }), { replaceState: true })}
 	onSessionChange={updateSessionRoute}
 	onOpenTerminal={(workspaceId) => void goto(resolve('/workspaces/[workspaceId]/terminal', { workspaceId }))}
+	onOpenFile={openFileInEditor}
 	navigation={(workspaceId) => productNavigation(page.route.id, workspaceId)} />

@@ -4,14 +4,16 @@
 	import { FitAddon } from '@xterm/addon-fit';
 	import { SearchAddon, type ISearchOptions, type ISearchResultChangeEvent } from '@xterm/addon-search';
 	import { Unicode11Addon } from '@xterm/addon-unicode11';
+	import { WebLinksAddon } from '@xterm/addon-web-links';
 	import { Terminal } from '@xterm/xterm';
 	import { onMount, tick } from 'svelte';
 
 	import { terminalTheme, THEMES, type ThemeName } from '../theme';
 	import { useExternalLinks } from './external-links';
 	import Icon from './Icon.svelte';
-	import { detectPlatform, type KeyPlatform } from './keymap.svelte';
-	import type { TerminalConnection, TerminalConnectionEvents, TerminalExit } from './types/terminal';
+	import { detectPlatform, eventChord, getKeymap, type KeyPlatform } from './keymap.svelte';
+	import { createTerminalPathLinks } from './terminal-links';
+	import type { TerminalConnection, TerminalConnectionEvents, TerminalExit, TerminalFileLinks } from './types/terminal';
 
 	type Props = {
 		/** Accessible name of the terminal region. */
@@ -23,6 +25,10 @@
 		onexit?: (status: TerminalExit) => void;
 		ondisconnect?: () => void;
 		onselectionchange?: (hasSelection: boolean) => void;
+		/** Called when live output arrives. Scrollback replayed on connect does not count. */
+		onoutput?: () => void;
+		/** Turns workspace file paths in the output into links. Without it, paths stay plain text. */
+		fileLinks?: TerminalFileLinks;
 		/** Platform whose find shortcut opens search. Tests set it. */
 		platform?: KeyPlatform;
 	};
@@ -35,6 +41,8 @@
 		onexit,
 		ondisconnect,
 		onselectionchange,
+		onoutput,
+		fileLinks,
 		platform = detectPlatform()
 	}: Props = $props();
 
@@ -42,6 +50,17 @@
 	const SYSTEM_MONO = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 
 	const links = useExternalLinks();
+	const keymap = getKeymap();
+
+	/**
+	 * The terminal sends every key to its program, except the dock shortcut,
+	 * which a keyboard operator needs to leave a docked terminal.
+	 */
+	function isDockChord(event: KeyboardEvent): boolean {
+		const chord = eventChord(event);
+		const dock = keymap?.actions.find((action) => action.id === 'panel.dock');
+		return chord !== undefined && Boolean(dock?.keys.includes(chord)) && Boolean(keymap?.canRun('panel.dock'));
+	}
 	/** The search addon stops counting and highlighting past this many matches. */
 	const MATCH_LIMIT = 1000;
 
@@ -63,9 +82,13 @@
 	});
 
 	/** Fits the grid to the container. A hidden container has no size to measure. */
+	/** Sends the measured grid to the program once per connection. Set while connected. */
+	let reportSize: (() => void) | undefined;
+
 	function fit(): void {
 		if (!host.clientWidth || !host.clientHeight) return;
 		fitAddon?.fit();
+		reportSize?.();
 	}
 
 	/** Copies the current selection to the system clipboard. Returns whether text was selected. */
@@ -177,6 +200,9 @@
 		instance.unicode.activeVersion = '11';
 		const search = new SearchAddon({ highlightLimit: MATCH_LIMIT });
 		instance.loadAddon(search);
+		// Plain-text URLs open through the same handler as OSC 8 links.
+		instance.loadAddon(new WebLinksAddon((_event, uri) => links.open(uri)));
+		const pathLinks = fileLinks && instance.registerLinkProvider(createTerminalPathLinks(instance, fileLinks));
 		// The clipboard addon's bundle reads `self` when it loads, so importing it
 		// at module scope breaks Node consumers of the package index.
 		void import('@xterm/addon-clipboard').then(({ ClipboardAddon }) => {
@@ -186,6 +212,11 @@
 		// Elsewhere Ctrl+C belongs to the shell, so use the Ctrl+Shift convention.
 		instance.attachCustomKeyEventHandler((event) => {
 			if (event.type !== 'keydown') return true;
+			if (isDockChord(event)) {
+				event.preventDefault();
+				keymap?.run('panel.dock');
+				return false;
+			}
 			if (isFindChord(event)) {
 				event.preventDefault();
 				void openSearch();
@@ -225,7 +256,10 @@
 				replays += 1;
 				instance.write(bytes, () => (replays -= 1));
 			},
-			output: (bytes) => instance.write(bytes),
+			output: (bytes) => {
+				instance.write(bytes);
+				onoutput?.();
+			},
 			reset: () => instance.reset(),
 			exit: (status) => {
 				instance.options.disableStdin = true;
@@ -234,7 +268,16 @@
 			},
 			disconnect: () => ondisconnect?.()
 		});
-		connection.resize(instance.cols, instance.rows);
+		// A hidden tab has no size to measure, so xterm holds its 80×24 default.
+		// Sending that would shrink the program, and its redraw would read as
+		// new output. The size goes out once the tab shows and has been fitted.
+		let sized = false;
+		reportSize = () => {
+			if (sized) return;
+			sized = true;
+			connection.resize(instance.cols, instance.rows);
+		};
+		if (host.clientWidth && host.clientHeight) reportSize();
 		const subscriptions = [
 			instance.onData((data) => {
 				if (replays === 0) connection.write(encoder.encode(data));
@@ -245,7 +288,10 @@
 					connection.write(Uint8Array.from(data, (character) => character.codePointAt(0) ?? 0));
 				}
 			}),
-			instance.onResize(({ cols, rows }) => connection.resize(cols, rows)),
+			instance.onResize(({ cols, rows }) => {
+				sized = true;
+				connection.resize(cols, rows);
+			}),
 			instance.onSelectionChange(() => onselectionchange?.(instance.hasSelection())),
 			// The addon reports counts only for searches that draw decorations.
 			search.onDidChangeResults((change) => (results = change))
@@ -256,6 +302,8 @@
 		return () => {
 			observer.disconnect();
 			for (const subscription of subscriptions) subscription.dispose();
+			pathLinks?.dispose();
+			reportSize = undefined;
 			connection.close();
 			instance.dispose();
 			terminal = undefined;
@@ -329,6 +377,7 @@
 <style>
 	.terminal-view {
 		position: relative;
+		min-width: 0;
 		min-height: 0;
 	}
 
@@ -342,6 +391,14 @@
 	.terminal-view__screen :global(.xterm) {
 		height: 100%;
 		padding: var(--pau-space-2);
+	}
+
+	/*
+	 * xterm.css paints the viewport black, and the viewport spans the padding
+	 * above. Leave it clear so the screen's theme background fills the frame.
+	 */
+	.terminal-view__screen :global(.xterm-viewport) {
+		background-color: transparent;
 	}
 
 	/*

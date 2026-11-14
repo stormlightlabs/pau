@@ -21,7 +21,19 @@
 	import { desktopNativeCapabilitiesContext, type DesktopNativeCapabilities } from './native-capabilities';
 	import { interfacePreferences } from './interface-preferences.svelte';
 
-	let { workspaceId, productItems }: { workspaceId: string; productItems?: ShellNavItem[] } = $props();
+	let {
+		workspaceId,
+		productItems,
+		openPath,
+		openLine
+	}: {
+		workspaceId: string;
+		productItems?: ShellNavItem[];
+		/** A file to show when the view opens. */
+		openPath?: string;
+		/** The line of `openPath` to show. */
+		openLine?: number;
+	} = $props();
 
 	let resolvedWorkspaceName = $state<string>();
 	let workspacePath = $state<string>();
@@ -78,6 +90,8 @@
 	{editorSource}
 	{disconnected}
 	{productItems}
+	{openPath}
+	{openLine}
 	{workspacePath}
 	revealPath={native?.revealPath}
 	paneWidths={interfacePreferences.widths}

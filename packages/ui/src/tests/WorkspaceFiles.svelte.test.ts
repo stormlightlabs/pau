@@ -479,3 +479,32 @@ test('forgets the subfolders of a folder renamed on disk', async () => {
 		.toHaveAttribute('aria-expanded', 'false');
 	expect(page.getByRole('treeitem', { name: 'surfaces.md' }).query()).toBeNull();
 });
+
+test('reloads the open subfolders of a folder replaced on disk', async () => {
+	let notify: ((changes: WorkspaceFileChanges) => void) | undefined;
+	let tree = structuredClone(workspaceFileFixtures.tree);
+	await renderFiles(
+		source({
+			listDirectory: async (path) => structuredClone(tree[path] ?? []),
+			watch: (onChange) => {
+				notify = onChange;
+				return vi.fn();
+			}
+		})
+	);
+	await userEvent.click(page.getByRole('treeitem', { name: 'dev', exact: true }));
+	await userEvent.click(page.getByRole('treeitem', { name: 'design', exact: true }));
+	await expect.element(page.getByRole('treeitem', { name: 'surfaces.md' })).toBeInTheDocument();
+
+	// `mv dev dev.old && mv dev.new dev` lands as one update, and the new
+	// `dev` lists the same subfolder with other contents.
+	tree = {
+		...tree,
+		'': [...(tree[''] ?? []), { path: 'dev.old', kind: 'directory', size: null }],
+		dev: [{ path: 'dev/design', kind: 'directory', size: null }],
+		'dev/design': [{ path: 'dev/design/tokens.md', kind: 'file', size: 10 }]
+	};
+	notify?.({ paths: ['dev', 'dev.new', 'dev.old'], git: false, truncated: false });
+	await expect.element(page.getByRole('treeitem', { name: 'tokens.md' })).toBeInTheDocument();
+	expect(page.getByRole('treeitem', { name: 'surfaces.md' }).query()).toBeNull();
+});

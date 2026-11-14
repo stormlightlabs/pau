@@ -2979,6 +2979,7 @@ dependencies = [
  "time",
  "tokio",
  "tokio-rusqlite",
+ "tracing",
  "ts-rs",
  "uuid",
 ]

@@ -674,7 +674,7 @@ fn is_hidden(hidden: &[String], relative: &str) -> bool {
 
 /// Whether a path component names Git's folder. Compared without case, since
 /// a case-insensitive volume opens `.GIT` as `.git`.
-fn is_git_dir(name: &OsStr) -> bool {
+pub(crate) fn is_git_dir(name: &OsStr) -> bool {
     name.to_str()
         .is_some_and(|name| name.eq_ignore_ascii_case(GIT_DIR))
 }
@@ -857,7 +857,13 @@ fn worktree_file(root: &Path, relative_path: &str) -> Result<Vec<u8>, WorkspaceE
     directory.read(relative).map_err(WorkspaceError::from)
 }
 
-fn walker(path: &Path, options: TraversalOptions, max_depth: Option<usize>) -> WalkBuilder {
+/// Walks `path` the way the file tree lists it: symlinks are not followed,
+/// and ignore files apply unless `options` asks for ignored paths.
+pub(crate) fn walker(
+    path: &Path,
+    options: TraversalOptions,
+    max_depth: Option<usize>,
+) -> WalkBuilder {
     let mut builder = WalkBuilder::new(path);
     builder
         .follow_links(false)

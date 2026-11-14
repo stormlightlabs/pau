@@ -249,7 +249,7 @@
 			</dl>
 		</section>
 		{#if resource.warnings.length > 0}
-			<section class="resource-notice" aria-labelledby="resource-detail-warnings">
+			<section class="pau-notice resource-notice" aria-labelledby="resource-detail-warnings">
 				<Icon name="warning" size={16} />
 				<h3 id="resource-detail-warnings" class="resource-notice__title">Warnings</h3>
 				<ul class="resource-notice__body">
@@ -303,7 +303,10 @@
 				</EmptyState>
 			{:else}
 				{#if untrustedProject}
-					<section class="resource-notice resources__trust" role="status" aria-labelledby="resources-trust-title">
+					<section
+						class="pau-notice resource-notice resources__trust"
+						role="status"
+						aria-labelledby="resources-trust-title">
 						<Icon name="warning" size={16} />
 						<h2 id="resources-trust-title" class="resource-notice__title">
 							<span class="resources__sr-only">Warning:</span>
@@ -391,7 +394,7 @@
 				{/if}
 
 				{#if index.warnings.length > 0}
-					<section class="resource-notice resources__warnings" aria-labelledby="resources-warnings-title">
+					<section class="pau-notice resource-notice resources__warnings" aria-labelledby="resources-warnings-title">
 						<Icon name="warning" size={16} />
 						<h2 id="resources-warnings-title" class="resource-notice__title">Discovery warnings</h2>
 						<ul class="resource-notice__body">
@@ -432,8 +435,8 @@
 	}
 
 	/*
-	 * A warning notice follows the agent readiness notice: a bordered surface
-	 * with a warning leading edge. The icon centers on the title's line and the
+	 * A warning notice takes its border, tint, and icon color from the shared
+	 * `pau-notice` rule. The icon centers on the title's line and the
 	 * body starts under the title, so the text keeps one leading edge.
 	 */
 	.resource-notice {
@@ -443,14 +446,6 @@
 		column-gap: var(--pau-space-2);
 		row-gap: var(--pau-space-1);
 		padding: var(--pau-space-3) var(--pau-space-4);
-		border: var(--pau-border-thin) solid var(--pau-border);
-		border-inline-start: 2px solid var(--pau-warning);
-		border-radius: var(--pau-radius-surface);
-		background: var(--pau-surface);
-	}
-
-	.resource-notice > :global(.pau-icon) {
-		color: var(--pau-warning);
 	}
 
 	.resource-notice__title {

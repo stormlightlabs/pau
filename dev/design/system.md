@@ -197,6 +197,13 @@ Spend accent color on the primary action, current selection, focus, and active
 state. Muted copy must remain legible on every surface. State always combines
 color with text, shape, icon, or position.
 
+A warning notice inside a surface, such as the Pi readiness notice or a
+resource browser warning, takes the warning tone on the whole box: a thin
+warning border on every side, a light warning tint, and a warning icon when it
+has one. A colored side border on a rounded box tapers at the corners, so
+notices do not use one. The shared `pau-notice` rule in `packages/ui` owns
+this treatment.
+
 ## Components and controls
 
 Use one control vocabulary across screens:

@@ -57,9 +57,7 @@
 			</ul>
 		{/if}
 		{#if truncated}
-			<p class="mention-completion__empty" role="status">
-				Search stopped early in this large workspace. Type a folder path to narrow it.
-			</p>
+			<p class="mention-completion__empty" role="status">Search stopped early. Type a folder path to narrow it.</p>
 		{/if}
 	{/if}
 </div>

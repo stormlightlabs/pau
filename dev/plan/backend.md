@@ -17,10 +17,15 @@ placeholders of running processes.
 the whole workspace for a name, or only the folder before the last slash, and
 ranks prefix, substring, then in-order letter matches, folders first. The walk
 runs on a blocking thread and stops after 200,000 entries, so a huge tree costs
-a partial answer instead of a stalled request. One walk runs per workspace: a
-newer search stops the older one, and a dropped request stops its own. A walk
-that stops early sets `truncated`, and the composer says so instead of
-reporting no match. A link is offered only when its target resolves inside the
+a partial answer instead of a stalled request. Each request owns its walk, and
+dropping the request stops it at the next entry. The client aborts the fetch a
+newer keystroke makes stale, so concurrent searches from other tabs run to the
+end. A walk that hits the entry budget sets `truncated`, and the composer says
+so instead of reporting no match. The walk skips `.git` even when hidden files
+are included, and leading slashes in a query count from the workspace root.
+The stop is checked between entries, so a `read_dir` that blocks on a hung
+network or FUSE mount holds its blocking thread until the filesystem answers.
+Bounding that would need asynchronous filesystem I/O. A link is offered only when its target resolves inside the
 root and is not a credential file. `GET /api/workspaces/{id}/search` searches
 file content instead.
 

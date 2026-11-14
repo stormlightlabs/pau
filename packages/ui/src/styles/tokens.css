@@ -17,6 +17,7 @@
 @import './notice.css';
 @import './section-label.css';
 @import './states.css';
+@import './visually-hidden.css';
 @import './view-title.css';
 
 :root {

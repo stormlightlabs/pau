@@ -70,7 +70,7 @@
 							<span>{action.label}</span>
 							{#if showScope}
 								<span class="keyboard-shortcuts__scope"
-									><span class="keyboard-shortcuts__sr-only">Scope:</span> {keyActionScope(action)}</span>
+									><span class="pau-visually-hidden">Scope:</span> {keyActionScope(action)}</span>
 							{/if}
 							{#each action.yielded as conflict (conflict.keys)}
 								<small>{conflictNote(conflict)}</small>
@@ -174,14 +174,5 @@
 	.keyboard-shortcuts__scope {
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
-	}
-
-	.keyboard-shortcuts__sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip-path: inset(50%);
-		white-space: nowrap;
 	}
 </style>

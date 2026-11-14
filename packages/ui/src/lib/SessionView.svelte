@@ -2270,9 +2270,9 @@
 												{#if session.unseen && session.id !== activeSessionId}
 													{@const kind = markerKind(session.status)}
 													<span class={`session-rail__marker session-rail__marker--${kind}`} data-marker={kind}></span>
-													<span class="session-view__sr-only">{markerLabel[kind]}</span>
+													<span class="pau-visually-hidden">{markerLabel[kind]}</span>
 												{:else if hasAttention(session)}
-													<span class="session-view__sr-only">Attention required</span>
+													<span class="pau-visually-hidden">Attention required</span>
 												{/if}
 											</span>
 										</button>
@@ -2770,7 +2770,7 @@
 				</div>
 			</div>
 
-			<p class="session-view__sr-only session-view__announcer" role="status">{announcement}</p>
+			<p class="pau-visually-hidden session-view__announcer" role="status">{announcement}</p>
 			{#if arrived}
 				<!-- Mouse down must not move focus out of the composer. -->
 				<button
@@ -2904,7 +2904,7 @@
 								</div>
 							{/if}
 							<label class="session-composer__field">
-								<span class="session-view__sr-only">Prompt</span>
+								<span class="pau-visually-hidden">Prompt</span>
 								<Icon name="chevronRight" class="session-composer__prompt" />
 								<textarea
 									bind:this={composer}
@@ -2979,7 +2979,7 @@
 								<div class="session-composer__actions">
 									<input
 										bind:this={imagePicker}
-										class="session-view__sr-only"
+										class="pau-visually-hidden"
 										type="file"
 										accept={imageAccept}
 										multiple
@@ -3504,17 +3504,6 @@
 	.session-view__notice--failed {
 		color: var(--pau-text);
 		border-color: var(--pau-danger);
-	}
-
-	.session-view__sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		padding: 0;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		white-space: nowrap;
-		border: 0;
 	}
 
 	/* A secondary button that floats over the transcript, so it needs a fill. */
@@ -4071,17 +4060,6 @@
 		padding: var(--pau-space-2) var(--pau-space-3);
 		color: var(--pau-danger);
 		border-top: 1px solid var(--pau-border);
-	}
-
-	.session-view__sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		padding: 0;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		white-space: nowrap;
-		border: 0;
 	}
 
 	@media (max-width: 40rem) {

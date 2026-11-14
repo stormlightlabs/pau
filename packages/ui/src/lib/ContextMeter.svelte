@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../styles/tokens.css';
 	import { dismissible } from './dismissal';
 	import { createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
@@ -76,7 +77,7 @@
 					accessible name keeps it.
 				-->
 				<span
-					>{#if context}<span class="context-meter__hidden">Context</span>{/if}
+					>{#if context}<span class="pau-visually-hidden">Context</span>{/if}
 					<span class="context-meter__summary"><MetaText text={summary} /></span>{#if short}<span
 							class="context-meter__short">{short}</span
 						>{/if}</span>
@@ -173,16 +174,6 @@
 	.context-meter__button:focus-visible {
 		outline: var(--pau-focus-width) solid var(--pau-focus);
 		outline-offset: var(--pau-focus-offset);
-	}
-
-	/* Keeps "Context" in the accessible name without spending footer width on it. */
-	.context-meter__hidden {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		white-space: nowrap;
 	}
 
 	.context-meter__short {

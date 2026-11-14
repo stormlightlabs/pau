@@ -2,7 +2,13 @@ import { page, userEvent } from 'vitest/browser';
 import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
-import { emptyResourceIndex, largeResourceIndex, resourceIndex, untrustedResourceIndex } from '../fixtures/resources';
+import {
+	emptyResourceIndex,
+	largeResourceIndex,
+	resourceIndex,
+	undecidedResourceIndex,
+	untrustedResourceIndex
+} from '../fixtures/resources';
 import ResourceBrowser from '../lib/ResourceBrowser.svelte';
 import { RESOURCE_KIND_LABELS, RESOURCE_KINDS } from '../lib/resource-browser';
 import type { ResourceIndex, ResourceKind } from '../lib/types/resources';
@@ -87,6 +93,21 @@ test.each(RESOURCE_KINDS)('marks untrusted project %s and keeps them inspectable
 	await expect
 		.element(inspector())
 		.toHaveTextContent('Not trusted. You declined this workspace, so Pi skips its project resources.');
+});
+
+test.each([
+	{ index: untrustedResourceIndex, name: 'Warning: Workspace not trusted' },
+	{ index: undecidedResourceIndex, name: 'Warning: Workspace not trusted yet' }
+])('names the trust notice $name for screen readers', async ({ index, name }) => {
+	await page.viewport(1440, 900);
+	await renderBrowser('skill', { index });
+
+	const notice = page.getByRole('status', { name, exact: true });
+	await expect.element(notice).toBeVisible();
+	await expect.element(notice.getByRole('heading', { level: 2 })).toHaveTextContent(name);
+	// The prefix is read aloud but takes no visible space.
+	const prefix = notice.getByText('Warning:', { exact: true }).element().getBoundingClientRect();
+	expect(prefix.width * prefix.height).toBeLessThanOrEqual(1);
 });
 
 test.each(RESOURCE_KINDS)('lists user and project %s and filters by scope', async (kind) => {

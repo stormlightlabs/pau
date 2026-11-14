@@ -197,12 +197,13 @@ Spend accent color on the primary action, current selection, focus, and active
 state. Muted copy must remain legible on every surface. State always combines
 color with text, shape, icon, or position.
 
-A warning notice inside a surface, such as the Pi readiness notice or a
+A warning notice with rounded corners, such as the Pi readiness notice or a
 resource browser warning, takes the warning tone on the whole box: a thin
 warning border on every side, a light warning tint, and a warning icon when it
-has one. A colored side border on a rounded box tapers at the corners, so
-notices do not use one. The shared `pau-notice` rule in `packages/ui` owns
-this treatment.
+has one. A colored side border on a rounded box tapers at the corners, so a
+rounded notice never uses one. The shared `pau-notice` rule in `packages/ui`
+owns this treatment. A square-cornered notice, such as a session notice or a
+keyboard shortcut note, may mark its tone with a colored side border.
 
 ## Components and controls
 

@@ -42,7 +42,7 @@
 	onclick={() => void copy()}>
 	{result ? (result.ok ? 'Copied' : 'Copy failed') : 'Copy'}
 </button>
-<span class="copy-button__status" role="status">{result && !result.ok ? result.error : ''}</span>
+<span class="pau-visually-hidden" role="status">{result && !result.ok ? result.error : ''}</span>
 
 <style>
 	.copy-button {
@@ -72,16 +72,6 @@
 	.copy-button.copy-button--failed:is(:hover, :active) {
 		border-color: var(--pau-danger);
 		color: var(--pau-danger);
-	}
-
-	/* Read by screen readers only. The button label already shows the failure. */
-	.copy-button__status {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		white-space: nowrap;
 	}
 
 	:global(:root[data-motion='reduce']) .copy-button {

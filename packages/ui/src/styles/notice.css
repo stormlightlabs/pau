@@ -1,10 +1,11 @@
 /*
- * A warning notice inside a surface, such as the agent readiness notice or a
- * resource browser warning. The whole box takes the warning tone: a thin
- * warning border on every side and a light warning tint. A colored side
- * border on a rounded box curves and tapers at the corners, so notices never
- * use one. A notice with an icon colors the icon in the warning tone too.
- * Components own the notice's layout and padding.
+ * A rounded warning notice, such as the agent readiness notice or a resource
+ * browser warning. The whole box takes the warning tone: a thin warning
+ * border on every side and a light warning tint. A colored side border on a
+ * rounded box curves and tapers at the corners, so a rounded notice never
+ * uses one. Square-cornered notices may keep a side border. A notice with an
+ * icon colors the icon in the warning tone too. Components own the notice's
+ * layout and padding.
  */
 .pau-notice {
 	border: var(--pau-border-thin) solid var(--pau-warning);

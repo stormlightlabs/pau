@@ -381,7 +381,7 @@
 							title={`${item.label}: ${reason}`}>
 							<Icon name={item.icon ?? 'agents'} size={20} />
 						</button>
-						<span id={`product-${item.id}-unavailable`} class="app-shell__sr-only">{reason}</span>
+						<span id={`product-${item.id}-unavailable`} class="pau-visually-hidden">{reason}</span>
 					{/if}
 				</li>
 			{/each}
@@ -902,17 +902,6 @@
 
 	.app-shell__backdrop {
 		display: none;
-	}
-
-	.app-shell__sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		padding: 0;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		white-space: nowrap;
-		border: 0;
 	}
 
 	:global(.app-shell a:focus-visible),

@@ -309,7 +309,7 @@
 						aria-labelledby="resources-trust-title">
 						<Icon name="warning" size={16} />
 						<h2 id="resources-trust-title" class="resource-notice__title">
-							<span class="resources__sr-only">Warning:</span>
+							<span class="pau-visually-hidden">Warning:</span>
 							{index.project_trust === 'untrusted' ? 'Workspace not trusted' : 'Workspace not trusted yet'}
 						</h2>
 						<p class="resource-notice__body">
@@ -323,7 +323,7 @@
 				{#if counts[kind] > 0}
 					<div class="resources__filters" role="search" aria-label={`Filter ${noun}`}>
 						<label class="resources__query">
-							<span class="resources__sr-only">Filter by name</span>
+							<span class="pau-visually-hidden">Filter by name</span>
 							<Icon name="search" size={16} />
 							<input
 								type="search"
@@ -524,15 +524,6 @@
 
 	.resources__query input::placeholder {
 		color: var(--pau-text-muted);
-	}
-
-	.resources__sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip-path: inset(50%);
-		white-space: nowrap;
 	}
 
 	.resources__columns,

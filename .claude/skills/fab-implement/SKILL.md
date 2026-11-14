@@ -45,9 +45,9 @@ Stop and ask when any of these is true:
   any.
 - The work needs a decision the task does not record.
 
-A task with open subtasks is one unit of work. Work the subtasks in the
-order their dependencies give, on one branch, and close them all with one
-pull request.
+A task with open subtasks is one unit of work. Work the subtasks on one
+branch and close them all with one pull request. A blocked-by link between
+two of its subtasks orders the steps of that one pull request.
 
 ## Take a working tree
 

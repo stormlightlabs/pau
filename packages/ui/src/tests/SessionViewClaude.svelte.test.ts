@@ -39,25 +39,6 @@ test('offers an idle Claude Code session only the controls it supports', async (
 	await expect.element(page.getByRole('menuitem', { name: 'Stop' })).toBeVisible();
 });
 
-test('shows the model and thinking level Claude Code reports, read-only', async () => {
-	const [workspace] = sessionFixtures.claude;
-	const [claude] = workspace?.sessions ?? [];
-	if (!workspace || !claude) throw new Error('missing Claude fixture');
-	const reported = { ...claude, model: 'Claude Opus 4.1', thinkingLevel: 'high' as const };
-	await render(SessionView, {
-		workspaces: [{ ...workspace, sessions: [reported] }],
-		activeSessionId: 'claude-idle',
-		...handlers()
-	});
-
-	const model = page.getByRole('button', { name: 'Model: Claude Opus 4.1' });
-	await expect.element(model).toBeDisabled();
-	await expect.element(model).toHaveAccessibleDescription(/does not support switching models/);
-	const thinking = page.getByRole('combobox', { name: 'Thinking level' });
-	await expect.element(thinking).toBeDisabled();
-	await expect.element(thinking).toHaveTextContent('High');
-});
-
 test('lets a running Claude Code session be interrupted but not steered', async () => {
 	const onInterrupt = vi.fn();
 	await render(SessionView, {

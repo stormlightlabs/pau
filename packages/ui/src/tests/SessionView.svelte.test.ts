@@ -842,7 +842,9 @@ test('selects an already open workspace instead of adding it again', async () =>
 	await userEvent.click(page.getByRole('button', { name: 'Open', exact: true }));
 
 	await expect.element(page.getByRole('heading', { name: 'Fix diff gutter', level: 1 })).toBeVisible();
-	await expect.element(rail.getByRole('heading', { name: 'Pau' })).toBeInTheDocument();
+	// The closed overlay rail is hidden from the accessibility tree, so open it again to read it.
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	await expect.element(rail.getByRole('heading', { name: 'Pau' })).toBeVisible();
 	expect(document.querySelectorAll('.session-rail section')).toHaveLength(1);
 });
 

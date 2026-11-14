@@ -73,6 +73,7 @@ async function whilePressed<T>(element: HTMLElement, read: () => T): Promise<T> 
 		y: frame.top + (box.top + box.height / 2) * scale,
 		button: 'left' as const
 	};
+	console.log('DEBUG', JSON.stringify({ frame, iw: window.innerWidth, ih: window.innerHeight, dpr: window.devicePixelRatio, box, point, at: document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)?.outerHTML.slice(0, 80), sy: window.scrollY }));
 	const session = cdp();
 	await session.send('Input.dispatchMouseEvent', { type: 'mousePressed', clickCount: 1, ...point });
 	const result = read();
@@ -131,6 +132,7 @@ describe.each(controls)('%s', (control) => {
 		await rest();
 		const focused = await lookWhileFocused(enabled);
 
+		console.log('DEBUG', control, JSON.stringify({ resting, hovered, pressed, focused }));
 		expect(new Set([resting, hovered, pressed, focused]).size).toBe(4);
 	});
 

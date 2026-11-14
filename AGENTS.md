@@ -39,13 +39,23 @@ Do not start Docker Desktop or another container or virtual-machine runtime
 without explicit user approval. Use an already-running runtime only when the
 active task requires it.
 
-Run heavyweight verification serially. Do not run `pnpm check`, browser tests,
+CI runs the full gate. The Check workflow runs `pnpm gate`, the Storybook build
+and the website build on every pull request to `main` and every push to `main`.
+Locally, run the narrowest checks that cover the change, then `fab gates`
+before each push, which runs only the scopes the changed files match. Do not
+run `fab gates --full` or a full application or repository build locally
+unless the task asks for one. After a follow-up edit, rerun the narrowest check
+that covers the changed code.
+
+Run local heavyweight checks serially. Do not run `pnpm check`, browser tests,
 Storybook or website builds, and Cargo builds at the same time. Resource
-contention can cause false timeouts in process and interaction tests. Run a full
-application or repository build only when the active task requires it or the
-change affects that build boundary. After a follow-up edit, rerun the narrowest
-check that covers the changed code; rebuild only when the edit can affect the
-built artifact.
+contention can cause false timeouts in process and interaction tests.
+
+Before posting `Review finished at <sha>`, read the result of the Check
+workflow for that head with `gh pr checks <n>`. This replaces the `fab-storm`
+skill's step that runs `fab gates --full` on the head, and a Check failure
+counts as a failure of that step. When Check is still running, wait for it
+with `gh run watch <run id>` and read the result once. Do not poll in a loop.
 
 ## Tasks
 

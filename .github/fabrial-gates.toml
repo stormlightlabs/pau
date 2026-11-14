@@ -6,7 +6,7 @@
 # repository owns the file: `fab update` and `fab check` leave it alone.
 
 full = "pnpm gate"
-unmatched = "full"
+unmatched = "skip"
 
 # Rust changes can change the generated TypeScript protocol, so this scope
 # also checks that the generated files are current.

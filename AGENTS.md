@@ -43,10 +43,10 @@ active task requires it.
 CI runs the full gate. The Check workflow runs `pnpm gate`, the Storybook build
 and the website build on every pull request to `main` and every push to `main`.
 Locally, run the narrowest checks that cover the change, then `fab gates`
-before each push, which runs only the scopes the changed files match. Do not
-run `fab gates --full` or a full application or repository build locally
-unless the task asks for one. After a follow-up edit, rerun the narrowest check
-that covers the changed code.
+before each push. It runs only the scopes the changed files match, and files
+no scope names run nothing. Do not run `fab gates --full` or a full
+application or repository build locally unless the task asks for one. After a
+follow-up edit, rerun the narrowest check that covers the changed code.
 
 Run local heavyweight checks serially. Do not run `pnpm check`, browser tests,
 Storybook or website builds, and Cargo builds at the same time. Resource

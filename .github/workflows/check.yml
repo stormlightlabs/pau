@@ -20,14 +20,16 @@ jobs:
   gate:
     name: Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Install Linux build and sandbox dependencies
         run: |
           sudo apt-get update
           sudo apt-get install --yes build-essential bubblewrap curl file libayatana-appindicator3-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev librsvg2-dev patchelf ripgrep socat wget vim neovim
-      # The terminal integration tests edit files in Vim, Neovim and Helix,
-      # and skip an editor that is not on the PATH. Ubuntu has no current
+      # Vim, Neovim and Helix serve the terminal editor scenarios that land
+      # with the terminal layouts change. Until then no test runs them. Those
+      # tests skip an editor that is not on the PATH. Ubuntu has no current
       # Helix package, so it comes from the pinned release.
       - name: Install Helix
         env:
@@ -71,6 +73,7 @@ jobs:
   website:
     name: Website
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

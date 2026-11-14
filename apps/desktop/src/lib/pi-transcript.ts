@@ -1,6 +1,7 @@
 import {
 	isImageType,
 	maxImageBytes,
+	maxRequestImageBytes,
 	type AutoRetry,
 	type BashToolCall,
 	type CompactionReason,
@@ -360,25 +361,73 @@ export function findTranscriptEntry(
 	return found;
 }
 
+/** Base64 length of `bytes` bytes, padding included. */
+const base64Length = (bytes: number) => Math.ceil(bytes / 3) * 4;
+
 /** Longest base64 text of an image within {@link maxImageBytes}. */
-const MAX_IMAGE_BASE64 = Math.ceil(maxImageBytes / 3) * 4;
+const MAX_IMAGE_BASE64 = base64Length(maxImageBytes);
+
+/** Most base64 text the images of one message may hold, within {@link maxRequestImageBytes}. */
+const MAX_MESSAGE_IMAGE_BASE64 = base64Length(maxRequestImageBytes);
+
+/**
+ * Most base64 text the images of a whole transcript may hold: four full
+ * requests. Every image is a `data:` URL in state and in the DOM, so a long
+ * history of screenshots would otherwise hold hundreds of megabytes.
+ */
+const MAX_TRANSCRIPT_IMAGE_BASE64 = 4 * MAX_MESSAGE_IMAGE_BASE64;
 
 /**
  * Reads the images in a user message's content. An image shows only with a
- * type Pau accepts for prompts, base64 data, and no more than
- * {@link maxImageBytes}; the rest are left out, so a damaged or oversized
- * session file cannot slow the transcript down.
+ * type Pau accepts for prompts and base64 data that can decode; a damaged
+ * image is left out. An image over {@link maxImageBytes}, or one that takes
+ * the message past {@link maxRequestImageBytes}, counts in `hiddenImages`
+ * so the view can say it is not shown.
  */
-function promptImages(content: unknown): PromptImage[] | undefined {
-	if (!Array.isArray(content)) return undefined;
-	const images = content.flatMap((block) => {
-		if (!isObject(block) || block.type !== 'image') return [];
+function promptImages(content: unknown): { images?: PromptImage[]; hiddenImages?: number } {
+	if (!Array.isArray(content)) return {};
+	const images: PromptImage[] = [];
+	let hidden = 0;
+	let total = 0;
+	for (const block of content) {
+		if (!isObject(block) || block.type !== 'image') continue;
 		const mimeType = text(block.mimeType);
 		const data = text(block.data);
-		if (!mimeType || !data || data.length > MAX_IMAGE_BASE64 || !isImageType(mimeType)) return [];
-		return /^[A-Za-z0-9+/]+={0,2}$/.test(data) ? [{ mimeType, data }] : [];
+		if (!mimeType || !data || !isImageType(mimeType)) continue;
+		if (data.length > MAX_IMAGE_BASE64 || total + data.length > MAX_MESSAGE_IMAGE_BASE64) {
+			hidden += 1;
+			continue;
+		}
+		// A length of 1 mod 4 leaves a lone sextet that decodes to no byte.
+		if (data.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) continue;
+		images.push({ mimeType, data });
+		total += data.length;
+	}
+	return { ...(images.length > 0 && { images }), ...(hidden > 0 && { hiddenImages: hidden }) };
+}
+
+/**
+ * Keeps the transcript's images within {@link MAX_TRANSCRIPT_IMAGE_BASE64}.
+ * The newest images win: walking back from the end, each image past the
+ * budget leaves its message and counts in its `hiddenImages`. Entries that
+ * keep all their images are returned unchanged.
+ */
+function limitImages(entries: TranscriptEntry[]): TranscriptEntry[] {
+	let total = 0;
+	let changed = false;
+	const limited = entries.toReversed().map((entry) => {
+		if (entry.kind !== 'message' || !entry.images) return entry;
+		const kept = entry.images.filter((image) => {
+			if (total + image.data.length > MAX_TRANSCRIPT_IMAGE_BASE64) return false;
+			total += image.data.length;
+			return true;
+		});
+		if (kept.length === entry.images.length) return entry;
+		changed = true;
+		const hiddenImages = (entry.hiddenImages ?? 0) + entry.images.length - kept.length;
+		return { ...entry, images: kept.length > 0 ? kept : undefined, hiddenImages };
 	});
-	return images.length === 0 ? undefined : images;
+	return changed ? limited.toReversed() : entries;
 }
 
 /** Projects one authoritative or starting message into transcript entries. */
@@ -412,8 +461,8 @@ function projectMessage(
 						.join('\n')
 				: '');
 		const images = promptImages(content);
-		if (!body && !images) return [];
-		return [{ id: `${key}:0`, kind: 'message', role: 'user', body, ...(images && { images }) }];
+		if (!body && !images.images && !images.hiddenImages) return [];
+		return [{ id: `${key}:0`, kind: 'message', role: 'user', body, ...images }];
 	}
 	if (role === 'bashExecution') {
 		const command = text(message.command);
@@ -473,7 +522,8 @@ function replaceMessage(entries: TranscriptEntry[], key: string, projected: Tran
 	const first = entries.findIndex((entry) => owned(entry));
 	const kept = entries.filter((entry) => !owned(entry));
 	const at = first === -1 ? kept.length : entries.slice(0, first).filter((entry) => !owned(entry)).length;
-	return [...kept.slice(0, at), ...projected, ...kept.slice(at)];
+	const next = [...kept.slice(0, at), ...projected, ...kept.slice(at)];
+	return projected.some((entry) => entry.kind === 'message' && entry.images) ? limitImages(next) : next;
 }
 
 function applyMessageUpdate(state: PiTranscript, update: JsonObject): PiTranscript {

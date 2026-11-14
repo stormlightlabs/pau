@@ -800,7 +800,8 @@ export const PromptImagesFromHistory: Story = {
 		await expect(within(marker).getByText('96,400 tokens before')).toBeVisible();
 		await expect(canvas.getByRole('img', { name: 'Image 2 of 2' })).toBeVisible();
 		await expect(canvas.getAllByRole('img', { name: 'Image 1 of 1' })).toHaveLength(1);
-		await expect(canvas.getAllByRole('button', { name: 'Copy your message' })).toHaveLength(1);
+		await expect(canvas.getByText('2 images not shown: too large')).toBeVisible();
+		await expect(canvas.getAllByRole('button', { name: 'Copy your message' })).toHaveLength(2);
 	}
 };
 export const CompactedAutomatically: Story = {

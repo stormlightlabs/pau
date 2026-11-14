@@ -75,7 +75,7 @@ test('shows the images sent with a user prompt and leaves out ones Pau cannot sh
 		png,
 		{ type: 'image', mimeType: 'image/svg+xml', data: 'AQID' },
 		{ type: 'image', mimeType: 'image/png', data: 'https://example.com/a.png' },
-		{ type: 'image', mimeType: 'image/png', data: 'A'.repeat(8 * 1024 * 1024) }
+		{ type: 'image', mimeType: 'image/png', data: 'AAAAA' }
 	];
 	const expected = [
 		{
@@ -93,6 +93,51 @@ test('shows the images sent with a user prompt and leaves out ones Pau cannot sh
 	);
 	expect(piTranscriptFromMessages([{ role: 'user', content: [png], timestamp: 1 }]).entries).toEqual([
 		{ ...expected[0], body: '' }
+	]);
+});
+
+const image = (data: string) => ({ type: 'image', mimeType: 'image/png', data });
+
+const entry = (content: unknown[]) => piTranscriptFromMessages([{ role: 'user', content, timestamp: 1 }]).entries[0];
+
+/** An image at the 5 MiB limit: 6,990,508 characters of base64. */
+const largestImage = image('A'.repeat(6_990_508));
+
+test('shows an image at the size limit and counts one past it, or past the message limit, as hidden', () => {
+	const limit = largestImage.data;
+
+	expect(entry([image(limit)])).toMatchObject({ images: [{ data: limit }] });
+	expect(entry([image(`${limit}A`)])).toEqual({
+		id: 'user-1:0',
+		kind: 'message',
+		role: 'user',
+		body: '',
+		hiddenImages: 1
+	});
+	// Two images at the limit fill a 10 MiB request; a third does not fit.
+	const full = entry([image(limit), image(limit), image('AQID')]);
+	expect(full).toMatchObject({ hiddenImages: 1 });
+	expect(full.kind === 'message' && full.images?.length).toBe(2);
+});
+
+test('keeps the newest images within the transcript budget and counts older ones as hidden', () => {
+	// Each message carries a full 10 MiB request; the transcript keeps four.
+	const messages = Array.from({ length: 6 }, (_, index) => ({
+		role: 'user',
+		content: [largestImage, largestImage],
+		timestamp: index + 1
+	}));
+	const entries = piTranscriptFromMessages(messages).entries;
+
+	expect(
+		entries.map((entry) => (entry.kind === 'message' ? [entry.images?.length ?? 0, entry.hiddenImages] : []))
+	).toEqual([
+		[0, 2],
+		[0, 2],
+		[2, undefined],
+		[2, undefined],
+		[2, undefined],
+		[2, undefined]
 	]);
 });
 

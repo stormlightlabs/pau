@@ -2721,6 +2721,13 @@
 											{/each}
 										</ul>
 									{/if}
+									{#if entry.hiddenImages}
+										<p class="session-message__hidden-images">
+											{entry.hiddenImages === 1
+												? 'Image not shown: too large'
+												: `${entry.hiddenImages} images not shown: too large`}
+										</p>
+									{/if}
 									{#if canRetry && entry.id === retryableEntryId}
 										<button
 											type="button"
@@ -3913,6 +3920,11 @@
 
 	.session-message__images {
 		margin-top: var(--pau-space-2);
+	}
+
+	.session-message p.session-message__hidden-images {
+		color: var(--pau-text-muted);
+		font-size: var(--pau-type-sm);
 	}
 
 	.session-images li {

@@ -119,6 +119,8 @@ export type TranscriptMessage = {
 	 * each one from its own data and never loads a URL.
 	 */
 	images?: PromptImage[];
+	/** Images sent with the prompt that are too large to show. The view names how many. */
+	hiddenImages?: number;
 };
 
 export type TranscriptThinking = { id: string; kind: 'thinking'; body: string; complete: boolean };

@@ -197,7 +197,8 @@ const promptImagesTranscript: SessionViewModel['transcript'] = [
 				data: 'iVBORw0KGgoAAAANSUhEUgAAAKAAAAB4CAIAAAD6wG44AAAA2ElEQVR42u3RQQ0AIAwAsQnbGxGIQM40IWsqeLA0OQXXyHM1uLAAsAALsAALsAALMGABFmABFmABFmDAAizAAizAAizAAgxYgAVYgAVYgAUYsAALsAALsAALMGABFmABFmABFmABBizAAizAAizAAgxYgAVYgAVYgAUYsAuABViABViABViAAQuwvgBetTU4wIAFWIAFWIAFWIABC7AAC7AAC7AAAxZgARZgARZgARZgwAIswAIswAIswIAFWIAFWIAFWIABC7AAC7AAC7AACzBgARZgAdbDGraZGOytTlWeAAAAAElFTkSuQmCC'
 			}
 		]
-	}
+	},
+	{ id: 'prompt-images-hidden', kind: 'message', role: 'user', body: 'And this recording.', hiddenImages: 2 }
 ];
 
 const extensionUi = {

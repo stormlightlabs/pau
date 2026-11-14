@@ -7,14 +7,27 @@ Read the Product specification before a product change, the Technical plan
 before an architecture change, and the documents on the task's project before
 either. When a product or architecture decision changes, update the owning
 Linear document in the same task. Do not add plan or spec files to the
-repository.
+repository. A delegated agent without Linear access gets the spec and plan text
+it needs in its brief, and the agent that dispatched it updates the Linear
+document.
 
 - [ROADMAP.md](dev/ROADMAP.md) sets the rules for splitting work into tasks.
   The tasks themselves live in Linear, as [Tasks](#tasks) describes.
 - `dev/design/` holds design decisions, as [UI work](#ui-work) describes.
 
-Do not repeat the spec or plan here. This file owns the testing and dogfooding
-rules below, so that a session without Linear still has them.
+Do not repeat the spec or plan here, except for the invariants below. This file
+also owns the testing and dogfooding rules, so that a session without Linear
+still has them.
+
+Every task keeps these invariants from the Technical plan:
+
+- Shared UI code in `packages/ui` does not import Tauri APIs.
+- The Cargo workspace version is the desktop app's only version source.
+- Untagged builds report a `-dev` version, use the
+  `org.stormlightlabs.pau.dev` bundle identifier, and keep their own data
+  directory so they never migrate the installed app's database.
+- Before 1.0.0, migrations only move forward, and the app refuses to open a
+  database whose schema is newer than its own.
 
 ## Commands
 

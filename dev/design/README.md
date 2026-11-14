@@ -1,7 +1,7 @@
 # Design references
 
 This directory records Pau's durable interface decisions and early sketches.
-The product spec and the architecture plan, which live in the project's issue
+The Product specification and the Technical plan, which live in the project's issue
 tracker, define product behavior and implementation policy.
 
 - [`system.md`](system.md) defines the visual and interaction system.

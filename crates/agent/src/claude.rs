@@ -13,6 +13,9 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStderr, ChildStdout, Command};
 use tokio::sync::{Mutex, broadcast, oneshot, watch};
 
+#[cfg(unix)]
+use crate::process_group::signal_process_group;
+use crate::process_group::{ProcessGroup, lead_process_group};
 use crate::{
     AgentCapabilities, AgentControl, AgentControlError, AgentEvent, AgentEventKind,
     AgentSessionStatus,
@@ -389,9 +392,10 @@ impl ClaudeBridgeProcess {
             .current_dir(&options.working_directory)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
-        let mut child = command.spawn().map_err(ClaudeBridgeProcessError::Start)?;
+            .stderr(Stdio::piped());
+        let mut child = lead_process_group(&mut command)
+            .spawn()
+            .map_err(ClaudeBridgeProcessError::Start)?;
         let process_id = child.id().ok_or_else(|| {
             ClaudeBridgeProcessError::Start(std::io::Error::other(
                 "bridge host did not report a process ID",
@@ -411,13 +415,11 @@ impl ClaudeBridgeProcess {
         let watcher_output = output.clone();
         let watcher_pending = Arc::clone(&pending);
         let watcher_requested = Arc::clone(&shutdown_requested);
+        let mut group = ProcessGroup::new(child);
         tokio::spawn(async move {
             let status = tokio::select! {
-                status = child.wait() => status,
-                _ = kill_receiver.recv() => {
-                    let _ = child.start_kill();
-                    child.wait().await
-                }
+                status = group.wait() => status,
+                _ = kill_receiver.recv() => group.kill().await,
             };
             if let Ok(status) = status {
                 let exit = process_exit(status, watcher_requested.load(Ordering::SeqCst));
@@ -539,14 +541,7 @@ impl ClaudeBridgeProcess {
 
     #[cfg(unix)]
     async fn send_signal(&self, signal: i32) -> Result<(), ClaudeBridgeProcessError> {
-        let result = unsafe { libc::kill(self.process_id as i32, signal) };
-        if result == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH) {
-            Ok(())
-        } else {
-            Err(ClaudeBridgeProcessError::Signal(
-                std::io::Error::last_os_error(),
-            ))
-        }
+        signal_process_group(self.process_id, signal).map_err(ClaudeBridgeProcessError::Signal)
     }
 
     #[cfg(not(unix))]
@@ -994,24 +989,20 @@ fn terminate_signal() -> i32 {
 
 #[cfg(all(test, unix))]
 mod tests {
-    use std::os::unix::fs::PermissionsExt;
-
     use super::*;
+    use crate::process_group::tests::{assert_gone, grandchild, host_with_grandchild};
 
     #[tokio::test]
     async fn kills_a_bridge_that_never_answers_the_handshake() {
         let directory = tempfile::tempdir().unwrap();
-        let bridge = directory.path().join("pau-claude-bridge");
-        std::fs::write(&bridge, "#!/bin/sh\necho $$ > pid\nexec sleep 600\n").unwrap();
-        std::fs::set_permissions(&bridge, std::fs::Permissions::from_mode(0o755)).unwrap();
         let options = StartClaudeBridgeOptions {
-            executable_path: bridge,
+            executable_path: host_with_grandchild(directory.path()),
             working_directory: directory.path().to_path_buf(),
             arguments: Vec::new(),
             shutdown_timeouts: ClaudeBridgeShutdownTimeouts::default(),
         };
 
-        let error = ClaudeSession::start_within(options, Duration::from_millis(500))
+        let error = ClaudeSession::start_within(options, Duration::from_secs(3))
             .await
             .err()
             .expect("the start should fail");
@@ -1020,15 +1011,6 @@ mod tests {
             "{error}"
         );
         assert!(error.to_string().contains("did not answer"), "{error}");
-        let pid: i32 = std::fs::read_to_string(directory.path().join("pid"))
-            .unwrap()
-            .trim()
-            .parse()
-            .unwrap();
-        assert_eq!(
-            unsafe { libc::kill(pid, 0) },
-            -1,
-            "the bridge is still running"
-        );
+        assert_gone(grandchild(directory.path()).await).await;
     }
 }

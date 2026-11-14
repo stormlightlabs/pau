@@ -279,6 +279,9 @@ pub fn discover_pi(options: &DiscoverPiOptions) -> Result<PiDiscovery, PiDiscove
 }
 
 fn validate_configured_path(path: &Path) -> Result<PathBuf, PiDiscoveryError> {
+    // Pi runs in the workspace, where a relative path would name another file.
+    let absolute = std::path::absolute(path);
+    let path = absolute.as_deref().unwrap_or(path);
     match fs::metadata(path) {
         Ok(metadata) if is_executable_file(&metadata) => Ok(path.to_path_buf()),
         Ok(_) => Err(discovery_error(
@@ -318,10 +321,7 @@ fn find_on_path(path: &OsStr) -> Result<PathBuf, PiDiscoveryError> {
     let mut blocked_path = None;
     let executable_name = format!("pi{}", env::consts::EXE_SUFFIX);
 
-    for directory in env::split_paths(path) {
-        if directory.as_os_str().is_empty() {
-            continue;
-        }
+    for directory in pau_agent::absolute_path_entries(path) {
         let candidate = directory.join(&executable_name);
         match fs::metadata(&candidate) {
             Ok(metadata) if is_executable_file(&metadata) => return Ok(candidate),

@@ -32,19 +32,23 @@ export default async function setup(project: TestProject): Promise<() => Promise
 	const port = await freePort();
 	const token = randomBytes(24).toString('base64url');
 	const origin = `http://127.0.0.1:${port}`;
-	const server = spawn(binary, [], {
+	// The server refuses a token in its environment, where other processes
+	// could read it, so it arrives on standard input.
+	const environment = { ...process.env };
+	delete environment.PAU_API_TOKEN;
+	const server = spawn(binary, ['--token-stdin'], {
 		env: {
-			...process.env,
+			...environment,
 			PAU_SERVER_ADDR: `127.0.0.1:${port}`,
-			PAU_API_TOKEN: token,
 			PAU_DATABASE_PATH: path.join(root, 'pau.db'),
 			SHELL: '/bin/sh',
 			ENV: '',
 			BASH_SILENCE_DEPRECATION_WARNING: '1',
 			PS1: 'pau$ '
 		},
-		stdio: ['ignore', 'ignore', 'inherit']
+		stdio: ['pipe', 'ignore', 'inherit']
 	});
+	server.stdin.end(`${token}\n`);
 	const stop = async () => {
 		server.kill('SIGINT');
 		await rm(root, { recursive: true, force: true });

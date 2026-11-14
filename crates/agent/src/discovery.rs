@@ -264,6 +264,16 @@ pub fn discover_claude(
     })
 }
 
+/// Yields the directories of a `PATH` value that are absolute.
+///
+/// Agents run with the workspace as their working directory. An empty or
+/// relative entry would then name a directory inside the repository, where
+/// anyone who can commit to it could plant the executable, so discovery skips
+/// those entries.
+pub fn absolute_path_entries(path: &OsStr) -> impl Iterator<Item = PathBuf> + '_ {
+    env::split_paths(path).filter(|directory| directory.is_absolute())
+}
+
 /// Why an executable could not be located.
 enum Lookup {
     /// Nothing exists at the configured path, or on `PATH` when it is `None`.
@@ -277,6 +287,10 @@ enum Lookup {
 /// only when no later directory holds an executable one.
 fn locate(name: &str, configured: Option<&Path>, path: &OsStr) -> Result<PathBuf, Lookup> {
     if let Some(configured) = configured {
+        // The bridge runs in the workspace, where a relative path would name
+        // a different file.
+        let configured = &std::path::absolute(configured)
+            .map_err(|_| Lookup::Missing(Some(configured.to_path_buf())))?;
         return match fs::metadata(configured) {
             Ok(metadata) if is_executable_file(&metadata) => Ok(configured.to_path_buf()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -287,10 +301,7 @@ fn locate(name: &str, configured: Option<&Path>, path: &OsStr) -> Result<PathBuf
     }
     let file_name = format!("{name}{}", env::consts::EXE_SUFFIX);
     let mut blocked = None;
-    for directory in env::split_paths(path) {
-        if directory.as_os_str().is_empty() {
-            continue;
-        }
+    for directory in absolute_path_entries(path) {
         let candidate = directory.join(&file_name);
         match fs::metadata(&candidate) {
             Ok(metadata) if is_executable_file(&metadata) => return Ok(candidate),

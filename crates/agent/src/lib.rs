@@ -6,6 +6,7 @@ mod controls;
 mod discovery;
 mod events;
 mod mcp;
+mod process_group;
 
 pub use agents::AgentKind;
 pub use claude::{
@@ -23,7 +24,7 @@ pub use controls::{
 };
 pub use discovery::{
     CLAUDE_BRIDGE_COMMAND, ClaudeDiscovery, ClaudeDiscoveryError, ClaudeDiscoveryErrorCode,
-    DiscoverClaudeOptions, MIN_SUPPORTED_CLAUDE_VERSION, discover_claude,
+    DiscoverClaudeOptions, MIN_SUPPORTED_CLAUDE_VERSION, absolute_path_entries, discover_claude,
 };
 pub use events::{AgentEvent, AgentEventKind, AgentSessionStatus};
 pub use mcp::{
@@ -34,6 +35,9 @@ pub use mcp::{
     McpServerSource, claude_mcp_capabilities, discover_claude_mcp, edit_mcp_server,
     merge_mcp_layers, redact_mcp_value, run_claude_mcp_operation, set_claude_server_enabled,
 };
+#[cfg(unix)]
+pub use process_group::signal_process_group;
+pub use process_group::{ProcessGroup, lead_process_group};
 
 /// Identifies the agent subsystem in diagnostics.
 pub const CRATE_NAME: &str = "pau-agent";

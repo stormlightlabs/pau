@@ -66,6 +66,34 @@ fn reports_a_missing_claude() {
 }
 
 #[test]
+fn skips_relative_path_entries() {
+    let directory = tempfile::tempdir().unwrap();
+    write_script(directory.path(), "claude", "echo '2.1.281 (Claude Code)'");
+    write_script(directory.path(), "pau-claude-bridge", "exit 0");
+    // The same directory, named relative to the test's working directory.
+    let up = std::env::current_dir().unwrap().components().count() - 1;
+    let relative = Path::new(&"../".repeat(up)).join(directory.path().strip_prefix("/").unwrap());
+    assert!(relative.join("claude").is_file());
+
+    let error = discover_claude(&DiscoverClaudeOptions {
+        path: std::env::join_paths([relative.as_path(), Path::new("")]).unwrap(),
+        ..on_path(directory.path())
+    })
+    .unwrap_err();
+    assert_eq!(error.code(), ClaudeDiscoveryErrorCode::NotFound);
+
+    // A configured relative path reaches the bridge as an absolute one.
+    let discovery = discover_claude(&DiscoverClaudeOptions {
+        executable_path: Some(relative.join("claude")),
+        bridge_path: Some(relative.join("pau-claude-bridge")),
+        path: OsString::new(),
+    })
+    .unwrap();
+    assert!(discovery.executable_path.is_absolute());
+    assert!(discovery.bridge_path.is_absolute());
+}
+
+#[test]
 fn reports_a_non_executable_claude() {
     let directory = tempfile::tempdir().unwrap();
     fs::write(directory.path().join("claude"), "").unwrap();

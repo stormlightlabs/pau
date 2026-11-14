@@ -1420,7 +1420,7 @@ pub async fn start_with_options(
 /// Starts the shared API with an explicitly configured token.
 ///
 /// This entry point supports browser development, where Vite and the server
-/// receive the same token through their process environments.
+/// share a token from `.env` or one the server reads on standard input.
 pub async fn start_with_token(address: SocketAddr, token: ApiToken) -> io::Result<ServerHandle> {
     start_with_token_and_options(address, token, ServerOptions::default()).await
 }

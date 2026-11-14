@@ -165,8 +165,7 @@ async function responseJson<T>(response: Response): Promise<T> {
 
 function workspaceEndpoint(
 	workspaceId: string,
-	endpoint:
-		'file' | 'files' | 'names' | 'search' | 'git/diff' | 'git/status' | 'sandbox' | 'sandbox/preview' | 'pi-sessions'
+	endpoint: 'file' | 'files' | 'search' | 'git/diff' | 'git/status' | 'sandbox' | 'sandbox/preview' | 'pi-sessions'
 ): URL {
 	const origin = apiConnection().origin || 'https://pau.local';
 	return new URL(`/api/workspaces/${encodeURIComponent(workspaceId)}/${endpoint}`, origin);
@@ -336,20 +335,20 @@ export async function writeWorkspaceFile(
 /**
  * Finds files and folders by name in a registered workspace, best match first.
  * A query with a slash searches only the folder before the last slash.
- * Aborting `signal` cancels the request and stops the server's walk.
+ * Aborting `options.signal` cancels the request and stops the server's walk.
  */
 export async function searchWorkspaceNames(
 	workspaceId: string,
 	query: string,
-	options: { includeHidden: boolean; includeIgnored: boolean },
-	fetcher: typeof fetch = fetch,
-	signal?: AbortSignal
+	options: { includeHidden: boolean; includeIgnored: boolean; signal?: AbortSignal },
+	fetcher: typeof fetch = fetch
 ): Promise<NameSearchResult> {
-	const url = workspaceEndpoint(workspaceId, 'names');
+	const url = workspaceEndpoint(workspaceId, 'search');
 	url.searchParams.set('query', query);
+	url.searchParams.set('match', 'names');
 	if (options.includeHidden) url.searchParams.set('include_hidden', 'true');
 	if (options.includeIgnored) url.searchParams.set('include_ignored', 'true');
-	const response = await fetcher(requestUrl(url), { headers: authorization(), signal });
+	const response = await fetcher(requestUrl(url), { headers: authorization(), signal: options.signal });
 	return responseJson<NameSearchResult>(response);
 }
 

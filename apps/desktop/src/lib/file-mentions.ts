@@ -5,10 +5,9 @@ import { searchWorkspaceNames } from './api';
 /**
  * Finds the workspace files and folders for the path typed after an `@`.
  *
- * The server's name search ranks the matches and leaves out ignored files.
- * Hidden entries appear only when the name after the last slash starts with a
- * dot. Folder paths end in a slash so accepting one keeps completion open.
- * Aborting `signal` cancels a search the next keystroke made stale.
+ * Ignored files stay out, and hidden ones appear only when the name after the
+ * last slash starts with a dot. Folder paths end in a slash so accepting one
+ * keeps completion open.
  */
 export async function searchFileMentions(
 	workspaceId: string,
@@ -17,8 +16,8 @@ export async function searchFileMentions(
 	fetcher: typeof fetch = fetch
 ): Promise<FileMentionSearch> {
 	const name = query.slice(query.lastIndexOf('/') + 1);
-	const options = { includeHidden: name.startsWith('.'), includeIgnored: false };
-	const { entries, truncated } = await searchWorkspaceNames(workspaceId, query, options, fetcher, signal);
+	const options = { includeHidden: name.startsWith('.'), includeIgnored: false, signal };
+	const { entries, truncated } = await searchWorkspaceNames(workspaceId, query, options, fetcher);
 	const files = entries.map((entry) =>
 		entry.kind === 'directory' ? { path: `${entry.path}/`, directory: true } : { path: entry.path, directory: false }
 	);

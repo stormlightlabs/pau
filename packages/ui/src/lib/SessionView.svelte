@@ -126,9 +126,9 @@
 		/**
 		 * Lists the workspace files and folders that match the path typed after an
 		 * `@` in the composer. Folders end with a slash. A rejection shows that the
-		 * search failed. Without it, `@` does not open completion.
+		 * search failed, and the view aborts `signal` once a newer search starts.
+		 * Without it, `@` does not open completion.
 		 */
-		/** Searches for `@` mentions. The view aborts `signal` once a newer search starts. */
 		onSearchFiles?: (workspaceId: string, query: string, signal: AbortSignal) => Promise<FileMentionSearch>;
 		/**
 		 * Interrupts the running turn. Pi drops any queued messages on interrupt,

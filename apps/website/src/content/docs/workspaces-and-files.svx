@@ -52,6 +52,11 @@ Right-click a file or folder in the tree, or focus it and press `Shift+F10`,
 to copy its full or workspace-relative path or show it in the file manager.
 Files can also open in Pau's editor.
 
+Type `@` in the prompt to mention a file. Pau finds files and folders by name
+anywhere in the workspace and leaves out ignored files. A folder path, such as
+`@src/`, lists only that folder. In a very large workspace, the list can say
+that the search stopped early. Type a folder path to narrow it.
+
 For a Git worktree, the file rail shows the current branch and each staged,
 modified, deleted, renamed, untracked, or conflicted path. A detached HEAD shows
 the abbreviated commit instead of a branch. Pau labels directories outside a
@@ -87,18 +92,6 @@ set.
 content. Search follows the same hidden and ignored-file controls, skips known
 credential files and files larger than 2 MiB, and returns at most 200 matches
 by default. Set `limit` to request up to 1,000 matches.
-
-`GET /api/workspaces/{workspace_id}/names?query=app` finds files and folders by
-name, which is how `@` mentions in the composer complete paths. Names match as
-a prefix first, then anywhere in the name, then with the letters in order, and
-folders come ahead of files. A query with a slash, such as `src/ap`, searches
-only the `src` folder, and a leading slash counts from the workspace root. The
-search uses the same hidden and ignored-file controls, never looks inside
-`.git`, and skips known credential files, links to them, and links that point
-outside the workspace. The response lists up to 50 names in `entries` by
-default, up to 1,000 with `limit`. The search stops after visiting 200,000
-entries and then sets `truncated` to `true`: a name it did not reach may still
-exist.
 
 ## Use a terminal
 

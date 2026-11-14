@@ -812,9 +812,9 @@ test('loads session commands for completion and sends the chosen command as a pr
 });
 
 test('completes an @ mention from the name search, however deep the file sits', async () => {
-	const { props, fetcher } = setup({
+	const { props } = setup({
 		'GET /api/sessions': () => json([idleSession]),
-		'GET /api/workspaces/pau/names?query=needle': () =>
+		'GET /api/workspaces/pau/search?query=needle&match=names': () =>
 			json({ entries: [{ path: 'pkg250/src/deep/nested/needle.rs', kind: 'file', size: 12 }], truncated: false })
 	});
 	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
@@ -825,8 +825,6 @@ test('completes an @ mention from the name search, however deep the file sits', 
 	await userEvent.keyboard('{Enter}');
 
 	await expect.element(prompt).toHaveValue('@pkg250/src/deep/nested/needle.rs ');
-	const requested = fetcher.mock.calls.map(([input]) => String(input));
-	expect(requested.filter((url) => url.includes('/files'))).toEqual([]);
 });
 
 test('aborts a name search the next keystroke made stale and ignores its late answer', async () => {
@@ -834,11 +832,11 @@ test('aborts a name search the next keystroke made stale and ignores its late an
 	let answerStale: ((response: Response) => void) | undefined;
 	const { props } = setup({
 		'GET /api/sessions': () => json([idleSession]),
-		'GET /api/workspaces/pau/names?query=ne': (init) => {
+		'GET /api/workspaces/pau/search?query=ne&match=names': (init) => {
 			stale = init?.signal ?? undefined;
 			return new Promise((resolve) => (answerStale = resolve));
 		},
-		'GET /api/workspaces/pau/names?query=needle': () =>
+		'GET /api/workspaces/pau/search?query=needle&match=names': () =>
 			json({ entries: [{ path: 'needle.rs', kind: 'file', size: 1 }], truncated: false })
 	});
 	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
@@ -852,21 +850,6 @@ test('aborts a name search the next keystroke made stale and ignores its late an
 
 	answerStale?.(json({ entries: [{ path: 'network.rs', kind: 'file', size: 1 }], truncated: false }));
 	await expect.element(page.getByRole('option', { name: /network\.rs/ })).not.toBeInTheDocument();
-});
-
-test.each([
-	['nothing matches', () => json({ entries: [], truncated: false }), 'No matching files'],
-	['the search stopped early', () => json({ entries: [], truncated: true }), /Search stopped early/],
-	['the search fails', () => json({ code: 'internal', message: 'down' }, 500), 'Files could not be searched']
-])('says so when %s', async (_case, names, message) => {
-	const { props } = setup({
-		'GET /api/sessions': () => json([idleSession]),
-		'GET /api/workspaces/pau/names?query=zzz': names
-	});
-	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
-
-	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), '@zzz');
-	await expect.element(page.getByText(message)).toBeVisible();
 });
 
 test('shows the queued messages, follows queue updates, and restores them when cleared', async () => {

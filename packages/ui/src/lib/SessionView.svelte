@@ -568,8 +568,11 @@
 	let startingWorkspaceId = $state<string>();
 	let startFailure = $state<{ workspaceId: string; workspaceName: string; agent: SessionAgent; message: string }>();
 	let controlError = $state<string>();
-	/** The session whose transcript export is in flight, so Export cannot run twice. */
-	let exportingSessionId = $state<string>();
+	/**
+	 * Sessions whose transcript export is in flight, so Export cannot run twice
+	 * for one session while another session's export finishes on its own.
+	 */
+	const exportingSessionIds = new SvelteSet<string>();
 	/** Where the last transcript export saved its file, until another action replaces the notice. */
 	let exportedTranscript = $state<{ sessionId: string; path: string }>();
 	/** The ended session whose restart is in flight, so its button cannot start it twice. */
@@ -1120,14 +1123,14 @@
 		if (!onExportTranscript) return;
 		controlError = undefined;
 		exportedTranscript = undefined;
-		exportingSessionId = session.id;
+		exportingSessionIds.add(session.id);
 		try {
 			const path = await onExportTranscript(session.id);
 			if (path) exportedTranscript = { sessionId: session.id, path };
 		} catch (cause) {
 			controlError = cause instanceof Error ? cause.message : 'Pau could not export the transcript. Try again.';
 		} finally {
-			exportingSessionId = undefined;
+			exportingSessionIds.delete(session.id);
 		}
 	}
 
@@ -2610,7 +2613,7 @@
 						</div>
 					{/if}
 					{#if onExportTranscript && activeSession.capabilities.exportTranscript && liveStatuses.has(activeSession.status)}
-						{@const exporting = exportingSessionId === activeSession.id}
+						{@const exporting = exportingSessionIds.has(activeSession.id)}
 						<button
 							type="button"
 							class="pau-button pau-button--quiet"

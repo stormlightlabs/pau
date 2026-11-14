@@ -843,15 +843,74 @@ async fn exports_the_session_file_through_pi_into_the_chosen_file() {
         .collect();
     assert_eq!(names.len(), 2, "no staging file is left behind: {names:?}");
 
-    // Pi renders into a temporary file beside the chosen one, never into it.
+    // Pi renders into its own staging folder, never beside the chosen file,
+    // and the folder is gone once the export finishes.
     let commands = fixture.commands();
     assert_command(&commands[0], "export_html");
     let rendered = PathBuf::from(commands[0]["outputPath"].as_str().unwrap());
-    assert_eq!(rendered.parent(), Some(saved.path()));
-    assert_ne!(rendered, destination);
+    let staging = rendered.parent().unwrap();
+    assert_ne!(staging, saved.path());
+    assert!(!staging.exists(), "the staging folder is removed");
+    session.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_dropped_export_leaves_no_file_behind() {
+    let fixture = FakePi::new(EXPORT_FIXTURE);
+    fs::write(
+        fixture.root.path().join("session.jsonl"),
+        TRANSCRIPT_SESSION,
+    )
+    .unwrap();
+    // The fixture holds the export until the test releases it.
+    fs::write(fixture.root.path().join("gate"), "").unwrap();
+    let session = PiSession::start(fixture.options()).unwrap();
+    let saved = tempfile::tempdir().unwrap();
+    let destination = saved.path().join("transcript.html");
+
+    {
+        let export = session.export_html(destination.clone());
+        tokio::pin!(export);
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while fixture.commands().is_empty() {
+                tokio::select! {
+                    result = &mut export => panic!("the export finished early: {result:?}"),
+                    () = tokio::time::sleep(Duration::from_millis(20)) => {}
+                }
+            }
+        })
+        .await
+        .unwrap();
+        // Dropping the future here is what a closed HTTP request does.
+    }
+
+    let rendered = PathBuf::from(fixture.commands()[0]["outputPath"].as_str().unwrap());
+    let staging = rendered.parent().unwrap().to_owned();
+    assert_ne!(staging, saved.path());
+    let mode = fs::metadata(&staging).unwrap().permissions().mode();
+    assert_eq!(
+        mode & 0o777,
+        0o700,
+        "only the owner can write where Pi does"
+    );
+
+    // Pi finishes after the caller left. Its file lands in the staging
+    // folder, which is removed once Pi answers.
+    fs::write(fixture.root.path().join("release"), "").unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while staging.exists() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the staging folder is removed after Pi answers");
+    let names: Vec<_> = fs::read_dir(saved.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
     assert!(
-        !rendered.exists(),
-        "the temporary file was renamed into place"
+        names.is_empty(),
+        "nothing is written beside the chosen file: {names:?}"
     );
     session.stop().await.unwrap();
 }
@@ -1215,7 +1274,7 @@ done
 
 /// Answers `export_html` as Pi does: it renders `session.jsonl` in its working
 /// directory into an HTML page at `outputPath`, or fails when the file is
-/// missing.
+/// missing. While a `gate` file exists, it waits for a `release` file first.
 const EXPORT_FIXTURE: &str = r#"
 while IFS= read -r command; do
     printf '%s\n' "$command" >> "$PWD/commands.jsonl"
@@ -1223,6 +1282,9 @@ while IFS= read -r command; do
     case "$command" in
         *'"type":"export_html"'*)
             output=$(printf '%s' "$command" | sed -n 's/.*"outputPath":"\([^"]*\)".*/\1/p')
+            if [ -f "$PWD/gate" ]; then
+                while [ ! -f "$PWD/release" ]; do sleep 0.05; done
+            fi
             if [ -f "$PWD/session.jsonl" ]; then
                 { printf '<!DOCTYPE html>\n<html><body><script type="application/json">'; cat "$PWD/session.jsonl"; printf '</script></body></html>\n'; } > "$output"
                 printf '{"id":"%s","type":"response","command":"export_html","success":true,"data":{"path":"%s"}}\n' "$id" "$output"

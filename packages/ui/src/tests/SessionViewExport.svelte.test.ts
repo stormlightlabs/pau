@@ -34,6 +34,38 @@ test('exports the transcript and says where the file went', async () => {
 	await expect.element(exportButton()).toBeEnabled();
 });
 
+test("keeps each session's export busy until that export finishes", async () => {
+	const pending = new Map<string, PromiseWithResolvers<string | undefined>>();
+	const onExportTranscript = vi.fn((sessionId: string) => {
+		const saved = Promise.withResolvers<string | undefined>();
+		pending.set(sessionId, saved);
+		return saved.promise;
+	});
+	const workspaces: SessionWorkspace[] = [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [sessionFixtures.idle[0]!.sessions[0]!, sessionFixtures.running[0]!.sessions[0]!]
+		}
+	];
+	const view = await render(SessionView, open(workspaces, onExportTranscript));
+
+	await userEvent.click(exportButton());
+	await view.rerender({ activeSessionId: 'session-running' });
+	await userEvent.click(exportButton());
+	await expect.element(exportButton()).toBeDisabled();
+
+	// The first session's export finishes while the second one still runs.
+	pending.get('session-idle')!.resolve(undefined);
+	await view.rerender({ activeSessionId: 'session-idle' });
+	await expect.element(exportButton()).toBeEnabled();
+	await view.rerender({ activeSessionId: 'session-running' });
+	await expect.element(exportButton()).toBeDisabled();
+
+	pending.get('session-running')!.resolve(undefined);
+	await expect.element(exportButton()).toBeEnabled();
+});
+
 test('shows nothing when the operator cancels the save dialog', async () => {
 	const onExportTranscript = vi.fn(cancelled);
 	await render(SessionView, open(sessionFixtures.idle, onExportTranscript));

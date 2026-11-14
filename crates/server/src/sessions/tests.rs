@@ -1209,6 +1209,11 @@ async fn exports_the_transcript_of_a_resumed_session_to_the_chosen_file() {
         (status, error["code"].as_str()),
         (StatusCode::FORBIDDEN, Some("permission_denied"))
     );
+    // The I/O error names the temporary file's folder; the response must not.
+    let body = error.to_string();
+    assert!(!body.contains(saved.path().to_str().unwrap()), "{body}");
+    assert!(!body.contains(".pau-transcript-"), "{body}");
+    assert_eq!(error["message"], "Pau may not write to that folder");
 
     // A new session has no file, so the fake Pi refuses to export it.
     let (_, fresh) = fixture.start(None).await;

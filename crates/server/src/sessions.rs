@@ -778,15 +778,53 @@ fn thinking_level(level: SessionThinkingLevel) -> ThinkingLevel {
     }
 }
 
-/// HTTP status and stable code for a session failure.
+/// HTTP status, stable code and message for a session failure.
 ///
 /// Controls distinguish three caller-visible cases: the agent cannot perform
 /// the control at all (`unsupported_control`), the session is in the wrong
 /// state (`invalid_session_state`), and the agent refused the request
 /// (`control_rejected`). A process that exits before it answers is
 /// `session_exited`.
-pub(crate) fn error_status(error: &PiSessionRegistryError) -> (StatusCode, &'static str) {
-    match error {
+///
+/// A failed transcript write gets fixed text rather than the I/O error's,
+/// which can name the temporary file and its folder.
+pub(crate) fn error_response(error: &PiSessionRegistryError) -> (StatusCode, &'static str, String) {
+    if let PiSessionRegistryError::Session(PiSessionError::Export(error)) = error {
+        let (status, code, message) = match error.kind() {
+            std::io::ErrorKind::InvalidInput => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    "invalid_destination",
+                    error.to_string(),
+                );
+            }
+            std::io::ErrorKind::PermissionDenied => (
+                StatusCode::FORBIDDEN,
+                "permission_denied",
+                "Pau may not write to that folder",
+            ),
+            std::io::ErrorKind::ReadOnlyFilesystem => {
+                (StatusCode::FORBIDDEN, "read_only", "the disk is read-only")
+            }
+            std::io::ErrorKind::StorageFull => (
+                StatusCode::INSUFFICIENT_STORAGE,
+                "storage_full",
+                "the disk is full",
+            ),
+            std::io::ErrorKind::TimedOut => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "export_failed",
+                "Pi did not finish the export in time",
+            ),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "export_failed",
+                "the file could not be written",
+            ),
+        };
+        return (status, code, message.to_owned());
+    }
+    let (status, code) = match error {
         PiSessionRegistryError::InvalidId => (StatusCode::BAD_REQUEST, "invalid_session_id"),
         PiSessionRegistryError::AlreadyExists(_) => (StatusCode::CONFLICT, "session_exists"),
         PiSessionRegistryError::NotFound(_) => (StatusCode::NOT_FOUND, "not_found"),
@@ -810,22 +848,12 @@ pub(crate) fn error_status(error: &PiSessionRegistryError) -> (StatusCode, &'sta
             PiSessionError::Process(PiProcessError::Start(_)) => {
                 (StatusCode::SERVICE_UNAVAILABLE, "pi_unavailable")
             }
-            PiSessionError::Process(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
-            PiSessionError::Export(error) => match error.kind() {
-                std::io::ErrorKind::InvalidInput => {
-                    (StatusCode::BAD_REQUEST, "invalid_destination")
-                }
-                std::io::ErrorKind::PermissionDenied => {
-                    (StatusCode::FORBIDDEN, "permission_denied")
-                }
-                std::io::ErrorKind::ReadOnlyFilesystem => (StatusCode::FORBIDDEN, "read_only"),
-                std::io::ErrorKind::StorageFull => {
-                    (StatusCode::INSUFFICIENT_STORAGE, "storage_full")
-                }
-                _ => (StatusCode::INTERNAL_SERVER_ERROR, "export_failed"),
-            },
+            PiSessionError::Process(_) | PiSessionError::Export(_) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
+            }
         },
-    }
+    };
+    (status, code, error.to_string())
 }
 
 fn session_api(state: &ApiState) -> Result<&SessionApi, ApiError> {

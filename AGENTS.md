@@ -57,14 +57,6 @@ Do not start Docker Desktop or another container or virtual-machine runtime
 without explicit user approval. Use an already-running runtime only when the
 active task requires it.
 
-Run heavyweight verification serially. Do not run `pnpm check`, browser tests,
-Storybook or website builds, and Cargo builds at the same time. Resource
-contention can cause false timeouts in process and interaction tests. Run a full
-application or repository build only when the active task requires it or the
-change affects that build boundary. After a follow-up edit, rerun the narrowest
-check that covers the changed code; rebuild only when the edit can affect the
-built artifact.
-
 ## Tasks
 
 The installed skills read this section for the tracker's steps. Linear is the
@@ -177,6 +169,32 @@ full browser tests for workflows that cross packages or transports.
 - Default checks use fake processes and local fixtures. Tests that invoke paid
   agents, need signing credentials, or depend on remote services are opt-in.
 - Use coverage to find untested branches, not as a percentage target.
+
+CI runs the full gate. The Check workflow runs `pnpm gate`, the desktop
+integration tests, the Storybook build and the website build on every pull
+request to `main` and every push to `main`.
+
+Locally, `fab gates` runs only the scopes the changed files match, and files
+no scope names run nothing. Do not run `fab gates --full` or a full
+application or repository build locally unless the task asks for one. After a
+follow-up edit, rerun the narrowest check that covers the changed code.
+
+Run local heavyweight checks serially. Do not run `pnpm check`, browser tests,
+Storybook or website builds, and Cargo builds at the same time. Resource
+contention can cause false timeouts in process and interaction tests.
+
+Before posting `Review finished at <sha>`, read the result of the Check
+workflow for that head. This replaces the `fab-storm` skill's step that runs
+`fab gates --full` on the head, and a Check failure counts as a failure of that
+step:
+
+1. Find the Check run for the head with
+   `gh run list --workflow Check --commit <sha> --json databaseId,status,conclusion`.
+2. When there is no run, or it was cancelled or skipped, Check has not passed.
+   Push again or report it.
+3. While the run is queued or in progress, wait once with
+   `timeout 50m gh run watch <run id> --exit-status`. Do not poll in a loop.
+4. Read `gh pr checks <n>` once for the result.
 
 ## Dogfood Pau
 

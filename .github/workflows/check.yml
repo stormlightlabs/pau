@@ -1,25 +1,57 @@
 name: Check
 
 on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# A new push to a pull request cancels the run on its older head. Runs on
+# main each finish, so every merge gets a result.
+concurrency:
+  group: check-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   gate:
     name: Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Install Linux build and sandbox dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes build-essential bubblewrap curl file libayatana-appindicator3-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev librsvg2-dev patchelf ripgrep socat wget
+          sudo apt-get install --yes build-essential bubblewrap curl file libayatana-appindicator3-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev librsvg2-dev patchelf ripgrep socat wget vim neovim
+      # Vim, Neovim and Helix serve the terminal editor scenarios that land
+      # with the terminal layouts change. Until then no test runs them. Those
+      # tests skip an editor that is not on the PATH. Ubuntu has no current
+      # Helix package, so it comes from the pinned release.
+      - name: Install Helix
+        env:
+          HELIX_VERSION: 25.07.1
+          HELIX_SHA256: 3f08e63ecd388fff657ad39722f88bb03dcf326f1f2da2700d99e1dc40ab2e8b
+        run: |
+          archive="helix-${HELIX_VERSION}-x86_64-linux.tar.xz"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/$archive" \
+            "https://github.com/helix-editor/helix/releases/download/${HELIX_VERSION}/${archive}"
+          echo "${HELIX_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check
+          sudo mkdir -p /opt/helix
+          sudo tar --extract --file "$RUNNER_TEMP/$archive" --directory /opt/helix --strip-components 1
+          sudo ln -s /opt/helix/hx /usr/local/bin/hx
+          hx --version
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      # Pull requests read the cache that main saves but do not save their
+      # own, so they cannot evict main's cache under the repository limit.
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: pnpm/action-setup@v4
         with:
           version: 12.3.4
@@ -32,6 +64,8 @@ jobs:
         run: pnpm --filter @stormlightlabs/pau-ui exec playwright install --with-deps chromium
       - name: Run the gate
         run: pnpm gate
+      - name: Run the desktop integration tests
+        run: pnpm --filter @stormlightlabs/pau-desktop test:integration
       - name: Build Storybook
         run: pnpm build:ui
       - uses: actions/upload-artifact@v4
@@ -43,6 +77,7 @@ jobs:
   website:
     name: Website
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

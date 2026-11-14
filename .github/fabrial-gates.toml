@@ -6,16 +6,16 @@
 # repository owns the file: `fab update` and `fab check` leave it alone.
 
 full = "pnpm gate"
-unmatched = "full"
+unmatched = "skip"
 
 # Rust changes can change the generated TypeScript protocol, so this scope
 # also checks that the generated files are current.
 [[scoped]]
 name = "rust"
-paths = ["crates/**", "apps/desktop/src-tauri/**", "packages/sandbox/native/**", "Cargo.toml", "Cargo.lock"]
+paths = ["crates/**", "apps/desktop/src-tauri/**", "packages/sandbox/native/**", "Cargo.toml", "Cargo.lock", "rust-toolchain*"]
 run = "pnpm gate:rust && pnpm check:generated"
 
 [[scoped]]
 name = "typescript"
-paths = ["apps/*/src/**", "packages/*/src/**", "apps/*/*.ts", "apps/*/*.js", "packages/*/*.ts", "packages/*/*.js", "apps/*/package.json", "packages/*/package.json", "package.json", "pnpm-lock.yaml", "eslint.config.*", ".prettierrc*", "tsconfig*.json"]
+paths = ["apps/*/src/**", "packages/*/src/**", "packages/*/test/**", "apps/*/scripts/**", "packages/*/scripts/**", "packages/*/.storybook/**", "apps/*/*.ts", "apps/*/*.js", "packages/*/*.ts", "packages/*/*.js", "apps/*/package.json", "packages/*/package.json", "apps/*/tsconfig*.json", "packages/*/tsconfig*.json", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "eslint.config.*", "prettier.config.*", ".prettierrc*", ".prettierignore", "tsconfig*.json"]
 run = "pnpm gate:ts"

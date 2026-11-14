@@ -12,12 +12,12 @@ tracker holds it.
 
 ## The primitives
 
-| Primitive  | What it is                                                         |
-| ---------- | ------------------------------------------------------------------ |
-| Collection | Groups run units. Holds their order and what crosses them.         |
-| Run unit   | A body of work one run takes. Holds tasks, and is never claimed.   |
-| Task       | One claim, one branch, one pull request.                           |
-| Dependency | One task waits for another to land.                                |
+| Primitive  | What it is                                                                                               |
+| ---------- | -------------------------------------------------------------------------------------------------------- |
+| Collection | Groups run units. Holds their order and what crosses them.                                               |
+| Run unit   | A body of work one run claims. Holds tasks, and carries a status.                                        |
+| Task       | One step of a run unit.                                                                                  |
+| Dependency | One run unit waits for another to land, or one task comes before another in its run unit's pull request. |
 
 The **Tasks** section of `AGENTS.md` maps each primitive to the tracker and
 names the command that writes it. Without that section, use GitHub:
@@ -27,7 +27,7 @@ names the command that writes it. Without that section, use GitHub:
 | Collection | a milestone               | `gh api repos/{owner}/{repo}/milestones -f title=… -f description=…` |
 | Run unit   | an issue with sub-issues  | `gh issue create --milestone …`                                  |
 | Task       | a sub-issue               | `gh issue create`, then `gh api repos/{owner}/{repo}/issues/<unit>/sub_issues -F sub_issue_id=<id>` |
-| Dependency | blocked-by                | `gh api repos/{owner}/{repo}/issues/<task>/dependencies/blocked_by -F issue_id=<id>` |
+| Dependency | blocked-by                | `gh api repos/{owner}/{repo}/issues/<unit or task>/dependencies/blocked_by -F issue_id=<id>` |
 
 Both endpoints take the issue's numeric `id`, not its number. Read it with
 `gh api repos/{owner}/{repo}/issues/<n> --jq .id`.
@@ -54,8 +54,9 @@ and says so.
 
 One per body of work that fits a run. Its body gives the goal, its own stop
 rule (more than "every task is done"), the source, and what it must not
-absorb. It carries no status: nothing claims it, so a status would only copy
-its tasks'.
+absorb. A run claims it, so it carries a status. Its tasks are the steps of
+that run. Dependencies between run units go on the run units. A dependency
+between two of its tasks orders the steps of its one pull request.
 
 Two tiers only. A task that needs tasks of its own is a second run unit beside
 the first, never nested under it.
@@ -69,8 +70,8 @@ file two of them write. Say which to sequence around which.
 
 ## Tasks
 
-Two changes that must land together are one task. Two that could land a week
-apart are two. Each task's body holds:
+A task is one step of its run unit's pull request, sized as a step. Work that
+could land on its own belongs in its own run unit. Each task's body holds:
 
 - The problem, with evidence.
 - Done when: the stop rule.
@@ -80,10 +81,11 @@ apart are two. Each task's body holds:
 - The idea or spec it came from.
 
 Attach each task to its run unit through the tracker's relation, not a line in
-a body: a run finds its tasks through the relation. Where one task cannot
-start until another lands, record a dependency as well, since the relation
-says nothing about order. A task waiting on a dependency is not blocked; leave
-its status alone.
+a body: a run finds its tasks through the relation. Where one task must come
+before another, record a dependency between them as well, since the relation
+says nothing about order. It orders the steps of the run unit's one pull
+request. A task waiting on a dependency is not blocked; leave its status
+alone.
 
 ## Then
 
@@ -94,6 +96,6 @@ and report exactly what was written, so the next run resumes from there.
 ## Do not
 
 - Write a task whose stop rule you cannot state.
-- Give a run unit a status, or nest deeper than run unit and task.
+- Nest deeper than run unit and task.
 - Open a collection for one run unit.
 - Claim or start any of it. Filing and working are separate steps.

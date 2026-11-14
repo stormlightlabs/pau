@@ -106,7 +106,7 @@ test('offers workspace actions and leaves removal for later', async () => {
 
 	await userEvent.keyboard('{Shift>}{F10}{/Shift}');
 	await userEvent.click(page.getByRole('menuitem', { name: 'New session' }));
-	expect(onStartSession).toHaveBeenCalledWith('pau');
+	expect(onStartSession).toHaveBeenCalledWith('pau', 'pi');
 });
 
 test('copies a message and branches from a user message', async () => {

@@ -1,11 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/svelte-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
-import { agentReadinessFixtures } from '../fixtures/launch';
+import { agentReadinessFixtures, claudeReadinessFixtures } from '../fixtures/launch';
 import AgentReadinessNotice from '../lib/AgentReadinessNotice.svelte';
 
 const meta = {
-	title: 'Launch/Pi readiness notice',
+	title: 'Launch/Agent readiness notice',
 	component: AgentReadinessNotice,
 	parameters: { layout: 'padded' },
 	args: { problem: agentReadinessFixtures.missing, onOpenTerminal: fn() }
@@ -28,3 +28,9 @@ export const NoProvider: Story = { args: { problem: agentReadinessFixtures.noPro
 export const WithoutWorkspace: Story = { args: { onOpenTerminal: undefined } };
 
 export const PiMissingNarrow: Story = { parameters: { viewport: { defaultViewport: 'narrow' } } };
+
+export const ClaudeMissing: Story = { args: { problem: claudeReadinessFixtures.missing } };
+
+export const ClaudeUnsupported: Story = { args: { problem: claudeReadinessFixtures.unsupported } };
+
+export const ClaudeBridgeMissing: Story = { args: { problem: claudeReadinessFixtures.missingBridge } };

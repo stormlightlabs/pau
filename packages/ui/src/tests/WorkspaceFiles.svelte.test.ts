@@ -275,6 +275,39 @@ test('opens a file menu from the keyboard and runs its path actions', async () =
 	writeText.mockRestore();
 });
 
+test('opens a keyboard menu beside its row when the narrow rail is still sliding in', async () => {
+	const [initialWidth, initialHeight] = [window.innerWidth, window.innerHeight];
+	onTestFinished(() => page.viewport(initialWidth, initialHeight));
+	await page.viewport(640, 900);
+	// A long slide keeps the rail moving while the menu opens, however slow the run.
+	const slow = document.createElement('style');
+	slow.textContent = '.app-shell__context-rail { transition-duration: 60s !important; }';
+	document.head.append(slow);
+	onTestFinished(() => slow.remove());
+	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source() });
+	await expect.element(page.getByText('README.md')).toBeInTheDocument();
+
+	await openNavigation();
+	const row = page.getByRole('treeitem', { name: /README\.md/ });
+	await expect.element(row).toBeInTheDocument();
+	const readme = row.element() as HTMLElement;
+	readme.focus();
+	await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+	const menu = page.getByRole('menu', { name: 'README.md actions' });
+	await expect.element(menu).toBeInViewport({ ratio: 1 });
+
+	const rail = readme.closest('.app-shell__context-rail')!;
+	for (const animation of rail.getAnimations()) animation.finish();
+	await expect
+		.poll(() => {
+			const box = menu.element().getBoundingClientRect();
+			const bounds = readme.getBoundingClientRect();
+			return [box.left - bounds.left, box.top - bounds.bottom];
+		})
+		.toEqual([8, 0]);
+	await expect.element(menu).toBeInViewport({ ratio: 1 });
+});
+
 test('offers only path actions for a folder and reports a failed action', async () => {
 	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source(), revealPath: vi.fn() });
 	await openNavigation();

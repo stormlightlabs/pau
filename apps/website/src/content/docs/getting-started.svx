@@ -98,14 +98,22 @@ state and resumes events after the last event already shown.
 pnpm --filter @stormlightlabs/pau-desktop dev
 ```
 
-For browser development, generate a token with `openssl rand -hex 32`. Set the
-same value as `PAU_API_TOKEN` for the Rust server and Vite development server.
-Vite adds it to proxied API requests; do not put the token in source files or
-commit it.
+For browser development, generate a token with `openssl rand -hex 32` and set
+it as `PAU_API_TOKEN` in the repository's `.env` file. The Rust server and the
+Vite development server both read it there, and Vite adds it to proxied API
+requests. Do not commit the token.
 
 ```bash
-PAU_API_TOKEN="$TOKEN" cargo run -p pau-server
-PAU_API_TOKEN="$TOKEN" pnpm --filter @stormlightlabs/pau-web dev
+cargo run -p pau-server
+pnpm dev:desktop:browser
+```
+
+The server refuses a `PAU_API_TOKEN` set in its environment, because other
+processes run by the same user can read a process's environment. To start it
+with a token that is not in `.env`, pass the token on standard input:
+
+```bash
+printf '%s\n' "$TOKEN" | cargo run -p pau-server -- --token-stdin
 ```
 
 ## Install a macOS release

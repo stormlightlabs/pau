@@ -1,5 +1,7 @@
 <script lang="ts">
 	import '../styles/tokens.css';
+	import { onMount } from 'svelte';
+
 	import type { ThemeName, UiFontName } from '../theme';
 	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
 	import EmptyState from './EmptyState.svelte';
@@ -50,6 +52,8 @@
 	let tabs = $state<TabState[]>([]);
 	let activeId = $state<string>();
 	let creating = $state(false);
+	/** True until the terminals left open by an earlier view have been listed. */
+	let restoring = $state(true);
 	let error = $state('');
 	let views: Record<string, TerminalView | undefined> = $state({});
 	let activeTab = $derived(tabs.find((tab) => tab.id === activeId));
@@ -74,6 +78,28 @@
 		if (tab.exit?.signal) return `Ended by ${tab.exit.signal}`;
 		return `Exited with code ${tab.exit?.exitCode ?? 0}`;
 	}
+
+	/**
+	 * Reattaches the terminals that outlived an earlier view, such as one left
+	 * by a route change. They keep running on the server, so their tabs come
+	 * back ahead of any opened since.
+	 */
+	async function restoreTerminals(): Promise<void> {
+		try {
+			const open = await source.list();
+			const restored = open.filter((tab) => tabs.every((candidate) => candidate.id !== tab.id));
+			tabs.unshift(...restored.map((tab) => ({ ...tab, state: 'running' as const, hasSelection: false })));
+			activeId ??= tabs[0]?.id;
+		} catch (cause) {
+			error = `Could not reopen your terminals. ${message(cause)}`;
+		} finally {
+			restoring = false;
+		}
+	}
+
+	onMount(() => {
+		void restoreTerminals();
+	});
 
 	async function openTerminal(): Promise<void> {
 		creating = true;
@@ -161,7 +187,7 @@
 	onResize={onPaneResize}>
 	{#snippet context()}
 		{#if tabs.length === 0}
-			<p class="terminal-surface__rail-empty">No terminals</p>
+			{#if !restoring}<p class="terminal-surface__rail-empty">No terminals</p>{/if}
 		{:else}
 			<ul class="terminal-surface__list" aria-label="Terminal status">
 				{#each tabs as tab (tab.id)}
@@ -210,7 +236,7 @@
 				type="button"
 				class="terminal-surface__icon-button pau-utility-button"
 				aria-label="New terminal"
-				disabled={creating || disconnected}
+				disabled={creating || restoring || disconnected}
 				onclick={() => void openTerminal()}>
 				<Icon name="plus" size={16} />
 			</button>
@@ -252,7 +278,7 @@
 
 		{#if error}<p class="terminal-surface__error" role="alert">{error}</p>{/if}
 
-		{#if tabs.length === 0}
+		{#if tabs.length === 0 && !restoring}
 			<EmptyState title="No terminals open">
 				<p>Open a terminal to run commands in this workspace.</p>
 				<button

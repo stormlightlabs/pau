@@ -12,6 +12,10 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStderr, ChildStdout, Command};
 use tokio::sync::{Mutex, broadcast, mpsc, oneshot, watch};
 
+#[cfg(unix)]
+use pau_agent::signal_process_group;
+use pau_agent::{ProcessGroup, lead_process_group};
+
 /// Time allowed for each stage of Pi process shutdown.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PiShutdownTimeouts {
@@ -173,8 +177,8 @@ impl PiProcess {
             .current_dir(&options.working_directory)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
+            .stderr(Stdio::piped());
+        lead_process_group(&mut command);
 
         let mut child =
             crate::retry_executable_busy(|| command.spawn()).map_err(PiProcessError::Start)?;
@@ -202,13 +206,11 @@ impl PiProcess {
         let watcher_output = output.clone();
         let watcher_pending = Arc::clone(&pending);
         let watcher_shutdown = Arc::clone(&shutdown_requested);
+        let mut group = ProcessGroup::new(child);
         tokio::spawn(async move {
             let status = tokio::select! {
-                status = child.wait() => status,
-                _ = kill_receiver.recv() => {
-                    let _ = child.start_kill();
-                    child.wait().await
-                }
+                status = group.wait() => status,
+                _ = kill_receiver.recv() => group.kill().await,
             };
             match status {
                 Ok(status) => {
@@ -401,17 +403,7 @@ impl PiProcess {
 
     #[cfg(unix)]
     async fn send_signal(&self, signal: i32) -> Result<(), PiProcessError> {
-        let result = unsafe { libc::kill(self.process_id as i32, signal) };
-        if result == 0 {
-            Ok(())
-        } else {
-            let error = std::io::Error::last_os_error();
-            if error.raw_os_error() == Some(libc::ESRCH) {
-                Ok(())
-            } else {
-                Err(PiProcessError::Signal(error))
-            }
-        }
+        signal_process_group(self.process_id, signal).map_err(PiProcessError::Signal)
     }
 
     #[cfg(not(unix))]
@@ -711,6 +703,42 @@ while :; do :; done
             fs::read_to_string(signal_log).unwrap(),
             "interrupt\nterminate\n"
         );
+    }
+
+    #[tokio::test]
+    async fn shutdown_stops_the_processes_pi_started() {
+        let fixture =
+            FakePi::new("sleep 600 &\necho $! > \"$PWD/grandchild\"\ntrap '' INT TERM\nwait\n");
+        let grandchild_path = fixture.root.path().join("grandchild");
+        let process = fixture.start(PiShutdownTimeouts {
+            protocol: Duration::from_millis(50),
+            interrupt: Duration::from_millis(50),
+            terminate: Duration::from_millis(50),
+            kill: Duration::from_secs(2),
+        });
+        let grandchild: i32 = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if let Ok(text) = fs::read_to_string(&grandchild_path)
+                    && let Ok(pid) = text.trim().parse()
+                {
+                    return pid;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .unwrap();
+
+        process.shutdown().await.unwrap();
+
+        tokio::time::timeout(Duration::from_secs(2), async {
+            // SAFETY: signal 0 only checks that the process exists.
+            while unsafe { libc::kill(grandchild, 0) } == 0 {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("the process Pi started is still running");
     }
 
     struct FakePi {

@@ -2,7 +2,7 @@
 	import '../styles/tokens.css';
 	import { onMount, tick } from 'svelte';
 
-	import type { ContextMenuRequest } from './context-menu';
+	import { keyboardAnchor, type ContextMenuRequest } from './context-menu';
 	import { dismissible } from './dismissal';
 	import { returnFocus } from './focus-return';
 
@@ -29,17 +29,46 @@
 		// The top layer keeps the menu above every pane, including a rail that
 		// is translated into view, while it still inherits the theme tokens.
 		menu?.showPopover();
-		place();
+		place(request.x, request.y);
 		void tick().then(() => focusItem(firstFocusable()));
+		// A keyboard anchor was measured from a row that may still be moving,
+		// such as a rail sliding in, so the menu moves to the row once it stops.
+		if (!request.keyboard) return;
+		const { invoker } = request;
+		void settled(invoker).then((moved) => {
+			if (!moved || closed) return;
+			const anchor = keyboardAnchor(invoker);
+			place(anchor.x, anchor.y);
+		});
 	});
 
-	/** Keeps the menu inside the viewport, flipping it to the left or above its anchor when it would overflow. */
-	function place(): void {
+	/**
+	 * Waits for every finite animation and transition on the element or its
+	 * ancestors to end, and reports whether there were any. Endless ones, such
+	 * as a spinner, never end and are skipped.
+	 */
+	async function settled(element: Element): Promise<boolean> {
+		const moving = document.getAnimations().filter((animation) => {
+			const target = animation.effect instanceof KeyframeEffect ? animation.effect.target : null;
+			return target?.contains(element) && animation.effect?.getComputedTiming().endTime !== Infinity;
+		});
+		await Promise.allSettled(moving.map((animation) => animation.finished));
+		return moving.length > 0;
+	}
+
+	/**
+	 * Opens the menu at an anchor, flipping it to the left or above when it
+	 * would overflow, then holds it inside all four viewport edges. A keyboard
+	 * anchor can start off screen, such as a row in a rail that is still
+	 * sliding in.
+	 */
+	function place(x: number, y: number): void {
 		if (!menu) return;
 		const { width, height } = menu.getBoundingClientRect();
-		const { x, y } = request;
-		left = x + width + edge > innerWidth ? Math.max(edge, x - width) : x;
-		top = y + height + edge > innerHeight ? Math.max(edge, y - height) : y;
+		const preferredLeft = x + width + edge > innerWidth ? x - width : x;
+		const preferredTop = y + height + edge > innerHeight ? y - height : y;
+		left = Math.max(edge, Math.min(preferredLeft, innerWidth - width - edge));
+		top = Math.max(edge, Math.min(preferredTop, innerHeight - height - edge));
 		origin = `${top < y ? 'bottom' : 'top'} ${left < x ? 'right' : 'left'}`;
 	}
 

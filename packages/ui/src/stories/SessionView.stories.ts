@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/svelte-vite';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import { commandFixtures } from '../fixtures/commands';
-import { agentReadinessFixtures } from '../fixtures/launch';
+import { agentReadinessFixtures, claudeReadinessFixtures } from '../fixtures/launch';
 import { fileMentionFixtures } from '../fixtures/file-mentions';
 import { modelFixtures } from '../fixtures/models';
 import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
@@ -180,6 +180,44 @@ export const RunWithoutQueue: Story = {
 		const canvas = within(canvasElement);
 		await expect(canvas.getByText(/cannot take new direction during a run/)).toBeInTheDocument();
 		await expect(canvas.getByRole('button', { name: /Interrupt/ })).toBeEnabled();
+	}
+};
+export const ClaudeSession: Story = {
+	args: { workspaces: sessionFixtures.claude, initialSessionId: 'claude-idle', models: modelFixtures.populated },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByRole('textbox', { name: 'Prompt' })).toBeEnabled();
+		await expect(canvas.getByRole('button', { name: /^Model:/ })).toBeDisabled();
+		await expect(canvas.queryByRole('button', { name: 'Compact' })).toBeNull();
+	}
+};
+export const ClaudeNotReady: Story = {
+	args: {
+		workspaces: [{ id: 'ankify', name: 'ankify', path: '/Users/operator/projects/ankify', sessions: [] }],
+		initialSessionId: undefined,
+		openable: true,
+		pickedFolder: '/Users/operator/projects/ankify',
+		claudeReadiness: claudeReadinessFixtures.missing
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(canvas.getByRole('button', { name: 'Open workspace…' }));
+		await expect(await canvas.findByRole('button', { name: 'Start Claude Code session' })).toBeDisabled();
+		await expect(canvas.getByRole('region', { name: 'Claude Code is not ready' })).toBeVisible();
+	}
+};
+export const ClaudeFailedStart: Story = {
+	args: {
+		workspaces: sessionFixtures.idleWithPath,
+		initialSessionId: 'session-idle',
+		startFailure: claudeReadinessFixtures.unsupported.reason
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(canvas.getByRole('heading', { name: 'Pau' }));
+		await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+		await userEvent.click(await canvas.findByRole('menuitem', { name: 'New Claude Code session' }));
+		await expect(await canvas.findByRole('alert')).toHaveTextContent('Claude Code 2.0.1 is unsupported');
 	}
 };
 export const Starting: Story = { args: { workspaces: sessionFixtures.starting, initialSessionId: 'session-starting' } };

@@ -33,6 +33,7 @@
 	import CommandCompletion from './CommandCompletion.svelte';
 	import ContextMenu from './ContextMenu.svelte';
 	import AgentReadinessNotice from './AgentReadinessNotice.svelte';
+	import { codeSpans, withoutCodeMarks } from './code-spans';
 	import type { AgentReadinessProblem } from './types/launch';
 	import {
 		contextMenuRequest,
@@ -81,6 +82,7 @@
 		SandboxDenial,
 		SavedSession,
 		SavedSessionList,
+		SessionAgent,
 		SessionBranchOutcome,
 		SessionSearchHit,
 		SessionSearchOutcome,
@@ -165,11 +167,12 @@
 		 */
 		onClearQueue?: (sessionId: string) => Promise<MessageQueue>;
 		/**
-		 * Starts a session in a workspace. When set, the rail offers a start
-		 * control for each workspace. A rejected promise shows its message as a
-		 * failed start.
+		 * Starts a session of an agent in a workspace. When set, the rail offers
+		 * a start control for each workspace, which starts Pi, and the
+		 * workspace menu and an opened workspace also offer Claude Code. A
+		 * rejected promise shows its message as a failed start.
 		 */
-		onStartSession?: (workspaceId: string) => void | Promise<void>;
+		onStartSession?: (workspaceId: string, agent: SessionAgent) => void | Promise<void>;
 		/**
 		 * Lists a workspace's saved sessions, newest first. With
 		 * `onResumeSession`, the rail lists each workspace's newest saved
@@ -240,6 +243,17 @@
 		 * where the operator starts sessions, show it with the fixing command.
 		 */
 		agentReadiness?: AgentReadinessProblem;
+		/**
+		 * Why Claude Code cannot start a session. The controls that start one
+		 * are disabled with this reason, and an opened workspace shows it.
+		 */
+		claudeReadiness?: AgentReadinessProblem;
+		/**
+		 * Reads Claude Code's readiness again, bypassing any cached report.
+		 * With it, the Claude Code notice offers Check again, since its
+		 * disabled controls cannot fail a start that would read it again.
+		 */
+		onCheckClaude?: () => Promise<void>;
 		/**
 		 * Shows a path in the system file manager. The desktop app supplies it.
 		 * With it, the workspace's context menu offers to reveal the folder.
@@ -336,6 +350,8 @@
 		onCloneSession,
 		onOpenTerminal,
 		agentReadiness,
+		claudeReadiness,
+		onCheckClaude,
 		revealPath,
 		onLoadModels,
 		onSelectModel,
@@ -523,7 +539,7 @@
 	let dragDepth = 0;
 	let dropRejectionTimer: ReturnType<typeof setTimeout> | undefined;
 	let startingWorkspaceId = $state<string>();
-	let startFailure = $state<{ workspaceId: string; workspaceName: string; message: string }>();
+	let startFailure = $state<{ workspaceId: string; workspaceName: string; agent: SessionAgent; message: string }>();
 	let controlError = $state<string>();
 	/** The ended session whose restart is in flight, so its button cannot start it twice. */
 	let restartingSessionId = $state<string>();
@@ -988,18 +1004,19 @@
 		openError = undefined;
 	}
 
-	async function startSession(workspace: SessionWorkspace): Promise<void> {
+	async function startSession(workspace: SessionWorkspace, agent: SessionAgent = 'pi'): Promise<void> {
 		if (!onStartSession || startingWorkspaceId) return;
 		startingWorkspaceId = workspace.id;
 		startFailure = undefined;
 		openedWorkspaceId = undefined;
 		closeOpenForm();
 		try {
-			await onStartSession(workspace.id);
+			await onStartSession(workspace.id, agent);
 		} catch (cause) {
 			startFailure = {
 				workspaceId: workspace.id,
 				workspaceName: workspace.name,
+				agent,
 				message: cause instanceof Error ? cause.message : 'Try again, or open Diagnostics for details.'
 			};
 		} finally {
@@ -1260,6 +1277,13 @@
 					? undefined
 					: 'A session is already starting.';
 			items.push({ id: 'new-session', label: 'New session', disabled: reason !== undefined, reason });
+			const claudeReason = reason ?? (claudeReadiness ? withoutCodeMarks(claudeReadiness.reason) : undefined);
+			items.push({
+				id: 'new-claude-session',
+				label: 'New Claude Code session',
+				disabled: claudeReason !== undefined,
+				reason: claudeReason
+			});
 		}
 		if (onOpenTerminal) items.push({ id: 'terminal', label: 'Open terminal' });
 		if (workspace.path) {
@@ -1281,6 +1305,10 @@
 		switch (id) {
 			case 'new-session': {
 				void startSession(workspace);
+				break;
+			}
+			case 'new-claude-session': {
+				void startSession(workspace, 'claude');
 				break;
 			}
 			case 'terminal': {
@@ -2072,11 +2100,14 @@
 	<span class="session-rail__state"><small aria-hidden="true">{state}</small></span>
 {/snippet}
 
-{#snippet readinessNotice(workspaceId?: string)}
-	{#if agentReadiness}
+{#snippet readinessNotice(workspaceId?: string, agent: SessionAgent = 'pi')}
+	{@const problem = agent === 'claude' ? claudeReadiness : agentReadiness}
+	{#if problem}
 		<AgentReadinessNotice
-			problem={agentReadiness}
-			onOpenTerminal={onOpenTerminal && workspaceId ? () => onOpenTerminal(workspaceId) : undefined} />
+			{problem}
+			onOpenTerminal={onOpenTerminal && workspaceId ? () => onOpenTerminal(workspaceId) : undefined}
+			onCheckAgain={agent === 'claude' ? onCheckClaude : undefined}
+			reasonId={agent === 'claude' ? 'claude-readiness-reason' : undefined} />
 	{/if}
 {/snippet}
 
@@ -2307,7 +2338,7 @@
 					load={() => onLoadSavedSessions(pickerWorkspace.id)}
 					onNew={async () => {
 						if (!onStartSession) return;
-						await onStartSession(pickerWorkspace.id);
+						await onStartSession(pickerWorkspace.id, 'pi');
 						pickerWorkspaceId = undefined;
 					}}
 					onResume={async (savedSessionId) => {
@@ -2324,7 +2355,10 @@
 				role="alert"
 				titleId="start-failed-title"
 				title={`Could not start a session in ${startFailure.workspaceName}`}>
-				<p>{startFailure.message}</p>
+				<p class="session-view__failure">
+					{#each codeSpans(startFailure.message) as span, index (index)}{#if span.code}<code>{span.text}</code
+							>{:else}{span.text}{/if}{/each}
+				</p>
 				{#if onStartSession}
 					<button
 						type="button"
@@ -2332,10 +2366,10 @@
 						disabled={disconnected || startingWorkspaceId !== undefined}
 						onclick={() => {
 							const workspace = workspaces.find((candidate) => candidate.id === startFailure?.workspaceId);
-							if (workspace) void startSession(workspace);
+							if (workspace) void startSession(workspace, startFailure?.agent);
 						}}>Try again</button>
 				{/if}
-				{@render readinessNotice(startFailure.workspaceId)}
+				{@render readinessNotice(startFailure.workspaceId, startFailure.agent)}
 			</EmptyState>
 		</section>
 	{:else if onOpenWorkspace && (openFormVisible || openError || (!sessionsLoading.active && workspaces.length === 0))}
@@ -2389,13 +2423,22 @@
 			<EmptyState level={1} role="status" titleId="opened-workspace-title" title={`${openedWorkspace.name} is open`}>
 				<p>It has no sessions yet.</p>
 				{#if onStartSession}
-					<button
-						type="button"
-						class="pau-button pau-button--primary session-view__retry"
-						disabled={disconnected || startingWorkspaceId !== undefined}
-						onclick={() => void startSession(openedWorkspace)}>Start session</button>
+					<div class="session-view__start-actions">
+						<button
+							type="button"
+							class="pau-button pau-button--primary"
+							disabled={disconnected || startingWorkspaceId !== undefined}
+							onclick={() => void startSession(openedWorkspace)}>Start session</button>
+						<button
+							type="button"
+							class="pau-button pau-button--secondary"
+							disabled={disconnected || startingWorkspaceId !== undefined || claudeReadiness !== undefined}
+							aria-describedby={claudeReadiness ? 'claude-readiness-reason' : undefined}
+							onclick={() => void startSession(openedWorkspace, 'claude')}>Start Claude Code session</button>
+					</div>
 				{/if}
 				{@render readinessNotice(openedWorkspace.id)}
+				{@render readinessNotice(openedWorkspace.id, 'claude')}
 			</EmptyState>
 		</section>
 	{:else if sessionsLoading.active && !activeSession}
@@ -3366,6 +3409,18 @@
 
 	.session-view__retry {
 		margin-top: var(--pau-space-4);
+	}
+
+	.session-view__start-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--pau-space-2);
+		margin-top: var(--pau-space-4);
+	}
+
+	.session-view__failure code {
+		font-family: var(--pau-font-code);
+		font-size: var(--pau-type-sm);
 	}
 
 	.session-message__retry {

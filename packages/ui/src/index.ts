@@ -137,6 +137,7 @@ export type {
 	ContextUsage,
 	SessionCapabilities,
 	SessionUsage,
+	SessionAgent,
 	SessionStatus,
 	SessionViewModel,
 	SavedSession,

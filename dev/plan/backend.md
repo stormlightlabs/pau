@@ -6,16 +6,34 @@ HTTP handles finite operations such as opening a workspace, starting a session,
 reading a file, or changing settings. Commands return after validation and
 acceptance; long-running progress arrives as events.
 
+## Agent sessions
+
+`POST /api/sessions` names its agent as `pi` or `claude`, and Pi starts when
+the request names none. `pau-agent` lists the supported agents. Pi sessions
+run through `pau-pi`. Claude sessions run through `pau-agent`'s Claude bridge
+client, which starts the `pau-claude-bridge` host for the discovered Claude
+Code. Every session reports its agent and the controls it accepts. A route
+for a control the agent lacks answers `501 unsupported_control`. An unknown
+agent is refused with `400 unknown_agent`. An agent that cannot start is
+refused with `503 agent_unavailable` and its discovery reason.
+
+A Claude session resumes a conversation when the request names its Claude
+Code session ID. A resumed session reports that ID from the start, and every
+session reports the ID of each finished turn. The bridge keeps no message
+history, so a client shows a Claude session's transcript from the events it
+received.
+
 ## Agent readiness
 
 `GET /api/agents/readiness` reports, for each supported agent, whether Pau
 found the executable, its version, whether that version is supported, and a
 reason when the agent cannot start a session. For Pi it also starts a
 short-lived `pi --mode rpc` to count the models Pi reports; that check is
-limited to 10 seconds and creates no session. Discovery uses the backend's
-`PATH` as it is. The report is read-only, reused for 30 seconds, and
-`?refresh=true` runs the checks again. Claude is not yet in the report because
-only the TypeScript bridge discovers it.
+limited to 10 seconds and creates no session. Claude is ready when Claude
+Code runs a supported version, with `claude --version` limited to 5 seconds,
+and `pau-claude-bridge` is installed. Discovery uses the backend's `PATH` as
+it is. The report is read-only, reused for 30 seconds, and `?refresh=true`
+runs the checks again.
 
 ## Events
 
@@ -54,6 +72,22 @@ timeout.
 
 PTY processes use a cross-platform Rust PTY library. Structured protocols use
 pipes, never a PTY, so framing and diagnostics stay separate.
+
+A PTY terminal keeps reading output while no view is attached. It retains the
+last 1 MiB, dropping the oldest bytes first, and replays it to each view that
+attaches before sending live output. Once output has been dropped, the replay
+starts with sequences that restore the terminal modes the dropped output set,
+such as the alternate screen, mouse tracking and bracketed paste. The terminal
+list is in opening order, so a client that mounts its terminal view again,
+after a route change for example, reattaches its tabs in that order.
+
+Terminal output never waits for a view, and the memory it holds is fixed. Up
+to 512 KiB waits between the PTY reader and the scrollback. When that buffer
+fills, the reader stops and the child blocks on its next write. Live output to
+views shares one buffer of 256 chunks of at most 8 KiB. A view that falls
+further behind is closed with code 1013, and the client reconnects with a
+delay that starts at 250 ms and doubles up to 8 s, then catches up from the
+scrollback.
 
 ## Resource monitoring
 

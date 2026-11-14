@@ -1,9 +1,9 @@
 import { TerminalSurface, THEMES, type ThemeName } from '@stormlightlabs/pau-ui';
-import { expect, inject, test } from 'vitest';
+import { afterEach, expect, inject, test } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 
-import { DESKTOP_CONNECTION_GLOBAL } from './api';
+import { closeTerminal, DESKTOP_CONNECTION_GLOBAL, listTerminals } from './api';
 import { createTerminalSource } from './terminal-source';
 
 declare module 'vitest' {
@@ -17,6 +17,13 @@ const { connection, workspaceId } = inject('pauApi');
 // Connect the way the desktop shell does, through a frozen global that exists
 // before the client reads it.
 Object.defineProperty(globalThis, DESKTOP_CONNECTION_GLOBAL, { value: Object.freeze(connection) });
+
+// Terminals outlive the surface, so close each test's terminals before the
+// next test mounts a surface that would reattach them.
+afterEach(async () => {
+	const terminals = await listTerminals();
+	for (const terminal of terminals) await closeTerminal(terminal.id);
+});
 
 function renderSurface(theme: ThemeName = 'eldritch') {
 	return render(TerminalSurface, {
@@ -63,6 +70,18 @@ test('runs shell commands with Unicode input and output', async () => {
 
 	await run('sh terminal', String.raw`printf '%s\n' "typed 界 é"`, /^typed 界 é$/m);
 	await run('sh terminal', String.raw`printf '\344\270\226 \360\237\231\202\n'`, /^世 🙂$/m);
+});
+
+test('reattaches running terminals after the surface unmounts', async () => {
+	const first = await renderSurface();
+	await openShell('sh terminal');
+	await run('sh terminal', 'echo before-route-change', /^before-route-change$/m);
+	first.unmount();
+
+	await renderSurface();
+	await expect.element(page.getByRole('tab', { name: 'sh' })).toHaveAttribute('aria-selected', 'true');
+	await expect.poll(() => screenText('sh terminal'), { timeout: 10_000 }).toMatch(/^before-route-change$/m);
+	await run('sh terminal', 'echo after-route-change', /^after-route-change$/m);
 });
 
 test('copies selected output and pastes clipboard text as input', async () => {

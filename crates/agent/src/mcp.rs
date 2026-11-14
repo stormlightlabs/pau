@@ -19,6 +19,8 @@ use serde_json::{Map, Value};
 use tokio::process::Command;
 use tokio::time::timeout;
 
+use crate::process_group::{ProcessGroup, lead_process_group};
+
 /// Agent whose native MCP configuration owns a document.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum McpAgent {
@@ -692,9 +694,9 @@ pub async fn run_claude_mcp_operation(
         .current_dir(&options.working_directory)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .kill_on_drop(true);
-    let status = match timeout(options.timeout, command.status()).await {
+        .stderr(Stdio::null());
+    let mut group = ProcessGroup::new(lead_process_group(&mut command).spawn()?);
+    let status = match timeout(options.timeout, group.wait()).await {
         Ok(status) => status?,
         Err(_) => {
             return Ok(McpOperationResult {

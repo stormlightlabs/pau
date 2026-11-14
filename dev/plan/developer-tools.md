@@ -19,7 +19,9 @@ WebSocket binary frames carry input and output; typed control messages handle
 create, attach, resize, signal, detach, and close. Output tasks must apply
 bounded backpressure so a noisy command cannot exhaust server memory. The
 backend retains bounded scrollback for reattachment and marks a replay as
-partial if older bytes were discarded. PTYs survive route changes, frontend
+partial if older bytes were discarded. Each stream sends the replay as its
+first binary frame, empty when there is no output, and the view drops the
+answers its terminal gives to queries in that replay. PTYs survive route changes, frontend
 reloads, and browser disconnects. They stop when the user closes them, their
 process exits, or Pau explicitly quits; closing and reopening a view does not
 stop them.

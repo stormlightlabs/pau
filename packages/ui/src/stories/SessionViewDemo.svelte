@@ -11,6 +11,7 @@
 		PromptQueue,
 		SavedSession,
 		SavedSessionList,
+		SessionAgent,
 		SessionWorkspace,
 		TranscriptEntry
 	} from '../lib/types/session';
@@ -42,6 +43,7 @@
 		restoredSession,
 		productItems,
 		agentReadiness,
+		claudeReadiness,
 		models,
 		paneWidths,
 		theme,
@@ -76,6 +78,7 @@
 		openable?: boolean;
 		/** Why Pi cannot start a session, as launch reports it. */
 		agentReadiness?: AgentReadinessProblem;
+		claudeReadiness?: AgentReadinessProblem;
 		/** Pane widths in pixels; a null width keeps the default. */
 		paneWidths?: ShellPaneWidths;
 		theme?: ThemeName;
@@ -171,9 +174,9 @@
 		);
 	}
 
-	function startSession(workspaceId: string): void {
+	function startSession(workspaceId: string, agent: SessionAgent): void {
 		if (startFailure) throw new Error(startFailure);
-		lastAction = `${workspaceId}: start session`;
+		lastAction = agent === 'claude' ? `${workspaceId}: start Claude Code session` : `${workspaceId}: start session`;
 	}
 
 	function respondToExtension(sessionId: string, response: ExtensionUiResponse): void {
@@ -185,6 +188,7 @@
 	workspaces={allWorkspaces}
 	{productItems}
 	{agentReadiness}
+	{claudeReadiness}
 	{paneWidths}
 	{theme}
 	{uiFont}

@@ -812,6 +812,9 @@ enum ApiError {
     PiUnavailable(String),
     /// The workspace selects a sandbox, which session launches cannot apply.
     SandboxedSessionUnsupported,
+    /// A session request named an unknown agent, or a session of an agent
+    /// other than Pi failed, with its status, code, and message.
+    Agent(StatusCode, &'static str, String),
     /// A session control or lifecycle operation failed.
     Session(Box<pau_pi::PiSessionRegistryError>),
     /// The requested native session cannot be resumed.
@@ -855,7 +858,9 @@ impl IntoResponse for ApiError {
                 };
                 (status, code, error.to_string())
             }
-            Self::ExtensionRequest(status, code, message) => (status, code, message),
+            Self::ExtensionRequest(status, code, message) | Self::Agent(status, code, message) => {
+                (status, code, message)
+            }
             Self::InvalidPreferences(message) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "invalid_preferences",
@@ -1415,7 +1420,7 @@ pub async fn start_with_options(
 /// Starts the shared API with an explicitly configured token.
 ///
 /// This entry point supports browser development, where Vite and the server
-/// receive the same token through their process environments.
+/// share a token from `.env` or one the server reads on standard input.
 pub async fn start_with_token(address: SocketAddr, token: ApiToken) -> io::Result<ServerHandle> {
     start_with_token_and_options(address, token, ServerOptions::default()).await
 }

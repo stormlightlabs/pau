@@ -119,8 +119,25 @@ export type TranscriptMessage = {
 	 * each one from its own data and never loads a URL.
 	 */
 	images?: PromptImage[];
-	/** Images sent with the prompt that are too large to show. The view names how many. */
-	hiddenImages?: number;
+	/**
+	 * Images sent with the prompt that are not shown, by reason. The view names
+	 * how many of each.
+	 */
+	hiddenImages?: HiddenImages;
+};
+
+/** Counts of the images in one prompt that the transcript does not show, by reason. */
+export type HiddenImages = {
+	/** Over the size of one image, the images of one request, or the pixel cap. */
+	tooLarge?: number;
+	/** Damaged data or a type prompts do not accept. */
+	unreadable?: number;
+	/**
+	 * Dropped to keep the transcript's images within its memory budget. The
+	 * view keeps a placeholder of the same size in place of each one, so the
+	 * layout above the reader does not move when a newer prompt drops them.
+	 */
+	older?: number;
 };
 
 export type TranscriptThinking = { id: string; kind: 'thinking'; body: string; complete: boolean };

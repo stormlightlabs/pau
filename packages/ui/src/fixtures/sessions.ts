@@ -162,13 +162,23 @@ const automaticCompaction: SessionViewModel['transcript'][number] = {
 	willRetry: true
 };
 
-/** A session resumed from saved history: a compaction with no recorded cause, then a prompt with screenshots. */
+/**
+ * A session resumed from saved history: a compaction with no recorded cause,
+ * then prompts with screenshots, some left out as older, too large, or damaged.
+ */
 const promptImagesTranscript: SessionViewModel['transcript'] = [
 	{
 		id: 'compaction-history',
 		kind: 'compaction',
 		summary: 'The user is fixing gutter markers that drift under soft-wrap.',
 		tokensBefore: 96_400
+	},
+	{
+		id: 'prompt-images-older',
+		kind: 'message',
+		role: 'user',
+		body: 'This is how the gutter looked before the wrap change.',
+		hiddenImages: { older: 3 }
 	},
 	{
 		id: 'prompt-images',
@@ -198,7 +208,13 @@ const promptImagesTranscript: SessionViewModel['transcript'] = [
 			}
 		]
 	},
-	{ id: 'prompt-images-hidden', kind: 'message', role: 'user', body: 'And this recording.', hiddenImages: 2 }
+	{
+		id: 'prompt-images-hidden',
+		kind: 'message',
+		role: 'user',
+		body: 'And these recordings.',
+		hiddenImages: { tooLarge: 2, unreadable: 1 }
+	}
 ];
 
 const extensionUi = {

@@ -156,6 +156,7 @@ export type {
 	SessionWorkspace,
 	TranscriptCompaction,
 	TranscriptEntry,
+	HiddenImages,
 	ThinkingLevel,
 	TranscriptTool,
 	ShellCommand,

@@ -6,6 +6,7 @@ import {
 	type BashToolCall,
 	type CompactionReason,
 	type CompactionState,
+	type HiddenImages,
 	type MessageQueue,
 	type PromptImage,
 	type ToolCallDetails,
@@ -14,6 +15,8 @@ import {
 	type TranscriptEntry,
 	type TranscriptTool
 } from '@stormlightlabs/pau-ui';
+
+import { imageSize, maxImagePixels } from './image-size';
 
 /**
  * Display transcript rebuilt from native Pi messages and events.
@@ -379,38 +382,55 @@ const MAX_TRANSCRIPT_IMAGE_BASE64 = 4 * MAX_MESSAGE_IMAGE_BASE64;
 
 /**
  * Reads the images in a user message's content. An image shows only with a
- * type Pau accepts for prompts and base64 data that can decode; a damaged
- * image is left out. An image over {@link maxImageBytes}, or one that takes
- * the message past {@link maxRequestImageBytes}, counts in `hiddenImages`
- * so the view can say it is not shown.
+ * type Pau accepts for prompts, base64 data that can decode, and a header
+ * that records its size; any other counts as unreadable. An image over
+ * {@link maxImageBytes} or {@link maxImagePixels}, or one that takes the
+ * message past {@link maxRequestImageBytes}, counts as too large. The view
+ * names both counts, so a prompt of only hidden images still shows its turn.
  */
-function promptImages(content: unknown): { images?: PromptImage[]; hiddenImages?: number } {
+function promptImages(content: unknown): { images?: PromptImage[]; hiddenImages?: HiddenImages } {
 	if (!Array.isArray(content)) return {};
 	const images: PromptImage[] = [];
-	let hidden = 0;
+	let tooLarge = 0;
+	let unreadable = 0;
 	let total = 0;
 	for (const block of content) {
 		if (!isObject(block) || block.type !== 'image') continue;
-		const mimeType = text(block.mimeType);
-		const data = text(block.data);
-		if (!mimeType || !data || !isImageType(mimeType)) continue;
+		const mimeType = text(block.mimeType) ?? '';
+		const data = text(block.data) ?? '';
+		if (!data || !isImageType(mimeType)) {
+			unreadable += 1;
+			continue;
+		}
 		if (data.length > MAX_IMAGE_BASE64 || total + data.length > MAX_MESSAGE_IMAGE_BASE64) {
-			hidden += 1;
+			tooLarge += 1;
 			continue;
 		}
 		// A length of 1 mod 4 leaves a lone sextet that decodes to no byte.
-		if (data.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) continue;
+		const size = data.length % 4 !== 1 && /^[A-Za-z0-9+/]+={0,2}$/.test(data) ? imageSize(mimeType, data) : undefined;
+		if (!size) {
+			unreadable += 1;
+			continue;
+		}
+		if (size.width * size.height > maxImagePixels) {
+			tooLarge += 1;
+			continue;
+		}
 		images.push({ mimeType, data });
 		total += data.length;
 	}
-	return { ...(images.length > 0 && { images }), ...(hidden > 0 && { hiddenImages: hidden }) };
+	const hiddenImages = { ...(tooLarge > 0 && { tooLarge }), ...(unreadable > 0 && { unreadable }) };
+	return { ...(images.length > 0 && { images }), ...((tooLarge > 0 || unreadable > 0) && { hiddenImages }) };
 }
 
 /**
  * Keeps the transcript's images within {@link MAX_TRANSCRIPT_IMAGE_BASE64}.
  * The newest images win: walking back from the end, each image past the
- * budget leaves its message and counts in its `hiddenImages`. Entries that
- * keep all their images are returned unchanged.
+ * budget leaves its message and counts as older. The view keeps a placeholder
+ * the size of the thumbnail for each older image, so a new prompt that pushes
+ * earlier images out of the budget does not move the content above a reader
+ * who has scrolled up, and their data still leaves memory. Entries that keep
+ * all their images are returned unchanged.
  */
 function limitImages(entries: TranscriptEntry[]): TranscriptEntry[] {
 	let total = 0;
@@ -424,8 +444,8 @@ function limitImages(entries: TranscriptEntry[]): TranscriptEntry[] {
 		});
 		if (kept.length === entry.images.length) return entry;
 		changed = true;
-		const hiddenImages = (entry.hiddenImages ?? 0) + entry.images.length - kept.length;
-		return { ...entry, images: kept.length > 0 ? kept : undefined, hiddenImages };
+		const older = (entry.hiddenImages?.older ?? 0) + entry.images.length - kept.length;
+		return { ...entry, images: kept.length > 0 ? kept : undefined, hiddenImages: { ...entry.hiddenImages, older } };
 	});
 	return changed ? limited.toReversed() : entries;
 }

@@ -964,6 +964,11 @@
 			: `${before} → about ${tokenFormat.format(entry.tokensAfter)} tokens`;
 	}
 
+	/** Names the prompt images not shown for one reason, such as `2 images not shown: too large`. */
+	function hiddenImagesLabel(count: number, reason: string): string {
+		return `${count === 1 ? 'Image' : `${count} images`} not shown: ${reason}`;
+	}
+
 	async function compact(): Promise<void> {
 		if (!onCompact || !activeSession || compacting) return;
 		const sessionId = activeSession.id;
@@ -2710,22 +2715,30 @@
 									{:else if entry.body}
 										<p>{entry.body}</p>
 									{/if}
-									{#if entry.images?.length}
+									{#if entry.images?.length || entry.hiddenImages?.older}
 										<ul class="session-images session-message__images" aria-label="Attached images">
-											{#each entry.images as image, index (index)}
+											{#each entry.images ?? [] as image, index (index)}
 												<li>
 													<img
 														src={`data:${image.mimeType};base64,${image.data}`}
-														alt={`Image ${index + 1} of ${entry.images.length}`} />
+														alt={`Image ${index + 1} of ${entry.images?.length}`}
+														decoding="async"
+														loading="lazy" />
 												</li>
+											{/each}
+											{#each { length: entry.hiddenImages?.older ?? 0 }, index (index)}
+												<li class="session-images__older">Older image not shown</li>
 											{/each}
 										</ul>
 									{/if}
-									{#if entry.hiddenImages}
+									{#if entry.hiddenImages?.tooLarge}
 										<p class="session-message__hidden-images">
-											{entry.hiddenImages === 1
-												? 'Image not shown: too large'
-												: `${entry.hiddenImages} images not shown: too large`}
+											{hiddenImagesLabel(entry.hiddenImages.tooLarge, 'too large')}
+										</p>
+									{/if}
+									{#if entry.hiddenImages?.unreadable}
+										<p class="session-message__hidden-images">
+											{hiddenImagesLabel(entry.hiddenImages.unreadable, 'damaged or unsupported')}
 										</p>
 									{/if}
 									{#if canRetry && entry.id === retryableEntryId}
@@ -3974,6 +3987,20 @@
 		object-fit: cover;
 		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
+	}
+
+	/* Holds an older image's place at thumbnail size, so dropping it does not move the transcript. */
+	.session-images li.session-images__older {
+		width: 4rem;
+		height: 4rem;
+		place-content: center;
+		justify-items: center;
+		border: 1px dashed var(--pau-border);
+		border-radius: var(--pau-radius-control);
+		color: var(--pau-text-muted);
+		font-size: var(--pau-type-xs);
+		line-height: 1.2;
+		text-align: center;
 	}
 
 	/*

@@ -688,10 +688,11 @@ while :; do :; done
             kill: Duration::from_secs(1),
         });
         // The limit only stops a hung start. Under a full parallel test run the
-        // shell can take more than a second to write `ready`.
-        tokio::time::timeout(Duration::from_secs(10), async {
+        // shell can take more than a second to write `ready`. The poll sleeps
+        // so that it does not hold a core the shell needs to start.
+        tokio::time::timeout(Duration::from_secs(5), async {
             while !ready.exists() {
-                tokio::task::yield_now().await;
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
         })
         .await

@@ -40,8 +40,9 @@ Do not start Docker Desktop or another container or virtual-machine runtime
 without explicit user approval. Use an already-running runtime only when the
 active task requires it.
 
-CI runs the full gate. The Check workflow runs `pnpm gate`, the Storybook build
-and the website build on every pull request to `main` and every push to `main`.
+CI runs the full gate. The Check workflow runs `pnpm gate`, the desktop
+integration tests, the Storybook build and the website build on every pull
+request to `main` and every push to `main`.
 Locally, run the narrowest checks that cover the change, then `fab gates`
 before each push. It runs only the scopes the changed files match, and files
 no scope names run nothing. Do not run `fab gates --full` or a full
@@ -53,10 +54,17 @@ Storybook or website builds, and Cargo builds at the same time. Resource
 contention can cause false timeouts in process and interaction tests.
 
 Before posting `Review finished at <sha>`, read the result of the Check
-workflow for that head with `gh pr checks <n>`. This replaces the `fab-storm`
-skill's step that runs `fab gates --full` on the head, and a Check failure
-counts as a failure of that step. When Check is still running, wait for it
-with `gh run watch <run id>` and read the result once. Do not poll in a loop.
+workflow for that head. This replaces the `fab-storm` skill's step that runs
+`fab gates --full` on the head, and a Check failure counts as a failure of that
+step:
+
+1. Find the Check run for the head with
+   `gh run list --workflow Check --commit <sha> --json databaseId,status,conclusion`.
+2. When there is no run, or it was cancelled or skipped, Check has not passed.
+   Push again or report it.
+3. While the run is queued or in progress, wait once with
+   `timeout 50m gh run watch <run id> --exit-status`. Do not poll in a loop.
+4. Read `gh pr checks <n>` once for the result.
 
 ## Tasks
 

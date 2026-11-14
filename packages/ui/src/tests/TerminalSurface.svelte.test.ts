@@ -65,6 +65,36 @@ test('reattaches open terminals when the surface mounts again', async () => {
 	await expect.poll(() => fixture.source.list()).toEqual([{ id: 'fixture-2', title: 'zsh 2' }]);
 });
 
+test('waits for the open terminals before opening another, so titles keep opening order', async () => {
+	const fixture = createTerminalFixture();
+	const first = await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+	await userEvent.click(page.getByRole('button', { name: 'Open a terminal' }));
+	await expect.element(page.getByRole('tab', { name: 'zsh' })).toBeVisible();
+	first.unmount();
+
+	const listed = Promise.withResolvers<void>();
+	const source = {
+		...fixture.source,
+		list: async () => {
+			await listed.promise;
+			return fixture.source.list();
+		}
+	};
+	await render(TerminalSurface, { workspaceName: 'pau', source });
+	const newTerminal = page.getByRole('button', { name: 'New terminal' });
+	await expect.element(newTerminal).toBeDisabled();
+
+	listed.resolve();
+	await expect.element(newTerminal).toBeEnabled();
+	await userEvent.click(newTerminal);
+	await expect.element(page.getByRole('tab', { name: 'zsh 2' })).toHaveAttribute('aria-selected', 'true');
+	const titles = page
+		.getByRole('tab')
+		.elements()
+		.map((tab) => tab.textContent?.trim());
+	expect(titles).toEqual(['zsh', 'zsh 2']);
+});
+
 test('still opens terminals when the open ones cannot be listed', async () => {
 	const fixture = createTerminalFixture({ listError: 'The server stopped responding.' });
 	await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });

@@ -37,6 +37,8 @@ enum State {
     Escape,
     /// Inside a control sequence that may set or reset modes.
     Csi,
+    /// After `CSI !`, which a final `p` makes a soft terminal reset (DECSTR).
+    SoftReset,
     /// Inside a control sequence the tracker does not act on, until its final
     /// byte.
     Ignore,
@@ -110,6 +112,9 @@ impl ModeTracker {
                         .saturating_add(u16::from(byte - b'0'));
                 }
                 b';' if self.count < MAX_PARAMS => self.count += 1,
+                b'!' if self.count == 1 && self.params[0] == 0 && !self.private => {
+                    self.state = State::SoftReset;
+                }
                 b'h' | b'l' => {
                     if self.private {
                         self.apply(byte == b'h');
@@ -123,7 +128,11 @@ impl ModeTracker {
                 0x00..=0x1f => {}
                 _ => self.state = State::Ignore,
             },
-            State::Ignore => {
+            State::SoftReset if byte == b'p' => {
+                self.soft_reset();
+                self.state = State::Ground;
+            }
+            State::SoftReset | State::Ignore => {
                 if (0x40..=0x7e).contains(&byte) || byte == 0x18 || byte == 0x1a {
                     self.state = State::Ground;
                 }
@@ -137,6 +146,18 @@ impl ModeTracker {
                 self.modes[index] = set;
             }
         }
+    }
+
+    /// Applies DECSTR to the tracked modes. As in xterm, it shows the cursor,
+    /// restores autowrap, and sets normal cursor keys and a numeric keypad. It
+    /// leaves the alternate screen, mouse reports and bracketed paste alone.
+    fn soft_reset(&mut self) {
+        for (index, (mode, default)) in MODES.iter().enumerate() {
+            if matches!(mode, 1 | 7 | 25) {
+                self.modes[index] = *default;
+            }
+        }
+        self.application_keypad = false;
     }
 
     /// Returns the sequences that move a terminal from its power-on state into
@@ -187,6 +208,19 @@ mod tests {
             "\x1b[?2004h"
         );
         assert_eq!(restored(b"\x1b[?1049h\x1b=\x1bc\x1b[?7l"), "\x1b[?7l");
+    }
+
+    #[test]
+    fn soft_reset_restores_cursor_wrap_and_keys_only() {
+        let stream = b"\x1b[?1049h\x1b[?25l\x1b[?7l\x1b[?1h\x1b=\x1b[?2004h\x1b[!p";
+        assert_eq!(restored(stream), "\x1b[?1049h\x1b[?2004h");
+        // Split across feeds, and an intermediate other than `!` does nothing.
+        let mut tracker = ModeTracker::default();
+        for part in [&b"\x1b[?25l\x1b["[..], b"!", b"p"] {
+            tracker.feed(part.iter().copied());
+        }
+        assert_eq!(tracker.restore(), b"");
+        assert_eq!(restored(b"\x1b[?25l\x1b[\"p"), "\x1b[?25l");
     }
 
     #[test]

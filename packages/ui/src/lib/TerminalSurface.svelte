@@ -236,7 +236,7 @@
 				type="button"
 				class="terminal-surface__icon-button pau-utility-button"
 				aria-label="New terminal"
-				disabled={creating || disconnected}
+				disabled={creating || restoring || disconnected}
 				onclick={() => void openTerminal()}>
 				<Icon name="plus" size={16} />
 			</button>

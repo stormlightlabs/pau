@@ -687,7 +687,9 @@ while :; do :; done
             terminate: Duration::from_secs(2),
             kill: Duration::from_secs(1),
         });
-        tokio::time::timeout(Duration::from_secs(1), async {
+        // The limit only stops a hung start. Under a full parallel test run the
+        // shell can take more than a second to write `ready`.
+        tokio::time::timeout(Duration::from_secs(10), async {
             while !ready.exists() {
                 tokio::task::yield_now().await;
             }

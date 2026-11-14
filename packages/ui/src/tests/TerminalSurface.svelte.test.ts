@@ -230,6 +230,10 @@ test('applies each theme to the terminal background and ANSI palette', async () 
 		const prompt = view.querySelector(':scope .xterm-rows span.xterm-fg-12')!;
 		await expect.poll(() => getComputedStyle(prompt).color).toBe(rgb(terminal.ansi[12]));
 		expect(getComputedStyle(view).backgroundColor).toBe(rgb(terminal.background));
+		// Nothing inside paints another color over the padding around the grid.
+		for (const layer of view.querySelectorAll(':scope .xterm, :scope .xterm-viewport, :scope .xterm-screen')) {
+			expect(['rgba(0, 0, 0, 0)', rgb(terminal.background)]).toContain(getComputedStyle(layer).backgroundColor);
+		}
 		expect(view.dataset.theme).toBe(name);
 	}
 });

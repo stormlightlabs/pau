@@ -394,6 +394,14 @@
 	}
 
 	/*
+	 * xterm.css paints the viewport black, and the viewport spans the padding
+	 * above. Leave it clear so the screen's theme background fills the frame.
+	 */
+	.terminal-view__screen :global(.xterm-viewport) {
+		background-color: transparent;
+	}
+
+	/*
 	 * The bar floats over the top of the output instead of taking a row, so
 	 * opening it never resizes the PTY or reflows the lines being searched.
 	 * It is not a dismissible overlay: selecting output or switching windows

@@ -35,6 +35,22 @@ and `pau-claude-bridge` is installed. Discovery uses the backend's `PATH` as
 it is. The report is read-only, reused for 30 seconds, and `?refresh=true`
 runs the checks again.
 
+## Agent resources
+
+`GET /api/workspaces/{workspace_id}/resources` lists the skills, prompts,
+extensions, themes, and packages Pi finds for the workspace, without starting
+Pi. Each entry names its kind, scope, source, trust, and status. Status is
+ready, duplicate with the path of the resource that loads instead, invalid,
+or missing for a declared package that is not installed. Each entry carries
+the warnings about its own file. Problems that belong to no entry, such as an
+unreadable settings file or a listed path that does not exist, stay in the
+index's warnings, so one bad file never hides the rest.
+
+User resources are trusted. Project resources follow Pi's saved project trust
+decision in `trust.json`, or `defaultProjectTrust` when none applies. A
+`project_trust` extension or Pi's `--approve` flag can still decide
+differently inside a running Pi, and the index cannot see either.
+
 ## Events
 
 Every server event has:

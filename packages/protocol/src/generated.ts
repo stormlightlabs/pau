@@ -1500,6 +1500,94 @@ bindings: Array<AgentKeybinding>,
  */
 warnings: Array<AgentKeybindingWarning>, };
 
+export type AgentResourceKind = "skill" | "prompt" | "extension" | "theme" | "package";
+
+export type AgentResourceScope = "user" | "project";
+
+export type AgentResourceSourceKind = "directory" | "setting" | "package";
+
+export type AgentResourceTrust = "trusted" | "untrusted" | "undecided";
+
+export type AgentResourceStatus = "ready" | "duplicate" | "invalid" | "missing";
+
+export type AgentResource = {
+/**
+ * Stable identity within one index: the path, or for a package its
+ * scope and declared source.
+ */
+id: string,
+/**
+ * Resource kind.
+ */
+kind: AgentResourceKind,
+/**
+ * Skill, prompt, extension, or theme name, or a package's declared
+ * source.
+ */
+name: string,
+/**
+ * What the resource does, when its file says.
+ */
+description: string | null,
+/**
+ * Absolute path of the resource file, or of an installed package's
+ * directory.
+ */
+path: string | null,
+/**
+ * User or project.
+ */
+scope: AgentResourceScope,
+/**
+ * How the agent finds it.
+ */
+source_kind: AgentResourceSourceKind,
+/**
+ * The scanned directory, the settings file, or the package source.
+ */
+source: string,
+/**
+ * Whether the agent loads the resource's scope.
+ */
+trust: AgentResourceTrust,
+/**
+ * Whether the resource loads.
+ */
+status: AgentResourceStatus,
+/**
+ * Path of the resource that loads instead, for a duplicate.
+ */
+winner: string | null,
+/**
+ * Problems found in this resource.
+ */
+warnings: Array<string>, };
+
+export type AgentResourceWarning = {
+/**
+ * File or directory the warning is about.
+ */
+path: string,
+/**
+ * What was ignored and why.
+ */
+message: string, };
+
+export type AgentResourceIndex = {
+/**
+ * Loaded resources in the agent's lookup order, which decides
+ * duplicates, then resources that do not load, then packages.
+ */
+resources: Array<AgentResource>,
+/**
+ * Problems that belong to no single resource.
+ */
+warnings: Array<AgentResourceWarning>,
+/**
+ * Trust of the workspace's project resources.
+ */
+project_trust: AgentResourceTrust, };
+
 export type SessionQueue = "steer" | "follow_up";
 
 export type SessionImage = {

@@ -3,8 +3,8 @@ use std::os::unix::fs::symlink;
 use std::path::PathBuf;
 
 use pau_pi::{
-    DiscoverPiResourcesOptions, PiResource, PiResourceIndex, PiResourceKind, PiResourceScope,
-    PiResourceSource, discover_pi_resources,
+    DiscoverPiResourcesOptions, PiProjectTrust, PiResource, PiResourceIndex, PiResourceKind,
+    PiResourceScope, PiResourceSource, discover_pi_resources,
 };
 use tempfile::TempDir;
 
@@ -180,6 +180,20 @@ fn malformed_and_incomplete_resources_warn_without_hiding_others() {
         "not a valid JSON object"
     ));
     assert!(names(&index, PiResourceKind::Theme).is_empty());
+    let skipped: Vec<_> = index
+        .skipped
+        .iter()
+        .map(|s| (s.resource.name.as_str(), s.winner.is_none()))
+        .collect();
+    assert_eq!(
+        skipped,
+        [
+            ("bare", true),
+            ("unclosed", true),
+            ("anonymous", true),
+            ("broken", true)
+        ]
+    );
 }
 
 #[test]
@@ -205,6 +219,47 @@ fn duplicate_names_keep_the_first_discovery_and_warn() {
     // Extensions have no name uniqueness rule.
     assert_eq!(names(&index, PiResourceKind::Extension), ["dup", "dup"]);
     assert_eq!(index.warnings.len(), 2);
+    let skipped = &index.skipped[0];
+    assert_eq!(skipped.resource.scope, PiResourceScope::User);
+    assert_eq!(
+        skipped.winner.as_deref(),
+        Some(f.path("work/.pi/skills/same/SKILL.md").as_path())
+    );
+    assert_eq!(index.skipped.len(), 2);
+}
+
+#[test]
+fn reads_the_nearest_saved_trust_decision() {
+    let f = Fixture::new();
+    fs::create_dir_all(f.path("work/nested")).unwrap();
+    let trust = |entries: &str| f.write("home/.pi/agent/trust.json", entries);
+    let canonical = |relative: &str| f.path(relative).canonicalize().unwrap();
+    let key = |relative: &str| serde_json::to_string(&canonical(relative)).unwrap();
+
+    assert_eq!(f.discover().project_trust, PiProjectTrust::Undecided);
+    trust(&format!("{{{}: true}}", key("work")));
+    assert_eq!(
+        f.discover_in("work/nested").project_trust,
+        PiProjectTrust::Trusted
+    );
+    trust(&format!(
+        "{{{}: true, {}: false}}",
+        key("work"),
+        key("work/nested")
+    ));
+    assert_eq!(
+        f.discover_in("work/nested").project_trust,
+        PiProjectTrust::Declined
+    );
+    trust("{}");
+    f.write(
+        "home/.pi/agent/settings.json",
+        r#"{"defaultProjectTrust": "always"}"#,
+    );
+    assert_eq!(f.discover().project_trust, PiProjectTrust::Trusted);
+    trust("[]");
+    let index = f.discover();
+    assert!(warned(&index, "trust.json", "not a valid JSON object"));
 }
 
 #[test]
@@ -310,7 +365,6 @@ fn indexes_packages_with_conventions_manifests_and_filters() {
         .find(|p| p.source == "npm:not-installed")
         .unwrap();
     assert!(!missing.installed);
-    assert!(warned(&index, "agent/settings.json", "is not installed"));
 
     assert_eq!(
         find(&index, PiResourceKind::Skill, "pkg-skill").source,

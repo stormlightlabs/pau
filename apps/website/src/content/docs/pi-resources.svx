@@ -1,0 +1,88 @@
+---
+title: Pi resources
+description: See which skills, prompts, extensions, themes, and packages Pi loads, where each comes from, and why one does not load.
+order: 6
+---
+
+# Pi resources
+
+The Resources view lists what Pi finds for a workspace: skills, prompt
+templates, extensions, themes, and packages. Pau reads Pi's folders and
+settings files to build the list. It does not start Pi or change any file.
+
+Open it from **Resources** in the product rail, or go to
+`/workspaces/{workspace_id}/resources/skills`. The rail beside the list has
+one view per kind with a count.
+
+## What each row shows
+
+Each row shows the resource's name and description, then its scope, its
+source, and its state.
+
+- **Scope** is **User** for your own configuration in `~/.pi/agent` and
+  `~/.agents/skills`, or **Project** for the workspace's `.pi` folder and
+  `.agents/skills` folders.
+- **Source** is **Folder** for a folder Pi scans, **Settings** for a path
+  or package listed in a `settings.json` file, or **Package** with the
+  package's source.
+- **State** is **Loads** when Pi loads the resource. Otherwise it names the
+  problem: **Invalid**, **Not installed**, **Duplicate**, **Not trusted**,
+  **Trust not decided**, or a count of warnings.
+
+Choose a row to see its full file path, the settings file or folder it came
+from, and every warning about it. On a narrow window the detail replaces the
+list. Press **Back** or Escape to return.
+
+## Trust
+
+Pi loads project resources only after you trust the workspace. Your user
+resources always load. Until you decide, Pi sessions started from Pau skip
+the project resources, and the view says so above the list. Run `/trust` in
+Pi to save a decision. Pau reads it from `~/.pi/agent/trust.json`, or from
+the `defaultProjectTrust` setting when no decision applies.
+
+Untrusted resources stay in the list, so you can check what a workspace would
+load before you trust it. Extensions and packages run code with your
+account's permissions.
+
+## Problems
+
+- **Invalid**: Pi skips the file. A skill without a description, malformed
+  frontmatter, or a theme that is not valid JSON is invalid. The detail lists
+  the reason.
+- **Duplicate**: two skills, prompts, or themes share a name. Pi loads the
+  first it finds, in this order: paths in project settings, project folders,
+  paths in user settings, user folders, then packages. The detail names the
+  file that loads instead.
+- **Not installed**: a package listed in settings is missing from disk.
+- **Warnings**: Pi loads the resource but reports a problem, such as a skill
+  name with capital letters.
+
+Problems that belong to no single resource, such as a listed path that does
+not exist or a broken symbolic link, appear under **Discovery warnings**
+below the list.
+
+## Filter and move through the list
+
+Type in **Filter by name** to narrow the list, and use the scope and trust
+choices to show only user or project resources, or only those with a given
+trust state. **Clear filters** appears when nothing matches.
+
+Press the down arrow in the filter to move into the list. The arrow keys,
+Home, and End move the selection, and Enter or Space opens the detail on a
+narrow window.
+
+## API
+
+`GET /api/workspaces/{workspace_id}/resources` returns the same index as
+JSON:
+
+```bash
+curl -H "Authorization: Bearer $PAU_API_TOKEN" \
+  http://127.0.0.1:3001/api/workspaces/$WORKSPACE_ID/resources
+```
+
+Each entry has `kind`, `name`, `description`, `path`, `scope`,
+`source_kind`, `source`, `trust`, `status`, `winner`, and `warnings`. The
+top-level `warnings` list holds discovery problems, and `project_trust`
+reports the workspace's trust state.

@@ -18,9 +18,10 @@
 //! 5. Packages declared in project, then user, settings. A project entry for
 //!    the same package replaces the user entry.
 //!
-//! Known gap: Pi only loads project `.pi` resources (and project settings)
-//! once the project is trusted, and hides them otherwise. This indexer always
-//! reads them; the caller must apply Pau's trust decision when presenting them.
+//! Pi only loads project `.pi` resources, project `.agents/skills`, and
+//! project settings once the project is trusted. This indexer always reads
+//! them so they stay inspectable, and reports the saved decision as
+//! [`PiResourceIndex::project_trust`] for the caller to present.
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -127,6 +128,38 @@ pub struct PiPackage {
     pub installed: bool,
 }
 
+/// A resource Pi finds but does not load.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PiSkippedResource {
+    /// The resource as far as it could be read. An invalid file is named
+    /// after its file or skill directory and has no description.
+    #[serde(flatten)]
+    pub resource: PiResource,
+    /// For a name collision, the path of the resource that loads instead.
+    /// `None` when the file is invalid; its reason is in the warnings.
+    pub winner: Option<PathBuf>,
+}
+
+/// Pi's project trust decision for a workspace.
+///
+/// An extension handling Pi's `project_trust` event and the `--approve` flag
+/// can override it in a running Pi; neither is visible on disk.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PiProjectTrust {
+    /// A saved decision trusts the workspace, or `defaultProjectTrust` is
+    /// `"always"`.
+    Trusted,
+    /// A saved decision declines the workspace, or `defaultProjectTrust` is
+    /// `"never"`.
+    Declined,
+    /// No decision applies. RPC sessions skip project resources until the
+    /// operator saves one with Pi's `/trust`.
+    #[default]
+    Undecided,
+}
+
 /// Problem found while indexing.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -147,8 +180,12 @@ pub struct PiResourceIndex {
     pub resources: Vec<PiResource>,
     /// Declared packages.
     pub packages: Vec<PiPackage>,
+    /// Resources found but not loaded: name collisions and invalid files.
+    pub skipped: Vec<PiSkippedResource>,
     /// Discovery warnings.
     pub warnings: Vec<PiResourceWarning>,
+    /// Whether Pi loads the project-scope resources.
+    pub project_trust: PiProjectTrust,
 }
 
 /// Locations used for one discovery run.
@@ -222,6 +259,7 @@ pub fn discover_pi_resources(options: &DiscoverPiResourcesOptions) -> PiResource
         PiResourceScope::User,
     );
     indexer.scan_packages(&files);
+    indexer.index.project_trust = indexer.project_trust(options, user.value.as_ref());
     indexer.index
 }
 
@@ -391,6 +429,8 @@ impl Indexer {
             PiResourceKind::Extension => Some((extension_name(&candidate), None)),
         };
         let Some((name, description)) = loaded else {
+            let name = candidate.fallback_name();
+            self.skip(candidate, name, None, scope, source, None);
             return;
         };
         // Skills, prompts, and themes need unique names; extensions do not.
@@ -400,10 +440,14 @@ impl Indexer {
                 .resources
                 .iter()
                 .find(|r| r.kind == kind && r.name == name)
-                .map(|r| r.path.display().to_string());
+                .map(|r| r.path.clone());
             if let Some(first) = first {
-                let message = format!("Name \"{name}\" collides with {first}; keeping the first.");
+                let message = format!(
+                    "Name \"{name}\" collides with {}; keeping the first.",
+                    first.display()
+                );
                 self.warn(Some(kind), &candidate.file, message);
+                self.skip(candidate, name, description, scope, source, Some(first));
                 return;
             }
         }
@@ -417,6 +461,68 @@ impl Indexer {
         });
     }
 
+    fn skip(
+        &mut self,
+        candidate: Candidate,
+        name: String,
+        description: Option<String>,
+        scope: PiResourceScope,
+        source: PiResourceSource,
+        winner: Option<PathBuf>,
+    ) {
+        self.index.skipped.push(PiSkippedResource {
+            resource: PiResource {
+                kind: candidate.kind,
+                name,
+                description,
+                path: candidate.file,
+                scope,
+                source,
+            },
+            winner,
+        });
+    }
+
+    /// Reads Pi's saved decision for the workspace from `trust.json` in the
+    /// agent directory: the entry for the workspace or its nearest ancestor,
+    /// by canonical path. Without one, the user setting `defaultProjectTrust`
+    /// decides.
+    fn project_trust(
+        &mut self,
+        options: &DiscoverPiResourcesOptions,
+        user_settings: Option<&Value>,
+    ) -> PiProjectTrust {
+        let path = options.agent_directory.join("trust.json");
+        let saved = match fs::read_to_string(&path) {
+            Ok(text) => match parse_json(&text) {
+                Some(Value::Object(saved)) => saved,
+                _ => {
+                    self.warn(
+                        None,
+                        &path,
+                        "Trust store is not a valid JSON object; ignored.",
+                    );
+                    Map::new()
+                }
+            },
+            Err(_) => Map::new(),
+        };
+        let workspace = fs::canonicalize(&options.workspace).unwrap_or(options.workspace.clone());
+        let decision = workspace.ancestors().find_map(|directory| {
+            saved
+                .get(directory.to_string_lossy().as_ref())
+                .and_then(Value::as_bool)
+        });
+        let default = user_settings
+            .and_then(|settings| settings.get("defaultProjectTrust"))
+            .and_then(Value::as_str);
+        match (decision, default) {
+            (Some(true), _) | (None, Some("always")) => PiProjectTrust::Trusted,
+            (Some(false), _) | (None, Some("never")) => PiProjectTrust::Declined,
+            _ => PiProjectTrust::Undecided,
+        }
+    }
+
     fn load_skill(&mut self, c: &Candidate) -> Option<(String, Option<String>)> {
         let text = self.read(c)?;
         let Some(front) = parse_frontmatter(&text) else {
@@ -427,16 +533,10 @@ impl Indexer {
             );
             return None;
         };
-        let fallback = if c.is_skill_directory() {
-            c.file.parent().and_then(Path::file_name)
-        } else {
-            c.file.file_stem()
-        };
         let name = front
             .get("name")
             .cloned()
-            .or_else(|| fallback.map(|n| n.to_string_lossy().into_owned()))
-            .unwrap_or_default();
+            .unwrap_or_else(|| c.fallback_name());
         let Some(description) = front.get("description").filter(|d| !d.trim().is_empty()) else {
             self.warn(
                 Some(c.kind),
@@ -583,20 +683,20 @@ impl Indexer {
                     settings_path: file.path.clone(),
                     extensions: None,
                 };
-                let root = package_root(&declaration).filter(|root| root.is_dir());
+                // Collecting the components drops the `.` of a `./pkg` source.
+                let declared_root =
+                    package_root(&declaration).map(|root| root.components().collect::<PathBuf>());
+                let root = declared_root.clone().filter(|root| root.is_dir());
                 self.index.packages.push(PiPackage {
                     source: source.to_owned(),
                     scope: file.scope,
                     settings_path: file.path.clone(),
-                    root: package_root(&declaration),
+                    root: declared_root,
                     installed: root.is_some(),
                 });
-                match root {
-                    Some(root) => self.scan_package(&root, source, filters, file.scope),
-                    None => {
-                        let message = format!("Package \"{source}\" is not installed.");
-                        self.warn(None, &file.path, message);
-                    }
+                // A missing package is reported by `PiPackage::installed`.
+                if let Some(root) = root {
+                    self.scan_package(&root, source, filters, file.scope);
                 }
             }
         }
@@ -658,6 +758,18 @@ struct Candidate {
 impl Candidate {
     fn new(kind: PiResourceKind, file: PathBuf) -> Self {
         Self { kind, file }
+    }
+
+    /// Name for a file that could not be read: the skill directory, or the
+    /// file name without its extension.
+    fn fallback_name(&self) -> String {
+        let name = if self.is_skill_directory() {
+            self.file.parent().and_then(Path::file_name)
+        } else {
+            self.file.file_stem()
+        };
+        name.map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
     }
 
     fn is_skill_directory(&self) -> bool {

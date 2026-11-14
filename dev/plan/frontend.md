@@ -21,7 +21,7 @@ Desktop routes should be deep-linkable:
 ```text
 /workspaces/:workspaceId/sessions/:sessionId
 /workspaces/:workspaceId/editor
-/workspaces/:workspaceId/resources
+/workspaces/:workspaceId/resources/:kind
 /settings
 ```
 

@@ -3,6 +3,10 @@ use std::{fs, path::PathBuf};
 use pau_core::{
     HealthResponse, ServerEvent, ServerEventKind, ServerSnapshot, ServerStreamMessage,
     VersionResponse,
+    agent_resources::{
+        AgentResource, AgentResourceIndex, AgentResourceKind, AgentResourceScope,
+        AgentResourceSourceKind, AgentResourceStatus, AgentResourceTrust, AgentResourceWarning,
+    },
     diagnostics::{
         AdapterDiagnostic, DiagnosticBundle, DiagnosticLevel, DiagnosticRecord, DiagnosticSettings,
         TransportDiagnostic,
@@ -149,6 +153,14 @@ fn main() {
         AgentKeybinding::decl(&config),
         AgentKeybindingWarning::decl(&config),
         AgentKeybindings::decl(&config),
+        AgentResourceKind::decl(&config),
+        AgentResourceScope::decl(&config),
+        AgentResourceSourceKind::decl(&config),
+        AgentResourceTrust::decl(&config),
+        AgentResourceStatus::decl(&config),
+        AgentResource::decl(&config),
+        AgentResourceWarning::decl(&config),
+        AgentResourceIndex::decl(&config),
         SessionQueue::decl(&config),
         SessionImage::decl(&config),
         SessionPromptRequest::decl(&config),

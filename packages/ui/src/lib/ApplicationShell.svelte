@@ -29,6 +29,8 @@
 		unavailable?: string;
 		icon?: IconKind;
 		status?: string;
+		/** Number of entries behind the item, shown after the label without a state dot. */
+		count?: number;
 		attention?: boolean;
 		active?: boolean;
 	};
@@ -422,7 +424,9 @@
 										class:attention={item.attention}></span>
 								{/if}
 								<span>{item.label}</span>
-								{#if item.status}<small>{item.status}</small>{/if}
+								{#if item.status}<small>{item.status}</small>{:else if item.count !== undefined}<small
+										>{item.count}</small
+									>{/if}
 							</a>
 						</li>
 					{/each}
@@ -808,6 +812,7 @@
 
 	.app-shell__context-rail small {
 		color: var(--shell-muted);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.app-shell__item-dot {

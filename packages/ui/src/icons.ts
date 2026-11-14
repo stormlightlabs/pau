@@ -8,6 +8,7 @@ export const ICONS = {
 	terminal: 'i-tabler-terminal-2',
 	check: 'i-tabler-check',
 	chevronDown: 'i-tabler-chevron-down',
+	chevronLeft: 'i-tabler-chevron-left',
 	chevronRight: 'i-tabler-chevron-right',
 	arrowUp: 'i-tabler-arrow-up',
 	arrowDown: 'i-tabler-arrow-down',

@@ -449,6 +449,10 @@ fn router_with_services(
             get(sessions::list_native_sessions),
         )
         .route(
+            "/api/workspaces/{workspace_id}/resources",
+            get(sessions::resources::get_workspace_resources),
+        )
+        .route(
             "/api/workspaces/{workspace_id}/sandbox",
             get(get_workspace_sandbox).put(update_workspace_sandbox),
         )

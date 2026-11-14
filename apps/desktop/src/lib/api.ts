@@ -1,4 +1,5 @@
 import type {
+	AgentResourceIndex,
 	AgentKeybindings,
 	AgentReadinessReport,
 	AgentSession,
@@ -164,7 +165,16 @@ async function responseJson<T>(response: Response): Promise<T> {
 
 function workspaceEndpoint(
 	workspaceId: string,
-	endpoint: 'file' | 'files' | 'search' | 'git/diff' | 'git/status' | 'sandbox' | 'sandbox/preview' | 'pi-sessions'
+	endpoint:
+		| 'file'
+		| 'files'
+		| 'search'
+		| 'git/diff'
+		| 'git/status'
+		| 'sandbox'
+		| 'sandbox/preview'
+		| 'pi-sessions'
+		| 'resources'
 ): URL {
 	const origin = apiConnection().origin || 'https://pau.local';
 	return new URL(`/api/workspaces/${encodeURIComponent(workspaceId)}/${endpoint}`, origin);
@@ -430,6 +440,19 @@ async function sendSessionRequest(
 export async function listSessions(fetcher: typeof fetch = fetch): Promise<AgentSession[]> {
 	const response = await fetcher(sessionUrl(''), { headers: authorization() });
 	return responseJson<AgentSession[]>(response);
+}
+
+/**
+ * Lists the skills, prompts, extensions, themes, and packages Pi finds for a
+ * workspace, with each one's source, scope, trust, and problems.
+ */
+export async function getWorkspaceResources(
+	workspaceId: string,
+	fetcher: typeof fetch = fetch
+): Promise<AgentResourceIndex> {
+	const url = requestUrl(workspaceEndpoint(workspaceId, 'resources'));
+	const response = await fetcher(url, { headers: authorization() });
+	return responseJson<AgentResourceIndex>(response);
 }
 
 /** Lists the workspace's saved Pi sessions, newest first. */

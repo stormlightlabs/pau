@@ -8,6 +8,7 @@ import type {
 	PromptImage,
 	PromptQueue,
 	SavedSessionList,
+	SessionAgent,
 	SessionBranchOutcome,
 	SessionSearchOutcome,
 	SessionTreeSnapshot,
@@ -64,6 +65,7 @@ import {
 	withoutNotification,
 	type LiveExtensionUi
 } from './extension-ui';
+import { reduceClaudeEvent, withClaudePrompt } from './claude-transcript';
 import { EventStreamClient, type EventSocketFactory, type EventStreamState } from './event-stream';
 import {
 	emptyPiTranscript,
@@ -101,13 +103,20 @@ const NOTIFICATION_MS = 8000;
 /**
  * Turns an API failure into copy for the operator. Starting and controlling a
  * session share most codes, but `not_found` names a different missing thing.
+ * The copy for most codes names Pi; a Claude Code session's refusals keep the
+ * backend's own message instead.
  */
 export function sessionErrorMessage(
 	cause: unknown,
-	action: 'start' | 'control' | 'resume' | 'retry' | 'branch' | 'compact'
+	action: 'start' | 'control' | 'resume' | 'retry' | 'branch' | 'compact',
+	agent: SessionAgent = 'pi'
 ): string {
 	if (!(cause instanceof PauApiError)) {
 		return 'Pau could not reach its backend. Check that the desktop app is still running, then try again.';
+	}
+	if (agent === 'claude' && cause.code === 'image_input_unsupported') return cause.message;
+	if (agent === 'claude' && cause.code === 'control_rejected') {
+		return `Claude Code rejected the request: ${cause.message}`;
 	}
 	if (action === 'branch' && cause.code === 'invalid_session_state') {
 		return 'Pi is busy. Wait for the current run to finish, then branch again.';
@@ -317,6 +326,11 @@ export class LiveSessions {
 		});
 	}
 
+	/** The agent a session runs. Every agent other than Claude Code takes the Pi paths. */
+	#agent(sessionId: string): SessionAgent {
+		return this.#sessions[sessionId]?.agent === 'claude' ? 'claude' : 'pi';
+	}
+
 	/** The live session in a workspace that runs the saved Pi session, if any. */
 	#liveSessionFor(workspaceId: string, savedSessionId: string): AgentSession | undefined {
 		return Object.values(this.#sessions).find(
@@ -383,6 +397,8 @@ export class LiveSessions {
 	 * the transcript the store already has.
 	 */
 	async #readHistory(sessionId: string): Promise<void> {
+		// The Claude bridge keeps no history to read; its transcript is what streamed.
+		if (this.#agent(sessionId) === 'claude') return;
 		if (this.#historyReplay.has(sessionId)) {
 			this.#historyStale.add(sessionId);
 			return;
@@ -426,6 +442,8 @@ export class LiveSessions {
 	}
 
 	async #readExtensionUi(sessionId: string): Promise<void> {
+		// Extension UI comes from Pi extensions only.
+		if (this.#agent(sessionId) === 'claude') return;
 		if (this.#extensionReplay.has(sessionId)) {
 			this.#extensionStale.add(sessionId);
 			return;
@@ -447,11 +465,11 @@ export class LiveSessions {
 		}
 	}
 
-	async #control(request: () => Promise<void>): Promise<void> {
+	async #control(request: () => Promise<void>, agent: SessionAgent = 'pi'): Promise<void> {
 		try {
 			await request();
 		} catch (cause) {
-			throw new Error(sessionErrorMessage(cause, 'control'), { cause });
+			throw new Error(sessionErrorMessage(cause, 'control', agent), { cause });
 		}
 	}
 
@@ -558,7 +576,8 @@ export class LiveSessions {
 			if (!payloads) continue;
 			this.#pendingOutput.delete(id);
 			let transcript = this.#transcripts[id] ?? emptyPiTranscript;
-			for (const payload of payloads) transcript = reducePiEvent(transcript, payload);
+			const reduce = this.#agent(id) === 'claude' ? reduceClaudeEvent : reducePiEvent;
+			for (const payload of payloads) transcript = reduce(transcript, payload);
 			this.#transcripts[id] = transcript;
 		}
 	}
@@ -578,7 +597,7 @@ export class LiveSessions {
 			workspaceId: session.workspace_id,
 			savedSessionId: session.native_session_id ?? undefined,
 			title: this.#pendingNames[session.id] ?? session.name ?? sessionTitle(transcript),
-			agent: 'Pi',
+			agent: session.agent === 'claude' ? 'Claude Code' : 'Pi',
 			status: session.status,
 			error: failureMessage(session),
 			unseen: this.#unseen.has(session.id),
@@ -692,10 +711,10 @@ export class LiveSessions {
 		}
 	}
 
-	/** Starts a session and returns its ID. Rejects with operator-facing copy. */
-	async start(workspaceId: string): Promise<string> {
+	/** Starts a session of an agent, Pi by default, and returns its ID. Rejects with operator-facing copy. */
+	async start(workspaceId: string, agent: SessionAgent = 'pi'): Promise<string> {
 		try {
-			const session = await startSession(workspaceId, this.#fetcher);
+			const session = await startSession(workspaceId, this.#fetcher, null, agent);
 			this.#sessions[session.id] = session;
 			void this.#readHistory(session.id);
 			return session.id;
@@ -723,14 +742,15 @@ export class LiveSessions {
 	}
 
 	/**
-	 * Opens a saved Pi session and returns the live session's ID. A saved session
-	 * that a live session already runs is selected instead of resumed twice.
+	 * Opens a saved session of an agent, Pi by default, and returns the live
+	 * session's ID. A saved session that a live session already runs is
+	 * selected instead of resumed twice.
 	 */
-	async resume(workspaceId: string, savedSessionId: string): Promise<string> {
+	async resume(workspaceId: string, savedSessionId: string, agent: SessionAgent = 'pi'): Promise<string> {
 		const running = this.#liveSessionFor(workspaceId, savedSessionId);
 		if (running) return running.id;
 		try {
-			const session = await startSession(workspaceId, this.#fetcher, savedSessionId);
+			const session = await startSession(workspaceId, this.#fetcher, savedSessionId, agent);
 			this.#sessions[session.id] = session;
 			void this.#readHistory(session.id);
 			return session.id;
@@ -740,17 +760,18 @@ export class LiveSessions {
 	}
 
 	/**
-	 * Starts an ended session again and returns the new live session's ID. It
-	 * resumes the saved Pi session when Pi wrote one, so the conversation
-	 * continues. A session that failed before Pi saved anything starts fresh in
-	 * the same workspace.
+	 * Starts an ended session again with the same agent and returns the new
+	 * live session's ID. It resumes the agent's saved session when the agent
+	 * reported one, so the conversation continues. A session that failed
+	 * before the agent saved anything starts fresh in the same workspace.
 	 */
 	async restart(sessionId: string): Promise<string> {
 		const session = this.#sessions[sessionId];
 		if (!session) throw new Error('Pau no longer has this session. Start a new one from the session rail.');
+		const agent = this.#agent(sessionId);
 		return session.native_session_id
-			? this.resume(session.workspace_id, session.native_session_id)
-			: this.start(session.workspace_id);
+			? this.resume(session.workspace_id, session.native_session_id, agent)
+			: this.start(session.workspace_id, agent);
 	}
 
 	/** Lists the models a session can select. Rejects with operator-facing copy. */
@@ -804,9 +825,23 @@ export class LiveSessions {
 		}
 	}
 
-	/** Prompts an idle session, or steers or queues a follow-up during a run. */
-	send(sessionId: string, text: string, queue?: PromptQueue, images: PromptImage[] = []): Promise<void> {
+	/**
+	 * Prompts an idle session, or steers or queues a follow-up during a run.
+	 *
+	 * The Claude bridge does not echo prompts, so an accepted Claude prompt is
+	 * added to the transcript here, ahead of any reply that streamed while the
+	 * request was in flight.
+	 */
+	async send(sessionId: string, text: string, queue?: PromptQueue, images: PromptImage[] = []): Promise<void> {
 		const attachments = images.map((image) => ({ mime_type: image.mimeType, data: image.data }));
+		if (queue === undefined && this.#agent(sessionId) === 'claude') {
+			this.#flushOutput(sessionId);
+			const at = (this.#transcripts[sessionId] ?? emptyPiTranscript).entries.length;
+			await this.#control(() => promptSession(sessionId, text, attachments, this.#fetcher), 'claude');
+			this.#flushOutput(sessionId);
+			this.#transcripts[sessionId] = withClaudePrompt(this.#transcripts[sessionId] ?? emptyPiTranscript, text, at);
+			return;
+		}
 		return this.#control(() =>
 			queue === undefined
 				? promptSession(sessionId, text, attachments, this.#fetcher)
@@ -925,8 +960,13 @@ export class LiveSessions {
 		});
 	}
 
-	/** Reads a session's earlier prompts for composer recall, newest first. */
+	/**
+	 * Reads a session's earlier prompts for composer recall, newest first. The
+	 * Claude bridge keeps none, so a Claude session recalls only the prompts
+	 * the composer sent.
+	 */
 	history(sessionId: string): Promise<string[]> {
+		if (this.#agent(sessionId) === 'claude') return Promise.resolve([]);
 		return getSessionHistory(sessionId, this.#fetcher);
 	}
 
@@ -944,7 +984,7 @@ export class LiveSessions {
 			}
 			return { steering: cleared.steering, followUp: cleared.follow_up };
 		} catch (cause) {
-			throw new Error(sessionErrorMessage(cause, 'control'), { cause });
+			throw new Error(sessionErrorMessage(cause, 'control', this.#agent(sessionId)), { cause });
 		}
 	}
 
@@ -1009,7 +1049,7 @@ export class LiveSessions {
 
 	/** Stops the session's process. */
 	stop(sessionId: string): Promise<void> {
-		return this.#control(() => stopSession(sessionId, this.#fetcher));
+		return this.#control(() => stopSession(sessionId, this.#fetcher), this.#agent(sessionId));
 	}
 
 	/**

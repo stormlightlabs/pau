@@ -1,19 +1,21 @@
 //! `GET /api/agents/readiness`: whether each supported agent can start a
 //! session.
 //!
-//! The check is read-only and bounded. Pi is located with the same discovery a
-//! session launch uses, so it honours the process `PATH` as it is. A found,
-//! supported Pi is then started in `--mode rpc` for one `get_available_models`
-//! request and shut down, all within [`MODEL_CHECK_TIMEOUT`]. No session is
-//! created and no model is called.
+//! The check is read-only and bounded. Each agent is located with the same
+//! discovery a session launch uses, so it honours the process `PATH` as it
+//! is. A found, supported Pi is then started in `--mode rpc` for one
+//! `get_available_models` request and shut down, all within
+//! [`MODEL_CHECK_TIMEOUT`]. Claude is ready once Claude Code runs a supported
+//! version and the Claude bridge is installed; it has no model check. No
+//! session is created and no model is called.
 //!
 //! The report is cached for [`CACHE_LIFETIME`] so startup progress and the
 //! first-run view can both ask without launching Pi twice. Concurrent
 //! callers share one check. `?refresh=true` skips the cache for a "check
 //! again" action.
 //!
-//! Claude has no backend discovery yet, so the report lists Pi only. Each
-//! agent is one entry in `agents`, so adding Claude changes no client.
+//! The report has one entry per [`AgentKind`], in the order of
+//! [`AgentKind::ALL`], so adding an agent changes no client.
 
 use std::time::{Duration, Instant};
 
@@ -21,6 +23,7 @@ use axum::{
     Json,
     extract::{Query, State},
 };
+use pau_agent::{AgentKind, ClaudeDiscoveryErrorCode, DiscoverClaudeOptions, discover_claude};
 use pau_core::readiness::{AgentReadiness, AgentReadinessReport};
 use pau_pi::{
     DiscoverPiOptions, MIN_SUPPORTED_PI_VERSION, PiDiscoveryErrorCode, PiProcess,
@@ -66,9 +69,18 @@ impl SessionApi {
         {
             return report.clone();
         }
-        let report = AgentReadinessReport {
-            agents: vec![check_pi(self.discovery.clone()).await],
-        };
+        // Check concurrently so one slow agent does not delay the others.
+        let (pi, claude) = tokio::join!(
+            check_pi(self.discovery.clone()),
+            check_claude(self.claude_discovery.clone()),
+        );
+        let agents = AgentKind::ALL
+            .map(|agent| match agent {
+                AgentKind::Pi => pi.clone(),
+                AgentKind::Claude => claude.clone(),
+            })
+            .to_vec();
+        let report = AgentReadinessReport { agents };
         *cache = Some((Instant::now(), report.clone()));
         report
     }
@@ -127,6 +139,54 @@ async fn check_pi(discovery: DiscoverPiOptions) -> AgentReadiness {
             readiness.ready = true;
         }
         Err(reason) => readiness.reason = Some(reason),
+    }
+    readiness
+}
+
+async fn check_claude(discovery: DiscoverClaudeOptions) -> AgentReadiness {
+    let mut readiness = AgentReadiness {
+        agent: AgentKind::Claude.id().to_owned(),
+        found: false,
+        executable_path: None,
+        version: None,
+        version_supported: false,
+        model_count: None,
+        ready: false,
+        reason: None,
+    };
+    let discovered = match tokio::task::spawn_blocking(move || discover_claude(&discovery)).await {
+        Ok(discovered) => discovered,
+        Err(error) => {
+            readiness.reason = Some(format!("Claude Code could not be checked: {error}."));
+            return readiness;
+        }
+    };
+    match discovered {
+        Ok(claude) => {
+            readiness.found = true;
+            readiness.executable_path = Some(claude.executable_path.display().to_string());
+            readiness.version = Some(claude.version.to_string());
+            readiness.version_supported = true;
+            readiness.ready = true;
+        }
+        Err(error) => {
+            let code = error.code();
+            readiness.found = !matches!(
+                code,
+                ClaudeDiscoveryErrorCode::NotFound | ClaudeDiscoveryErrorCode::NotExecutable
+            );
+            // A missing bridge is found only after the version passed.
+            readiness.version_supported = matches!(
+                code,
+                ClaudeDiscoveryErrorCode::BridgeNotFound
+                    | ClaudeDiscoveryErrorCode::BridgeNotExecutable
+            );
+            readiness.executable_path = error
+                .executable_path()
+                .map(|path| path.display().to_string());
+            readiness.version = error.version().map(ToString::to_string);
+            readiness.reason = Some(error.to_string());
+        }
     }
     readiness
 }

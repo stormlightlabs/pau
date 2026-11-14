@@ -13,6 +13,9 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStderr, ChildStdout, Command};
 use tokio::sync::{Mutex, broadcast, oneshot, watch};
 
+#[cfg(unix)]
+use crate::process_group::signal_process_group;
+use crate::process_group::{ProcessGroup, lead_process_group};
 use crate::{
     AgentCapabilities, AgentControl, AgentControlError, AgentEvent, AgentEventKind,
     AgentSessionStatus,
@@ -40,6 +43,13 @@ pub const CLAUDE_BRIDGE_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     shell_commands: false,
     stop: true,
 };
+
+/// Time a new bridge host has to answer the `status` handshake.
+///
+/// The host answers once it has checked the Claude Code version, which takes
+/// a few seconds at most. A host that has not answered by then is killed and
+/// the start fails, so a hung host cannot leave the start request pending.
+pub const CLAUDE_BRIDGE_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Time allowed for each stage of bridge-host shutdown.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -319,6 +329,8 @@ pub enum ClaudeBridgeProcessError {
     Rejected(ClaudeBridgeCommandError),
     /// The host exited before responding.
     Exited(ClaudeBridgeExit),
+    /// The host did not answer the `status` handshake in time and was killed.
+    HandshakeTimeout(Duration),
     /// The host survived the forced-kill deadline.
     KillTimeout,
     /// A platform signal failed.
@@ -340,6 +352,11 @@ impl fmt::Display for ClaudeBridgeProcessError {
             Self::Exited(exit) => write!(
                 formatter,
                 "Claude bridge exited before responding: {exit:?}"
+            ),
+            Self::HandshakeTimeout(deadline) => write!(
+                formatter,
+                "Claude bridge did not answer within {} seconds of starting",
+                deadline.as_secs()
             ),
             Self::KillTimeout => {
                 formatter.write_str("Claude bridge did not exit after the kill deadline")
@@ -375,9 +392,10 @@ impl ClaudeBridgeProcess {
             .current_dir(&options.working_directory)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
-        let mut child = command.spawn().map_err(ClaudeBridgeProcessError::Start)?;
+            .stderr(Stdio::piped());
+        let mut child = lead_process_group(&mut command)
+            .spawn()
+            .map_err(ClaudeBridgeProcessError::Start)?;
         let process_id = child.id().ok_or_else(|| {
             ClaudeBridgeProcessError::Start(std::io::Error::other(
                 "bridge host did not report a process ID",
@@ -397,13 +415,11 @@ impl ClaudeBridgeProcess {
         let watcher_output = output.clone();
         let watcher_pending = Arc::clone(&pending);
         let watcher_requested = Arc::clone(&shutdown_requested);
+        let mut group = ProcessGroup::new(child);
         tokio::spawn(async move {
             let status = tokio::select! {
-                status = child.wait() => status,
-                _ = kill_receiver.recv() => {
-                    let _ = child.start_kill();
-                    child.wait().await
-                }
+                status = group.wait() => status,
+                _ = kill_receiver.recv() => group.kill().await,
             };
             if let Ok(status) = status {
                 let exit = process_exit(status, watcher_requested.load(Ordering::SeqCst));
@@ -525,14 +541,7 @@ impl ClaudeBridgeProcess {
 
     #[cfg(unix)]
     async fn send_signal(&self, signal: i32) -> Result<(), ClaudeBridgeProcessError> {
-        let result = unsafe { libc::kill(self.process_id as i32, signal) };
-        if result == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH) {
-            Ok(())
-        } else {
-            Err(ClaudeBridgeProcessError::Signal(
-                std::io::Error::last_os_error(),
-            ))
-        }
+        signal_process_group(self.process_id, signal).map_err(ClaudeBridgeProcessError::Signal)
     }
 
     #[cfg(not(unix))]
@@ -659,12 +668,30 @@ pub struct ClaudeSession {
 }
 
 impl ClaudeSession {
-    /// Starts and handshakes with one package bridge host.
+    /// Starts and handshakes with one package bridge host, killing it when it
+    /// does not answer within [`CLAUDE_BRIDGE_HANDSHAKE_TIMEOUT`].
     pub async fn start(
         options: StartClaudeBridgeOptions,
     ) -> Result<Self, ClaudeBridgeProcessError> {
+        Self::start_within(options, CLAUDE_BRIDGE_HANDSHAKE_TIMEOUT).await
+    }
+
+    async fn start_within(
+        options: StartClaudeBridgeOptions,
+        handshake_timeout: Duration,
+    ) -> Result<Self, ClaudeBridgeProcessError> {
         let process = Arc::new(ClaudeBridgeProcess::start(options)?);
-        let state = process.command("status", None).await?;
+        let state =
+            match tokio::time::timeout(handshake_timeout, process.command("status", None)).await {
+                Ok(state) => state?,
+                Err(_) => {
+                    let _ = process.kill.send(()).await;
+                    wait_for_exit_for(process.exit.clone(), process.shutdown_timeouts.kill).await;
+                    return Err(ClaudeBridgeProcessError::HandshakeTimeout(
+                        handshake_timeout,
+                    ));
+                }
+            };
         let native_session_id = state
             .get("nativeSessionId")
             .and_then(Value::as_str)
@@ -742,11 +769,14 @@ impl ClaudeSession {
     pub async fn stop(&self) -> Result<ClaudeBridgeExit, ClaudeSessionError> {
         {
             let mut status = self.status.lock().await;
+            // A failed session is accepted so its host can always be ended,
+            // even when it exited on its own.
             if !matches!(
                 *status,
                 AgentSessionStatus::Idle
                     | AgentSessionStatus::Running
                     | AgentSessionStatus::Waiting
+                    | AgentSessionStatus::Failed
             ) {
                 return Err(invalid_state(
                     AgentControl::Stop,
@@ -817,20 +847,15 @@ fn observe_session(
                     {
                         *native_session_id.lock().await = Some(id.to_owned());
                     }
+                    // Every finished turn leaves the session idle, failed ones
+                    // included: a failed API call ends the turn, not the bridge,
+                    // so the next prompt must still be accepted.
                     let mut current = status.lock().await;
                     if !matches!(
                         *current,
                         AgentSessionStatus::Stopping | AgentSessionStatus::Stopped
                     ) {
-                        *current = if payload
-                            .and_then(|value| value.get("status"))
-                            .and_then(Value::as_str)
-                            == Some("failed")
-                        {
-                            AgentSessionStatus::Failed
-                        } else {
-                            AgentSessionStatus::Idle
-                        };
+                        *current = AgentSessionStatus::Idle;
                     }
                 }
                 Ok(ClaudeBridgeOutput::Exit(exit)) => {
@@ -960,4 +985,32 @@ fn terminate_signal() -> i32 {
 #[cfg(not(unix))]
 fn terminate_signal() -> i32 {
     0
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use crate::process_group::tests::{assert_gone, grandchild, host_with_grandchild};
+
+    #[tokio::test]
+    async fn kills_a_bridge_that_never_answers_the_handshake() {
+        let directory = tempfile::tempdir().unwrap();
+        let options = StartClaudeBridgeOptions {
+            executable_path: host_with_grandchild(directory.path()),
+            working_directory: directory.path().to_path_buf(),
+            arguments: Vec::new(),
+            shutdown_timeouts: ClaudeBridgeShutdownTimeouts::default(),
+        };
+
+        let error = ClaudeSession::start_within(options, Duration::from_secs(3))
+            .await
+            .err()
+            .expect("the start should fail");
+        assert!(
+            matches!(error, ClaudeBridgeProcessError::HandshakeTimeout(_)),
+            "{error}"
+        );
+        assert!(error.to_string().contains("did not answer"), "{error}");
+        assert_gone(grandchild(directory.path()).await).await;
+    }
 }

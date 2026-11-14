@@ -137,6 +137,48 @@ done
     assert!(session.stop().await.unwrap().requested);
 }
 
+#[tokio::test]
+async fn stops_a_session_whose_bridge_failed() {
+    let temporary = tempfile::tempdir().unwrap();
+    let launcher = temporary.path().join("failing bridge host");
+    // Answers the handshake, then exits without being asked on the first
+    // prompt.
+    fs::write(
+        &launcher,
+        r#"#!/bin/sh
+IFS= read -r line
+id=$(printf '%s' "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+printf '{"version":1,"type":"response","id":"%s","ok":true,"result":{"nativeSessionId":null}}\n' "$id"
+IFS= read -r line
+exit 1
+"#,
+    )
+    .unwrap();
+    fs::set_permissions(&launcher, fs::Permissions::from_mode(0o755)).unwrap();
+    let session = ClaudeSession::start(StartClaudeBridgeOptions {
+        executable_path: launcher,
+        working_directory: temporary.path().to_path_buf(),
+        arguments: Vec::<OsString>::new(),
+        shutdown_timeouts: ClaudeBridgeShutdownTimeouts::default(),
+    })
+    .await
+    .unwrap();
+
+    assert!(session.prompt("crash").await.is_err());
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while session.status().await != AgentSessionStatus::Failed {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the session never failed");
+
+    let exit = session.stop().await.unwrap();
+    assert!(!exit.requested);
+    assert_eq!(exit.code, Some(1));
+    assert_eq!(session.status().await, AgentSessionStatus::Stopped);
+}
+
 fn bridge_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packages/claude-bridge")
 }

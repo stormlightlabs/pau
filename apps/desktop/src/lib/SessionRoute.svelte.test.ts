@@ -27,6 +27,7 @@ const workspace: Workspace = {
 
 const idleSession: AgentSession = {
 	id: 'session-1',
+	agent: 'pi',
 	workspace_id: 'pau',
 	status: 'idle',
 	started_at: '2026-04-01T12:00:00Z',
@@ -535,7 +536,7 @@ test('resumes a saved session from the picker and selects it', async () => {
 
 	await expect.element(page.getByText('Starting the agent process…')).toBeVisible();
 	expect(start).toHaveBeenCalledWith(
-		expect.objectContaining({ body: '{"workspace_id":"pau","model":null,"native_session_id":"native-1"}' })
+		expect.objectContaining({ body: '{"agent":"pi","workspace_id":"pau","model":null,"native_session_id":"native-1"}' })
 	);
 	expect(changes).toEqual(['session-1']);
 });
@@ -559,7 +560,7 @@ test('resumes a recent saved session from the rail and lists it once', async () 
 
 	await expect.element(page.getByText('Starting the agent process…')).toBeVisible();
 	expect(start).toHaveBeenCalledWith(
-		expect.objectContaining({ body: '{"workspace_id":"pau","model":null,"native_session_id":"native-1"}' })
+		expect.objectContaining({ body: '{"agent":"pi","workspace_id":"pau","model":null,"native_session_id":"native-1"}' })
 	);
 	expect(changes).toEqual(['session-1']);
 	// The live session takes the saved row's place.
@@ -1290,4 +1291,94 @@ test('opens the workspace view that was open last', async () => {
 
 	await vi.waitFor(() => expect(onOpenView).toHaveBeenCalledWith('terminal', 'pau'));
 	await expect.element(page.getByRole('heading', { name: 'Loading sessions…' })).toBeVisible();
+});
+
+/** Opens the workspace menu from its heading in the collapsed rail. */
+async function openWorkspaceMenu(): Promise<void> {
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	await userEvent.click(page.getByRole('heading', { name: 'Pau' }));
+	await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+}
+
+const claudeMissing = {
+	agent: 'claude',
+	found: false,
+	executable_path: null,
+	version: null,
+	version_supported: false,
+	model_count: null,
+	ready: false,
+	reason: 'Claude Code was not found. Install Claude Code, add `claude` to PATH, or configure its executable path.'
+};
+
+test('disables Claude Code with the reason the readiness report gives', async () => {
+	const { props } = setup({ 'GET /api/agents/readiness': () => json({ agents: [claudeMissing] }) });
+	await render(SessionRoute, props);
+
+	await openWorkspaceMenu();
+	const item = page.getByRole('menuitem', { name: 'New Claude Code session' });
+	await expect.element(item).toBeDisabled();
+	await expect.element(item).toHaveAccessibleDescription(claudeMissing.reason.replaceAll('`', ''));
+});
+
+test('checks Claude Code again from its notice, bypassing the cached report', async () => {
+	const refresh = vi.fn(() => json({ agents: [{ ...claudeMissing, found: true, ready: true, reason: null }] }));
+	const { props } = setup({
+		'GET /api/workspaces': () => json([]),
+		'POST /api/workspaces': () => json(workspace, 201),
+		'GET /api/agents/readiness': () => json({ agents: [claudeMissing] }),
+		'GET /api/agents/readiness?refresh=true': refresh
+	});
+	await render(SessionRoute, props);
+	await userEvent.fill(page.getByRole('textbox', { name: 'Folder path' }), '/home/me/pau');
+	await userEvent.click(page.getByRole('button', { name: 'Open', exact: true }));
+
+	const startClaude = page.getByRole('button', { name: 'Start Claude Code session' });
+	await expect.element(startClaude).toBeDisabled();
+	await userEvent.click(page.getByRole('button', { name: 'Check again' }));
+
+	expect(refresh).toHaveBeenCalledOnce();
+	await expect.element(startClaude).toBeEnabled();
+	await expect.element(page.getByRole('region', { name: 'Claude Code is not ready' })).not.toBeInTheDocument();
+});
+
+test('starts a Claude Code session and streams its reply', async () => {
+	const claudeSession: AgentSession = {
+		...idleSession,
+		id: 'session-1',
+		agent: 'claude',
+		capabilities: {
+			...idleSession.capabilities,
+			follow_up: false,
+			steer: false,
+			message_queue: false,
+			model_selection: false,
+			thinking_level: false,
+			command_discovery: false,
+			usage: false,
+			compaction: false,
+			branching: false,
+			retry: false,
+			rename: false,
+			clone_session: false,
+			shell_commands: false
+		}
+	};
+	const start = vi.fn(() => json(claudeSession, 201));
+	const { props, sockets } = setup({
+		'GET /api/agents/readiness': () => json({ agents: [{ ...claudeMissing, found: true, ready: true, reason: null }] }),
+		'POST /api/sessions': start
+	});
+	await render(SessionRoute, props);
+	sockets[0]?.open();
+
+	await openWorkspaceMenu();
+	await userEvent.click(page.getByRole('menuitem', { name: 'New Claude Code session' }));
+	expect(JSON.parse(String((start.mock.calls[0] as unknown as [RequestInit])[0].body))).toMatchObject({
+		agent: 'claude'
+	});
+
+	sockets[0]?.receive(output({ sequence: 0, event: 'text.delta', payload: { text: 'Reading the bridge.' } }));
+	await expect.element(page.getByText('Reading the bridge.')).toBeVisible();
+	await expect.element(page.getByRole('button', { name: 'Compact' })).not.toBeInTheDocument();
 });

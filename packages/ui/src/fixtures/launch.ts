@@ -41,3 +41,20 @@ export const agentReadinessFixtures = {
 	outdated: { reason: 'Pi 0.9.2 is older than the 1.0 release Pau supports.', action: 'update_pi' },
 	noProvider: { reason: 'Pi has no models available. Connect a provider in Pi first.', action: 'run_pi' }
 } satisfies Record<string, AgentReadinessProblem>;
+
+/** Claude Code readiness problems, with the reasons the backend reports. */
+export const claudeReadinessFixtures = {
+	missing: {
+		agent: 'claude',
+		reason: 'Claude Code was not found. Install Claude Code, add `claude` to PATH, or configure its executable path.'
+	},
+	unsupported: {
+		agent: 'claude',
+		reason: 'Claude Code 2.0.1 is unsupported. Update Claude Code to 2.1.259 or newer with `claude update`.'
+	},
+	missingBridge: {
+		agent: 'claude',
+		reason:
+			'The Claude bridge was not found. Install `@stormlightlabs/pau-claude-bridge` and add its `pau-claude-bridge` command to PATH.'
+	}
+} satisfies Record<string, AgentReadinessProblem>;

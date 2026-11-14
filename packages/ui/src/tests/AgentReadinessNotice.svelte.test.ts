@@ -2,7 +2,7 @@ import { page } from 'vitest/browser';
 import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
-import { agentReadinessFixtures } from '../fixtures/launch';
+import { agentReadinessFixtures, claudeReadinessFixtures } from '../fixtures/launch';
 import { sessionFixtures } from '../fixtures/sessions';
 import AgentReadinessNotice from '../lib/AgentReadinessNotice.svelte';
 import SessionView from '../lib/SessionView.svelte';
@@ -31,6 +31,35 @@ test('shows the reason alone when there is no command', async () => {
 	await expect.element(notice()).toHaveTextContent('Pi cannot start a session.');
 	expect(page.getByRole('code').query()).toBeNull();
 	expect(page.getByRole('button', { name: 'Open terminal' }).query()).toBeNull();
+});
+
+test('names Claude Code and gives its reason without a command', async () => {
+	await render(AgentReadinessNotice, { problem: claudeReadinessFixtures.unsupported, onOpenTerminal: vi.fn() });
+
+	const claude = page.getByRole('region', { name: 'Claude Code is not ready' });
+	await expect.element(claude).toHaveTextContent(claudeReadinessFixtures.unsupported.reason.replaceAll('`', ''));
+	await expect.element(claude.getByRole('code')).toHaveTextContent('claude update');
+	expect(page.getByRole('button', { name: 'Open terminal' }).query()).toBeNull();
+});
+
+test('checks Claude Code again and disables the action until the check ends', async () => {
+	const check = Promise.withResolvers<void>();
+	const onCheckAgain = vi.fn(() => check.promise);
+	await render(AgentReadinessNotice, { problem: claudeReadinessFixtures.missing, onCheckAgain });
+
+	const claude = page.getByRole('region', { name: 'Claude Code is not ready' });
+	await claude.getByRole('button', { name: 'Check again' }).click();
+	expect(onCheckAgain).toHaveBeenCalledOnce();
+	await expect.element(claude.getByRole('button', { name: 'Checking…' })).toBeDisabled();
+	check.resolve();
+	await expect.element(claude.getByRole('button', { name: 'Check again' })).toBeEnabled();
+});
+
+test('offers no Check again action without a handler', async () => {
+	await render(AgentReadinessNotice, { problem: claudeReadinessFixtures.missing });
+
+	await expect.element(page.getByRole('region', { name: 'Claude Code is not ready' })).toBeVisible();
+	expect(page.getByRole('button', { name: 'Check again' }).query()).toBeNull();
 });
 
 test('opens a terminal in a workspace from the empty sessions view', async () => {

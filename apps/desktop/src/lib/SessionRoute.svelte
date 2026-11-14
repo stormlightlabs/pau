@@ -1,9 +1,15 @@
 <script lang="ts">
 	import type { LastRoute, LastView } from '@stormlightlabs/pau-protocol';
-	import { SessionView, type SavedSession, type ShellNavItem } from '@stormlightlabs/pau-ui';
+	import {
+		SessionView,
+		type AgentReadinessProblem,
+		type SavedSession,
+		type SessionAgent,
+		type ShellNavItem
+	} from '@stormlightlabs/pau-ui';
 	import { getContext, onMount, untrack } from 'svelte';
 
-	import { getUiPreferences } from './api';
+	import { getAgentReadiness, getUiPreferences } from './api';
 
 	import type { EventSocketFactory } from './event-stream';
 	import { searchFileMentions } from './file-mentions';
@@ -82,6 +88,26 @@
 	/** Absent in the browser development server, which has no launch check. */
 	const agentReadiness = getContext<AgentReadinessSource | undefined>(agentReadinessContext);
 
+	/**
+	 * Why Claude Code cannot start a session, from the backend's readiness
+	 * report. Launch checks only Pi, so the route reads the report itself on
+	 * mount, after a Claude Code start fails, and when the operator asks the
+	 * notice to check again. Unset while the report
+	 * is unread or could not be read, which leaves Claude Code available.
+	 */
+	let claudeReadiness = $state<AgentReadinessProblem>();
+
+	async function checkClaude(refresh = false): Promise<void> {
+		try {
+			const report = await getAgentReadiness(refresh, fetcher);
+			const claude = report.agents.find((agent) => agent.agent === 'claude');
+			claudeReadiness =
+				claude && !claude.ready && claude.reason ? { agent: 'claude', reason: claude.reason } : undefined;
+		} catch {
+			claudeReadiness = undefined;
+		}
+	}
+
 	/** Absent in the browser development server, which has no native notifications. */
 	const attention = getContext<SessionAttention | undefined>(sessionAttentionContext);
 
@@ -132,6 +158,7 @@
 
 	onMount(() => {
 		sessions.connect();
+		void checkClaude();
 		if (restoreLastRoute) void readSavedRoute();
 		return () => sessions.close();
 	});
@@ -190,8 +217,14 @@
 		if (workspace) onSessionChange?.(workspace.id, sessionId);
 	}
 
-	async function startSession(workspaceId: string): Promise<void> {
-		const sessionId = await sessions.start(workspaceId);
+	async function startSession(workspaceId: string, agent: SessionAgent): Promise<void> {
+		let sessionId: string;
+		try {
+			sessionId = await sessions.start(workspaceId, agent);
+		} catch (cause) {
+			if (agent === 'claude') void checkClaude(true);
+			throw cause;
+		}
 		restoredOpen = false;
 		selectedSessionId = sessionId;
 		openedWorkspaceId = undefined;
@@ -241,6 +274,8 @@
 	revealPath={native?.revealPath}
 	{onOpenTerminal}
 	agentReadiness={agentReadiness?.()}
+	{claudeReadiness}
+	onCheckClaude={() => checkClaude(true)}
 	onOpenWorkspace={openWorkspace}
 	onSelectSession={selectSession}
 	onClearAttention={() => sessions.clearUnseen()}

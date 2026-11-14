@@ -1,3 +1,5 @@
+import type { SessionAgent } from './session';
+
 /** Whether launch is still running, finished, or stopped on a failure. */
 export type LaunchPhase = 'running' | 'ready' | 'failed';
 
@@ -24,5 +26,8 @@ export type LaunchStep = {
 /** The Pi actions, which the operator runs in a terminal. */
 export type AgentSetupAction = Exclude<LaunchAction, 'update_pau'>;
 
-/** Why Pi cannot start a session, and what fixes it. */
-export type AgentReadinessProblem = { reason: string; action?: AgentSetupAction | null };
+/**
+ * Why an agent cannot start a session, and what fixes it. `agent` is Pi when
+ * absent. The setup actions are Pi's; another agent's reason names its fix.
+ */
+export type AgentReadinessProblem = { agent?: SessionAgent; reason: string; action?: AgentSetupAction | null };

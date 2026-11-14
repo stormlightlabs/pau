@@ -376,7 +376,7 @@ test('explains a failed start and retries it', async () => {
 
 	await userEvent.click(page.getByRole('button', { name: 'Close navigation' }));
 	await userEvent.click(page.getByRole('button', { name: 'Try again' }));
-	expect(onStartSession).toHaveBeenNthCalledWith(2, 'pau');
+	expect(onStartSession).toHaveBeenNthCalledWith(2, 'pau', 'pi');
 	await expect.element(page.getByRole('heading', { name: 'No session selected' })).toBeVisible();
 });
 
@@ -411,7 +411,7 @@ test('explains why a running session without queues cannot take a prompt', async
 	await render(SessionView, { workspaces: sessionFixtures.runningWithoutQueue, activeSessionId: 'session-no-queue' });
 
 	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeDisabled();
-	await expect.element(page.getByText(/Claude cannot take new direction during a run/)).toBeVisible();
+	await expect.element(page.getByText(/Claude Code cannot take new direction during a run/)).toBeVisible();
 	await expect.element(page.getByRole('listbox')).not.toBeInTheDocument();
 });
 
@@ -879,7 +879,7 @@ test('runs session shortcuts from the app key map', async () => {
 	press({ key: '3', code: 'Digit3', metaKey: true });
 	expect(onSelectSession).toHaveBeenLastCalledWith('claude-review');
 	press({ key: 'n', code: 'KeyN', metaKey: true });
-	expect(onStartSession).toHaveBeenCalledWith('pau');
+	expect(onStartSession).toHaveBeenCalledWith('pau', 'pi');
 	press({ key: 'l', code: 'KeyL', metaKey: true });
 	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toHaveFocus();
 });

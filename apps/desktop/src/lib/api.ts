@@ -46,6 +46,7 @@ import type {
 	Workspace,
 	WorkspaceSandbox
 } from '@stormlightlabs/pau-protocol';
+import type { SessionAgent } from '@stormlightlabs/pau-ui';
 
 /**
  * Where the client sends API requests and the token it authenticates with.
@@ -442,15 +443,22 @@ export async function listNativeSessions(
 }
 
 /**
- * Starts a Pi session in a registered workspace with the agent's default
- * model. Passing a saved session's ID resumes it instead of starting fresh.
+ * Starts a session of an agent, Pi unless `agent` names another, in a
+ * registered workspace with the agent's default model. Passing a saved
+ * session's ID resumes it instead of starting fresh.
  */
 export async function startSession(
 	workspaceId: string,
 	fetcher: typeof fetch = fetch,
-	nativeSessionId: string | null = null
+	nativeSessionId: string | null = null,
+	agent: SessionAgent = 'pi'
 ): Promise<AgentSession> {
-	const request: StartSessionRequest = { workspace_id: workspaceId, model: null, native_session_id: nativeSessionId };
+	const request: StartSessionRequest = {
+		agent,
+		workspace_id: workspaceId,
+		model: null,
+		native_session_id: nativeSessionId
+	};
 	const response = await fetcher(sessionUrl(''), {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', ...authorization() },

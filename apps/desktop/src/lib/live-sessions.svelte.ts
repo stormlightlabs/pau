@@ -17,6 +17,7 @@ import type {
 	SessionWorkspace,
 	ThinkingLevel
 } from '@stormlightlabs/pau-ui';
+import { agentLabel } from '@stormlightlabs/pau-ui';
 
 import {
 	PauApiError,
@@ -228,7 +229,9 @@ function wireResponse(response: ExtensionUiResponse) {
 
 function failureMessage(session: AgentSession): string | undefined {
 	if (session.status !== 'failed') return undefined;
-	const exit = session.exit_code === null ? 'Pi exited unexpectedly.' : `Pi exited with code ${session.exit_code}.`;
+	const agent = agentLabel(session.agent);
+	const exit =
+		session.exit_code === null ? `${agent} exited unexpectedly.` : `${agent} exited with code ${session.exit_code}.`;
 	return `${exit} Start a new session to continue.`;
 }
 
@@ -597,7 +600,7 @@ export class LiveSessions {
 			workspaceId: session.workspace_id,
 			savedSessionId: session.native_session_id ?? undefined,
 			title: this.#pendingNames[session.id] ?? session.name ?? sessionTitle(transcript),
-			agent: session.agent === 'claude' ? 'Claude Code' : 'Pi',
+			agent: agentLabel(session.agent),
 			status: session.status,
 			error: failureMessage(session),
 			unseen: this.#unseen.has(session.id),

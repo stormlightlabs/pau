@@ -1,5 +1,5 @@
-import type { LastRoute, MotionPreference, UiPreferences } from '@stormlightlabs/pau-protocol';
-import type { ShellPaneWidths } from '@stormlightlabs/pau-ui';
+import type { LastRoute, UiPreferences } from '@stormlightlabs/pau-protocol';
+import { THEMES, UI_FONTS, type ShellPaneWidths } from '@stormlightlabs/pau-ui';
 
 import { getUiPreferences, updateUiPreferences } from './api';
 import { EventStreamClient, type EventSocketFactory } from './event-stream';
@@ -10,6 +10,58 @@ const SAVE_DELAY_MS = 400;
 /** Local copy of the motion setting, read by the inline script in `app.html` before first paint. */
 export const MOTION_CACHE_KEY = 'pau.motion';
 
+/**
+ * Local copies of the theme and UI font. A new window starts with them, so
+ * the launch splash and the first view paint in the saved theme instead of
+ * flashing the default until the preferences load.
+ */
+export const THEME_CACHE_KEY = 'pau.theme';
+export const UI_FONT_CACHE_KEY = 'pau.ui-font';
+
+/**
+ * The preferences Settings changes, under their protocol field names so a
+ * save can lay them over the stored document as they are.
+ */
+export type InterfaceChoices = Pick<UiPreferences, 'theme' | 'ui_font' | 'notifications' | 'motion'>;
+
+const CHOICE_KEYS = ['theme', 'ui_font', 'notifications', 'motion'] as const satisfies (keyof InterfaceChoices)[];
+
+function pickChoices(preferences: InterfaceChoices): InterfaceChoices {
+	const { theme, ui_font, notifications, motion } = preferences;
+	return { theme, ui_font, notifications, motion };
+}
+
+/** Reads a cached value, or `undefined` when storage is unavailable or holds something this build does not know. */
+function cached<T extends string>(key: string, known: Record<T, unknown>): T | undefined {
+	try {
+		const value = localStorage.getItem(key);
+		return value !== null && Object.hasOwn(known, value) ? (value as T) : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function remember(key: string, value: string): void {
+	try {
+		localStorage.setItem(key, value);
+	} catch {
+		// Without storage the next window starts from the defaults until preferences load.
+	}
+}
+
+/**
+ * Keeps the local copies that the next window starts with. They hold only
+ * stored values, so a choice whose save fails never reaches another window.
+ */
+function rememberChoices(choices: InterfaceChoices): void {
+	remember(MOTION_CACHE_KEY, choices.motion);
+	remember(THEME_CACHE_KEY, choices.theme);
+	remember(UI_FONT_CACHE_KEY, choices.ui_font);
+}
+
+/** A choice from Settings waiting for its run of writes to finish. */
+type PendingChoice = { keys: (keyof InterfaceChoices)[]; resolve: () => void; reject: (reason: Error) => void };
+
 export type InterfacePreferencesOptions = {
 	root?: HTMLElement;
 	browserOrigin?: string;
@@ -19,7 +71,7 @@ export type InterfacePreferencesOptions = {
 };
 
 /**
- * Keeps the pane widths and the motion setting in step with the saved
+ * Keeps the pane widths and the Settings choices in step with the saved
  * interface preferences.
  *
  * The shell reports each resize through {@link InterfacePreferences.resize}. The
@@ -29,9 +81,10 @@ export type InterfacePreferencesOptions = {
  *
  * The motion setting sets `data-motion` on the root element, which the UI
  * tokens and transitions read. `system` removes the attribute so the OS
- * reduced-motion query decides. Every save writes the whole document built
- * from the latest loaded copy, so a motion change keeps the saved widths and
- * a resize keeps the motion setting.
+ * reduced-motion query decides. Views read the theme and UI font from
+ * {@link InterfacePreferences.choices} and hand them to their shell. Every
+ * save writes the whole document built from the latest loaded copy, so a
+ * Settings change keeps the saved widths and a resize keeps the choices.
  *
  * The view the operator has open is saved too, through
  * {@link InterfacePreferences.rememberRoute}, so the next launch can return
@@ -42,12 +95,24 @@ export class InterfacePreferences {
 	/** The view this window last opened. Unset until it opens one, so a save keeps the stored view. */
 	#route: LastRoute | undefined;
 	#timer: ReturnType<typeof setTimeout> | undefined;
-	#saving: Promise<void> | undefined;
+	/** The last write queued. Each write starts once this one settles, so writes reach the server in order. */
+	#saving: Promise<unknown> = Promise.resolve();
+	/** Writes queued or in flight. While any remain, a loaded copy does not replace local changes. */
+	#pending = 0;
+	/** The choices shown before the first write of the current run of queued writes. */
+	#runStart: InterfaceChoices | undefined;
+	/** Choices made during the current run, settled together once its last write finishes. */
+	#waiting: PendingChoice[] = [];
 	#stream: EventStreamClient | undefined;
 	readonly #options: InterfacePreferencesOptions;
 
-	/** The motion setting. Change it through {@link InterfacePreferences.setMotion}. */
-	motion = $state<MotionPreference>('system');
+	/** The Settings choices. Change one through {@link InterfacePreferences.choose}. */
+	choices = $state<InterfaceChoices>({
+		theme: cached(THEME_CACHE_KEY, THEMES) ?? 'eldritch',
+		ui_font: cached(UI_FONT_CACHE_KEY, UI_FONTS) ?? 'overpass',
+		notifications: 'attention',
+		motion: 'system'
+	});
 
 	/** Widths to hand to the shell. `null` keeps a pane at its default width. */
 	widths = $state<ShellPaneWidths>({ contextRail: null, inspector: null });
@@ -56,45 +121,89 @@ export class InterfacePreferences {
 		this.#options = options;
 	}
 
-	async #flush(): Promise<void> {
+	/**
+	 * Queues a write of the current preferences behind every write already
+	 * queued. Writes queued back to back form a run, and only the run's last
+	 * write decides the outcome.
+	 *
+	 * Each write reads the preferences when it starts, so a later write
+	 * carries every change made before it, and an earlier failure is
+	 * overwritten by it. When the last write fails, each choice it sent comes
+	 * back to the saved copy, or to the value shown before the run's first
+	 * write when no saved copy has loaded. Every choice made during the run
+	 * then rejects if that restore changed its setting, and resolves
+	 * otherwise. Widths and the open view stay applied after a failure, and
+	 * the next resize or view change saves them again.
+	 *
+	 * @param before The choices shown before this write's change.
+	 */
+	async #flush(before: InterfaceChoices = pickChoices(this.choices)): Promise<void> {
 		clearTimeout(this.#timer);
 		this.#timer = undefined;
-		await this.#saving;
-		this.#saving = this.#write();
-		await this.#saving;
-		this.#saving = undefined;
+		if (this.#pending === 0) this.#runStart = before;
+		this.#pending += 1;
+		const previous = this.#saving;
+		const write = (async () => {
+			await previous;
+			return this.#write();
+		})();
+		this.#saving = write;
+		const { sent, failure } = await write;
+		this.#pending -= 1;
+		if (this.#pending > 0) return;
+		const waiting = this.#waiting;
+		const start = this.#runStart ?? before;
+		this.#waiting = [];
+		this.#runStart = undefined;
+		if (!failure) {
+			for (const choice of waiting) choice.resolve();
+			return;
+		}
+		const restored = { ...this.choices };
+		for (const key of CHOICE_KEYS) {
+			if (this.choices[key] === sent[key]) Object.assign(restored, { [key]: this.#saved?.[key] ?? start[key] });
+		}
+		const shown = this.choices;
+		this.#applyChoices(restored);
+		for (const choice of waiting) {
+			if (choice.keys.some((key) => restored[key] !== shown[key])) choice.reject(failure);
+			else choice.resolve();
+		}
 	}
 
-	/** Saves the current widths. A failure leaves them applied; the next resize saves again. */
-	async #write(): Promise<void> {
+	/**
+	 * Saves the whole document and resolves with the choices it sent and any
+	 * failure instead of rejecting, so a write that waits on this one is not
+	 * failed by it.
+	 */
+	async #write(): Promise<{ sent: InterfaceChoices; failure?: Error }> {
+		const sent = { ...this.choices };
 		try {
 			const base = this.#saved ?? (await getUiPreferences(this.#options.fetcher));
 			const { contextRail, inspector } = this.widths;
-			this.#saved = await updateUiPreferences(
+			const saved = await updateUiPreferences(
 				{
 					...base,
-					motion: this.motion,
+					...sent,
 					pane_widths: { context_rail: contextRail, inspector },
 					last_route: this.#route ?? base.last_route
 				},
 				this.#options.fetcher
 			);
-		} catch {
-			// Nothing to roll back: the widths stay applied in this window.
+			this.#saved = saved;
+			rememberChoices(saved);
+			return { sent };
+		} catch (error) {
+			return { sent, failure: error instanceof Error ? error : new Error(String(error)) };
 		}
 	}
 
-	/** Sets the root attribute and the local copy that the next launch reads before first paint. */
-	#applyMotion(motion: MotionPreference): void {
-		this.motion = motion;
+	/** Shows the choices and sets the motion attribute. */
+	#applyChoices(choices: InterfaceChoices): void {
+		this.choices = choices;
 		const root = this.#options.root ?? document.documentElement;
-		if (motion === 'system') delete root.dataset.motion;
-		else root.dataset.motion = motion;
-		try {
-			localStorage.setItem(MOTION_CACHE_KEY, motion);
-		} catch {
-			// Without storage the first paint follows the OS until preferences load.
-		}
+		if (choices.motion === 'system') delete root.dataset.motion;
+		else root.dataset.motion = choices.motion;
 	}
 
 	/** Loads the saved widths and follows changes made elsewhere. */
@@ -129,15 +238,27 @@ export class InterfacePreferences {
 			return;
 		}
 		this.#saved = preferences;
-		if (this.#saving === undefined) this.#applyMotion(preferences.motion);
-		if (this.#timer !== undefined || this.#saving !== undefined) return;
+		rememberChoices(preferences);
+		if (this.#pending === 0) this.#applyChoices(pickChoices(preferences));
+		if (this.#timer !== undefined || this.#pending > 0) return;
 		this.widths = { contextRail: preferences.pane_widths.context_rail, inspector: preferences.pane_widths.inspector };
 	}
 
-	/** Applies a motion setting the operator chose and saves it at once. */
-	setMotion(motion: MotionPreference): void {
-		this.#applyMotion(motion);
-		void this.#flush();
+	/**
+	 * Applies a choice the operator made in Settings and saves it at once.
+	 * The promise settles when the last queued write finishes. When that
+	 * write fails and restores this setting, it rejects with the reason, so
+	 * Settings can show it, as {@link #flush} explains.
+	 */
+	choose(change: Partial<InterfaceChoices>): Promise<void> {
+		const before = pickChoices(this.choices);
+		this.#applyChoices({ ...this.choices, ...change });
+		const keys = Object.keys(change) as (keyof InterfaceChoices)[];
+		const settled = new Promise<void>((resolve, reject) => {
+			this.#waiting.push({ keys, resolve, reject });
+		});
+		void this.#flush(before);
+		return settled;
 	}
 
 	/** Saves the view the operator opened, unless it is already the saved one. */

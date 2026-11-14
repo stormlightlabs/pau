@@ -8,7 +8,10 @@ vi.mock('$app/state', () => ({
 	page: { params: { workspaceId: 'pau' }, route: { id: '/workspaces/[workspaceId]/processes' } }
 }));
 
-vi.mock('$lib/api', () => ({ listWorkspaces: async () => [{ id: 'pau', name: 'Pau', path: '/src/pau' }] }));
+vi.mock('$lib/api', async (importOriginal) => ({
+	...(await importOriginal<object>()),
+	listWorkspaces: async () => [{ id: 'pau', name: 'Pau', path: '/src/pau' }]
+}));
 
 test('shows processes inside the application shell without sample data', async () => {
 	await page.viewport(800, 560);

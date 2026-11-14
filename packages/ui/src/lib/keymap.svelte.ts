@@ -96,6 +96,7 @@ export const APP_KEY_ACTIONS: readonly KeyAction[] = [
 		palette: false
 	},
 	{ id: 'app.shortcuts', label: 'Show keyboard shortcuts', group: 'General', keys: ['mod+/'], whileTyping: true },
+	{ id: 'app.settings', label: 'Open settings', group: 'General', keys: ['mod+,'], whileTyping: true },
 	{
 		id: 'workspace.open',
 		label: 'Open workspace',
@@ -205,6 +206,21 @@ export const APP_KEY_ACTIONS: readonly KeyAction[] = [
 		unavailable: DESKTOP_ONLY
 	}
 ];
+
+/**
+ * Where an action's shortcut works, as the Keyboard settings list it: the
+ * views that can run it, and whether it gives way while a text field has
+ * focus.
+ */
+export function keyActionScope(action: Pick<KeyAction, 'unavailable' | 'whileTyping'>): string {
+	const views =
+		action.unavailable === SESSIONS_ONLY
+			? 'Sessions'
+			: action.unavailable === DESKTOP_ONLY
+				? 'Desktop app'
+				: 'All views';
+	return action.whileTyping ? views : `${views}, not while typing`;
+}
 
 type Modifier = 'ctrl' | 'alt' | 'shift' | 'meta';
 

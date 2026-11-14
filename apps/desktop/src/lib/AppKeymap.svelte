@@ -18,6 +18,7 @@
 	import { onMount, setContext, type Snippet } from 'svelte';
 
 	import { getPiKeybindings } from './api';
+	import { interfacePreferences } from './interface-preferences.svelte';
 	import type { DesktopNativeCapabilities } from './native-capabilities';
 	import { stepZoom } from './zoom';
 
@@ -26,6 +27,7 @@
 		fetcher,
 		platform,
 		onOpenSessionView = () => {},
+		onOpenSettings = () => {},
 		children
 	}: {
 		native?: DesktopNativeCapabilities;
@@ -34,6 +36,8 @@
 		platform?: KeyPlatform;
 		/** Navigates to the session view so a menu action it owns can run. */
 		onOpenSessionView?: () => void;
+		/** Navigates to Settings, from ⌘, or the app menu. */
+		onOpenSettings?: () => void;
 		children?: Snippet;
 	} = $props();
 
@@ -76,6 +80,7 @@
 
 		const unregister = [
 			keymap.register('app.shortcuts', () => (shortcutsOpen = !shortcutsOpen)),
+			keymap.register('app.settings', () => onOpenSettings()),
 			keymap.register('navigate.back', () => history.back()),
 			keymap.register('navigate.forward', () => history.forward())
 		];
@@ -99,4 +104,9 @@
 
 {@render children?.()}
 
-<KeyboardShortcuts bind:open={shortcutsOpen} actions={keymap.actions} platform={keymap.platform} />
+<KeyboardShortcuts
+	bind:open={shortcutsOpen}
+	actions={keymap.actions}
+	platform={keymap.platform}
+	theme={interfacePreferences.choices.theme}
+	uiFont={interfacePreferences.choices.ui_font} />

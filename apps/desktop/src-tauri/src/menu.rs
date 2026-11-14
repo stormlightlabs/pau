@@ -53,13 +53,22 @@ const KEYBOARD_SHORTCUTS: ActionItem = ActionItem {
     accelerator: None,
 };
 
-const ACTION_ITEMS: [&ActionItem; 6] = [
+/// Lives in the app menu on macOS and in the File menu elsewhere, where
+/// desktop apps keep their settings.
+const SETTINGS: ActionItem = ActionItem {
+    action: "app.settings",
+    label: "Settings…",
+    accelerator: Some("CmdOrCtrl+,"),
+};
+
+const ACTION_ITEMS: [&ActionItem; 7] = [
     &NEW_SESSION,
     &OPEN_WORKSPACE,
     &ZOOM_IN,
     &ZOOM_OUT,
     &ACTUAL_SIZE,
     &KEYBOARD_SHORTCUTS,
+    &SETTINGS,
 ];
 
 /// Returns the frontend action for a menu item ID, or `None` for the
@@ -91,12 +100,15 @@ fn action_item<R: Runtime>(app: &AppHandle<R>, item: &ActionItem) -> tauri::Resu
 
 /// Builds the app menu: the platform's standard menus plus Pau's actions.
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
-    let file = SubmenuBuilder::new(app, "File")
+    let settings = action_item(app, &SETTINGS)?;
+    let mut file = SubmenuBuilder::new(app, "File")
         .item(&action_item(app, &NEW_SESSION)?)
         .item(&action_item(app, &OPEN_WORKSPACE)?)
-        .separator()
-        .close_window()
-        .build()?;
+        .separator();
+    if !cfg!(target_os = "macos") {
+        file = file.item(&settings).separator();
+    }
+    let file = file.close_window().build()?;
     let edit = SubmenuBuilder::new(app, "Edit")
         .undo()
         .redo()
@@ -128,6 +140,8 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         submenus.push(
             SubmenuBuilder::new(app, "Pau")
                 .about(None)
+                .separator()
+                .item(&settings)
                 .separator()
                 .services()
                 .separator()
@@ -165,6 +179,7 @@ mod tests {
         assert_eq!(menu_action("session.new"), Some("session.new"));
         assert_eq!(menu_action("workspace.open"), Some("workspace.open"));
         assert_eq!(menu_action("view.zoomReset"), Some("view.zoomReset"));
+        assert_eq!(menu_action("app.settings"), Some("app.settings"));
         assert_eq!(menu_action("copy"), None);
     }
 

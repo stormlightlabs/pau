@@ -1,4 +1,4 @@
-import type { AgentSession, ServerEvent, SessionStatus } from '@stormlightlabs/pau-protocol';
+import type { AgentSession, NotificationPolicy, ServerEvent, SessionStatus } from '@stormlightlabs/pau-protocol';
 import { describe, expect, test, vi } from 'vitest';
 
 import { FakeEventSocket } from './fake-event-socket';
@@ -6,9 +6,14 @@ import { SessionAttention, inView, statusAttention, type AttentionNotifier } fro
 
 const counter = { sequence: 0 };
 
-function changed(status: SessionStatus, name: string | null = 'Fix the login bug', id = 'session-1'): ServerEvent {
+function changed(
+	status: SessionStatus,
+	name: string | null = 'Fix the login bug',
+	id = 'session-1',
+	agent = 'pi'
+): ServerEvent {
 	counter.sequence += 1;
-	const session = { id, workspace_id: 'pau', status, name } as unknown as AgentSession;
+	const session = { id, agent, workspace_id: 'pau', status, name } as unknown as AgentSession;
 	return {
 		sequence: counter.sequence,
 		timestamp: '2026-10-21T12:00:00Z',
@@ -31,6 +36,11 @@ function question(requestId: string, id = 'session-1'): ServerEvent {
 	};
 }
 
+/** The server's notice that the operator interrupted the run. */
+function interrupted(id = 'session-1'): ServerEvent {
+	return { ...question('stop', id), payload: JSON.stringify({ type: 'session_interrupted' }) };
+}
+
 function workspace(): ServerEvent {
 	counter.sequence += 1;
 	return {
@@ -44,7 +54,7 @@ function workspace(): ServerEvent {
 }
 
 /** An attention store on a fake socket that already sent its snapshot. */
-function setup(snapshot: ServerEvent[] = [changed('idle')]) {
+function setup(snapshot: ServerEvent[] = [changed('idle')], policy?: () => NotificationPolicy) {
 	const notifier = {
 		notify: vi.fn<AttentionNotifier['notify']>().mockResolvedValue(undefined),
 		setBadgeCount: vi.fn<AttentionNotifier['setBadgeCount']>().mockResolvedValue(undefined)
@@ -53,6 +63,7 @@ function setup(snapshot: ServerEvent[] = [changed('idle')]) {
 	const attention = new SessionAttention({
 		browserOrigin: 'http://localhost:5173',
 		notifier,
+		policy,
 		socketFactory: (url) => {
 			const socket = new FakeEventSocket(url);
 			sockets.push(socket);
@@ -78,7 +89,7 @@ describe('which status changes ask for attention', () => {
 		['starting', 'failed', 'failed'],
 		['stopping', 'failed', undefined],
 		['stopping', 'stopped', undefined],
-		['running', 'idle', undefined],
+		['running', 'idle', 'finished'],
 		['idle', 'running', undefined],
 		['waiting', 'waiting', undefined],
 		['failed', 'failed', undefined],
@@ -86,6 +97,10 @@ describe('which status changes ask for attention', () => {
 		[undefined, 'failed', undefined]
 	])('%s to %s', (previous, next, reason) => {
 		expect(statusAttention(previous, next)).toBe(reason);
+	});
+
+	test('an interrupted run that goes idle has not finished its turn', () => {
+		expect(statusAttention('running', 'idle', true)).toBeUndefined();
 	});
 
 	test('a session is in view only while the window has focus and shows it', () => {
@@ -120,6 +135,58 @@ test('notifies when a session out of view waits, asks, or fails, and badges the 
 	send(changed('failed'));
 	expect(notifier.notify).toHaveBeenLastCalledWith({ title: 'Fix the login bug', body: 'Pi exited unexpectedly.' });
 	expect(notifier.setBadgeCount).toHaveBeenCalledTimes(2);
+});
+
+describe('notification policy', () => {
+	test('notifies a finished turn only when the policy is all', () => {
+		let policy: NotificationPolicy = 'attention';
+		const { notifier, send } = setup([changed('idle')], () => policy);
+
+		send(changed('running'), changed('idle'));
+		expect(notifier.notify).not.toHaveBeenCalled();
+
+		policy = 'all';
+		send(changed('running'), changed('idle'));
+		expect(notifier.notify).toHaveBeenCalledWith({ title: 'Fix the login bug', body: 'Pi finished its turn.' });
+		expect(notifier.setBadgeCount).toHaveBeenCalledWith(1);
+	});
+
+	test('does not report an interrupted run as a finished turn', () => {
+		const { notifier, send } = setup([changed('idle')], () => 'all');
+		send(changed('running'), interrupted(), changed('idle'));
+		expect(notifier.notify).not.toHaveBeenCalled();
+
+		send(changed('running'), changed('idle'));
+		expect(notifier.notify).toHaveBeenCalledWith({ title: 'Fix the login bug', body: 'Pi finished its turn.' });
+	});
+
+	test('notifies nothing and leaves the badge alone when the policy is off', () => {
+		const { notifier, send } = setup([changed('running')], () => 'off');
+
+		send(changed('waiting'), question('ask-1'), changed('failed'));
+
+		expect(notifier.notify).not.toHaveBeenCalled();
+		expect(notifier.setBadgeCount).not.toHaveBeenCalled();
+	});
+});
+
+/** A Claude Code session's status change. */
+function claude(status: SessionStatus, name: string | null = null): ServerEvent {
+	return changed(status, name, 'session-1', 'claude');
+}
+
+describe('a Claude Code session', () => {
+	test('names Claude Code when it waits or finishes', () => {
+		const { notifier, send } = setup([workspace(), claude('idle')], () => 'all');
+
+		send(claude('waiting'));
+		send(claude('running', 'Fix the login bug'), claude('idle', 'Fix the login bug'));
+
+		expect(notifier.notify.mock.calls).toEqual([
+			[{ title: 'Claude Code session in pau', body: 'Claude Code is waiting for your input.' }],
+			[{ title: 'Fix the login bug', body: 'Claude Code finished its turn.' }]
+		]);
+	});
 });
 
 test('notifies a session shown in an unfocused window', () => {

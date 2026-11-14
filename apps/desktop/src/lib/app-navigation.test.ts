@@ -19,7 +19,7 @@ test('links working views for the current workspace and leaves the rest coming s
 		processes: { href: undefined, unavailable: undefined, active: false },
 		sandbox: { href: '/workspaces/a%20b/sandbox', unavailable: undefined, active: false },
 		resources: { href: undefined, unavailable: undefined, active: false },
-		settings: { href: undefined, unavailable: undefined, active: false },
+		settings: { href: '/settings', unavailable: undefined, active: false },
 		diagnostics: { href: '/diagnostics', unavailable: undefined, active: false }
 	});
 });
@@ -32,10 +32,12 @@ test('disables workspace views until a workspace is open', () => {
 		expect(items[id]).toEqual({ href: undefined, unavailable: NO_WORKSPACE_REASON, active: false });
 	}
 	expect(items.diagnostics?.href).toBe('/diagnostics');
+	expect(items.settings?.href).toBe('/settings');
 });
 
 test('marks Sessions active on a session route and nothing on an unknown route', () => {
 	expect(destinations('/workspaces/[workspaceId]/sessions/[sessionId]', 'pau').sessions?.active).toBe(true);
+	expect(destinations('/settings').settings?.active).toBe(true);
 	expect(Object.values(destinations(null, 'pau')).some((item) => item.active)).toBe(false);
 });
 

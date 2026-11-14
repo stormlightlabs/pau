@@ -4,6 +4,7 @@ import { render } from 'vitest-browser-svelte';
 
 import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
 import { sessionFixtures } from '../fixtures/sessions';
+import ApplicationShell from '../lib/ApplicationShell.svelte';
 import SessionView from '../lib/SessionView.svelte';
 import ApplicationShellDemo from '../stories/ApplicationShellDemo.svelte';
 import KeyboardShortcutsDemo from '../stories/KeyboardShortcutsDemo.svelte';
@@ -51,6 +52,26 @@ test('sizes context rail rows like the other rail rows', async () => {
 	const rows = [...document.querySelectorAll<HTMLElement>('.app-shell__context-rail a')];
 	expect(rows.length).toBeGreaterThan(0);
 	for (const row of rows) expect(row.getBoundingClientRect().height).toBe(32);
+});
+
+test('starts every label in a rail on one edge when only some items have a status', async () => {
+	await page.viewport(1440, 900);
+	await render(ApplicationShell, {
+		workspaceName: 'pau',
+		contextLabel: 'Sessions',
+		productItems: [],
+		contextItems: [
+			{ id: 'running', label: 'Running', href: '#running', status: 'Live' },
+			{ id: 'plain', label: 'Plain', href: '#plain' },
+			{ id: 'waiting', label: 'Waiting', href: '#waiting', attention: true }
+		]
+	});
+
+	const rail = page.getByRole('complementary', { name: 'Sessions' });
+	const edges = ['Running', 'Plain', 'Waiting'].map(
+		(name) => rail.getByText(name, { exact: true }).element().getBoundingClientRect().left
+	);
+	expect(new Set(edges).size).toBe(1);
 });
 
 test.each([

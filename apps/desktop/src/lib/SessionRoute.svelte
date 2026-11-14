@@ -261,6 +261,8 @@
 </script>
 
 <SessionView
+	theme={interfacePreferences.choices.theme}
+	uiFont={interfacePreferences.choices.ui_font}
 	{workspaces}
 	{activeSessionId}
 	loading={sessions.loading || restoring}

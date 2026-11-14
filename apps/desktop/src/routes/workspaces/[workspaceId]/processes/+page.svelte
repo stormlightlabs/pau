@@ -5,6 +5,7 @@
 
 	import { listWorkspaces } from '$lib/api';
 	import { productNavigation } from '$lib/app-navigation';
+	import { interfacePreferences } from '$lib/interface-preferences.svelte';
 
 	let workspaceId = $derived(page.params.workspaceId ?? '');
 	let workspaceName = $state<string>();
@@ -23,6 +24,8 @@
 
 <!-- The server does not report process resource use yet, so the view says so instead of listing sample data. -->
 <ApplicationShell
+	theme={interfacePreferences.choices.theme}
+	uiFont={interfacePreferences.choices.ui_font}
 	workspaceName={workspaceName ?? workspaceId}
 	contextLabel="Processes"
 	productItems={productNavigation(page.route.id, workspaceId)}

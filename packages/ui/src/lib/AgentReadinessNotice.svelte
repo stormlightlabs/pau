@@ -11,6 +11,7 @@ once the operator has applied it.
 	import { codeSpans } from './code-spans';
 	import CopyButton from './CopyButton.svelte';
 	import type { AgentReadinessProblem, AgentSetupAction } from './types/launch';
+	import { agentLabel } from './types/session';
 
 	type Props = {
 		problem: AgentReadinessProblem;
@@ -53,7 +54,7 @@ once the operator has applied it.
 	};
 
 	const step = $derived(problem.action ? setup[problem.action] : undefined);
-	const agentName = $derived(problem.agent === 'claude' ? 'Claude Code' : 'Pi');
+	const agentName = $derived(agentLabel(problem.agent ?? 'pi'));
 	const titleId = $props.id();
 </script>
 

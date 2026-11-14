@@ -234,3 +234,23 @@ test('reads the workspace branch on load and again after a run settles', async (
 	change('idle', 4);
 	await vi.waitFor(() => expect(sessions.workspaces[0]?.branch).toBeUndefined());
 });
+
+test('names the agent of a failed session', async () => {
+	const { sessions, socket } = await setup();
+
+	socket.receive({
+		type: 'event',
+		event: {
+			sequence: 1,
+			timestamp: '2026-04-01T12:00:02Z',
+			workspace_id: 'pau',
+			session_id: 'session-1',
+			kind: 'session_changed',
+			payload: JSON.stringify({ ...session, agent: 'claude', status: 'failed', exit_code: 2 })
+		}
+	});
+
+	expect(sessions.workspaces[0]?.sessions[0]?.error).toBe(
+		'Claude Code exited with code 2. Start a new session to continue.'
+	);
+});

@@ -50,9 +50,15 @@ export { default as McpConfigurationView } from './lib/McpConfigurationView.svel
 export { default as ModelPicker } from './lib/ModelPicker.svelte';
 export { default as ContextMeter } from './lib/ContextMeter.svelte';
 export { default as ThinkingLevelPicker } from './lib/ThinkingLevelPicker.svelte';
-export { default as MotionSettingControl } from './lib/MotionSettingControl.svelte';
 export { default as ProcessesView } from './lib/ProcessesView.svelte';
 export { default as SandboxSettingsView } from './lib/SandboxSettingsView.svelte';
+export {
+	default as SettingsView,
+	SETTINGS_SECTIONS,
+	type NotificationSetting,
+	type SettingsChoices,
+	type SettingsSectionId
+} from './lib/SettingsView.svelte';
 export { default as Select, type SelectOption } from './lib/Select.svelte';
 export { default as SessionResourceSummary } from './lib/SessionResourceSummary.svelte';
 export { default as TranscriptSearch } from './lib/TranscriptSearch.svelte';
@@ -155,6 +161,7 @@ export type {
 	EditToolCall,
 	WriteToolCall
 } from './lib/types/session';
+export { agentLabel } from './lib/types/session';
 export { ICONS, type IconKind } from './icons';
 export {
 	THEMES,

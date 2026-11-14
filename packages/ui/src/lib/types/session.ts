@@ -1,6 +1,14 @@
 /** An agent Pau can start a session of, by the backend's identifier. */
 export type SessionAgent = 'pi' | 'claude';
 
+/**
+ * Names an agent the way Pau shows it, from the backend's identifier. The
+ * identifier arrives as a string, so any value other than `claude` reads as Pi.
+ */
+export function agentLabel(agent: string): string {
+	return agent === 'claude' ? 'Claude Code' : 'Pi';
+}
+
 /** Lifecycle states shown by the session surface. */
 export type SessionStatus = 'starting' | 'idle' | 'running' | 'waiting' | 'stopping' | 'stopped' | 'failed';
 

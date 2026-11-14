@@ -459,6 +459,8 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
         .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(cleared, queued);
+    // The interrupt is announced before the idle status it causes.
+    next_event(&mut stream, output("session_interrupted")).await;
     next_event(&mut stream, session_changed("idle")).await;
     assert_eq!(fixture.call("GET", &base, None).await.1["status"], "idle");
     next_event(&mut stream, output("session_usage")).await;

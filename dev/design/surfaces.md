@@ -298,6 +298,32 @@ Settings group durable choices by user intent. Scope and consequence appear next
 to each setting. Theme, font, agent discovery, preferred editor, and terminal
 editor launch behavior remain distinct choices.
 
+Settings opens from the app menu, the product rail, and ⌘, (Ctrl+, on Linux).
+The context rail lists the sections: Appearance, Notifications, Keyboard,
+Editor, and Shell. Choosing one moves focus to it. A section with nothing to
+set yet says so. Each setting saves when it changes. A failed save keeps the
+previous choice and shows the reason under the setting. Settings that belong
+to one view, such as the agent sandbox, MCP servers, and diagnostics, stay in
+that view.
+
+Appearance shows each theme as a card painted in that theme's own colors: a
+line of code in its syntax colors and a strip of its terminal palette. The
+selected card takes the active accent. Each font choice is set in its own
+typeface. Motion sits with them.
+
+Theme cards span the section. Other setting rows stop at 40rem, so on a wide
+window each control stays near its name.
+
+Notifications offers three policies. The default notifies when a session out
+of view waits for input, asks a question, or fails. The second also notifies
+when a turn finishes. Off sends no notifications and leaves the app icon badge
+alone. The session rail still marks sessions that need attention.
+
+Keyboard lists Pau's shortcuts in the shortcut dialog's groups. Each one names
+its scope, such as All views, Sessions, or Desktop app, and whether it gives
+way while a text field has focus. The list is read-only. A Pi binding that
+takes a chord is noted as it is in the dialog.
+
 Pau themes apply only to Pau surfaces. External and terminal editors retain
 their own configuration and colors. At narrow widths, section navigation
 collapses before controls lose their labels or descriptions.

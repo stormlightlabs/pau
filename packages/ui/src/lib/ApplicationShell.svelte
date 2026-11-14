@@ -118,6 +118,8 @@
 	/** Whether the operator hid the contextual rail on wide windows. */
 	let contextHidden = $state(false);
 	let hasContext = $derived(Boolean(context) || contextItems.length > 0);
+	/** Whether any rail item has a state to mark. Then every item keeps the dot column, so all labels share one edge. */
+	let contextMarked = $derived(contextItems.some((item) => item.status !== undefined || item.attention));
 
 	/** Narrow windows show the contextual rail as an overlay instead of a column. */
 	const narrow = new MediaQuery('max-width: 48rem');
@@ -333,8 +335,10 @@
 				paletteEntrance = event.detail > 0 ? 'pointer' : 'keyboard';
 				paletteOpen = true;
 			}}>
-			<span class="app-shell__search-icon" aria-hidden="true"></span>
-			<span class="app-shell__command-placeholder">Search or run a command</span>
+			<span class="app-shell__command-label">
+				<span class="app-shell__search-icon" aria-hidden="true"></span>
+				<span class="app-shell__command-placeholder">Search or run a command</span>
+			</span>
 			{#if paletteShortcut}<kbd>{paletteShortcut}</kbd>{/if}
 		</button>
 	</header>
@@ -401,7 +405,7 @@
 			{#if context}
 				<div class="app-shell__context-content">{@render context()}</div>
 			{:else}
-				<ul>
+				<ul class:app-shell__context-list--marked={contextMarked}>
 					{#each contextItems as item (item.id)}
 						<li>
 							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the app owner resolves rail destinations -->
@@ -409,8 +413,14 @@
 								href={item.href}
 								class="pau-row"
 								class:active={item.active}
-								aria-current={item.active ? 'page' : undefined}>
-								<span class:attention={item.attention} class="app-shell__item-dot"></span>
+								aria-current={item.active ? 'page' : undefined}
+								onclick={() => contextOpen && closeContext()}>
+								<!-- The dot marks an item's state. An item without one, such as a Settings section, gets an empty cell in a rail that shows dots, and no cell otherwise. -->
+								{#if contextMarked}
+									<span
+										class:app-shell__item-dot={item.status !== undefined || item.attention}
+										class:attention={item.attention}></span>
+								{/if}
 								<span>{item.label}</span>
 								{#if item.status}<small>{item.status}</small>{/if}
 							</a>
@@ -625,9 +635,15 @@
 		background: var(--shell-accent);
 	}
 
+	/*
+	 * The icon and placeholder sit as one group in the middle of the field, and
+	 * the shortcut keeps the trailing edge. The equal outer tracks hold the group
+	 * centered whether or not the shortcut shows.
+	 */
 	.app-shell__command-input {
-		display: flex;
+		display: grid;
 		flex: 0 1 auto;
+		grid-template-columns: 1fr minmax(0, auto) 1fr;
 		align-items: center;
 		width: min(23rem, 45vw);
 		min-width: var(--pau-size-row-md);
@@ -641,7 +657,15 @@
 		cursor: pointer;
 	}
 
+	.app-shell__command-label {
+		display: flex;
+		grid-column: 2;
+		align-items: center;
+		min-width: 0;
+	}
+
 	.app-shell__search-icon {
+		flex: none;
 		width: 0.75rem;
 		height: 0.75rem;
 		margin-right: var(--pau-space-2);
@@ -660,15 +684,15 @@
 
 	.app-shell__command-placeholder {
 		min-width: 0;
-		flex: 1;
 		overflow: hidden;
 		color: var(--shell-muted);
-		text-align: start;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
 	.app-shell__command-input kbd {
+		grid-column: 3;
+		justify-self: end;
 		color: var(--shell-faint);
 		font: inherit;
 	}
@@ -759,12 +783,16 @@
 
 	.app-shell__context-rail a {
 		display: grid;
-		grid-template-columns: 0.5rem minmax(0, 1fr) auto;
+		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
 		gap: var(--pau-space-2);
 		min-height: var(--pau-size-row-md);
 		padding-inline: var(--pau-space-3);
 		text-decoration: none;
+	}
+
+	.app-shell__context-list--marked a {
+		grid-template-columns: 0.5rem minmax(0, 1fr) auto;
 	}
 
 	.app-shell__context-rail a.active {

@@ -278,6 +278,12 @@ async fn interrupts_a_running_turn_and_resumes_the_conversation_later() {
         .call("POST", &format!("{base}/interrupt"), None)
         .await;
     assert_eq!(status, StatusCode::OK, "{cleared}");
+    // The interrupt is announced before the turn ends, so clients do not
+    // report the idle session as a finished turn.
+    next_event(&mut stream, |event, payload| {
+        event.kind == ServerEventKind::SessionOutput && payload["type"] == "session_interrupted"
+    })
+    .await;
     let ended = next_event(&mut stream, |event, payload| {
         event.kind == ServerEventKind::SessionOutput && payload["event"] == "turn.completed"
     })

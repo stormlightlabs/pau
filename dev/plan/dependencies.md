@@ -43,9 +43,10 @@ which would also open `tel:` links outside that handler.
 
 Use `tauri-plugin-notification` 2.4.0 and the matching
 `@tauri-apps/plugin-notification` package to tell the operator when a session
-out of view waits, asks a question, or fails. The plugin is MIT or Apache-2.0
-licensed and maintained in the Tauri plugins workspace. Releases from 2.5
-require Tauri 2.12. The Dock badge uses the window `setBadgeCount` API in Tauri
+out of view waits, asks a question, or fails, and when it finishes a turn if
+the operator chose that in Settings. The plugin is MIT or Apache-2.0 licensed
+and maintained in the Tauri plugins workspace. Releases from 2.5 require Tauri
+2.12. The Dock badge uses the window `setBadgeCount` API in Tauri
 itself and adds no dependency.
 
 The main window may check and request notification permission and send a

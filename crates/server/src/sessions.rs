@@ -42,6 +42,15 @@
 //! can close it without refetching. Notifications are transient by nature and
 //! stay output-only.
 //!
+//! # Interrupts
+//!
+//! `POST /api/sessions/{id}/interrupt` publishes a synthetic
+//! `session_interrupted` `session_output` event before it asks Pi to abort a
+//! running session. The abort ends with the same `running` to `idle`
+//! `session_changed` as a finished turn, and the event comes first so clients
+//! can tell the two apart, for example to skip a "turn finished"
+//! notification.
+//!
 //! # Shell commands
 //!
 //! `POST /api/sessions/{id}/shell` runs a command through Pi's `bash` RPC
@@ -321,6 +330,22 @@ impl SessionApi {
                     .to_string(),
             );
         });
+    }
+
+    /// Tells clients that the operator interrupted a running turn, so the
+    /// idle status that follows is not read as a finished turn.
+    ///
+    /// Callers publish it before they interrupt the agent, so it precedes
+    /// every `session_changed` the interrupt causes, including one forwarded
+    /// from the agent's own events.
+    fn announce_interrupt(&self, session_id: &str, workspace_id: &str) {
+        self.events.publish(
+            diagnostic_timestamp(),
+            Some(workspace_id.to_owned()),
+            Some(session_id.to_owned()),
+            ServerEventKind::SessionOutput,
+            serde_json::json!({"type": "session_interrupted"}).to_string(),
+        );
     }
 
     /// Drops every unanswered dialog of a session and announces each one.
@@ -1181,12 +1206,20 @@ pub(crate) async fn interrupt_session(
 ) -> Result<Json<SessionMessageQueue>, ApiError> {
     let api = session_api(&state)?;
     if let Some(session) = api.claude_session(&session_id) {
+        if session.status().await == AgentSessionStatus::Running
+            && let Some(record) = api.record(&session_id)
+        {
+            api.announce_interrupt(&session_id, &record.workspace_id);
+        }
         // The bridge has no message queues, so an interrupt clears nothing.
         session.interrupt().await.map_err(claude::session_error)?;
         api.publish_current(&session_id).await;
         return Ok(Json(SessionMessageQueue::default()));
     }
     let (record, session) = api.live(&session_id).await?;
+    if session.status().await == AgentSessionStatus::Running {
+        api.announce_interrupt(&session_id, &record.workspace_id);
+    }
     let cleared = session.interrupt().await?;
     api.clear_dialogs(&session_id, &record.workspace_id, "interrupted");
     api.publish_current(&session_id).await;

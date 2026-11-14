@@ -1,10 +1,20 @@
-import type { AgentSession, ServerEvent, SessionStatus, Workspace } from '@stormlightlabs/pau-protocol';
+import type {
+	AgentSession,
+	NotificationPolicy,
+	ServerEvent,
+	SessionStatus,
+	Workspace
+} from '@stormlightlabs/pau-protocol';
+import { agentLabel } from '@stormlightlabs/pau-ui';
 
 import { EventStreamClient, type EventSocketFactory, type EventStreamState } from './event-stream';
 import { isExtensionEvent, opensDialog } from './extension-ui';
 
-/** Why a session asks for the operator. */
-export type AttentionReason = 'waiting' | 'question' | 'failed';
+/**
+ * Why a session notifies the operator. `finished` is a turn that ended
+ * without asking for anything, which notifies only under the `all` policy.
+ */
+export type AttentionReason = 'waiting' | 'question' | 'failed' | 'finished';
 
 /** Text for one native notification. */
 export type AttentionNotification = { title: string; body: string };
@@ -26,12 +36,18 @@ export type AttentionView = { windowFocused: boolean; viewedSessionId: string | 
  * The first status seen for a session is never a change: it comes from a
  * snapshot or a session that just started. A repeated status is the same
  * transition delivered again. A session that fails while stopping was
- * stopped by the operator, who needs no notice of it.
+ * stopped by the operator, who needs no notice of it. A running session that
+ * goes idle has finished its turn, unless the operator interrupted it.
  */
-export function statusAttention(previous: SessionStatus | undefined, next: SessionStatus): AttentionReason | undefined {
+export function statusAttention(
+	previous: SessionStatus | undefined,
+	next: SessionStatus,
+	interrupted = false
+): AttentionReason | undefined {
 	if (previous === undefined || previous === next) return undefined;
 	if (next === 'waiting') return 'waiting';
 	if (next === 'failed' && previous !== 'stopping') return 'failed';
+	if (next === 'idle' && previous === 'running' && !interrupted) return 'finished';
 	return undefined;
 }
 
@@ -40,15 +56,30 @@ export function inView(sessionId: string, view: AttentionView): boolean {
 	return view.windowFocused && view.viewedSessionId === sessionId;
 }
 
-const BODIES: Record<AttentionReason, string> = {
-	waiting: 'Pi is waiting for your input.',
-	question: 'Pi needs your answer to continue.',
-	failed: 'Pi exited unexpectedly.'
+const BODIES: Record<AttentionReason, (agent: string) => string> = {
+	waiting: (agent) => `${agent} is waiting for your input.`,
+	question: (agent) => `${agent} needs your answer to continue.`,
+	failed: (agent) => `${agent} exited unexpectedly.`,
+	finished: (agent) => `${agent} finished its turn.`
 };
 
-/** Builds the notification for a session, titled with its name. */
-export function attentionNotification(title: string, reason: AttentionReason): AttentionNotification {
-	return { title, body: BODIES[reason] };
+/** Whether the notification policy lets `reason` notify. */
+export function policyAllows(policy: NotificationPolicy, reason: AttentionReason): boolean {
+	if (policy === 'off') return false;
+	return reason !== 'finished' || policy === 'all';
+}
+
+/**
+ * Builds the notification for a session, titled with its name. `agent` is the
+ * agent's label, such as `Claude Code`, which the body names.
+ */
+export function attentionNotification(title: string, agent: string, reason: AttentionReason): AttentionNotification {
+	return { title, body: BODIES[reason](agent) };
+}
+
+/** Whether a `session_output` payload is the server's notice that the operator interrupted the run. */
+function isInterrupt(payload: unknown): boolean {
+	return typeof payload === 'object' && payload !== null && 'type' in payload && payload.type === 'session_interrupted';
 }
 
 function workspaceName(workspace: Workspace): string {
@@ -62,12 +93,16 @@ export const sessionAttentionContext = Symbol('pau.desktop.session-attention');
 export type SessionAttentionOptions = {
 	browserOrigin: string;
 	notifier: AttentionNotifier;
+	/** Reads the operator's notification policy each time a session would notify. Defaults to `attention`. */
+	policy?: () => NotificationPolicy;
 	socketFactory?: EventSocketFactory;
 };
 
 /**
  * Sends a native notification and badges the app icon when a session out of
- * the operator's view starts waiting, asks a question, or fails.
+ * the operator's view starts waiting, asks a question, or fails. Under the
+ * `all` policy a finished turn notifies too, and under `off` nothing notifies
+ * or adds to the badge.
  *
  * The app layout owns one instance for the life of the window, so sessions
  * notify while any view is open. It follows its own event stream from a
@@ -78,11 +113,18 @@ export type SessionAttentionOptions = {
  */
 export class SessionAttention {
 	readonly #notifier: AttentionNotifier;
+	readonly #policy: () => NotificationPolicy;
 	readonly #stream: EventStreamClient;
 	readonly #sessions = new Map<string, AgentSession>();
 	readonly #workspaces = new Map<string, string>();
 	/** Extension questions already notified, keyed by session and request ID. */
 	readonly #asked = new Set<string>();
+	/**
+	 * Sessions the operator interrupted, from the server's
+	 * `session_interrupted` event until their next status change, which the
+	 * interrupt caused.
+	 */
+	readonly #interrupted = new Set<string>();
 	/** Sessions that notified and have not been viewed since. */
 	readonly #pending = new Set<string>();
 	#badge = 0;
@@ -91,6 +133,7 @@ export class SessionAttention {
 
 	constructor(options: SessionAttentionOptions) {
 		this.#notifier = options.notifier;
+		this.#policy = options.policy ?? (() => 'attention');
 		this.#stream = new EventStreamClient({
 			browserOrigin: options.browserOrigin,
 			socketFactory: options.socketFactory,
@@ -105,7 +148,9 @@ export class SessionAttention {
 			return;
 		}
 		if (event.kind === 'session_output' && event.session_id) {
-			this.#question(event.session_id, JSON.parse(event.payload));
+			const payload: unknown = JSON.parse(event.payload);
+			if (isInterrupt(payload)) this.#interrupted.add(event.session_id);
+			else this.#question(event.session_id, payload);
 			return;
 		}
 		if (event.kind !== 'session_changed') {
@@ -113,7 +158,9 @@ export class SessionAttention {
 			return;
 		}
 		const session = JSON.parse(event.payload) as AgentSession;
-		const reason = statusAttention(this.#sessions.get(session.id)?.status, session.status);
+		const previous = this.#sessions.get(session.id)?.status;
+		const interrupted = previous !== session.status && this.#interrupted.delete(session.id);
+		const reason = statusAttention(previous, session.status, interrupted);
 		this.#remember(event);
 		if (reason) this.#raise(session.id, reason);
 	}
@@ -137,20 +184,21 @@ export class SessionAttention {
 	}
 
 	#raise(sessionId: string, reason: AttentionReason): void {
-		if (inView(sessionId, this.#view)) return;
+		if (inView(sessionId, this.#view) || !policyAllows(this.#policy(), reason)) return;
 		this.#pending.add(sessionId);
-		void this.#notifier.notify(attentionNotification(this.#title(sessionId), reason)).catch(() => {
+		const agent = agentLabel(this.#sessions.get(sessionId)?.agent ?? 'pi');
+		void this.#notifier.notify(attentionNotification(this.#title(sessionId, agent), agent, reason)).catch(() => {
 			// Notifications are best effort. The badge and rail marker still show.
 		});
 		this.#publishBadge();
 	}
 
-	#title(sessionId: string): string {
+	#title(sessionId: string, agent: string): string {
 		const session = this.#sessions.get(sessionId);
 		const title = this.#titleOf?.(sessionId) ?? session?.name ?? undefined;
 		if (title) return title;
 		const workspace = session && this.#workspaces.get(session.workspace_id);
-		return workspace ? `Pi session in ${workspace}` : 'Pi session';
+		return workspace ? `${agent} session in ${workspace}` : `${agent} session`;
 	}
 
 	#clearViewed(): void {

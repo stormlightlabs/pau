@@ -1,5 +1,5 @@
 import type { MotionPreference, UiPreferences } from '@stormlightlabs/pau-protocol';
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { FakeEventSocket } from './fake-event-socket';
 import { InterfacePreferences } from './interface-preferences.svelte';
@@ -11,10 +11,13 @@ function preferences(
 ): UiPreferences {
 	return {
 		version: 1,
-		theme: 'system',
+		theme: 'eldritch',
+		ui_font: 'overpass',
+		notifications: 'attention',
 		motion,
-		pane_widths: { context_rail: contextRail, inspector }
-	} as unknown as UiPreferences;
+		pane_widths: { context_rail: contextRail, inspector },
+		last_route: null
+	};
 }
 
 function json(body: unknown): Response {
@@ -42,6 +45,8 @@ function backend(initial: UiPreferences) {
 }
 
 describe('interface preferences', () => {
+	afterEach(() => localStorage.clear());
+
 	test('applies the saved widths on load', async () => {
 		const server = backend(preferences(300, null));
 		const panes = new InterfacePreferences({ fetcher: server.fetcher });
@@ -137,7 +142,7 @@ describe('interface preferences', () => {
 			await settings.load();
 
 			expect(root.dataset.motion).toBe(attribute);
-			expect(settings.motion).toBe(motion);
+			expect(settings.choices.motion).toBe(motion);
 		});
 
 		test('saves a change at once and keeps the saved widths', async () => {
@@ -146,10 +151,92 @@ describe('interface preferences', () => {
 			const settings = new InterfacePreferences({ fetcher: server.fetcher, root });
 			await settings.load();
 
-			settings.setMotion('reduce');
+			settings.choose({ motion: 'reduce' });
 
 			expect(root.dataset.motion).toBe('reduce');
 			await vi.waitFor(() => expect(server.puts).toEqual([preferences(300, 420, 'reduce')]));
+		});
+
+		test('restores the previous setting when the save fails', async () => {
+			const root = document.createElement('div');
+			const server = backend(preferences(null, null, 'full'));
+			const settings = new InterfacePreferences({ fetcher: server.fetcher, root });
+			await settings.load();
+			vi.mocked(server.fetcher).mockResolvedValueOnce(
+				Response.json({ message: 'The database is read-only.' }, { status: 500 })
+			);
+
+			await expect(settings.choose({ motion: 'reduce' })).rejects.toThrow('The database is read-only.');
+
+			expect(settings.choices.motion).toBe('full');
+			expect(root.dataset.motion).toBe('full');
+		});
+
+		test('keeps a later choice when an earlier save fails', async () => {
+			const root = document.createElement('div');
+			const server = backend(preferences(null, null, 'full'));
+			const settings = new InterfacePreferences({ fetcher: server.fetcher, root });
+			await settings.load();
+			const firstPut = Promise.withResolvers<Response>();
+			vi.mocked(server.fetcher).mockReturnValueOnce(firstPut.promise);
+
+			const first = settings.choose({ motion: 'reduce' });
+			await vi.waitFor(() => expect(server.fetcher).toHaveBeenCalledTimes(2));
+			const second = settings.choose({ motion: 'system' });
+			firstPut.resolve(Response.json({ message: 'The database is read-only.' }, { status: 500 }));
+
+			await expect(first).resolves.toBeUndefined();
+			await second;
+			expect(settings.choices.motion).toBe('system');
+			expect(root.dataset.motion).toBeUndefined();
+			expect(server.puts).toEqual([preferences(null, null, 'system')]);
+		});
+
+		test.each([
+			['the first later save fails', [true, false]],
+			['the last save fails', [false, true]]
+		] as const)('matches the saved setting after quick picks when %s', async (_case, failOrder) => {
+			// Saved `full`, then Reduce, System and Full are picked while Reduce
+			// saves. Reduce succeeds, one later save fails and one succeeds. The
+			// later outcomes are released last-request-first, so writes sent at
+			// once would finish out of order.
+			const root = document.createElement('div');
+			let stored = preferences(null, null, 'full');
+			const outcomes = [true, ...failOrder.map((fails) => !fails)].map(() => Promise.withResolvers<boolean>());
+			let putCount = 0;
+			const fetcher = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+				if (init?.method !== 'PUT') return json(stored);
+				if (!(await outcomes[putCount++].promise)) {
+					return Response.json({ message: 'The database is read-only.' }, { status: 500 });
+				}
+				stored = JSON.parse(init.body as string) as UiPreferences;
+				return json(stored);
+			}) as unknown as typeof fetch;
+			const settings = new InterfacePreferences({ fetcher, root });
+			await settings.load();
+			const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+			// A failed pick rejects for Settings to show. This test checks the state.
+			const pick = async (motion: MotionPreference) => {
+				try {
+					await settings.choose({ motion });
+				} catch {
+					// Expected for the pick whose save fails.
+				}
+			};
+			const picks = [pick('reduce')];
+			await vi.waitFor(() => expect(putCount).toBe(1));
+			picks.push(pick('system'), pick('full'));
+			outcomes[0].resolve(true);
+			await settle();
+			outcomes[2].resolve(!failOrder[1]);
+			await settle();
+			outcomes[1].resolve(!failOrder[0]);
+			await Promise.all(picks);
+
+			expect(stored.motion).toBe('full');
+			expect(settings.choices.motion).toBe('full');
+			expect(root.dataset.motion).toBe('full');
 		});
 
 		test('a resize keeps the motion setting', async () => {
@@ -201,6 +288,106 @@ describe('interface preferences', () => {
 
 			await vi.waitFor(() => expect(root.dataset.motion).toBe('reduce'));
 			settings.stop();
+		});
+	});
+
+	describe('theme, font, and notifications', () => {
+		test('saves each choice and keeps the rest of the document', async () => {
+			const server = backend(preferences(300, null, 'full'));
+			const settings = new InterfacePreferences({ fetcher: server.fetcher, root: document.createElement('div') });
+			await settings.load();
+
+			await settings.choose({ theme: 'nord' });
+			await settings.choose({ ui_font: 'inter' });
+			await settings.choose({ notifications: 'off' });
+
+			expect(settings.choices).toEqual({ theme: 'nord', ui_font: 'inter', notifications: 'off', motion: 'full' });
+			expect(server.puts.at(-1)).toEqual({
+				...preferences(300, null, 'full'),
+				theme: 'nord',
+				ui_font: 'inter',
+				notifications: 'off'
+			});
+		});
+
+		test('restores the saved theme when the save fails', async () => {
+			const server = backend({ ...preferences(null, null), theme: 'iceberg' });
+			const settings = new InterfacePreferences({ fetcher: server.fetcher, root: document.createElement('div') });
+			await settings.load();
+			vi.mocked(server.fetcher).mockResolvedValueOnce(
+				Response.json({ message: 'The database is read-only.' }, { status: 500 })
+			);
+
+			await expect(settings.choose({ theme: 'nord' })).rejects.toThrow('The database is read-only.');
+
+			expect(settings.choices.theme).toBe('iceberg');
+		});
+
+		test('does not report a failed theme save that a queued font save stores', async () => {
+			const server = backend({ ...preferences(null, null), theme: 'iceberg' });
+			const settings = new InterfacePreferences({ fetcher: server.fetcher, root: document.createElement('div') });
+			await settings.load();
+			const themePut = Promise.withResolvers<Response>();
+			vi.mocked(server.fetcher).mockReturnValueOnce(themePut.promise);
+
+			const theme = settings.choose({ theme: 'nord' });
+			await vi.waitFor(() => expect(server.fetcher).toHaveBeenCalledTimes(2));
+			const font = settings.choose({ ui_font: 'inter' });
+			themePut.resolve(Response.json({ message: 'The database is read-only.' }, { status: 500 }));
+
+			await expect(theme).resolves.toBeUndefined();
+			await expect(font).resolves.toBeUndefined();
+			expect(settings.choices).toMatchObject({ theme: 'nord', ui_font: 'inter' });
+			expect(server.puts).toEqual([{ ...preferences(null, null), theme: 'nord', ui_font: 'inter' }]);
+		});
+
+		test('reports each choice that a failed run of saves restores', async () => {
+			const server = backend({ ...preferences(null, null), theme: 'iceberg' });
+			const settings = new InterfacePreferences({ fetcher: server.fetcher, root: document.createElement('div') });
+			await settings.load();
+			const themePut = Promise.withResolvers<Response>();
+			const failed = () => Response.json({ message: 'The database is read-only.' }, { status: 500 });
+			vi.mocked(server.fetcher).mockReturnValueOnce(themePut.promise).mockResolvedValueOnce(failed());
+
+			const theme = settings.choose({ theme: 'nord' });
+			await vi.waitFor(() => expect(server.fetcher).toHaveBeenCalledTimes(2));
+			const font = settings.choose({ ui_font: 'inter' });
+			themePut.resolve(failed());
+
+			await expect(theme).rejects.toThrow('The database is read-only.');
+			await expect(font).rejects.toThrow('The database is read-only.');
+			expect(settings.choices).toMatchObject({ theme: 'iceberg', ui_font: 'overpass' });
+		});
+
+		test('restores the theme shown before the first failed save when nothing has loaded', async () => {
+			localStorage.setItem('pau.theme', 'vitesse-dark');
+			const fetcher = vi.fn(async () =>
+				Response.json({ message: 'The server is restarting.' }, { status: 503 })
+			) as unknown as typeof fetch;
+			const settings = new InterfacePreferences({ fetcher, root: document.createElement('div') });
+			await settings.load();
+			const firstSave = Promise.withResolvers<Response>();
+			vi.mocked(fetcher).mockReturnValueOnce(firstSave.promise);
+
+			const nord = settings.choose({ theme: 'nord' });
+			await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+			const iceberg = settings.choose({ theme: 'iceberg' });
+			firstSave.resolve(Response.json({ message: 'The server is restarting.' }, { status: 503 }));
+
+			await expect(nord).rejects.toThrow('The server is restarting.');
+			await expect(iceberg).rejects.toThrow('The server is restarting.');
+			expect(settings.choices.theme).toBe('vitesse-dark');
+			expect(localStorage.getItem('pau.theme')).toBe('vitesse-dark');
+		});
+
+		test('starts a new window with the theme and font the last one loaded', async () => {
+			const server = backend({ ...preferences(null, null), theme: 'vitesse-dark', ui_font: 'ibm-plex-sans' });
+			await new InterfacePreferences({ fetcher: server.fetcher, root: document.createElement('div') }).load();
+
+			const next = new InterfacePreferences({ fetcher: server.fetcher });
+
+			expect(next.choices.theme).toBe('vitesse-dark');
+			expect(next.choices.ui_font).toBe('ibm-plex-sans');
 		});
 	});
 });

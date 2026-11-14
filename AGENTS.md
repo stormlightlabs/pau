@@ -50,18 +50,19 @@ built artifact.
 ## Tasks
 
 The installed skills read this section for the tracker's steps. Linear is the
-tracker for all work, and a `PAU-<n>` ID is a Linear task. Tasks live in the
-Linear team PAU. Agents reach it through the session's Linear connector tools,
+tracker for all work, and a `PAU-<n>` ID is a Linear issue. Issues live in
+the Linear team PAU. Agents reach it through the session's Linear connector tools,
 such as `get_issue` with relations, `save_issue`, `save_comment`, and
 `save_document`. Subagents run inside that session and need no Linear access
 of their own.
 
-The unit of work is a parent issue, or an issue with no parent. A run checks
-it for readiness, claims it, works it on one branch, and closes it with one
-pull request. Its sub-issues are the steps inside that pull request, done in
-the order their blocked-by links to each other give, and they close when it
-merges. A sub-issue is never dispatched on its own. A parent belongs to one
-release milestone, and every sub-issue carries the same milestone.
+This section decides the unit of work for this repository: an issue, meaning a
+parent issue or an issue with no parent. A run checks it for readiness, claims
+it, works it on one branch, and closes it with one pull request. Its sub-issues
+are the steps inside that pull request, done in the order their blocked-by
+links to each other give, and they close when it merges. A sub-issue is never
+dispatched on its own. A parent belongs to one release milestone, and every
+sub-issue carries the same milestone.
 
 | Step                                     | In Linear                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -69,14 +70,15 @@ release milestone, and every sub-issue carries the same milestone.
 | Check readiness                          | A parent issue or an issue with no parent, in Todo, with every issue it is blocked by Done, Canceled or Duplicate                                                                                                                                                                                                                                                                                                                                     |
 | Start                                    | Set In Progress and comment `Claimed on claude/<issue id>`, then re-read the comments. The earliest claim comment holds the claim, in place of `fab claim`; if it names another branch or run, stop and report. Work on the branch `claude/<issue id, lowercase>`, such as `claude/pau-1`, in a worktree under `../pau-worktrees/`. The issue is the unit of work, never a sub-issue. Linear's default `gitBranchName`, `<user>/pau-n-…`, is not used |
 | Open the PR                              | Link the PR on the issue and set In Review                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Complete                                 | After the PR merges, set the issue and each of its sub-issues Done, with the comment `Done in #<n> at <sha>: <summary>` on the issue. Never close an issue without a PR                                                                                                                                                                                                                                                                               |
+| Complete                                 | After the PR merges, set the issue and each open sub-issue Done, with the comment `Done in #<n> at <sha>: <summary>` on the issue. Never close an issue without a PR                                                                                                                                                                                                                                                                                  |
 | Hand off                                 | Before any push, comment the handoff note and `Released`, and set Todo. Once a PR exists, comment the handoff note and leave the issue In Review with the PR linked                                                                                                                                                                                                                                                                                   |
 | Pick up                                  | Read the latest handoff note. Continue the linked PR when there is one, and otherwise claim the issue as Start does                                                                                                                                                                                                                                                                                                                                   |
 | Record new work                          | A new PAU issue in the right project, in Todo when it is ready to work or Backlog when it is untriaged, with its blocked-by links set when it is created                                                                                                                                                                                                                                                                                              |
 | Record an idea or spec                   | A Linear document on the team or the project                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Record a report, review or resource list | One Linear document on the issue, with links and screenshots, kept current. Not comments, and not one link resource per item                                                                                                                                                                                                                                                                                                                          |
 
-`fab-decompose` writes these primitives with `save_issue`:
+`fab-decompose` writes these primitives with `save_issue`. Its run unit is an
+issue, and its task primitive is a sub-issue:
 
 | Primitive  | In Linear         | Written as                                                                                                         |
 | ---------- | ----------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -89,26 +91,26 @@ Blocked-by links between parents decide what can run in parallel. List the
 Todo parent issues and issues with no parent, drop any that are not ready, and
 give each worktree one.
 
-Every task follows these rules:
+Every issue follows these rules:
 
 - Work on one unit of work per branch, session and pull request unless the
   user explicitly combines them. Parallel worktrees may each work a different
   one.
 - Keep implementation, tests, Storybook stories, and user documentation required
-  by the task in the same change.
+  by the issue in the same change.
 - In `packages/ui`, keep stories under `src/stories` and tests under
   `src/tests`.
-- Run the task's verification, starting with the narrowest relevant checks. Do
+- Run the issue's verification, starting with the narrowest relevant checks. Do
   not invoke paid agents or remote services from default tests.
-- A release's gates are the tasks in its milestone in the tracker. When a
-  platform check is unavailable, the task may close if portable coverage
-  passes and the check's task is not in that milestone. Record the unavailable
+- A release's gates are the issues in its milestone in the tracker. When a
+  platform check is unavailable, the issue may close if portable coverage
+  passes and the check's issue is not in that milestone. Record the unavailable
   check as a new Backlog issue.
-- Fix every finding from the task's required verification, including unrelated
+- Fix every finding from the issue's required verification, including unrelated
   pre-existing findings. Do not defer or report those findings as separate
   follow-up work. Keep defects found outside required checks separate unless
   they block verification.
-- Do not write CHANGELOG entries in a task's pull request. Changelog updates
+- Do not write CHANGELOG entries in an issue's pull request. Changelog updates
   are being automated from the squash commits on `main`.
 - Write commit messages and pull request descriptions without agent
   attribution. Omit `Co-Authored-By` trailers and generated-by lines.
@@ -139,13 +141,14 @@ instruction in its prompt.
 
 Always audit changed prose against that skill before finishing. Remove AI
 writing tropes, stock transitions, repetition, inflated claims, and other
-formulaic language. Keep task boundaries and implementation phases out of
+formulaic language. Keep issue boundaries and implementation phases out of
 user-facing or published documentation. The repository is open source, so
 never put Linear issue IDs, Linear URLs or Claude Design artifact links in
-code, docs, commit messages or pull request descriptions; naming Linear and
-the PAU team is fine. Name packages, scripts, and
-files for what they do, not for the task phase that created them, such as a
-spike.
+prose, code, docs or commit messages. Branch names are exempt, since they
+follow `claude/<issue id>`, and so is the branch that fabrial's pull request
+footer prints. Naming Linear and the PAU team is fine. Name packages,
+scripts, and files for what they do, not for the phase of work that created
+them, such as a spike.
 
 Write the description or prose body of each issue, document, and pull request
 for the item it describes, and never carry a fixed sentence from one to the

@@ -41,10 +41,13 @@ Stop and ask when any of these is true:
 - The task is already in progress, its latest handoff is not addressed to
   this session, and the run that dispatched you does not hold its claim (see
   **Start it**).
-- It has open subtasks. Work those one at a time instead.
 - It has no acceptance criteria you could check, and the person has not given
   any.
 - The work needs a decision the task does not record.
+
+A task with open subtasks is one unit of work. Work the subtasks in the
+order their dependencies give, on one branch, and close them all with one
+pull request.
 
 ## Take a working tree
 

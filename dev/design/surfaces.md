@@ -94,8 +94,10 @@ and offers Try again.
 Each workspace in the session rail has a start control, which starts Pi. The
 workspace menu and a newly opened workspace also start Claude Code. When the
 readiness report says Claude Code cannot start, those controls are disabled
-and show its reason. When a session cannot start, the task surface names the
-cause and offers a retry with the same agent. While the backend connection is
+and show its reason. The Claude Code notice offers Check again, which reads the
+report anew once the operator has fixed the cause. When a session cannot
+start, the task surface names the cause and offers a retry with the same
+agent. While the backend connection is
 down, the session stays readable but sending, starting, and stopping are
 disabled until Pau reconnects. A control the agent does not
 support is hidden, and the composer explains when no delivery mode is left.

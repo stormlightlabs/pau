@@ -1321,6 +1321,27 @@ test('disables Claude Code with the reason the readiness report gives', async ()
 	await expect.element(item).toHaveAccessibleDescription(claudeMissing.reason.replaceAll('`', ''));
 });
 
+test('checks Claude Code again from its notice, bypassing the cached report', async () => {
+	const refresh = vi.fn(() => json({ agents: [{ ...claudeMissing, found: true, ready: true, reason: null }] }));
+	const { props } = setup({
+		'GET /api/workspaces': () => json([]),
+		'POST /api/workspaces': () => json(workspace, 201),
+		'GET /api/agents/readiness': () => json({ agents: [claudeMissing] }),
+		'GET /api/agents/readiness?refresh=true': refresh
+	});
+	await render(SessionRoute, props);
+	await userEvent.fill(page.getByRole('textbox', { name: 'Folder path' }), '/home/me/pau');
+	await userEvent.click(page.getByRole('button', { name: 'Open', exact: true }));
+
+	const startClaude = page.getByRole('button', { name: 'Start Claude Code session' });
+	await expect.element(startClaude).toBeDisabled();
+	await userEvent.click(page.getByRole('button', { name: 'Check again' }));
+
+	expect(refresh).toHaveBeenCalledOnce();
+	await expect.element(startClaude).toBeEnabled();
+	await expect.element(page.getByRole('region', { name: 'Claude Code is not ready' })).not.toBeInTheDocument();
+});
+
 test('starts a Claude Code session and streams its reply', async () => {
 	const claudeSession: AgentSession = {
 		...idleSession,

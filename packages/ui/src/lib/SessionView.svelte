@@ -249,6 +249,12 @@
 		 */
 		claudeReadiness?: AgentReadinessProblem;
 		/**
+		 * Reads Claude Code's readiness again, bypassing any cached report.
+		 * With it, the Claude Code notice offers Check again, since its
+		 * disabled controls cannot fail a start that would read it again.
+		 */
+		onCheckClaude?: () => Promise<void>;
+		/**
 		 * Shows a path in the system file manager. The desktop app supplies it.
 		 * With it, the workspace's context menu offers to reveal the folder.
 		 */
@@ -345,6 +351,7 @@
 		onOpenTerminal,
 		agentReadiness,
 		claudeReadiness,
+		onCheckClaude,
 		revealPath,
 		onLoadModels,
 		onSelectModel,
@@ -2098,7 +2105,9 @@
 	{#if problem}
 		<AgentReadinessNotice
 			{problem}
-			onOpenTerminal={onOpenTerminal && workspaceId ? () => onOpenTerminal(workspaceId) : undefined} />
+			onOpenTerminal={onOpenTerminal && workspaceId ? () => onOpenTerminal(workspaceId) : undefined}
+			onCheckAgain={agent === 'claude' ? onCheckClaude : undefined}
+			reasonId={agent === 'claude' ? 'claude-readiness-reason' : undefined} />
 	{/if}
 {/snippet}
 
@@ -2424,6 +2433,7 @@
 							type="button"
 							class="pau-button pau-button--secondary"
 							disabled={disconnected || startingWorkspaceId !== undefined || claudeReadiness !== undefined}
+							aria-describedby={claudeReadiness ? 'claude-readiness-reason' : undefined}
 							onclick={() => void startSession(openedWorkspace, 'claude')}>Start Claude Code session</button>
 					</div>
 				{/if}

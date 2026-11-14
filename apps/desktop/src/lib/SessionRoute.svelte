@@ -91,7 +91,8 @@
 	/**
 	 * Why Claude Code cannot start a session, from the backend's readiness
 	 * report. Launch checks only Pi, so the route reads the report itself on
-	 * mount and again after a Claude Code start fails. Unset while the report
+	 * mount, after a Claude Code start fails, and when the operator asks the
+	 * notice to check again. Unset while the report
 	 * is unread or could not be read, which leaves Claude Code available.
 	 */
 	let claudeReadiness = $state<AgentReadinessProblem>();
@@ -274,6 +275,7 @@
 	{onOpenTerminal}
 	agentReadiness={agentReadiness?.()}
 	{claudeReadiness}
+	onCheckClaude={() => checkClaude(true)}
 	onOpenWorkspace={openWorkspace}
 	onSelectSession={selectSession}
 	onClearAttention={() => sessions.clearUnseen()}

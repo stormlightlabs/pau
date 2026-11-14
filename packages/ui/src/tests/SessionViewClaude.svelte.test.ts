@@ -106,8 +106,11 @@ test('explains a missing Claude Code where an opened workspace starts sessions',
 	await userEvent.click(page.getByRole('button', { name: 'Open', exact: true }));
 
 	await expect.element(page.getByRole('heading', { name: 'Pau is open' })).toBeVisible();
-	await expect.element(page.getByRole('button', { name: 'Start Claude Code session' })).toBeDisabled();
-	await expect.element(claudeNotice()).toHaveTextContent(claudeReadinessFixtures.missing.reason.replaceAll('`', ''));
+	const reason = claudeReadinessFixtures.missing.reason.replaceAll('`', '');
+	const startClaude = page.getByRole('button', { name: 'Start Claude Code session' });
+	await expect.element(startClaude).toBeDisabled();
+	await expect.element(startClaude).toHaveAccessibleDescription(reason);
+	await expect.element(claudeNotice()).toHaveTextContent(reason);
 	await userEvent.click(page.getByRole('button', { name: 'Start session' }));
 	expect(onStartSession).toHaveBeenCalledWith('pau', 'pi');
 });

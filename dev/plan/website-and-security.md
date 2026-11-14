@@ -43,7 +43,9 @@ ready, never through a URL. The webview keeps the first connection it receives
 and cannot be pointed at another origin. During desktop development, the desktop frontend
 may run in a normal browser against this local endpoint. This is a development
 path for `apps/desktop`, not the remote web product. Tokens must not be written
-to normal logs.
+to normal logs. The browser development server reads its token from
+`PAU_API_TOKEN` and removes the variable before it starts, so agents,
+terminals and other child processes cannot read it.
 
 The standalone web server and `apps/web` ship after the desktop application. The
 server owns process lifetime without Tauri and defaults to loopback with a

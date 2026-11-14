@@ -6,6 +6,12 @@ export type TerminalTab = { id: string; title: string };
 
 /** Callbacks that a terminal connection uses to report its byte stream and lifecycle. */
 export type TerminalConnectionEvents = {
+	/**
+	 * Receives the terminal's scrollback, which each stream sends once before
+	 * any live output. Old queries in it, such as a device attributes request,
+	 * must not be answered to the running program.
+	 */
+	replay: (bytes: Uint8Array) => void;
 	/** Receives raw PTY output bytes in arrival order. */
 	output: (bytes: Uint8Array) => void;
 	/**

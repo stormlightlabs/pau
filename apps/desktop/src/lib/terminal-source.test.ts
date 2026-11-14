@@ -29,6 +29,11 @@ class FakeSocket extends EventTarget {
 		this.dispatchEvent(new Event('open'));
 	}
 
+	receive(text: string): void {
+		const data = new TextEncoder().encode(text).buffer;
+		this.dispatchEvent(Object.assign(new Event('message'), { data }));
+	}
+
 	closeWith(code: number): void {
 		this.readyState = 3;
 		this.dispatchEvent(Object.assign(new Event('close'), { code }));
@@ -49,6 +54,9 @@ function events(): TerminalConnectionEvents & { log: string[] } {
 	const log: string[] = [];
 	return {
 		log,
+		replay: (bytes) => {
+			log.push(`replay ${new TextDecoder().decode(bytes)}`);
+		},
 		output: (bytes) => {
 			log.push(`output ${new TextDecoder().decode(bytes)}`);
 		},
@@ -97,6 +105,20 @@ test('reconnects a stream that fell behind with a growing delay and clears the s
 	expect(delays).toEqual([250, 500, 1000, 2000, 4000, 8000, 8000]);
 	expect(recorded.log).toEqual(Array.from({ length: 7 }, () => 'reset'));
 	expect(FakeSocket.opened.at(-1)!.sent).toEqual([JSON.stringify({ type: 'resize', size: { cols: 80, rows: 24 } })]);
+});
+
+test('hands each stream its first binary frame as the replay', () => {
+	const recorded = events();
+	createTerminalSource('http://localhost:5173', 'workspace').connect('terminal', recorded);
+	FakeSocket.opened[0]!.accept();
+	FakeSocket.opened[0]!.receive('');
+	FakeSocket.opened[0]!.receive('live');
+	FakeSocket.opened[0]!.closeWith(1013);
+	vi.advanceTimersByTime(250);
+	FakeSocket.opened[1]!.accept();
+	FakeSocket.opened[1]!.receive('live');
+	FakeSocket.opened[1]!.receive('more');
+	expect(recorded.log).toEqual(['replay ', 'output live', 'reset', 'replay live', 'output more']);
 });
 
 test('starts the delay over once a stream stays open', () => {

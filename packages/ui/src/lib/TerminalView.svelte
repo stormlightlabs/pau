@@ -215,7 +215,16 @@
 		}
 
 		const encoder = new TextEncoder();
+		// xterm.js answers queries as it parses them, through the same events
+		// as typed input. While a replay is parsing, those answers belong to a
+		// program that asked long ago, so they are dropped. Input typed in that
+		// short window is dropped with them.
+		let replays = 0;
 		const connection = connect({
+			replay: (bytes) => {
+				replays += 1;
+				instance.write(bytes, () => (replays -= 1));
+			},
 			output: (bytes) => instance.write(bytes),
 			reset: () => instance.reset(),
 			exit: (status) => {
@@ -227,11 +236,15 @@
 		});
 		connection.resize(instance.cols, instance.rows);
 		const subscriptions = [
-			instance.onData((data) => connection.write(encoder.encode(data))),
+			instance.onData((data) => {
+				if (replays === 0) connection.write(encoder.encode(data));
+			}),
 			// Binary events carry one byte per character, such as legacy mouse reports.
-			instance.onBinary((data) =>
-				connection.write(Uint8Array.from(data, (character) => character.codePointAt(0) ?? 0))
-			),
+			instance.onBinary((data) => {
+				if (replays === 0) {
+					connection.write(Uint8Array.from(data, (character) => character.codePointAt(0) ?? 0));
+				}
+			}),
 			instance.onResize(({ cols, rows }) => connection.resize(cols, rows)),
 			instance.onSelectionChange(() => onselectionchange?.(instance.hasSelection())),
 			// The addon reports counts only for searches that draw decorations.

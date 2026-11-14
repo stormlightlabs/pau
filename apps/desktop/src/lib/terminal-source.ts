@@ -43,6 +43,7 @@ export function createTerminalSource(browserOrigin: string, workspaceId: string)
 			let size = INITIAL_SIZE;
 			let finished = false;
 			let replayed = false;
+			let awaitingReplay = false;
 			let attempts = 0;
 			let retry: ReturnType<typeof setTimeout> | undefined;
 			let stable: ReturnType<typeof setTimeout> | undefined;
@@ -59,12 +60,16 @@ export function createTerminalSource(browserOrigin: string, workspaceId: string)
 					// already shows after the first one.
 					if (replayed) events.reset();
 					replayed = true;
+					awaitingReplay = true;
 					sendSize();
 					stable = setTimeout(() => (attempts = 0), STABLE_CONNECTION_MS);
 				});
 				socket.addEventListener('message', (event: MessageEvent<ArrayBuffer | string>) => {
 					if (typeof event.data !== 'string') {
-						events.output(new Uint8Array(event.data));
+						// The first binary frame is always the scrollback, even when empty.
+						if (awaitingReplay) events.replay(new Uint8Array(event.data));
+						else events.output(new Uint8Array(event.data));
+						awaitingReplay = false;
 						return;
 					}
 					const message = JSON.parse(event.data) as TerminalServerMessage;

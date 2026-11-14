@@ -6,26 +6,29 @@
 //! in order and builds the sequences that put a fresh terminal back into the
 //! same modes, which the scrollback sends ahead of each replay.
 
-/// DEC private modes the tracker follows, with their power-on state.
-///
-/// The alternate screen modes come first, because entering the alternate
-/// screen must happen before the replay draws on it.
-const MODES: [(u16, bool); 14] = [
-    (47, false),   // Alternate screen.
-    (1047, false), // Alternate screen, cleared on exit.
-    (1049, false), // Alternate screen with saved cursor.
+/// DEC private modes the tracker follows as on or off flags, with their
+/// power-on state. DECSTR returns every one of them to that state.
+const FLAGS: [(u16, bool); 5] = [
     (1, false),    // Application cursor keys.
     (7, true),     // Autowrap.
     (25, true),    // Visible cursor.
-    (1000, false), // Mouse button reports.
-    (1002, false), // Mouse drag reports.
-    (1003, false), // Mouse motion reports.
     (1004, false), // Focus reports.
-    (1005, false), // UTF-8 mouse encoding.
-    (1006, false), // SGR mouse encoding.
-    (1015, false), // urxvt mouse encoding.
     (2004, false), // Bracketed paste.
 ];
+
+/// Modes that select one screen buffer. As in xterm.js, setting any of them
+/// shows the alternate screen and resetting any of them leaves it.
+const ALTERNATE_SCREEN: [u16; 3] = [47, 1047, 1049];
+
+/// Mouse tracking protocols: X10, button, drag and any motion. xterm.js keeps
+/// one active protocol, so setting one replaces the last and resetting any of
+/// them turns tracking off.
+const MOUSE_PROTOCOLS: [u16; 4] = [9, 1000, 1002, 1003];
+
+/// Mouse encodings xterm.js supports: SGR and SGR pixels. As with the
+/// protocols, one is active and resetting either restores the default. xterm.js
+/// ignores the UTF-8 (1005) and urxvt (1015) encodings, so the tracker does too.
+const MOUSE_ENCODINGS: [u16; 2] = [1006, 1016];
 
 /// Parameters kept from one control sequence. Longer sequences are ignored,
 /// which keeps the tracker's memory fixed.
@@ -51,9 +54,15 @@ enum State {
 pub(crate) struct ModeTracker {
     state: State,
     private: bool,
+    /// Whether the sequence has a parameter byte yet. A `?` counts as the
+    /// private marker only before the first one.
+    started: bool,
     params: [u16; MAX_PARAMS],
     count: usize,
-    modes: [bool; MODES.len()],
+    flags: [bool; FLAGS.len()],
+    alternate_screen: Option<u16>,
+    mouse_protocol: Option<u16>,
+    mouse_encoding: Option<u16>,
     application_keypad: bool,
 }
 
@@ -62,9 +71,13 @@ impl Default for ModeTracker {
         Self {
             state: State::Ground,
             private: false,
+            started: false,
             params: [0; MAX_PARAMS],
             count: 1,
-            modes: MODES.map(|(_, default)| default),
+            flags: FLAGS.map(|(_, default)| default),
+            alternate_screen: None,
+            mouse_protocol: None,
+            mouse_encoding: None,
             application_keypad: false,
         }
     }
@@ -91,6 +104,7 @@ impl ModeTracker {
                     b'[' => {
                         self.state = State::Csi;
                         self.private = false;
+                        self.started = false;
                         self.params = [0; MAX_PARAMS];
                         self.count = 1;
                     }
@@ -102,19 +116,21 @@ impl ModeTracker {
                 }
             }
             State::Csi => match byte {
-                b'?' if self.count == 1 && self.params[0] == 0 && !self.private => {
-                    self.private = true;
-                }
+                b'?' if !self.started && !self.private => self.private = true,
                 b'0'..=b'9' => {
+                    self.started = true;
                     let param = &mut self.params[self.count - 1];
                     *param = param
                         .saturating_mul(10)
                         .saturating_add(u16::from(byte - b'0'));
                 }
-                b';' if self.count < MAX_PARAMS => self.count += 1,
-                b'!' if self.count == 1 && self.params[0] == 0 && !self.private => {
-                    self.state = State::SoftReset;
+                b';' if self.count < MAX_PARAMS => {
+                    self.started = true;
+                    self.count += 1;
                 }
+                // xterm.js runs DECSTR for `CSI ! p` with any parameters, but
+                // not after a private marker.
+                b'!' if !self.private => self.state = State::SoftReset,
                 b'h' | b'l' => {
                     if self.private {
                         self.apply(byte == b'h');
@@ -132,7 +148,13 @@ impl ModeTracker {
                 self.soft_reset();
                 self.state = State::Ground;
             }
-            State::SoftReset | State::Ignore => {
+            State::SoftReset => match byte {
+                0x40..=0x7e | 0x18 | 0x1a => self.state = State::Ground,
+                0x00..=0x1f => {}
+                // A second intermediate or a parameter makes another sequence.
+                _ => self.state = State::Ignore,
+            },
+            State::Ignore => {
                 if (0x40..=0x7e).contains(&byte) || byte == 0x18 || byte == 0x1a {
                     self.state = State::Ground;
                 }
@@ -141,34 +163,52 @@ impl ModeTracker {
     }
 
     fn apply(&mut self, set: bool) {
-        for param in &self.params[..self.count] {
-            if let Some(index) = MODES.iter().position(|(mode, _)| mode == param) {
-                self.modes[index] = set;
+        for &param in &self.params[..self.count] {
+            let selected = set.then_some(param);
+            if ALTERNATE_SCREEN.contains(&param) {
+                self.alternate_screen = selected;
+            } else if MOUSE_PROTOCOLS.contains(&param) {
+                self.mouse_protocol = selected;
+            } else if MOUSE_ENCODINGS.contains(&param) {
+                self.mouse_encoding = selected;
+            } else if let Some(index) = FLAGS.iter().position(|(mode, _)| *mode == param) {
+                self.flags[index] = set;
             }
         }
     }
 
-    /// Applies DECSTR to the tracked modes. As in xterm, it shows the cursor,
-    /// restores autowrap, and sets normal cursor keys and a numeric keypad. It
-    /// leaves the alternate screen, mouse reports and bracketed paste alone.
+    /// Applies DECSTR as xterm.js does. Its soft reset returns every tracked
+    /// flag and the keypad to their power-on state, and leaves the alternate
+    /// screen and mouse tracking alone.
     fn soft_reset(&mut self) {
-        for (index, (mode, default)) in MODES.iter().enumerate() {
-            if matches!(mode, 1 | 7 | 25) {
-                self.modes[index] = *default;
-            }
-        }
+        self.flags = FLAGS.map(|(_, default)| default);
         self.application_keypad = false;
     }
 
     /// Returns the sequences that move a terminal from its power-on state into
     /// the tracked modes. Empty when every mode is at its power-on state.
+    ///
+    /// The alternate screen comes first, because entering it must happen
+    /// before the replay draws on it.
     pub(crate) fn restore(&self) -> Vec<u8> {
         let mut sequences = Vec::new();
-        for ((mode, default), &set) in MODES.iter().zip(&self.modes) {
+        let mut push = |mode: u16, set: bool| {
+            let action = if set { 'h' } else { 'l' };
+            sequences.extend(format!("\x1b[?{mode}{action}").into_bytes());
+        };
+        if let Some(mode) = self.alternate_screen {
+            push(mode, true);
+        }
+        for ((mode, default), &set) in FLAGS.iter().zip(&self.flags) {
             if set != *default {
-                let action = if set { 'h' } else { 'l' };
-                sequences.extend(format!("\x1b[?{mode}{action}").into_bytes());
+                push(*mode, set);
             }
+        }
+        for mode in [self.mouse_protocol, self.mouse_encoding]
+            .into_iter()
+            .flatten()
+        {
+            push(mode, true);
         }
         if self.application_keypad {
             sequences.extend(b"\x1b=");
@@ -197,7 +237,7 @@ mod tests {
         let stream = b"\x1b[?1049h\x1b[?1h\x1b=\x1b[?25l\x1b[?1000;1006h\x1b[?2004h";
         assert_eq!(
             restored(stream),
-            "\x1b[?1049h\x1b[?1h\x1b[?25l\x1b[?1000h\x1b[?1006h\x1b[?2004h\x1b="
+            "\x1b[?1049h\x1b[?1h\x1b[?25l\x1b[?2004h\x1b[?1000h\x1b[?1006h\x1b="
         );
     }
 
@@ -211,16 +251,45 @@ mod tests {
     }
 
     #[test]
-    fn soft_reset_restores_cursor_wrap_and_keys_only() {
-        let stream = b"\x1b[?1049h\x1b[?25l\x1b[?7l\x1b[?1h\x1b=\x1b[?2004h\x1b[!p";
-        assert_eq!(restored(stream), "\x1b[?1049h\x1b[?2004h");
-        // Split across feeds, and an intermediate other than `!` does nothing.
+    fn soft_reset_resets_flags_and_keypad_but_not_screen_or_mouse() {
+        let stream = b"\x1b[?1049h\x1b[?1000h\x1b[?25l\x1b[?7l\x1b[?1h\x1b=\x1b[?1004;2004h\x1b[!p";
+        assert_eq!(restored(stream), "\x1b[?1049h\x1b[?1000h");
+        // Split across feeds, and with parameters.
         let mut tracker = ModeTracker::default();
-        for part in [&b"\x1b[?25l\x1b["[..], b"!", b"p"] {
+        for part in [&b"\x1b[?25l\x1b["[..], b"5!", b"p"] {
             tracker.feed(part.iter().copied());
         }
         assert_eq!(tracker.restore(), b"");
-        assert_eq!(restored(b"\x1b[?25l\x1b[\"p"), "\x1b[?25l");
+        // A private marker or another intermediate makes another sequence.
+        for stream in [
+            &b"\x1b[?25l\x1b[\"p"[..],
+            b"\x1b[?25l\x1b[?!p",
+            b"\x1b[?25l\x1b[!\"p",
+        ] {
+            assert_eq!(restored(stream), "\x1b[?25l", "{stream:?}");
+        }
+    }
+
+    #[test]
+    fn keeps_one_mouse_protocol_and_one_encoding() {
+        // Resetting any protocol turns tracking off.
+        assert_eq!(restored(b"\x1b[?1000h\x1b[?1003h\x1b[?1003l"), "");
+        // The last protocol set wins.
+        assert_eq!(restored(b"\x1b[?1003h\x1b[?1000h"), "\x1b[?1000h");
+        assert_eq!(
+            restored(b"\x1b[?1006h\x1b[?1016h\x1b[?1015h"),
+            "\x1b[?1016h"
+        );
+        assert_eq!(restored(b"\x1b[?1016h\x1b[?1006l"), "");
+        // `?` counts as the private marker only as the first byte.
+        assert_eq!(restored(b"\x1b[0?1003h"), "");
+        assert_eq!(restored(b"\x1b[??1003h"), "");
+    }
+
+    #[test]
+    fn keeps_one_alternate_screen() {
+        assert_eq!(restored(b"\x1b[?1049h\x1b[?47l"), "");
+        assert_eq!(restored(b"\x1b[?47h\x1b[?1049h"), "\x1b[?1049h");
     }
 
     #[test]

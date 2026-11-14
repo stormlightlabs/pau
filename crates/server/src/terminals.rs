@@ -278,9 +278,11 @@ pub(crate) async fn close_terminal(
 
 /// Attaches a WebSocket to a terminal's input and output.
 ///
-/// The stream first sends the terminal's scrollback as one binary frame, when
-/// it holds any output, and then live output. A client that reattaches
-/// receives the whole scrollback again, so it should clear its screen first.
+/// The stream first sends the terminal's scrollback as one binary frame, empty
+/// when it holds no output, and then live output. A client tells the replay
+/// from live output by that order, so it can drop the answers a terminal gives
+/// to old queries in the replay. A client that reattaches receives the whole
+/// scrollback again, so it should clear its screen first.
 pub(crate) async fn stream_terminal(
     State(state): State<ApiState>,
     AxumPath(terminal_id): AxumPath<String>,
@@ -295,7 +297,7 @@ pub(crate) async fn stream_terminal(
 async fn serve_stream(mut socket: WebSocket, managed: Arc<ManagedTerminal>) {
     let mut attachment = managed.scrollback.attach();
     let replay = attachment.take_replay();
-    if !replay.is_empty() && socket.send(Message::Binary(replay)).await.is_err() {
+    if socket.send(Message::Binary(replay)).await.is_err() {
         return;
     }
     loop {
@@ -544,6 +546,12 @@ mod tests {
         assert_eq!(info.command[0], "/bin/sh");
 
         let mut socket = fixture.connect(&info.id, Some(TOKEN)).await.unwrap();
+        // The script has printed nothing yet, so the replay frame is empty.
+        let replay = timeout(STEP_LIMIT, socket.next()).await.unwrap();
+        assert_eq!(
+            replay.unwrap().unwrap(),
+            tungstenite::Message::binary(Vec::new())
+        );
         let resize = TerminalClientMessage::Resize {
             size: TerminalSize {
                 cols: 100,

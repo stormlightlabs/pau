@@ -62,8 +62,9 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 				events.exit(status);
 			};
 			queueMicrotask(() => {
+				// Like the server, every stream opens with the scrollback, empty or not.
 				const history = options.history ?? [];
-				for (const output of history) send(`${output}\r\n`);
+				events.replay(encoder.encode(history.map((output) => `${output}\r\n`).join('')));
 				send(`Terminal ready: 界 🙂\r\n${PROMPT}`);
 				if (options.exitOnConnect) exit(options.exitOnConnect);
 			});

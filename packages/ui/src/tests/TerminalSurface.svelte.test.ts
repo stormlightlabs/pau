@@ -120,9 +120,41 @@ test('clears the screen before a reconnect replays the output', async () => {
 	await expect.poll(() => screenText('zsh terminal')).toContain('before');
 
 	events!.reset();
-	events!.output(encoder.encode('replayed'));
+	events!.replay(encoder.encode('replayed'));
 	await expect.poll(() => screenText('zsh terminal')).toContain('replayed');
 	expect(screenText('zsh terminal')).not.toContain('before');
+});
+
+test('answers no queries from the replay but still sends input and answers live queries', async () => {
+	let events: TerminalConnectionEvents | undefined;
+	const written: string[] = [];
+	const decoder = new TextDecoder();
+	await render(TerminalView, {
+		label: 'zsh terminal',
+		connect: (connected) => {
+			events = connected;
+			return {
+				write: (bytes) => {
+					written.push(decoder.decode(bytes));
+				},
+				resize: () => {},
+				close: () => {}
+			};
+		}
+	});
+	const encoder = new TextEncoder();
+	// Device attributes, cursor position and background colour queries.
+	events!.replay(encoder.encode('old\u{1B}[c\u{1B}[6n\u{1B}]11;?\u{7}'));
+	await expect.poll(() => screenText('zsh terminal')).toContain('old');
+	events!.output(encoder.encode('live'));
+	await expect.poll(() => screenText('zsh terminal')).toContain('live');
+	expect(written).toEqual([]);
+
+	await userEvent.click(page.getByRole('group', { name: 'zsh terminal' }));
+	await userEvent.keyboard('x');
+	await expect.poll(() => written).toEqual(['x']);
+	events!.output(encoder.encode('\u{1B}[c'));
+	await expect.poll(() => written).toEqual(['x', '\u{1B}[?1;2c']);
 });
 
 test('reports exit status and stops accepting input', async () => {

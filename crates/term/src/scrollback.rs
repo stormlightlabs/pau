@@ -419,16 +419,23 @@ mod tests {
         );
     }
 
-    #[test]
-    fn keeps_memory_bounded_while_a_view_stops_reading() {
+    #[tokio::test]
+    async fn keeps_memory_bounded_while_a_view_stops_reading() {
         let scrollback = TerminalScrollback::with_limit(64 * 1024);
-        let _idle = scrollback.attach();
+        let mut idle = scrollback.attach();
         for _ in 0..LIVE_CHUNKS * 8 {
             scrollback.push(vec![b'y'; 8 * 1024]);
         }
-        let shared = scrollback.0.lock().unwrap();
-        assert!(shared.retained.len() <= shared.limit);
-        assert!(shared.live.as_ref().unwrap().len() <= LIVE_CHUNKS);
+        assert!(scrollback.0.lock().unwrap().retained.len() <= 64 * 1024);
+        // The idle view lost the oldest chunks, and only the newest
+        // `LIVE_CHUNKS` are still held for it.
+        assert_eq!(idle.recv().await, AttachedOutput::Lagged);
+        let live = idle.live.as_mut().unwrap();
+        let mut held = 0;
+        while live.try_recv().is_ok() {
+            held += 1;
+        }
+        assert_eq!(held, LIVE_CHUNKS);
     }
 
     #[tokio::test]

@@ -210,7 +210,7 @@
 						</small>
 					{:else if tab.activity}
 						<span class="terminal-panel__activity" title="New output">
-							<span class="terminal-panel__sr-only">New output</span>
+							<span class="pau-visually-hidden">New output</span>
 						</span>
 					{/if}
 				</button>
@@ -391,15 +391,6 @@
 		height: 0.45rem;
 		border-radius: 50%;
 		background: var(--shell-accent);
-	}
-
-	.terminal-panel__sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip-path: inset(50%);
-		white-space: nowrap;
 	}
 
 	.terminal-panel__icon-button {

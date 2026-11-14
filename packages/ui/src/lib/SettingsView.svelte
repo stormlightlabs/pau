@@ -143,7 +143,7 @@
 			<span class="settings-view__name" id="{id}-{slug}-name">{name}</span>
 			<p id="{id}-{slug}-description">{description}</p>
 			<span class="settings-view__scope" id="{id}-{slug}-scope"
-				><span class="settings-view__sr-only">Scope:</span> {scope}</span>
+				><span class="pau-visually-hidden">Scope:</span> {scope}</span>
 		</div>
 		<div class="settings-view__control">{@render control()}</div>
 		{#if errors[slug]}
@@ -469,15 +469,6 @@
 	.settings-view__error {
 		grid-column: 1 / -1;
 		color: var(--pau-danger);
-	}
-
-	.settings-view__sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip-path: inset(50%);
-		white-space: nowrap;
 	}
 
 	/* Narrow panes stack the control under its description instead of squeezing the description. */

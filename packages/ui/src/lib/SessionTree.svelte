@@ -297,7 +297,7 @@
 							</span>
 						{/if}
 						{#if row.isLeaf}<span class="session-tree__badge session-tree__badge--current">Current</span>{/if}
-						{#if row.onPath && !row.isLeaf}<span class="session-tree__sr-only">On the current branch</span>{/if}
+						{#if row.onPath && !row.isLeaf}<span class="pau-visually-hidden">On the current branch</span>{/if}
 					{/if}
 				</div>
 			{/each}
@@ -494,14 +494,5 @@
 
 	button {
 		justify-self: start;
-	}
-
-	.session-tree__sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip-path: inset(50%);
-		white-space: nowrap;
 	}
 </style>

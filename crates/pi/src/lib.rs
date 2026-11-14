@@ -42,8 +42,9 @@ pub use registry::{
     StartRegisteredPiSession,
 };
 pub use resources::{
-    DiscoverPiResourcesOptions, PiPackage, PiResource, PiResourceIndex, PiResourceKind,
-    PiResourceScope, PiResourceSource, PiResourceWarning, discover_pi_resources,
+    DiscoverPiResourcesOptions, PiPackage, PiProjectTrust, PiResource, PiResourceIndex,
+    PiResourceKind, PiResourceScope, PiResourceSource, PiResourceWarning, PiSkippedResource,
+    discover_pi_resources,
 };
 pub use sandbox::{PiSandboxLaunch, PreparePiSandbox, prepare_pi_sandbox};
 pub use session::{

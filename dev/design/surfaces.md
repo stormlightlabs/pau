@@ -286,10 +286,26 @@ shows native connection state, startup diagnostics, and negotiated capabilities.
 Create, edit, enable, disable, authenticate, test, and remove actions stay with
 the selected server.
 
+The contextual rail holds one view per kind: Skills, Prompts, Extensions,
+Themes, and Packages, each with its count. A view leads with a name filter and
+scope and trust choices, then one row per resource with its name and
+description, scope, source kind, and one state: invalid or not installed in
+the danger color, then duplicate, missing trust, or warnings in the warning
+color, or Loads. The state is always text, never color alone. Rows hide full
+paths, which lose their useful end when cut, and the detail shows them. While
+the workspace is not trusted, a notice above the filter says Pi skips its
+project resources. Discovery warnings that belong to no resource follow the
+list.
+
+The list is a listbox. Arrow keys, Home, and End move the selection, Down
+Arrow moves from the filter into the list, and only the selected row is in
+the tab order. On a wide window the selection fills the inspector.
+
 Selection must not imply trust. Invalid and untrusted resources remain
 inspectable. Disabled and failed servers keep their details and a direct next
-action. At narrow widths, the selected resource opens as a detail view with a
-clear return to the filtered list.
+action. Below the inspector's docking width, choosing a resource replaces the
+list with its detail and a Back button that takes focus. Back or Escape
+returns to the filtered list with focus on the same row.
 
 ## Agent sandbox
 

@@ -53,7 +53,7 @@
 			{#if path}
 				<span class="status-line__path" title={path}>
 					<Icon name="files" class="status-line__icon" size={14} />
-					<span class="status-line__sr-only">Working directory</span>
+					<span class="pau-visually-hidden">Working directory</span>
 					<!-- Right-to-left direction moves the ellipsis to the start; the isolate keeps the path readable. -->
 					<span class="status-line__path-text"><bdi>{path}</bdi></span>
 				</span>
@@ -61,7 +61,7 @@
 			{#if branch}
 				<span class="status-line__branch" title={branch}>
 					<Icon name="gitBranch" class="status-line__icon" size={14} />
-					<span class="status-line__sr-only">Branch</span>
+					<span class="pau-visually-hidden">Branch</span>
 					<span class="status-line__branch-text">{branch}</span>
 				</span>
 			{/if}
@@ -69,7 +69,7 @@
 				<span class="status-line__figures">
 					{#each figures as figure (figure.label)}
 						<span class="status-line__figure" title={figure.label}>
-							{#if figure.mark}<span aria-hidden="true">{figure.mark}</span>{/if}<span class="status-line__sr-only"
+							{#if figure.mark}<span aria-hidden="true">{figure.mark}</span>{/if}<span class="pau-visually-hidden"
 								>{figure.label}</span>
 							{figure.text}
 						</span>
@@ -160,14 +160,5 @@
 		flex: 0 1 auto;
 		margin: 0 0 0 auto;
 		text-align: end;
-	}
-
-	.status-line__sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		white-space: nowrap;
 	}
 </style>

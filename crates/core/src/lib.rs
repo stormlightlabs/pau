@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+pub mod agent_resources;
 pub mod diagnostics;
 pub mod keybindings;
 pub mod persistence;

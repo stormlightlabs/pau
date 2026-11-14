@@ -18,7 +18,7 @@ test('links working views for the current workspace and leaves the rest coming s
 		terminal: { href: '/workspaces/a%20b/terminal', unavailable: undefined, active: true },
 		processes: { href: undefined, unavailable: undefined, active: false },
 		sandbox: { href: '/workspaces/a%20b/sandbox', unavailable: undefined, active: false },
-		resources: { href: undefined, unavailable: undefined, active: false },
+		resources: { href: '/workspaces/a%20b/resources', unavailable: undefined, active: false },
 		settings: { href: '/settings', unavailable: undefined, active: false },
 		diagnostics: { href: '/diagnostics', unavailable: undefined, active: false }
 	});
@@ -28,7 +28,7 @@ test('disables workspace views until a workspace is open', () => {
 	const items = destinations('/');
 
 	expect(items.sessions).toEqual({ href: '/', unavailable: undefined, active: true });
-	for (const id of ['files', 'terminal', 'sandbox']) {
+	for (const id of ['files', 'terminal', 'sandbox', 'resources']) {
 		expect(items[id]).toEqual({ href: undefined, unavailable: NO_WORKSPACE_REASON, active: false });
 	}
 	expect(items.diagnostics?.href).toBe('/diagnostics');
@@ -38,6 +38,7 @@ test('disables workspace views until a workspace is open', () => {
 test('marks Sessions active on a session route and nothing on an unknown route', () => {
 	expect(destinations('/workspaces/[workspaceId]/sessions/[sessionId]', 'pau').sessions?.active).toBe(true);
 	expect(destinations('/settings').settings?.active).toBe(true);
+	expect(destinations('/workspaces/[workspaceId]/resources/[[kind]]', 'pau').resources?.active).toBe(true);
 	expect(Object.values(destinations(null, 'pau')).some((item) => item.active)).toBe(false);
 });
 
@@ -48,6 +49,7 @@ test('describes workspace views to restore and leaves other routes out', () => {
 		session_id: null,
 		saved_session_id: null
 	});
+	expect(workspaceViewRoute('/workspaces/[workspaceId]/resources/[[kind]]', 'pau')?.view).toBe('resources');
 	expect(workspaceViewRoute('/workspaces/[workspaceId]/sessions/[sessionId]', 'pau')).toBeUndefined();
 	expect(workspaceViewRoute('/diagnostics', undefined)).toBeUndefined();
 });

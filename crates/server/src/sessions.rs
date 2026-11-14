@@ -1666,6 +1666,7 @@ pub(crate) async fn abort_session_shell_commands(
 
 mod claude;
 pub(crate) mod readiness;
+pub(crate) mod resources;
 
 #[cfg(all(test, unix))]
 mod tests;

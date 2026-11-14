@@ -8,6 +8,7 @@ export const ICONS = {
 	terminal: 'i-tabler-terminal-2',
 	check: 'i-tabler-check',
 	chevronDown: 'i-tabler-chevron-down',
+	chevronLeft: 'i-tabler-chevron-left',
 	chevronRight: 'i-tabler-chevron-right',
 	arrowUp: 'i-tabler-arrow-up',
 	arrowDown: 'i-tabler-arrow-down',
@@ -44,6 +45,7 @@ export const ICONS = {
 	diagnostics: 'i-tabler-stethoscope',
 	settings: 'i-tabler-adjustments-horizontal',
 	sidebar: 'i-tabler-layout-sidebar',
+	warning: 'i-tabler-alert-triangle',
 	dock: 'i-tabler-layout-bottombar',
 	maximize: 'i-tabler-arrows-maximize'
 } as const;

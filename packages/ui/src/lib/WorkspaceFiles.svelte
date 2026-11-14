@@ -574,7 +574,7 @@
 			</form>
 
 			<fieldset class="workspace-files__visibility">
-				<legend>File visibility</legend>
+				<legend class="pau-visually-hidden">File visibility</legend>
 				<label class="pau-choice">
 					<input
 						type="checkbox"
@@ -1012,14 +1012,6 @@
 		padding: var(--pau-space-3) var(--shell-inset);
 		border: 0;
 		border-bottom: 1px solid var(--shell-border);
-	}
-
-	.workspace-files__visibility legend {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
 	}
 
 	.workspace-files__visibility label {

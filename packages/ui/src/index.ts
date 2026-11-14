@@ -51,6 +51,9 @@ export { default as ModelPicker } from './lib/ModelPicker.svelte';
 export { default as ContextMeter } from './lib/ContextMeter.svelte';
 export { default as ThinkingLevelPicker } from './lib/ThinkingLevelPicker.svelte';
 export { default as ProcessesView } from './lib/ProcessesView.svelte';
+export { default as ResourceBrowser } from './lib/ResourceBrowser.svelte';
+export { RESOURCE_KIND_LABELS, RESOURCE_KINDS, resourceKindFromSegment } from './lib/resource-browser';
+export type { ResourceEntry, ResourceIndex, ResourceKind } from './lib/types/resources';
 export { default as SandboxSettingsView } from './lib/SandboxSettingsView.svelte';
 export {
 	default as SettingsView,

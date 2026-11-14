@@ -1,10 +1,14 @@
 use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::PathBuf;
+use std::process::Command;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 use pau_pi::{
-    DiscoverPiResourcesOptions, PiResource, PiResourceIndex, PiResourceKind, PiResourceScope,
-    PiResourceSource, discover_pi_resources,
+    DiscoverPiResourcesOptions, PiProjectTrust, PiResource, PiResourceIndex, PiResourceKind,
+    PiResourceScope, PiResourceSource, discover_pi_resources,
 };
 use tempfile::TempDir;
 
@@ -47,6 +51,16 @@ impl Fixture {
 
     fn discover(&self) -> PiResourceIndex {
         self.discover_in("work")
+    }
+
+    /// Saves Pi's trust decision for the `work` workspace.
+    fn trust_work(&self, decision: bool) {
+        fs::create_dir_all(self.path("work")).unwrap();
+        let key = serde_json::to_string(&self.path("work").canonicalize().unwrap()).unwrap();
+        self.write(
+            "home/.pi/agent/trust.json",
+            &format!("{{{key}: {decision}}}"),
+        );
     }
 }
 
@@ -162,6 +176,7 @@ fn malformed_and_incomplete_resources_warn_without_hiding_others() {
     f.write("work/.pi/themes/broken.json", "{ nope");
     f.write("work/.pi/themes/anonymous.json", "{}");
     f.write("work/.pi/settings.json", "[1]");
+    f.trust_work(true);
 
     let index = f.discover();
 
@@ -180,6 +195,20 @@ fn malformed_and_incomplete_resources_warn_without_hiding_others() {
         "not a valid JSON object"
     ));
     assert!(names(&index, PiResourceKind::Theme).is_empty());
+    let skipped: Vec<_> = index
+        .skipped
+        .iter()
+        .map(|s| (s.resource.name.as_str(), s.winner.is_none()))
+        .collect();
+    assert_eq!(
+        skipped,
+        [
+            ("bare", true),
+            ("unclosed", true),
+            ("anonymous", true),
+            ("broken", true)
+        ]
+    );
 }
 
 #[test]
@@ -191,6 +220,7 @@ fn duplicate_names_keep_the_first_discovery_and_warn() {
     f.write("home/.pi/agent/themes/b.json", r#"{"name":"t"}"#);
     f.write("work/.pi/extensions/dup.ts", "");
     f.write("home/.pi/agent/extensions/dup.ts", "");
+    f.trust_work(true);
 
     let index = f.discover();
 
@@ -205,6 +235,47 @@ fn duplicate_names_keep_the_first_discovery_and_warn() {
     // Extensions have no name uniqueness rule.
     assert_eq!(names(&index, PiResourceKind::Extension), ["dup", "dup"]);
     assert_eq!(index.warnings.len(), 2);
+    let skipped = &index.skipped[0];
+    assert_eq!(skipped.resource.scope, PiResourceScope::User);
+    assert_eq!(
+        skipped.winner.as_deref(),
+        Some(f.path("work/.pi/skills/same/SKILL.md").as_path())
+    );
+    assert_eq!(index.skipped.len(), 2);
+}
+
+#[test]
+fn reads_the_nearest_saved_trust_decision() {
+    let f = Fixture::new();
+    fs::create_dir_all(f.path("work/nested")).unwrap();
+    let trust = |entries: &str| f.write("home/.pi/agent/trust.json", entries);
+    let canonical = |relative: &str| f.path(relative).canonicalize().unwrap();
+    let key = |relative: &str| serde_json::to_string(&canonical(relative)).unwrap();
+
+    assert_eq!(f.discover().project_trust, PiProjectTrust::Undecided);
+    trust(&format!("{{{}: true}}", key("work")));
+    assert_eq!(
+        f.discover_in("work/nested").project_trust,
+        PiProjectTrust::Trusted
+    );
+    trust(&format!(
+        "{{{}: true, {}: false}}",
+        key("work"),
+        key("work/nested")
+    ));
+    assert_eq!(
+        f.discover_in("work/nested").project_trust,
+        PiProjectTrust::Declined
+    );
+    trust("{}");
+    f.write(
+        "home/.pi/agent/settings.json",
+        r#"{"defaultProjectTrust": "always"}"#,
+    );
+    assert_eq!(f.discover().project_trust, PiProjectTrust::Trusted);
+    trust("[]");
+    let index = f.discover();
+    assert!(warned(&index, "trust.json", "not a valid JSON object"));
 }
 
 #[test]
@@ -253,6 +324,7 @@ fn settings_paths_resolve_by_scope_and_honor_exclusions() {
     );
     f.write("home/.pi/agent/ext/a.ts", "");
     f.write("home/.pi/agent/ext/b.ts", "");
+    f.trust_work(true);
 
     let index = f.discover();
 
@@ -293,6 +365,7 @@ fn indexes_packages_with_conventions_manifests_and_filters() {
         ]}"#,
     );
     f.write("work/.pi/settings.json", r#"{"packages":["./local-pkg"]}"#);
+    f.trust_work(true);
 
     let index = f.discover();
 
@@ -310,7 +383,6 @@ fn indexes_packages_with_conventions_manifests_and_filters() {
         .find(|p| p.source == "npm:not-installed")
         .unwrap();
     assert!(!missing.installed);
-    assert!(warned(&index, "agent/settings.json", "is not installed"));
 
     assert_eq!(
         find(&index, PiResourceKind::Skill, "pkg-skill").source,
@@ -342,12 +414,159 @@ fn project_package_entry_replaces_the_user_entry() {
         r#"{"packages":["npm:shared"]}"#,
     );
     f.write("work/.pi/settings.json", r#"{"packages":["npm:shared"]}"#);
+    f.trust_work(true);
 
     let index = f.discover();
 
     assert_eq!(index.packages.len(), 1);
     assert_eq!(index.packages[0].scope, PiResourceScope::Project);
     assert_eq!(names(&index, PiResourceKind::Prompt), ["project"]);
+}
+
+/// Pi reads no project resource or project setting until the project is
+/// trusted, so the user resources it loads win every collision, and the
+/// project `settings.json` adds no paths or packages.
+#[test]
+fn untrusted_project_resources_never_shadow_user_ones() {
+    for decision in [None, Some(false)] {
+        let f = Fixture::new();
+        f.write("work/.pi/prompts/review.md", "Project review\n");
+        f.write("work/.pi/prompts/other.md", "Other\n");
+        f.write("work/.pi/more/listed.md", "Listed\n");
+        f.write(
+            "work/.pi/settings.json",
+            r#"{"prompts":["more"],"packages":["npm:shared"]}"#,
+        );
+        f.write("work/.pi/npm/node_modules/shared/package.json", "{}");
+        f.write("work/.pi/npm/node_modules/shared/prompts/shared.md", "p");
+        f.write("home/.pi/agent/prompts/review.md", "User review\n");
+        f.write("home/.pi/agent/npm/node_modules/shared/package.json", "{}");
+        f.write(
+            "home/.pi/agent/npm/node_modules/shared/prompts/shared.md",
+            "u",
+        );
+        f.write(
+            "home/.pi/agent/settings.json",
+            r#"{"packages":["npm:shared"]}"#,
+        );
+        if let Some(decision) = decision {
+            f.trust_work(decision);
+        }
+
+        let index = f.discover();
+
+        let ready = |name: &str| -> Vec<PiResourceScope> {
+            index
+                .resources
+                .iter()
+                .filter(|r| r.kind == PiResourceKind::Prompt && r.name == name)
+                .map(|r| r.scope)
+                .collect()
+        };
+        assert_eq!(
+            ready("review"),
+            [PiResourceScope::User, PiResourceScope::Project],
+            "{decision:?}"
+        );
+        assert_eq!(ready("shared"), [PiResourceScope::User], "{decision:?}");
+        assert!(ready("listed").is_empty(), "{decision:?}");
+        let scopes: Vec<PiResourceScope> = index.packages.iter().map(|p| p.scope).collect();
+        assert_eq!(scopes, [PiResourceScope::User]);
+        assert!(index.skipped.is_empty(), "{:#?}", index.skipped);
+    }
+}
+
+/// Runs discovery on another thread and fails instead of hanging when it
+/// does not finish.
+fn discover_within(f: &Fixture, seconds: u64) -> PiResourceIndex {
+    let options = DiscoverPiResourcesOptions {
+        home_directory: f.path("home"),
+        agent_directory: f.path("home/.pi/agent"),
+        workspace: f.path("work"),
+    };
+    fs::create_dir_all(&options.workspace).unwrap();
+    let (send, receive) = mpsc::channel();
+    thread::spawn(move || send.send(discover_pi_resources(&options)));
+    receive
+        .recv_timeout(Duration::from_secs(seconds))
+        .expect("discovery did not finish")
+}
+
+#[test]
+fn untrusted_settings_cannot_scan_outside_the_workspace() {
+    let f = Fixture::new();
+    f.skill("home/extra/outside", "outside");
+    f.write("elsewhere/prompt.md", "Outside\n");
+    f.write(
+        "work/.pi/settings.json",
+        r#"{"skills":["/","~"],"prompts":["~","../../elsewhere"],"themes":["/"]}"#,
+    );
+    f.write("work/.pi/prompts/inside.md", "Inside\n");
+
+    let index = discover_within(&f, 10);
+
+    let workspace = f.path("work");
+    for resource in &index.resources {
+        assert!(resource.path.starts_with(&workspace), "{resource:#?}");
+    }
+    assert_eq!(names(&index, PiResourceKind::Prompt), ["inside"]);
+    assert!(names(&index, PiResourceKind::Skill).is_empty());
+}
+
+#[test]
+fn skips_special_files_and_oversized_files() {
+    let f = Fixture::new();
+    f.write("work/.pi/prompts/ok.md", "Fine\n");
+    let fifo = f.path("elsewhere/pipe.md");
+    fs::create_dir_all(fifo.parent().unwrap()).unwrap();
+    let made = Command::new("mkfifo").arg(&fifo).status().unwrap();
+    assert!(made.success());
+    symlink(&fifo, f.path("work/.pi/prompts/pipe.md")).unwrap();
+    f.write("work/.pi/prompts/huge.md", &"x".repeat(600 * 1024));
+    f.write(
+        "work/.pi/settings.json",
+        r#"{"prompts":["../../elsewhere/pipe.md"]}"#,
+    );
+    f.trust_work(true);
+
+    let index = discover_within(&f, 10);
+
+    assert_eq!(names(&index, PiResourceKind::Prompt), ["ok"]);
+    assert!(warned(&index, "elsewhere/pipe.md", "Not a regular file"));
+    assert!(warned(&index, "prompts/huge.md", "larger than 512 KiB"));
+    assert!(
+        index
+            .skipped
+            .iter()
+            .any(|s| s.resource.path.ends_with("prompts/huge.md"))
+    );
+}
+
+#[test]
+fn folder_scans_stop_at_the_depth_and_entry_caps() {
+    let f = Fixture::new();
+    let deep = (0..12)
+        .map(|i| format!("d{i}"))
+        .collect::<Vec<_>>()
+        .join("/");
+    f.skill(&format!("work/.pi/skills/{deep}"), "deep");
+    f.skill("work/.pi/skills/shallow", "shallow");
+    let many = f.path("work/.pi/prompts");
+    fs::create_dir_all(&many).unwrap();
+    for i in 0..20_050 {
+        fs::write(many.join(format!("{i:05}.txt")), "").unwrap();
+    }
+    f.trust_work(true);
+
+    let index = discover_within(&f, 30);
+
+    assert_eq!(names(&index, PiResourceKind::Skill), ["shallow"]);
+    assert!(warned(&index, "d8", "nested too deeply"));
+    assert!(warned(
+        &index,
+        ".pi/prompts",
+        "Scan stopped after 20000 entries"
+    ));
 }
 
 #[test]

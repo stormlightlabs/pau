@@ -14,6 +14,7 @@ const SECTION_ROUTES: Record<string, string> = {
 	'/workspaces/[workspaceId]/terminal': 'terminal',
 	'/workspaces/[workspaceId]/processes': 'processes',
 	'/workspaces/[workspaceId]/sandbox': 'sandbox',
+	'/workspaces/[workspaceId]/resources/[[kind]]': 'resources',
 	'/settings': 'settings',
 	'/diagnostics': 'diagnostics'
 };
@@ -39,7 +40,7 @@ export function productNavigation(routeId: string | null, workspaceId: string | 
 		{ id: 'terminal', label: 'Terminal', icon: 'terminal', href: workspacePath('terminal'), unavailable },
 		{ id: 'processes', label: 'Processes', icon: 'processes' },
 		{ id: 'sandbox', label: 'Agent sandbox', icon: 'sandbox', href: workspacePath('sandbox'), unavailable },
-		{ id: 'resources', label: 'Resources', icon: 'resources' },
+		{ id: 'resources', label: 'Resources', icon: 'resources', href: workspacePath('resources'), unavailable },
 		{ id: 'settings', label: 'Settings', icon: 'settings', href: '/settings' },
 		{ id: 'diagnostics', label: 'Diagnostics', icon: 'diagnostics', href: '/diagnostics' }
 	];
@@ -51,7 +52,8 @@ export const WORKSPACE_VIEW_ROUTES = {
 	files: '/workspaces/[workspaceId]/editor',
 	terminal: '/workspaces/[workspaceId]/terminal',
 	processes: '/workspaces/[workspaceId]/processes',
-	sandbox: '/workspaces/[workspaceId]/sandbox'
+	sandbox: '/workspaces/[workspaceId]/sandbox',
+	resources: '/workspaces/[workspaceId]/resources/[[kind]]'
 } as const satisfies Record<Exclude<LastView, 'session'>, string>;
 
 /**

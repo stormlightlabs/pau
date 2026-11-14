@@ -18,12 +18,21 @@
 //! 5. Packages declared in project, then user, settings. A project entry for
 //!    the same package replaces the user entry.
 //!
-//! Known gap: Pi only loads project `.pi` resources (and project settings)
-//! once the project is trusted, and hides them otherwise. This indexer always
-//! reads them; the caller must apply Pau's trust decision when presenting them.
+//! Pi only loads project `.pi` resources, project `.agents/skills`, and
+//! project settings once the project is trusted. This indexer always reads
+//! the project folders so they stay inspectable, and reports the saved
+//! decision as [`PiResourceIndex::project_trust`] for the caller to present.
+//! Until the project is trusted, it ignores the project `settings.json`, as Pi
+//! does, so a committed file cannot point the scan outside the workspace. The
+//! user scope is indexed first and names collide only within one scope, so a
+//! project file never shadows the user resource Pi loads.
+//!
+//! Every read is limited to regular files of at most [`MAX_FILE_BYTES`], and
+//! folder scans stop at [`MAX_WALK_DEPTH`] and [`MAX_WALK_ENTRIES`].
 
 use std::collections::{HashMap, HashSet};
-use std::fs;
+use std::fs::{self, File};
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use globset::GlobBuilder;
@@ -32,6 +41,34 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::mcp::{PackageDeclaration, package_key, package_root};
+
+/// Largest resource, settings or manifest file the indexer reads. Pi's
+/// resources are small text files; the cap keeps a committed multi-gigabyte
+/// file from exhausting server memory.
+const MAX_FILE_BYTES: u64 = 512 * 1024;
+/// Deepest folder `walk` enters below a scanned path, as in `list_files`.
+const MAX_WALK_DEPTH: usize = 8;
+/// Directory entries one index examines before scanning stops.
+const MAX_WALK_ENTRIES: usize = 20_000;
+const NOT_REGULAR: &str = "Not a regular file or folder; skipped.";
+
+/// Reads a UTF-8 file of at most [`MAX_FILE_BYTES`]. The path must name a
+/// regular file after following symbolic links: opening a FIFO blocks and a
+/// device such as `/dev/zero` never reaches the end.
+fn read_bounded(path: &Path) -> io::Result<String> {
+    if !fs::metadata(path)?.is_file() {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, NOT_REGULAR));
+    }
+    let mut bytes = Vec::new();
+    File::open(path)?
+        .take(MAX_FILE_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_FILE_BYTES {
+        let message = format!("File is larger than {} KiB.", MAX_FILE_BYTES / 1024);
+        return Err(io::Error::new(io::ErrorKind::InvalidData, message));
+    }
+    String::from_utf8(bytes).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+}
 
 /// Kind of Pi resource.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -127,6 +164,38 @@ pub struct PiPackage {
     pub installed: bool,
 }
 
+/// A resource Pi finds but does not load.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PiSkippedResource {
+    /// The resource as far as it could be read. An invalid file is named
+    /// after its file or skill directory and has no description.
+    #[serde(flatten)]
+    pub resource: PiResource,
+    /// For a name collision, the path of the resource that loads instead.
+    /// `None` when the file is invalid; its reason is in the warnings.
+    pub winner: Option<PathBuf>,
+}
+
+/// Pi's project trust decision for a workspace.
+///
+/// An extension handling Pi's `project_trust` event and the `--approve` flag
+/// can override it in a running Pi; neither is visible on disk.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PiProjectTrust {
+    /// A saved decision trusts the workspace, or `defaultProjectTrust` is
+    /// `"always"`.
+    Trusted,
+    /// A saved decision declines the workspace, or `defaultProjectTrust` is
+    /// `"never"`.
+    Declined,
+    /// No decision applies. RPC sessions skip project resources until the
+    /// operator saves one with Pi's `/trust`.
+    #[default]
+    Undecided,
+}
+
 /// Problem found while indexing.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -147,8 +216,12 @@ pub struct PiResourceIndex {
     pub resources: Vec<PiResource>,
     /// Declared packages.
     pub packages: Vec<PiPackage>,
+    /// Resources found but not loaded: name collisions and invalid files.
+    pub skipped: Vec<PiSkippedResource>,
     /// Discovery warnings.
     pub warnings: Vec<PiResourceWarning>,
+    /// Whether Pi loads the project-scope resources.
+    pub project_trust: PiProjectTrust,
 }
 
 /// Locations used for one discovery run.
@@ -174,55 +247,57 @@ struct SettingsFile {
 /// Indexes user and project Pi resources.
 pub fn discover_pi_resources(options: &DiscoverPiResourcesOptions) -> PiResourceIndex {
     let mut indexer = Indexer::default();
-    let project_pi = options.workspace.join(".pi");
-    let home = &options.home_directory;
-    let files = [
-        (project_pi.clone(), PiResourceScope::Project),
-        (options.agent_directory.clone(), PiResourceScope::User),
-    ]
-    .map(|(base, scope)| {
-        let path = base.join("settings.json");
-        SettingsFile {
-            value: indexer.read_settings(&path),
-            base,
-            path,
-            scope,
-        }
-    });
-    let [project, user] = &files;
+    let user = indexer.settings_file(options.agent_directory.clone(), PiResourceScope::User);
+    let trust = indexer.project_trust(options, user.value.as_ref());
+    indexer.index.project_trust = trust;
+    let project_base = options.workspace.join(".pi");
 
-    indexer.scan_setting_paths(project, home);
+    if trust == PiProjectTrust::Trusted {
+        let project = indexer.settings_file(project_base, PiResourceScope::Project);
+        let files = [project, user];
+        scan_scope(&mut indexer, &files[0], options);
+        scan_scope(&mut indexer, &files[1], options);
+        indexer.scan_packages(&files);
+    } else {
+        // Pi reads no project settings until the project is trusted, so a
+        // committed `settings.json` cannot point the scan outside the
+        // workspace. The project folders are still listed for inspection.
+        let project = SettingsFile {
+            value: None,
+            path: project_base.join("settings.json"),
+            base: project_base,
+            scope: PiResourceScope::Project,
+        };
+        // Scanning the user scope first lets a project file never shadow a
+        // user one.
+        indexer.isolate_scopes = true;
+        scan_scope(&mut indexer, &user, options);
+        indexer.scan_packages(std::slice::from_ref(&user));
+        scan_scope(&mut indexer, &project, options);
+    }
+    indexer.index
+}
+
+/// Scans the paths one settings file lists, then its scope's conventional
+/// directories.
+fn scan_scope(indexer: &mut Indexer, file: &SettingsFile, options: &DiscoverPiResourcesOptions) {
+    let home = &options.home_directory;
+    indexer.scan_setting_paths(file, home);
     for kind in PiResourceKind::ALL {
-        indexer.scan_directory(
-            kind,
-            &project_pi.join(kind.directory()),
-            PiResourceScope::Project,
-        );
-        if kind == PiResourceKind::Skill {
+        indexer.scan_directory(kind, &file.base.join(kind.directory()), file.scope);
+        if kind == PiResourceKind::Skill && file.scope == PiResourceScope::Project {
             for root in project_agent_roots(&options.workspace, home) {
-                indexer.scan_directory(
-                    kind,
-                    &root.join(".agents/skills"),
-                    PiResourceScope::Project,
-                );
+                indexer.scan_directory(kind, &root.join(".agents/skills"), file.scope);
             }
         }
     }
-    indexer.scan_setting_paths(user, home);
-    for kind in PiResourceKind::ALL {
+    if file.scope == PiResourceScope::User {
         indexer.scan_directory(
-            kind,
-            &options.agent_directory.join(kind.directory()),
-            PiResourceScope::User,
+            PiResourceKind::Skill,
+            &home.join(".agents/skills"),
+            file.scope,
         );
     }
-    indexer.scan_directory(
-        PiResourceKind::Skill,
-        &home.join(".agents/skills"),
-        PiResourceScope::User,
-    );
-    indexer.scan_packages(&files);
-    indexer.index
 }
 
 /// Directories whose `.agents/skills` Pi reads for the project: the workspace
@@ -245,9 +320,31 @@ fn project_agent_roots(workspace: &Path, home: &Path) -> Vec<PathBuf> {
 struct Indexer {
     index: PiResourceIndex,
     seen_paths: HashSet<PathBuf>,
+    /// Directory entries `walk` has examined across the whole index.
+    walked_entries: usize,
+    /// Set once the entry budget runs out, so the warning appears once.
+    walk_stopped: bool,
+    /// Set when the project is not trusted: names then collide only within
+    /// one scope, since Pi loads no project resource that could win.
+    isolate_scopes: bool,
 }
 
 impl Indexer {
+    /// Counts one directory entry under `dir`. Returns true once the budget
+    /// is spent, warning the first time.
+    fn walk_budget_spent(&mut self, kind: PiResourceKind, dir: &Path) -> bool {
+        self.walked_entries += 1;
+        if self.walked_entries <= MAX_WALK_ENTRIES {
+            return false;
+        }
+        if !self.walk_stopped {
+            self.walk_stopped = true;
+            let message = format!("Scan stopped after {MAX_WALK_ENTRIES} entries.");
+            self.warn(Some(kind), dir, message);
+        }
+        true
+    }
+
     fn warn(&mut self, kind: Option<PiResourceKind>, path: &Path, message: impl Into<String>) {
         self.index.warnings.push(PiResourceWarning {
             kind,
@@ -286,20 +383,30 @@ impl Indexer {
         let mut found = Vec::new();
         if meta.is_file() {
             self.candidate_file(kind, path, &mut found, true);
+        } else if meta.is_dir() {
+            self.walk(kind, path, &mut found, &mut HashSet::new(), 0);
         } else {
-            self.walk(kind, path, &mut found, &mut HashSet::new(), true);
+            self.warn(Some(kind), path, NOT_REGULAR);
+            return None;
         }
         Some(found)
     }
 
+    /// Collects candidates under `dir`, `depth` levels below the scanned path.
+    /// Depth and the indexer's entry budget bound the scan, since a settings
+    /// path or a symbolic link can point at a large tree.
     fn walk(
         &mut self,
         kind: PiResourceKind,
         dir: &Path,
         found: &mut Vec<Candidate>,
         visited: &mut HashSet<PathBuf>,
-        root: bool,
+        depth: usize,
     ) {
+        if depth > MAX_WALK_DEPTH {
+            self.warn(Some(kind), dir, "Folder is nested too deeply; not scanned.");
+            return;
+        }
         let Ok(canonical) = fs::canonicalize(dir) else {
             return;
         };
@@ -326,13 +433,16 @@ impl Indexer {
             if name.starts_with('.') || name == "node_modules" {
                 continue;
             }
+            if self.walk_budget_spent(kind, dir) {
+                return;
+            }
             let Ok(meta) = fs::metadata(&entry) else {
                 self.warn(Some(kind), &entry, "Broken symbolic link.");
                 continue;
             };
             if meta.is_dir() {
                 match kind {
-                    PiResourceKind::Skill => self.walk(kind, &entry, found, visited, false),
+                    PiResourceKind::Skill => self.walk(kind, &entry, found, visited, depth + 1),
                     PiResourceKind::Extension => {
                         let index = ["index.ts", "index.js"]
                             .iter()
@@ -344,7 +454,10 @@ impl Indexer {
                     }
                     PiResourceKind::Prompt | PiResourceKind::Theme => {}
                 }
-            } else if root || kind != PiResourceKind::Skill {
+            } else if !meta.is_file() {
+                // Devices, FIFOs and sockets never finish reading.
+                continue;
+            } else if depth == 0 || kind != PiResourceKind::Skill {
                 // Standalone Markdown skills count only at the top level.
                 self.candidate_file(kind, &entry, found, false);
             }
@@ -391,6 +504,8 @@ impl Indexer {
             PiResourceKind::Extension => Some((extension_name(&candidate), None)),
         };
         let Some((name, description)) = loaded else {
+            let name = candidate.fallback_name();
+            self.skip(candidate, name, None, scope, source, None);
             return;
         };
         // Skills, prompts, and themes need unique names; extensions do not.
@@ -399,11 +514,17 @@ impl Indexer {
                 .index
                 .resources
                 .iter()
-                .find(|r| r.kind == kind && r.name == name)
-                .map(|r| r.path.display().to_string());
+                .find(|r| {
+                    r.kind == kind && r.name == name && (!self.isolate_scopes || r.scope == scope)
+                })
+                .map(|r| r.path.clone());
             if let Some(first) = first {
-                let message = format!("Name \"{name}\" collides with {first}; keeping the first.");
+                let message = format!(
+                    "Name \"{name}\" collides with {}; keeping the first.",
+                    first.display()
+                );
                 self.warn(Some(kind), &candidate.file, message);
+                self.skip(candidate, name, description, scope, source, Some(first));
                 return;
             }
         }
@@ -417,6 +538,68 @@ impl Indexer {
         });
     }
 
+    fn skip(
+        &mut self,
+        candidate: Candidate,
+        name: String,
+        description: Option<String>,
+        scope: PiResourceScope,
+        source: PiResourceSource,
+        winner: Option<PathBuf>,
+    ) {
+        self.index.skipped.push(PiSkippedResource {
+            resource: PiResource {
+                kind: candidate.kind,
+                name,
+                description,
+                path: candidate.file,
+                scope,
+                source,
+            },
+            winner,
+        });
+    }
+
+    /// Reads Pi's saved decision for the workspace from `trust.json` in the
+    /// agent directory: the entry for the workspace or its nearest ancestor,
+    /// by canonical path. Without one, the user setting `defaultProjectTrust`
+    /// decides.
+    fn project_trust(
+        &mut self,
+        options: &DiscoverPiResourcesOptions,
+        user_settings: Option<&Value>,
+    ) -> PiProjectTrust {
+        let path = options.agent_directory.join("trust.json");
+        let saved = match read_bounded(&path) {
+            Ok(text) => match parse_json(&text) {
+                Some(Value::Object(saved)) => saved,
+                _ => {
+                    self.warn(
+                        None,
+                        &path,
+                        "Trust store is not a valid JSON object; ignored.",
+                    );
+                    Map::new()
+                }
+            },
+            Err(_) => Map::new(),
+        };
+        let workspace = fs::canonicalize(&options.workspace).unwrap_or(options.workspace.clone());
+        let decision = workspace.ancestors().find_map(|directory| {
+            saved
+                .get(directory.to_string_lossy().as_ref())
+                .and_then(Value::as_bool)
+        });
+        let default = user_settings
+            .and_then(|settings| settings.get("defaultProjectTrust"))
+            .and_then(Value::as_str);
+        match (decision, default) {
+            (Some(true), _) | (None, Some("always")) => PiProjectTrust::Trusted,
+            (Some(false), _) | (None, Some("never")) => PiProjectTrust::Declined,
+            _ => PiProjectTrust::Undecided,
+        }
+    }
+
     fn load_skill(&mut self, c: &Candidate) -> Option<(String, Option<String>)> {
         let text = self.read(c)?;
         let Some(front) = parse_frontmatter(&text) else {
@@ -427,16 +610,10 @@ impl Indexer {
             );
             return None;
         };
-        let fallback = if c.is_skill_directory() {
-            c.file.parent().and_then(Path::file_name)
-        } else {
-            c.file.file_stem()
-        };
         let name = front
             .get("name")
             .cloned()
-            .or_else(|| fallback.map(|n| n.to_string_lossy().into_owned()))
-            .unwrap_or_default();
+            .unwrap_or_else(|| c.fallback_name());
         let Some(description) = front.get("description").filter(|d| !d.trim().is_empty()) else {
             self.warn(
                 Some(c.kind),
@@ -497,7 +674,7 @@ impl Indexer {
     }
 
     fn read(&mut self, c: &Candidate) -> Option<String> {
-        match fs::read_to_string(&c.file) {
+        match read_bounded(&c.file) {
             Ok(text) => Some(text),
             Err(error) => {
                 self.warn(Some(c.kind), &c.file, format!("Cannot read file: {error}"));
@@ -506,9 +683,27 @@ impl Indexer {
         }
     }
 
+    /// Reads the `settings.json` in `base`.
+    fn settings_file(&mut self, base: PathBuf, scope: PiResourceScope) -> SettingsFile {
+        let path = base.join("settings.json");
+        SettingsFile {
+            value: self.read_settings(&path),
+            base,
+            path,
+            scope,
+        }
+    }
+
     /// Reads a settings file. Absent is normal; unreadable JSON warns.
     fn read_settings(&mut self, path: &Path) -> Option<Value> {
-        let text = fs::read_to_string(path).ok()?;
+        let text = match read_bounded(path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return None,
+            Err(error) => {
+                self.warn(None, path, format!("Cannot read settings: {error}"));
+                return None;
+            }
+        };
         match parse_json(&text) {
             Some(value) if value.is_object() => Some(value),
             _ => {
@@ -549,7 +744,8 @@ impl Indexer {
     }
 
     fn scan_packages(&mut self, files: &[SettingsFile]) {
-        // Project comes first, so a user entry for the same package is dropped.
+        // When `files` holds both scopes, project comes first, so a user entry
+        // for the same package is dropped.
         let mut seen = HashSet::new();
         for file in files {
             let Some(entries) = file
@@ -583,20 +779,20 @@ impl Indexer {
                     settings_path: file.path.clone(),
                     extensions: None,
                 };
-                let root = package_root(&declaration).filter(|root| root.is_dir());
+                // Collecting the components drops the `.` of a `./pkg` source.
+                let declared_root =
+                    package_root(&declaration).map(|root| root.components().collect::<PathBuf>());
+                let root = declared_root.clone().filter(|root| root.is_dir());
                 self.index.packages.push(PiPackage {
                     source: source.to_owned(),
                     scope: file.scope,
                     settings_path: file.path.clone(),
-                    root: package_root(&declaration),
+                    root: declared_root,
                     installed: root.is_some(),
                 });
-                match root {
-                    Some(root) => self.scan_package(&root, source, filters, file.scope),
-                    None => {
-                        let message = format!("Package \"{source}\" is not installed.");
-                        self.warn(None, &file.path, message);
-                    }
+                // A missing package is reported by `PiPackage::installed`.
+                if let Some(root) = root {
+                    self.scan_package(&root, source, filters, file.scope);
                 }
             }
         }
@@ -611,7 +807,7 @@ impl Indexer {
         filters: Option<&Map<String, Value>>,
         scope: PiResourceScope,
     ) {
-        let manifest = fs::read_to_string(root.join("package.json"))
+        let manifest = read_bounded(&root.join("package.json"))
             .ok()
             .and_then(|text| parse_json(&text))
             .and_then(|value| value.get("pi").cloned());
@@ -658,6 +854,18 @@ struct Candidate {
 impl Candidate {
     fn new(kind: PiResourceKind, file: PathBuf) -> Self {
         Self { kind, file }
+    }
+
+    /// Name for a file that could not be read: the skill directory, or the
+    /// file name without its extension.
+    fn fallback_name(&self) -> String {
+        let name = if self.is_skill_directory() {
+            self.file.parent().and_then(Path::file_name)
+        } else {
+            self.file.file_stem()
+        };
+        name.map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default()
     }
 
     fn is_skill_directory(&self) -> bool {

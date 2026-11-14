@@ -372,7 +372,7 @@
 		<span class="select__value" class:select__value--placeholder={!selected}>{selected?.label ?? placeholder}</span>
 		<Icon name="chevronDown" class="select__chevron" size="0.75rem" />
 	</button>
-	{#if explained}<span id={hintId} class="select__hint">{disabledReason}</span>{/if}
+	{#if explained}<span id={hintId} class="pau-visually-hidden">{disabledReason}</span>{/if}
 
 	<!-- Pointer presses keep focus on the trigger, which owns the active option. -->
 	<div
@@ -501,15 +501,6 @@
 	.select__trigger :global(.select__chevron) {
 		flex: none;
 		color: var(--pau-text-muted);
-	}
-
-	/* Screen readers get the explanation through aria-describedby. Sighted users get the title. */
-	.select__hint {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip-path: inset(50%);
 	}
 
 	.select__list {

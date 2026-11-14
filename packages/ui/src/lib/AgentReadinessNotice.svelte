@@ -58,7 +58,7 @@ once the operator has applied it.
 	const titleId = $props.id();
 </script>
 
-<section class="agent-readiness" aria-labelledby={titleId}>
+<section class="pau-notice agent-readiness" aria-labelledby={titleId}>
 	<h2 id={titleId}>{agentName} is not ready</h2>
 	<p id={reasonId}>
 		{#each codeSpans(problem.reason) as span, index (index)}{#if span.code}<code>{span.text}</code
@@ -90,10 +90,6 @@ once the operator has applied it.
 		gap: var(--pau-space-2);
 		margin-block-start: var(--pau-space-5);
 		padding: var(--pau-space-4);
-		border: var(--pau-border-thin) solid var(--pau-border);
-		border-inline-start: 2px solid var(--pau-warning);
-		border-radius: var(--pau-radius-surface);
-		background: var(--pau-surface);
 	}
 
 	.agent-readiness h2,

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 
+	import '../styles/tokens.css';
 	import { anchorBox, placeAgainst } from './anchored-placement';
 	import { dismissible } from './dismissal';
 	import { createFocusReturn } from './focus-return';
@@ -177,7 +178,7 @@
 		<span class="model-picker__value">{pendingId ? 'Switching…' : label}</span>
 		<Icon name="chevronDown" class="model-picker__chevron" size="0.75rem" />
 	</button>
-	{#if explanation}<span id="model-picker-note" class="model-picker__hint">{explanation}</span>{/if}
+	{#if explanation}<span id="model-picker-note" class="pau-visually-hidden">{explanation}</span>{/if}
 
 	{#if open}
 		<div
@@ -276,15 +277,6 @@
 	.model-picker__trigger :global(.model-picker__chevron) {
 		flex: none;
 		color: var(--pau-text-muted);
-	}
-
-	/* Screen readers get the explanation through aria-describedby. Sighted users get the title. */
-	.model-picker__hint {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip-path: inset(50%);
 	}
 
 	.model-picker__panel {

@@ -118,6 +118,8 @@ Every issue follows these rules:
 - Author commits with the owner's GitHub noreply address,
   `71664048+desertthunder@users.noreply.github.com`, and use it in any
   trailer. GitHub rejects a push whose author email is private.
+- Title pull requests as Conventional Commits, such as `feat(server): …` or
+  `docs: …`. The title becomes the squash commit's subject on `main`.
 
 ## Dogfood Pau
 

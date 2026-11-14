@@ -29,7 +29,8 @@ removing it, and in the main checkout after pulling a merge.
 
 On macOS, do not enter the Nix shell or use direnv. Use the Homebrew and rustup
 toolchain described in `README.md`, and keep local settings in `.env`. The flake
-and `.envrc` serve NixOS only.
+and `.envrc` serve NixOS only. Install standalone CLIs from Homebrew or the
+vendor's release, not from nixpkgs.
 
 Run JavaScript tools through pnpm with `pnpm exec`, `pnpm --filter`, or a
 package script. Do not use `npx`.
@@ -111,6 +112,9 @@ Every task follows these rules:
   are being automated from the squash commits on `main`.
 - Write commit messages and pull request descriptions without agent
   attribution. Omit `Co-Authored-By` trailers and generated-by lines.
+- Author commits with the owner's GitHub noreply address,
+  `71664048+desertthunder@users.noreply.github.com`, and use it in any
+  trailer. GitHub rejects a push whose author email is private.
 
 ## Dogfood Pau
 
@@ -135,8 +139,11 @@ instruction in its prompt.
 
 Always audit changed prose against that skill before finishing. Remove AI
 writing tropes, stock transitions, repetition, inflated claims, and other
-formulaic language. Keep task IDs, task boundaries, and implementation phases
-out of user-facing or published documentation. Name packages, scripts, and
+formulaic language. Keep task boundaries and implementation phases out of
+user-facing or published documentation. The repository is open source, so
+never put Linear issue IDs, Linear URLs or Claude Design artifact links in
+code, docs, commit messages or pull request descriptions; naming Linear and
+the PAU team is fine. Name packages, scripts, and
 files for what they do, not for the task phase that created them, such as a
 spike.
 

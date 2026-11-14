@@ -80,15 +80,35 @@ export class PermissionController {
 			if (evaluation.action === 'deny') {
 				return deny('rule', evaluation.ruleReason ?? `Blocked by the Pau permission policy (${evaluation.reason}).`);
 			}
-			const started = performance.now();
-			const value = await ui.select(requestTitle(requestId, call, evaluation), [...DECISIONS], {
-				...(signal && { signal }),
-				timeout: state.timeout
+			// The controller's own timer decides a timeout. Measuring the elapsed
+			// time after the dialog closes misreads a timeout as a denial, because
+			// Pi's timer can fire a millisecond early by `performance.now()`. This
+			// timer starts before the dialog's, so with the same delay it fires
+			// first.
+			let expired = false;
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			const expiry = new Promise<undefined>((resolve) => {
+				timer = setTimeout(() => {
+					expired = true;
+					resolve(undefined);
+				}, state.timeout);
 			});
+			let value: string | undefined;
+			try {
+				value = await Promise.race([
+					ui.select(requestTitle(requestId, call, evaluation), [...DECISIONS], {
+						...(signal && { signal }),
+						timeout: state.timeout
+					}),
+					expiry
+				]);
+			} finally {
+				clearTimeout(timer);
+			}
 			// Pi resolves an aborted, expired, or cancelled dialog as `undefined`
 			// and drops its pending entry, so a late answer is ignored.
 			if (signal?.aborted) return deny('abort', ABORTED);
-			if (value === undefined && performance.now() - started >= state.timeout) {
+			if (value === undefined && expired) {
 				return deny('timeout', 'The permission request timed out without an answer.');
 			}
 			const answer = parseAnswer(value);

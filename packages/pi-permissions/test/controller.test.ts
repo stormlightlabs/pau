@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import path from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
-import { PermissionController, type PermissionUi } from '../src/controller.ts';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
+import { PermissionController, type PermissionUi, type Verdict } from '../src/controller.ts';
 import type { DecisionRecord, RequestEnvelope } from '../src/messages.ts';
 import { loadPolicy, POLICY_FILE_ENV } from '../src/policy.ts';
 import { createFixture, type Fixture, writePolicy } from './fixture.ts';
@@ -47,6 +47,18 @@ function controller(options: Parameters<typeof writePolicy>[1] = {}): Permission
 
 const call = (toolName: string, input: Record<string, unknown>) => ({ toolName, toolCallId: randomUUID(), input });
 const touch = (file = 'a.txt') => call('bash', { command: `touch ${file}` });
+
+/** Opens a dialog that Pi expires after its timeout, and lets that time pass. */
+async function expire(): Promise<{ verdict: Verdict; records: DecisionRecord[] }> {
+	vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+	const { ui, dialogs, records } = fakeUi(
+		({ timeout }) => new Promise((resolve) => setTimeout(() => resolve(undefined), timeout))
+	);
+	const pending = controller({ dialogTimeoutMs: 1000 }).handle(touch(), ui, undefined);
+	await vi.waitUntil(() => dialogs.length === 1);
+	await vi.advanceTimersByTimeAsync(1000);
+	return { verdict: await pending, records };
+}
 
 describe('PermissionController', () => {
 	it('allows silently and records the rule as the source', async () => {
@@ -164,13 +176,25 @@ describe('PermissionController', () => {
 		expect(records[0]).toMatchObject({ source: 'abort' });
 	});
 
-	it('denies on timeout and records it', async () => {
-		const { ui, records } = fakeUi(
-			({ timeout }) => new Promise((resolve) => setTimeout(() => resolve(undefined), timeout))
-		);
-		const verdict = await controller({ dialogTimeoutMs: 1000 }).handle(touch(), ui, undefined);
-		expect(verdict).toEqual({ block: true, reason: expect.stringContaining('timed out') });
-		expect(records[0]).toMatchObject({ outcome: 'denied', source: 'timeout' });
+	describe('timeout', () => {
+		afterEach(() => {
+			vi.useRealTimers();
+			vi.restoreAllMocks();
+		});
+
+		it('denies on timeout and records it', async () => {
+			const { verdict, records } = await expire();
+			expect(verdict).toEqual({ block: true, reason: expect.stringContaining('timed out') });
+			expect(records[0]).toMatchObject({ outcome: 'denied', source: 'timeout' });
+		});
+
+		it('reports a timeout when the timer fires a millisecond early by the clock', async () => {
+			let reads = 0;
+			vi.spyOn(performance, 'now').mockImplementation(() => (reads++ === 0 ? 0 : 999));
+			const { verdict, records } = await expire();
+			expect(verdict).toEqual({ block: true, reason: expect.stringContaining('timed out') });
+			expect(records[0]).toMatchObject({ outcome: 'denied', source: 'timeout' });
+		});
 	});
 
 	it('shows one dialog at a time, in order', async () => {

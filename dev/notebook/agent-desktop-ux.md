@@ -233,7 +233,7 @@ parallel, one Git worktree per workspace
 Pau's frame already has the right regions: a command bar, a product rail, a
 context rail, one main surface, an optional inspector, and a terminal dock. The
 work is to make each region carry the patterns above without breaking Pau's
-rules from [`dev/spec`](../spec/overview.md):
+rules from the product spec:
 
 - Native session files stay authoritative. Pau caches and hides; it never
   deletes agent history as a side effect.

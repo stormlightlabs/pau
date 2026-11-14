@@ -6,8 +6,8 @@ precise. It should not resemble an analytics dashboard or hide process state
 behind decorative summaries.
 
 This document owns durable visual and interaction decisions. Product behavior
-comes from [`SPEC.md`](../SPEC.md). Architecture and implementation policy come
-from [`PLAN.md`](../PLAN.md).
+comes from the product spec, and architecture and implementation policy from
+the architecture plan. Both live in the project's issue tracker.
 
 ## Surface mode
 

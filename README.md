@@ -19,9 +19,10 @@ The application is planned around:
 - Neovim's embedded RPC UI, with CodeMirror as a lightweight editor
 
 The repository contains the desktop application, a remote web application
-scaffold, documentation site, shared packages, and Rust services.
-[SPEC.md](dev/SPEC.md) describes the product, [PLAN.md](dev/PLAN.md) the
-architecture, and [ROADMAP.md](dev/ROADMAP.md) how work is split into tasks.
+scaffold, documentation site, shared packages, and Rust services. The product
+spec and architecture plan live in the project's issue tracker.
+[ROADMAP.md](dev/ROADMAP.md) describes how work is split into tasks, and
+[`dev/design`](dev/design/README.md) records interface decisions.
 
 ## Development environment
 

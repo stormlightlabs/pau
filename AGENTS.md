@@ -1,15 +1,19 @@
 # Pau agent guide
 
-Read these indexes and every document they link before changing the project:
+The product spec and the architecture plan live in Linear, as documents on
+the team PAU and its projects. The team documents "Product specification" and
+"Technical plan" index them, and each feature's plan sits on its project.
+Before changing an area, read the documents on the task's project and the
+team's architecture plan. When a product or architecture decision changes,
+update the owning Linear document in the same task. Do not add plan or spec
+files to the repository.
 
-- [SPEC.md](dev/SPEC.md) indexes product behavior and scope.
-- [PLAN.md](dev/PLAN.md) indexes architecture, package ownership, design,
-  documentation, and testing policy.
 - [ROADMAP.md](dev/ROADMAP.md) sets the rules for splitting work into tasks.
   The tasks themselves live in Linear, as [Tasks](#tasks) describes.
+- `dev/design/` holds design decisions, as [UI work](#ui-work) describes.
 
-Do not repeat their content here. Update the owning document when a product or
-architecture decision changes.
+Do not repeat the spec or plan here. The testing and dogfooding rules below
+are the exception, so that a session without Linear still has them.
 
 ## Commands
 
@@ -117,13 +121,55 @@ Every issue follows these rules:
 - Title pull requests as Conventional Commits, such as `feat(server): …` or
   `docs: …`. The title becomes the squash commit's subject on `main`.
 
+## Testing
+
+Choose the smallest test that proves the behavior. Keep edge-heavy logic out
+of UI components, exercise process boundaries with fake executables, and keep
+full browser tests for workflows that cross packages or transports.
+
+- Put Rust unit tests beside the code. Use table-driven cases for known
+  failures and property tests for protocol framing, event sequences, and path
+  handling.
+- Use Tokio's paused clock for timeout, retry, and shutdown behavior instead
+  of sleeping in tests.
+- Integration tests launch fake Pi, Claude, terminal, and editor processes.
+  They cover partial and oversized frames, early exits, ignored signals,
+  cancellation races, backpressure, replay gaps, symlink and traversal
+  attempts, migration failure, and cleanup after dropped clients.
+- Redaction tests seed every sensitive field class and confirm it is absent
+  from in-memory records, UI events, logs, and exported bundles.
+- Storybook stories in `packages/ui` use typed fixtures and cover the states a
+  surface reaches, such as empty, loading, running, waiting, failed,
+  disconnected, long content, narrow width, and each shipped theme.
+- Use Storybook `play` functions, with accessibility checks, for short
+  interactions, and Vitest for deeper state transitions. Use Vitest browser
+  mode with `vitest-browser-svelte` when focus, events, layout, or lifecycle
+  need a real browser. Query by role, label, and visible text.
+- Keep a small set of reviewed screenshots for high-value compositions. Do
+  not snapshot every component or use a screenshot in place of a behavior
+  assertion.
+- Desktop integration tests live in `*.integration.test.ts` files and run
+  with `pnpm --filter @stormlightlabs/pau-desktop test:integration`, which
+  builds `pau-server`. The default `test` script excludes them.
+- Critical Playwright flows also run in WebKit, because Tauri uses a system
+  webview on Linux and macOS.
+- Default checks use fake processes and local fixtures. Tests that invoke paid
+  agents, need signing credentials, or depend on remote services are opt-in.
+- Use coverage to find untested branches, not as a percentage target.
+
 ## Dogfood Pau
 
-Follow the [dogfooding policy](dev/plan/dogfooding.md). Keep the released local
-Claude bridge installed for personal Pi use and in this project's Pi settings,
-then use it for suitable Pau work. Use each later Pau surface once it is usable,
-and include the self-hosted smoke run required by
-[ROADMAP.md](dev/ROADMAP.md).
+Use Pau to build Pau as each surface becomes usable. The task that first
+makes a surface usable includes a self-hosted smoke run when practical, and
+later work uses that surface when it fits the task. Dogfood the desktop app
+from the latest signed build of a release tag, not from a development build;
+[Signed macOS builds](dev/macos-signing.md) describes how to make one.
+Dogfooding supplements deterministic tests. Fix a defect it finds in the
+active task when the defect violates that task's behavior or verification,
+and otherwise record it as a new issue.
+
+Keep the released local Claude bridge installed for personal Pi use and in this
+project's Pi settings, and use it for suitable Pau work.
 
 When the agent already runs inside Zellij, perform Zellij verification in a new
 tab of the current session. Do not create a nested Zellij session unless explicitly

@@ -99,7 +99,11 @@ pub struct PaneWidths {
 }
 
 /// A workspace view the operator can return to on launch.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+///
+/// A view this build does not know, saved by a newer one, reads as the
+/// default, so an older build keeps the rest of the preferences instead of
+/// replacing them with defaults on its next save.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(rename_all = "snake_case")]
 pub enum LastView {
@@ -116,6 +120,21 @@ pub enum LastView {
     Sandbox,
     /// The agent resources found for the workspace.
     Resources,
+}
+
+impl<'de> Deserialize<'de> for LastView {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "files" => Self::Files,
+            "terminal" => Self::Terminal,
+            "processes" => Self::Processes,
+            "sandbox" => Self::Sandbox,
+            "resources" => Self::Resources,
+            _ => Self::Session,
+        })
+    }
 }
 
 /// The view to restore on launch.
@@ -306,6 +325,45 @@ mod tests {
         let route = r#"{"workspace_id":"w1","session_id":null,"saved_session_id":null}"#;
         let parsed = serde_json::from_str::<LastRoute>(route).unwrap();
         assert_eq!(parsed.view, LastView::Session);
+    }
+
+    #[tokio::test]
+    async fn an_unknown_view_keeps_the_other_preferences() {
+        let (database, store) = store().await;
+        let saved = r#"{"version":1,"theme":"nord","ui_font":"inter","notifications":"off",
+            "motion":"reduce","pane_widths":{},"last_route":{"workspace_id":"w1",
+            "view":"timeline","session_id":null,"saved_session_id":null}}"#;
+        database
+            .settings()
+            .set(ApplicationSetting {
+                key: UI_PREFERENCES_KEY.to_owned(),
+                value: saved.to_owned(),
+                updated_at: "2026-01-01T00:00:00Z".to_owned(),
+            })
+            .await
+            .unwrap();
+
+        let loaded = store.load().await.unwrap();
+
+        assert_eq!(loaded.theme, ThemePreference::Nord);
+        assert_eq!(loaded.ui_font, UiFontPreference::Inter);
+        assert_eq!(loaded.notifications, NotificationPolicy::Off);
+        assert_eq!(loaded.motion, MotionPreference::Reduce);
+        assert_eq!(loaded.last_route.unwrap().view, LastView::Session);
+        let wrong_type = r#"{"workspace_id":"w1","view":3,"session_id":null,
+            "saved_session_id":null}"#;
+        assert!(serde_json::from_str::<LastRoute>(wrong_type).is_err());
+        for view in [
+            LastView::Session,
+            LastView::Files,
+            LastView::Terminal,
+            LastView::Processes,
+            LastView::Sandbox,
+            LastView::Resources,
+        ] {
+            let json = serde_json::to_string(&view).unwrap();
+            assert_eq!(serde_json::from_str::<LastView>(&json).unwrap(), view);
+        }
     }
 
     #[tokio::test]

@@ -20,14 +20,19 @@
 //!
 //! Pi only loads project `.pi` resources, project `.agents/skills`, and
 //! project settings once the project is trusted. This indexer always reads
-//! them so they stay inspectable, and reports the saved decision as
-//! [`PiResourceIndex::project_trust`] for the caller to present. Until the
-//! project is trusted, the user scope is indexed first and names collide only
-//! within one scope, so a project file never shadows the user resource Pi
-//! loads, and a project package entry never replaces the user entry.
+//! the project folders so they stay inspectable, and reports the saved
+//! decision as [`PiResourceIndex::project_trust`] for the caller to present.
+//! Until the project is trusted, it ignores the project `settings.json`, as Pi
+//! does, so a committed file cannot point the scan outside the workspace. The
+//! user scope is indexed first and names collide only within one scope, so a
+//! project file never shadows the user resource Pi loads.
+//!
+//! Every read is limited to regular files of at most [`MAX_FILE_BYTES`], and
+//! folder scans stop at [`MAX_WALK_DEPTH`] and [`MAX_WALK_ENTRIES`].
 
 use std::collections::{HashMap, HashSet};
-use std::fs;
+use std::fs::{self, File};
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use globset::GlobBuilder;
@@ -36,6 +41,34 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::mcp::{PackageDeclaration, package_key, package_root};
+
+/// Largest resource, settings or manifest file the indexer reads. Pi's
+/// resources are small text files; the cap keeps a committed multi-gigabyte
+/// file from exhausting server memory.
+const MAX_FILE_BYTES: u64 = 512 * 1024;
+/// Deepest folder `walk` enters below a scanned path, as in `list_files`.
+const MAX_WALK_DEPTH: usize = 8;
+/// Directory entries one index examines before scanning stops.
+const MAX_WALK_ENTRIES: usize = 20_000;
+const NOT_REGULAR: &str = "Not a regular file or folder; skipped.";
+
+/// Reads a UTF-8 file of at most [`MAX_FILE_BYTES`]. The path must name a
+/// regular file after following symbolic links: opening a FIFO blocks and a
+/// device such as `/dev/zero` never reaches the end.
+fn read_bounded(path: &Path) -> io::Result<String> {
+    if !fs::metadata(path)?.is_file() {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, NOT_REGULAR));
+    }
+    let mut bytes = Vec::new();
+    File::open(path)?
+        .take(MAX_FILE_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_FILE_BYTES {
+        let message = format!("File is larger than {} KiB.", MAX_FILE_BYTES / 1024);
+        return Err(io::Error::new(io::ErrorKind::InvalidData, message));
+    }
+    String::from_utf8(bytes).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+}
 
 /// Kind of Pi resource.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -214,36 +247,33 @@ struct SettingsFile {
 /// Indexes user and project Pi resources.
 pub fn discover_pi_resources(options: &DiscoverPiResourcesOptions) -> PiResourceIndex {
     let mut indexer = Indexer::default();
-    let files = [
-        (options.workspace.join(".pi"), PiResourceScope::Project),
-        (options.agent_directory.clone(), PiResourceScope::User),
-    ]
-    .map(|(base, scope)| {
-        let path = base.join("settings.json");
-        SettingsFile {
-            value: indexer.read_settings(&path),
-            base,
-            path,
-            scope,
-        }
-    });
-    let [project, user] = &files;
+    let user = indexer.settings_file(options.agent_directory.clone(), PiResourceScope::User);
     let trust = indexer.project_trust(options, user.value.as_ref());
     indexer.index.project_trust = trust;
+    let project_base = options.workspace.join(".pi");
 
     if trust == PiProjectTrust::Trusted {
-        scan_scope(&mut indexer, project, options);
-        scan_scope(&mut indexer, user, options);
+        let project = indexer.settings_file(project_base, PiResourceScope::Project);
+        let files = [project, user];
+        scan_scope(&mut indexer, &files[0], options);
+        scan_scope(&mut indexer, &files[1], options);
         indexer.scan_packages(&files);
     } else {
-        // Pi loads only the user scope. Scanning it first lets a project file
-        // never shadow a user one, and keeps each project package entry from
-        // replacing the user entry for the same package.
+        // Pi reads no project settings until the project is trusted, so a
+        // committed `settings.json` cannot point the scan outside the
+        // workspace. The project folders are still listed for inspection.
+        let project = SettingsFile {
+            value: None,
+            path: project_base.join("settings.json"),
+            base: project_base,
+            scope: PiResourceScope::Project,
+        };
+        // Scanning the user scope first lets a project file never shadow a
+        // user one.
         indexer.isolate_scopes = true;
-        for file in [user, project] {
-            scan_scope(&mut indexer, file, options);
-            indexer.scan_packages(std::slice::from_ref(file));
-        }
+        scan_scope(&mut indexer, &user, options);
+        indexer.scan_packages(std::slice::from_ref(&user));
+        scan_scope(&mut indexer, &project, options);
     }
     indexer.index
 }
@@ -290,12 +320,31 @@ fn project_agent_roots(workspace: &Path, home: &Path) -> Vec<PathBuf> {
 struct Indexer {
     index: PiResourceIndex,
     seen_paths: HashSet<PathBuf>,
+    /// Directory entries `walk` has examined across the whole index.
+    walked_entries: usize,
+    /// Set once the entry budget runs out, so the warning appears once.
+    walk_stopped: bool,
     /// Set when the project is not trusted: names then collide only within
     /// one scope, since Pi loads no project resource that could win.
     isolate_scopes: bool,
 }
 
 impl Indexer {
+    /// Counts one directory entry under `dir`. Returns true once the budget
+    /// is spent, warning the first time.
+    fn walk_budget_spent(&mut self, kind: PiResourceKind, dir: &Path) -> bool {
+        self.walked_entries += 1;
+        if self.walked_entries <= MAX_WALK_ENTRIES {
+            return false;
+        }
+        if !self.walk_stopped {
+            self.walk_stopped = true;
+            let message = format!("Scan stopped after {MAX_WALK_ENTRIES} entries.");
+            self.warn(Some(kind), dir, message);
+        }
+        true
+    }
+
     fn warn(&mut self, kind: Option<PiResourceKind>, path: &Path, message: impl Into<String>) {
         self.index.warnings.push(PiResourceWarning {
             kind,
@@ -334,20 +383,30 @@ impl Indexer {
         let mut found = Vec::new();
         if meta.is_file() {
             self.candidate_file(kind, path, &mut found, true);
+        } else if meta.is_dir() {
+            self.walk(kind, path, &mut found, &mut HashSet::new(), 0);
         } else {
-            self.walk(kind, path, &mut found, &mut HashSet::new(), true);
+            self.warn(Some(kind), path, NOT_REGULAR);
+            return None;
         }
         Some(found)
     }
 
+    /// Collects candidates under `dir`, `depth` levels below the scanned path.
+    /// Depth and the indexer's entry budget bound the scan, since a settings
+    /// path or a symbolic link can point at a large tree.
     fn walk(
         &mut self,
         kind: PiResourceKind,
         dir: &Path,
         found: &mut Vec<Candidate>,
         visited: &mut HashSet<PathBuf>,
-        root: bool,
+        depth: usize,
     ) {
+        if depth > MAX_WALK_DEPTH {
+            self.warn(Some(kind), dir, "Folder is nested too deeply; not scanned.");
+            return;
+        }
         let Ok(canonical) = fs::canonicalize(dir) else {
             return;
         };
@@ -374,13 +433,16 @@ impl Indexer {
             if name.starts_with('.') || name == "node_modules" {
                 continue;
             }
+            if self.walk_budget_spent(kind, dir) {
+                return;
+            }
             let Ok(meta) = fs::metadata(&entry) else {
                 self.warn(Some(kind), &entry, "Broken symbolic link.");
                 continue;
             };
             if meta.is_dir() {
                 match kind {
-                    PiResourceKind::Skill => self.walk(kind, &entry, found, visited, false),
+                    PiResourceKind::Skill => self.walk(kind, &entry, found, visited, depth + 1),
                     PiResourceKind::Extension => {
                         let index = ["index.ts", "index.js"]
                             .iter()
@@ -392,7 +454,10 @@ impl Indexer {
                     }
                     PiResourceKind::Prompt | PiResourceKind::Theme => {}
                 }
-            } else if root || kind != PiResourceKind::Skill {
+            } else if !meta.is_file() {
+                // Devices, FIFOs and sockets never finish reading.
+                continue;
+            } else if depth == 0 || kind != PiResourceKind::Skill {
                 // Standalone Markdown skills count only at the top level.
                 self.candidate_file(kind, &entry, found, false);
             }
@@ -505,7 +570,7 @@ impl Indexer {
         user_settings: Option<&Value>,
     ) -> PiProjectTrust {
         let path = options.agent_directory.join("trust.json");
-        let saved = match fs::read_to_string(&path) {
+        let saved = match read_bounded(&path) {
             Ok(text) => match parse_json(&text) {
                 Some(Value::Object(saved)) => saved,
                 _ => {
@@ -609,7 +674,7 @@ impl Indexer {
     }
 
     fn read(&mut self, c: &Candidate) -> Option<String> {
-        match fs::read_to_string(&c.file) {
+        match read_bounded(&c.file) {
             Ok(text) => Some(text),
             Err(error) => {
                 self.warn(Some(c.kind), &c.file, format!("Cannot read file: {error}"));
@@ -618,9 +683,27 @@ impl Indexer {
         }
     }
 
+    /// Reads the `settings.json` in `base`.
+    fn settings_file(&mut self, base: PathBuf, scope: PiResourceScope) -> SettingsFile {
+        let path = base.join("settings.json");
+        SettingsFile {
+            value: self.read_settings(&path),
+            base,
+            path,
+            scope,
+        }
+    }
+
     /// Reads a settings file. Absent is normal; unreadable JSON warns.
     fn read_settings(&mut self, path: &Path) -> Option<Value> {
-        let text = fs::read_to_string(path).ok()?;
+        let text = match read_bounded(path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return None,
+            Err(error) => {
+                self.warn(None, path, format!("Cannot read settings: {error}"));
+                return None;
+            }
+        };
         match parse_json(&text) {
             Some(value) if value.is_object() => Some(value),
             _ => {
@@ -724,7 +807,7 @@ impl Indexer {
         filters: Option<&Map<String, Value>>,
         scope: PiResourceScope,
     ) {
-        let manifest = fs::read_to_string(root.join("package.json"))
+        let manifest = read_bounded(&root.join("package.json"))
             .ok()
             .and_then(|text| parse_json(&text))
             .and_then(|value| value.get("pi").cloned());

@@ -178,6 +178,7 @@ test('filters three hundred skills by name and trust', async () => {
 	await userEvent.click(page.getByRole('button', { name: 'Clear filters' }));
 	await expect.element(page.getByText('300 skills')).toBeVisible();
 	await expect.element(page.getByRole('combobox', { name: 'Trust' })).toHaveTextContent('Any trust');
+	await expect.element(page.getByRole('searchbox', { name: 'Filter by name' })).toHaveFocus();
 });
 
 test('moves through the list with the keyboard and updates the inspector', async () => {

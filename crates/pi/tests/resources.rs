@@ -1,6 +1,10 @@
 use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::PathBuf;
+use std::process::Command;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 use pau_pi::{
     DiscoverPiResourcesOptions, PiProjectTrust, PiResource, PiResourceIndex, PiResourceKind,
@@ -172,6 +176,7 @@ fn malformed_and_incomplete_resources_warn_without_hiding_others() {
     f.write("work/.pi/themes/broken.json", "{ nope");
     f.write("work/.pi/themes/anonymous.json", "{}");
     f.write("work/.pi/settings.json", "[1]");
+    f.trust_work(true);
 
     let index = f.discover();
 
@@ -360,6 +365,7 @@ fn indexes_packages_with_conventions_manifests_and_filters() {
         ]}"#,
     );
     f.write("work/.pi/settings.json", r#"{"packages":["./local-pkg"]}"#);
+    f.trust_work(true);
 
     let index = f.discover();
 
@@ -418,14 +424,15 @@ fn project_package_entry_replaces_the_user_entry() {
 }
 
 /// Pi reads no project resource or project setting until the project is
-/// trusted, so the user resources it loads win every collision.
+/// trusted, so the user resources it loads win every collision, and the
+/// project `settings.json` adds no paths or packages.
 #[test]
 fn untrusted_project_resources_never_shadow_user_ones() {
     for decision in [None, Some(false)] {
         let f = Fixture::new();
         f.write("work/.pi/prompts/review.md", "Project review\n");
         f.write("work/.pi/prompts/other.md", "Other\n");
-        f.write("work/.pi/more/other.md", "Other again\n");
+        f.write("work/.pi/more/listed.md", "Listed\n");
         f.write(
             "work/.pi/settings.json",
             r#"{"prompts":["more"],"packages":["npm:shared"]}"#,
@@ -461,23 +468,105 @@ fn untrusted_project_resources_never_shadow_user_ones() {
             [PiResourceScope::User, PiResourceScope::Project],
             "{decision:?}"
         );
-        assert_eq!(
-            ready("shared"),
-            [PiResourceScope::User, PiResourceScope::Project],
-            "{decision:?}"
-        );
+        assert_eq!(ready("shared"), [PiResourceScope::User], "{decision:?}");
+        assert!(ready("listed").is_empty(), "{decision:?}");
         let scopes: Vec<PiResourceScope> = index.packages.iter().map(|p| p.scope).collect();
-        assert_eq!(scopes, [PiResourceScope::User, PiResourceScope::Project]);
-        // Collisions inside the project still resolve as they would once it
-        // is trusted: the project settings path comes first.
-        assert_eq!(index.skipped.len(), 1, "{:#?}", index.skipped);
-        let skipped = &index.skipped[0];
-        assert_eq!(skipped.resource.path, f.path("work/.pi/prompts/other.md"));
-        assert_eq!(
-            skipped.winner.as_deref(),
-            Some(f.path("work/.pi/more/other.md").as_path())
-        );
+        assert_eq!(scopes, [PiResourceScope::User]);
+        assert!(index.skipped.is_empty(), "{:#?}", index.skipped);
     }
+}
+
+/// Runs discovery on another thread and fails instead of hanging when it
+/// does not finish.
+fn discover_within(f: &Fixture, seconds: u64) -> PiResourceIndex {
+    let options = DiscoverPiResourcesOptions {
+        home_directory: f.path("home"),
+        agent_directory: f.path("home/.pi/agent"),
+        workspace: f.path("work"),
+    };
+    fs::create_dir_all(&options.workspace).unwrap();
+    let (send, receive) = mpsc::channel();
+    thread::spawn(move || send.send(discover_pi_resources(&options)));
+    receive
+        .recv_timeout(Duration::from_secs(seconds))
+        .expect("discovery did not finish")
+}
+
+#[test]
+fn untrusted_settings_cannot_scan_outside_the_workspace() {
+    let f = Fixture::new();
+    f.skill("home/extra/outside", "outside");
+    f.write("elsewhere/prompt.md", "Outside\n");
+    f.write(
+        "work/.pi/settings.json",
+        r#"{"skills":["/","~"],"prompts":["~","../../elsewhere"],"themes":["/"]}"#,
+    );
+    f.write("work/.pi/prompts/inside.md", "Inside\n");
+
+    let index = discover_within(&f, 10);
+
+    let workspace = f.path("work");
+    for resource in &index.resources {
+        assert!(resource.path.starts_with(&workspace), "{resource:#?}");
+    }
+    assert_eq!(names(&index, PiResourceKind::Prompt), ["inside"]);
+    assert!(names(&index, PiResourceKind::Skill).is_empty());
+}
+
+#[test]
+fn skips_special_files_and_oversized_files() {
+    let f = Fixture::new();
+    f.write("work/.pi/prompts/ok.md", "Fine\n");
+    let fifo = f.path("elsewhere/pipe.md");
+    fs::create_dir_all(fifo.parent().unwrap()).unwrap();
+    let made = Command::new("mkfifo").arg(&fifo).status().unwrap();
+    assert!(made.success());
+    symlink(&fifo, f.path("work/.pi/prompts/pipe.md")).unwrap();
+    f.write("work/.pi/prompts/huge.md", &"x".repeat(600 * 1024));
+    f.write(
+        "work/.pi/settings.json",
+        r#"{"prompts":["../../elsewhere/pipe.md"]}"#,
+    );
+    f.trust_work(true);
+
+    let index = discover_within(&f, 10);
+
+    assert_eq!(names(&index, PiResourceKind::Prompt), ["ok"]);
+    assert!(warned(&index, "elsewhere/pipe.md", "Not a regular file"));
+    assert!(warned(&index, "prompts/huge.md", "larger than 512 KiB"));
+    assert!(
+        index
+            .skipped
+            .iter()
+            .any(|s| s.resource.path.ends_with("prompts/huge.md"))
+    );
+}
+
+#[test]
+fn folder_scans_stop_at_the_depth_and_entry_caps() {
+    let f = Fixture::new();
+    let deep = (0..12)
+        .map(|i| format!("d{i}"))
+        .collect::<Vec<_>>()
+        .join("/");
+    f.skill(&format!("work/.pi/skills/{deep}"), "deep");
+    f.skill("work/.pi/skills/shallow", "shallow");
+    let many = f.path("work/.pi/prompts");
+    fs::create_dir_all(&many).unwrap();
+    for i in 0..20_050 {
+        fs::write(many.join(format!("{i:05}.txt")), "").unwrap();
+    }
+    f.trust_work(true);
+
+    let index = discover_within(&f, 30);
+
+    assert_eq!(names(&index, PiResourceKind::Skill), ["shallow"]);
+    assert!(warned(&index, "d8", "nested too deeply"));
+    assert!(warned(
+        &index,
+        ".pi/prompts",
+        "Scan stopped after 20000 entries"
+    ));
 }
 
 #[test]

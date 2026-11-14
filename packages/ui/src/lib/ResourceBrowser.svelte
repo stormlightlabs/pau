@@ -88,6 +88,13 @@
 	/** The resource whose detail fills the main surface on narrow windows. */
 	let openedId = $state<string>();
 	let list = $state<HTMLElement>();
+	let queryInput = $state<HTMLInputElement>();
+
+	/** Clearing unmounts the Clear filters button, so focus moves to the query field. */
+	function clearFilters() {
+		filter = { ...NO_RESOURCE_FILTER };
+		queryInput?.focus();
+	}
 
 	let label = $derived(RESOURCE_KIND_LABELS[kind]);
 	let noun = $derived(label.toLowerCase());
@@ -301,6 +308,7 @@
 								type="search"
 								placeholder="Filter by name"
 								bind:value={filter.query}
+								bind:this={queryInput}
 								onkeydown={(event) => {
 									if (!selected || event.key !== 'ArrowDown') return;
 									event.preventDefault();
@@ -323,10 +331,7 @@
 					</EmptyState>
 				{:else if visible.length === 0}
 					<EmptyState title={`No ${noun} match these filters`}>
-						<button
-							type="button"
-							class="pau-button pau-button--secondary"
-							onclick={() => (filter = { ...NO_RESOURCE_FILTER })}>Clear filters</button>
+						<button type="button" class="pau-button pau-button--secondary" onclick={clearFilters}>Clear filters</button>
 					</EmptyState>
 				{:else}
 					<div class="resources__columns" aria-hidden="true">

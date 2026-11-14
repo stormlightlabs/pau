@@ -287,13 +287,9 @@ async fn an_untrusted_project_never_shadows_user_resources() {
             .filter(|resource| resource["kind"] == "package")
             .map(|resource| (&resource["scope"], &resource["trust"]))
             .collect();
-        assert_eq!(
-            packages,
-            [
-                (&json!("user"), &json!("trusted")),
-                (&json!("project"), &json!(trust)),
-            ]
-        );
+        // Pi reads no project settings until the project is trusted, so the
+        // project's package entry is not listed.
+        assert_eq!(packages, [(&json!("user"), &json!("trusted"))]);
     }
 }
 

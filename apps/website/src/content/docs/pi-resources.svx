@@ -41,9 +41,14 @@ the project resources, and the view says so above the list. Run `/trust` in
 Pi to save a decision. Pau reads it from `~/.pi/agent/trust.json`, or from
 the `defaultProjectTrust` setting when no decision applies.
 
-Untrusted resources stay in the list, so you can check what a workspace would
-load before you trust it. Extensions and packages run code with your
-account's permissions.
+Untrusted resources from the workspace's `.pi` and `.agents/skills` folders
+stay in the list, so you can check what a workspace would load before you
+trust it. Paths and packages in the workspace's `.pi/settings.json` appear
+only after you trust it, since Pi does not read that file before then.
+Extensions and packages run code with your account's permissions.
+
+Pau skips files larger than 512 KiB and anything that is not a regular file,
+such as a pipe or a device, and reports them as problems.
 
 ## Problems
 

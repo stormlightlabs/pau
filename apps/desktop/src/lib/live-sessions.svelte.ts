@@ -17,6 +17,7 @@ import type {
 	SessionWorkspace,
 	ThinkingLevel
 } from '@stormlightlabs/pau-ui';
+import { agentLabel } from '@stormlightlabs/pau-ui';
 
 import {
 	PauApiError,
@@ -99,14 +100,6 @@ const TITLE_LENGTH = 60;
 
 /** How long an extension notification stays on screen. */
 const NOTIFICATION_MS = 8000;
-
-/**
- * Names the agent a session runs, by the session's `agent` field, the way the
- * session surface shows it. Every agent other than Claude Code is Pi.
- */
-export function agentLabel(agent: string): string {
-	return agent === 'claude' ? 'Claude Code' : 'Pi';
-}
 
 /**
  * Turns an API failure into copy for the operator. Starting and controlling a
@@ -236,7 +229,9 @@ function wireResponse(response: ExtensionUiResponse) {
 
 function failureMessage(session: AgentSession): string | undefined {
 	if (session.status !== 'failed') return undefined;
-	const exit = session.exit_code === null ? 'Pi exited unexpectedly.' : `Pi exited with code ${session.exit_code}.`;
+	const agent = agentLabel(session.agent);
+	const exit =
+		session.exit_code === null ? `${agent} exited unexpectedly.` : `${agent} exited with code ${session.exit_code}.`;
 	return `${exit} Start a new session to continue.`;
 }
 

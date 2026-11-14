@@ -161,6 +161,7 @@ export type {
 	EditToolCall,
 	WriteToolCall
 } from './lib/types/session';
+export { agentLabel } from './lib/types/session';
 export { ICONS, type IconKind } from './icons';
 export {
 	THEMES,

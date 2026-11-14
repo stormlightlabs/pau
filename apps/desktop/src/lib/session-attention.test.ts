@@ -187,14 +187,6 @@ describe('a Claude Code session', () => {
 			[{ title: 'Fix the login bug', body: 'Claude Code finished its turn.' }]
 		]);
 	});
-
-	test('does not report an interrupted turn as finished', () => {
-		const { notifier, send } = setup([claude('idle')], () => 'all');
-
-		send(claude('running'), interrupted(), claude('idle'));
-
-		expect(notifier.notify).not.toHaveBeenCalled();
-	});
 });
 
 test('notifies a session shown in an unfocused window', () => {

@@ -5,10 +5,10 @@ import type {
 	SessionStatus,
 	Workspace
 } from '@stormlightlabs/pau-protocol';
+import { agentLabel } from '@stormlightlabs/pau-ui';
 
 import { EventStreamClient, type EventSocketFactory, type EventStreamState } from './event-stream';
 import { isExtensionEvent, opensDialog } from './extension-ui';
-import { agentLabel } from './live-sessions.svelte';
 
 /**
  * Why a session notifies the operator. `finished` is a turn that ended

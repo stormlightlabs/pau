@@ -351,12 +351,19 @@
 		max-width: none;
 	}
 
+	/*
+	 * The chip trims its line box to the cap height and baseline, so the even
+	 * padding centers the letters themselves rather than the font's taller
+	 * ascent, whichever UI font is set.
+	 */
 	.settings-view__scope {
 		margin-top: var(--pau-space-1);
-		padding: var(--pau-space-1) var(--pau-space-2);
+		padding: var(--pau-space-2);
 		color: var(--pau-text-muted);
 		border: 1px solid var(--pau-border);
 		font-size: var(--pau-type-xs);
+		line-height: 1;
+		text-box: trim-both cap alphabetic;
 	}
 
 	.settings-view__choices {

@@ -335,8 +335,10 @@
 				paletteEntrance = event.detail > 0 ? 'pointer' : 'keyboard';
 				paletteOpen = true;
 			}}>
-			<span class="app-shell__search-icon" aria-hidden="true"></span>
-			<span class="app-shell__command-placeholder">Search or run a command</span>
+			<span class="app-shell__command-label">
+				<span class="app-shell__search-icon" aria-hidden="true"></span>
+				<span class="app-shell__command-placeholder">Search or run a command</span>
+			</span>
 			{#if paletteShortcut}<kbd>{paletteShortcut}</kbd>{/if}
 		</button>
 	</header>
@@ -633,9 +635,15 @@
 		background: var(--shell-accent);
 	}
 
+	/*
+	 * The icon and placeholder sit as one group in the middle of the field, and
+	 * the shortcut keeps the trailing edge. The equal outer tracks hold the group
+	 * centered whether or not the shortcut shows.
+	 */
 	.app-shell__command-input {
-		display: flex;
+		display: grid;
 		flex: 0 1 auto;
+		grid-template-columns: 1fr minmax(0, auto) 1fr;
 		align-items: center;
 		width: min(23rem, 45vw);
 		min-width: var(--pau-size-row-md);
@@ -649,7 +657,15 @@
 		cursor: pointer;
 	}
 
+	.app-shell__command-label {
+		display: flex;
+		grid-column: 2;
+		align-items: center;
+		min-width: 0;
+	}
+
 	.app-shell__search-icon {
+		flex: none;
 		width: 0.75rem;
 		height: 0.75rem;
 		margin-right: var(--pau-space-2);
@@ -668,15 +684,15 @@
 
 	.app-shell__command-placeholder {
 		min-width: 0;
-		flex: 1;
 		overflow: hidden;
 		color: var(--shell-muted);
-		text-align: start;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
 	.app-shell__command-input kbd {
+		grid-column: 3;
+		justify-self: end;
 		color: var(--shell-faint);
 		font: inherit;
 	}

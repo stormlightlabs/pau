@@ -58,7 +58,7 @@
 </script>
 
 <!-- Group headings are h3: both the shortcut dialog and the Keyboard settings section title the list with an h2. -->
-<div class="keyboard-shortcut-list">
+<div class={['keyboard-shortcut-list', showScope && 'keyboard-shortcut-list--scoped']}>
 	{#each groups as { group, actions: groupActions } (group)}
 		<section aria-labelledby={`${id}-${group}`}>
 			<h3 id={`${id}-${group}`}>{group}</h3>
@@ -129,6 +129,15 @@
 	.keyboard-shortcuts__label {
 		display: grid;
 		min-width: 0;
+	}
+
+	/* With a scope line under each name, as in Settings, a row reads as two lines and needs room around them. */
+	.keyboard-shortcut-list--scoped li {
+		padding-block: var(--pau-space-2);
+	}
+
+	.keyboard-shortcut-list--scoped .keyboard-shortcuts__label {
+		gap: var(--pau-space-1);
 	}
 
 	small {

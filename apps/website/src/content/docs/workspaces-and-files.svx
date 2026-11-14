@@ -88,6 +88,15 @@ content. Search follows the same hidden and ignored-file controls, skips known
 credential files and files larger than 2 MiB, and returns at most 200 matches
 by default. Set `limit` to request up to 1,000 matches.
 
+`GET /api/workspaces/{workspace_id}/names?query=app` finds files and folders by
+name, which is how `@` mentions in the composer complete paths. Names match as
+a prefix first, then anywhere in the name, then with the letters in order, and
+folders come ahead of files. A query with a slash, such as `src/ap`, searches
+only the `src` folder. The search uses the same hidden and ignored-file
+controls, skips known credential files and links that point outside the
+workspace, and returns 50 names by default, up to 1,000 with `limit`. It stops
+after visiting 200,000 entries.
+
 ## Use a terminal
 
 The workspace terminal runs the shell named by `$SHELL` in the workspace root.

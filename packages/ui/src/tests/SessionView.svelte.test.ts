@@ -946,6 +946,21 @@ test('shows when nothing matches, and Escape closes the list without interruptin
 	await expect.element(page.getByText('No action sent')).toBeVisible();
 });
 
+test('closes file and command completion on a press outside the composer', async () => {
+	await render(SessionViewDemo, mentionProps);
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.type(prompt, '@src');
+	await expect.element(page.getByRole('listbox', { name: 'Files' })).toBeVisible();
+	await userEvent.click(page.getByRole('heading', { level: 1 }).first());
+	await expect.element(page.getByRole('listbox')).not.toBeInTheDocument();
+
+	await userEvent.clear(prompt);
+	await userEvent.type(prompt, '/');
+	await expect.element(page.getByRole('listbox', { name: 'Commands' })).toBeVisible();
+	await userEvent.click(page.getByRole('heading', { level: 1 }).first());
+	await expect.element(page.getByRole('listbox')).not.toBeInTheDocument();
+});
+
 test('reports a failed file search', async () => {
 	await render(SessionViewDemo, { ...mentionProps, searchFailure: true });
 	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), '@src');

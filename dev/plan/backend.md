@@ -6,6 +6,20 @@ HTTP handles finite operations such as opening a workspace, starting a session,
 reading a file, or changing settings. Commands return after validation and
 acceptance; long-running progress arrives as events.
 
+## Workspace files
+
+File endpoints reject any path that resolves outside the canonical workspace
+root, and directory walks never follow links. Listings and searches apply Git and ignore-file rules, skip
+credential files, and hide empty sandbox placeholders of running processes.
+
+`GET /api/workspaces/{id}/names` serves `@` mentions in the composer. It walks
+the whole workspace for a name, or only the folder before the last slash, and
+ranks prefix, substring, then in-order letter matches, folders first. The walk
+runs on a blocking thread and stops after 200,000 entries, so a huge tree costs
+a partial answer instead of a stalled request. A link is offered only when its
+target resolves inside the root. `GET /api/workspaces/{id}/search` searches
+file content instead.
+
 ## Agent sessions
 
 `POST /api/sessions` names its agent as `pi` or `claude`, and Pi starts when

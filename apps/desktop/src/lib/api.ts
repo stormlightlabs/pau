@@ -164,7 +164,8 @@ async function responseJson<T>(response: Response): Promise<T> {
 
 function workspaceEndpoint(
 	workspaceId: string,
-	endpoint: 'file' | 'files' | 'search' | 'git/diff' | 'git/status' | 'sandbox' | 'sandbox/preview' | 'pi-sessions'
+	endpoint:
+		'file' | 'files' | 'names' | 'search' | 'git/diff' | 'git/status' | 'sandbox' | 'sandbox/preview' | 'pi-sessions'
 ): URL {
 	const origin = apiConnection().origin || 'https://pau.local';
 	return new URL(`/api/workspaces/${encodeURIComponent(workspaceId)}/${endpoint}`, origin);
@@ -329,6 +330,24 @@ export async function writeWorkspaceFile(
 		body: JSON.stringify({ path, content, expected_revision: expectedRevision })
 	});
 	return responseJson<FileContent>(response);
+}
+
+/**
+ * Finds files and folders by name in a registered workspace, best match first.
+ * A query with a slash searches only the folder before the last slash.
+ */
+export async function searchWorkspaceNames(
+	workspaceId: string,
+	query: string,
+	options: { includeHidden: boolean; includeIgnored: boolean },
+	fetcher: typeof fetch = fetch
+): Promise<FileEntry[]> {
+	const url = workspaceEndpoint(workspaceId, 'names');
+	url.searchParams.set('query', query);
+	if (options.includeHidden) url.searchParams.set('include_hidden', 'true');
+	if (options.includeIgnored) url.searchParams.set('include_ignored', 'true');
+	const response = await fetcher(requestUrl(url), { headers: authorization() });
+	return responseJson<FileEntry[]>(response);
 }
 
 /** Searches visible UTF-8 files in a registered workspace. */

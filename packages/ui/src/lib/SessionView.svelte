@@ -2905,6 +2905,11 @@
 									}}
 									onkeyup={() => (caret = composer?.selectionStart ?? draft.length)}
 									onclick={() => (caret = composer?.selectionStart ?? draft.length)}
+									onblur={() => {
+										// A press outside the composer closes its completion lists, as Escape does.
+										dismissedDraft = draft;
+										dismissedMention = draft;
+									}}
 									aria-autocomplete={commandMatches || mentionOpen ? 'list' : undefined}
 									aria-controls={activeOption?.list}
 									aria-activedescendant={activeOption ? `${activeOption.list}-option-${activeOption.index}` : undefined}

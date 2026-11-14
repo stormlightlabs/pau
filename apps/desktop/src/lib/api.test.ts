@@ -20,6 +20,7 @@ import {
 	runSessionShellCommand,
 	searchSession,
 	searchWorkspaceFiles,
+	searchWorkspaceNames,
 	setDesktopConnection,
 	startPayloadTracing,
 	stopSessionShellCommands,
@@ -220,7 +221,7 @@ test('returns the queued messages an interrupt removed', async () => {
 	});
 });
 
-test('lists and searches workspace files with traversal options', async () => {
+test('lists and searches workspace files and names with traversal options', async () => {
 	const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json([]));
 
 	await listWorkspaceFiles('workspace / one', 'src/lib', { includeHidden: true, includeIgnored: false }, fetcher);
@@ -240,6 +241,13 @@ test('lists and searches workspace files with traversal options', async () => {
 	expect(fetcher).toHaveBeenNthCalledWith(
 		2,
 		'http://127.0.0.1:43127/api/workspaces/workspace%20%2F%20one/search?query=needle+%26+thread&limit=1000&include_ignored=true',
+		{ headers: { Authorization: `Bearer ${TOKEN}` } }
+	);
+
+	await searchWorkspaceNames('workspace / one', 'src/.en', { includeHidden: true, includeIgnored: false }, fetcher);
+	expect(fetcher).toHaveBeenNthCalledWith(
+		3,
+		'http://127.0.0.1:43127/api/workspaces/workspace%20%2F%20one/names?query=src%2F.en&include_hidden=true',
 		{ headers: { Authorization: `Bearer ${TOKEN}` } }
 	);
 });

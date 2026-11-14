@@ -811,6 +811,38 @@ test('loads session commands for completion and sends the chosen command as a pr
 	expect(prompt).toHaveBeenCalledWith(expect.objectContaining({ body: expect.stringContaining('/review') }));
 });
 
+test('completes an @ mention from the name search, however deep the file sits', async () => {
+	const { props, fetcher } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/workspaces/pau/names?query=needle': () =>
+			json([{ path: 'pkg250/src/deep/nested/needle.rs', kind: 'file', size: 12 }])
+	});
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+
+	await userEvent.type(prompt, '@needle');
+	await expect.element(page.getByRole('option', { name: /needle\.rs/ })).toBeVisible();
+	await userEvent.keyboard('{Enter}');
+
+	await expect.element(prompt).toHaveValue('@pkg250/src/deep/nested/needle.rs ');
+	const requested = fetcher.mock.calls.map(([input]) => String(input));
+	expect(requested.filter((url) => url.includes('/files'))).toEqual([]);
+});
+
+test.each([
+	['nothing matches', () => json([]), 'No matching files'],
+	['the search fails', () => json({ code: 'internal', message: 'down' }, 500), 'Files could not be searched']
+])('says so when %s', async (_case, names, message) => {
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/workspaces/pau/names?query=zzz': names
+	});
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+
+	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), '@zzz');
+	await expect.element(page.getByText(message)).toBeVisible();
+});
+
 test('shows the queued messages, follows queue updates, and restores them when cleared', async () => {
 	const clear = vi.fn(() => json({ steering: ['Keep the API.'], follow_up: ['Add a test.'] }));
 	const { props, sockets } = setup({

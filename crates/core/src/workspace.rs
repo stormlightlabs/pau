@@ -19,6 +19,9 @@ use crate::sandbox::is_placeholder;
 
 const DEFAULT_SEARCH_LIMIT: usize = 200;
 const MAX_SEARCH_LIMIT: usize = 1_000;
+const DEFAULT_NAME_SEARCH_LIMIT: usize = 50;
+/// Most entries one name search visits before it returns what it found.
+const MAX_NAME_SEARCH_ENTRIES: usize = 200_000;
 /// Largest file the editor opens, search reads, or diff review compares.
 const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 
@@ -555,6 +558,47 @@ impl WorkspaceService {
         Ok(matches)
     }
 
+    /// Finds files and folders whose names match `query`, best match first.
+    ///
+    /// A query with a slash searches only the direct children of the folder
+    /// before the last slash, by the name after it, the way Pi completes
+    /// paths. An empty query lists the root. Any other query searches every
+    /// folder under the root that traversal options and ignore rules allow,
+    /// visiting at most [`MAX_NAME_SEARCH_ENTRIES`] entries so a huge tree
+    /// cannot stall the request. A folder that does not exist yields no
+    /// matches, and one outside the root is [`WorkspaceError::InvalidPath`].
+    ///
+    /// Names match case-insensitively as a prefix, then a substring, then
+    /// letters in order. Folders come before files of the same rank, then
+    /// shorter paths. Links are never followed, and a link appears only when
+    /// its target stays inside the root.
+    pub async fn search_names(
+        &self,
+        workspace_id: &str,
+        query: &str,
+        options: TraversalOptions,
+        limit: Option<usize>,
+    ) -> Result<Vec<FileEntry>, WorkspaceError> {
+        let root = self.root(workspace_id).await?;
+        let limit = limit
+            .unwrap_or(DEFAULT_NAME_SEARCH_LIMIT)
+            .clamp(1, MAX_SEARCH_LIMIT);
+        let hidden = self.hidden_placeholders(workspace_id, &root).await?;
+        let query = query.to_owned();
+        tokio::task::spawn_blocking(move || {
+            search_names_in(
+                &root,
+                &query,
+                options,
+                limit,
+                MAX_NAME_SEARCH_ENTRIES,
+                &hidden,
+            )
+        })
+        .await
+        .map_err(|error| io::Error::other(error.to_string()))?
+    }
+
     /// Returns workspace-relative placeholders of running sandboxed processes
     /// that are still empty. A placeholder the operator has since written is
     /// a real file and stays visible.
@@ -604,6 +648,105 @@ fn is_hidden(hidden: &[String], relative: &str) -> bool {
                 .strip_prefix(placeholder.as_str())
                 .is_some_and(|rest| rest.starts_with('/'))
     })
+}
+
+/// Runs [`WorkspaceService::search_names`] under a canonical root, visiting at
+/// most `budget` entries. Tests pass a small budget to exercise the cut-off.
+fn search_names_in(
+    root: &Path,
+    query: &str,
+    options: TraversalOptions,
+    limit: usize,
+    budget: usize,
+    hidden: &[String],
+) -> Result<Vec<FileEntry>, WorkspaceError> {
+    let (folder, name) = query.rsplit_once('/').unwrap_or(("", query));
+    let needle = name.to_lowercase();
+    let start = match confined_existing(root, folder) {
+        Ok(path) if path.is_dir() => path,
+        Ok(_) | Err(WorkspaceError::NotFound) => return Ok(Vec::new()),
+        Err(error) => return Err(error),
+    };
+    let depth = (query.contains('/') || needle.is_empty()).then_some(1);
+    let mut found = Vec::new();
+    // An unreadable folder costs its own entries, not the whole search.
+    for item in walker(&start, options, depth).take(budget).flatten() {
+        if item.depth() == 0 {
+            continue;
+        }
+        let Some(file_type) = item.file_type() else {
+            continue;
+        };
+        let Some(rank) = item
+            .file_name()
+            .to_str()
+            .and_then(|name| name_rank(name, &needle))
+        else {
+            continue;
+        };
+        let relative = relative_display(root, item.path())?;
+        if is_sensitive(&relative) || is_hidden(hidden, &relative) {
+            continue;
+        }
+        let kind = if file_type.is_dir() {
+            FileEntryKind::Directory
+        } else if file_type.is_symlink() {
+            // A mention of a link that leaves the root would hand the agent a
+            // path to files outside the workspace.
+            if !fs::canonicalize(item.path()).is_ok_and(|target| target.starts_with(root)) {
+                continue;
+            }
+            FileEntryKind::Symlink
+        } else {
+            FileEntryKind::File
+        };
+        found.push((
+            rank,
+            FileEntry {
+                path: relative,
+                kind,
+                size: None,
+            },
+        ));
+    }
+
+    let folder_first = |entry: &FileEntry| entry.kind != FileEntryKind::Directory;
+    found.sort_by(|(left_rank, left), (right_rank, right)| {
+        left_rank
+            .cmp(right_rank)
+            .then_with(|| folder_first(left).cmp(&folder_first(right)))
+            .then_with(|| left.path.len().cmp(&right.path.len()))
+            .then_with(|| left.path.cmp(&right.path))
+    });
+    found.truncate(limit);
+    Ok(found
+        .into_iter()
+        .map(|(_, mut entry)| {
+            if entry.kind == FileEntryKind::File {
+                entry.size = fs::symlink_metadata(root.join(&entry.path))
+                    .ok()
+                    .map(|metadata| metadata.len());
+            }
+            entry
+        })
+        .collect())
+}
+
+/// Ranks a name against a lowercase needle: 0 for a prefix, 1 for a
+/// substring, 2 for the needle's letters in order, and `None` otherwise.
+fn name_rank(name: &str, needle: &str) -> Option<u8> {
+    let name = name.to_lowercase();
+    if name.starts_with(needle) {
+        return Some(0);
+    }
+    if name.contains(needle) {
+        return Some(1);
+    }
+    let mut letters = name.chars();
+    needle
+        .chars()
+        .all(|wanted| letters.any(|letter| letter == wanted))
+        .then_some(2)
 }
 
 async fn git_head_file(root: &Path, relative_path: &str) -> Result<Vec<u8>, WorkspaceError> {
@@ -1297,5 +1440,158 @@ mod tests {
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].path, "main.rs");
         assert_eq!(matches[0].line, 2);
+    }
+
+    fn touch(root: &Path, relative: &str) {
+        let path = root.join(relative);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, "").unwrap();
+    }
+
+    fn paths(entries: &[FileEntry]) -> Vec<&str> {
+        entries.iter().map(|entry| entry.path.as_str()).collect()
+    }
+
+    #[tokio::test]
+    async fn ranks_name_matches_and_scopes_a_query_with_a_slash() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+        for file in [
+            "src/App.svelte",
+            "src/lib/api.ts",
+            "apple/core.rs",
+            "snapper.rs",
+            "docs/map-plan.md",
+            "README.md",
+        ] {
+            touch(&root, file);
+        }
+        let search = |query: &'static str| {
+            let service = &service;
+            let id = workspace.id.clone();
+            async move {
+                service
+                    .search_names(&id, query, TraversalOptions::default(), None)
+                    .await
+            }
+        };
+
+        let found = search("app").await.unwrap();
+        assert_eq!(
+            paths(&found),
+            ["apple", "src/App.svelte", "snapper.rs", "docs/map-plan.md"]
+        );
+        assert_eq!(found[0].kind, FileEntryKind::Directory);
+        assert_eq!(found[1].size, Some(0));
+        assert_eq!(
+            paths(&search("src/").await.unwrap()),
+            ["src/lib", "src/App.svelte"]
+        );
+        assert_eq!(paths(&search("src/ap").await.unwrap()), ["src/App.svelte"]);
+        assert_eq!(paths(&search("").await.unwrap()).len(), 5);
+        assert!(search("missing/").await.unwrap().is_empty());
+        assert!(search("zzz").await.unwrap().is_empty());
+        assert!(matches!(
+            search("../").await,
+            Err(WorkspaceError::InvalidPath)
+        ));
+    }
+
+    #[tokio::test]
+    async fn leaves_out_hidden_ignored_and_credential_names_unless_asked() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+        fs::write(root.join(".gitignore"), "*.log\n").unwrap();
+        for file in ["notes.md", ".notes", "notes.log", ".env.notes"] {
+            touch(&root, file);
+        }
+        let search = |include_hidden, include_ignored| {
+            let options = TraversalOptions {
+                include_hidden,
+                include_ignored,
+            };
+            service.search_names(&workspace.id, "notes", options, None)
+        };
+
+        assert_eq!(paths(&search(false, false).await.unwrap()), ["notes.md"]);
+        assert_eq!(
+            paths(&search(true, false).await.unwrap()),
+            ["notes.md", ".notes"]
+        );
+        assert_eq!(
+            paths(&search(false, true).await.unwrap()),
+            ["notes.md", "notes.log"]
+        );
+    }
+
+    #[tokio::test]
+    async fn returns_at_most_the_requested_number_of_names() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+        for index in 0..60 {
+            touch(&root, &format!("note{index}.md"));
+        }
+        let options = TraversalOptions::default();
+
+        let three = service
+            .search_names(&workspace.id, "note", options, Some(3))
+            .await
+            .unwrap();
+        assert_eq!(paths(&three), ["note0.md", "note1.md", "note2.md"]);
+        let default = service
+            .search_names(&workspace.id, "note", options, None)
+            .await
+            .unwrap();
+        assert_eq!(default.len(), DEFAULT_NAME_SEARCH_LIMIT);
+    }
+
+    #[tokio::test]
+    async fn finds_a_deep_name_in_a_large_tree_and_stops_at_the_entry_budget() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+        for index in 0..300 {
+            touch(&root, &format!("pkg{index:03}/src/mod.rs"));
+        }
+        touch(&root, "pkg250/src/deep/nested/needle.rs");
+
+        let found = service
+            .search_names(&workspace.id, "needle", TraversalOptions::default(), None)
+            .await
+            .unwrap();
+        assert_eq!(paths(&found), ["pkg250/src/deep/nested/needle.rs"]);
+
+        let canonical = fs::canonicalize(&root).unwrap();
+        let options = TraversalOptions::default();
+        let all = search_names_in(&canonical, "mod", options, 1_000, usize::MAX, &[]).unwrap();
+        assert_eq!(all.len(), 300);
+        let cut = search_names_in(&canonical, "mod", options, 1_000, 100, &[]).unwrap();
+        assert!(!cut.is_empty() && cut.len() < 50);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn never_follows_or_offers_links_that_leave_the_workspace() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+        let outside = directory.path().join("outside");
+        touch(&outside, "plan-secret.md");
+        touch(&root, "docs/plan.md");
+        std::os::unix::fs::symlink(&outside, root.join("escape")).unwrap();
+        std::os::unix::fs::symlink(outside.join("plan-secret.md"), root.join("plan-out")).unwrap();
+        std::os::unix::fs::symlink(root.join("docs/plan.md"), root.join("plan-in")).unwrap();
+        let options = TraversalOptions::default();
+
+        let found = service
+            .search_names(&workspace.id, "plan", options, None)
+            .await
+            .unwrap();
+        assert_eq!(paths(&found), ["plan-in", "docs/plan.md"]);
+        assert_eq!(found[0].kind, FileEntryKind::Symlink);
+        assert!(matches!(
+            service
+                .search_names(&workspace.id, "escape/", options, None)
+                .await,
+            Err(WorkspaceError::InvalidPath)
+        ));
     }
 }

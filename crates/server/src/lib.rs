@@ -442,6 +442,7 @@ fn router_with_services(
             get(read_file).put(write_file),
         )
         .route("/api/workspaces/{workspace_id}/search", get(search_files))
+        .route("/api/workspaces/{workspace_id}/names", get(search_names))
         .route("/api/workspaces/{workspace_id}/git/status", get(git_status))
         .route("/api/workspaces/{workspace_id}/git/diff", get(git_diff))
         .route(
@@ -1063,6 +1064,23 @@ async fn search_files(
     };
     service
         .search(&workspace_id, &query.query, traversal, query.limit)
+        .await
+        .map(Json)
+        .map_err(ApiError::from)
+}
+
+async fn search_names(
+    State(state): State<ApiState>,
+    AxumPath(workspace_id): AxumPath<String>,
+    Query(query): Query<SearchFilesQuery>,
+) -> Result<Json<Vec<FileEntry>>, ApiError> {
+    let service = workspace_service(&state)?;
+    let traversal = TraversalOptions {
+        include_hidden: query.include_hidden,
+        include_ignored: query.include_ignored,
+    };
+    service
+        .search_names(&workspace_id, &query.query, traversal, query.limit)
         .await
         .map(Json)
         .map_err(ApiError::from)
@@ -2212,6 +2230,22 @@ mod tests {
                 .unwrap();
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].path, "note.txt");
+
+        let names = Request::builder()
+            .uri(format!(
+                "/api/workspaces/{}/names?query=not&limit=1",
+                workspace.id
+            ))
+            .header(header::AUTHORIZATION, &authorization)
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(names).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let names: Vec<FileEntry> =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(names.len(), 1);
+        assert_eq!(names[0].path, "note.txt");
 
         let git_status = Request::builder()
             .uri(format!("/api/workspaces/{}/git/status", workspace.id))

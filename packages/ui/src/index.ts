@@ -52,7 +52,13 @@ export { default as ContextMeter } from './lib/ContextMeter.svelte';
 export { default as ThinkingLevelPicker } from './lib/ThinkingLevelPicker.svelte';
 export { default as ProcessesView } from './lib/ProcessesView.svelte';
 export { default as SandboxSettingsView } from './lib/SandboxSettingsView.svelte';
-export { default as SettingsView, SETTINGS_SECTIONS, type SettingsSectionId } from './lib/SettingsView.svelte';
+export {
+	default as SettingsView,
+	SETTINGS_SECTIONS,
+	type NotificationSetting,
+	type SettingsChoices,
+	type SettingsSectionId
+} from './lib/SettingsView.svelte';
 export { default as Select, type SelectOption } from './lib/Select.svelte';
 export { default as SessionResourceSummary } from './lib/SessionResourceSummary.svelte';
 export { default as TranscriptSearch } from './lib/TranscriptSearch.svelte';

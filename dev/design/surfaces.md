@@ -301,6 +301,21 @@ previous choice and shows the reason under the setting. Settings that belong
 to one view, such as the agent sandbox, MCP servers, and diagnostics, stay in
 that view.
 
+Appearance shows each theme as a card painted in that theme's own colors: a
+line of code in its syntax colors and a strip of its terminal palette. The
+selected card takes the active accent. Each font choice is set in its own
+typeface. Motion sits with them.
+
+Notifications offers three policies. The default notifies when a session out
+of view waits for input, asks a question, or fails. The second also notifies
+when a turn finishes. Off sends no notifications and leaves the app icon badge
+alone. The session rail still marks sessions that need attention.
+
+Keyboard lists Pau's shortcuts in the shortcut dialog's groups. Each one names
+its scope: every view, Sessions, or the desktop app, and whether it gives way
+while a text field has focus. The list is read-only. A Pi binding that takes a
+chord is noted as it is in the dialog.
+
 Pau themes apply only to Pau surfaces. External and terminal editors retain
 their own configuration and colors. At narrow widths, section navigation
 collapses before controls lose their labels or descriptions.

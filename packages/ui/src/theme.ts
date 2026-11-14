@@ -75,13 +75,13 @@ export type PauTheme = {
 	};
 };
 
-/** User-selectable UI fonts. Font files are bundled and never loaded from a remote origin. */
+/** User-selectable UI fonts, with the names Settings shows. Font files are bundled and never loaded from a remote origin. */
 export const UI_FONTS = {
-	overpass: { label: 'Overpass Variable', family: "'Overpass Variable'" },
-	'ibm-plex-sans': { label: 'IBM Plex Sans Variable', family: "'IBM Plex Sans Variable'" },
-	inter: { label: 'Inter Variable', family: "'Inter Variable'" },
+	overpass: { label: 'Overpass', family: "'Overpass Variable'" },
+	'ibm-plex-sans': { label: 'IBM Plex Sans', family: "'IBM Plex Sans Variable'" },
+	inter: { label: 'Inter', family: "'Inter Variable'" },
 	'atkinson-hyperlegible-next': {
-		label: 'Atkinson Hyperlegible Next Variable',
+		label: 'Atkinson Hyperlegible Next',
 		family: "'Atkinson Hyperlegible Next Variable'"
 	},
 	'atkinson-hyperlegible-soft': { label: 'Atkinson Hyperlegible Soft', family: "'Atkinson Hyperlegible Soft'" }

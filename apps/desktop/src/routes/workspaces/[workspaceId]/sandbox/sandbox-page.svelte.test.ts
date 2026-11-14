@@ -10,7 +10,8 @@ vi.mock('$app/state', () => ({
 	page: { params: { workspaceId: 'pau' }, route: { id: '/workspaces/[workspaceId]/sandbox' } }
 }));
 
-vi.mock('$lib/api', () => ({
+vi.mock('$lib/api', async (importOriginal) => ({
+	...(await importOriginal<object>()),
 	listWorkspaces: async () => [],
 	getWorkspaceSandbox: async () => ({ selection: selectionWire(sandboxFixtures.granted) }),
 	previewSandbox: async () => null,

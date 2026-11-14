@@ -1,5 +1,5 @@
-import type { LastRoute, MotionPreference, UiPreferences } from '@stormlightlabs/pau-protocol';
-import type { ShellPaneWidths } from '@stormlightlabs/pau-ui';
+import type { LastRoute, UiPreferences } from '@stormlightlabs/pau-protocol';
+import { THEMES, UI_FONTS, type ShellPaneWidths } from '@stormlightlabs/pau-ui';
 
 import { getUiPreferences, updateUiPreferences } from './api';
 import { EventStreamClient, type EventSocketFactory } from './event-stream';
@@ -10,6 +10,45 @@ const SAVE_DELAY_MS = 400;
 /** Local copy of the motion setting, read by the inline script in `app.html` before first paint. */
 export const MOTION_CACHE_KEY = 'pau.motion';
 
+/**
+ * Local copies of the theme and UI font. A new window starts with them, so
+ * the launch splash and the first view paint in the saved theme instead of
+ * flashing the default until the preferences load.
+ */
+export const THEME_CACHE_KEY = 'pau.theme';
+export const UI_FONT_CACHE_KEY = 'pau.ui-font';
+
+/**
+ * The preferences Settings changes, under their protocol field names so a
+ * save can lay them over the stored document as they are.
+ */
+export type InterfaceChoices = Pick<UiPreferences, 'theme' | 'ui_font' | 'notifications' | 'motion'>;
+
+const CHOICE_KEYS = ['theme', 'ui_font', 'notifications', 'motion'] as const satisfies (keyof InterfaceChoices)[];
+
+function pickChoices(preferences: InterfaceChoices): InterfaceChoices {
+	const { theme, ui_font, notifications, motion } = preferences;
+	return { theme, ui_font, notifications, motion };
+}
+
+/** Reads a cached value, or `undefined` when storage is unavailable or holds something this build does not know. */
+function cached<T extends string>(key: string, known: Record<T, unknown>): T | undefined {
+	try {
+		const value = localStorage.getItem(key);
+		return value !== null && Object.hasOwn(known, value) ? (value as T) : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function remember(key: string, value: string): void {
+	try {
+		localStorage.setItem(key, value);
+	} catch {
+		// Without storage the next window starts from the defaults until preferences load.
+	}
+}
+
 export type InterfacePreferencesOptions = {
 	root?: HTMLElement;
 	browserOrigin?: string;
@@ -19,7 +58,7 @@ export type InterfacePreferencesOptions = {
 };
 
 /**
- * Keeps the pane widths and the motion setting in step with the saved
+ * Keeps the pane widths and the Settings choices in step with the saved
  * interface preferences.
  *
  * The shell reports each resize through {@link InterfacePreferences.resize}. The
@@ -29,9 +68,10 @@ export type InterfacePreferencesOptions = {
  *
  * The motion setting sets `data-motion` on the root element, which the UI
  * tokens and transitions read. `system` removes the attribute so the OS
- * reduced-motion query decides. Every save writes the whole document built
- * from the latest loaded copy, so a motion change keeps the saved widths and
- * a resize keeps the motion setting.
+ * reduced-motion query decides. Views read the theme and UI font from
+ * {@link InterfacePreferences.choices} and hand them to their shell. Every
+ * save writes the whole document built from the latest loaded copy, so a
+ * Settings change keeps the saved widths and a resize keeps the choices.
  *
  * The view the operator has open is saved too, through
  * {@link InterfacePreferences.rememberRoute}, so the next launch can return
@@ -49,8 +89,13 @@ export class InterfacePreferences {
 	#stream: EventStreamClient | undefined;
 	readonly #options: InterfacePreferencesOptions;
 
-	/** The motion setting. Change it through {@link InterfacePreferences.setMotion}. */
-	motion = $state<MotionPreference>('system');
+	/** The Settings choices. Change one through {@link InterfacePreferences.choose}. */
+	choices = $state<InterfaceChoices>({
+		theme: cached(THEME_CACHE_KEY, THEMES) ?? 'eldritch',
+		ui_font: cached(UI_FONT_CACHE_KEY, UI_FONTS) ?? 'overpass',
+		notifications: 'attention',
+		motion: 'system'
+	});
 
 	/** Widths to hand to the shell. `null` keeps a pane at its default width. */
 	widths = $state<ShellPaneWidths>({ contextRail: null, inspector: null });
@@ -65,13 +110,12 @@ export class InterfacePreferences {
 	 *
 	 * Each write reads the preferences when it starts, so a later write
 	 * carries every change made before it. A failed write therefore restores
-	 * the saved motion setting only when no later write is queued and the
-	 * screen still shows the setting it sent. Otherwise the later write
-	 * decides what is saved, and restoring here would leave the screen
-	 * disagreeing with the stored value. `fallback` is used when no saved
-	 * copy has loaded.
+	 * a saved choice only when no later write is queued and the screen still
+	 * shows the value it sent. Otherwise the later write decides what is
+	 * saved, and restoring here would leave the screen disagreeing with the
+	 * stored value. `fallback` is used when no saved copy has loaded.
 	 */
-	async #flush(fallback?: MotionPreference): Promise<void> {
+	async #flush(fallback?: Partial<InterfaceChoices>): Promise<void> {
 		clearTimeout(this.#timer);
 		this.#timer = undefined;
 		this.#pending += 1;
@@ -84,15 +128,21 @@ export class InterfacePreferences {
 		const { sent, failure } = await write;
 		this.#pending -= 1;
 		if (!failure) return;
-		const restore = this.#saved?.motion ?? fallback;
-		if (restore && this.#pending === 0 && this.motion === sent) this.#applyMotion(restore);
+		if (this.#pending === 0) {
+			const restored = { ...this.choices };
+			for (const key of CHOICE_KEYS) {
+				const value = this.#saved?.[key] ?? fallback?.[key];
+				if (value !== undefined && this.choices[key] === sent[key]) Object.assign(restored, { [key]: value });
+			}
+			this.#applyChoices(restored);
+		}
 		throw failure;
 	}
 
 	/**
 	 * Saves widths and the open view. A failure leaves them applied in this
-	 * window, and the next resize or view change saves again. A motion
-	 * setting this write failed to save is restored as {@link #flush} says.
+	 * window, and the next resize or view change saves again. A choice this
+	 * write failed to save is restored as {@link #flush} says.
 	 */
 	async #save(): Promise<void> {
 		try {
@@ -103,19 +153,19 @@ export class InterfacePreferences {
 	}
 
 	/**
-	 * Saves the whole document and resolves with the motion setting it sent
-	 * and any failure instead of rejecting, so a write that waits on this one
-	 * is not failed by it.
+	 * Saves the whole document and resolves with the choices it sent and any
+	 * failure instead of rejecting, so a write that waits on this one is not
+	 * failed by it.
 	 */
-	async #write(): Promise<{ sent: MotionPreference; failure?: Error }> {
-		const sent = this.motion;
+	async #write(): Promise<{ sent: InterfaceChoices; failure?: Error }> {
+		const sent = { ...this.choices };
 		try {
 			const base = this.#saved ?? (await getUiPreferences(this.#options.fetcher));
 			const { contextRail, inspector } = this.widths;
 			this.#saved = await updateUiPreferences(
 				{
 					...base,
-					motion: sent,
+					...sent,
 					pane_widths: { context_rail: contextRail, inspector },
 					last_route: this.#route ?? base.last_route
 				},
@@ -127,17 +177,15 @@ export class InterfacePreferences {
 		}
 	}
 
-	/** Sets the root attribute and the local copy that the next launch reads before first paint. */
-	#applyMotion(motion: MotionPreference): void {
-		this.motion = motion;
+	/** Shows the choices, sets the motion attribute, and keeps the local copies that the next window starts with. */
+	#applyChoices(choices: InterfaceChoices): void {
+		this.choices = choices;
 		const root = this.#options.root ?? document.documentElement;
-		if (motion === 'system') delete root.dataset.motion;
-		else root.dataset.motion = motion;
-		try {
-			localStorage.setItem(MOTION_CACHE_KEY, motion);
-		} catch {
-			// Without storage the first paint follows the OS until preferences load.
-		}
+		if (choices.motion === 'system') delete root.dataset.motion;
+		else root.dataset.motion = choices.motion;
+		remember(MOTION_CACHE_KEY, choices.motion);
+		remember(THEME_CACHE_KEY, choices.theme);
+		remember(UI_FONT_CACHE_KEY, choices.ui_font);
 	}
 
 	/** Loads the saved widths and follows changes made elsewhere. */
@@ -172,20 +220,20 @@ export class InterfacePreferences {
 			return;
 		}
 		this.#saved = preferences;
-		if (this.#pending === 0) this.#applyMotion(preferences.motion);
+		if (this.#pending === 0) this.#applyChoices(pickChoices(preferences));
 		if (this.#timer !== undefined || this.#pending > 0) return;
 		this.widths = { contextRail: preferences.pane_widths.context_rail, inspector: preferences.pane_widths.inspector };
 	}
 
 	/**
-	 * Applies a motion setting the operator chose and saves it at once. When
-	 * the save fails, the saved setting comes back and the promise rejects
+	 * Applies a choice the operator made in Settings and saves it at once.
+	 * When the save fails, the saved value comes back and the promise rejects
 	 * with the reason, so Settings can show it. A failure that a later choice
 	 * has already replaced changes nothing, as {@link #flush} explains.
 	 */
-	async setMotion(motion: MotionPreference): Promise<void> {
-		const previous = this.motion;
-		this.#applyMotion(motion);
+	async choose(change: Partial<InterfaceChoices>): Promise<void> {
+		const previous = pickChoices(this.choices);
+		this.#applyChoices({ ...this.choices, ...change });
 		await this.#flush(previous);
 	}
 

@@ -70,6 +70,8 @@
 </script>
 
 <WorkspaceFiles
+	theme={interfacePreferences.choices.theme}
+	uiFont={interfacePreferences.choices.ui_font}
 	{workspaceId}
 	{workspaceName}
 	{source}

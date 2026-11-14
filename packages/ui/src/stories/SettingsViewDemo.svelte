@@ -1,20 +1,34 @@
 <script lang="ts">
 	import { shellNavigationFixtures } from '../fixtures/application-shell';
 	import ApplicationShell, { type ShellNavItem } from '../lib/ApplicationShell.svelte';
-	import SettingsView, { SETTINGS_SECTIONS } from '../lib/SettingsView.svelte';
-	import type { MotionSetting } from '../motion';
+	import { Keymap, type PiKeyBinding } from '../lib/keymap.svelte';
+	import SettingsView, { SETTINGS_SECTIONS, type SettingsChoices } from '../lib/SettingsView.svelte';
 
 	let {
-		motion: initialMotion = 'system',
-		saveError
+		initial = {},
+		saveError,
+		piBindings = []
 	}: {
-		motion?: MotionSetting;
+		/** Saved choices to start from. Unset ones use Pau's defaults. */
+		initial?: Partial<SettingsChoices>;
 		/** Rejects every save with this reason, as an unreachable backend would. */
 		saveError?: string;
+		/** Pi bindings that take chords from Pau's shortcuts. */
+		piBindings?: PiKeyBinding[];
 	} = $props();
 
 	// svelte-ignore state_referenced_locally
-	let motion = $state(initialMotion);
+	let choices = $state<SettingsChoices>({
+		theme: 'eldritch',
+		uiFont: 'overpass',
+		notifications: 'attention',
+		motion: 'system',
+		...initial
+	});
+
+	const keymap = new Keymap({ platform: 'mac' });
+	// svelte-ignore state_referenced_locally
+	keymap.setPiBindings(piBindings);
 
 	const productItems: ShellNavItem[] = shellNavigationFixtures.productItems.map((item) =>
 		item.id === 'settings' ? { ...item, href: '#settings', active: true } : { ...item, active: false }
@@ -25,12 +39,18 @@
 		href: `#settings-${section.id}`
 	}));
 
-	async function save(value: MotionSetting): Promise<void> {
+	async function save<K extends keyof SettingsChoices>(key: K, value: SettingsChoices[K]): Promise<void> {
 		if (saveError) throw new Error(saveError);
-		motion = value;
+		choices[key] = value;
 	}
 </script>
 
-<ApplicationShell workspaceName="Settings" contextLabel="Sections" {productItems} {contextItems}>
-	<SettingsView {motion} onMotionChange={save} />
+<ApplicationShell
+	workspaceName="Settings"
+	contextLabel="Sections"
+	{productItems}
+	{contextItems}
+	theme={choices.theme}
+	uiFont={choices.uiFont}>
+	<SettingsView {...choices} onChange={save} shortcuts={keymap.actions} platform={keymap.platform} />
 </ApplicationShell>

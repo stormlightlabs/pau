@@ -18,6 +18,7 @@
 	import { onMount, setContext, type Snippet } from 'svelte';
 
 	import { getPiKeybindings } from './api';
+	import { interfacePreferences } from './interface-preferences.svelte';
 	import type { DesktopNativeCapabilities } from './native-capabilities';
 	import { stepZoom } from './zoom';
 
@@ -103,4 +104,9 @@
 
 {@render children?.()}
 
-<KeyboardShortcuts bind:open={shortcutsOpen} actions={keymap.actions} platform={keymap.platform} />
+<KeyboardShortcuts
+	bind:open={shortcutsOpen}
+	actions={keymap.actions}
+	platform={keymap.platform}
+	theme={interfacePreferences.choices.theme}
+	uiFont={interfacePreferences.choices.ui_font} />

@@ -1,5 +1,11 @@
 <script lang="ts">
-	import { ApplicationShell, SETTINGS_SECTIONS, SettingsView } from '@stormlightlabs/pau-ui';
+	import {
+		ApplicationShell,
+		getKeymap,
+		SETTINGS_SECTIONS,
+		SettingsView,
+		type SettingsChoices
+	} from '@stormlightlabs/pau-ui';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 
@@ -16,6 +22,15 @@
 		href: `#settings-${section.id}`
 	}));
 
+	const keymap = getKeymap();
+	const choices = $derived(interfacePreferences.choices);
+
+	/** Settings names the font `uiFont`; the stored document names it `ui_font`. */
+	function change<K extends keyof SettingsChoices>(key: K, value: SettingsChoices[K]): Promise<void> {
+		const { uiFont, ...rest }: Partial<SettingsChoices> = { [key]: value };
+		return interfacePreferences.choose(uiFont ? { ...rest, ui_font: uiFont } : rest);
+	}
+
 	onMount(() => {
 		void listWorkspaces()
 			.then((workspaces) => (workspaceId = workspaces[0]?.id))
@@ -29,8 +44,15 @@
 	workspaceName="Settings"
 	contextLabel="Sections"
 	productItems={productNavigation(page.route.id, workspaceId)}
-	contextItems={sectionItems}>
+	contextItems={sectionItems}
+	theme={choices.theme}
+	uiFont={choices.ui_font}>
 	<SettingsView
-		motion={interfacePreferences.motion}
-		onMotionChange={(value) => interfacePreferences.setMotion(value)} />
+		theme={choices.theme}
+		uiFont={choices.ui_font}
+		notifications={choices.notifications}
+		motion={choices.motion}
+		onChange={change}
+		shortcuts={keymap?.actions ?? []}
+		platform={keymap?.platform ?? 'other'} />
 </ApplicationShell>

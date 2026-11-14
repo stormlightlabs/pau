@@ -19,6 +19,7 @@
 
 	import { getWorkspaceSandbox, listWorkspaces, previewSandbox, updateWorkspaceSandbox } from '$lib/api';
 	import { productNavigation } from '$lib/app-navigation';
+	import { interfacePreferences } from '$lib/interface-preferences.svelte';
 	import { effectiveView, selectionView, selectionWire } from '$lib/sandbox-model';
 
 	const PREVIEW_DELAY_MS = 250;
@@ -102,6 +103,8 @@
 <svelte:head><title>Agent sandbox · Pau</title></svelte:head>
 
 <ApplicationShell
+	theme={interfacePreferences.choices.theme}
+	uiFont={interfacePreferences.choices.ui_font}
 	workspaceName={workspaceName ?? workspaceId}
 	contextLabel="Agent sandbox"
 	productItems={productNavigation(page.route.id, workspaceId)}

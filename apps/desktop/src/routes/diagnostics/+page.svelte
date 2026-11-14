@@ -17,6 +17,7 @@
 		updateDiagnosticSettings
 	} from '$lib/api';
 	import { productNavigation } from '$lib/app-navigation';
+	import { interfacePreferences } from '$lib/interface-preferences.svelte';
 
 	let bundle = $state<DiagnosticBundleView>(diagnosticFixtures.disabled);
 	let error = $state<string>();
@@ -107,6 +108,8 @@
 <svelte:head><title>Diagnostics · Pau</title></svelte:head>
 
 <ApplicationShell
+	theme={interfacePreferences.choices.theme}
+	uiFont={interfacePreferences.choices.ui_font}
 	workspaceName="Diagnostics"
 	contextLabel="Diagnostics"
 	productItems={productNavigation(page.route.id, workspaceId)}

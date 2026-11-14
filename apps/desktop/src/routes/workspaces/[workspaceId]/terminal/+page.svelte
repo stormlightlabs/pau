@@ -29,6 +29,8 @@
 <svelte:head><title>Terminal · Pau</title></svelte:head>
 
 <TerminalSurface
+	theme={interfacePreferences.choices.theme}
+	uiFont={interfacePreferences.choices.ui_font}
 	{workspaceName}
 	{source}
 	{disconnected}

@@ -207,6 +207,21 @@ export const APP_KEY_ACTIONS: readonly KeyAction[] = [
 	}
 ];
 
+/**
+ * Where an action's shortcut works, as the Keyboard settings list it: the
+ * views that can run it, and whether it gives way while a text field has
+ * focus.
+ */
+export function keyActionScope(action: Pick<KeyAction, 'unavailable' | 'whileTyping'>): string {
+	const views =
+		action.unavailable === SESSIONS_ONLY
+			? 'Sessions'
+			: action.unavailable === DESKTOP_ONLY
+				? 'Desktop app'
+				: 'All views';
+	return action.whileTyping ? views : `${views}, not while typing`;
+}
+
 type Modifier = 'ctrl' | 'alt' | 'shift' | 'meta';
 
 const MODIFIERS: Partial<Record<string, Modifier>> = {

@@ -32,7 +32,11 @@
 	const attention = setContext(
 		sessionAttentionContext,
 		notify && setBadgeCount
-			? new SessionAttention({ browserOrigin: location.origin, notifier: { notify, setBadgeCount } })
+			? new SessionAttention({
+					browserOrigin: location.origin,
+					notifier: { notify, setBadgeCount },
+					policy: () => interfacePreferences.choices.notifications
+				})
 			: undefined
 	);
 
@@ -101,7 +105,12 @@
 {/snippet}
 
 {#if desktop}
-	<LaunchSplash {phase} steps={launchSteps(progress)} error={startupError}>
+	<LaunchSplash
+		{phase}
+		steps={launchSteps(progress)}
+		error={startupError}
+		theme={interfacePreferences.choices.theme}
+		uiFont={interfacePreferences.choices.ui_font}>
 		{@render app()}
 	</LaunchSplash>
 {:else}

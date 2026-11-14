@@ -125,26 +125,19 @@
 </script>
 
 <!--
-	Each setting is a row: its name, what it changes, and its scope on the
-	left, the control on the right. A wide setting puts its control under the
-	description instead. The scope chip names where the choice applies, so a
-	workspace setting never reads as a global one.
+	Each setting is one column: its name with the scope chip beside it, what it
+	changes, then the control, so the control starts on the same edge as the
+	name. The scope chip names where the choice applies, so a workspace setting
+	never reads as a global one.
 -->
-{#snippet setting(
-	name: string,
-	slug: keyof SettingsChoices,
-	description: string,
-	scope: string,
-	control: Snippet,
-	wide = false
-)}
-	<div class={['settings-view__setting', wide && 'settings-view__setting--wide']}>
-		<div class="settings-view__about">
+{#snippet setting(name: string, slug: keyof SettingsChoices, description: string, scope: string, control: Snippet)}
+	<div class="settings-view__setting">
+		<div class="settings-view__heading">
 			<span class="settings-view__name" id="{id}-{slug}-name">{name}</span>
-			<p id="{id}-{slug}-description">{description}</p>
 			<span class="settings-view__scope" id="{id}-{slug}-scope"
 				><span class="pau-visually-hidden">Scope:</span> {scope}</span>
 		</div>
+		<p class="settings-view__description" id="{id}-{slug}-description">{description}</p>
 		<div class="settings-view__control">{@render control()}</div>
 		{#if errors[slug]}
 			<p class="settings-view__error" role="alert">Pau could not save this setting. {errors[slug]}</p>
@@ -244,8 +237,7 @@
 					'theme',
 					'Colors for Pau, its code views, and its terminals. External and terminal editors keep their own.',
 					'All workspaces',
-					themeControl,
-					true
+					themeControl
 				)}
 				{@render setting(
 					'Font',
@@ -297,7 +289,7 @@
 	/* Sections start on the view header's inset, so headings, names, and the title share one edge. */
 	.settings-view__section {
 		display: grid;
-		gap: var(--pau-space-3);
+		gap: var(--pau-space-5);
 		padding: var(--pau-space-4) var(--pau-space-3);
 		border-top: 1px solid var(--pau-border);
 		scroll-margin-top: var(--pau-space-4);
@@ -314,56 +306,65 @@
 		font-weight: 600;
 	}
 
-	/* Rows stay narrow so a control sits near its name on a wide window. */
+	/*
+	 * Every setting keeps one rhythm, top to bottom: the name and scope chip
+	 * share a line, the description follows `space/1` below, and the control
+	 * `space/2` below that, starting on the name's edge. Settings sit
+	 * `space/5` apart, so the gap between two settings is always larger than
+	 * any gap inside one.
+	 */
 	.settings-view__setting {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto;
-		max-width: 40rem;
-		align-items: start;
-		column-gap: var(--pau-space-5);
-		row-gap: var(--pau-space-2);
+		justify-items: start;
 		font-size: var(--pau-type-md);
 	}
 
-	.settings-view__about {
-		display: grid;
-		justify-items: start;
-		gap: var(--pau-space-1);
-	}
-
-	.settings-view__name {
-		font-weight: 500;
-	}
-
-	.settings-view__about p,
-	.settings-view__intro,
-	.settings-view__empty {
-		color: var(--pau-text-muted);
-	}
-
-	.settings-view__about p,
-	.settings-view__intro {
-		max-width: 40rem;
-	}
-
-	.settings-view__setting--wide {
-		grid-template-columns: minmax(0, 1fr);
-		max-width: none;
+	.settings-view__heading {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--pau-space-2);
 	}
 
 	/*
-	 * The chip trims its line box to the cap height and baseline, so the even
-	 * padding centers the letters themselves rather than the font's taller
-	 * ascent, whichever UI font is set.
+	 * The name and the chip trim their line boxes to the cap height and
+	 * baseline, so centering them puts their capitals on one line, and the
+	 * chip's even padding centers its own letters, whichever UI font is set.
 	 */
+	.settings-view__name {
+		font-weight: 500;
+		text-box: trim-both cap alphabetic;
+	}
+
 	.settings-view__scope {
-		margin-top: var(--pau-space-1);
 		padding: var(--pau-space-2);
 		color: var(--pau-text-muted);
 		border: 1px solid var(--pau-border);
 		font-size: var(--pau-type-xs);
 		line-height: 1;
 		text-box: trim-both cap alphabetic;
+	}
+
+	.settings-view__description {
+		margin-top: var(--pau-space-1);
+	}
+
+	.settings-view__control {
+		justify-self: stretch;
+		margin-top: var(--pau-space-2);
+	}
+
+	.settings-view__description,
+	.settings-view__intro,
+	.settings-view__empty {
+		color: var(--pau-text-muted);
+	}
+
+	/* Text and short controls stop at 40rem, so on a wide window they stay near their name. Theme cards span the section. */
+	.settings-view__description,
+	.settings-view__intro,
+	.settings-view__choices {
+		max-width: 40rem;
 	}
 
 	.settings-view__choices {
@@ -467,14 +468,7 @@
 	}
 
 	.settings-view__error {
-		grid-column: 1 / -1;
+		margin-top: var(--pau-space-2);
 		color: var(--pau-danger);
-	}
-
-	/* Narrow panes stack the control under its description instead of squeezing the description. */
-	@container (max-width: 36rem) {
-		.settings-view__setting {
-			grid-template-columns: minmax(0, 1fr);
-		}
 	}
 </style>

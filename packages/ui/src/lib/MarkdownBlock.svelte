@@ -78,8 +78,9 @@
 			start={typeof list.start === 'number' && list.start !== 1 ? list.start : undefined}>
 			{#each list.items as item, index (index)}
 				<li>
-					{#if item.task}<input type="checkbox" checked={item.checked} disabled aria-label="Task" />{/if}
-					{#each item.tokens as child, childIndex (childIndex)}
+					{#if item.task}<span class="markdown__task"
+							><input type="checkbox" checked={item.checked} disabled aria-label="Task" /></span
+						>{/if}{#each item.tokens as child, childIndex (childIndex)}
 						{#if child.type === 'text'}
 							{@render inline((child as Tokens.Text).tokens ?? [child])}
 						{:else}
@@ -174,13 +175,66 @@
 		color: var(--pau-text-muted);
 	}
 
+	/*
+	 * Item text starts on the transcript inset, `space/5` in, and the marker
+	 * sits on the text column's left edge, where paragraphs start. A nested
+	 * list repeats this from its parent item's text. The browser's own
+	 * marker hangs a variable distance left of the text, so it is drawn here.
+	 * An empty marker string, unlike `none`, keeps Safari reading the list as
+	 * a list.
+	 */
 	ul,
 	ol {
 		padding-left: var(--pau-space-5);
+		list-style-type: '';
 	}
 
-	li input {
-		margin: 0 var(--pau-space-2) 0 calc(var(--pau-space-4) * -1);
+	li {
+		position: relative;
+	}
+
+	li::before {
+		position: absolute;
+		left: calc(var(--pau-space-5) * -1);
+		color: var(--pau-text-muted);
+	}
+
+	ul > li::before {
+		content: '•';
+	}
+
+	ol > li::before {
+		content: counter(list-item) '.';
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* A task item's checkbox takes the marker's place and centers on the capitals. */
+	li:has(> .markdown__task)::before {
+		content: none;
+	}
+
+	/*
+	 * The box stays in the line, so its baseline offset can center it on the
+	 * capitals. Its only content is positioned, so its baseline is its bottom
+	 * edge in every engine, which a native checkbox's own baseline is not. The
+	 * offset raises that edge by half the cap height less half the box. Its
+	 * margins move it into the marker's place without moving the text.
+	 */
+	.markdown__task {
+		position: relative;
+		display: inline-block;
+		width: 1em;
+		height: 1em;
+		margin: 0 calc(var(--pau-space-5) - 1em) 0 calc(var(--pau-space-5) * -1);
+		vertical-align: calc(0.5cap - 0.5em);
+	}
+
+	.markdown__task input {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		margin: 0;
 	}
 
 	blockquote {

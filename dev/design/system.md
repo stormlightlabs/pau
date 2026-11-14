@@ -81,10 +81,10 @@ Do not scale the desktop composition down. Recompose it.
 
 The composer footer holds two groups: quiet options (delivery mode, model,
 thinking, permission, context) and the actions. They share one row when both
-fit, such as at 1440×900 with the session rail hidden. When they no longer
-fit, including at 1440×900 with both the session rail and the context rail
-open, the actions keep the first row under the field and the options wrap
-below them. In a narrow footer, the context meter shows only the share used,
+fit, as a Claude Code session's model, thinking, and actions do at 1440×900.
+When they no longer fit, as with a running Pi session's full set of options
+in the measure-wide session column, the actions keep the first row under the
+field and the options wrap below them. In a narrow footer, the context meter shows only the share used,
 and its details still list the window and token totals. Completion lists open
 as a popover above the composer, so the composer keeps its height and the
 transcript does not move.
@@ -94,8 +94,8 @@ composer's own box and dashes its border: focus color when the drop would
 attach images, danger color with the reason when it would not. The composer
 and the status line keep their size and place.
 
-The status line under the composer starts and ends with the composer's
-controls and sets the folder, branch, and figures in the mono metadata role.
+The status line under the composer starts and ends on the composer's edges
+and sets the folder, branch, and figures in the mono metadata role.
 Figures that are still zero stay hidden. When space runs short, the path loses
 its start first, the branch keeps its name up to a cap, the figures never
 shrink, and extension statuses wrap to a second row.
@@ -159,7 +159,9 @@ weights 400, 500, and 600. Fold any heavier weight into 600.
 
 - Set transcript prose, the composer, dialog and settings body text, and the
   primary text of list rows at 14px. Keep ordinary transcript prose to a
-  maximum measure of about 74 characters.
+  maximum measure of 75ch. The session header, transcript, composer, and
+  status line share that one column, so they start and end on the same
+  edges.
 - Keep metadata readable at 12–13px with sufficient contrast and line height.
   No product text goes below 12px, except uppercase, letter-spaced section
   labels, which may use 11px.
@@ -230,6 +232,9 @@ so a row of unavailable actions still ranks the primary first. The shared
 `pau-button` variants in `packages/ui` own these colors and the size: a
 `row-md` (32px) height and `type-md` (14px) text in every view, toolbars and
 banners included. Components place and space buttons but do not resize them.
+A button centers its label on the capitals, from cap height to baseline,
+rather than on the font's line box, which sits higher or lower in each UI font.
+An icon in a button centers on the same line.
 
 Controls that show or hide a rail, sidebar, or inspector belong in the top app
 bar. Keep task-specific actions in the task surface.
@@ -267,9 +272,10 @@ prompt when the actions sit on the row above them.
 Transcript entries start at the transcript's left edge, where assistant prose
 and the session title start. Everything else in an entry starts on one inset,
 `space/5` in from that edge: user message text, disclosure summaries, tool
-bodies, and the calls inside a tool group. A left rule, such as the user
-message bar or a tool row's line, counts toward the inset, so the text does not
-move with the rule's width. Calls inside a group sit under the group's rule
+bodies, the calls inside a tool group, and the text of a Markdown list item,
+whose bullet, number, or task checkbox sits on the left edge. A left rule,
+such as the user message bar or a tool row's line, counts toward the inset, so
+the text does not move with the rule's width. Calls inside a group sit under the group's rule
 with no further indent. Thinking, tool rows, tool groups, and compaction
 markers share one disclosure treatment from `disclosure.css`: a right chevron
 centered in the inset that turns down while the entry is open, muted summary
@@ -318,7 +324,8 @@ path where practical.
 
 Radio buttons and checkboxes stay native and sit `space/2` from their labels.
 The shared `pau-choice` row clears the browser's input margin, which would
-otherwise push the gap off the spacing scale. Text fields and settings panels
+otherwise push the gap off the spacing scale. The input is one `em` square and
+centers on the capitals of its label's first line, as button labels do. Text fields and settings panels
 draw their edges with the theme border token.
 
 ## Keyboard

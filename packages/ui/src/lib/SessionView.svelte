@@ -3392,7 +3392,12 @@
 		grid-template-rows: auto auto minmax(0, 1fr) auto;
 		height: 100%;
 		min-height: 0;
-		max-width: 58rem;
+		/*
+		 * The header, transcript, composer, and status line share one column,
+		 * as wide as the transcript's reading measure, so all four start and
+		 * end on the same edges.
+		 */
+		max-width: 75ch;
 		margin-inline: auto;
 	}
 
@@ -3542,8 +3547,14 @@
 		color: var(--pau-text-muted);
 	}
 
+	/*
+	 * The scroll box reaches `space/4` past the column's right edge, so an
+	 * overlay scrollbar draws beside the text instead of over it.
+	 */
 	.session-view__transcript {
 		grid-area: transcript;
+		margin-right: calc(var(--pau-space-4) * -1);
+		padding-right: var(--pau-space-4);
 		overflow: auto;
 	}
 
@@ -3556,7 +3567,6 @@
 
 	.session-message {
 		position: relative;
-		max-width: 75ch;
 	}
 
 	.session-message :global(.session-message__copy) {
@@ -3635,7 +3645,6 @@
 	}
 
 	.session-thinking {
-		max-width: 75ch;
 		color: var(--pau-text-muted);
 	}
 
@@ -3651,7 +3660,6 @@
 	}
 
 	.session-compaction {
-		max-width: 75ch;
 		padding-block: var(--pau-space-1);
 		color: var(--pau-text-muted);
 		border-block: 1px dashed var(--pau-border);
@@ -3725,7 +3733,6 @@
 	.session-denial {
 		display: grid;
 		gap: var(--pau-space-2);
-		max-width: 75ch;
 		padding: var(--pau-space-3) var(--pau-space-4);
 		background: var(--pau-canvas);
 		border-left: 2px solid var(--pau-danger);

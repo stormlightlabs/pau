@@ -197,7 +197,7 @@
 				type="button"
 				class="resource-detail__back pau-button pau-button--quiet"
 				onclick={() => void closeDetail()}>
-				<Icon name="chevronLeft" size={16} />Back to {label}
+				<Icon name="chevronLeft" size={16} /> Back to {label}
 			</button>
 		{/if}
 		<header class="resource-detail__header">

@@ -160,24 +160,44 @@ function footerRows(): HTMLElement[][] {
 		.map((row) => rows.get(row)!);
 }
 
-test('keeps every footer control on one center line at 1440×900', async () => {
+test('keeps a Claude Code footer on one center line at 1440×900', async () => {
 	await page.viewport(1440, 900);
-	await setup();
+	await render(SessionView, {
+		workspaces: sessionFixtures.claude,
+		activeSessionId: 'claude-idle',
+		onLoadModels: vi.fn().mockResolvedValue(modelFixtures.populated),
+		onSelectModel: vi.fn(),
+		onSelectThinkingLevel: vi.fn()
+	});
+	await document.fonts.ready;
 
 	const rows = footerRows();
 	expect(rows).toHaveLength(1);
 	expect(rows[0]!.map((control) => control.textContent)).toContainEqual(expect.stringMatching(/Send prompt/));
 });
 
-test('puts the actions first and the options below them at 800×560', async () => {
-	await page.viewport(800, 560);
-	await setup();
-
+/** Asserts the actions take the first footer row and the options wrap below them. */
+function expectActionsFirst() {
 	const rows = footerRows();
 	expect(rows).toHaveLength(2);
 	const first = rows[0]!.map((control) => control.textContent ?? '');
 	expect(first).toContainEqual(expect.stringMatching(/Send prompt/));
 	expect(first).toContainEqual(expect.stringMatching(/Interrupt/));
+}
+
+// The session column is as wide as the transcript's measure, so a Pi footer wraps even on a wide window.
+test('puts the actions first and the options below them at 1440×900', async () => {
+	await page.viewport(1440, 900);
+	await setup();
+
+	expectActionsFirst();
+});
+
+test('puts the actions first and the options below them at 800×560', async () => {
+	await page.viewport(800, 560);
+	await setup();
+
+	expectActionsFirst();
 	// The meter shortens to the share used and keeps its name.
 	await expect.element(page.getByRole('button', { name: 'Context 42%' })).toBeVisible();
 });

@@ -3,8 +3,9 @@
 //! An app opened from Finder, the Dock, or Spotlight inherits launchd's minimal
 //! `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`), not the one the operator's shell
 //! builds. Pi, Node.js, and the tools agents and terminals run then look
-//! missing even though they work in a terminal. Startup asks the login shell
-//! for its `PATH` once and puts it ahead of the inherited entries.
+//! missing even though they work in a terminal. The first startup step asks
+//! the login shell for its `PATH` once and puts it ahead of the inherited
+//! entries, and the backend gives the result to every child process.
 
 use std::{
     env,
@@ -28,13 +29,6 @@ pub enum LoginPathError {
     TimedOut,
     /// The shell could not start, or printed no marked value.
     Unavailable,
-}
-
-/// Runs the operator's login shell, from `SHELL` or `/bin/zsh`, and returns
-/// its `PATH`. See [`shell_path`].
-pub fn login_shell_path() -> Result<OsString, LoginPathError> {
-    let shell = env::var_os("SHELL").unwrap_or_else(|| OsString::from("/bin/zsh"));
-    shell_path(&shell, TIMEOUT)
 }
 
 /// Runs `shell` and returns its `PATH`, stopping the shell after `timeout`.

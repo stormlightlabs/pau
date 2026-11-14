@@ -18,6 +18,7 @@ fn sh(script: &str) -> (Terminal, TerminalOutput) {
         program: "/bin/sh".to_owned(),
         args: vec!["-c".to_owned(), script.to_owned()],
         cwd: std::env::temp_dir(),
+        environment: Vec::new(),
         size: SIZE,
     })
     .unwrap()
@@ -233,6 +234,7 @@ fn rejects_empty_dimensions_and_missing_programs() {
         program: "/nonexistent/pau-terminal-test".to_owned(),
         args: Vec::new(),
         cwd: std::env::temp_dir(),
+        environment: Vec::new(),
         size: SIZE,
     });
     assert!(matches!(missing, Err(TerminalError::Spawn(_))));

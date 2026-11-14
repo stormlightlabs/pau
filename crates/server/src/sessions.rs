@@ -117,9 +117,8 @@ use pau_pi::{
     DiscoverPiOptions, PiCommand, PiCommandSource, PiExtensionUiRequest, PiExtensionUiResponse,
     PiExtensionWidgetPlacement, PiImage, PiKeybindingSource, PiModel, PiProcessError,
     PiProcessOutput, PiSession, PiSessionError, PiSessionOutput, PiSessionRegistry,
-    PiSessionRegistryError, PiSessionUsage, PiShutdownTimeouts, StartPiProcessOptions,
-    StartRegisteredPiSession, discover_pi, find_pi_session_file, list_pi_session_files,
-    pi_configuration_paths, read_pi_keybindings,
+    PiSessionRegistryError, PiSessionUsage, StartRegisteredPiSession, discover_pi,
+    find_pi_session_file, list_pi_session_files, pi_configuration_paths, read_pi_keybindings,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -192,6 +191,9 @@ impl std::fmt::Debug for SessionApi {
 impl SessionApi {
     /// Creates the service and starts forwarding registry output to `events`.
     ///
+    /// Claude discovery searches the same `PATH` as `discovery`, and every
+    /// agent process receives it.
+    ///
     /// Must be called inside a Tokio runtime.
     pub(crate) fn new(
         registry: PiSessionRegistry,
@@ -200,8 +202,11 @@ impl SessionApi {
     ) -> Self {
         let api = Self {
             registry: Arc::new(registry),
+            claude_discovery: DiscoverClaudeOptions {
+                path: discovery.path.clone(),
+                ..DiscoverClaudeOptions::default()
+            },
             discovery,
-            claude_discovery: DiscoverClaudeOptions::default(),
             claude: Arc::default(),
             records: Arc::default(),
             extension_ui: Arc::default(),
@@ -213,7 +218,7 @@ impl SessionApi {
     }
 
     /// Replaces the Claude discovery settings, which otherwise search the
-    /// server's `PATH`.
+    /// Pi discovery `PATH`.
     #[cfg(test)]
     pub(crate) fn with_claude_discovery(mut self, discovery: DiscoverClaudeOptions) -> Self {
         self.claude_discovery = discovery;
@@ -996,13 +1001,7 @@ pub(crate) async fn start_session(
             id: id.clone(),
             workspace_id: request.workspace_id,
             started_at: record.started_at.clone(),
-            process: StartPiProcessOptions {
-                executable_path: pi.executable_path,
-                working_directory: root,
-                arguments,
-                environment: Vec::new(),
-                shutdown_timeouts: PiShutdownTimeouts::default(),
-            },
+            process: pi.process_options(root, arguments),
             sandbox_placeholders: Vec::new(),
         })
         .await;

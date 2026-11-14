@@ -84,6 +84,9 @@ pub struct StartClaudeBridgeOptions {
     pub working_directory: PathBuf,
     /// Arguments passed to the bridge host.
     pub arguments: Vec<OsString>,
+    /// Variables added to Pau's environment for the host and the Claude Code
+    /// process it starts.
+    pub environment: Vec<(OsString, OsString)>,
     /// Deadlines for shutdown escalation.
     pub shutdown_timeouts: ClaudeBridgeShutdownTimeouts,
 }
@@ -389,6 +392,12 @@ impl ClaudeBridgeProcess {
         let mut command = Command::new(&options.executable_path);
         command
             .args(&options.arguments)
+            .envs(
+                options
+                    .environment
+                    .iter()
+                    .map(|(name, value)| (name, value)),
+            )
             .current_dir(&options.working_directory)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -999,6 +1008,7 @@ mod tests {
             executable_path: host_with_grandchild(directory.path()),
             working_directory: directory.path().to_path_buf(),
             arguments: Vec::new(),
+            environment: Vec::new(),
             shutdown_timeouts: ClaudeBridgeShutdownTimeouts::default(),
         };
 

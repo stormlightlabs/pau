@@ -18,6 +18,8 @@ tauri = { version = "2.11.5", features = [] }
 tauri-plugin-dialog = "2.7.3"
 tauri-plugin-notification = "~2.4.0"
 tauri-plugin-opener = "2.5.5"
+# `src/window_state.rs` mirrors this release's saved-state file format and its
+# check that a window lies on a connected display. Recheck both before a bump.
 tauri-plugin-window-state = "~2.4.1"
 tokio.workspace = true
 tracing.workspace = true

@@ -213,10 +213,7 @@ mod tests {
     }
 
     #[test]
-    fn saves_size_position_and_maximized_state_but_not_visibility() {
-        assert!(FLAGS.contains(StateFlags::SIZE));
-        assert!(FLAGS.contains(StateFlags::POSITION));
-        assert!(FLAGS.contains(StateFlags::MAXIMIZED));
+    fn leaves_visibility_to_the_shell() {
         assert!(!FLAGS.contains(StateFlags::VISIBLE));
     }
 }

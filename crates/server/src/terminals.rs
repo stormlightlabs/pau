@@ -155,10 +155,9 @@ pub(crate) async fn create_terminal(
     State(state): State<ApiState>,
     Json(request): Json<CreateTerminalRequest>,
 ) -> Result<(StatusCode, Json<TerminalInfo>), TerminalApiError> {
-    let root = workspace_service(&state)?
-        .root(&request.workspace_id)
-        .await?;
-    let command = match request.command {
+    let workspaces = workspace_service(&state)?;
+    let root = workspaces.root(&request.workspace_id).await?;
+    let mut command = match request.command {
         None => TerminalCommand::shell(root, request.size),
         Some(command) => {
             let mut parts = command.into_iter();
@@ -170,10 +169,12 @@ pub(crate) async fn create_terminal(
                 program,
                 args: parts.collect(),
                 cwd: root,
+                environment: Vec::new(),
                 size: request.size,
             }
         }
     };
+    command.environment = workspaces.process_environment();
     let argv = std::iter::once(command.program.clone())
         .chain(command.args.iter().cloned())
         .collect();
@@ -395,6 +396,10 @@ mod tests {
     /// failure.
     const STEP_LIMIT: Duration = Duration::from_secs(20);
 
+    /// The `PATH` the fixture's workspace service gives its processes, which
+    /// differs from the test's own.
+    const PROCESS_PATH: &str = "/pau-login/bin:/usr/bin:/bin";
+
     type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
     struct Fixture {
@@ -410,7 +415,8 @@ mod tests {
         let root = directory.path().join("project");
         fs::create_dir(&root).unwrap();
         let database = Database::open(":memory:").await.unwrap();
-        let workspaces = WorkspaceService::new(database.workspaces());
+        let workspaces =
+            WorkspaceService::new(database.workspaces()).with_path(PROCESS_PATH.into());
         let workspace = workspaces.open(&root, None).await.unwrap();
         let events = EventHub::default();
         let app = router_with_services(
@@ -534,6 +540,20 @@ mod tests {
                 signal: None,
             },
         })
+    }
+
+    #[tokio::test]
+    async fn gives_a_terminal_the_server_path() {
+        let fixture = fixture().await;
+        let info = fixture.create("printf 'path=%s;' \"$PATH\"").await;
+
+        let mut socket = fixture.connect(&info.id, Some(TOKEN)).await.unwrap();
+        let (output, _) = read_stream(&mut socket, None).await;
+
+        assert!(
+            output.contains(&format!("path={PROCESS_PATH};")),
+            "{output:?}"
+        );
     }
 
     #[tokio::test]

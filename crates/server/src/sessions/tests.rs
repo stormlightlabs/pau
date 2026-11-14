@@ -24,10 +24,15 @@ const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 /// a prompt whose text is `exit`. Shell commands other than `echo hi` and
 /// `sleep 60`, which runs until `abort_bash`, fail. A resumed session answers `get_messages`
 /// with the messages of its file, after a summary once it has compacted.
+/// The `PATH` agent fixtures run with. The fake agents need `sed` and `cat`,
+/// and it holds no real Pi or Claude Code to be found by mistake.
+pub(crate) const FIXTURE_PATH: &str = "/usr/bin:/bin";
+
 const FAKE_PI: &str = r#"#!/bin/sh
 if [ "$1" = '--version' ]; then echo 1.0.0; exit 0; fi
 [ "$1" = '--mode' ] && [ "$2" = 'rpc' ] || exit 64
 printf '%s\n' "$*" > "$PWD/args.txt"
+printf '%s' "$PATH" > "$PWD/path.txt"
 current=model-one
 session_file=
 [ "$3" = '--session' ] && session_file=$4
@@ -212,7 +217,7 @@ impl Fixture {
             PiSessionRegistry::new(database.processes()),
             DiscoverPiOptions {
                 executable_path: Some(executable.map_or(pi, |name| directory.path().join(name))),
-                path: Default::default(),
+                path: FIXTURE_PATH.into(),
                 home_directory: Some(directory.path().to_path_buf()),
                 agent_directory: None,
                 session_directory: None,
@@ -229,6 +234,7 @@ impl Fixture {
             Some(SandboxApi::new(
                 database.sandbox_selection(),
                 directory.path().join("sandbox"),
+                std::env::var_os("PATH").unwrap_or_default(),
             )),
             Some(sessions),
         );
@@ -674,6 +680,21 @@ async fn reports_usage_on_request_and_after_assistant_messages() {
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(missing["code"], "not_found");
+}
+
+/// Pi runs with the discovery `PATH`. A fake Pi that cannot find `sed` never
+/// answers, so a time limit turns a wrong `PATH` into a failure, not a hang.
+#[tokio::test]
+async fn starts_pi_with_the_discovery_path() {
+    let fixture = Fixture::new(None).await;
+
+    let (status, session) = tokio::time::timeout(Duration::from_secs(10), fixture.start(None))
+        .await
+        .expect("the session did not start within 10 seconds");
+
+    assert_eq!(status, StatusCode::CREATED, "{session}");
+    let path = fs::read_to_string(fixture.workspace_root.join("path.txt")).unwrap();
+    assert_eq!(path, FIXTURE_PATH);
 }
 
 #[tokio::test]

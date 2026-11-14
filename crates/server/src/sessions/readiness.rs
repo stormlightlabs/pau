@@ -126,7 +126,7 @@ async fn check_pi(discovery: DiscoverPiOptions) -> AgentReadiness {
     readiness.version = Some(pi.version.to_string());
     readiness.version_supported = true;
 
-    match count_models(pi.executable_path, working_directory).await {
+    match count_models(pi.process_options(working_directory, Vec::new())).await {
         Ok(0) => {
             readiness.model_count = Some(0);
             readiness.reason = Some(
@@ -192,21 +192,15 @@ async fn check_claude(discovery: DiscoverClaudeOptions) -> AgentReadiness {
 }
 
 /// Asks a short-lived `pi --mode rpc` how many models it can use.
-async fn count_models(
-    executable_path: std::path::PathBuf,
-    working_directory: std::path::PathBuf,
-) -> Result<u32, String> {
+async fn count_models(launch: StartPiProcessOptions) -> Result<u32, String> {
     let process = PiProcess::start(StartPiProcessOptions {
-        executable_path,
-        working_directory,
-        arguments: Vec::new(),
-        environment: Vec::new(),
         shutdown_timeouts: PiShutdownTimeouts {
             protocol: Duration::from_millis(500),
             interrupt: Duration::from_millis(500),
             terminate: Duration::from_millis(500),
             kill: Duration::from_millis(500),
         },
+        ..launch
     })
     .map_err(|error| format!("Pi could not start to list its models: {error}."))?;
     let response = tokio::time::timeout(

@@ -109,7 +109,8 @@ const REQUIRED_HELP_MARKERS: [&str; 2] = ["--mode", "rpc"];
 pub struct DiscoverPiOptions {
     /// An exact executable path. When set, `PATH` is not searched.
     pub executable_path: Option<PathBuf>,
-    /// The path list searched when no exact executable path is set.
+    /// The path list searched when no exact executable path is set, and the
+    /// `PATH` the version and capability probes run with.
     pub path: OsString,
     /// The home directory used for Pi's default agent directory.
     pub home_directory: Option<PathBuf>,
@@ -175,6 +176,26 @@ pub struct PiDiscovery {
     pub compatibility: PiCompatibility,
     /// A diagnostic for a newer release that passed the capability check.
     pub warning: Option<String>,
+    /// The `PATH` discovery searched, which every Pi process also receives.
+    pub path: OsString,
+}
+
+impl PiDiscovery {
+    /// Builds the launch for this Pi in `working_directory`, with `PATH` set
+    /// to the one discovery searched and the default shutdown deadlines.
+    pub fn process_options(
+        &self,
+        working_directory: PathBuf,
+        arguments: Vec<OsString>,
+    ) -> StartPiProcessOptions {
+        StartPiProcessOptions {
+            executable_path: self.executable_path.clone(),
+            working_directory,
+            arguments,
+            environment: vec![("PATH".into(), self.path.clone())],
+            shutdown_timeouts: PiShutdownTimeouts::default(),
+        }
+    }
 }
 
 /// A machine-readable reason why Pi discovery failed.
@@ -241,7 +262,7 @@ pub fn discover_pi(options: &DiscoverPiOptions) -> Result<PiDiscovery, PiDiscove
         Some(path) => validate_configured_path(path)?,
         None => find_on_path(&options.path)?,
     };
-    let version = read_version(&executable_path)?;
+    let version = read_version(&executable_path, &options.path)?;
     let minimum = Version::parse(MIN_SUPPORTED_PI_VERSION).expect("valid Pi minimum version");
     let latest = Version::parse(LATEST_VERIFIED_PI_VERSION).expect("valid latest Pi version");
 
@@ -260,7 +281,7 @@ pub fn discover_pi(options: &DiscoverPiOptions) -> Result<PiDiscovery, PiDiscove
     let (compatibility, warning) = if version <= latest {
         (PiCompatibility::Verified, None)
     } else {
-        verify_rpc_capability(&executable_path, &version)?;
+        verify_rpc_capability(&executable_path, &options.path, &version)?;
         (
             PiCompatibility::NewerUnverified,
             Some(format!(
@@ -276,6 +297,7 @@ pub fn discover_pi(options: &DiscoverPiOptions) -> Result<PiDiscovery, PiDiscove
         configuration,
         compatibility,
         warning,
+        path: options.path.clone(),
     })
 }
 
@@ -354,9 +376,11 @@ fn find_on_path(path: &OsStr) -> Result<PathBuf, PiDiscoveryError> {
     ))
 }
 
-fn read_version(executable_path: &Path) -> Result<Version, PiDiscoveryError> {
+/// Runs `pi --version` with `path` as its `PATH`, so a Pi installed as a
+/// Node.js script finds the `node` its shebang names.
+fn read_version(executable_path: &Path, path: &OsStr) -> Result<Version, PiDiscoveryError> {
     let mut command = Command::new(executable_path);
-    command.arg("--version");
+    command.arg("--version").env("PATH", path);
     let output = retry_executable_busy(|| command.output()).map_err(|source| {
         discovery_error(
             PiDiscoveryErrorCode::VersionCommandFailed,
@@ -408,10 +432,11 @@ fn read_version(executable_path: &Path) -> Result<Version, PiDiscoveryError> {
 
 fn verify_rpc_capability(
     executable_path: &Path,
+    path: &OsStr,
     version: &Version,
 ) -> Result<(), PiDiscoveryError> {
     let mut command = Command::new(executable_path);
-    command.arg("--help");
+    command.arg("--help").env("PATH", path);
     let output = retry_executable_busy(|| command.output()).map_err(|source| {
         discovery_error(
             PiDiscoveryErrorCode::VersionCommandFailed,
@@ -681,6 +706,33 @@ mod tests {
 
         eprintln!("{result:#?}");
         assert!(result.executable_path.is_file());
+    }
+
+    /// A Pi installed as a Node.js script finds its interpreter only on the
+    /// discovery `PATH`, which may differ from the server's own.
+    #[cfg(unix)]
+    #[test]
+    fn runs_the_probes_with_the_discovery_path() {
+        let fixture = PiFixture::new("1.0.0", true);
+        let tools = fixture.root.path().join("tools");
+        fs::create_dir(&tools).unwrap();
+        let interpreter = tools.join("fake-node");
+        fs::write(&interpreter, "#!/bin/sh\nexec /bin/sh \"$@\"\n").unwrap();
+        fs::set_permissions(&interpreter, fs::Permissions::from_mode(0o755)).unwrap();
+        let script = fs::read_to_string(&fixture.executable).unwrap();
+        fs::write(
+            &fixture.executable,
+            script.replace("#!/bin/sh", "#!/usr/bin/env fake-node"),
+        )
+        .unwrap();
+        let mut options = fixture.options(None);
+        options.path = env::join_paths([fixture.root.path(), tools.as_path()]).unwrap();
+
+        let result = discover_pi(&options).unwrap();
+
+        assert_eq!(result.version, Version::new(1, 0, 0));
+        let launch = result.process_options(fixture.root.path().into(), Vec::new());
+        assert_eq!(launch.environment, [("PATH".into(), options.path)]);
     }
 
     struct PiFixture {

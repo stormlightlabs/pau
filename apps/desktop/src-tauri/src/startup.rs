@@ -1,16 +1,24 @@
 //! Startup work that runs after the main window opens.
 //!
-//! The window appears first and shows progress while the shell opens the
-//! database, starts the backend, and checks agent readiness. Each change
-//! replaces the whole [`StartupProgress`] snapshot and is published to the
-//! window, and the `startup_progress` command returns the current snapshot, so
-//! a page that loads late still sees every step.
+//! The window appears first and shows progress while the shell reads the
+//! login shell `PATH`, opens the database, starts the backend, and checks
+//! agent readiness. Each change replaces the whole [`StartupProgress`]
+//! snapshot and is published to the window, and the `startup_progress`
+//! command returns the current snapshot, so a page that loads late still sees
+//! every step.
 //!
 //! The backend connection reaches the page only through that snapshot, once
 //! the backend serves requests. The token never appears in a URL.
+//!
+//! The shell never changes its own environment: its runtime and WebKit
+//! threads may read it at any time, and changing it then is undefined
+//! behavior. The `PATH` the first step resolves goes to the backend instead,
+//! which gives it to every child process it starts.
 
 use std::{
+    env,
     error::Error,
+    ffi::OsString,
     future::Future,
     io,
     net::Ipv4Addr,
@@ -58,20 +66,35 @@ impl StepFailure {
     }
 }
 
-/// The work behind the database, backend, and agent readiness steps.
+/// The `PATH` the backend and its child processes receive.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessPath {
+    /// The login shell's entries ahead of the inherited ones, or only the
+    /// inherited ones when the login shell could not report its own.
+    pub path: OsString,
+    /// Why the login shell's `PATH` could not be used, if it could not.
+    pub failure: Option<StepFailure>,
+}
+
+/// The work behind the startup steps.
 ///
 /// [`PauLauncher`] runs the real backend. Tests substitute their own steps.
 pub trait Launcher: Sync {
     /// The opened database that the backend step takes over.
     type Database: Send;
 
+    /// Resolves the `PATH` for the backend. Never stops startup.
+    fn read_path(&self) -> impl Future<Output = ProcessPath> + Send;
+
     /// Opens and migrates the database.
     fn open_database(&self) -> impl Future<Output = Result<Self::Database, StepFailure>> + Send;
 
-    /// Starts the backend on the opened database and returns its connection.
+    /// Starts the backend on the opened database with `path` as the `PATH`
+    /// of every child process, and returns its connection.
     fn start_backend(
         &self,
         database: Self::Database,
+        path: OsString,
     ) -> impl Future<Output = Result<DesktopConnection, StepFailure>> + Send;
 
     /// Checks every supported agent. Called only after the backend started.
@@ -86,23 +109,10 @@ pub struct StartupState {
 }
 
 impl StartupState {
-    /// Starts with every step pending and the login shell step resolved.
-    ///
-    /// The login shell `PATH` is read before the window opens, so its result
-    /// is known when progress is first shown.
-    pub fn new(login_path: Result<(), StepFailure>) -> Self {
-        let mut progress = StartupProgress::new();
-        let step = progress.step_mut(StartupStepId::LoginShellPath);
-        match login_path {
-            Ok(()) => step.state = StartupStepState::Done,
-            Err(failure) => {
-                step.state = StartupStepState::Failed;
-                step.reason = Some(failure.reason);
-                step.action = failure.action;
-            }
-        }
+    /// Starts with every step pending.
+    pub fn new() -> Self {
         Self {
-            progress: Mutex::new(progress),
+            progress: Mutex::new(StartupProgress::new()),
             page_attached: AtomicBool::new(false),
         }
     }
@@ -168,11 +178,15 @@ impl StartupState {
     }
 }
 
-/// Runs the database, backend, and agent readiness steps in order.
+/// Runs the login shell `PATH`, database, backend, and agent readiness steps
+/// in order.
 ///
-/// A database or backend failure stops startup, marks the phase failed, and
-/// returns the reason. Agent readiness never stops startup: a missing or
-/// unusable agent fails its step, and the phase still becomes ready.
+/// The backend starts only once the `PATH` is known, so agent readiness and
+/// every child process use it. A login shell failure fails its step and
+/// keeps the inherited `PATH`. A database or backend failure stops startup,
+/// marks the phase failed, and returns the reason. Agent readiness never
+/// stops startup: a missing or unusable agent fails its step, and the phase
+/// still becomes ready.
 pub async fn run<L: Launcher>(
     launcher: &L,
     state: &StartupState,
@@ -184,6 +198,24 @@ pub async fn run<L: Launcher>(
         state.update(&publish, |progress| progress.phase = StartupPhase::Failed);
         reason
     };
+
+    state.set_step(
+        &publish,
+        StartupStepId::LoginShellPath,
+        StartupStepState::Running,
+        None,
+    );
+    let ProcessPath { path, failure } = launcher.read_path().await;
+    let login_state = match failure {
+        None => StartupStepState::Done,
+        Some(_) => StartupStepState::Failed,
+    };
+    state.set_step(
+        &publish,
+        StartupStepId::LoginShellPath,
+        login_state,
+        failure,
+    );
 
     state.set_step(
         &publish,
@@ -209,7 +241,7 @@ pub async fn run<L: Launcher>(
         None,
     );
     let connection = launcher
-        .start_backend(database)
+        .start_backend(database, path)
         .await
         .map_err(|failure| fail(StartupStepId::Backend, failure))?;
     state.update(&publish, |progress| {
@@ -267,31 +299,28 @@ fn readiness_failure(report: &AgentReadinessReport) -> Option<StepFailure> {
     })
 }
 
-/// Describes the login shell `PATH` result as a step outcome.
+/// Describes why the login shell `PATH` could not be read.
 ///
-/// A failure only means Pau keeps the `PATH` it was opened with, so it never
-/// stops startup.
+/// The failure only means Pau keeps the `PATH` it was opened with, so it
+/// never stops startup.
 #[cfg(target_os = "macos")]
-pub fn login_path_outcome(
-    result: Result<(), crate::login_path::LoginPathError>,
-) -> Result<(), StepFailure> {
+fn login_path_failure(error: crate::login_path::LoginPathError) -> StepFailure {
     use crate::login_path::{LoginPathError, TIMEOUT};
 
-    let reason = match result {
-        Ok(()) => return Ok(()),
-        Err(LoginPathError::TimedOut) => format!(
+    let reason = match error {
+        LoginPathError::TimedOut => format!(
             "Your login shell took longer than {} seconds to report its PATH, so Pau kept \
              the PATH it was opened with. Pi and other tools may not be found.",
             TIMEOUT.as_secs()
         ),
-        Err(LoginPathError::Unavailable) => "Pau could not read your login shell's PATH, \
+        LoginPathError::Unavailable => "Pau could not read your login shell's PATH, \
              so it kept the PATH it was opened with. Pi and other tools may not be found."
             .to_owned(),
     };
-    Err(StepFailure {
+    StepFailure {
         reason,
         action: None,
-    })
+    }
 }
 
 /// Turns an error into text that starts with a capital letter.
@@ -307,12 +336,16 @@ pub fn sentence(error: &dyn Error) -> String {
     }
 }
 
-/// Runs the real database, backend, and agent check, and owns the backend for
-/// as long as the app runs.
+/// Runs the real login shell, database, backend, and agent check, and owns
+/// the backend for as long as the app runs.
 pub struct PauLauncher {
     /// The database file, or `None` for the backend's default location.
     database_path: Option<PathBuf>,
+    /// Backend options. The backend step fills in `path`.
     options: ServerOptions,
+    /// The login shell, from `SHELL` or `/bin/zsh`.
+    #[cfg(target_os = "macos")]
+    shell: OsString,
     server: Mutex<Option<ServerHandle>>,
 }
 
@@ -323,8 +356,17 @@ impl PauLauncher {
         Self {
             database_path,
             options,
+            #[cfg(target_os = "macos")]
+            shell: env::var_os("SHELL").unwrap_or_else(|| OsString::from("/bin/zsh")),
             server: Mutex::new(None),
         }
+    }
+
+    /// Replaces the login shell, so tests can run a fake one.
+    #[cfg(all(test, target_os = "macos"))]
+    fn with_shell(mut self, shell: OsString) -> Self {
+        self.shell = shell;
+        self
     }
 
     /// Asks a started backend to shut down. Does nothing before it starts.
@@ -343,6 +385,43 @@ impl PauLauncher {
 impl Launcher for PauLauncher {
     type Database = ServerDatabase;
 
+    /// Asks the login shell for its `PATH` on macOS, off the async runtime,
+    /// and puts it ahead of the inherited one. Other platforms keep the
+    /// inherited `PATH`.
+    async fn read_path(&self) -> ProcessPath {
+        let inherited = env::var_os("PATH").unwrap_or_default();
+        #[cfg(target_os = "macos")]
+        {
+            use crate::login_path::{LoginPathError, TIMEOUT, merge_paths, shell_path};
+
+            let shell = self.shell.clone();
+            let login = tokio::task::spawn_blocking(move || shell_path(&shell, TIMEOUT))
+                .await
+                .unwrap_or(Err(LoginPathError::Unavailable));
+            match login {
+                Ok(login) => ProcessPath {
+                    path: merge_paths(&login, &inherited).unwrap_or(inherited),
+                    failure: None,
+                },
+                Err(error) => {
+                    tracing::warn!(
+                        ?error,
+                        "could not read the login shell PATH; keeping the inherited PATH"
+                    );
+                    ProcessPath {
+                        path: inherited,
+                        failure: Some(login_path_failure(error)),
+                    }
+                }
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        ProcessPath {
+            path: inherited,
+            failure: None,
+        }
+    }
+
     async fn open_database(&self) -> Result<ServerDatabase, StepFailure> {
         let opened = match &self.database_path {
             Some(path) => pau_server::open_database_at(path).await,
@@ -354,12 +433,17 @@ impl Launcher for PauLauncher {
     async fn start_backend(
         &self,
         database: ServerDatabase,
+        path: OsString,
     ) -> Result<DesktopConnection, StepFailure> {
         let token = ApiToken::generate().map_err(|error| StepFailure::from_error(&error))?;
+        let options = ServerOptions {
+            path: Some(path),
+            ..self.options.clone()
+        };
         let server = pau_server::start_with_database(
             (Ipv4Addr::LOCALHOST, 0).into(),
             token,
-            self.options,
+            options,
             database,
         )
         .await

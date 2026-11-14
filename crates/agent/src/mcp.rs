@@ -662,6 +662,8 @@ pub struct ClaudeMcpOptions {
     pub executable_path: PathBuf,
     /// Workspace in which Claude resolves project and local configuration.
     pub working_directory: PathBuf,
+    /// The `PATH` Claude and the MCP servers it starts run with.
+    pub path: OsString,
     /// Maximum duration of one finite native command.
     pub timeout: Duration,
 }
@@ -691,6 +693,7 @@ pub async fn run_claude_mcp_operation(
     let mut command = Command::new(&options.executable_path);
     command
         .args(arguments)
+        .env("PATH", &options.path)
         .current_dir(&options.working_directory)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -1043,6 +1046,7 @@ mod tests {
         let options = ClaudeMcpOptions {
             executable_path: executable,
             working_directory: directory.path().to_path_buf(),
+            path: std::env::var_os("PATH").unwrap_or_default(),
             timeout: Duration::from_secs(2),
         };
         let test = run_claude_mcp_operation(

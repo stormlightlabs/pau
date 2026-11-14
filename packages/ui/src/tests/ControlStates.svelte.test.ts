@@ -73,7 +73,6 @@ async function whilePressed<T>(element: HTMLElement, read: () => T): Promise<T> 
 		y: frame.top + (box.top + box.height / 2) * scale,
 		button: 'left' as const
 	};
-	console.log('DEBUG', JSON.stringify({ frame, iw: window.innerWidth, ih: window.innerHeight, dpr: window.devicePixelRatio, box, point, at: document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)?.outerHTML.slice(0, 80), sy: window.scrollY }));
 	const session = cdp();
 	await session.send('Input.dispatchMouseEvent', { type: 'mousePressed', clickCount: 1, ...point });
 	const result = read();
@@ -91,18 +90,21 @@ async function lookWhileFocused(element: HTMLElement): Promise<string> {
 	return focused;
 }
 
-/** Touch emulation makes the page report `(hover: none)`, as a touch screen does. */
+/**
+ * Touch emulation makes the page report `(hover: none)`, as a touch screen
+ * does. Turning it off emulates a mouse rather than clearing the emulation:
+ * cleared, headless Chromium on Linux reports the runner's own pointer, which
+ * has no hover, and every later hover read would fail.
+ */
 async function emulateTouch(enabled: boolean) {
 	await cdp().send('Emulation.setTouchEmulationEnabled', { enabled, maxTouchPoints: 1 });
 	// Touch emulation alone updates matchMedia but can leave styles computed for
 	// a hover-capable pointer, so the media features are emulated directly too.
 	await cdp().send('Emulation.setEmulatedMedia', {
-		features: enabled
-			? [
-					{ name: 'hover', value: 'none' },
-					{ name: 'pointer', value: 'coarse' }
-				]
-			: []
+		features: [
+			{ name: 'hover', value: enabled ? 'none' : 'hover' },
+			{ name: 'pointer', value: enabled ? 'coarse' : 'fine' }
+		]
 	});
 }
 
@@ -123,6 +125,7 @@ afterEach(async () => {
 
 describe.each(controls)('%s', (control) => {
 	test('shows distinct colors at rest, on hover, pressed, and focused', async () => {
+		expect(matchMedia('(hover: hover)').matches).toBe(true);
 		const { enabled } = instances(control);
 		await rest();
 		const resting = look(enabled);
@@ -132,7 +135,6 @@ describe.each(controls)('%s', (control) => {
 		await rest();
 		const focused = await lookWhileFocused(enabled);
 
-		console.log('DEBUG', control, JSON.stringify({ resting, hovered, pressed, focused }));
 		expect(new Set([resting, hovered, pressed, focused]).size).toBe(4);
 	});
 

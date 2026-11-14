@@ -1,6 +1,7 @@
 //! Workspace registration and root-confined file operations.
 
 use std::{
+    ffi::OsStr,
     fmt, fs, io,
     path::{Component, Path, PathBuf},
     sync::{
@@ -671,6 +672,13 @@ fn is_hidden(hidden: &[String], relative: &str) -> bool {
     })
 }
 
+/// Whether a path component names Git's folder. Compared without case, since
+/// a case-insensitive volume opens `.GIT` as `.git`.
+fn is_git_dir(name: &OsStr) -> bool {
+    name.to_str()
+        .is_some_and(|name| name.eq_ignore_ascii_case(GIT_DIR))
+}
+
 /// Sets a name search's stop flag when its future is dropped.
 struct StopOnDrop(Arc<AtomicBool>);
 
@@ -705,11 +713,15 @@ fn search_names_in(
     // `@/src` names the workspace's `src`, never the filesystem root.
     let folder = folder.trim_start_matches('/');
     let needle = name.to_lowercase();
-    let in_git = Path::new(folder)
-        .components()
-        .any(|component| component.as_os_str() == GIT_DIR);
+    // Check the folder the query resolves to, not the one typed: `.GIT` on a
+    // case-insensitive volume and a link to `.git` both land inside it.
+    let in_git = |path: &Path| {
+        path.strip_prefix(root).map_or(true, |relative| {
+            relative.components().any(|c| is_git_dir(c.as_os_str()))
+        })
+    };
     let start = match confined_existing(root, folder) {
-        Ok(path) if path.is_dir() && !in_git => path,
+        Ok(path) if path.is_dir() && !in_git(&path) => path,
         Ok(_) | Err(WorkspaceError::NotFound) => {
             return Ok(NameSearchResult {
                 entries: Vec::new(),
@@ -722,7 +734,7 @@ fn search_names_in(
     let mut found = Vec::new();
     let mut truncated = false;
     let entries = walker(&start, options.traversal, depth)
-        .filter_entry(|entry| entry.file_name() != GIT_DIR)
+        .filter_entry(|entry| !is_git_dir(entry.file_name()))
         .build();
     for (visited, item) in entries.enumerate() {
         if visited == walk.budget || walk.stop.load(Ordering::Relaxed) {
@@ -1764,6 +1776,14 @@ mod tests {
         assert_eq!(paths(&search("config").await.unwrap()), ["config.toml"]);
         assert!(search(".gi").await.unwrap().entries.is_empty());
         assert!(search(".git/").await.unwrap().entries.is_empty());
+        assert!(search(".GIT/").await.unwrap().entries.is_empty());
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(root.join(".git"), root.join("g")).unwrap();
+            assert!(search("g/").await.unwrap().entries.is_empty());
+            assert!(search("g/objects/").await.unwrap().entries.is_empty());
+            assert_eq!(paths(&search("config").await.unwrap()), ["config.toml"]);
+        }
         assert_eq!(paths(&search("//src/x").await.unwrap()), ["src/x.rs"]);
         assert_eq!(paths(&search("/src/x").await.unwrap()), ["src/x.rs"]);
         assert!(search("//x").await.unwrap().entries.is_empty());

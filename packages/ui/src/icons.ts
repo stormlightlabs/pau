@@ -44,7 +44,8 @@ export const ICONS = {
 	sandbox: 'i-tabler-shield-lock',
 	diagnostics: 'i-tabler-stethoscope',
 	settings: 'i-tabler-adjustments-horizontal',
-	sidebar: 'i-tabler-layout-sidebar'
+	sidebar: 'i-tabler-layout-sidebar',
+	warning: 'i-tabler-alert-triangle'
 } as const;
 
 /** A semantic icon kind supported by Pau's shared icon component. */

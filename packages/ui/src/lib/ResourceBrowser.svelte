@@ -200,53 +200,64 @@
 				<Icon name="chevronLeft" size={16} />Back to {label}
 			</button>
 		{/if}
-		<header>
+		<header class="resource-detail__header">
 			<h2 id="resource-detail-title">{resource.name}</h2>
-			<p><MetaText text={`${SCOPE_LABELS[resource.scope]} ${resource.kind}`} /></p>
-		</header>
-		{#if attention}
-			<p class={['resource-detail__attention', `resource-detail__attention--${attention.tone}`]}>
-				{attention.label}
+			<p class="resource-detail__kind">
+				<MetaText text={`${SCOPE_LABELS[resource.scope]} ${resource.kind}`} />
+				{#if attention}
+					<span class={['resource-detail__attention', `resource-detail__attention--${attention.tone}`]}>
+						{attention.label}
+					</span>
+				{/if}
 			</p>
-		{/if}
-		{#if resource.description}<p class="resource-detail__description">{resource.description}</p>{/if}
-		<p class="resource-detail__note">{KIND_NOTES[resource.kind]}</p>
-		<dl>
-			<div>
-				<dt>Status</dt>
-				<dd>{statusText(resource)}</dd>
-			</div>
-			<div>
-				<dt>Trust</dt>
-				<dd>{trustText(resource)}</dd>
-			</div>
-			<div>
-				<dt>Source</dt>
-				<dd>
-					{SOURCE_LABELS[resource.source_kind]}
-					<code>{resource.source}</code>
-				</dd>
-			</div>
-			{#if resource.path}
+		</header>
+		<section class="resource-detail__section" aria-labelledby="resource-detail-about">
+			<h3 id="resource-detail-about" class="pau-section-label">About</h3>
+			{#if resource.description}<p class="resource-detail__description">{resource.description}</p>{/if}
+			<p class="resource-detail__note">{KIND_NOTES[resource.kind]}</p>
+		</section>
+		<section class="resource-detail__section" aria-labelledby="resource-detail-facts">
+			<h3 id="resource-detail-facts" class="pau-section-label">Details</h3>
+			<dl>
 				<div>
-					<dt>{resource.kind === 'package' ? 'Installed in' : 'File'}</dt>
-					<dd><code>{resource.path}</code></dd>
+					<dt>Status</dt>
+					<dd>{statusText(resource)}</dd>
 				</div>
-			{/if}
-			{#if resource.winner}
 				<div>
-					<dt>Loads instead</dt>
-					<dd><code>{resource.winner}</code></dd>
+					<dt>Trust</dt>
+					<dd>{trustText(resource)}</dd>
 				</div>
-			{/if}
-		</dl>
+				<div>
+					<dt>Source</dt>
+					<dd>
+						{SOURCE_LABELS[resource.source_kind]}
+						<code>{resource.source}</code>
+					</dd>
+				</div>
+				{#if resource.path}
+					<div>
+						<dt>{resource.kind === 'package' ? 'Installed in' : 'File'}</dt>
+						<dd><code>{resource.path}</code></dd>
+					</div>
+				{/if}
+				{#if resource.winner}
+					<div>
+						<dt>Loads instead</dt>
+						<dd><code>{resource.winner}</code></dd>
+					</div>
+				{/if}
+			</dl>
+		</section>
 		{#if resource.warnings.length > 0}
-			<h3>Warnings</h3>
-			<ul class="resource-detail__warnings">
-				{#each resource.warnings as warning, position (position)}
-					<li>{warning}</li>
-				{/each}
-			</ul>
+			<section class="resource-notice" aria-labelledby="resource-detail-warnings">
+				<Icon name="warning" size={16} />
+				<h3 id="resource-detail-warnings" class="resource-notice__title">Warnings</h3>
+				<ul class="resource-notice__body">
+					{#each resource.warnings as warning, position (position)}
+						<li>{warning}</li>
+					{/each}
+				</ul>
+			</section>
 		{/if}
 	</section>
 {/snippet}
@@ -292,11 +303,18 @@
 				</EmptyState>
 			{:else}
 				{#if untrustedProject}
-					<p class="resources__trust" role="status">
-						{index.project_trust === 'untrusted'
-							? "You declined to trust this workspace, so Pi skips its project resources. They're listed here so you can review them."
-							: "Pi skips this workspace's project resources until you trust it with /trust in Pi. Review them here first."}
-					</p>
+					<section class="resource-notice resources__trust" role="status" aria-labelledby="resources-trust-title">
+						<Icon name="warning" size={16} />
+						<h2 id="resources-trust-title" class="resource-notice__title">
+							<span class="resources__sr-only">Warning:</span>
+							{index.project_trust === 'untrusted' ? 'Workspace not trusted' : 'Workspace not trusted yet'}
+						</h2>
+						<p class="resource-notice__body">
+							{index.project_trust === 'untrusted'
+								? "You declined to trust this workspace, so Pi skips its project resources. They're listed here so you can review them."
+								: "Pi skips this workspace's project resources until you trust it with /trust in Pi. Review them here first."}
+						</p>
+					</section>
 				{/if}
 
 				{#if counts[kind] > 0}
@@ -334,7 +352,7 @@
 						<button type="button" class="pau-button pau-button--secondary" onclick={clearFilters}>Clear filters</button>
 					</EmptyState>
 				{:else}
-					<div class="resources__columns" aria-hidden="true">
+					<div class="resources__columns pau-section-label" aria-hidden="true">
 						<span>Name</span><span>Scope</span><span>Source</span><span>State</span>
 					</div>
 					<div class="resources__list" role="listbox" aria-label={label} bind:this={list}>
@@ -373,9 +391,10 @@
 				{/if}
 
 				{#if index.warnings.length > 0}
-					<section class="resources__warnings" aria-labelledby="resources-warnings-title">
-						<h2 id="resources-warnings-title">Discovery warnings</h2>
-						<ul>
+					<section class="resource-notice resources__warnings" aria-labelledby="resources-warnings-title">
+						<Icon name="warning" size={16} />
+						<h2 id="resources-warnings-title" class="resource-notice__title">Discovery warnings</h2>
+						<ul class="resource-notice__body">
 							{#each index.warnings as warning, position (position)}
 								<li><code>{warning.path}</code><span>{warning.message}</span></li>
 							{/each}
@@ -388,9 +407,19 @@
 </ApplicationShell>
 
 <style>
+	/*
+	 * Vertical rhythm: the view header ends `space/5` above the first group.
+	 * The trust notice is its own group, `space/5` above the filters. The filter
+	 * bar sits `space/4` above the list it narrows, and the discovery warnings
+	 * start `space/6` below the list as a separate task. Everything shares the
+	 * header's `space/3` inset.
+	 */
 	.resources {
+		--row-name-line: 1.25rem;
+		--row-meta-line: 1.125rem;
 		container-type: inline-size;
 		min-width: 0;
+		padding-bottom: var(--pau-space-6);
 		color: var(--pau-text);
 		font-family: var(--pau-font-ui);
 		--empty-state-inset: var(--pau-space-3);
@@ -402,13 +431,65 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	.resources__trust {
-		margin: 0 var(--pau-space-3) var(--pau-space-4);
-		padding: var(--pau-space-2) var(--pau-space-3);
-		color: var(--pau-text);
-		border-left: 3px solid var(--pau-warning);
-		background: var(--pau-surface-raised);
+	/*
+	 * A warning notice follows the agent readiness notice: a bordered surface
+	 * with a warning leading edge. The icon centers on the title's line and the
+	 * body starts under the title, so the text keeps one leading edge.
+	 */
+	.resource-notice {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: center;
+		column-gap: var(--pau-space-2);
+		row-gap: var(--pau-space-1);
+		padding: var(--pau-space-3) var(--pau-space-4);
+		border: var(--pau-border-thin) solid var(--pau-border);
+		border-inline-start: 2px solid var(--pau-warning);
+		border-radius: var(--pau-radius-surface);
+		background: var(--pau-surface);
+	}
+
+	.resource-notice > :global(.pau-icon) {
+		color: var(--pau-warning);
+	}
+
+	.resource-notice__title {
+		margin: 0;
+		font-size: var(--pau-type-md);
+		font-weight: var(--pau-weight-semibold);
+		line-height: var(--row-name-line);
+	}
+
+	.resource-notice__body {
+		grid-column: 2;
+		margin: 0;
+		color: var(--pau-text-muted);
+		font-size: var(--pau-type-sm);
 		line-height: 1.5;
+	}
+
+	ul.resource-notice__body {
+		display: grid;
+		gap: var(--pau-space-2);
+		padding: 0;
+		list-style: none;
+	}
+
+	.resources__trust,
+	.resources__warnings {
+		margin-inline: var(--pau-space-3);
+	}
+
+	.resources__trust {
+		margin-bottom: var(--pau-space-5);
+	}
+
+	.resources__warnings {
+		margin-top: var(--pau-space-6);
+	}
+
+	.resources__warnings li {
+		display: grid;
 	}
 
 	.resources__filters {
@@ -469,16 +550,18 @@
 	}
 
 	.resources__columns {
-		min-height: var(--pau-size-row-lg);
-		color: var(--pau-text-muted);
+		min-height: var(--pau-size-row-md);
 		border-bottom: 1px solid var(--pau-border);
-		font-size: var(--pau-type-xs);
-		font-weight: var(--pau-weight-semibold);
 	}
 
+	/*
+	 * Every row is as tall as a name over a description, so rows keep one
+	 * rhythm and a row without a description centers its name. A button is
+	 * border-box, so the height also counts the row's bottom rule.
+	 */
 	.resource-row {
 		width: 100%;
-		min-height: 3.25rem;
+		min-height: calc(var(--row-name-line) + var(--row-meta-line) + 2 * var(--pau-space-2) + 1px);
 		padding-block: var(--pau-space-2);
 		color: var(--pau-text);
 		border: 0;
@@ -501,6 +584,7 @@
 
 	.resource-row > span {
 		min-width: 0;
+		line-height: var(--row-meta-line);
 	}
 
 	.resource-row__name {
@@ -516,7 +600,9 @@
 	}
 
 	.resource-row__name strong {
-		font-weight: var(--pau-weight-semibold);
+		font-size: var(--pau-type-md);
+		font-weight: var(--pau-weight-medium);
+		line-height: var(--row-name-line);
 	}
 
 	.resource-row small,
@@ -537,33 +623,6 @@
 		color: var(--pau-danger) !important;
 	}
 
-	.resources__warnings {
-		margin-top: var(--pau-space-5);
-		padding-inline: var(--pau-space-3);
-	}
-
-	.resources__warnings h2,
-	.resource-detail h3 {
-		margin: 0 0 var(--pau-space-2);
-		font-size: var(--pau-type-sm);
-		font-weight: var(--pau-weight-semibold);
-	}
-
-	.resources__warnings ul,
-	.resource-detail__warnings {
-		display: grid;
-		gap: var(--pau-space-2);
-		margin: 0;
-		padding: 0;
-		list-style: none;
-		font-size: var(--pau-type-sm);
-	}
-
-	.resources__warnings li {
-		display: grid;
-		color: var(--pau-text-muted);
-	}
-
 	code {
 		overflow-wrap: anywhere;
 		font-family: var(--pau-font-code);
@@ -574,10 +633,15 @@
 		color: var(--pau-text);
 	}
 
+	/*
+	 * The detail stacks a header and labelled sections. Sections sit `space/4`
+	 * apart behind a rule, a label sits `space/2` above its content, and each
+	 * fact keeps its value `space/1` under its name.
+	 */
 	.resource-detail {
 		display: grid;
 		align-content: start;
-		gap: var(--pau-space-3);
+		gap: var(--pau-space-4);
 		min-width: 0;
 		/* The inspector already insets its content by the rail inset. */
 		padding: var(--pau-space-1) 0 var(--pau-space-4);
@@ -592,7 +656,7 @@
 		margin-left: calc(var(--pau-space-3) * -1);
 	}
 
-	.resource-detail header {
+	.resource-detail__header {
 		display: grid;
 		gap: var(--pau-space-1);
 	}
@@ -600,6 +664,7 @@
 	.resource-detail h2 {
 		margin: 0;
 		font-size: var(--pau-type-lg);
+		font-weight: var(--pau-weight-semibold);
 		overflow-wrap: anywhere;
 	}
 
@@ -608,22 +673,39 @@
 		line-height: 1.5;
 	}
 
-	.resource-detail header p,
+	.resource-detail__kind {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--pau-space-2);
+		color: var(--pau-text-muted);
+		font-size: var(--pau-type-sm);
+	}
+
+	.resource-detail__attention {
+		font-weight: var(--pau-weight-semibold);
+	}
+
+	.resource-detail__section {
+		display: grid;
+		gap: var(--pau-space-2);
+		padding-top: var(--pau-space-4);
+		border-top: 1px solid var(--pau-border);
+	}
+
+	.resource-detail__section h3 {
+		margin: 0;
+	}
+
 	.resource-detail__note,
 	.resource-detail dt {
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-sm);
 	}
 
-	.resource-detail__attention {
-		font-size: var(--pau-type-sm);
-		font-weight: var(--pau-weight-semibold);
-	}
-
 	.resource-detail dl {
 		display: grid;
 		gap: var(--pau-space-3);
-		margin: var(--pau-space-1) 0 0;
+		margin: 0;
 	}
 
 	.resource-detail dd {
@@ -631,12 +713,6 @@
 		gap: var(--pau-space-1);
 		margin: var(--pau-space-1) 0 0;
 		font-size: var(--pau-type-sm);
-		line-height: 1.5;
-	}
-
-	.resource-detail__warnings li {
-		padding-left: var(--pau-space-2);
-		border-left: 2px solid var(--pau-warning);
 		line-height: 1.5;
 	}
 
@@ -660,9 +736,14 @@
 			display: none;
 		}
 
+		/* Rows keep the described height, and a row without a description centers its content. */
 		.resource-row {
 			grid-template-columns: auto minmax(0, 1fr) auto;
+			align-content: center;
 			row-gap: var(--pau-space-1);
+			min-height: calc(
+				var(--row-name-line) + 2 * var(--row-meta-line) + var(--pau-space-1) + 2 * var(--pau-space-2) + 1px
+			);
 		}
 
 		.resource-row__name {

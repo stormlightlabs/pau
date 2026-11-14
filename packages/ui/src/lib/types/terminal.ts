@@ -8,6 +8,11 @@ export type TerminalTab = { id: string; title: string };
 export type TerminalConnectionEvents = {
 	/** Receives raw PTY output bytes in arrival order. */
 	output: (bytes: Uint8Array) => void;
+	/**
+	 * Clears the screen and scrollback before the connection replays the
+	 * terminal's output again, as it does after reconnecting.
+	 */
+	reset: () => void;
 	/** Reports the final status after the process exits. No output follows. */
 	exit: (status: TerminalExit) => void;
 	/** Reports a stream that closed before the process exit was known. */
@@ -27,6 +32,8 @@ export type TerminalConnection = {
 
 /** Terminal operations supplied to the terminal surface by the application. */
 export type TerminalSource = {
+	/** Lists the terminals still open from an earlier view, oldest first. */
+	list: () => Promise<TerminalTab[]>;
 	create: () => Promise<TerminalTab>;
 	connect: (id: string, events: TerminalConnectionEvents) => TerminalConnection;
 	close: (id: string) => Promise<void>;

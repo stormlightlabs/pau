@@ -711,6 +711,12 @@ export function respondToExtensionUi(
 	);
 }
 
+/** Lists the terminals the backend keeps open, oldest first. */
+export async function listTerminals(fetcher: typeof fetch = fetch): Promise<TerminalInfo[]> {
+	const response = await fetcher(`${apiConnection().origin}/api/terminals`, { headers: authorization() });
+	return responseJson<TerminalInfo[]>(response);
+}
+
 /** Opens the user's shell in a workspace root. */
 export async function createTerminal(
 	workspaceId: string,

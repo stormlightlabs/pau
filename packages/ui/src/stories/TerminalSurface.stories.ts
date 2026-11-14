@@ -93,6 +93,23 @@ export const OpenFailed: Story = {
 	}
 };
 
+export const Reattached: Story = {
+	args: { running: 3 },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(await canvas.findByRole('tab', { name: 'zsh' })).toHaveAttribute('aria-selected', 'true');
+		await expect(canvas.getByRole('tab', { name: 'zsh 3' })).toBeInTheDocument();
+	}
+};
+
+export const ReattachFailed: Story = {
+	args: { listError: 'The server stopped responding.' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(await canvas.findByRole('alert')).toHaveTextContent('Could not reopen your terminals.');
+	}
+};
+
 export const Disconnected: Story = { args: { disconnected: true } };
 
 export const Nord: Story = { args: { theme: 'nord' }, play: openTerminal };

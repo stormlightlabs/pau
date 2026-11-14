@@ -217,6 +217,7 @@
 		const encoder = new TextEncoder();
 		const connection = connect({
 			output: (bytes) => instance.write(bytes),
+			reset: () => instance.reset(),
 			exit: (status) => {
 				instance.options.disableStdin = true;
 				instance.options.cursorBlink = false;

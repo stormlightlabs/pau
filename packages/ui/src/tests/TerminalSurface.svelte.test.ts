@@ -6,6 +6,7 @@ import { createTerminalFixture } from '../fixtures/terminals';
 import { detectPlatform } from '../lib/keymap.svelte';
 import TerminalSurface from '../lib/TerminalSurface.svelte';
 import TerminalView from '../lib/TerminalView.svelte';
+import type { TerminalConnectionEvents } from '../lib/types/terminal';
 import { THEMES, type ThemeName } from '../theme';
 
 function screenText(label: string): string {
@@ -44,6 +45,54 @@ test('opens, switches, and closes terminal tabs that carry typed Unicode input',
 	await userEvent.click(page.getByRole('button', { name: 'Close zsh', exact: true }));
 	await expect.element(page.getByRole('tab', { name: 'zsh', exact: true })).not.toBeInTheDocument();
 	await expect.element(page.getByRole('tab', { name: 'zsh 2' })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('reattaches open terminals when the surface mounts again', async () => {
+	const fixture = createTerminalFixture();
+	const first = await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+	await userEvent.click(page.getByRole('button', { name: 'Open a terminal' }));
+	await userEvent.click(page.getByRole('button', { name: 'New terminal' }));
+	await expect.element(page.getByRole('tab', { name: 'zsh 2' })).toBeVisible();
+	first.unmount();
+
+	await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+	await expect.element(page.getByRole('tab', { name: 'zsh', exact: true })).toHaveAttribute('aria-selected', 'true');
+	await expect.element(page.getByRole('tab', { name: 'zsh 2' })).toBeVisible();
+	await expect.poll(() => screenText('zsh terminal')).toContain('Terminal ready');
+	expect(page.getByRole('button', { name: 'Open a terminal' }).query()).toBeNull();
+
+	await userEvent.click(page.getByRole('button', { name: 'Close zsh', exact: true }));
+	await expect.poll(() => fixture.source.list()).toEqual([{ id: 'fixture-2', title: 'zsh 2' }]);
+});
+
+test('still opens terminals when the open ones cannot be listed', async () => {
+	const fixture = createTerminalFixture({ listError: 'The server stopped responding.' });
+	await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+	await expect
+		.element(page.getByRole('alert'))
+		.toHaveTextContent('Could not reopen your terminals. The server stopped responding.');
+
+	await userEvent.click(page.getByRole('button', { name: 'Open a terminal' }));
+	await expect.element(page.getByRole('tab', { name: 'zsh' })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('clears the screen before a reconnect replays the output', async () => {
+	let events: TerminalConnectionEvents | undefined;
+	await render(TerminalView, {
+		label: 'zsh terminal',
+		connect: (connected) => {
+			events = connected;
+			return { write: () => {}, resize: () => {}, close: () => {} };
+		}
+	});
+	const encoder = new TextEncoder();
+	events!.output(encoder.encode('before'));
+	await expect.poll(() => screenText('zsh terminal')).toContain('before');
+
+	events!.reset();
+	events!.output(encoder.encode('replayed'));
+	await expect.poll(() => screenText('zsh terminal')).toContain('replayed');
+	expect(screenText('zsh terminal')).not.toContain('before');
 });
 
 test('reports exit status and stops accepting input', async () => {

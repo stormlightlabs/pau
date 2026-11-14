@@ -1,5 +1,6 @@
 //! Terminal sessions and embedded Neovim integration.
 
+mod modes;
 mod pty;
 mod scrollback;
 

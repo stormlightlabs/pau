@@ -57,7 +57,19 @@ pipes, never a PTY, so framing and diagnostics stay separate.
 
 A PTY terminal keeps reading output while no view is attached. It retains the
 last 1 MiB, dropping the oldest bytes first, and replays it to each view that
-attaches before sending live output.
+attaches before sending live output. Once output has been dropped, the replay
+starts with sequences that restore the terminal modes the dropped output set,
+such as the alternate screen, mouse tracking and bracketed paste. The terminal
+list is in opening order, so a client that mounts its terminal view again,
+after a route change for example, reattaches its tabs in that order.
+
+Terminal output never waits for a view, and the memory it holds is fixed. Up
+to 512 KiB waits between the PTY reader and the scrollback. When that buffer
+fills, the reader stops and the child blocks on its next write. Live output to
+views shares one buffer of 256 chunks of at most 8 KiB. A view that falls
+further behind is closed with code 1013, and the client reconnects with a
+delay that starts at 250 ms and doubles up to 8 s, then catches up from the
+scrollback.
 
 ## Resource monitoring
 

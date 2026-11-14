@@ -9,7 +9,10 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, Weak},
+    sync::{
+        Arc, Mutex, Weak,
+        atomic::{AtomicU64, Ordering},
+    },
     time::Duration,
 };
 
@@ -38,6 +41,10 @@ use super::{ApiError, ApiErrorBody, ApiState, EventHub, diagnostic_timestamp, wo
 /// Time a closing terminal has to exit after `SIGHUP` before `SIGKILL`.
 const CLOSE_GRACE: Duration = Duration::from_secs(3);
 
+/// Source of [`ManagedTerminal::opened`], so terminals list in the order they
+/// were opened and a reattaching client can rebuild its tabs in that order.
+static OPENED: AtomicU64 = AtomicU64::new(0);
+
 /// Live terminals keyed by their stable identifier.
 #[derive(Clone, Default)]
 pub(crate) struct TerminalRegistry(Arc<Mutex<HashMap<String, Arc<ManagedTerminal>>>>);
@@ -63,6 +70,7 @@ pub(crate) fn is_stream_path(path: &str) -> bool {
 
 struct ManagedTerminal {
     id: String,
+    opened: u64,
     workspace_id: String,
     command: Vec<String>,
     terminal: Terminal,
@@ -178,6 +186,7 @@ pub(crate) async fn create_terminal(
     let mut exit = terminal.exit();
     let managed = Arc::new(ManagedTerminal {
         id: Uuid::new_v4().to_string(),
+        opened: OPENED.fetch_add(1, Ordering::Relaxed),
         workspace_id: request.workspace_id,
         command: argv,
         terminal,
@@ -204,7 +213,7 @@ pub(crate) async fn create_terminal(
     Ok((StatusCode::CREATED, Json(info)))
 }
 
-/// Lists live terminals.
+/// Lists live terminals, oldest first.
 pub(crate) async fn list_terminals(State(state): State<ApiState>) -> Json<Vec<TerminalInfo>> {
     let mut terminals: Vec<_> = state
         .terminals
@@ -212,10 +221,10 @@ pub(crate) async fn list_terminals(State(state): State<ApiState>) -> Json<Vec<Te
         .lock()
         .expect("terminal registry lock poisoned")
         .values()
-        .map(|terminal| terminal.info())
+        .cloned()
         .collect();
-    terminals.sort_by(|left, right| left.id.cmp(&right.id));
-    Json(terminals)
+    terminals.sort_by_key(|terminal| terminal.opened);
+    Json(terminals.iter().map(|terminal| terminal.info()).collect())
 }
 
 /// Returns one terminal.
@@ -591,7 +600,9 @@ mod tests {
 
         let (status, body) = fixture.call("GET", "/api/terminals", None).await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(body.as_array().unwrap().len(), 2);
+        let listed: Vec<TerminalInfo> = serde_json::from_value(body).unwrap();
+        let ids: Vec<_> = listed.iter().map(|terminal| terminal.id.as_str()).collect();
+        assert_eq!(ids, [trapped.id.as_str(), looping.id.as_str()]);
 
         let size_path = format!("/api/terminals/{}/size", looping.id);
         let (status, body) = fixture
@@ -689,6 +700,33 @@ mod tests {
         assert!(position("first") < position("detached"), "{replay:?}");
         assert!(position("detached") < position("second"), "{replay:?}");
         assert!(output.contains("second"), "{output:?}");
+    }
+
+    #[tokio::test]
+    async fn closes_a_stream_that_reads_slower_than_the_terminal_writes() {
+        let fixture = fixture().await;
+        let info = fixture.create("exec yes pau").await;
+        let mut socket = fixture.connect(&info.id, Some(TOKEN)).await.unwrap();
+
+        // While the client reads nothing, the socket buffers fill and the
+        // stream falls behind the terminal's live output.
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let code = timeout(STEP_LIMIT, async {
+            while let Some(message) = socket.next().await {
+                if let tungstenite::Message::Close(frame) = message.unwrap() {
+                    return frame.map(|frame| frame.code);
+                }
+            }
+            None
+        })
+        .await
+        .unwrap();
+        assert_eq!(code, Some(close_code::AGAIN.into()));
+
+        let (status, _) = fixture
+            .call("DELETE", &format!("/api/terminals/{}", info.id), None)
+            .await;
+        assert_eq!(status, StatusCode::OK);
     }
 
     #[tokio::test]

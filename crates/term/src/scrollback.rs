@@ -13,7 +13,7 @@ use std::{
 use bytes::Bytes;
 use tokio::sync::broadcast;
 
-use crate::TerminalOutput;
+use crate::{TerminalOutput, modes::ModeTracker};
 
 /// Output bytes a terminal keeps for replay.
 ///
@@ -29,10 +29,12 @@ use crate::TerminalOutput;
 /// programs and very long lines, it drops only up to the next UTF-8 character
 /// boundary, and the replay can still start inside an escape sequence.
 ///
-/// A replay holds output bytes, not terminal state. Modes a program set
-/// before the cut, such as the alternate screen, mouse tracking and bracketed
-/// paste, are missing from it, so a view that reattaches to a full-screen
-/// program after a cut can draw on the main screen and ignore the mouse.
+/// A replay holds output bytes, not the whole terminal state. It starts with
+/// the sequences that restore the modes the dropped output had set, such as
+/// the alternate screen, cursor keys, mouse tracking and bracketed paste, so a
+/// view that reattaches to a full-screen program after a cut still draws on
+/// the right screen and receives the mouse. Colors, the scroll region and the
+/// screen contents the dropped output drew are not restored.
 pub const SCROLLBACK_BYTES: usize = 1024 * 1024;
 
 /// Bytes searched for a newline after a cut before the scrollback settles for
@@ -57,6 +59,8 @@ struct Shared {
     /// The last `limit` bytes of output, oldest first.
     retained: VecDeque<u8>,
     limit: usize,
+    /// Modes set by the output dropped from `retained`.
+    dropped_modes: ModeTracker,
     /// Live feed to attached views, cleared at end of output so that every
     /// attachment observes the end.
     ///
@@ -92,6 +96,7 @@ impl TerminalScrollback {
         Self(Arc::new(Mutex::new(Shared {
             retained: VecDeque::new(),
             limit,
+            dropped_modes: ModeTracker::default(),
             live: Some(live),
         })))
     }
@@ -105,19 +110,21 @@ impl TerminalScrollback {
     /// output and then reports [`AttachedOutput::Ended`].
     ///
     /// Once more than [`SCROLLBACK_BYTES`] of output has been written, the
-    /// replay can miss terminal modes the program set before the cut, as
-    /// [`SCROLLBACK_BYTES`] describes.
+    /// replay starts with the sequences that restore the terminal modes the
+    /// dropped output set, as [`SCROLLBACK_BYTES`] describes.
     pub fn attach(&self) -> TerminalAttachment {
         let shared = self.0.lock().expect("terminal scrollback lock poisoned");
         let (front, back) = shared.retained.as_slices();
+        let modes = shared.dropped_modes.restore();
         TerminalAttachment {
-            replay: Bytes::from([front, back].concat()),
+            replay: Bytes::from([&modes, front, back].concat()),
             live: shared.live.as_ref().map(broadcast::Sender::subscribe),
         }
     }
 
     fn push(&self, chunk: Vec<u8>) {
-        let mut shared = self.0.lock().expect("terminal scrollback lock poisoned");
+        let mut guard = self.0.lock().expect("terminal scrollback lock poisoned");
+        let shared = &mut *guard;
         let limit = shared.limit;
         let cut = shared.retained.len() + chunk.len() > limit;
         let kept = &chunk[chunk.len().saturating_sub(limit)..];
@@ -129,13 +136,19 @@ impl TerminalScrollback {
         } else {
             overflow.checked_sub(1).map(|last| shared.retained[last])
         };
-        shared.retained.drain(..overflow);
+        // Dropped bytes reach the mode tracker in stream order: the oldest
+        // retained bytes, then any part of the chunk beyond the limit, then
+        // the partial line before the new replay start.
+        shared.dropped_modes.feed(shared.retained.drain(..overflow));
+        shared
+            .dropped_modes
+            .feed(chunk[..chunk.len() - kept.len()].iter().copied());
         shared.retained.extend(kept);
         // A cut right after a newline already leaves the replay on a line
         // start.
         if cut && dropped != Some(b'\n') {
             let start = replay_start(&shared.retained);
-            shared.retained.drain(..start);
+            shared.dropped_modes.feed(shared.retained.drain(..start));
         }
         if let Some(live) = &shared.live {
             // Sending fails only when no view is attached.
@@ -392,6 +405,30 @@ mod tests {
         let mut later = scrollback.attach();
         assert_eq!(later.take_replay(), Bytes::from_static(b"last"));
         assert_eq!(later.recv().await, AttachedOutput::Ended);
+    }
+
+    #[test]
+    fn restores_modes_set_by_dropped_output_before_the_replay() {
+        let scrollback = TerminalScrollback::with_limit(16);
+        scrollback.push(b"\x1b[?1049h\x1b[?2004hscreen\n".to_vec());
+        scrollback.push(b"\x1b[?2004l".to_vec());
+        scrollback.push(b"line one\nline two\n".to_vec());
+        assert_eq!(
+            scrollback.attach().take_replay(),
+            Bytes::from_static(b"\x1b[?1049hline two\n")
+        );
+    }
+
+    #[test]
+    fn keeps_memory_bounded_while_a_view_stops_reading() {
+        let scrollback = TerminalScrollback::with_limit(64 * 1024);
+        let _idle = scrollback.attach();
+        for _ in 0..LIVE_CHUNKS * 8 {
+            scrollback.push(vec![b'y'; 8 * 1024]);
+        }
+        let shared = scrollback.0.lock().unwrap();
+        assert!(shared.retained.len() <= shared.limit);
+        assert!(shared.live.as_ref().unwrap().len() <= LIVE_CHUNKS);
     }
 
     #[tokio::test]

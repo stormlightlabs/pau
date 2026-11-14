@@ -1,4 +1,4 @@
-import type { TerminalExit, TerminalSource } from '../lib/types/terminal';
+import type { TerminalExit, TerminalSource, TerminalTab } from '../lib/types/terminal';
 
 /** Options for the in-memory terminal used by stories and component tests. */
 export type TerminalFixtureOptions = {
@@ -8,6 +8,10 @@ export type TerminalFixtureOptions = {
 	createError?: string;
 	/** Earlier output that each new terminal prints before its ready line. */
 	history?: readonly string[];
+	/** Terminals already running before a surface mounts, which it reattaches. */
+	running?: number;
+	/** Rejects listing the running terminals with this message. */
+	listError?: string;
 };
 
 /** An in-memory terminal source and the input and sizes it received. */
@@ -22,20 +26,32 @@ const PROMPT = '\u{1B}[1;34m~/pau\u{1B}[0m $ ';
 /**
  * Creates a line-echoing shell stand-in. Typed characters echo back, Enter
  * prints the line, and `exit [code]` ends the terminal with that code.
+ * Terminals stay open until closed, so a surface rendered again with the same
+ * fixture reattaches them, as after a route change.
  */
 export function createTerminalFixture(options: TerminalFixtureOptions = {}): TerminalFixture {
 	const sizes = new Map<string, { cols: number; rows: number }>();
 	const input = new Map<string, string>();
 	const encoder = new TextEncoder();
 	const decoder = new TextDecoder();
+	const open: TerminalTab[] = [];
 	let created = 0;
+	const openTerminal = (): TerminalTab => {
+		created += 1;
+		const tab = { id: `fixture-${created}`, title: created === 1 ? 'zsh' : `zsh ${created}` };
+		open.push(tab);
+		return tab;
+	};
+	for (let index = 0; index < (options.running ?? 0); index += 1) openTerminal();
 
 	const source: TerminalSource = {
+		list: async () => {
+			if (options.listError) throw new Error(options.listError);
+			return [...open];
+		},
 		create: async () => {
 			if (options.createError) throw new Error(options.createError);
-			created += 1;
-			const id = `fixture-${created}`;
-			return { id, title: created === 1 ? 'zsh' : `zsh ${created}` };
+			return openTerminal();
 		},
 		connect: (id, events) => {
 			let line = '';
@@ -80,7 +96,12 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 				close: () => {}
 			};
 		},
-		close: async () => {}
+		close: async (id) => {
+			open.splice(
+				open.findIndex((tab) => tab.id === id),
+				1
+			);
+		}
 	};
 	return { source, sizes, input };
 }

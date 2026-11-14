@@ -1,19 +1,20 @@
 # Pau agent guide
 
-The product spec and the architecture plan live in Linear, as documents on
-the team PAU and its projects. The team documents "Product specification" and
-"Technical plan" index them, and each feature's plan sits on its project.
-Before changing an area, read the documents on the task's project and the
-team's architecture plan. When a product or architecture decision changes,
-update the owning Linear document in the same task. Do not add plan or spec
-files to the repository.
+The product specification and the technical plan live in Linear, as documents
+on the team PAU and its projects. The team documents "Product specification"
+and "Technical plan" index them, and each feature's plan sits on its project.
+Read the Product specification before a product change, the Technical plan
+before an architecture change, and the documents on the task's project before
+either. When a product or architecture decision changes, update the owning
+Linear document in the same task. Do not add plan or spec files to the
+repository.
 
 - [ROADMAP.md](dev/ROADMAP.md) sets the rules for splitting work into tasks.
   The tasks themselves live in Linear, as [Tasks](#tasks) describes.
 - `dev/design/` holds design decisions, as [UI work](#ui-work) describes.
 
-Do not repeat the spec or plan here. The testing and dogfooding rules below
-are the exception, so that a session without Linear still has them.
+Do not repeat the spec or plan here. This file owns the testing and dogfooding
+rules below, so that a session without Linear still has them.
 
 ## Commands
 
@@ -136,6 +137,9 @@ full browser tests for workflows that cross packages or transports.
   They cover partial and oversized frames, early exits, ignored signals,
   cancellation races, backpressure, replay gaps, symlink and traversal
   attempts, migration failure, and cleanup after dropped clients.
+- Platform-specific PTY and filesystem tests run on Linux and macOS.
+- Fault injection, fake events, forced disconnects, and child-process failure
+  controls compile or ship only in development builds.
 - Redaction tests seed every sensitive field class and confirm it is absent
   from in-memory records, UI events, logs, and exported bundles.
 - Storybook stories in `packages/ui` use typed fixtures and cover the states a
@@ -145,6 +149,10 @@ full browser tests for workflows that cross packages or transports.
   interactions, and Vitest for deeper state transitions. Use Vitest browser
   mode with `vitest-browser-svelte` when focus, events, layout, or lifecycle
   need a real browser. Query by role, label, and visible text.
+- Add SSR and server tests for SvelteKit routes, endpoint helpers, metadata,
+  and hydration-sensitive output.
+- Generated TypeScript contracts and shared protocol fixtures run against both
+  the Rust and the TypeScript consumers.
 - Keep a small set of reviewed screenshots for high-value compositions. Do
   not snapshot every component or use a screenshot in place of a behavior
   assertion.

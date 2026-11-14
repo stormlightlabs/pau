@@ -6,9 +6,14 @@ import { SessionAttention, inView, statusAttention, type AttentionNotifier } fro
 
 const counter = { sequence: 0 };
 
-function changed(status: SessionStatus, name: string | null = 'Fix the login bug', id = 'session-1'): ServerEvent {
+function changed(
+	status: SessionStatus,
+	name: string | null = 'Fix the login bug',
+	id = 'session-1',
+	agent = 'pi'
+): ServerEvent {
 	counter.sequence += 1;
-	const session = { id, workspace_id: 'pau', status, name } as unknown as AgentSession;
+	const session = { id, agent, workspace_id: 'pau', status, name } as unknown as AgentSession;
 	return {
 		sequence: counter.sequence,
 		timestamp: '2026-10-21T12:00:00Z',
@@ -162,6 +167,33 @@ describe('notification policy', () => {
 
 		expect(notifier.notify).not.toHaveBeenCalled();
 		expect(notifier.setBadgeCount).not.toHaveBeenCalled();
+	});
+});
+
+/** A Claude Code session's status change. */
+function claude(status: SessionStatus, name: string | null = null): ServerEvent {
+	return changed(status, name, 'session-1', 'claude');
+}
+
+describe('a Claude Code session', () => {
+	test('names Claude Code when it waits or finishes', () => {
+		const { notifier, send } = setup([workspace(), claude('idle')], () => 'all');
+
+		send(claude('waiting'));
+		send(claude('running', 'Fix the login bug'), claude('idle', 'Fix the login bug'));
+
+		expect(notifier.notify.mock.calls).toEqual([
+			[{ title: 'Claude Code session in pau', body: 'Claude Code is waiting for your input.' }],
+			[{ title: 'Fix the login bug', body: 'Claude Code finished its turn.' }]
+		]);
+	});
+
+	test('does not report an interrupted turn as finished', () => {
+		const { notifier, send } = setup([claude('idle')], () => 'all');
+
+		send(claude('running'), interrupted(), claude('idle'));
+
+		expect(notifier.notify).not.toHaveBeenCalled();
 	});
 });
 

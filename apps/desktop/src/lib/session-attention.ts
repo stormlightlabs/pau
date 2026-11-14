@@ -8,6 +8,7 @@ import type {
 
 import { EventStreamClient, type EventSocketFactory, type EventStreamState } from './event-stream';
 import { isExtensionEvent, opensDialog } from './extension-ui';
+import { agentLabel } from './live-sessions.svelte';
 
 /**
  * Why a session notifies the operator. `finished` is a turn that ended
@@ -55,11 +56,11 @@ export function inView(sessionId: string, view: AttentionView): boolean {
 	return view.windowFocused && view.viewedSessionId === sessionId;
 }
 
-const BODIES: Record<AttentionReason, string> = {
-	waiting: 'Pi is waiting for your input.',
-	question: 'Pi needs your answer to continue.',
-	failed: 'Pi exited unexpectedly.',
-	finished: 'Pi finished its turn.'
+const BODIES: Record<AttentionReason, (agent: string) => string> = {
+	waiting: (agent) => `${agent} is waiting for your input.`,
+	question: (agent) => `${agent} needs your answer to continue.`,
+	failed: (agent) => `${agent} exited unexpectedly.`,
+	finished: (agent) => `${agent} finished its turn.`
 };
 
 /** Whether the notification policy lets `reason` notify. */
@@ -68,9 +69,12 @@ export function policyAllows(policy: NotificationPolicy, reason: AttentionReason
 	return reason !== 'finished' || policy === 'all';
 }
 
-/** Builds the notification for a session, titled with its name. */
-export function attentionNotification(title: string, reason: AttentionReason): AttentionNotification {
-	return { title, body: BODIES[reason] };
+/**
+ * Builds the notification for a session, titled with its name. `agent` is the
+ * agent's label, such as `Claude Code`, which the body names.
+ */
+export function attentionNotification(title: string, agent: string, reason: AttentionReason): AttentionNotification {
+	return { title, body: BODIES[reason](agent) };
 }
 
 /** Whether a `session_output` payload is the server's notice that the operator interrupted the run. */
@@ -182,18 +186,19 @@ export class SessionAttention {
 	#raise(sessionId: string, reason: AttentionReason): void {
 		if (inView(sessionId, this.#view) || !policyAllows(this.#policy(), reason)) return;
 		this.#pending.add(sessionId);
-		void this.#notifier.notify(attentionNotification(this.#title(sessionId), reason)).catch(() => {
+		const agent = agentLabel(this.#sessions.get(sessionId)?.agent ?? 'pi');
+		void this.#notifier.notify(attentionNotification(this.#title(sessionId, agent), agent, reason)).catch(() => {
 			// Notifications are best effort. The badge and rail marker still show.
 		});
 		this.#publishBadge();
 	}
 
-	#title(sessionId: string): string {
+	#title(sessionId: string, agent: string): string {
 		const session = this.#sessions.get(sessionId);
 		const title = this.#titleOf?.(sessionId) ?? session?.name ?? undefined;
 		if (title) return title;
 		const workspace = session && this.#workspaces.get(session.workspace_id);
-		return workspace ? `Pi session in ${workspace}` : 'Pi session';
+		return workspace ? `${agent} session in ${workspace}` : `${agent} session`;
 	}
 
 	#clearViewed(): void {

@@ -101,6 +101,14 @@ const TITLE_LENGTH = 60;
 const NOTIFICATION_MS = 8000;
 
 /**
+ * Names the agent a session runs, by the session's `agent` field, the way the
+ * session surface shows it. Every agent other than Claude Code is Pi.
+ */
+export function agentLabel(agent: string): string {
+	return agent === 'claude' ? 'Claude Code' : 'Pi';
+}
+
+/**
  * Turns an API failure into copy for the operator. Starting and controlling a
  * session share most codes, but `not_found` names a different missing thing.
  * The copy for most codes names Pi; a Claude Code session's refusals keep the
@@ -597,7 +605,7 @@ export class LiveSessions {
 			workspaceId: session.workspace_id,
 			savedSessionId: session.native_session_id ?? undefined,
 			title: this.#pendingNames[session.id] ?? session.name ?? sessionTitle(transcript),
-			agent: session.agent === 'claude' ? 'Claude Code' : 'Pi',
+			agent: agentLabel(session.agent),
 			status: session.status,
 			error: failureMessage(session),
 			unseen: this.#unseen.has(session.id),

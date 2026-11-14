@@ -49,6 +49,19 @@ function remember(key: string, value: string): void {
 	}
 }
 
+/**
+ * Keeps the local copies that the next window starts with. They hold only
+ * stored values, so a choice whose save fails never reaches another window.
+ */
+function rememberChoices(choices: InterfaceChoices): void {
+	remember(MOTION_CACHE_KEY, choices.motion);
+	remember(THEME_CACHE_KEY, choices.theme);
+	remember(UI_FONT_CACHE_KEY, choices.ui_font);
+}
+
+/** A choice from Settings waiting for its run of writes to finish. */
+type PendingChoice = { keys: (keyof InterfaceChoices)[]; resolve: () => void; reject: (reason: Error) => void };
+
 export type InterfacePreferencesOptions = {
 	root?: HTMLElement;
 	browserOrigin?: string;
@@ -86,6 +99,10 @@ export class InterfacePreferences {
 	#saving: Promise<unknown> = Promise.resolve();
 	/** Writes queued or in flight. While any remain, a loaded copy does not replace local changes. */
 	#pending = 0;
+	/** The choices shown before the first write of the current run of queued writes. */
+	#runStart: InterfaceChoices | undefined;
+	/** Choices made during the current run, settled together once its last write finishes. */
+	#waiting: PendingChoice[] = [];
 	#stream: EventStreamClient | undefined;
 	readonly #options: InterfacePreferencesOptions;
 
@@ -106,18 +123,24 @@ export class InterfacePreferences {
 
 	/**
 	 * Queues a write of the current preferences behind every write already
-	 * queued, and rejects when this write fails and no later write is queued.
+	 * queued. Writes queued back to back form a run, and only the run's last
+	 * write decides the outcome.
 	 *
 	 * Each write reads the preferences when it starts, so a later write
-	 * carries every change made before it. While one is queued, it decides
-	 * what is saved: a failure here neither restores nor rejects, because
-	 * either would contradict the value that write stores. The last write to
-	 * fail restores each choice the screen still shows as it sent it.
-	 * `fallback` is used when no saved copy has loaded.
+	 * carries every change made before it, and an earlier failure is
+	 * overwritten by it. When the last write fails, each choice it sent comes
+	 * back to the saved copy, or to the value shown before the run's first
+	 * write when no saved copy has loaded. Every choice made during the run
+	 * then rejects if that restore changed its setting, and resolves
+	 * otherwise. Widths and the open view stay applied after a failure, and
+	 * the next resize or view change saves them again.
+	 *
+	 * @param before The choices shown before this write's change.
 	 */
-	async #flush(fallback?: Partial<InterfaceChoices>): Promise<void> {
+	async #flush(before: InterfaceChoices = pickChoices(this.choices)): Promise<void> {
 		clearTimeout(this.#timer);
 		this.#timer = undefined;
+		if (this.#pending === 0) this.#runStart = before;
 		this.#pending += 1;
 		const previous = this.#saving;
 		const write = (async () => {
@@ -127,26 +150,24 @@ export class InterfacePreferences {
 		this.#saving = write;
 		const { sent, failure } = await write;
 		this.#pending -= 1;
-		if (!failure || this.#pending > 0) return;
+		if (this.#pending > 0) return;
+		const waiting = this.#waiting;
+		const start = this.#runStart ?? before;
+		this.#waiting = [];
+		this.#runStart = undefined;
+		if (!failure) {
+			for (const choice of waiting) choice.resolve();
+			return;
+		}
 		const restored = { ...this.choices };
 		for (const key of CHOICE_KEYS) {
-			const value = this.#saved?.[key] ?? fallback?.[key];
-			if (value !== undefined && this.choices[key] === sent[key]) Object.assign(restored, { [key]: value });
+			if (this.choices[key] === sent[key]) Object.assign(restored, { [key]: this.#saved?.[key] ?? start[key] });
 		}
+		const shown = this.choices;
 		this.#applyChoices(restored);
-		throw failure;
-	}
-
-	/**
-	 * Saves widths and the open view. A failure leaves them applied in this
-	 * window, and the next resize or view change saves again. A choice this
-	 * write failed to save is restored as {@link #flush} says.
-	 */
-	async #save(): Promise<void> {
-		try {
-			await this.#flush();
-		} catch {
-			// Nothing to roll back.
+		for (const choice of waiting) {
+			if (choice.keys.some((key) => restored[key] !== shown[key])) choice.reject(failure);
+			else choice.resolve();
 		}
 	}
 
@@ -160,7 +181,7 @@ export class InterfacePreferences {
 		try {
 			const base = this.#saved ?? (await getUiPreferences(this.#options.fetcher));
 			const { contextRail, inspector } = this.widths;
-			this.#saved = await updateUiPreferences(
+			const saved = await updateUiPreferences(
 				{
 					...base,
 					...sent,
@@ -169,21 +190,20 @@ export class InterfacePreferences {
 				},
 				this.#options.fetcher
 			);
+			this.#saved = saved;
+			rememberChoices(saved);
 			return { sent };
 		} catch (error) {
 			return { sent, failure: error instanceof Error ? error : new Error(String(error)) };
 		}
 	}
 
-	/** Shows the choices, sets the motion attribute, and keeps the local copies that the next window starts with. */
+	/** Shows the choices and sets the motion attribute. */
 	#applyChoices(choices: InterfaceChoices): void {
 		this.choices = choices;
 		const root = this.#options.root ?? document.documentElement;
 		if (choices.motion === 'system') delete root.dataset.motion;
 		else root.dataset.motion = choices.motion;
-		remember(MOTION_CACHE_KEY, choices.motion);
-		remember(THEME_CACHE_KEY, choices.theme);
-		remember(UI_FONT_CACHE_KEY, choices.ui_font);
 	}
 
 	/** Loads the saved widths and follows changes made elsewhere. */
@@ -206,7 +226,7 @@ export class InterfacePreferences {
 	stop(): void {
 		this.#stream?.stop();
 		this.#stream = undefined;
-		if (this.#timer !== undefined) void this.#save();
+		if (this.#timer !== undefined) void this.#flush();
 	}
 
 	/** Reads the saved preferences. Failing to read leaves the default widths. */
@@ -218,6 +238,7 @@ export class InterfacePreferences {
 			return;
 		}
 		this.#saved = preferences;
+		rememberChoices(preferences);
 		if (this.#pending === 0) this.#applyChoices(pickChoices(preferences));
 		if (this.#timer !== undefined || this.#pending > 0) return;
 		this.widths = { contextRail: preferences.pane_widths.context_rail, inspector: preferences.pane_widths.inspector };
@@ -225,14 +246,19 @@ export class InterfacePreferences {
 
 	/**
 	 * Applies a choice the operator made in Settings and saves it at once.
-	 * When the save fails, the saved value comes back and the promise rejects
-	 * with the reason, so Settings can show it. A failure followed by a
-	 * queued write of any setting changes nothing, as {@link #flush} explains.
+	 * The promise settles when the last queued write finishes. When that
+	 * write fails and restores this setting, it rejects with the reason, so
+	 * Settings can show it, as {@link #flush} explains.
 	 */
-	async choose(change: Partial<InterfaceChoices>): Promise<void> {
-		const previous = pickChoices(this.choices);
+	choose(change: Partial<InterfaceChoices>): Promise<void> {
+		const before = pickChoices(this.choices);
 		this.#applyChoices({ ...this.choices, ...change });
-		await this.#flush(previous);
+		const keys = Object.keys(change) as (keyof InterfaceChoices)[];
+		const settled = new Promise<void>((resolve, reject) => {
+			this.#waiting.push({ keys, resolve, reject });
+		});
+		void this.#flush(before);
+		return settled;
 	}
 
 	/** Saves the view the operator opened, unless it is already the saved one. */
@@ -240,14 +266,14 @@ export class InterfacePreferences {
 		const current = this.#route ?? this.#saved?.last_route;
 		if (current && sameRoute(current, route)) return;
 		this.#route = route;
-		void this.#save();
+		void this.#flush();
 	}
 
 	/** Applies widths the operator chose and schedules saving them. */
 	resize(widths: ShellPaneWidths): void {
 		this.widths = widths;
 		clearTimeout(this.#timer);
-		this.#timer = setTimeout(() => void this.#save(), this.#options.saveDelayMs ?? SAVE_DELAY_MS);
+		this.#timer = setTimeout(() => void this.#flush(), this.#options.saveDelayMs ?? SAVE_DELAY_MS);
 	}
 }
 

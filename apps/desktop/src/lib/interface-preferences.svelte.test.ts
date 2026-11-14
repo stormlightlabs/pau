@@ -341,6 +341,45 @@ describe('interface preferences', () => {
 			expect(server.puts).toEqual([{ ...preferences(null, null), theme: 'nord', ui_font: 'inter' }]);
 		});
 
+		test('reports each choice that a failed run of saves restores', async () => {
+			const server = backend({ ...preferences(null, null), theme: 'iceberg' });
+			const settings = new InterfacePreferences({ fetcher: server.fetcher, root: document.createElement('div') });
+			await settings.load();
+			const themePut = Promise.withResolvers<Response>();
+			const failed = () => Response.json({ message: 'The database is read-only.' }, { status: 500 });
+			vi.mocked(server.fetcher).mockReturnValueOnce(themePut.promise).mockResolvedValueOnce(failed());
+
+			const theme = settings.choose({ theme: 'nord' });
+			await vi.waitFor(() => expect(server.fetcher).toHaveBeenCalledTimes(2));
+			const font = settings.choose({ ui_font: 'inter' });
+			themePut.resolve(failed());
+
+			await expect(theme).rejects.toThrow('The database is read-only.');
+			await expect(font).rejects.toThrow('The database is read-only.');
+			expect(settings.choices).toMatchObject({ theme: 'iceberg', ui_font: 'overpass' });
+		});
+
+		test('restores the theme shown before the first failed save when nothing has loaded', async () => {
+			localStorage.setItem('pau.theme', 'vitesse-dark');
+			const fetcher = vi.fn(async () =>
+				Response.json({ message: 'The server is restarting.' }, { status: 503 })
+			) as unknown as typeof fetch;
+			const settings = new InterfacePreferences({ fetcher, root: document.createElement('div') });
+			await settings.load();
+			const firstSave = Promise.withResolvers<Response>();
+			vi.mocked(fetcher).mockReturnValueOnce(firstSave.promise);
+
+			const nord = settings.choose({ theme: 'nord' });
+			await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+			const iceberg = settings.choose({ theme: 'iceberg' });
+			firstSave.resolve(Response.json({ message: 'The server is restarting.' }, { status: 503 }));
+
+			await expect(nord).rejects.toThrow('The server is restarting.');
+			await expect(iceberg).rejects.toThrow('The server is restarting.');
+			expect(settings.choices.theme).toBe('vitesse-dark');
+			expect(localStorage.getItem('pau.theme')).toBe('vitesse-dark');
+		});
+
 		test('starts a new window with the theme and font the last one loaded', async () => {
 			const server = backend({ ...preferences(null, null), theme: 'vitesse-dark', ui_font: 'ibm-plex-sans' });
 			await new InterfacePreferences({ fetcher: server.fetcher, root: document.createElement('div') }).load();

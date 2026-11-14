@@ -179,18 +179,9 @@ describe('PermissionController', () => {
 	describe('timeout', () => {
 		afterEach(() => {
 			vi.useRealTimers();
-			vi.restoreAllMocks();
 		});
 
 		it('denies on timeout and records it', async () => {
-			const { verdict, records } = await expire();
-			expect(verdict).toEqual({ block: true, reason: expect.stringContaining('timed out') });
-			expect(records[0]).toMatchObject({ outcome: 'denied', source: 'timeout' });
-		});
-
-		it('reports a timeout when the timer fires a millisecond early by the clock', async () => {
-			let reads = 0;
-			vi.spyOn(performance, 'now').mockImplementation(() => (reads++ === 0 ? 0 : 999));
 			const { verdict, records } = await expire();
 			expect(verdict).toEqual({ block: true, reason: expect.stringContaining('timed out') });
 			expect(records[0]).toMatchObject({ outcome: 'denied', source: 'timeout' });

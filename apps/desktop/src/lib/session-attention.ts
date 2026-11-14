@@ -36,13 +36,17 @@ export type AttentionView = { windowFocused: boolean; viewedSessionId: string | 
  * snapshot or a session that just started. A repeated status is the same
  * transition delivered again. A session that fails while stopping was
  * stopped by the operator, who needs no notice of it. A running session that
- * goes idle has finished its turn.
+ * goes idle has finished its turn, unless the operator interrupted it.
  */
-export function statusAttention(previous: SessionStatus | undefined, next: SessionStatus): AttentionReason | undefined {
+export function statusAttention(
+	previous: SessionStatus | undefined,
+	next: SessionStatus,
+	interrupted = false
+): AttentionReason | undefined {
 	if (previous === undefined || previous === next) return undefined;
 	if (next === 'waiting') return 'waiting';
 	if (next === 'failed' && previous !== 'stopping') return 'failed';
-	if (next === 'idle' && previous === 'running') return 'finished';
+	if (next === 'idle' && previous === 'running' && !interrupted) return 'finished';
 	return undefined;
 }
 
@@ -67,6 +71,11 @@ export function policyAllows(policy: NotificationPolicy, reason: AttentionReason
 /** Builds the notification for a session, titled with its name. */
 export function attentionNotification(title: string, reason: AttentionReason): AttentionNotification {
 	return { title, body: BODIES[reason] };
+}
+
+/** Whether a `session_output` payload is the server's notice that the operator interrupted the run. */
+function isInterrupt(payload: unknown): boolean {
+	return typeof payload === 'object' && payload !== null && 'type' in payload && payload.type === 'session_interrupted';
 }
 
 function workspaceName(workspace: Workspace): string {
@@ -106,6 +115,12 @@ export class SessionAttention {
 	readonly #workspaces = new Map<string, string>();
 	/** Extension questions already notified, keyed by session and request ID. */
 	readonly #asked = new Set<string>();
+	/**
+	 * Sessions the operator interrupted, from the server's
+	 * `session_interrupted` event until their next status change, which the
+	 * interrupt caused.
+	 */
+	readonly #interrupted = new Set<string>();
 	/** Sessions that notified and have not been viewed since. */
 	readonly #pending = new Set<string>();
 	#badge = 0;
@@ -129,7 +144,9 @@ export class SessionAttention {
 			return;
 		}
 		if (event.kind === 'session_output' && event.session_id) {
-			this.#question(event.session_id, JSON.parse(event.payload));
+			const payload: unknown = JSON.parse(event.payload);
+			if (isInterrupt(payload)) this.#interrupted.add(event.session_id);
+			else this.#question(event.session_id, payload);
 			return;
 		}
 		if (event.kind !== 'session_changed') {
@@ -137,7 +154,9 @@ export class SessionAttention {
 			return;
 		}
 		const session = JSON.parse(event.payload) as AgentSession;
-		const reason = statusAttention(this.#sessions.get(session.id)?.status, session.status);
+		const previous = this.#sessions.get(session.id)?.status;
+		const interrupted = previous !== session.status && this.#interrupted.delete(session.id);
+		const reason = statusAttention(previous, session.status, interrupted);
 		this.#remember(event);
 		if (reason) this.#raise(session.id, reason);
 	}

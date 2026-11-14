@@ -31,6 +31,11 @@ function question(requestId: string, id = 'session-1'): ServerEvent {
 	};
 }
 
+/** The server's notice that the operator interrupted the run. */
+function interrupted(id = 'session-1'): ServerEvent {
+	return { ...question('stop', id), payload: JSON.stringify({ type: 'session_interrupted' }) };
+}
+
 function workspace(): ServerEvent {
 	counter.sequence += 1;
 	return {
@@ -89,6 +94,10 @@ describe('which status changes ask for attention', () => {
 		expect(statusAttention(previous, next)).toBe(reason);
 	});
 
+	test('an interrupted run that goes idle has not finished its turn', () => {
+		expect(statusAttention('running', 'idle', true)).toBeUndefined();
+	});
+
 	test('a session is in view only while the window has focus and shows it', () => {
 		expect(inView('session-1', { windowFocused: true, viewedSessionId: 'session-1' })).toBe(true);
 		expect(inView('session-1', { windowFocused: false, viewedSessionId: 'session-1' })).toBe(false);
@@ -135,6 +144,15 @@ describe('notification policy', () => {
 		send(changed('running'), changed('idle'));
 		expect(notifier.notify).toHaveBeenCalledWith({ title: 'Fix the login bug', body: 'Pi finished its turn.' });
 		expect(notifier.setBadgeCount).toHaveBeenCalledWith(1);
+	});
+
+	test('does not report an interrupted run as a finished turn', () => {
+		const { notifier, send } = setup([changed('idle')], () => 'all');
+		send(changed('running'), interrupted(), changed('idle'));
+		expect(notifier.notify).not.toHaveBeenCalled();
+
+		send(changed('running'), changed('idle'));
+		expect(notifier.notify).toHaveBeenCalledWith({ title: 'Fix the login bug', body: 'Pi finished its turn.' });
 	});
 
 	test('notifies nothing and leaves the badge alone when the policy is off', () => {

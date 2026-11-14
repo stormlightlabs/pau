@@ -1,10 +1,17 @@
 import { Keymap, keymapContext } from '@stormlightlabs/pau-ui';
 import { page, userEvent } from 'vitest/browser';
-import { expect, test, vi } from 'vitest';
+import { beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { PauApiError } from '$lib/api';
 import SettingsPage from './+page.svelte';
+
+/** Saves fail at once unless a test holds one back. */
+const updateUiPreferences = vi.hoisted(() =>
+	vi.fn(async (): Promise<never> => {
+		throw new Error('unset');
+	})
+);
 
 vi.mock('$app/state', () => ({ page: { params: {}, route: { id: '/settings' } } }));
 
@@ -20,10 +27,14 @@ vi.mock('$lib/api', async (importOriginal) => ({
 		pane_widths: { context_rail: null, inspector: null },
 		last_route: null
 	}),
-	updateUiPreferences: async () => {
-		throw new PauApiError('The database is read-only.', 500);
-	}
+	updateUiPreferences
 }));
+
+beforeEach(() => {
+	updateUiPreferences.mockImplementation(async () => {
+		throw new PauApiError('The database is read-only.', 500);
+	});
+});
 
 test('marks Settings in the rail and links each section', async () => {
 	await page.viewport(1440, 900);
@@ -51,6 +62,20 @@ test('shows a failed notification save and keeps the saved policy', async () => 
 
 	await expect.element(page.getByRole('alert')).toHaveTextContent('The database is read-only.');
 	await expect.element(page.getByRole('radio', { name: 'When a session needs you' })).toBeChecked();
+});
+
+test('shows both failures when a theme save and a queued font save fail', async () => {
+	const themeSave = Promise.withResolvers<never>();
+	updateUiPreferences.mockReturnValueOnce(themeSave.promise);
+	await render(SettingsPage);
+
+	await userEvent.click(page.getByRole('radio', { name: 'Nord' }));
+	await userEvent.click(page.getByRole('radio', { name: 'Inter', exact: true }));
+	themeSave.reject(new PauApiError('The database is read-only.', 500));
+
+	await expect.poll(() => page.getByRole('alert').elements()).toHaveLength(2);
+	await expect.element(page.getByRole('radio', { name: 'Eldritch' })).toBeChecked();
+	await expect.element(page.getByRole('radio', { name: 'Overpass', exact: true })).toBeChecked();
 });
 
 test('lists the app shortcuts in the Keyboard section', async () => {

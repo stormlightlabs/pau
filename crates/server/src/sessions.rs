@@ -31,6 +31,15 @@
 //! can close it without refetching. Notifications are transient by nature and
 //! stay output-only.
 //!
+//! # Interrupts
+//!
+//! `POST /api/sessions/{id}/interrupt` publishes a synthetic
+//! `session_interrupted` `session_output` event before it asks Pi to abort a
+//! running session. The abort ends with the same `running` to `idle`
+//! `session_changed` as a finished turn, and the event comes first so clients
+//! can tell the two apart, for example to skip a "turn finished"
+//! notification.
+//!
 //! # Shell commands
 //!
 //! `POST /api/sessions/{id}/shell` runs a command through Pi's `bash` RPC
@@ -1107,6 +1116,17 @@ pub(crate) async fn interrupt_session(
 ) -> Result<Json<SessionMessageQueue>, ApiError> {
     let api = session_api(&state)?;
     let (record, session) = api.live(&session_id).await?;
+    // Published before the abort, so it precedes every `session_changed` the
+    // abort causes, including one forwarded from Pi's own lifecycle events.
+    if session.status().await == AgentSessionStatus::Running {
+        api.events.publish(
+            diagnostic_timestamp(),
+            Some(record.workspace_id.clone()),
+            Some(session_id.clone()),
+            ServerEventKind::SessionOutput,
+            serde_json::json!({"type": "session_interrupted"}).to_string(),
+        );
+    }
     let cleared = session.interrupt().await?;
     api.clear_dialogs(&session_id, &record.workspace_id, "interrupted");
     api.publish_current(&session_id).await;

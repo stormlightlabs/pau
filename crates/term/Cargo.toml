@@ -10,6 +10,7 @@ repository.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+bytes.workspace = true
 libc.workspace = true
 pau-core = { path = "../core" }
 portable-pty.workspace = true

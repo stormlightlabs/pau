@@ -5,19 +5,22 @@
 //! output, and text frames carry [`TerminalClientMessage`] and
 //! [`TerminalServerMessage`] values. Terminals outlive their streams and stop
 //! only when closed, when their process exits, or when the server drops them.
+//! A stream that attaches first receives the terminal's scrollback.
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, Weak},
+    sync::{
+        Arc, Mutex, Weak,
+        atomic::{AtomicU64, Ordering},
+    },
     time::Duration,
 };
 
 use axum::{
     Json,
-    body::Bytes,
     extract::{
         Path as AxumPath, State, WebSocketUpgrade,
-        ws::{Message, WebSocket},
+        ws::{CloseFrame, Message, WebSocket, close_code},
     },
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -30,19 +33,17 @@ use pau_core::{
     },
     workspace::WorkspaceError,
 };
-use pau_term::{Terminal, TerminalCommand, TerminalError};
-use tokio::sync::broadcast;
+use pau_term::{AttachedOutput, Terminal, TerminalCommand, TerminalError, TerminalScrollback};
 use uuid::Uuid;
 
 use super::{ApiError, ApiErrorBody, ApiState, EventHub, diagnostic_timestamp, workspace_service};
 
-/// Output chunks a stream may fall behind before it is disconnected.
-///
-/// The output pump never waits for a stream, so a slow client loses its
-/// connection instead of stalling the terminal or growing server memory.
-const STREAM_OUTPUT_CHUNKS: usize = 256;
 /// Time a closing terminal has to exit after `SIGHUP` before `SIGKILL`.
 const CLOSE_GRACE: Duration = Duration::from_secs(3);
+
+/// Source of [`ManagedTerminal::opened`], so terminals list in the order they
+/// were opened and a reattaching client can rebuild its tabs in that order.
+static OPENED: AtomicU64 = AtomicU64::new(0);
 
 /// Live terminals keyed by their stable identifier.
 #[derive(Clone, Default)]
@@ -69,12 +70,11 @@ pub(crate) fn is_stream_path(path: &str) -> bool {
 
 struct ManagedTerminal {
     id: String,
+    opened: u64,
     workspace_id: String,
     command: Vec<String>,
     terminal: Terminal,
-    /// Fan-out of terminal output. The output pump clears it at end of output
-    /// so that every subscriber's channel closes.
-    output: Arc<Mutex<Option<broadcast::Sender<Bytes>>>>,
+    scrollback: TerminalScrollback,
 }
 
 impl ManagedTerminal {
@@ -86,14 +86,6 @@ impl ManagedTerminal {
             size: self.terminal.size(),
             status: self.terminal.status(),
         }
-    }
-
-    fn subscribe(&self) -> Option<broadcast::Receiver<Bytes>> {
-        self.output
-            .lock()
-            .expect("terminal output lock poisoned")
-            .as_ref()
-            .map(broadcast::Sender::subscribe)
     }
 }
 
@@ -187,19 +179,18 @@ pub(crate) async fn create_terminal(
         .collect();
     // Spawning forks and waits for exec to report success, so keep it off
     // the runtime worker.
-    let (terminal, mut output) = tokio::task::spawn_blocking(move || Terminal::spawn(command))
+    let (terminal, output) = tokio::task::spawn_blocking(move || Terminal::spawn(command))
         .await
         .map_err(|error| TerminalApiError::Failed(error.to_string()))??;
 
-    let (sender, _) = broadcast::channel(STREAM_OUTPUT_CHUNKS);
-    let shared_output = Arc::new(Mutex::new(Some(sender.clone())));
     let mut exit = terminal.exit();
     let managed = Arc::new(ManagedTerminal {
         id: Uuid::new_v4().to_string(),
+        opened: OPENED.fetch_add(1, Ordering::Relaxed),
         workspace_id: request.workspace_id,
         command: argv,
         terminal,
-        output: Arc::clone(&shared_output),
+        scrollback: TerminalScrollback::follow(output),
     });
     state
         .terminals
@@ -208,17 +199,6 @@ pub(crate) async fn create_terminal(
         .expect("terminal registry lock poisoned")
         .insert(managed.id.clone(), Arc::clone(&managed));
 
-    // The pump holds no reference to the terminal, so dropping the registry
-    // still drops and stops the child.
-    tokio::spawn(async move {
-        while let Some(chunk) = output.recv().await {
-            let _ = sender.send(Bytes::from(chunk));
-        }
-        shared_output
-            .lock()
-            .expect("terminal output lock poisoned")
-            .take();
-    });
     let weak: Weak<ManagedTerminal> = Arc::downgrade(&managed);
     let events = state.events.clone();
     tokio::spawn(async move {
@@ -233,7 +213,7 @@ pub(crate) async fn create_terminal(
     Ok((StatusCode::CREATED, Json(info)))
 }
 
-/// Lists live terminals.
+/// Lists live terminals, oldest first.
 pub(crate) async fn list_terminals(State(state): State<ApiState>) -> Json<Vec<TerminalInfo>> {
     let mut terminals: Vec<_> = state
         .terminals
@@ -241,10 +221,10 @@ pub(crate) async fn list_terminals(State(state): State<ApiState>) -> Json<Vec<Te
         .lock()
         .expect("terminal registry lock poisoned")
         .values()
-        .map(|terminal| terminal.info())
+        .cloned()
         .collect();
-    terminals.sort_by(|left, right| left.id.cmp(&right.id));
-    Json(terminals)
+    terminals.sort_by_key(|terminal| terminal.opened);
+    Json(terminals.iter().map(|terminal| terminal.info()).collect())
 }
 
 /// Returns one terminal.
@@ -296,9 +276,13 @@ pub(crate) async fn close_terminal(
     Ok(Json(managed.info()))
 }
 
-/// Attaches a WebSocket to a terminal's input and live output.
+/// Attaches a WebSocket to a terminal's input and output.
 ///
-/// Output written before the stream attached is not replayed.
+/// The stream first sends the terminal's scrollback as one binary frame, empty
+/// when it holds no output, and then live output. A client tells the replay
+/// from live output by that order, so it can drop the answers a terminal gives
+/// to old queries in the replay. A client that reattaches receives the whole
+/// scrollback again, so it should clear its screen first.
 pub(crate) async fn stream_terminal(
     State(state): State<ApiState>,
     AxumPath(terminal_id): AxumPath<String>,
@@ -311,10 +295,11 @@ pub(crate) async fn stream_terminal(
 }
 
 async fn serve_stream(mut socket: WebSocket, managed: Arc<ManagedTerminal>) {
-    let Some(mut output) = managed.subscribe() else {
-        let _ = send_exited(&mut socket, &managed).await;
+    let mut attachment = managed.scrollback.attach();
+    let replay = attachment.take_replay();
+    if socket.send(Message::Binary(replay)).await.is_err() {
         return;
-    };
+    }
     loop {
         tokio::select! {
             message = socket.recv() => match message {
@@ -337,14 +322,27 @@ async fn serve_stream(mut socket: WebSocket, managed: Arc<ManagedTerminal>) {
                 Some(Ok(Message::Close(_))) | Some(Err(_)) | None => return,
                 Some(Ok(_)) => {}
             },
-            chunk = output.recv() => match chunk {
-                Ok(chunk) => {
+            output = attachment.recv() => match output {
+                AttachedOutput::Output(chunk) => {
                     if socket.send(Message::Binary(chunk)).await.is_err() {
                         return;
                     }
                 }
-                Err(broadcast::error::RecvError::Lagged(_)) => return,
-                Err(broadcast::error::RecvError::Closed) => {
+                // Close code 1013 (try again later) tells the client to
+                // reattach and catch up from the scrollback, where a dropped
+                // socket would look like a network failure. If output keeps
+                // outrunning the link, each reattach lags again, so the
+                // client must back off between attempts.
+                AttachedOutput::Lagged => {
+                    let _ = socket
+                        .send(Message::Close(Some(CloseFrame {
+                            code: close_code::AGAIN,
+                            reason: "output fell behind; reattach".into(),
+                        })))
+                        .await;
+                    return;
+                }
+                AttachedOutput::Ended => {
                     let _ = send_exited(&mut socket, &managed).await;
                     return;
                 }
@@ -548,6 +546,12 @@ mod tests {
         assert_eq!(info.command[0], "/bin/sh");
 
         let mut socket = fixture.connect(&info.id, Some(TOKEN)).await.unwrap();
+        // The script has printed nothing yet, so the replay frame is empty.
+        let replay = timeout(STEP_LIMIT, socket.next()).await.unwrap();
+        assert_eq!(
+            replay.unwrap().unwrap(),
+            tungstenite::Message::binary(Vec::new())
+        );
         let resize = TerminalClientMessage::Resize {
             size: TerminalSize {
                 cols: 100,
@@ -598,13 +602,15 @@ mod tests {
     async fn signals_resizes_lists_and_closes_terminals() {
         let fixture = fixture().await;
         let trapped = fixture
-            .create("read _; trap 'exit 9' INT; echo ready; while :; do sleep 1; done")
+            .create("trap 'exit 9' INT; echo ready; while :; do sleep 1; done")
             .await;
         let looping = fixture.create("while :; do sleep 1; done").await;
 
         let (status, body) = fixture.call("GET", "/api/terminals", None).await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(body.as_array().unwrap().len(), 2);
+        let listed: Vec<TerminalInfo> = serde_json::from_value(body).unwrap();
+        let ids: Vec<_> = listed.iter().map(|terminal| terminal.id.as_str()).collect();
+        assert_eq!(ids, [trapped.id.as_str(), looping.id.as_str()]);
 
         let size_path = format!("/api/terminals/{}/size", looping.id);
         let (status, body) = fixture
@@ -626,13 +632,9 @@ mod tests {
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(body["code"], "invalid_terminal");
 
-        // Output written before a stream attaches is not replayed, so the
-        // script waits for input before it installs the trap and reports it.
+        // The scrollback replays "ready" if the script printed it before the
+        // stream attached.
         let mut socket = fixture.connect(&trapped.id, Some(TOKEN)).await.unwrap();
-        socket
-            .send(tungstenite::Message::binary(b"\r".to_vec()))
-            .await
-            .unwrap();
         read_stream(&mut socket, Some("ready\r")).await;
         let (status, _) = fixture
             .call(
@@ -662,6 +664,77 @@ mod tests {
             .await;
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(body["code"], "terminal_not_found");
+    }
+
+    #[tokio::test]
+    async fn replays_output_written_before_and_between_streams() {
+        let fixture = fixture().await;
+        let info = fixture
+            .create("echo first; read _; echo detached; read _; echo second; exit 5")
+            .await;
+
+        let mut socket = fixture.connect(&info.id, Some(TOKEN)).await.unwrap();
+        read_stream(&mut socket, Some("first\r")).await;
+        socket
+            .send(tungstenite::Message::binary(b"\r".to_vec()))
+            .await
+            .unwrap();
+        socket.close(None).await.unwrap();
+
+        let mut socket = fixture.connect(&info.id, Some(TOKEN)).await.unwrap();
+        read_stream(&mut socket, Some("detached\r")).await;
+        socket
+            .send(tungstenite::Message::binary(b"\r".to_vec()))
+            .await
+            .unwrap();
+        let (output, exit) = read_stream(&mut socket, None).await;
+        assert_eq!(exit, exited(5));
+
+        // A stream that attaches after exit still receives the scrollback.
+        let mut socket = fixture.connect(&info.id, Some(TOKEN)).await.unwrap();
+        let (replay, exit) = read_stream(&mut socket, None).await;
+        assert_eq!(exit, exited(5));
+        let lines: Vec<_> = replay.split("\r\n").collect();
+        assert_eq!(
+            lines.iter().filter(|line| **line == "first").count(),
+            1,
+            "{replay:?}"
+        );
+        let position = |text| {
+            replay
+                .find(text)
+                .unwrap_or_else(|| panic!("{text:?} missing from {replay:?}"))
+        };
+        assert!(position("first") < position("detached"), "{replay:?}");
+        assert!(position("detached") < position("second"), "{replay:?}");
+        assert!(output.contains("second"), "{output:?}");
+    }
+
+    #[tokio::test]
+    async fn closes_a_stream_that_reads_slower_than_the_terminal_writes() {
+        let fixture = fixture().await;
+        let info = fixture.create("exec yes pau").await;
+        let mut socket = fixture.connect(&info.id, Some(TOKEN)).await.unwrap();
+
+        // While the client reads nothing, the socket buffers fill and the
+        // stream falls behind the terminal's live output.
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let code = timeout(STEP_LIMIT, async {
+            while let Some(message) = socket.next().await {
+                if let tungstenite::Message::Close(frame) = message.unwrap() {
+                    return frame.map(|frame| frame.code);
+                }
+            }
+            None
+        })
+        .await
+        .unwrap();
+        assert_eq!(code, Some(close_code::AGAIN.into()));
+
+        let (status, _) = fixture
+            .call("DELETE", &format!("/api/terminals/{}", info.id), None)
+            .await;
+        assert_eq!(status, StatusCode::OK);
     }
 
     #[tokio::test]

@@ -487,6 +487,9 @@ async fn controls_a_pi_session_over_http_and_the_event_stream() {
         .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(cleared, json!({"steering": [], "follow_up": []}));
+    // The usage refresh after an interrupt runs in the background, so wait
+    // for it before the recorded commands are compared.
+    next_event(&mut stream, output("session_usage")).await;
 
     let reconnected = fixture.events.subscribe(None);
     let [ServerStreamMessage::Snapshot { snapshot }] = &reconnected.initial[..] else {

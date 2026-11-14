@@ -6,8 +6,19 @@ export type TerminalTab = { id: string; title: string };
 
 /** Callbacks that a terminal connection uses to report its byte stream and lifecycle. */
 export type TerminalConnectionEvents = {
+	/**
+	 * Receives the terminal's scrollback, which each stream sends once before
+	 * any live output. Old queries in it, such as a device attributes request,
+	 * must not be answered to the running program.
+	 */
+	replay: (bytes: Uint8Array) => void;
 	/** Receives raw PTY output bytes in arrival order. */
 	output: (bytes: Uint8Array) => void;
+	/**
+	 * Clears the screen and scrollback before the connection replays the
+	 * terminal's output again, as it does after reconnecting.
+	 */
+	reset: () => void;
 	/** Reports the final status after the process exits. No output follows. */
 	exit: (status: TerminalExit) => void;
 	/** Reports a stream that closed before the process exit was known. */
@@ -27,6 +38,8 @@ export type TerminalConnection = {
 
 /** Terminal operations supplied to the terminal surface by the application. */
 export type TerminalSource = {
+	/** Lists the terminals still open from an earlier view, oldest first. */
+	list: () => Promise<TerminalTab[]>;
 	create: () => Promise<TerminalTab>;
 	connect: (id: string, events: TerminalConnectionEvents) => TerminalConnection;
 	close: (id: string) => Promise<void>;

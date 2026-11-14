@@ -3060,6 +3060,7 @@ version = "0.8.7"
 dependencies = [
  "async-trait",
  "axum",
+ "bytes 1.12.1",
  "futures-util",
  "libc",
  "nvim-rs",

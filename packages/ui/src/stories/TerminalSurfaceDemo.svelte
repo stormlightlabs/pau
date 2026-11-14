@@ -11,11 +11,22 @@
 		exitOnConnect?: TerminalExit;
 		createError?: string;
 		history?: string[];
+		running?: number;
+		listError?: string;
 	};
 
-	let { theme = 'eldritch', uiFont, disconnected = false, exitOnConnect, createError, history }: Props = $props();
+	let {
+		theme = 'eldritch',
+		uiFont,
+		disconnected = false,
+		exitOnConnect,
+		createError,
+		history,
+		running,
+		listError
+	}: Props = $props();
 
-	const { source } = $derived(createTerminalFixture({ exitOnConnect, createError, history }));
+	const { source } = $derived(createTerminalFixture({ exitOnConnect, createError, history, running, listError }));
 </script>
 
 <TerminalSurface workspaceName="pau" {source} {theme} {uiFont} {disconnected} />

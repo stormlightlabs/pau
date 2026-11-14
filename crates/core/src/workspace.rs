@@ -1,8 +1,13 @@
 //! Workspace registration and root-confined file operations.
 
 use std::{
+    ffi::OsStr,
     fmt, fs, io,
     path::{Component, Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use cap_std::{ambient_authority, fs::Dir};
@@ -19,6 +24,11 @@ use crate::sandbox::is_placeholder;
 
 const DEFAULT_SEARCH_LIMIT: usize = 200;
 const MAX_SEARCH_LIMIT: usize = 1_000;
+const DEFAULT_NAME_SEARCH_LIMIT: usize = 50;
+/// Most entries one name search visits before it returns what it found.
+const MAX_NAME_SEARCH_ENTRIES: usize = 200_000;
+/// Git's repository folder, which the name search never enters.
+const GIT_DIR: &str = ".git";
 /// Largest file the editor opens, search reads, or diff review compares.
 const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 
@@ -101,6 +111,19 @@ pub struct TraversalOptions {
     pub include_ignored: bool,
 }
 
+/// What a workspace search looks for and how many results it returns.
+#[derive(Debug, Clone, Default)]
+pub struct SearchOptions {
+    /// Text to find. A name search scopes a query with a slash to the folder
+    /// before the last slash.
+    pub query: String,
+    /// Which hidden and ignored paths the search visits.
+    pub traversal: TraversalOptions,
+    /// Most results to return. Each search has its own default, and no search
+    /// returns more than 1,000.
+    pub limit: Option<usize>,
+}
+
 /// Kind of object returned by a workspace listing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
@@ -123,6 +146,16 @@ pub struct FileEntry {
     pub kind: FileEntryKind,
     /// File size in bytes. Directories and links do not report a size.
     pub size: Option<u64>,
+}
+
+/// Files and folders a name search matched, best match first.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct NameSearchResult {
+    /// Matching entries, at most the requested limit.
+    pub entries: Vec<FileEntry>,
+    /// Whether the search stopped before visiting every entry it could, so a
+    /// name missing from `entries` may still exist.
+    pub truncated: bool,
 }
 
 /// UTF-8 file content and the revision required for a later write.
@@ -293,7 +326,7 @@ impl WorkspaceService {
 
         let hidden = self.hidden_placeholders(workspace_id, &root).await?;
         let mut entries = Vec::new();
-        for item in walker(&directory, options, Some(1)) {
+        for item in walker(&directory, options, Some(1)).build() {
             let item = item.map_err(|error| io::Error::other(error.to_string()))?;
             if item.depth() == 0 {
                 continue;
@@ -505,22 +538,22 @@ impl WorkspaceService {
     pub async fn search(
         &self,
         workspace_id: &str,
-        query: &str,
-        options: TraversalOptions,
-        limit: Option<usize>,
+        options: SearchOptions,
     ) -> Result<Vec<FileSearchMatch>, WorkspaceError> {
+        let query = options.query.as_str();
         if query.is_empty() {
             return Ok(Vec::new());
         }
         let root = self.root(workspace_id).await?;
-        let limit = limit
+        let limit = options
+            .limit
             .unwrap_or(DEFAULT_SEARCH_LIMIT)
             .clamp(1, MAX_SEARCH_LIMIT);
         let directory = Dir::open_ambient_dir(&root, ambient_authority())?;
         let hidden = self.hidden_placeholders(workspace_id, &root).await?;
         let mut matches = Vec::new();
 
-        for item in walker(&root, options, None) {
+        for item in walker(&root, options.traversal, None).build() {
             let item = item.map_err(|error| io::Error::other(error.to_string()))?;
             let Some(file_type) = item.file_type() else {
                 continue;
@@ -553,6 +586,39 @@ impl WorkspaceService {
             }
         }
         Ok(matches)
+    }
+
+    /// Finds files and folders by name, best match first.
+    ///
+    /// A query with a slash searches the direct children of the folder before
+    /// the last slash, and leading slashes count from the root. An empty query
+    /// lists the root. Any other query walks the whole tree, skipping `.git`,
+    /// and stops after [`MAX_NAME_SEARCH_ENTRIES`] entries with `truncated`
+    /// set. Names match case-insensitively as a prefix, then a substring, then
+    /// letters in order, folders before files. A link appears only when its
+    /// target stays inside the root and is not a credential file.
+    ///
+    /// Dropping the future stops the walk at the next entry. A `read_dir` that
+    /// blocks on a hung mount still holds its thread until it returns.
+    pub async fn search_names(
+        &self,
+        workspace_id: &str,
+        options: SearchOptions,
+    ) -> Result<NameSearchResult, WorkspaceError> {
+        let root = self.root(workspace_id).await?;
+        let hidden = self.hidden_placeholders(workspace_id, &root).await?;
+        let stop = StopOnDrop(Arc::new(AtomicBool::new(false)));
+        let walk_stop = Arc::clone(&stop.0);
+        tokio::task::spawn_blocking(move || {
+            let walk = NameWalk {
+                budget: MAX_NAME_SEARCH_ENTRIES,
+                hidden: &hidden,
+                stop: &walk_stop,
+            };
+            search_names_in(&root, &options, &walk)
+        })
+        .await
+        .map_err(|error| io::Error::other(error.to_string()))?
     }
 
     /// Returns workspace-relative placeholders of running sandboxed processes
@@ -606,6 +672,162 @@ fn is_hidden(hidden: &[String], relative: &str) -> bool {
     })
 }
 
+/// Whether a path component names Git's folder. Compared without case, since
+/// a case-insensitive volume opens `.GIT` as `.git`.
+fn is_git_dir(name: &OsStr) -> bool {
+    name.to_str()
+        .is_some_and(|name| name.eq_ignore_ascii_case(GIT_DIR))
+}
+
+/// Sets a name search's stop flag when its future is dropped.
+struct StopOnDrop(Arc<AtomicBool>);
+
+impl Drop for StopOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
+}
+
+/// Bounds on one name search's walk.
+struct NameWalk<'a> {
+    /// Most entries to visit before returning a truncated result.
+    budget: usize,
+    /// Placeholders of running sandboxed processes to leave out.
+    hidden: &'a [String],
+    /// Set when the caller no longer wants the result.
+    stop: &'a AtomicBool,
+}
+
+/// Runs [`WorkspaceService::search_names`] under a canonical root.
+fn search_names_in(
+    root: &Path,
+    options: &SearchOptions,
+    walk: &NameWalk,
+) -> Result<NameSearchResult, WorkspaceError> {
+    let query = options.query.as_str();
+    let limit = options
+        .limit
+        .unwrap_or(DEFAULT_NAME_SEARCH_LIMIT)
+        .clamp(1, MAX_SEARCH_LIMIT);
+    let (folder, name) = query.rsplit_once('/').unwrap_or(("", query));
+    // `@/src` names the workspace's `src`, never the filesystem root.
+    let folder = folder.trim_start_matches('/');
+    let needle = name.to_lowercase();
+    // Check the folder the query resolves to, not the one typed: `.GIT` on a
+    // case-insensitive volume and a link to `.git` both land inside it.
+    let in_git = |path: &Path| {
+        path.strip_prefix(root).map_or(true, |relative| {
+            relative.components().any(|c| is_git_dir(c.as_os_str()))
+        })
+    };
+    let start = match confined_existing(root, folder) {
+        Ok(path) if path.is_dir() && !in_git(&path) => path,
+        Ok(_) | Err(WorkspaceError::NotFound) => {
+            return Ok(NameSearchResult {
+                entries: Vec::new(),
+                truncated: false,
+            });
+        }
+        Err(error) => return Err(error),
+    };
+    let depth = (query.contains('/') || needle.is_empty()).then_some(1);
+    let mut found = Vec::new();
+    let mut truncated = false;
+    let entries = walker(&start, options.traversal, depth)
+        .filter_entry(|entry| !is_git_dir(entry.file_name()))
+        .build();
+    for (visited, item) in entries.enumerate() {
+        if visited == walk.budget || walk.stop.load(Ordering::Relaxed) {
+            truncated = true;
+            break;
+        }
+        // An unreadable folder costs its own entries, not the whole search.
+        let Ok(item) = item else {
+            continue;
+        };
+        if item.depth() == 0 {
+            continue;
+        }
+        let Some(file_type) = item.file_type() else {
+            continue;
+        };
+        let Some(rank) = item
+            .file_name()
+            .to_str()
+            .and_then(|name| name_rank(name, &needle))
+        else {
+            continue;
+        };
+        let relative = relative_display(root, item.path())?;
+        if is_sensitive(&relative) || is_hidden(walk.hidden, &relative) {
+            continue;
+        }
+        let kind = if file_type.is_dir() {
+            FileEntryKind::Directory
+        } else if file_type.is_symlink() {
+            // A mention of a link that leaves the root would hand the agent a
+            // path to files outside the workspace, and one to a credential
+            // file would hand it the secret under another name.
+            let target = fs::canonicalize(item.path());
+            if !target.is_ok_and(|target| {
+                relative_display(root, &target).is_ok_and(|target| !is_sensitive(&target))
+            }) {
+                continue;
+            }
+            FileEntryKind::Symlink
+        } else {
+            FileEntryKind::File
+        };
+        found.push((
+            rank,
+            FileEntry {
+                path: relative,
+                kind,
+                size: None,
+            },
+        ));
+    }
+
+    let folder_first = |entry: &FileEntry| entry.kind != FileEntryKind::Directory;
+    found.sort_by(|(left_rank, left), (right_rank, right)| {
+        left_rank
+            .cmp(right_rank)
+            .then_with(|| folder_first(left).cmp(&folder_first(right)))
+            .then_with(|| left.path.len().cmp(&right.path.len()))
+            .then_with(|| left.path.cmp(&right.path))
+    });
+    found.truncate(limit);
+    let entries = found
+        .into_iter()
+        .map(|(_, mut entry)| {
+            if entry.kind == FileEntryKind::File {
+                entry.size = fs::symlink_metadata(root.join(&entry.path))
+                    .ok()
+                    .map(|metadata| metadata.len());
+            }
+            entry
+        })
+        .collect();
+    Ok(NameSearchResult { entries, truncated })
+}
+
+/// Ranks a name against a lowercase needle: 0 for a prefix, 1 for a
+/// substring, 2 for the needle's letters in order, and `None` otherwise.
+fn name_rank(name: &str, needle: &str) -> Option<u8> {
+    let name = name.to_lowercase();
+    if name.starts_with(needle) {
+        return Some(0);
+    }
+    if name.contains(needle) {
+        return Some(1);
+    }
+    let mut letters = name.chars();
+    needle
+        .chars()
+        .all(|wanted| letters.any(|letter| letter == wanted))
+        .then_some(2)
+}
+
 async fn git_head_file(root: &Path, relative_path: &str) -> Result<Vec<u8>, WorkspaceError> {
     let object = format!("HEAD:{relative_path}");
     let output = Command::new("git")
@@ -635,7 +857,7 @@ fn worktree_file(root: &Path, relative_path: &str) -> Result<Vec<u8>, WorkspaceE
     directory.read(relative).map_err(WorkspaceError::from)
 }
 
-fn walker(path: &Path, options: TraversalOptions, max_depth: Option<usize>) -> ignore::Walk {
+fn walker(path: &Path, options: TraversalOptions, max_depth: Option<usize>) -> WalkBuilder {
     let mut builder = WalkBuilder::new(path);
     builder
         .follow_links(false)
@@ -647,7 +869,7 @@ fn walker(path: &Path, options: TraversalOptions, max_depth: Option<usize>) -> i
         .require_git(false)
         .parents(true)
         .max_depth(max_depth);
-    builder.build()
+    builder
 }
 
 fn validate_relative(path: &str) -> Result<&Path, WorkspaceError> {
@@ -878,7 +1100,7 @@ fn digit_run(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{fs, time::Duration};
 
     use tempfile::tempdir;
 
@@ -1291,11 +1513,320 @@ mod tests {
         fs::write(root.join(".gitignore"), "ignored.txt\n").unwrap();
 
         let matches = service
-            .search(&workspace.id, "find", TraversalOptions::default(), None)
+            .search(&workspace.id, search_for("find"))
             .await
             .unwrap();
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].path, "main.rs");
         assert_eq!(matches[0].line, 2);
+    }
+
+    fn search_for(query: &str) -> SearchOptions {
+        SearchOptions {
+            query: query.to_owned(),
+            ..SearchOptions::default()
+        }
+    }
+
+    fn touch(root: &Path, relative: &str) {
+        let path = root.join(relative);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, "").unwrap();
+    }
+
+    fn paths(result: &NameSearchResult) -> Vec<&str> {
+        result
+            .entries
+            .iter()
+            .map(|entry| entry.path.as_str())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn ranks_name_matches_and_scopes_a_query_with_a_slash() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+        for file in [
+            "src/App.svelte",
+            "src/lib/api.ts",
+            "apple/core.rs",
+            "snapper.rs",
+            "docs/map-plan.md",
+            "README.md",
+        ] {
+            touch(&root, file);
+        }
+        let search = |query| service.search_names(&workspace.id, search_for(query));
+
+        let found = search("app").await.unwrap();
+        assert_eq!(
+            paths(&found),
+            ["apple", "src/App.svelte", "snapper.rs", "docs/map-plan.md"]
+        );
+        assert_eq!(found.entries[0].kind, FileEntryKind::Directory);
+        assert_eq!(found.entries[1].size, Some(0));
+        assert!(!found.truncated);
+        assert_eq!(
+            paths(&search("src/").await.unwrap()),
+            ["src/lib", "src/App.svelte"]
+        );
+        assert_eq!(paths(&search("src/ap").await.unwrap()), ["src/App.svelte"]);
+        assert_eq!(paths(&search("").await.unwrap()).len(), 5);
+        assert!(search("missing/").await.unwrap().entries.is_empty());
+        assert!(search("zzz").await.unwrap().entries.is_empty());
+        assert!(matches!(
+            search("../").await,
+            Err(WorkspaceError::InvalidPath)
+        ));
+    }
+
+    #[tokio::test]
+    async fn leaves_out_hidden_ignored_and_credential_names_unless_asked() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+        fs::write(root.join(".gitignore"), "*.log\n").unwrap();
+        for file in ["notes.md", ".notes", "notes.log", ".env.notes"] {
+            touch(&root, file);
+        }
+        let search = |include_hidden, include_ignored| {
+            let traversal = TraversalOptions {
+                include_hidden,
+                include_ignored,
+            };
+            let options = SearchOptions {
+                traversal,
+                ..search_for("notes")
+            };
+            service.search_names(&workspace.id, options)
+        };
+
+        assert_eq!(paths(&search(false, false).await.unwrap()), ["notes.md"]);
+        assert_eq!(
+            paths(&search(true, false).await.unwrap()),
+            ["notes.md", ".notes"]
+        );
+        assert_eq!(
+            paths(&search(false, true).await.unwrap()),
+            ["notes.md", "notes.log"]
+        );
+    }
+
+    #[tokio::test]
+    async fn returns_at_most_the_requested_number_of_names() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+        for index in 0..60 {
+            touch(&root, &format!("note{index}.md"));
+        }
+        let three = SearchOptions {
+            limit: Some(3),
+            ..search_for("note")
+        };
+
+        let three = service.search_names(&workspace.id, three).await.unwrap();
+        assert_eq!(paths(&three), ["note0.md", "note1.md", "note2.md"]);
+        let default = service
+            .search_names(&workspace.id, search_for("note"))
+            .await
+            .unwrap();
+        assert_eq!(default.entries.len(), DEFAULT_NAME_SEARCH_LIMIT);
+        assert!(!default.truncated);
+    }
+
+    #[tokio::test]
+    async fn finds_a_deep_name_in_a_large_tree_and_stops_at_the_entry_budget() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+        for index in 0..300 {
+            touch(&root, &format!("pkg{index:03}/src/mod.rs"));
+        }
+        touch(&root, "pkg250/src/deep/nested/needle.rs");
+
+        let found = service
+            .search_names(&workspace.id, search_for("needle"))
+            .await
+            .unwrap();
+        assert_eq!(paths(&found), ["pkg250/src/deep/nested/needle.rs"]);
+
+        let canonical = fs::canonicalize(&root).unwrap();
+        let options = SearchOptions {
+            limit: Some(1_000),
+            ..search_for("mod")
+        };
+        let running = AtomicBool::new(false);
+        let search = |budget| {
+            let walk = NameWalk {
+                budget,
+                hidden: &[],
+                stop: &running,
+            };
+            search_names_in(&canonical, &options, &walk).unwrap()
+        };
+        let all = search(usize::MAX);
+        assert_eq!(all.entries.len(), 300);
+        assert!(!all.truncated);
+        let cut = search(100);
+        assert!(!cut.entries.is_empty() && cut.entries.len() < 50);
+        assert!(cut.truncated);
+    }
+
+    #[tokio::test]
+    async fn concurrent_searches_in_one_workspace_both_finish() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+        for index in 0..300 {
+            touch(&root, &format!("pkg{index:03}/src/mod.rs"));
+        }
+        let options = SearchOptions {
+            limit: Some(500),
+            ..search_for("mod")
+        };
+
+        let (first, second) = tokio::join!(
+            service.search_names(&workspace.id, options.clone()),
+            service.search_names(&workspace.id, options.clone()),
+        );
+        for found in [first.unwrap(), second.unwrap()] {
+            assert_eq!(found.entries.len(), 300);
+            assert!(!found.truncated);
+        }
+    }
+
+    /// Drops a real search while its walk is parked on a FIFO `.ignore`, then
+    /// checks the walk never reaches a second FIFO deeper in the tree. With
+    /// one blocking thread, a walk that kept going would hold it and the
+    /// next search could not run.
+    #[cfg(unix)]
+    #[test]
+    fn dropping_a_search_stops_its_walk() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let (directory, service, workspace) = fixture().await;
+            let root = directory.path().join("project");
+            touch(&root, "other/notes.md");
+            fs::create_dir_all(root.join("parked/deeper")).unwrap();
+            let parked = root.join("parked/.ignore");
+            let deeper = root.join("parked/deeper/.ignore");
+            for fifo in [&parked, &deeper] {
+                let status = std::process::Command::new("mkfifo")
+                    .arg(fifo)
+                    .status()
+                    .unwrap();
+                assert!(status.success());
+            }
+            let search = tokio::spawn({
+                let service = service.clone();
+                let id = workspace.id.clone();
+                async move { service.search_names(&id, search_for("needle")).await }
+            });
+            // Opening the write end returns once the walk has opened the read
+            // end. The walk holds the only blocking thread, so open it from a
+            // plain thread.
+            let (opened, writer) = tokio::sync::oneshot::channel();
+            let fifo = parked.clone();
+            std::thread::spawn(move || {
+                let _ = opened.send(fs::OpenOptions::new().write(true).open(fifo));
+            });
+            let writer = tokio::time::timeout(Duration::from_secs(10), writer)
+                .await
+                .expect("the walk never reached the parked folder")
+                .unwrap()
+                .unwrap();
+            search.abort();
+            assert!(search.await.unwrap_err().is_cancelled());
+            drop(writer);
+
+            let next = tokio::time::timeout(
+                Duration::from_secs(10),
+                service.search_names(&workspace.id, search_for("other/")),
+            )
+            .await;
+            if next.is_err() {
+                // Release the walk that kept going so the runtime can shut down.
+                let _ = fs::OpenOptions::new().write(true).open(&deeper);
+            }
+            let next = next.expect("the dropped search kept walking");
+            assert_eq!(paths(&next.unwrap()), ["other/notes.md"]);
+        });
+    }
+
+    #[tokio::test]
+    async fn never_enters_git_and_counts_leading_slashes_from_the_root() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+        touch(&root, ".git/config");
+        touch(&root, ".git/objects/ab/config");
+        touch(&root, "config.toml");
+        touch(&root, "src/x.rs");
+        let search = |query| {
+            let options = SearchOptions {
+                traversal: TraversalOptions {
+                    include_hidden: true,
+                    include_ignored: false,
+                },
+                ..search_for(query)
+            };
+            service.search_names(&workspace.id, options)
+        };
+
+        assert_eq!(paths(&search("config").await.unwrap()), ["config.toml"]);
+        assert!(search(".gi").await.unwrap().entries.is_empty());
+        assert!(search(".git/").await.unwrap().entries.is_empty());
+        assert!(search(".GIT/").await.unwrap().entries.is_empty());
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(root.join(".git"), root.join("g")).unwrap();
+            assert!(search("g/").await.unwrap().entries.is_empty());
+            assert!(search("g/objects/").await.unwrap().entries.is_empty());
+            assert_eq!(paths(&search("config").await.unwrap()), ["config.toml"]);
+        }
+        assert_eq!(paths(&search("//src/x").await.unwrap()), ["src/x.rs"]);
+        assert_eq!(paths(&search("/src/x").await.unwrap()), ["src/x.rs"]);
+        assert!(search("//x").await.unwrap().entries.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn never_follows_or_offers_links_that_leave_the_workspace() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+        let outside = directory.path().join("outside");
+        touch(&outside, "plan-secret.md");
+        touch(&root, "docs/plan.md");
+        std::os::unix::fs::symlink(&outside, root.join("escape")).unwrap();
+        std::os::unix::fs::symlink(outside.join("plan-secret.md"), root.join("plan-out")).unwrap();
+        std::os::unix::fs::symlink(root.join("docs/plan.md"), root.join("plan-in")).unwrap();
+        let found = service
+            .search_names(&workspace.id, search_for("plan"))
+            .await
+            .unwrap();
+        assert_eq!(paths(&found), ["plan-in", "docs/plan.md"]);
+        assert_eq!(found.entries[0].kind, FileEntryKind::Symlink);
+        assert!(matches!(
+            service
+                .search_names(&workspace.id, search_for("escape/"))
+                .await,
+            Err(WorkspaceError::InvalidPath)
+        ));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn never_offers_a_link_to_a_credential_file() {
+        let (directory, service, workspace) = fixture().await;
+        let root = directory.path().join("project");
+        touch(&root, ".env");
+        touch(&root, "env-guide.md");
+        std::os::unix::fs::symlink(root.join(".env"), root.join("env-notes")).unwrap();
+
+        let found = service
+            .search_names(&workspace.id, search_for("env"))
+            .await
+            .unwrap();
+        assert_eq!(paths(&found), ["env-guide.md"]);
     }
 }

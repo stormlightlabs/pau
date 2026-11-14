@@ -173,7 +173,7 @@ These follow from the code rather than from the experiment:
 - The spec already sends terminal-only extension components to "vanilla Pi in a
   Pau terminal" (`dev/design/surfaces.md`, Session), and the permission plan
   already restarts Pi on the same session file when the profile changes
-  (`dev/plan/backend.md`). Handoff is the general form of both.
+  (the backend plan). Handoff is the general form of both.
 
 ## The single-writer rule
 
@@ -288,7 +288,7 @@ files and apply to both sides.
   Pau can pass the permission extension and policy file to a Pau-terminal
   launch to keep the prompts, but approvals still reset.
 - The sandbox. Operator terminals are unsandboxed by default
-  (`dev/spec/safety-and-persistence.md`). Pau should refuse Open in Pi for a
+  (the safety and persistence spec). Pau should refuse Open in Pi for a
   sandboxed session until the terminal launch path supports containment, or
   require an explicit choice that names the loss.
 - Pau's per-session MCP override. The terminal Pi uses Pi's own MCP

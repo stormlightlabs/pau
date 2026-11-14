@@ -58,7 +58,7 @@ export const workspaceFileFixtures: {
 			{ path: 'notes.txt', previous_path: null, staged: null, worktree: 'untracked', conflicted: false },
 			{ path: 'new-file.ts', previous_path: null, staged: 'added', worktree: null, conflicted: false },
 			{ path: 'removed-file.ts', previous_path: null, staged: null, worktree: 'deleted', conflicted: false },
-			{ path: 'dev/PLAN.md', previous_path: null, staged: null, worktree: null, conflicted: true }
+			{ path: 'dev/DECISIONS.md', previous_path: null, staged: null, worktree: null, conflicted: true }
 		]
 	},
 	diffs: {
@@ -88,7 +88,7 @@ export const workspaceFileFixtures: {
 			preview: 'const sessions = $derived(workspaces.flatMap(...));'
 		},
 		{
-			path: 'dev/SPEC.md',
+			path: 'dev/design/surfaces.md',
 			line: 78,
 			preview: 'Browse workspace files with ignored and hidden files handled predictably.'
 		}

@@ -1,8 +1,8 @@
 # Design references
 
 This directory records Pau's durable interface decisions and early sketches.
-Product behavior remains defined by [`SPEC.md`](../SPEC.md), and architecture
-and implementation policy remain defined by [`PLAN.md`](../PLAN.md).
+The Product specification and the Technical plan, which live in the project's issue
+tracker, define product behavior and implementation policy.
 
 - [`system.md`](system.md) defines the visual and interaction system.
 - [`surfaces.md`](surfaces.md) states each product surface's purpose,

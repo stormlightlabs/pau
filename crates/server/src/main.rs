@@ -13,6 +13,7 @@
 
 use std::{
     env,
+    ffi::OsString,
     io::{self, BufRead},
     net::SocketAddr,
 };
@@ -35,32 +36,32 @@ struct Options {
 
 fn main() -> io::Result<()> {
     let options = parse_options(env::args().skip(1))?;
-    // `.env` does not override a variable that is already set, so a token
-    // present before it loads came from the launch environment.
-    let exported = env::var_os(TOKEN_VARIABLE).is_some();
+    // The environment changes only here, before the runtime starts any thread.
+    // Taking the exported token first leaves the variable unset, so `.env`
+    // can set it and its value wins over the exported one.
+    let exported = take_api_token();
     // Development settings live in the repository's .env file.
     if let Err(error) = dotenvy::dotenv()
         && !error.not_found()
     {
         return Err(io::Error::other(format!("could not read .env: {error}")));
     }
-    // The environment changes only here, before the runtime starts any thread.
-    let from_environment = take_api_token();
+    let from_env_file = take_api_token();
     let token = if options.token_stdin {
         read_token(io::stdin().lock())?
-    } else {
-        let token = from_environment.ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                "the browser development server needs a token on standard input with --token-stdin, or PAU_API_TOKEN in .env or the environment",
-            )
-        })?;
-        if exported {
-            eprintln!(
-                "warning: PAU_API_TOKEN came from the environment, where agents and commands the server starts can read it. Put it in .env or pass it with --token-stdin to avoid that."
-            );
-        }
+    } else if let Some(token) = from_env_file {
+        token_string(token)?
+    } else if let Some(token) = exported {
+        let token = token_string(token)?;
+        eprintln!(
+            "warning: PAU_API_TOKEN came from the environment, where agents and commands the server starts can read it. Put it in .env or pass it with --token-stdin to avoid that."
+        );
         token
+    } else {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "the browser development server needs a token on standard input with --token-stdin, or PAU_API_TOKEN in .env or the environment",
+        ));
     };
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -68,22 +69,32 @@ fn main() -> io::Result<()> {
         .block_on(serve(token, options.diagnostics))
 }
 
-/// Removes the token from the environment and returns it, whether `.env` or
-/// the launch environment set it.
+/// Removes the token from the environment and returns it, unless it is empty
+/// or only whitespace, which counts as unset.
 ///
 /// Every child process inherits the server's environment: agents, the
 /// commands they run, MCP servers, terminals and discovery probes. Removing
-/// the variable keeps the token out of theirs. It does not clear the launch
-/// environment that same-user processes can read, which still holds a token
-/// exported before the server started.
+/// the variable keeps the token out of theirs, whatever its encoding. It does
+/// not clear the launch environment that same-user processes can read, which
+/// still holds a token exported before the server started.
 ///
 /// Call it while the process has one thread: removing a variable races with
 /// any concurrent read of the environment.
-fn take_api_token() -> Option<String> {
-    let token = env::var(TOKEN_VARIABLE).ok()?;
+fn take_api_token() -> Option<OsString> {
+    let token = env::var_os(TOKEN_VARIABLE)?;
     // SAFETY: callers run before any other thread exists.
     unsafe { env::remove_var(TOKEN_VARIABLE) };
-    Some(token)
+    (!token.to_string_lossy().trim().is_empty()).then_some(token)
+}
+
+/// Converts a token taken from the environment, which may not be UTF-8.
+fn token_string(token: OsString) -> io::Result<String> {
+    token.into_string().map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "PAU_API_TOKEN is not valid UTF-8",
+        )
+    })
 }
 
 /// Reads the token from the first line of `input`, without its line ending.
@@ -184,16 +195,36 @@ mod tests {
     #[test]
     fn child_processes_do_not_inherit_the_api_token() {
         let token = "a".repeat(32);
+        let child_sees = || {
+            let child = std::process::Command::new("sh")
+                .args(["-c", "printf %s \"${PAU_API_TOKEN-unset}\""])
+                .output()
+                .unwrap();
+            String::from_utf8_lossy(&child.stdout).into_owned()
+        };
         // SAFETY: no other test in this binary reads or writes the
         // environment.
         unsafe { env::set_var(TOKEN_VARIABLE, &token) };
-
-        assert_eq!(take_api_token(), Some(token));
-        let child = std::process::Command::new("sh")
-            .args(["-c", "printf %s \"${PAU_API_TOKEN-unset}\""])
-            .output()
-            .unwrap();
-        assert_eq!(String::from_utf8_lossy(&child.stdout), "unset");
+        assert_eq!(take_api_token(), Some(token.into()));
+        assert_eq!(child_sees(), "unset");
         assert_eq!(take_api_token(), None);
+
+        // A blank value counts as unset but is still removed.
+        unsafe { env::set_var(TOKEN_VARIABLE, " ") };
+        assert_eq!(take_api_token(), None);
+        assert_eq!(child_sees(), "unset");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt;
+            let invalid = std::ffi::OsStr::from_bytes(b"\xff\xfe");
+            unsafe { env::set_var(TOKEN_VARIABLE, invalid) };
+            let taken = take_api_token().unwrap();
+            assert_eq!(child_sees(), "unset");
+            assert_eq!(
+                token_string(taken).unwrap_err().kind(),
+                io::ErrorKind::InvalidData
+            );
+        }
     }
 }

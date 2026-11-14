@@ -838,7 +838,9 @@ export const ImagesAttached: Story = {
 		await expect(canvas.getByRole('img', { name: 'screenshot.png' })).toBeVisible();
 		await userEvent.type(canvas.getByRole('textbox', { name: 'Prompt' }), 'What is in this image?');
 		await userEvent.click(canvas.getByRole('button', { name: /Send prompt/ }));
-		await expect(canvas.getByText(/session-running: steer: What is in this image\? \(1 image\)/)).toBeInTheDocument();
+		await expect(
+			await canvas.findByText(/session-running: steer: What is in this image\? \(1 image\)/)
+		).toBeInTheDocument();
 		await expect(canvas.queryByRole('img', { name: 'screenshot.png' })).not.toBeInTheDocument();
 	}
 };

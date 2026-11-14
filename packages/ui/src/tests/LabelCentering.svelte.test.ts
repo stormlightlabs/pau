@@ -122,6 +122,13 @@ function itemSpacing() {
 	};
 }
 
+/*
+ * Chromium lays text out at fractional positions, so a centered label lands
+ * within half a pixel. WebKit on Linux snaps boxes and hinted glyphs to whole
+ * device pixels, so there the bound is one device pixel.
+ */
+const precision = navigator.userAgent.includes('Chrome') ? 0.5 : 1 / devicePixelRatio;
+
 const remPx = () => Number(getComputedStyle(document.documentElement).fontSize.replace('px', ''));
 
 test.each(Object.keys(UI_FONTS) as UiFontName[])(
@@ -131,7 +138,7 @@ test.each(Object.keys(UI_FONTS) as UiFontName[])(
 		expect(CSS.supports('text-box: trim-both cap alphabetic')).toBe(true);
 
 		for (const { name, offset } of offsets(buttons, choices)) {
-			expect(Math.abs(offset), name).toBeLessThanOrEqual(0.5);
+			expect(Math.abs(offset), name).toBeLessThanOrEqual(precision);
 		}
 		const spacing = itemSpacing();
 		expect(spacing.icon).toBeCloseTo(remPx() / 2, 0);

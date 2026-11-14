@@ -304,6 +304,17 @@ line: number,
  */
 preview: string, };
 
+export type NameSearchResult = {
+/**
+ * Matching entries, at most the requested limit.
+ */
+entries: Array<FileEntry>,
+/**
+ * Whether the search stopped before visiting every entry it could, so a
+ * name missing from `entries` may still exist.
+ */
+truncated: boolean, };
+
 export type GitFileState = "modified" | "added" | "deleted" | "renamed" | "copied" | "type_changed" | "untracked";
 
 export type GitFileStatus = {

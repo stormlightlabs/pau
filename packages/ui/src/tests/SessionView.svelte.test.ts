@@ -842,7 +842,9 @@ test('selects an already open workspace instead of adding it again', async () =>
 	await userEvent.click(page.getByRole('button', { name: 'Open', exact: true }));
 
 	await expect.element(page.getByRole('heading', { name: 'Fix diff gutter', level: 1 })).toBeVisible();
-	await expect.element(rail.getByRole('heading', { name: 'Pau' })).toBeInTheDocument();
+	// The closed overlay rail is hidden from the accessibility tree, so open it again to read it.
+	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	await expect.element(rail.getByRole('heading', { name: 'Pau' })).toBeVisible();
 	expect(document.querySelectorAll('.session-rail section')).toHaveLength(1);
 });
 
@@ -944,6 +946,21 @@ test('shows when nothing matches, and Escape closes the list without interruptin
 	await userEvent.keyboard('{Escape}');
 	await expect.element(page.getByRole('listbox')).not.toBeInTheDocument();
 	await expect.element(page.getByText('No action sent')).toBeVisible();
+});
+
+test('closes file and command completion on a press outside the composer', async () => {
+	await render(SessionViewDemo, mentionProps);
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.type(prompt, '@src');
+	await expect.element(page.getByRole('listbox', { name: 'Files' })).toBeVisible();
+	await userEvent.click(page.getByRole('heading', { level: 1 }).first());
+	await expect.element(page.getByRole('listbox')).not.toBeInTheDocument();
+
+	await userEvent.clear(prompt);
+	await userEvent.type(prompt, '/');
+	await expect.element(page.getByRole('listbox', { name: 'Commands' })).toBeVisible();
+	await userEvent.click(page.getByRole('heading', { level: 1 }).first());
+	await expect.element(page.getByRole('listbox')).not.toBeInTheDocument();
 });
 
 test('reports a failed file search', async () => {

@@ -52,6 +52,11 @@ Right-click a file or folder in the tree, or focus it and press `Shift+F10`,
 to copy its full or workspace-relative path or show it in the file manager.
 Files can also open in Pau's editor.
 
+Type `@` in the prompt to mention a file. Pau finds files and folders by name
+anywhere in the workspace and leaves out ignored files. A folder path, such as
+`@src/`, lists only that folder. In a very large workspace, the list can say
+that the search stopped early. Type a folder path to narrow it.
+
 For a Git worktree, the file rail shows the current branch and each staged,
 modified, deleted, renamed, untracked, or conflicted path. A detached HEAD shows
 the abbreviated commit instead of a branch. Pau labels directories outside a

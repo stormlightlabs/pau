@@ -14,6 +14,7 @@ import type {
 	FileSearchMatch,
 	GitDiff,
 	GitStatus,
+	NameSearchResult,
 	NativeSessionList,
 	SessionBranchRequest,
 	SessionBranchResult,
@@ -329,6 +330,26 @@ export async function writeWorkspaceFile(
 		body: JSON.stringify({ path, content, expected_revision: expectedRevision })
 	});
 	return responseJson<FileContent>(response);
+}
+
+/**
+ * Finds files and folders by name in a registered workspace, best match first.
+ * A query with a slash searches only the folder before the last slash.
+ * Aborting `options.signal` cancels the request and stops the server's walk.
+ */
+export async function searchWorkspaceNames(
+	workspaceId: string,
+	query: string,
+	options: { includeHidden: boolean; includeIgnored: boolean; signal?: AbortSignal },
+	fetcher: typeof fetch = fetch
+): Promise<NameSearchResult> {
+	const url = workspaceEndpoint(workspaceId, 'search');
+	url.searchParams.set('query', query);
+	url.searchParams.set('match', 'names');
+	if (options.includeHidden) url.searchParams.set('include_hidden', 'true');
+	if (options.includeIgnored) url.searchParams.set('include_ignored', 'true');
+	const response = await fetcher(requestUrl(url), { headers: authorization(), signal: options.signal });
+	return responseJson<NameSearchResult>(response);
 }
 
 /** Searches visible UTF-8 files in a registered workspace. */

@@ -51,8 +51,8 @@ export default async function setup(project: TestProject): Promise<() => Promise
 	const port = await freePort();
 	const token = randomBytes(24).toString('base64url');
 	const origin = `http://127.0.0.1:${port}`;
-	// The server refuses a token in its environment, where other processes
-	// could read it, so it arrives on standard input.
+	// A token in the server's environment is readable by other processes, so
+	// it arrives on standard input.
 	const environment = { ...process.env };
 	delete environment.PAU_API_TOKEN;
 	const server = spawn(binary, ['--token-stdin'], {

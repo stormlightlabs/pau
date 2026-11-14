@@ -342,7 +342,7 @@
 	onRenameSession={(sessionId, name) => sessions.rename(sessionId, name)}
 	onCloneSession={(sessionId) => sessions.clone(sessionId)}
 	onLoadCommands={(sessionId) => sessions.listCommands(sessionId)}
-	onSearchFiles={searchFileMentions}
+	onSearchFiles={(workspaceId, query, signal) => searchFileMentions(workspaceId, query, signal, fetcher)}
 	onLoadModels={(sessionId) => sessions.listModels(sessionId)}
 	onSelectModel={(sessionId, model) => sessions.selectModel(sessionId, model)}
 	onSelectThinkingLevel={(sessionId, level) => sessions.selectThinkingLevel(sessionId, level)}

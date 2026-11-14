@@ -235,6 +235,25 @@ test('reads the workspace branch on load and again after a run settles', async (
 	await vi.waitFor(() => expect(sessions.workspaces[0]?.branch).toBeUndefined());
 });
 
+test('titles a session by its agent until the first prompt', async () => {
+	const { sessions, socket } = await setup();
+	const title = () => sessions.workspaces[0]?.sessions[0]?.title;
+	expect(title()).toBe('New Pi session');
+
+	socket.receive({
+		type: 'event',
+		event: {
+			sequence: 1,
+			timestamp: '2026-04-01T12:00:02Z',
+			workspace_id: 'pau',
+			session_id: 'session-1',
+			kind: 'session_changed',
+			payload: JSON.stringify({ ...session, agent: 'claude' })
+		}
+	});
+	expect(title()).toBe('New Claude Code session');
+});
+
 test('names the agent of a failed session', async () => {
 	const { sessions, socket } = await setup();
 

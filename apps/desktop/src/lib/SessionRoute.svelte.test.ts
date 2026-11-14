@@ -784,14 +784,15 @@ test.each([
 	await expect.element(page.getByRole('alert')).toHaveTextContent(expected);
 });
 
-test('disables the picker when the session cannot select models', async () => {
+test('hides the picker when the session cannot select models', async () => {
 	const { props } = setup({
 		'GET /api/sessions': () =>
 			json([{ ...idleSession, capabilities: { ...idleSession.capabilities, model_selection: false } }])
 	});
 	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
 
-	await expect.element(page.getByRole('button', { name: /^Model:/ })).toBeDisabled();
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeEnabled();
+	await expect.element(page.getByRole('button', { name: /^Model/ })).not.toBeInTheDocument();
 });
 
 test('loads session commands for completion and sends the chosen command as a prompt', async () => {
@@ -1418,6 +1419,10 @@ test('starts a Claude Code session and streams its reply', async () => {
 	expect(JSON.parse(String((start.mock.calls[0] as unknown as [RequestInit])[0].body))).toMatchObject({
 		agent: 'claude'
 	});
+
+	await expect.element(page.getByRole('heading', { name: 'New Claude Code session' })).toBeVisible();
+	await expect.element(page.getByRole('button', { name: /^Model/ })).not.toBeInTheDocument();
+	await expect.element(page.getByRole('combobox', { name: 'Thinking level' })).not.toBeInTheDocument();
 
 	sockets[0]?.receive(output({ sequence: 0, event: 'text.delta', payload: { text: 'Reading the bridge.' } }));
 	await expect.element(page.getByText('Reading the bridge.')).toBeVisible();

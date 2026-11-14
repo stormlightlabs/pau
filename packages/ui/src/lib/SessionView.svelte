@@ -2973,16 +2973,19 @@
 									{/if}
 									{#if onLoadModels && onSelectModel}
 										{#key activeSession.id}
-											<ModelPicker
-												bind:this={modelPicker}
-												load={() => onLoadModels(activeSession.id)}
-												onSelect={(model) => onSelectModel(activeSession.id, model)}
-												supported={activeSession.capabilities.modelSelection ?? false}
-												unavailableReason={modelUnavailableReason(activeSession, disconnected)}
-												fallbackLabel={activeSession.model}
-												onLoaded={(models) =>
-													(currentModelReasoning = models.find((model) => model.current)?.reasoning)} />
-											{#if onSelectThinkingLevel}
+											<!-- An agent without a control shows it only read-only, to report its current value. -->
+											{#if activeSession.capabilities.modelSelection || activeSession.model}
+												<ModelPicker
+													bind:this={modelPicker}
+													load={() => onLoadModels(activeSession.id)}
+													onSelect={(model) => onSelectModel(activeSession.id, model)}
+													supported={activeSession.capabilities.modelSelection ?? false}
+													unavailableReason={modelUnavailableReason(activeSession, disconnected)}
+													fallbackLabel={activeSession.model}
+													onLoaded={(models) =>
+														(currentModelReasoning = models.find((model) => model.current)?.reasoning)} />
+											{/if}
+											{#if onSelectThinkingLevel && (activeSession.capabilities.thinkingLevel || activeSession.thinkingLevel)}
 												<ThinkingLevelPicker
 													bind:this={thinkingPicker}
 													level={activeSession.thinkingLevel}

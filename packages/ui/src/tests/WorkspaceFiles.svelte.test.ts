@@ -431,3 +431,51 @@ test('follows changes on disk in the tree, branch, and open file, and stops when
 	view.unmount();
 	expect(stop).toHaveBeenCalledOnce();
 });
+
+test('forgets the subfolders of a folder renamed on disk', async () => {
+	let notify: ((changes: WorkspaceFileChanges) => void) | undefined;
+	let tree = structuredClone(workspaceFileFixtures.tree);
+	const notFound = Object.assign(new Error('missing'), { code: 'not_found' });
+	await renderFiles(
+		source({
+			listDirectory: async (path) => {
+				const entries = tree[path];
+				if (!entries) throw notFound;
+				return structuredClone(entries);
+			},
+			watch: (onChange) => {
+				notify = onChange;
+				return vi.fn();
+			}
+		})
+	);
+	await userEvent.click(page.getByRole('treeitem', { name: 'dev', exact: true }));
+	await userEvent.click(page.getByRole('treeitem', { name: 'design', exact: true }));
+	await expect.element(page.getByRole('treeitem', { name: 'surfaces.md' })).toBeInTheDocument();
+
+	const { dev, 'dev/design': design, ...rest } = tree;
+	const root = tree[''] ?? [];
+	tree = {
+		...rest,
+		'': root.map((entry) => (entry.path === 'dev' ? { ...entry, path: 'docs' } : entry)),
+		docs: (dev ?? []).map((entry) => ({ ...entry, path: entry.path.replace(/^dev/, 'docs') })),
+		'docs/design': (design ?? []).map((entry) => ({ ...entry, path: entry.path.replace(/^dev/, 'docs') }))
+	};
+	notify?.({ paths: ['dev', 'docs'], git: false, truncated: false });
+	await expect.element(page.getByRole('treeitem', { name: 'docs', exact: true })).toBeInTheDocument();
+	await expect.element(page.getByRole('treeitem', { name: 'surfaces.md' })).not.toBeInTheDocument();
+
+	// The folder comes back with different contents and opens collapsed inside.
+	tree = {
+		...tree,
+		'': [...(tree[''] ?? []), { path: 'dev', kind: 'directory', size: null }],
+		dev: [{ path: 'dev/design', kind: 'directory', size: null }],
+		'dev/design': [{ path: 'dev/design/tokens.md', kind: 'file', size: 10 }]
+	};
+	notify?.({ paths: ['dev'], git: false, truncated: false });
+	await userEvent.click(page.getByRole('treeitem', { name: 'dev', exact: true }));
+	await expect
+		.element(page.getByRole('treeitem', { name: 'design', exact: true }))
+		.toHaveAttribute('aria-expanded', 'false');
+	expect(page.getByRole('treeitem', { name: 'surfaces.md' }).query()).toBeNull();
+});

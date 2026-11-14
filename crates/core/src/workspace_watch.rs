@@ -17,7 +17,7 @@ use std::{
 
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use notify::{
-    Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+    Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
     event::{AccessKind, AccessMode},
 };
 use serde::{Deserialize, Serialize};
@@ -76,9 +76,15 @@ impl WorkspaceWatcher {
     ) -> Result<Self, WorkspaceError> {
         let (signals, receiver) = mpsc::channel();
         let sender = signals.clone();
-        let mut watcher = notify::recommended_watcher(move |event| {
-            let _ = sender.send(Signal::Event(event));
-        })
+        // Following symlinks would let a link to a large folder outside the
+        // workspace, such as the home folder, use up the system's watch
+        // limit. The file tree does not follow them either.
+        let mut watcher = RecommendedWatcher::new(
+            move |event| {
+                let _ = sender.send(Signal::Event(event));
+            },
+            Config::default().with_follow_symlinks(false),
+        )
         .map_err(watch_error)?;
         watcher
             .watch(root, RecursiveMode::Recursive)
@@ -396,6 +402,16 @@ mod tests {
         }
     }
 
+    /// Waits for an update that says Git state changed.
+    fn wait_for_git(receiver: &Receiver<WorkspaceFileChanges>) {
+        let deadline = Instant::now() + EVENT_WAIT;
+        while !receiver
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            .expect("no update reported a Git change")
+            .git
+        {}
+    }
+
     #[test]
     fn reports_created_changed_renamed_and_removed_files() {
         let (_directory, root, _watcher, receiver) = watched();
@@ -474,6 +490,62 @@ mod tests {
                 "reported a path the tree hides: {path}"
             );
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn skips_changes_behind_a_symlinked_folder() {
+        let outside = tempfile::tempdir().unwrap();
+        let outside_root = fs::canonicalize(outside.path()).unwrap();
+        let (_directory, root, _watcher, receiver) = {
+            let directory = tempfile::tempdir().unwrap();
+            let root = fs::canonicalize(directory.path()).unwrap();
+            std::os::unix::fs::symlink(&outside_root, root.join("linked")).unwrap();
+            let (sender, receiver) = mpsc::channel();
+            let watcher = WorkspaceWatcher::start(&root, move |changes| {
+                let _ = sender.send(changes);
+            })
+            .unwrap();
+            (directory, root, watcher, receiver)
+        };
+        fs::write(outside_root.join("outside.txt"), "outside").unwrap();
+        // A visible file written last marks the end of the sequence.
+        fs::write(root.join("visible.txt"), "visible").unwrap();
+
+        let mut seen = wait_for_path(&receiver, "visible.txt").paths;
+        seen.extend(receiver.try_iter().flat_map(|changes| changes.paths));
+        assert!(
+            seen.iter().all(|path| !path.starts_with("linked/")),
+            "followed the symlink: {seen:?}"
+        );
+    }
+
+    #[test]
+    fn reports_branch_changes_in_the_git_directory_and_a_linked_worktree() {
+        let (_directory, root, _watcher, receiver) = watched();
+        fs::create_dir(root.join(".git")).unwrap();
+        fs::write(root.join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+        wait_for_git(&receiver);
+
+        let directory = tempfile::tempdir().unwrap();
+        let base = fs::canonicalize(directory.path()).unwrap();
+        let worktree = base.join("worktree");
+        let git_dir = base.join("repo/.git/worktrees/worktree");
+        fs::create_dir(&worktree).unwrap();
+        fs::create_dir_all(&git_dir).unwrap();
+        fs::write(git_dir.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+        fs::write(
+            worktree.join(".git"),
+            format!("gitdir: {}\n", git_dir.display()),
+        )
+        .unwrap();
+        let (sender, linked) = mpsc::channel();
+        let _linked_watcher = WorkspaceWatcher::start(&worktree, move |changes| {
+            let _ = sender.send(changes);
+        })
+        .unwrap();
+        fs::write(git_dir.join("HEAD"), "ref: refs/heads/topic\n").unwrap();
+        wait_for_git(&linked);
     }
 
     #[test]

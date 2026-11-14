@@ -811,6 +811,47 @@ test('loads session commands for completion and sends the chosen command as a pr
 	expect(prompt).toHaveBeenCalledWith(expect.objectContaining({ body: expect.stringContaining('/review') }));
 });
 
+test('completes an @ mention from the name search, however deep the file sits', async () => {
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/workspaces/pau/search?query=needle&match=names': () =>
+			json({ entries: [{ path: 'pkg250/src/deep/nested/needle.rs', kind: 'file', size: 12 }], truncated: false })
+	});
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+
+	await userEvent.type(prompt, '@needle');
+	await expect.element(page.getByRole('option', { name: /needle\.rs/ })).toBeVisible();
+	await userEvent.keyboard('{Enter}');
+
+	await expect.element(prompt).toHaveValue('@pkg250/src/deep/nested/needle.rs ');
+});
+
+test('aborts a name search the next keystroke made stale and ignores its late answer', async () => {
+	let stale: AbortSignal | undefined;
+	let answerStale: ((response: Response) => void) | undefined;
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/workspaces/pau/search?query=ne&match=names': (init) => {
+			stale = init?.signal ?? undefined;
+			return new Promise((resolve) => (answerStale = resolve));
+		},
+		'GET /api/workspaces/pau/search?query=needle&match=names': () =>
+			json({ entries: [{ path: 'needle.rs', kind: 'file', size: 1 }], truncated: false })
+	});
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+
+	await userEvent.type(prompt, '@ne');
+	await expect.poll(() => stale).toBeDefined();
+	await userEvent.type(prompt, 'edle');
+	expect(stale?.aborted).toBe(true);
+	await expect.element(page.getByRole('option', { name: /needle\.rs/ })).toBeVisible();
+
+	answerStale?.(json({ entries: [{ path: 'network.rs', kind: 'file', size: 1 }], truncated: false }));
+	await expect.element(page.getByRole('option', { name: /network\.rs/ })).not.toBeInTheDocument();
+});
+
 test('shows the queued messages, follows queue updates, and restores them when cleared', async () => {
 	const clear = vi.fn(() => json({ steering: ['Keep the API.'], follow_up: ['Add a test.'] }));
 	const { props, sockets } = setup({

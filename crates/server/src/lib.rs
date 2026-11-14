@@ -34,7 +34,7 @@ use pau_core::{
         SandboxSelection, WorkspaceSandbox, resolve_sandbox, validate_selection,
     },
     workspace::{
-        FileContent, FileEntry, FileSearchMatch, GitDiff, GitStatus, TraversalOptions,
+        FileContent, FileEntry, GitDiff, GitStatus, SearchOptions, TraversalOptions,
         WorkspaceError, WorkspaceService,
     },
 };
@@ -1053,23 +1053,41 @@ struct SearchFilesQuery {
     include_hidden: bool,
     #[serde(default)]
     include_ignored: bool,
+    #[serde(default, rename = "match")]
+    match_kind: SearchMatch,
+}
+
+/// What `/api/workspaces/{id}/search` matches the query against.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SearchMatch {
+    /// File content, answered with a list of matching lines.
+    #[default]
+    Content,
+    /// File and folder names, answered with a `NameSearchResult`.
+    Names,
 }
 
 async fn search_files(
     State(state): State<ApiState>,
     AxumPath(workspace_id): AxumPath<String>,
     Query(query): Query<SearchFilesQuery>,
-) -> Result<Json<Vec<FileSearchMatch>>, ApiError> {
+) -> Result<Response, ApiError> {
     let service = workspace_service(&state)?;
-    let traversal = TraversalOptions {
-        include_hidden: query.include_hidden,
-        include_ignored: query.include_ignored,
+    let options = SearchOptions {
+        query: query.query,
+        traversal: TraversalOptions {
+            include_hidden: query.include_hidden,
+            include_ignored: query.include_ignored,
+        },
+        limit: query.limit,
     };
-    service
-        .search(&workspace_id, &query.query, traversal, query.limit)
-        .await
-        .map(Json)
-        .map_err(ApiError::from)
+    Ok(match query.match_kind {
+        SearchMatch::Content => Json(service.search(&workspace_id, options).await?).into_response(),
+        SearchMatch::Names => {
+            Json(service.search_names(&workspace_id, options).await?).into_response()
+        }
+    })
 }
 
 async fn git_status(
@@ -1616,6 +1634,7 @@ mod tests {
     };
 
     use axum::body::{Body, to_bytes};
+    use pau_core::workspace::{FileSearchMatch, NameSearchResult};
     use tempfile::tempdir;
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
@@ -2216,6 +2235,23 @@ mod tests {
                 .unwrap();
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].path, "note.txt");
+
+        let names = Request::builder()
+            .uri(format!(
+                "/api/workspaces/{}/search?query=not&match=names&limit=1",
+                workspace.id
+            ))
+            .header(header::AUTHORIZATION, &authorization)
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(names).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let names: NameSearchResult =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(names.entries.len(), 1);
+        assert_eq!(names.entries[0].path, "note.txt");
+        assert!(!names.truncated);
 
         let git_status = Request::builder()
             .uri(format!("/api/workspaces/{}/git/status", workspace.id))

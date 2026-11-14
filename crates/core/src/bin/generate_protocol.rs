@@ -53,7 +53,7 @@ use pau_core::{
     },
     workspace::{
         FileContent, FileEntry, FileEntryKind, FileSearchMatch, GitDiff, GitFileState,
-        GitFileStatus, GitStatus,
+        GitFileStatus, GitStatus, NameSearchResult,
     },
     workspace_watch::WorkspaceFileChanges,
 };
@@ -86,6 +86,7 @@ fn main() {
         FileEntry::decl(&config),
         FileContent::decl(&config),
         FileSearchMatch::decl(&config),
+        NameSearchResult::decl(&config),
         GitFileState::decl(&config),
         GitFileStatus::decl(&config),
         GitStatus::decl(&config),

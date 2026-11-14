@@ -118,6 +118,3 @@ file and direct TCP access from a sandboxed process and its descendants.
 tool through the sandbox, including streaming, abort, timeout, truncation,
 tool host crashes, grant changes during a session, a contained stdio MCP
 server, and per-call approval.
-
-See [backend contracts](../../dev/plan/backend.md#sandbox-runtime-selection)
-for the measured guarantees and known gaps.

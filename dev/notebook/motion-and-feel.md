@@ -443,8 +443,8 @@ Consequences:
 - Storybook and Vitest browser tests run in Chromium, which supports features
   WKWebView lacks. A transition that depends on `interpolate-size` or
   `overflow-anchor` will pass tests and fail in the app. Critical motion and
-  scrolling checks need a WebKit run, as `dev/plan/testing.md` already
-  requires for critical Playwright flows.
+  scrolling checks need a WebKit run, as the testing plan already requires
+  for critical Playwright flows.
 - Height animation must use `grid-template-rows` or measured heights, not
   `height: auto` interpolation.
 - The View Transitions API freezes rendering while the update callback runs
@@ -520,7 +520,7 @@ Consequences:
 ## Pau today
 
 Files read: `AGENTS.md`, `dev/design/system.md`, `dev/design/surfaces.md`,
-`dev/plan/frontend.md`, `dev/plan/testing.md`,
+the frontend and testing plans,
 `packages/ui/src/styles/tokens.css`, the components in `packages/ui/src/lib`,
 `packages/ui/.storybook`, and the transcript reducer in
 `apps/desktop/src/lib/pi-transcript.ts`.
@@ -529,7 +529,7 @@ What exists:
 
 - `dev/design/system.md` sets 100–250ms for routine changes, a short fade with
   a small offset for task-surface changes, no decorative live status, and a
-  reduced-motion rule that removes spatial movement. `dev/plan/frontend.md`
+  reduced-motion rule that removes spatial movement. The frontend plan
   names Svelte's motion APIs as the implementation.
 - `tokens.css` has spacing, type, radius, border, and size tokens, but no
   duration, easing, or distance tokens.

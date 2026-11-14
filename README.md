@@ -126,6 +126,10 @@ cargo run -p pau-server
 pnpm dev:desktop:browser
 ```
 
+The server can also read the token from standard input with `--token-stdin`,
+or from `PAU_API_TOKEN` exported in your shell. It warns about an exported
+token, because agents and commands the server starts can read it there.
+
 The development server authenticates and forwards `/api` requests to the local
 API at `127.0.0.1:3001`. All endpoints reject requests without the launch
 token. Workspace registrations are stored in the local Pau data directory. Set

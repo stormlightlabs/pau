@@ -108,13 +108,17 @@ cargo run -p pau-server
 pnpm dev:desktop:browser
 ```
 
-The server refuses a `PAU_API_TOKEN` set in its environment, because other
-processes run by the same user can read a process's environment. To start it
-with a token that is not in `.env`, pass the token on standard input:
+To start the server with a token that is not in `.env`, pass the token on
+standard input:
 
 ```bash
 printf '%s\n' "$TOKEN" | cargo run -p pau-server -- --token-stdin
 ```
+
+The server also accepts `PAU_API_TOKEN` exported in its environment, and prints
+a warning when it does. Other processes run by the same user, including the
+agents and commands the server starts, can read a process's environment.
+`.env` and `--token-stdin` keep the token out of it.
 
 ## Install a macOS release
 

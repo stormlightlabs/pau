@@ -1,3 +1,16 @@
+//! The browser development server.
+//!
+//! It takes its API token from the first source that has one:
+//!
+//! 1. Standard input, with `--token-stdin`.
+//! 2. `PAU_API_TOKEN` in the repository's `.env` file.
+//! 3. `PAU_API_TOKEN` in the launch environment. Processes run by the same
+//!    user can read that with `ps eww` or `/proc/<pid>/environ`, so the
+//!    server prints a warning when it uses a token from there.
+//!
+//! The desktop app embeds the server with a token held in memory and does not
+//! use this binary.
+
 use std::{
     env,
     io::{self, BufRead},
@@ -22,32 +35,32 @@ struct Options {
 
 fn main() -> io::Result<()> {
     let options = parse_options(env::args().skip(1))?;
-    // Same-user processes can read a process's launch environment, so a token
-    // there is exposed however soon the server drops it.
-    if env::var_os(TOKEN_VARIABLE).is_some() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "PAU_API_TOKEN must not be set in the environment, where other processes can read it; put it in .env or pass it with --token-stdin",
-        ));
-    }
-    // Development settings live in the repository's .env file. Variables
-    // already set in the environment win.
+    // `.env` does not override a variable that is already set, so a token
+    // present before it loads came from the launch environment.
+    let exported = env::var_os(TOKEN_VARIABLE).is_some();
+    // Development settings live in the repository's .env file.
     if let Err(error) = dotenvy::dotenv()
         && !error.not_found()
     {
         return Err(io::Error::other(format!("could not read .env: {error}")));
     }
     // The environment changes only here, before the runtime starts any thread.
-    let from_file = take_api_token();
+    let from_environment = take_api_token();
     let token = if options.token_stdin {
         read_token(io::stdin().lock())?
     } else {
-        from_file.ok_or_else(|| {
+        let token = from_environment.ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
-                "the browser development server needs PAU_API_TOKEN in .env or a token on standard input with --token-stdin",
+                "the browser development server needs a token on standard input with --token-stdin, or PAU_API_TOKEN in .env or the environment",
             )
-        })?
+        })?;
+        if exported {
+            eprintln!(
+                "warning: PAU_API_TOKEN came from the environment, where agents and commands the server starts can read it. Put it in .env or pass it with --token-stdin to avoid that."
+            );
+        }
+        token
     };
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -55,13 +68,14 @@ fn main() -> io::Result<()> {
         .block_on(serve(token, options.diagnostics))
 }
 
-/// Removes the token that `.env` loaded and returns it.
+/// Removes the token from the environment and returns it, whether `.env` or
+/// the launch environment set it.
 ///
 /// Every child process inherits the server's environment: agents, the
 /// commands they run, MCP servers, terminals and discovery probes. Removing
-/// the variable keeps the token out of theirs. The launch environment, which
-/// same-user processes can read, never held it, because `main` refuses a
-/// token set there.
+/// the variable keeps the token out of theirs. It does not clear the launch
+/// environment that same-user processes can read, which still holds a token
+/// exported before the server started.
 ///
 /// Call it while the process has one thread: removing a variable races with
 /// any concurrent read of the environment.

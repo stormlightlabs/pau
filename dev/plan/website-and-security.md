@@ -44,12 +44,14 @@ and cannot be pointed at another origin. During desktop development, the desktop
 may run in a normal browser against this local endpoint. This is a development
 path for `apps/desktop`, not the remote web product. Tokens must not be written
 to normal logs. The browser development server reads its token from standard
-input with `--token-stdin`, or from `PAU_API_TOKEN` in `.env`. It refuses a
-token in its launch environment, which processes run by the same user can read
-with `ps eww` or `/proc/<pid>/environ`. It removes the variable that `.env` set
-before it starts any child, so agents, terminals and other child processes do
-not inherit it. A token in `.env` stays readable by any process that can read
-that file, including an agent working in the Pau repository itself.
+input with `--token-stdin`, from `PAU_API_TOKEN` in `.env`, or from
+`PAU_API_TOKEN` in its launch environment, in that order. Processes run by the
+same user can read a launch environment with `ps eww` or
+`/proc/<pid>/environ`, so the server prints a warning when it uses a token from
+there. It removes the variable before it starts any child, so agents, terminals
+and other child processes do not inherit it. A token in `.env` stays readable
+by any process that can read that file, including an agent working in the Pau
+repository itself.
 
 The standalone web server and `apps/web` ship after the desktop application. The
 server owns process lifetime without Tauri and defaults to loopback with a

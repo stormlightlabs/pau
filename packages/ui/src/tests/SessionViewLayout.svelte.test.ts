@@ -181,3 +181,34 @@ test('shows the connection only while it is down', async () => {
 	await view.rerender({ workspaces: longName, disconnected: true });
 	await expect.element(page.getByRole('status').filter({ hasText: 'Disconnected' })).toBeVisible();
 });
+
+test('keeps prose to 75ch inside the full-width session column', async () => {
+	const base = sessionFixtures.running[0]!;
+	const session = base.sessions[0]!;
+	const prose = 'Gutter rows now follow visual line offsets, so wrapped lines keep their markers. '.repeat(4);
+	const body = `${prose}\n\n\`\`\`ts\nconst offsets = rows.map((row) => row.visualLine);\n\`\`\``;
+	await render(SessionView, {
+		workspaces: [
+			{ ...base, sessions: [{ ...session, transcript: [{ id: 'a1', kind: 'message', role: 'assistant', body }] }] }
+		],
+		activeSessionId: session.id
+	});
+	await document.fonts.ready;
+
+	const column = rect(document.querySelector('.session-view')!);
+	const remPx = Number(getComputedStyle(document.documentElement).fontSize.replace('px', ''));
+	expect(column.width).toBeCloseTo(58 * remPx, 0);
+
+	const paragraph = document.querySelector('.session-message .markdown p')!;
+	const measure = Number(getComputedStyle(paragraph).maxWidth.replace('px', ''));
+	expect(rect(paragraph).width).toBeLessThanOrEqual(measure);
+	expect(rect(paragraph).width).toBeLessThan(column.width - 100);
+
+	// Code takes the whole column, and the composer shares the column's edges.
+	const code = rect(document.querySelector('.session-message .markdown__code')!);
+	const composer = rect(document.querySelector('.session-view__composer-stack')!);
+	expect(code.left).toBeCloseTo(column.left, 0);
+	expect(code.right).toBeCloseTo(column.right, 0);
+	expect(composer.left).toBeCloseTo(column.left, 0);
+	expect(composer.right).toBeCloseTo(column.right, 0);
+});

@@ -226,6 +226,8 @@
 		width: 1em;
 		height: 1em;
 		margin: 0 calc(var(--pau-space-5) - 1em) 0 calc(var(--pau-space-5) * -1);
+		/* Close to the UI fonts' cap center where `cap` is unsupported. */
+		vertical-align: -0.15em;
 		vertical-align: calc(0.5cap - 0.5em);
 	}
 

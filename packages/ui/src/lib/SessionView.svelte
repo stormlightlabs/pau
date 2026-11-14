@@ -3394,10 +3394,10 @@
 		min-height: 0;
 		/*
 		 * The header, transcript, composer, and status line share one column,
-		 * as wide as the transcript's reading measure, so all four start and
-		 * end on the same edges.
+		 * so all four start and end on the same edges. Only transcript prose
+		 * keeps a narrower reading measure inside it.
 		 */
-		max-width: 75ch;
+		max-width: 58rem;
 		margin-inline: auto;
 	}
 
@@ -3567,6 +3567,15 @@
 
 	.session-message {
 		position: relative;
+	}
+
+	/*
+	 * Paragraph and list text keeps a 75ch reading measure from the column's
+	 * left edge. Code, tool output, diffs, and tables use the full column.
+	 */
+	.session-view__transcript :global(p),
+	.session-view__transcript :global(li) {
+		max-width: 75ch;
 	}
 
 	.session-message :global(.session-message__copy) {

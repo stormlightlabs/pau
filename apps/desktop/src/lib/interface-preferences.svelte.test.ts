@@ -185,7 +185,7 @@ describe('interface preferences', () => {
 			const second = settings.choose({ motion: 'system' });
 			firstPut.resolve(Response.json({ message: 'The database is read-only.' }, { status: 500 }));
 
-			await expect(first).rejects.toThrow('The database is read-only.');
+			await expect(first).resolves.toBeUndefined();
 			await second;
 			expect(settings.choices.motion).toBe('system');
 			expect(root.dataset.motion).toBeUndefined();
@@ -321,6 +321,24 @@ describe('interface preferences', () => {
 			await expect(settings.choose({ theme: 'nord' })).rejects.toThrow('The database is read-only.');
 
 			expect(settings.choices.theme).toBe('iceberg');
+		});
+
+		test('does not report a failed theme save that a queued font save stores', async () => {
+			const server = backend({ ...preferences(null, null), theme: 'iceberg' });
+			const settings = new InterfacePreferences({ fetcher: server.fetcher, root: document.createElement('div') });
+			await settings.load();
+			const themePut = Promise.withResolvers<Response>();
+			vi.mocked(server.fetcher).mockReturnValueOnce(themePut.promise);
+
+			const theme = settings.choose({ theme: 'nord' });
+			await vi.waitFor(() => expect(server.fetcher).toHaveBeenCalledTimes(2));
+			const font = settings.choose({ ui_font: 'inter' });
+			themePut.resolve(Response.json({ message: 'The database is read-only.' }, { status: 500 }));
+
+			await expect(theme).resolves.toBeUndefined();
+			await expect(font).resolves.toBeUndefined();
+			expect(settings.choices).toMatchObject({ theme: 'nord', ui_font: 'inter' });
+			expect(server.puts).toEqual([{ ...preferences(null, null), theme: 'nord', ui_font: 'inter' }]);
 		});
 
 		test('starts a new window with the theme and font the last one loaded', async () => {

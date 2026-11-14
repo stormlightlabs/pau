@@ -47,8 +47,9 @@
 		/** The saved motion setting. */
 		motion: MotionSetting;
 		/**
-		 * Saves a choice the operator made. A rejection selects the saved value
-		 * again and shows the reason under the setting, unless the operator has
+		 * Saves a choice the operator made. The view shows the props, so the
+		 * owner moves them to the pick and back when the save fails. A
+		 * rejection shows its reason under the setting, unless the operator has
 		 * made another choice for that setting since.
 		 */
 		onChange: <K extends keyof SettingsChoices>(key: K, value: SettingsChoices[K]) => Promise<void> | void;
@@ -72,60 +73,36 @@
 	const themeNames = Object.keys(THEMES) as ThemeName[];
 	const fontNames = Object.keys(UI_FONTS) as UiFontName[];
 
-	// Each selection leads its prop while a save is in flight and falls back
-	// to it when one fails. They are separate so that a saved value arriving
-	// for one setting never resets a pick still saving for another.
-	let selectedTheme = $derived(theme);
-	let selectedFont = $derived(uiFont);
-	let selectedNotifications = $derived(notifications);
-	let selectedMotion = $derived(motion);
-	const selection: SettingsChoices = {
-		get theme() {
-			return selectedTheme;
-		},
-		set theme(value) {
-			selectedTheme = value;
-		},
-		get uiFont() {
-			return selectedFont;
-		},
-		set uiFont(value) {
-			selectedFont = value;
-		},
-		get notifications() {
-			return selectedNotifications;
-		},
-		set notifications(value) {
-			selectedNotifications = value;
-		},
-		get motion() {
-			return selectedMotion;
-		},
-		set motion(value) {
-			selectedMotion = value;
-		}
-	};
 	const saved = $derived<SettingsChoices>({ theme, uiFont, notifications, motion });
 
 	let errors = $state<Partial<Record<keyof SettingsChoices, string>>>({});
 	/**
-	 * The operator's latest pick for each setting. A failed save is reported
-	 * only while it is still the latest, because a later pick's own save
-	 * decides what is saved. The selection cannot answer that: the owner may
-	 * already have rolled the prop back, which resets the derived value
-	 * before the rejection lands.
+	 * The operator's latest pick for each setting. A rejection is reported
+	 * only while its pick is still the latest, because a later pick's own
+	 * save decides what is saved.
 	 */
 	const latest: Partial<SettingsChoices> = {};
 
-	async function change<K extends keyof SettingsChoices>(key: K, value: SettingsChoices[K]): Promise<void> {
+	/**
+	 * Saves a pick and reports a failure under its setting. The owner restores
+	 * the saved value through the props, but an owner that never moved the
+	 * prop leaves the browser's own check on the failed radio, so the group is
+	 * set back to the prop here.
+	 */
+	async function change<K extends keyof SettingsChoices>(
+		key: K,
+		value: SettingsChoices[K],
+		input: HTMLInputElement
+	): Promise<void> {
 		latest[key] = value;
-		selection[key] = value;
 		errors[key] = undefined;
 		try {
 			await onChange(key, value);
 		} catch (error) {
 			if (latest[key] !== value) return;
-			selection[key] = saved[key];
+			for (const radio of document.getElementsByName(input.name)) {
+				if (radio instanceof HTMLInputElement) radio.checked = radio.value === saved[key];
+			}
 			errors[key] = error instanceof Error ? error.message : String(error);
 		}
 	}
@@ -191,8 +168,8 @@
 					type="radio"
 					name="{id}-{key}"
 					value={choice.value}
-					checked={selection[key] === choice.value}
-					onchange={() => void change(key, choice.value)} />
+					checked={saved[key] === choice.value}
+					onchange={(event) => void change(key, choice.value, event.currentTarget)} />
 				<span style={choice.style}>{choice.label}</span>
 			</label>
 		{/each}
@@ -221,8 +198,8 @@
 						type="radio"
 						name="{id}-theme"
 						value={name}
-						checked={selection.theme === name}
-						onchange={() => void change('theme', name)} />
+						checked={theme === name}
+						onchange={(event) => void change('theme', name, event.currentTarget)} />
 					<span>{THEMES[name].label}</span>
 				</span>
 			</label>
@@ -337,9 +314,11 @@
 		font-weight: 600;
 	}
 
+	/* Rows stay narrow so a control sits near its name on a wide window. */
 	.settings-view__setting {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
+		max-width: 40rem;
 		align-items: start;
 		column-gap: var(--pau-space-5);
 		row-gap: var(--pau-space-2);
@@ -369,6 +348,7 @@
 
 	.settings-view__setting--wide {
 		grid-template-columns: minmax(0, 1fr);
+		max-width: none;
 	}
 
 	.settings-view__scope {

@@ -106,14 +106,14 @@ export class InterfacePreferences {
 
 	/**
 	 * Queues a write of the current preferences behind every write already
-	 * queued, and rejects when this write fails.
+	 * queued, and rejects when this write fails and no later write is queued.
 	 *
 	 * Each write reads the preferences when it starts, so a later write
-	 * carries every change made before it. A failed write therefore restores
-	 * a saved choice only when no later write is queued and the screen still
-	 * shows the value it sent. Otherwise the later write decides what is
-	 * saved, and restoring here would leave the screen disagreeing with the
-	 * stored value. `fallback` is used when no saved copy has loaded.
+	 * carries every change made before it. While one is queued, it decides
+	 * what is saved: a failure here neither restores nor rejects, because
+	 * either would contradict the value that write stores. The last write to
+	 * fail restores each choice the screen still shows as it sent it.
+	 * `fallback` is used when no saved copy has loaded.
 	 */
 	async #flush(fallback?: Partial<InterfaceChoices>): Promise<void> {
 		clearTimeout(this.#timer);
@@ -127,15 +127,13 @@ export class InterfacePreferences {
 		this.#saving = write;
 		const { sent, failure } = await write;
 		this.#pending -= 1;
-		if (!failure) return;
-		if (this.#pending === 0) {
-			const restored = { ...this.choices };
-			for (const key of CHOICE_KEYS) {
-				const value = this.#saved?.[key] ?? fallback?.[key];
-				if (value !== undefined && this.choices[key] === sent[key]) Object.assign(restored, { [key]: value });
-			}
-			this.#applyChoices(restored);
+		if (!failure || this.#pending > 0) return;
+		const restored = { ...this.choices };
+		for (const key of CHOICE_KEYS) {
+			const value = this.#saved?.[key] ?? fallback?.[key];
+			if (value !== undefined && this.choices[key] === sent[key]) Object.assign(restored, { [key]: value });
 		}
+		this.#applyChoices(restored);
 		throw failure;
 	}
 
@@ -228,8 +226,8 @@ export class InterfacePreferences {
 	/**
 	 * Applies a choice the operator made in Settings and saves it at once.
 	 * When the save fails, the saved value comes back and the promise rejects
-	 * with the reason, so Settings can show it. A failure that a later choice
-	 * has already replaced changes nothing, as {@link #flush} explains.
+	 * with the reason, so Settings can show it. A failure followed by a
+	 * queued write of any setting changes nothing, as {@link #flush} explains.
 	 */
 	async choose(change: Partial<InterfaceChoices>): Promise<void> {
 		const previous = pickChoices(this.choices);

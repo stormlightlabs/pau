@@ -73,9 +73,11 @@
 		</blockquote>
 	{:else if node.type === 'list'}
 		{@const list = node as Tokens.List}
+		{@const start = typeof list.start === 'number' ? list.start : 1}
 		<svelte:element
 			this={list.ordered ? 'ol' : 'ul'}
-			start={typeof list.start === 'number' && list.start !== 1 ? list.start : undefined}>
+			start={start !== 1 ? start : undefined}
+			style:--markdown-marker-digits={list.ordered ? String(start + list.items.length - 1).length : undefined}>
 			{#each list.items as item, index (index)}
 				<li>
 					{#if item.task}<span class="markdown__task"
@@ -176,17 +178,31 @@
 	}
 
 	/*
-	 * Item text starts on the transcript inset, `space/5` in, and the marker
-	 * sits on the text column's left edge, where paragraphs start. A nested
-	 * list repeats this from its parent item's text. The browser's own
-	 * marker hangs a variable distance left of the text, so it is drawn here.
-	 * An empty marker string, unlike `none`, keeps Safari reading the list as
-	 * a list.
+	 * Item text starts `space/5` in, and a bullet sits on the left edge of
+	 * the text around the list, where paragraphs start. A nested list repeats
+	 * this from its parent item's text. The browser's own marker hangs a
+	 * variable distance left of the text, so it is drawn here. An empty
+	 * marker string, unlike `none`, keeps Safari reading the list as a list.
 	 */
 	ul,
 	ol {
-		padding-left: var(--pau-space-5);
+		--markdown-list-indent: var(--pau-space-5);
+
+		padding-left: var(--markdown-list-indent);
 		list-style-type: '';
+	}
+
+	/*
+	 * A number ends `space/2` before its item's text, so `9.` and `10.` line
+	 * up on the period and a longer number grows left, away from the text.
+	 * The markup gives the digit count of the list's last number, and the
+	 * indent widens to fit it, so `100.` and `1000.` stay inside the list.
+	 */
+	ol {
+		--markdown-list-indent: max(
+			var(--pau-space-5),
+			calc((var(--markdown-marker-digits, 1) + 1) * 1ch + var(--pau-space-2))
+		);
 	}
 
 	li {
@@ -195,16 +211,19 @@
 
 	li::before {
 		position: absolute;
-		left: calc(var(--pau-space-5) * -1);
 		color: var(--pau-text-muted);
 	}
 
 	ul > li::before {
+		left: calc(var(--markdown-list-indent) * -1);
 		content: '•';
 	}
 
 	ol > li::before {
+		right: calc(100% + var(--pau-space-2));
 		content: counter(list-item) '.';
+		/* Positioned against the item's left edge, the marker has no width to fill and would break between digits. */
+		white-space: nowrap;
 		font-variant-numeric: tabular-nums;
 	}
 
@@ -225,7 +244,7 @@
 		display: inline-block;
 		width: 1em;
 		height: 1em;
-		margin: 0 calc(var(--pau-space-5) - 1em) 0 calc(var(--pau-space-5) * -1);
+		margin: 0 calc(var(--markdown-list-indent) - 1em) 0 calc(var(--markdown-list-indent) * -1);
 		/* Close to the UI fonts' cap center where `cap` is unsupported. */
 		vertical-align: -0.15em;
 		vertical-align: calc(0.5cap - 0.5em);

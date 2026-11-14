@@ -32,6 +32,11 @@
 			<button type="button" class="pau-button pau-button--danger" data-control="danger" disabled>Stop session</button>
 		</div>
 		<div class="control-states__row">
+			<button type="button" class="pau-button pau-button--secondary"
+				><Icon name="chevronDown" size={14} /><span>Jump to latest</span></button>
+			<button type="button" class="pau-button pau-button--secondary"><span>Interrupt</span><kbd>Ctrl+C</kbd></button>
+		</div>
+		<div class="control-states__row">
 			<button
 				type="button"
 				class="control-states__icon pau-utility-button"

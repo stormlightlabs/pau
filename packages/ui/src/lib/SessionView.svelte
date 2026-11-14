@@ -2319,7 +2319,7 @@
 								<p>Saved sessions did not load.</p>
 								<button
 									type="button"
-									class="pau-button pau-button--secondary session-rail__retry"
+									class="pau-button pau-button--secondary"
 									disabled={disconnected}
 									onclick={() => void loadRecent(workspace.id)}>Try again</button>
 							</div>
@@ -2800,9 +2800,9 @@
 					onmousedown={(event) => event.preventDefault()}
 					onclick={scrollToLatest}
 					transition:fade={{ duration: isReducedMotion() ? 0 : motion.duration.small }}>
-					<Icon name="chevronDown" size={14} />
-					<span>Jump to latest</span>
-					{#if newEntries > 0}<small>{newEntries} new</small>{/if}
+					<Icon name="chevronDown" size={14} /><span>Jump to latest</span>{#if newEntries > 0}<small
+							>{newEntries} new</small
+						>{/if}
 				</button>
 			{/if}
 
@@ -3022,8 +3022,7 @@
 											class="pau-button pau-button--secondary"
 											disabled={disconnected}
 											onclick={() => void interrupt()}>
-											Interrupt{#if interruptShortcut}
-												<kbd>{interruptShortcut}</kbd>{/if}
+											<span>Interrupt</span>{#if interruptShortcut}<kbd>{interruptShortcut}</kbd>{/if}
 										</button>
 									{/if}
 									{#if shellRunning && onStopShellCommands}
@@ -3032,22 +3031,24 @@
 											class="pau-button pau-button--secondary"
 											disabled={disconnected}
 											onclick={() => void stopShellCommands()}>
-											Stop command{#if interruptShortcut && activeSession.status !== 'running'}
-												<kbd>{interruptShortcut}</kbd>{/if}
+											<span>Stop command</span>{#if interruptShortcut && activeSession.status !== 'running'}<kbd
+													>{interruptShortcut}</kbd
+												>{/if}
 										</button>
 									{/if}
 									<button
 										type="submit"
 										class="pau-button pau-button--primary"
 										disabled={!draft.trim() || sending || composerUnavailable !== undefined}>
-										{sending
-											? 'Sending…'
-											: onRunShellCommand && draftShell && activeSession.capabilities.shellCommands
-												? 'Run command'
-												: activeQueue === 'follow-up' && activeSession.status === 'running'
-													? 'Queue prompt'
-													: 'Send prompt'}
-										{#if submitShortcut}<kbd>{submitShortcut}</kbd>{/if}
+										<span
+											>{sending
+												? 'Sending…'
+												: onRunShellCommand && draftShell && activeSession.capabilities.shellCommands
+													? 'Run command'
+													: activeQueue === 'follow-up' && activeSession.status === 'running'
+														? 'Queue prompt'
+														: 'Send prompt'}</span
+										>{#if submitShortcut}<kbd>{submitShortcut}</kbd>{/if}
 									</button>
 								</div>
 							</div>
@@ -3182,9 +3183,11 @@
 	 * The status mark gets its own 0.75rem column and sits one spacing step
 	 * from the name, as it does beside the status in the session header. The
 	 * mark lines up with the workspace name above it, and the session name
-	 * starts where the shell's context rail starts its labels.
+	 * starts where the shell's context rail starts its labels. A shared
+	 * `pau-button` in the rail, such as Try again, keeps the shared style.
+	 * `:where` keeps this rule's weight, so rail classes still override it.
 	 */
-	.session-rail button {
+	.session-rail button:where(:not(.pau-button)) {
 		display: grid;
 		grid-template-columns: 0.75rem minmax(0, 1fr) auto;
 		align-items: center;
@@ -3341,21 +3344,6 @@
 	.session-rail__recent-failure p {
 		margin: 0;
 		color: var(--pau-danger);
-	}
-
-	/* The retry is a shared secondary button, not a session row. */
-	.session-rail .session-rail__retry {
-		display: inline-flex;
-		width: auto;
-		padding: 0 var(--pau-space-3);
-		color: var(--pau-text);
-		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-control);
-	}
-
-	.session-rail .session-rail__retry:disabled {
-		color: var(--pau-text-muted);
-		cursor: not-allowed;
 	}
 
 	.session-rail__rename {
@@ -3537,7 +3525,6 @@
 		z-index: 1;
 		align-self: end;
 		justify-self: center;
-		gap: var(--pau-space-2);
 		margin-bottom: var(--pau-space-3);
 		background-color: var(--pau-surface);
 		box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 24%);
@@ -3571,10 +3558,12 @@
 
 	/*
 	 * Paragraph and list text keeps a 75ch reading measure from the column's
-	 * left edge. Code, tool output, diffs, and tables use the full column.
+	 * left edge. The cap goes on the list, not its items, so items at every
+	 * level end where paragraphs end instead of one indent further right.
+	 * Code, tool output, diffs, and tables use the full column.
 	 */
 	.session-view__transcript :global(p),
-	.session-view__transcript :global(li) {
+	.session-view__transcript :global(:is(ul, ol)) {
 		max-width: 75ch;
 	}
 
@@ -4076,7 +4065,6 @@
 	}
 
 	.session-composer kbd {
-		margin-left: var(--pau-space-1);
 		color: inherit;
 		font: inherit;
 		font-size: var(--pau-type-xs);

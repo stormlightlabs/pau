@@ -161,8 +161,13 @@ weights 400, 500, and 600. Fold any heavier weight into 600.
   primary text of list rows at 14px. The session header, transcript,
   composer, and status line share one column, at most 58rem wide, so they
   start and end on the same edges. Paragraph and list text in the transcript
-  keeps a measure of 75ch from the column's left edge. Code, tool output,
-  diffs, and tables use the full column.
+  keeps a measure of 75ch from the column's left edge, so list items at every
+  level end where paragraphs end. Code, tool output, diffs, and tables use
+  the full column.
+- In transcript lists, a bullet sits on the left edge of the surrounding
+  text and item text starts `space/5` in. A number ends `space/2` before its
+  item's text, so numbers line up on the period, and a list whose last number
+  needs more room widens its indent.
 - Keep metadata readable at 12–13px with sufficient contrast and line height.
   No product text goes below 12px, except uppercase, letter-spaced section
   labels, which may use 11px.
@@ -235,7 +240,8 @@ so a row of unavailable actions still ranks the primary first. The shared
 banners included. Components place and space buttons but do not resize them.
 A button centers its label on the capitals, from cap height to baseline,
 rather than on the font's line box, which sits higher or lower in each UI font.
-An icon in a button centers on the same line.
+An icon in a button centers on the same line. An icon, the label, a count,
+and a key hint inside a button sit `space/2` apart.
 
 Controls that show or hide a rail, sidebar, or inspector belong in the top app
 bar. Keep task-specific actions in the task surface.

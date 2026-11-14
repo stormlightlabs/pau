@@ -22,7 +22,6 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	gap: var(--pau-space-1);
 	min-height: var(--pau-button-height);
 	padding-inline: var(--pau-space-3);
 	color: var(--pau-text);
@@ -37,6 +36,18 @@
 		color var(--pau-duration-feedback) var(--pau-ease-standard),
 		background-color var(--pau-duration-feedback) var(--pau-ease-standard),
 		border-color var(--pau-duration-feedback) var(--pau-ease-standard);
+}
+
+/*
+ * An icon, the label, a count, or a `kbd` hint inside a button sit `space/2`
+ * apart in both layouts below. The margin, not `gap`, sets the space, because
+ * `gap` does nothing in the trimmed inline layout. Markup puts no whitespace
+ * between these items, and a label beside another item goes in a `span`: the
+ * flex layout drops whitespace between items, but the inline layout draws it
+ * as a space whose width changes with the font.
+ */
+.pau-button > * + * {
+	margin-inline-start: var(--pau-space-2);
 }
 
 .pau-button:focus-visible {
@@ -169,9 +180,8 @@
  * button lays its label out as one trimmed line, cap height to baseline, and
  * equal padding centers the letters in every font. This needs block layout,
  * because a flex container wraps its text in an anonymous box that the trim
- * cannot reach. Icons center on the capitals, and spacing between an icon
- * or `kbd` and the label comes from the space in the markup. Without
- * `text-box`, as in older WebKitGTK, the flex layout above stays.
+ * cannot reach. Icons center on the capitals. Without `text-box`, as in
+ * older WebKitGTK, the flex layout above stays.
  */
 @supports (text-box: trim-both cap alphabetic) {
 	.pau-button {

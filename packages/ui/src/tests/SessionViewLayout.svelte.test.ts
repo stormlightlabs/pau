@@ -182,11 +182,18 @@ test('shows the connection only while it is down', async () => {
 	await expect.element(page.getByRole('status').filter({ hasText: 'Disconnected' })).toBeVisible();
 });
 
-test('keeps prose to 75ch inside the full-width session column', async () => {
+test('keeps prose and lists at every level to 75ch inside the full-width session column', async () => {
 	const base = sessionFixtures.running[0]!;
 	const session = base.sessions[0]!;
 	const prose = 'Gutter rows now follow visual line offsets, so wrapped lines keep their markers. '.repeat(4);
-	const body = `${prose}\n\n\`\`\`ts\nconst offsets = rows.map((row) => row.visualLine);\n\`\`\``;
+	const body = [
+		prose,
+		`- ${prose}\n  - ${prose}`,
+		'99. Ninety-nine\n100. One hundred',
+		'Then the long list.',
+		'999. Nine hundred ninety-nine\n1000. One thousand',
+		'```ts\nconst offsets = rows.map((row) => row.visualLine);\n```'
+	].join('\n\n');
 	await render(SessionView, {
 		workspaces: [
 			{ ...base, sessions: [{ ...session, transcript: [{ id: 'a1', kind: 'message', role: 'assistant', body }] }] }
@@ -199,10 +206,37 @@ test('keeps prose to 75ch inside the full-width session column', async () => {
 	const remPx = Number(getComputedStyle(document.documentElement).fontSize.replace('px', ''));
 	expect(column.width).toBeCloseTo(58 * remPx, 0);
 
-	const paragraph = document.querySelector('.session-message .markdown p')!;
-	const measure = Number(getComputedStyle(paragraph).maxWidth.replace('px', ''));
-	expect(rect(paragraph).width).toBeLessThanOrEqual(measure);
-	expect(rect(paragraph).width).toBeLessThan(column.width - 100);
+	// 75 advances of the paragraph font's zero, the width of its `ch`.
+	const paragraph = document.querySelector('.session-message .markdown > p')!;
+	const style = getComputedStyle(paragraph);
+	const context = document.createElement('canvas').getContext('2d')!;
+	context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+	const measure = 75 * context.measureText('0').width;
+	expect(measure).toBeLessThan(column.width - 100);
+	expect(rect(paragraph).left).toBeCloseTo(column.left, 0);
+	expect(rect(paragraph).width).toBeCloseTo(measure, 0);
+
+	// Items at both levels end on the paragraph's right edge, not an indent past it.
+	const outer = document.querySelector('.session-message .markdown > ul > li')!;
+	const inner = outer.querySelector(':scope > ul > li')!;
+	expect(rect(inner).left).toBeGreaterThan(rect(outer).left);
+	expect(rect(outer).right).toBeCloseTo(rect(paragraph).right, 0);
+	expect(rect(inner).right).toBeCloseTo(rect(paragraph).right, 0);
+
+	// Numbers end `space/2` before their text and stay inside the column.
+	for (const item of document.querySelectorAll('.session-message .markdown > ol > li')) {
+		const marker = getComputedStyle(item, '::before');
+		context.font = `${marker.fontWeight} ${marker.fontSize} ${marker.fontFamily}`;
+		const number = String(
+			Number(item.parentElement!.getAttribute('start')) + [...item.parentElement!.children].indexOf(item)
+		);
+		const width = context.measureText(`${'0'.repeat(number.length)}.`).width;
+		expect(marker.content, number).toBe('counter(list-item) "."');
+		expect(Number(marker.height.replace('px', '')), number).toBeLessThanOrEqual(
+			Number(marker.lineHeight.replace('px', ''))
+		);
+		expect(rect(item).left - remPx / 2 - width, number).toBeGreaterThanOrEqual(column.left);
+	}
 
 	// Code takes the whole column, and the composer shares the column's edges.
 	const code = rect(document.querySelector('.session-message .markdown__code')!);

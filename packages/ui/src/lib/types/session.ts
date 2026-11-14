@@ -1,3 +1,5 @@
+import type { PromptImage } from '../composer-images';
+
 /** An agent Pau can start a session of, by the backend's identifier. */
 export type SessionAgent = 'pi' | 'claude';
 
@@ -112,6 +114,11 @@ export type TranscriptMessage = {
 	label?: string;
 	/** Marks the error that ended an assistant turn. Only the latest one offers a retry. */
 	failed?: boolean;
+	/**
+	 * Images sent with a user prompt, as the agent stored them. The view shows
+	 * each one from its own data and never loads a URL.
+	 */
+	images?: PromptImage[];
 };
 
 export type TranscriptThinking = { id: string; kind: 'thinking'; body: string; complete: boolean };
@@ -216,7 +223,8 @@ export type CompactionReason = 'manual' | 'threshold' | 'overflow';
 export type TranscriptCompaction = {
 	id: string;
 	kind: 'compaction';
-	reason: CompactionReason;
+	/** Absent for a compaction read from saved history, where Pi does not record what started it. */
+	reason?: CompactionReason;
 	summary: string;
 	tokensBefore?: number;
 	/** First agent entry kept verbatim after the summary. Hosts match later estimates to the marker by it. */

@@ -1,14 +1,17 @@
-import type {
-	AutoRetry,
-	BashToolCall,
-	CompactionReason,
-	CompactionState,
-	MessageQueue,
-	ToolCallDetails,
-	ToolEdit,
-	ToolTruncation,
-	TranscriptEntry,
-	TranscriptTool
+import {
+	isImageType,
+	maxImageBytes,
+	type AutoRetry,
+	type BashToolCall,
+	type CompactionReason,
+	type CompactionState,
+	type MessageQueue,
+	type PromptImage,
+	type ToolCallDetails,
+	type ToolEdit,
+	type ToolTruncation,
+	type TranscriptEntry,
+	type TranscriptTool
 } from '@stormlightlabs/pau-ui';
 
 /**
@@ -357,17 +360,26 @@ export function findTranscriptEntry(
 	return found;
 }
 
+/** Longest base64 text of an image within {@link maxImageBytes}. */
+const MAX_IMAGE_BASE64 = Math.ceil(maxImageBytes / 3) * 4;
+
 /**
- * Labels for Pi's context summaries. A compaction summary stands in for the
- * turns it replaced, and a branch summary for the branch left behind.
- *
- * Both render as labelled messages until the transcript has a dedicated
- * compaction marker.
+ * Reads the images in a user message's content. An image shows only with a
+ * type Pau accepts for prompts, base64 data, and no more than
+ * {@link maxImageBytes}; the rest are left out, so a damaged or oversized
+ * session file cannot slow the transcript down.
  */
-const SUMMARY_LABELS: Record<string, string> = {
-	compactionSummary: 'Earlier conversation, summarized',
-	branchSummary: 'Previous branch, summarized'
-};
+function promptImages(content: unknown): PromptImage[] | undefined {
+	if (!Array.isArray(content)) return undefined;
+	const images = content.flatMap((block) => {
+		if (!isObject(block) || block.type !== 'image') return [];
+		const mimeType = text(block.mimeType);
+		const data = text(block.data);
+		if (!mimeType || !data || data.length > MAX_IMAGE_BASE64 || !isImageType(mimeType)) return [];
+		return /^[A-Za-z0-9+/]+={0,2}$/.test(data) ? [{ mimeType, data }] : [];
+	});
+	return images.length === 0 ? undefined : images;
+}
 
 /** Projects one authoritative or starting message into transcript entries. */
 function projectMessage(
@@ -377,10 +389,18 @@ function projectMessage(
 	complete: boolean
 ): TranscriptEntry[] {
 	const role = message.role;
-	const summaryLabel = typeof role === 'string' ? SUMMARY_LABELS[role] : undefined;
-	if (summaryLabel) {
+	// A compaction in saved history shows as the marker a live compaction adds.
+	if (role === 'compactionSummary') {
+		const summary = text(message.summary);
+		return summary
+			? [{ id: `${key}:0`, kind: 'compaction', summary, tokensBefore: numberField(message.tokensBefore) }]
+			: [];
+	}
+	if (role === 'branchSummary') {
 		const body = text(message.summary);
-		return body ? [{ id: `${key}:0`, kind: 'message', role: 'assistant', label: summaryLabel, body }] : [];
+		return body
+			? [{ id: `${key}:0`, kind: 'message', role: 'assistant', label: 'Previous branch, summarized', body }]
+			: [];
 	}
 	if (role === 'user') {
 		const content = message.content;
@@ -391,7 +411,9 @@ function projectMessage(
 						.flatMap((block) => (isObject(block) && block.type === 'text' ? [text(block.text) ?? ''] : []))
 						.join('\n')
 				: '');
-		return body ? [{ id: `${key}:0`, kind: 'message', role: 'user', body }] : [];
+		const images = promptImages(content);
+		if (!body && !images) return [];
+		return [{ id: `${key}:0`, kind: 'message', role: 'user', body, ...(images && { images }) }];
 	}
 	if (role === 'bashExecution') {
 		const command = text(message.command);

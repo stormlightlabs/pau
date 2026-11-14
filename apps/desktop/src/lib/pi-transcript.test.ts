@@ -53,13 +53,7 @@ test('builds a transcript from history, with tool outcomes and a compaction summ
 	const summary = { role: 'compactionSummary', summary: 'Fixed the gutter.', tokensBefore: 9000, timestamp: 0 };
 
 	expect(piTranscriptFromMessages([summary, user, reply, result, { role: 'custom' }]).entries).toEqual([
-		{
-			id: 'compactionSummary-0:0',
-			kind: 'message',
-			role: 'assistant',
-			label: 'Earlier conversation, summarized',
-			body: 'Fixed the gutter.'
-		},
+		{ id: 'compactionSummary-0:0', kind: 'compaction', summary: 'Fixed the gutter.', tokensBefore: 9000 },
 		{ id: 'user-1:0', kind: 'message', role: 'user', body: 'Read the README' },
 		{ id: 'assistant-2:0', kind: 'message', role: 'assistant', body: 'Reading it.' },
 		{
@@ -71,6 +65,34 @@ test('builds a transcript from history, with tool outcomes and a compaction summ
 			status: 'complete',
 			call: { tool: 'read', path: 'README.md' }
 		}
+	]);
+});
+
+test('shows the images sent with a user prompt and leaves out ones Pau cannot show', () => {
+	const png = { type: 'image', mimeType: 'image/png', data: 'AQID' };
+	const content = [
+		{ type: 'text', text: 'Describe this.' },
+		png,
+		{ type: 'image', mimeType: 'image/svg+xml', data: 'AQID' },
+		{ type: 'image', mimeType: 'image/png', data: 'https://example.com/a.png' },
+		{ type: 'image', mimeType: 'image/png', data: 'A'.repeat(8 * 1024 * 1024) }
+	];
+	const expected = [
+		{
+			id: 'user-1:0',
+			kind: 'message',
+			role: 'user',
+			body: 'Describe this.',
+			images: [{ mimeType: 'image/png', data: 'AQID' }]
+		}
+	];
+
+	expect(piTranscriptFromMessages([{ role: 'user', content, timestamp: 1 }]).entries).toEqual(expected);
+	expect(reduce([{ type: 'message_start', message: { role: 'user', content, timestamp: 1 } }]).entries).toEqual(
+		expected
+	);
+	expect(piTranscriptFromMessages([{ role: 'user', content: [png], timestamp: 1 }]).entries).toEqual([
+		{ ...expected[0], body: '' }
 	]);
 });
 

@@ -2698,15 +2698,28 @@
 										}
 									}}>
 									<h2><MetaText text={entry.label ?? (entry.role === 'user' ? 'You' : activeSession.agent)} /></h2>
-									<CopyButton
-										class="session-message__copy"
-										text={entry.body}
-										label={entry.role === 'user' ? 'Copy your message' : 'Copy reply'}
-										onResult={announceCopy} />
+									{#if entry.body}
+										<CopyButton
+											class="session-message__copy"
+											text={entry.body}
+											label={entry.role === 'user' ? 'Copy your message' : 'Copy reply'}
+											onResult={announceCopy} />
+									{/if}
 									{#if entry.role === 'assistant'}
 										<Markdown text={entry.body} />
-									{:else}
+									{:else if entry.body}
 										<p>{entry.body}</p>
+									{/if}
+									{#if entry.images?.length}
+										<ul class="session-images session-message__images" aria-label="Attached images">
+											{#each entry.images as image, index (index)}
+												<li>
+													<img
+														src={`data:${image.mimeType};base64,${image.data}`}
+														alt={`Image ${index + 1} of ${entry.images.length}`} />
+												</li>
+											{/each}
+										</ul>
 									{/if}
 									{#if canRetry && entry.id === retryableEntryId}
 										<button
@@ -2751,7 +2764,7 @@
 									data-found={entry.id === foundEntryKey || undefined}>
 									<summary>
 										<Icon name="chevronRight" class="pau-disclosure__chevron" size={14} />
-										<span>Context compacted{entry.reason === 'manual' ? '' : ' automatically'}</span>
+										<span>Context compacted{entry.reason && entry.reason !== 'manual' ? ' automatically' : ''}</span>
 										{#if compactionSizes(entry)}<small>{compactionSizes(entry)}</small>{/if}
 									</summary>
 									<p>{entry.summary}</p>
@@ -2888,7 +2901,7 @@
 								void submitPrompt();
 							}}>
 							{#if images.length > 0}
-								<ul class="session-composer__images" aria-label="Attached images">
+								<ul class="session-images session-composer__images" aria-label="Attached images">
 									{#each images as image (image.id)}
 										<li>
 											<img src={image.previewUrl} alt={image.name} />
@@ -3883,17 +3896,26 @@
 		color: var(--pau-danger);
 	}
 
-	.session-composer__images {
+	/* Image thumbnails, shared by the composer and the prompts in the transcript. */
+	.session-images {
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--pau-space-2);
 		margin: 0;
-		padding: var(--pau-space-2) var(--pau-space-3);
+		padding: 0;
 		list-style: none;
+	}
+
+	.session-composer__images {
+		padding: var(--pau-space-2) var(--pau-space-3);
 		border-bottom: 1px solid var(--pau-border);
 	}
 
-	.session-composer__images li {
+	.session-message__images {
+		margin-top: var(--pau-space-2);
+	}
+
+	.session-images li {
 		display: grid;
 		gap: var(--pau-space-1);
 		justify-items: start;
@@ -3934,7 +3956,7 @@
 		color: var(--pau-danger);
 	}
 
-	.session-composer__images img {
+	.session-images img {
 		width: 4rem;
 		height: 4rem;
 		object-fit: cover;

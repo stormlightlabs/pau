@@ -126,11 +126,17 @@ impl SessionApi {
             capabilities: CLAUDE_BRIDGE_CAPABILITIES,
             native: Arc::default(),
         };
+        // A resumed session reports its ID only after its first turn, so the
+        // requested ID stands in until then. Without it, stopping the session
+        // before that turn would lose the conversation it resumed.
         record
             .native
             .lock()
             .expect("native state lock poisoned")
-            .session_id = session.native_session_id().await;
+            .session_id = session
+            .native_session_id()
+            .await
+            .or(request.native_session_id);
         self.records
             .lock()
             .expect("session records lock poisoned")

@@ -1,3 +1,6 @@
+/** An agent Pau can start a session of, by the backend's identifier. */
+export type SessionAgent = 'pi' | 'claude';
+
 /** Lifecycle states shown by the session surface. */
 export type SessionStatus = 'starting' | 'idle' | 'running' | 'waiting' | 'stopping' | 'stopped' | 'failed';
 

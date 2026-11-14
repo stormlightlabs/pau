@@ -17,6 +17,12 @@ for a control the agent lacks answers `501 unsupported_control`. An unknown
 agent is refused with `400 unknown_agent`. An agent that cannot start is
 refused with `503 agent_unavailable` and its discovery reason.
 
+A Claude session resumes a conversation when the request names its Claude
+Code session ID. A resumed session reports that ID from the start, and every
+session reports the ID of each finished turn. The bridge keeps no message
+history, so a client shows a Claude session's transcript from the events it
+received.
+
 ## Agent readiness
 
 `GET /api/agents/readiness` reports, for each supported agent, whether Pau

@@ -287,12 +287,46 @@ export const sessionFixtures = {
 			sessions: [session('idle', { title: 'Fix diff gutter', compaction: { status: 'aborted', reason: 'threshold' } })]
 		}
 	],
+	/** An idle Claude Code session that streamed a reply and a tool call. */
+	claude: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			path: '/Users/operator/projects/pau',
+			sessions: [
+				session('idle', {
+					id: 'claude-idle',
+					title: 'Review the adapter fixtures',
+					agent: 'Claude Code',
+					model: undefined,
+					capabilities: claudeCapabilities,
+					transcript: [
+						{ id: 'claude-0', kind: 'message', role: 'user', body: 'Check the bridge fixtures against the protocol.' },
+						{
+							id: 'tool:t1',
+							kind: 'tool',
+							name: 'Read',
+							detail: 'packages/claude-bridge/test/fixtures/protocol.jsonl',
+							result: '5 lines',
+							status: 'complete'
+						},
+						{
+							id: 'claude-1',
+							kind: 'message',
+							role: 'assistant',
+							body: 'The fixtures match protocol version 1. Every event carries a sequence number.'
+						}
+					]
+				})
+			]
+		}
+	],
 	compactionUnsupported: [
 		{
 			id: 'pau',
 			name: 'Pau',
 			sessions: [
-				session('idle', { title: 'Review adapter fixtures', agent: 'Claude', capabilities: claudeCapabilities })
+				session('idle', { title: 'Review adapter fixtures', agent: 'Claude Code', capabilities: claudeCapabilities })
 			]
 		}
 	],
@@ -317,7 +351,7 @@ export const sessionFixtures = {
 				session('running', {
 					id: 'session-no-queue',
 					title: 'Review adapter fixtures',
-					agent: 'Claude',
+					agent: 'Claude Code',
 					capabilities: claudeCapabilities
 				})
 			]
@@ -444,7 +478,7 @@ export const sessionFixtures = {
 				session('idle', {
 					id: 'claude-review',
 					title: 'Review adapter fixtures',
-					agent: 'Claude',
+					agent: 'Claude Code',
 					capabilities: claudeCapabilities,
 					transcript: []
 				})

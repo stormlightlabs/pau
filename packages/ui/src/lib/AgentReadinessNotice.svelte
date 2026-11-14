@@ -1,11 +1,13 @@
 <!--
 @component
-Tells the operator why Pi cannot start a session and gives the command that
-fixes it. Pau cannot type into a terminal for the operator, so it shows the
-command with a copy button and opens a terminal where they can run it.
+Tells the operator why an agent cannot start a session. For Pi it gives the
+command that fixes it. Pau cannot type into a terminal for the operator, so it
+shows the command with a copy button and opens a terminal where they can run
+it. Claude Code's reason names its own fix.
 -->
 <script lang="ts">
 	import '../styles/tokens.css';
+	import { codeSpans } from './code-spans';
 	import CopyButton from './CopyButton.svelte';
 	import type { AgentReadinessProblem, AgentSetupAction } from './types/launch';
 
@@ -31,12 +33,16 @@ command with a copy button and opens a terminal where they can run it.
 	};
 
 	const step = $derived(problem.action ? setup[problem.action] : undefined);
+	const agentName = $derived(problem.agent === 'claude' ? 'Claude Code' : 'Pi');
 	const titleId = $props.id();
 </script>
 
 <section class="agent-readiness" aria-labelledby={titleId}>
-	<h2 id={titleId}>Pi is not ready</h2>
-	<p>{problem.reason}</p>
+	<h2 id={titleId}>{agentName} is not ready</h2>
+	<p>
+		{#each codeSpans(problem.reason) as span, index (index)}{#if span.code}<code>{span.text}</code
+				>{:else}{span.text}{/if}{/each}
+	</p>
 	{#if step}
 		<p>{step.instruction}</p>
 		<div class="agent-readiness__command">
@@ -74,6 +80,12 @@ command with a copy button and opens a terminal where they can run it.
 
 	.agent-readiness p {
 		color: var(--pau-text-muted);
+	}
+
+	.agent-readiness p code {
+		font-family: var(--pau-font-code);
+		font-size: var(--pau-type-sm);
+		color: var(--pau-text);
 	}
 
 	.agent-readiness__command {

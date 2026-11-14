@@ -199,3 +199,21 @@ async fn reports_a_ready_claude_and_a_missing_bridge() {
     assert_eq!(ready.model_count, None);
     assert_eq!(ready.reason, None);
 }
+
+#[tokio::test]
+async fn reports_an_unsupported_claude_version() {
+    let directory = tempfile::tempdir().unwrap();
+    let bin = directory.path().join("bin");
+    fs::create_dir(&bin).unwrap();
+    let claude = write_executable(&bin, "claude", "echo '2.0.1 (Claude Code)'");
+    write_executable(&bin, "pau-claude-bridge", "exit 0");
+
+    let old = report_with_claude_path(&directory, &bin)
+        .await
+        .agents
+        .remove(1);
+    assert!(old.found && !old.version_supported && !old.ready, "{old:?}");
+    assert_eq!(old.executable_path, Some(claude.display().to_string()));
+    assert_eq!(old.version.as_deref(), Some("2.0.1"));
+    assert!(old.reason.as_deref().unwrap().contains("2.0.1"), "{old:?}");
+}

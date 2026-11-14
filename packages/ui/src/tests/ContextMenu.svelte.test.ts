@@ -20,14 +20,14 @@ afterEach(() => {
 	for (const invoker of invokers.splice(0)) invoker.remove();
 });
 
-async function renderMenu(onSelect = vi.fn(), onClose = vi.fn()) {
+async function renderMenu(onSelect = vi.fn(), onClose = vi.fn(), anchor?: { x: number; y: number }) {
 	const invoker = document.createElement('button');
 	invokers.push(invoker);
 	invoker.textContent = 'Session row';
 	document.body.append(invoker);
 	invoker.focus();
 	await render(ContextMenu, {
-		request: { label: 'Session actions', items, x: 40, y: 40, keyboard: true, invoker, onSelect },
+		request: { label: 'Session actions', items, x: 40, y: 40, ...anchor, keyboard: true, invoker, onSelect },
 		onClose
 	});
 	return { onSelect, onClose, invoker };
@@ -49,6 +49,16 @@ test('focuses the first item and moves with the arrow, Home, End, and typeahead 
 	await expect.element(page.getByRole('menuitem', { name: 'Copy path' })).toHaveFocus();
 	await userEvent.keyboard('{Home}');
 	await expect.element(page.getByRole('menuitem', { name: 'Open' })).toHaveFocus();
+});
+
+test('keeps the menu on screen when its anchor starts off the left and top edges', async () => {
+	await renderMenu(vi.fn(), vi.fn(), { x: -200, y: -50 });
+	const menu = page.getByRole('menu', { name: 'Session actions' });
+
+	await expect.element(menu).toBeInViewport({ ratio: 1 });
+	const bounds = menu.element().getBoundingClientRect();
+	expect(bounds.left).toBe(8);
+	expect(bounds.top).toBe(8);
 });
 
 test('explains a disabled item and refuses it', async () => {

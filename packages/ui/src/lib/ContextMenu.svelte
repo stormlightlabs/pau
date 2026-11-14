@@ -33,13 +33,18 @@
 		void tick().then(() => focusItem(firstFocusable()));
 	});
 
-	/** Keeps the menu inside the viewport, flipping it to the left or above its anchor when it would overflow. */
+	/**
+	 * Keeps the menu inside the viewport, flipping it to the left or above its
+	 * anchor when it would overflow. A keyboard anchor can start off screen,
+	 * such as a row in a rail that is still sliding in, so the menu is also
+	 * held off the left and top edges.
+	 */
 	function place(): void {
 		if (!menu) return;
 		const { width, height } = menu.getBoundingClientRect();
 		const { x, y } = request;
-		left = x + width + edge > innerWidth ? Math.max(edge, x - width) : x;
-		top = y + height + edge > innerHeight ? Math.max(edge, y - height) : y;
+		left = Math.max(edge, x + width + edge > innerWidth ? x - width : x);
+		top = Math.max(edge, y + height + edge > innerHeight ? y - height : y);
 		origin = `${top < y ? 'bottom' : 'top'} ${left < x ? 'right' : 'left'}`;
 	}
 

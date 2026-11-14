@@ -2,6 +2,7 @@
 	import type { LastRoute, LastView } from '@stormlightlabs/pau-protocol';
 	import {
 		SessionView,
+		TerminalPanel,
 		type AgentReadinessProblem,
 		type SavedSession,
 		type SessionAgent,
@@ -18,6 +19,9 @@
 	import { desktopNativeCapabilitiesContext, type DesktopNativeCapabilities } from './native-capabilities';
 	import { sessionAttentionContext, type SessionAttention } from './session-attention';
 	import { agentReadinessContext, type AgentReadinessSource } from './startup';
+	import { terminalDock } from './terminal-dock.svelte';
+	import { createTerminalFileLinks } from './terminal-file-links';
+	import { createTerminalSource } from './terminal-source';
 
 	let {
 		initialSessionId,
@@ -26,6 +30,7 @@
 		socketFactory,
 		navigation,
 		onOpenTerminal,
+		onOpenFile,
 		restoreLastRoute = false,
 		onRouteChange,
 		onOpenView
@@ -47,6 +52,8 @@
 		onSessionChange?: (workspaceId: string, sessionId: string) => void;
 		/** Opens the terminal view of a workspace. */
 		onOpenTerminal?: (workspaceId: string) => void;
+		/** Opens a workspace file in the editor, such as one linked from terminal output. */
+		onOpenFile?: (workspaceId: string, path: string, line?: number) => void;
 		fetcher?: typeof fetch;
 		socketFactory?: EventSocketFactory;
 	} = $props();
@@ -84,6 +91,25 @@
 			workspaces.find((workspace) => workspace.sessions.some((session) => session.id === activeSessionId))?.id ??
 			workspaces[0]?.id
 	);
+	/** The docked terminals of the workspace in view. A new workspace gets its own. */
+	const dockTerminals = $derived.by(() => {
+		const workspaceId = currentWorkspaceId;
+		if (workspaceId === undefined) return;
+		return {
+			workspaceId,
+			source: createTerminalSource(location.origin, workspaceId),
+			fileLinks: onOpenFile && createTerminalFileLinks(workspaceId, (path, line) => onOpenFile(workspaceId, path, line))
+		};
+	});
+
+	// Moving terminals from the main area to the dock returns to this session.
+	$effect(() => {
+		const workspace = workspaces.find((candidate) =>
+			candidate.sessions.some((session) => session.id === activeSessionId)
+		);
+		if (workspace && activeSessionId) terminalDock.session = { workspaceId: workspace.id, sessionId: activeSessionId };
+	});
+
 	const native = getContext<DesktopNativeCapabilities | undefined>(desktopNativeCapabilitiesContext);
 	/** Absent in the browser development server, which has no launch check. */
 	const agentReadiness = getContext<AgentReadinessSource | undefined>(agentReadinessContext);
@@ -260,7 +286,31 @@
 	}
 </script>
 
+{#snippet terminals()}
+	{#if dockTerminals}
+		{#key dockTerminals}
+			<TerminalPanel
+				layout="dock"
+				theme={interfacePreferences.choices.theme}
+				disconnected={sessions.disconnected}
+				source={dockTerminals.source}
+				fileLinks={dockTerminals.fileLinks}
+				onMove={onOpenTerminal &&
+					(() => {
+						terminalDock.open = false;
+						onOpenTerminal(dockTerminals.workspaceId);
+					})}
+				onHide={() => (terminalDock.open = false)} />
+		{/key}
+	{/if}
+{/snippet}
+
 <SessionView
+	dock={dockTerminals ? terminals : undefined}
+	dockOpen={terminalDock.open}
+	onDockToggle={(open) => (terminalDock.open = open)}
+	dockHeight={terminalDock.height}
+	onDockResize={(height) => (terminalDock.height = height)}
 	theme={interfacePreferences.choices.theme}
 	uiFont={interfacePreferences.choices.ui_font}
 	{workspaces}

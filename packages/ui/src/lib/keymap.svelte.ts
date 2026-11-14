@@ -182,6 +182,14 @@ export const APP_KEY_ACTIONS: readonly KeyAction[] = [
 	{ id: 'panel.context', label: 'Toggle the session rail', group: 'Panels', keys: ['mod+b'], whileTyping: true },
 	{ id: 'panel.inspector', label: 'Toggle the inspector', group: 'Panels', keys: ['mod+alt+b'], whileTyping: true },
 	{
+		id: 'panel.dock',
+		label: 'Toggle the terminal dock',
+		group: 'Panels',
+		keys: ['ctrl+`'],
+		whileTyping: true,
+		unavailable: SESSIONS_ONLY
+	},
+	{
 		id: 'view.zoomIn',
 		label: 'Zoom in',
 		group: 'View',

@@ -44,3 +44,15 @@ export type TerminalSource = {
 	connect: (id: string, events: TerminalConnectionEvents) => TerminalConnection;
 	close: (id: string) => Promise<void>;
 };
+
+/**
+ * Lets a terminal turn workspace file paths in its output into links. The
+ * application owns the workspace, so it answers whether a path is a file and
+ * decides where opening one goes.
+ */
+export type TerminalFileLinks = {
+	/** Resolves whether `path`, relative to the workspace root, names a file. */
+	exists: (path: string) => Promise<boolean>;
+	/** Opens a workspace file, at `line` when the output named one. */
+	open: (path: string, line?: number) => void;
+};

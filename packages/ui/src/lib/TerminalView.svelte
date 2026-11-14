@@ -4,14 +4,16 @@
 	import { FitAddon } from '@xterm/addon-fit';
 	import { SearchAddon, type ISearchOptions, type ISearchResultChangeEvent } from '@xterm/addon-search';
 	import { Unicode11Addon } from '@xterm/addon-unicode11';
+	import { WebLinksAddon } from '@xterm/addon-web-links';
 	import { Terminal } from '@xterm/xterm';
 	import { onMount, tick } from 'svelte';
 
 	import { terminalTheme, THEMES, type ThemeName } from '../theme';
 	import { useExternalLinks } from './external-links';
 	import Icon from './Icon.svelte';
-	import { detectPlatform, type KeyPlatform } from './keymap.svelte';
-	import type { TerminalConnection, TerminalConnectionEvents, TerminalExit } from './types/terminal';
+	import { detectPlatform, eventChord, getKeymap, type KeyPlatform } from './keymap.svelte';
+	import { createTerminalPathLinks } from './terminal-links';
+	import type { TerminalConnection, TerminalConnectionEvents, TerminalExit, TerminalFileLinks } from './types/terminal';
 
 	type Props = {
 		/** Accessible name of the terminal region. */
@@ -23,6 +25,10 @@
 		onexit?: (status: TerminalExit) => void;
 		ondisconnect?: () => void;
 		onselectionchange?: (hasSelection: boolean) => void;
+		/** Called when live output arrives. Scrollback replayed on connect does not count. */
+		onoutput?: () => void;
+		/** Turns workspace file paths in the output into links. Without it, paths stay plain text. */
+		fileLinks?: TerminalFileLinks;
 		/** Platform whose find shortcut opens search. Tests set it. */
 		platform?: KeyPlatform;
 	};
@@ -35,6 +41,8 @@
 		onexit,
 		ondisconnect,
 		onselectionchange,
+		onoutput,
+		fileLinks,
 		platform = detectPlatform()
 	}: Props = $props();
 
@@ -42,6 +50,17 @@
 	const SYSTEM_MONO = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 
 	const links = useExternalLinks();
+	const keymap = getKeymap();
+
+	/**
+	 * The terminal sends every key to its program, except the dock shortcut,
+	 * which a keyboard operator needs to leave a docked terminal.
+	 */
+	function isDockChord(event: KeyboardEvent): boolean {
+		const chord = eventChord(event);
+		const dock = keymap?.actions.find((action) => action.id === 'panel.dock');
+		return chord !== undefined && Boolean(dock?.keys.includes(chord)) && Boolean(keymap?.canRun('panel.dock'));
+	}
 	/** The search addon stops counting and highlighting past this many matches. */
 	const MATCH_LIMIT = 1000;
 
@@ -177,6 +196,9 @@
 		instance.unicode.activeVersion = '11';
 		const search = new SearchAddon({ highlightLimit: MATCH_LIMIT });
 		instance.loadAddon(search);
+		// Plain-text URLs open through the same handler as OSC 8 links.
+		instance.loadAddon(new WebLinksAddon((_event, uri) => links.open(uri)));
+		const pathLinks = fileLinks && instance.registerLinkProvider(createTerminalPathLinks(instance, fileLinks));
 		// The clipboard addon's bundle reads `self` when it loads, so importing it
 		// at module scope breaks Node consumers of the package index.
 		void import('@xterm/addon-clipboard').then(({ ClipboardAddon }) => {
@@ -186,6 +208,11 @@
 		// Elsewhere Ctrl+C belongs to the shell, so use the Ctrl+Shift convention.
 		instance.attachCustomKeyEventHandler((event) => {
 			if (event.type !== 'keydown') return true;
+			if (isDockChord(event)) {
+				event.preventDefault();
+				keymap?.run('panel.dock');
+				return false;
+			}
 			if (isFindChord(event)) {
 				event.preventDefault();
 				void openSearch();
@@ -225,7 +252,10 @@
 				replays += 1;
 				instance.write(bytes, () => (replays -= 1));
 			},
-			output: (bytes) => instance.write(bytes),
+			output: (bytes) => {
+				instance.write(bytes);
+				onoutput?.();
+			},
 			reset: () => instance.reset(),
 			exit: (status) => {
 				instance.options.disableStdin = true;
@@ -256,6 +286,7 @@
 		return () => {
 			observer.disconnect();
 			for (const subscription of subscriptions) subscription.dispose();
+			pathLinks?.dispose();
 			connection.close();
 			instance.dispose();
 			terminal = undefined;
@@ -329,6 +360,7 @@
 <style>
 	.terminal-view {
 		position: relative;
+		min-width: 0;
 		min-height: 0;
 	}
 

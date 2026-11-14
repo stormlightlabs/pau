@@ -1,7 +1,7 @@
 <script lang="ts">
 	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
-	import { onDestroy, tick, untrack } from 'svelte';
+	import { onDestroy, tick, untrack, type Snippet } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { fade } from 'svelte/transition';
 	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
@@ -99,6 +99,16 @@
 	type Props = {
 		workspaces: SessionWorkspace[];
 		activeSessionId?: string;
+		/** Terminals docked below the session. The app supplies them for the workspace in view. */
+		dock?: Snippet;
+		/** Whether the terminal dock shows. */
+		dockOpen?: boolean;
+		/** Called when the operator shows or hides the terminal dock. */
+		onDockToggle?: (open: boolean) => void;
+		/** Operator-chosen dock height in CSS pixels. */
+		dockHeight?: number | null;
+		/** Called with the new dock height after the operator resizes it. */
+		onDockResize?: (height: number | null) => void;
 		disconnected?: boolean;
 		/** Shows the loading state until the first session list arrives. */
 		loading?: boolean;
@@ -320,6 +330,11 @@
 	let {
 		workspaces,
 		activeSessionId,
+		dock,
+		dockOpen,
+		onDockToggle,
+		dockHeight,
+		onDockResize,
 		disconnected = false,
 		loading = false,
 		onSelectSession = () => {},
@@ -2128,6 +2143,11 @@
 	{uiFont}
 	{paneWidths}
 	{paletteEntries}
+	{dock}
+	{dockOpen}
+	{onDockToggle}
+	{dockHeight}
+	{onDockResize}
 	onResize={onPaneResize}>
 	{#snippet context()}
 		<nav class="session-rail" aria-label="Workspaces and sessions">

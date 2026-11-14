@@ -19,6 +19,8 @@ export type TerminalFixture = {
 	source: TerminalSource;
 	sizes: Map<string, { cols: number; rows: number }>;
 	input: Map<string, string>;
+	/** Prints output to a connected terminal, as a program running in it would. */
+	print: (id: string, text: string) => void;
 };
 
 const PROMPT = '\u{1B}[1;34m~/pau\u{1B}[0m $ ';
@@ -35,6 +37,7 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 	const encoder = new TextEncoder();
 	const decoder = new TextDecoder();
 	const open: TerminalTab[] = [];
+	const printers = new Map<string, (text: string) => void>();
 	let created = 0;
 	const openTerminal = (): TerminalTab => {
 		created += 1;
@@ -57,6 +60,7 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 			let line = '';
 			let exited = false;
 			const send = (text: string) => events.output(encoder.encode(text));
+			printers.set(id, send);
 			const exit = (status: TerminalExit) => {
 				exited = true;
 				events.exit(status);
@@ -104,5 +108,5 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 			);
 		}
 	};
-	return { source, sizes, input };
+	return { source, sizes, input, print: (id, text) => printers.get(id)?.(text) };
 }

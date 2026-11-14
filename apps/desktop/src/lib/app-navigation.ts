@@ -78,3 +78,13 @@ export function claimLaunchRoute(): boolean {
 	launchRoute.claimed = true;
 	return true;
 }
+
+/**
+ * The query that makes the Files view open a file, such as one linked from
+ * terminal output: `?path=src/main.rs&line=12`.
+ */
+export function openFileQuery(path: string, line?: number): string {
+	const query = new URLSearchParams({ path });
+	if (line !== undefined) query.set('line', String(line));
+	return `?${query}`;
+}

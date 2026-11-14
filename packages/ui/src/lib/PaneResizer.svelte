@@ -4,13 +4,21 @@
 		label: string;
 		/** Element ID of the pane this separator resizes. */
 		controls: string;
-		/** Current pane width in pixels. */
+		/** Current pane size in pixels: its width, or its height for a horizontal separator. */
 		value: number;
 		min: number;
 		/** Largest width that still leaves the main surface its minimum. */
 		max: number;
-		/** `1` when dragging right widens the pane, `-1` when dragging left does. */
+		/**
+		 * `1` when dragging right, or down for a horizontal separator, grows the
+		 * pane. `-1` when dragging left, or up, does.
+		 */
 		direction: 1 | -1;
+		/**
+		 * `vertical` for a separator between side-by-side panes, which resizes
+		 * width. `horizontal` for one between stacked panes, which resizes height.
+		 */
+		orientation?: 'vertical' | 'horizontal';
 		/** True while a pointer drag is in progress. */
 		dragging?: boolean;
 		/** Applies a width while dragging. Called at most once per frame. */
@@ -28,6 +36,7 @@
 		min,
 		max,
 		direction,
+		orientation = 'vertical',
 		dragging = $bindable(false),
 		onPreview,
 		onCommit,
@@ -37,7 +46,11 @@
 	const STEP = 16;
 	const LARGE_STEP = 64;
 
-	let startX = 0;
+	let start = 0;
+	const position = (event: PointerEvent) => (orientation === 'vertical' ? event.clientX : event.clientY);
+	/** Keys that grow and shrink the pane along the separator's axis. */
+	const growKey = $derived(orientation === 'vertical' ? 'ArrowRight' : 'ArrowDown');
+	const shrinkKey = $derived(orientation === 'vertical' ? 'ArrowLeft' : 'ArrowUp');
 	let startWidth = 0;
 	let pending: number | undefined;
 	let frame: number | undefined;
@@ -56,7 +69,7 @@
 		} catch {
 			// A synthetic pointer has nothing to capture. The drag still follows move events.
 		}
-		startX = event.clientX;
+		start = position(event);
 		startWidth = value;
 		pending = undefined;
 		dragging = true;
@@ -64,7 +77,7 @@
 
 	function onPointerMove(event: PointerEvent) {
 		if (!dragging) return;
-		pending = clamp(startWidth + (event.clientX - startX) * direction);
+		pending = clamp(startWidth + (position(event) - start) * direction);
 		frame ??= requestAnimationFrame(flush);
 	}
 
@@ -82,11 +95,11 @@
 	function onKeyDown(event: KeyboardEvent) {
 		const step = event.shiftKey ? LARGE_STEP : STEP;
 		switch (event.key) {
-			case 'ArrowRight': {
+			case growKey: {
 				onCommit(clamp(value + step * direction));
 				break;
 			}
-			case 'ArrowLeft': {
+			case shrinkKey: {
 				onCommit(clamp(value - step * direction));
 				break;
 			}
@@ -111,8 +124,9 @@
 <div
 	class="pane-resizer"
 	class:dragging
+	class:horizontal={orientation === 'horizontal'}
 	role="separator"
-	aria-orientation="vertical"
+	aria-orientation={orientation}
 	aria-label={label}
 	aria-controls={controls}
 	aria-valuenow={value}
@@ -143,6 +157,16 @@
 		content: '';
 	}
 
+	.pane-resizer.horizontal {
+		width: auto;
+		height: 0.5rem;
+		cursor: row-resize;
+	}
+
+	.pane-resizer.horizontal::after {
+		inset: calc(50% - 1px) 0;
+	}
+
 	.pane-resizer.dragging::after {
 		background: var(--pau-accent);
 	}
@@ -160,5 +184,9 @@
 	.pane-resizer:focus-visible::after {
 		inset: 0 calc(50% - var(--pau-focus-width) / 2);
 		background: var(--pau-focus);
+	}
+
+	.pane-resizer.horizontal:focus-visible::after {
+		inset: calc(50% - var(--pau-focus-width) / 2) 0;
 	}
 </style>

@@ -23,16 +23,13 @@ function fakeFetch() {
 	});
 }
 
-test('links a path only when its directory lists it as a regular file', async () => {
+test('lists only the regular files in a directory', async () => {
 	const fetcher = fakeFetch();
 	const links = createTerminalFileLinks('ws 1', () => {}, fetcher);
 
-	await expect(links.exists('README.md')).resolves.toBe(true);
-	await expect(links.exists('src/main.rs')).resolves.toBe(true);
-	await expect(links.exists('src/lib.rs')).resolves.toBe(false);
-	await expect(links.exists('src/bin.rs')).resolves.toBe(false);
-	await expect(links.exists('src/other.rs')).resolves.toBe(false);
-	await expect(links.exists('docs/guide.md')).rejects.toThrow();
+	await expect(links.files('')).resolves.toEqual(['README.md']);
+	await expect(links.files('src')).resolves.toEqual(['src/main.rs']);
+	await expect(links.files('docs')).rejects.toThrow();
 
 	const [root, source] = fetcher.mock.calls.map(([input]) => new URL(String(input), 'https://pau.local'));
 	expect(root?.pathname).toBe('/api/workspaces/ws%201/files');

@@ -51,8 +51,11 @@ export type TerminalSource = {
  * decides where opening one goes.
  */
 export type TerminalFileLinks = {
-	/** Resolves whether `path`, relative to the workspace root, names a file. */
-	exists: (path: string) => Promise<boolean>;
+	/**
+	 * Lists the paths of the regular files directly inside `directory`, both
+	 * relative to the workspace root. The root is `''`.
+	 */
+	files: (directory: string) => Promise<readonly string[]>;
 	/** Opens a workspace file, at `line` when the output named one. */
 	open: (path: string, line?: number) => void;
 };

@@ -15,15 +15,14 @@ export function createTerminalFileLinks(
 	fetcher: typeof fetch = fetch
 ): TerminalFileLinks {
 	return {
-		exists: async (path) => {
-			const directory = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+		files: async (directory) => {
 			const entries = await listWorkspaceFiles(
 				workspaceId,
 				directory,
 				{ includeHidden: true, includeIgnored: true },
 				fetcher
 			);
-			return entries.some((entry) => entry.path === path && entry.kind === 'file');
+			return entries.filter((entry) => entry.kind === 'file').map((entry) => entry.path);
 		},
 		open
 	};

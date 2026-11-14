@@ -3,7 +3,7 @@ import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 
 import { createTerminalFixture } from '../fixtures/terminals';
-import { detectPlatform } from '../lib/keymap.svelte';
+import { detectPlatform, Keymap, keymapContext } from '../lib/keymap.svelte';
 import TerminalSurface from '../lib/TerminalSurface.svelte';
 import TerminalView from '../lib/TerminalView.svelte';
 import type { TerminalConnectionEvents } from '../lib/types/terminal';
@@ -63,6 +63,25 @@ test('reattaches open terminals when the surface mounts again', async () => {
 
 	await userEvent.click(page.getByRole('button', { name: 'Close zsh', exact: true }));
 	await expect.poll(() => fixture.source.list()).toEqual([{ id: 'fixture-2', title: 'zsh 2' }]);
+});
+
+test('keeps hidden tabs at their size and unmarked when the terminals move to another surface', async () => {
+	await page.viewport(1200, 800);
+	const fixture = createTerminalFixture();
+	const first = await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+	await userEvent.click(page.getByRole('button', { name: 'Open a terminal' }));
+	await userEvent.click(page.getByRole('button', { name: 'New terminal' }));
+	await userEvent.click(page.getByRole('tab', { name: 'zsh', exact: true }));
+	await expect.poll(() => fixture.sizes.get('fixture-2')?.cols ?? 0).toBeGreaterThan(80);
+	const size = fixture.sizes.get('fixture-2');
+	first.unmount();
+
+	await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+	const hidden = page.getByRole('tab', { name: /^zsh 2/ });
+	await expect.poll(() => screenText('zsh terminal')).toContain('Terminal ready');
+	await expect.element(hidden).toHaveAttribute('aria-selected', 'false');
+	expect(fixture.sizes.get('fixture-2')).toEqual(size);
+	await expect.element(hidden).not.toHaveTextContent('New output');
 });
 
 test('waits for the open terminals before opening another, so titles keep opening order', async () => {
@@ -290,6 +309,31 @@ test('leaves Ctrl+F to the shell outside macOS', async () => {
 
 	await userEvent.keyboard('{Control>}{Shift>}F{/Shift}{/Control}');
 	await expect.element(page.getByRole('textbox', { name: 'Find in terminal' })).toHaveFocus();
+});
+
+test('leaves Ctrl+` to the terminal when there is no dock to toggle', async () => {
+	const keymap = new Keymap({ platform: 'mac' });
+	const prevented: boolean[] = [];
+	const listen = (event: KeyboardEvent) => {
+		keymap.handleKeydown(event);
+		if (event.key === '`') prevented.push(event.defaultPrevented);
+	};
+	addEventListener('keydown', listen);
+	try {
+		const fixture = createTerminalFixture();
+		await render(TerminalSurface, {
+			props: { workspaceName: 'pau', source: fixture.source },
+			context: new Map([[keymapContext, keymap]])
+		});
+		await userEvent.click(page.getByRole('button', { name: 'Open a terminal' }));
+		await expect.poll(() => screenText('zsh terminal')).toContain('Terminal ready');
+
+		await userEvent.keyboard('{Control>}`{/Control}');
+		expect(prevented).toEqual([false]);
+		expect(keymap.canRun('panel.dock')).toBe(false);
+	} finally {
+		removeEventListener('keydown', listen);
+	}
 });
 
 test('marks background tabs that print while another tab shows, until the operator opens them', async () => {

@@ -50,32 +50,36 @@ test('opens a plain-text web address from the output', async () => {
 	await expect.poll(() => open.mock.calls).toEqual([['https://example.com/docs?page=2']]);
 });
 
-test('opens workspace file paths and leaves other text plain', async () => {
-	const exists = vi.fn(async (path: string) => path === 'src/main.rs' || path === 'notes/plan.md');
+test('opens workspace file paths, leaves other text plain, and lists each directory once', async () => {
+	const listings: Record<string, string[]> = { src: ['src/main.rs', 'src/lib.rs'], notes: ['notes/plan.md'] };
+	const files = vi.fn(async (directory: string) => listings[directory] ?? []);
 	const openFile = vi.fn();
 	const open = await renderLines(
-		['src/main.rs:12:5: error', 'src/missing.rs', 'v1.2.3', '../notes/plan.md', 'notes/plan.md'],
-		{ exists, open: openFile }
+		['src/main.rs:12:5: error', 'src/missing.rs', 'v1.2.3', '../notes/plan.md', 'notes/plan.md', 'src/lib.rs'],
+		{ files, open: openFile }
 	);
 
-	for (const row of [0, 1, 2, 3, 4]) await clickRow(row);
+	for (const row of [0, 1, 2, 3, 4, 5]) await clickRow(row);
 
 	await expect
 		.poll(() => openFile.mock.calls)
 		.toEqual([
 			['src/main.rs', 12],
-			['notes/plan.md', undefined]
+			['notes/plan.md', undefined],
+			['src/lib.rs', undefined]
 		]);
-	expect(exists.mock.calls.map(([path]) => path).toSorted((a, b) => a.localeCompare(b))).toEqual([
-		'notes/plan.md',
-		'src/main.rs',
-		'src/missing.rs'
+	expect(files.mock.calls.map(([directory]) => directory).toSorted((a, b) => a.localeCompare(b))).toEqual([
+		'notes',
+		'src'
 	]);
 	expect(open).not.toHaveBeenCalled();
 });
 
 test('shows a confirmed file path as a link on hover', async () => {
-	await renderLines(['crates/term/src/modes.rs:48'], { exists: async () => true, open: () => {} });
+	await renderLines(['crates/term/src/modes.rs:48'], {
+		files: async () => ['crates/term/src/modes.rs'],
+		open: () => {}
+	});
 	await userEvent.hover(document.querySelector<HTMLElement>('.xterm-screen')!, { position: rowStart(0) });
 
 	await expect.poll(() => document.querySelector('.xterm-cursor-pointer')).not.toBeNull();

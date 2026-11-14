@@ -82,9 +82,13 @@
 	});
 
 	/** Fits the grid to the container. A hidden container has no size to measure. */
+	/** Sends the measured grid to the program once per connection. Set while connected. */
+	let reportSize: (() => void) | undefined;
+
 	function fit(): void {
 		if (!host.clientWidth || !host.clientHeight) return;
 		fitAddon?.fit();
+		reportSize?.();
 	}
 
 	/** Copies the current selection to the system clipboard. Returns whether text was selected. */
@@ -264,7 +268,16 @@
 			},
 			disconnect: () => ondisconnect?.()
 		});
-		connection.resize(instance.cols, instance.rows);
+		// A hidden tab has no size to measure, so xterm holds its 80×24 default.
+		// Sending that would shrink the program, and its redraw would read as
+		// new output. The size goes out once the tab shows and has been fitted.
+		let sized = false;
+		reportSize = () => {
+			if (sized) return;
+			sized = true;
+			connection.resize(instance.cols, instance.rows);
+		};
+		if (host.clientWidth && host.clientHeight) reportSize();
 		const subscriptions = [
 			instance.onData((data) => {
 				if (replays === 0) connection.write(encoder.encode(data));
@@ -275,7 +288,10 @@
 					connection.write(Uint8Array.from(data, (character) => character.codePointAt(0) ?? 0));
 				}
 			}),
-			instance.onResize(({ cols, rows }) => connection.resize(cols, rows)),
+			instance.onResize(({ cols, rows }) => {
+				sized = true;
+				connection.resize(cols, rows);
+			}),
 			instance.onSelectionChange(() => onselectionchange?.(instance.hasSelection())),
 			// The addon reports counts only for searches that draw decorations.
 			search.onDidChangeResults((change) => (results = change))
@@ -287,6 +303,7 @@
 			observer.disconnect();
 			for (const subscription of subscriptions) subscription.dispose();
 			pathLinks?.dispose();
+			reportSize = undefined;
 			connection.close();
 			instance.dispose();
 			terminal = undefined;

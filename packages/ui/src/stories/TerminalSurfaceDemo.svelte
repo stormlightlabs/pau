@@ -31,7 +31,11 @@
 
 	const { source } = $derived(createTerminalFixture({ exitOnConnect, createError, history, running, listError }));
 	const fileLinks = $derived(
-		linkedFiles && { exists: async (path: string) => linkedFiles.includes(path), open: () => {} }
+		linkedFiles && {
+			files: async (directory: string) =>
+				linkedFiles.filter((path) => path.slice(0, Math.max(path.lastIndexOf('/'), 0)) === directory),
+			open: () => {}
+		}
 	);
 </script>
 

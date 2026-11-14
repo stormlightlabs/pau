@@ -71,29 +71,37 @@ function lineText(line: IBufferLine): { text: string; columns: number[] } {
 	return { text, columns };
 }
 
-/** How long an answer about one path is reused before the workspace is asked again. */
-const EXISTS_TTL_MS = 5000;
+/** How long a directory listing is reused before the workspace is asked again. */
+const LISTING_TTL_MS = 5000;
 
 /**
  * Turns workspace file paths in a terminal's output into links. A path
- * becomes a link only after `links.exists` confirms it names a file, so
- * text that merely looks like a path stays plain. Paths that continue onto
- * a wrapped line are not detected.
+ * becomes a link only after its directory's listing from `links.files` holds
+ * it, so text that merely looks like a path stays plain. Paths that continue
+ * onto a wrapped line are not detected.
  */
 export function createTerminalPathLinks(terminal: Terminal, links: TerminalFileLinks): ILinkProvider {
-	const answers = new Map<string, { at: number; exists: Promise<boolean> }>();
-	const exists = (path: string): Promise<boolean> => {
-		const cached = answers.get(path);
-		if (cached && performance.now() - cached.at < EXISTS_TTL_MS) return cached.exists;
-		const answer = (async () => {
-			try {
-				return await links.exists(path);
-			} catch {
-				return false;
-			}
-		})();
-		answers.set(path, { at: performance.now(), exists: answer });
-		return answer;
+	// One listing per directory serves every name in it, so hovering a line of
+	// `ls` output asks once. Expired listings are dropped on the next lookup.
+	const listings = new Map<string, { at: number; files: Promise<ReadonlySet<string>> }>();
+	const list = async (directory: string): Promise<ReadonlySet<string>> => {
+		try {
+			return new Set(await links.files(directory));
+		} catch {
+			return new Set();
+		}
+	};
+	const exists = async (path: string): Promise<boolean> => {
+		const now = performance.now();
+		for (const [key, listing] of listings) if (now - listing.at >= LISTING_TTL_MS) listings.delete(key);
+		const directory = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+		let listing = listings.get(directory);
+		if (!listing) {
+			listing = { at: now, files: list(directory) };
+			listings.set(directory, listing);
+		}
+		const files = await listing.files;
+		return files.has(path);
 	};
 
 	return {

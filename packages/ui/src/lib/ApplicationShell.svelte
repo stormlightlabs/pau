@@ -244,10 +244,13 @@
 		},
 		'panel.inspector': () => {
 			if (inspector) toggleInspector();
-		},
-		'panel.dock': () => {
-			if (dock) toggleDock();
 		}
+	});
+
+	// The dock shortcut exists only while there is a dock to toggle. A shell
+	// without one leaves Ctrl+` to the program in a terminal, where it sends NUL.
+	$effect(() => {
+		if (dock) return keymap?.register('panel.dock', toggleDock);
 	});
 
 	/** Shortest the dock may be, enough for its tab bar and a few lines. */

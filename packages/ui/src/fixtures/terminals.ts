@@ -27,7 +27,8 @@ const PROMPT = '\u{1B}[1;34m~/pau\u{1B}[0m $ ';
 
 /**
  * Creates a line-echoing shell stand-in. Typed characters echo back, Enter
- * prints the line, and `exit [code]` ends the terminal with that code.
+ * prints the line, a size change redraws the prompt, and `exit [code]` ends
+ * the terminal with that code.
  * Terminals stay open until closed, so a surface rendered again with the same
  * fixture reattaches them, as after a route change.
  */
@@ -38,6 +39,7 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 	const decoder = new TextDecoder();
 	const open: TerminalTab[] = [];
 	const printers = new Map<string, (text: string) => void>();
+	const connected = new Set<string>();
 	let created = 0;
 	const openTerminal = (): TerminalTab => {
 		created += 1;
@@ -67,9 +69,16 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 			};
 			queueMicrotask(() => {
 				// Like the server, every stream opens with the scrollback, empty or not.
-				const history = options.history ?? [];
-				events.replay(encoder.encode(history.map((output) => `${output}\r\n`).join('')));
-				send(`Terminal ready: 界 🙂\r\n${PROMPT}`);
+				// The ready line prints once; a reattach finds it in the scrollback.
+				const history = (options.history ?? []).map((output) => `${output}\r\n`).join('');
+				const ready = `Terminal ready: 界 🙂\r\n${PROMPT}`;
+				if (connected.has(id)) {
+					events.replay(encoder.encode(history + ready));
+				} else {
+					connected.add(id);
+					events.replay(encoder.encode(history));
+					send(ready);
+				}
 				if (options.exitOnConnect) exit(options.exitOnConnect);
 			});
 			return {
@@ -97,7 +106,12 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 						}
 					}
 				},
-				resize: (cols, rows) => sizes.set(id, { cols, rows }),
+				resize: (cols, rows) => {
+					const previous = sizes.get(id);
+					sizes.set(id, { cols, rows });
+					// A shell redraws its prompt when its window size changes.
+					if (previous && (previous.cols !== cols || previous.rows !== rows)) send(`\r${PROMPT}${line}`);
+				},
 				close: () => {}
 			};
 		},

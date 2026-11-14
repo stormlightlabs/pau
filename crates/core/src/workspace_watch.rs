@@ -376,12 +376,17 @@ mod tests {
         fs::create_dir_all(root.join("node_modules/pkg")).unwrap();
         fs::create_dir(root.join("src")).unwrap();
         fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+        let (watcher, receiver) = watch(&root);
+        (directory, root, watcher, receiver)
+    }
+
+    fn watch(root: &Path) -> (WorkspaceWatcher, Receiver<WorkspaceFileChanges>) {
         let (sender, receiver) = mpsc::channel();
-        let watcher = WorkspaceWatcher::start(&root, move |changes| {
+        let watcher = WorkspaceWatcher::start(root, move |changes| {
             let _ = sender.send(changes);
         })
         .unwrap();
-        (directory, root, watcher, receiver)
+        (watcher, receiver)
     }
 
     /// Waits for an update that lists `path`, skipping earlier updates such
@@ -497,17 +502,10 @@ mod tests {
     fn skips_changes_behind_a_symlinked_folder() {
         let outside = tempfile::tempdir().unwrap();
         let outside_root = fs::canonicalize(outside.path()).unwrap();
-        let (_directory, root, _watcher, receiver) = {
-            let directory = tempfile::tempdir().unwrap();
-            let root = fs::canonicalize(directory.path()).unwrap();
-            std::os::unix::fs::symlink(&outside_root, root.join("linked")).unwrap();
-            let (sender, receiver) = mpsc::channel();
-            let watcher = WorkspaceWatcher::start(&root, move |changes| {
-                let _ = sender.send(changes);
-            })
-            .unwrap();
-            (directory, root, watcher, receiver)
-        };
+        let directory = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(directory.path()).unwrap();
+        std::os::unix::fs::symlink(&outside_root, root.join("linked")).unwrap();
+        let (_watcher, receiver) = watch(&root);
         fs::write(outside_root.join("outside.txt"), "outside").unwrap();
         // A visible file written last marks the end of the sequence.
         fs::write(root.join("visible.txt"), "visible").unwrap();
@@ -522,30 +520,27 @@ mod tests {
 
     #[test]
     fn reports_branch_changes_in_the_git_directory_and_a_linked_worktree() {
-        let (_directory, root, _watcher, receiver) = watched();
-        fs::create_dir(root.join(".git")).unwrap();
-        fs::write(root.join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
-        wait_for_git(&receiver);
-
         let directory = tempfile::tempdir().unwrap();
         let base = fs::canonicalize(directory.path()).unwrap();
+        let repository = base.join("repo");
         let worktree = base.join("worktree");
-        let git_dir = base.join("repo/.git/worktrees/worktree");
+        let linked_git_dir = repository.join(".git/worktrees/worktree");
+        fs::create_dir_all(&linked_git_dir).unwrap();
         fs::create_dir(&worktree).unwrap();
-        fs::create_dir_all(&git_dir).unwrap();
-        fs::write(git_dir.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+        fs::write(repository.join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+        fs::write(linked_git_dir.join("HEAD"), "ref: refs/heads/main\n").unwrap();
         fs::write(
             worktree.join(".git"),
-            format!("gitdir: {}\n", git_dir.display()),
+            format!("gitdir: {}\n", linked_git_dir.display()),
         )
         .unwrap();
-        let (sender, linked) = mpsc::channel();
-        let _linked_watcher = WorkspaceWatcher::start(&worktree, move |changes| {
-            let _ = sender.send(changes);
-        })
-        .unwrap();
-        fs::write(git_dir.join("HEAD"), "ref: refs/heads/topic\n").unwrap();
-        wait_for_git(&linked);
+        let (_repository_watcher, repository_changes) = watch(&repository);
+        let (_worktree_watcher, worktree_changes) = watch(&worktree);
+
+        fs::write(repository.join(".git/HEAD"), "ref: refs/heads/topic\n").unwrap();
+        wait_for_git(&repository_changes);
+        fs::write(linked_git_dir.join("HEAD"), "ref: refs/heads/topic\n").unwrap();
+        wait_for_git(&worktree_changes);
     }
 
     #[test]

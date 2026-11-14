@@ -90,8 +90,15 @@ async function lookWhileFocused(element: HTMLElement): Promise<string> {
 	return focused;
 }
 
-/** Touch emulation makes the page report `(hover: none)`, as a touch screen does. */
+/**
+ * Touch emulation makes the page report `(hover: none)`, as a touch screen
+ * does. On headless Chromium for Linux, turning it off, even when it is
+ * already off, leaves the page with no hover until it reloads. So `afterEach`
+ * turns it off only after a test that turned it on, and those tests run last.
+ */
+let touching = false;
 async function emulateTouch(enabled: boolean) {
+	touching = enabled;
 	await cdp().send('Emulation.setTouchEmulationEnabled', { enabled, maxTouchPoints: 1 });
 	// Touch emulation alone updates matchMedia but can leave styles computed for
 	// a hover-capable pointer, so the media features are emulated directly too.
@@ -117,7 +124,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
 	instant.remove();
-	await emulateTouch(false);
+	if (touching) await emulateTouch(false);
 });
 
 describe.each(controls)('%s', (control) => {
@@ -160,11 +167,7 @@ test('never moves a pressed control', async () => {
 	}
 });
 
-/**
- * These run last. Once touch emulation has been on, headless Chromium on Linux
- * keeps reporting a pointer with no hover after it is turned off, so a hover
- * test after them would fail.
- */
+/** These run last, after every hover test, as `emulateTouch` explains. */
 describe.each(controls)('%s on a touch screen', (control) => {
 	test('drops the hover look without a hover-capable pointer', async () => {
 		await emulateTouch(true);

@@ -40,7 +40,7 @@ impl Fixture {
             PiSessionRegistry::new(database.processes()),
             DiscoverPiOptions {
                 executable_path: None,
-                path: crate::sessions::tests::FIXTURE_PATH.into(),
+                path: crate::sessions::tests::FIXTURE_PATH.as_str().into(),
                 home_directory: Some(root.clone()),
                 agent_directory: None,
                 session_directory: None,

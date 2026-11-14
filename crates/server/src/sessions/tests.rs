@@ -1,4 +1,4 @@
-use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, time::Duration};
+use std::{env, fs, os::unix::fs::PermissionsExt, path::PathBuf, sync::LazyLock, time::Duration};
 
 use axum::{
     Router,
@@ -19,15 +19,42 @@ use crate::{ApiToken, EventSubscription, SandboxApi, default_diagnostics, router
 
 const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 
+/// The `PATH` agent fixtures run with: the directories that hold the tools
+/// the fake agents call, found on the test's own `PATH` so the fixtures also
+/// run where those tools live outside `/usr/bin` and `/bin`, as on NixOS. No
+/// real Pi or Claude Code may sit beside them, or a test could start one by
+/// mistake.
+pub(crate) static FIXTURE_PATH: LazyLock<String> = LazyLock::new(|| {
+    let search = env::var_os("PATH").unwrap_or_default();
+    let mut directories: Vec<PathBuf> = Vec::new();
+    for tool in ["sed", "cat", "rm"] {
+        let directory = env::split_paths(&search)
+            .find(|directory| directory.join(tool).is_file())
+            .unwrap_or_else(|| panic!("agent fixtures need `{tool}` on the test's PATH"));
+        if !directories.contains(&directory) {
+            directories.push(directory);
+        }
+    }
+    for directory in &directories {
+        for agent in ["pi", "claude"] {
+            assert!(
+                !directory.join(agent).exists(),
+                "agent fixtures cannot use {} on PATH: it holds a real `{agent}`",
+                directory.display()
+            );
+        }
+    }
+    env::join_paths(directories)
+        .expect("tool directories form a PATH")
+        .into_string()
+        .expect("tool directories are UTF-8")
+});
+
 /// A Pi RPC stand-in. It records every command in the workspace, answers the
 /// controls the session API sends, and exits with status 3 without answering
 /// a prompt whose text is `exit`. Shell commands other than `echo hi` and
 /// `sleep 60`, which runs until `abort_bash`, fail. A resumed session answers `get_messages`
 /// with the messages of its file, after a summary once it has compacted.
-/// The `PATH` agent fixtures run with. The fake agents need `sed` and `cat`,
-/// and it holds no real Pi or Claude Code to be found by mistake.
-pub(crate) const FIXTURE_PATH: &str = "/usr/bin:/bin";
-
 const FAKE_PI: &str = r#"#!/bin/sh
 if [ "$1" = '--version' ]; then echo 1.0.0; exit 0; fi
 [ "$1" = '--mode' ] && [ "$2" = 'rpc' ] || exit 64
@@ -217,7 +244,7 @@ impl Fixture {
             PiSessionRegistry::new(database.processes()),
             DiscoverPiOptions {
                 executable_path: Some(executable.map_or(pi, |name| directory.path().join(name))),
-                path: FIXTURE_PATH.into(),
+                path: FIXTURE_PATH.as_str().into(),
                 home_directory: Some(directory.path().to_path_buf()),
                 agent_directory: None,
                 session_directory: None,
@@ -694,7 +721,7 @@ async fn starts_pi_with_the_discovery_path() {
 
     assert_eq!(status, StatusCode::CREATED, "{session}");
     let path = fs::read_to_string(fixture.workspace_root.join("path.txt")).unwrap();
-    assert_eq!(path, FIXTURE_PATH);
+    assert_eq!(path, *FIXTURE_PATH);
 }
 
 #[tokio::test]

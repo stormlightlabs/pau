@@ -97,7 +97,7 @@ impl Fixture {
             PiSessionRegistry::new(database.processes()),
             DiscoverPiOptions {
                 executable_path: Some(directory.path().join("missing pi")),
-                path: crate::sessions::tests::FIXTURE_PATH.into(),
+                path: crate::sessions::tests::FIXTURE_PATH.as_str().into(),
                 home_directory: Some(directory.path().to_path_buf()),
                 agent_directory: None,
                 session_directory: None,
@@ -108,7 +108,7 @@ impl Fixture {
         .with_claude_discovery(DiscoverClaudeOptions {
             executable_path: installed.then_some(claude),
             bridge_path: installed.then_some(bridge),
-            path: crate::sessions::tests::FIXTURE_PATH.into(),
+            path: crate::sessions::tests::FIXTURE_PATH.as_str().into(),
         });
         let app = router_with_services(
             ApiToken::configured(TOKEN).unwrap(),

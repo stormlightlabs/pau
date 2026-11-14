@@ -9,7 +9,8 @@ Read these indexes and every document they link before changing the project:
   The tasks themselves live in Linear, as [Tasks](#tasks) describes.
 
 Do not repeat their content here. Update the owning document when a product or
-architecture decision changes.
+architecture decision changes. For a plan or spec, that is the matching Linear
+project document, as [Tasks](#tasks) says.
 
 ## Commands
 
@@ -117,6 +118,8 @@ Every issue follows these rules:
   pre-existing findings. Do not defer or report those findings as separate
   follow-up work. Keep defects found outside required checks separate unless
   they block verification.
+- Do not add to or edit `dev/plan/` or `dev/spec/`. Write a plan or spec
+  change in the matching Linear project document.
 - Do not write CHANGELOG entries in an issue's pull request. Changelog updates
   are being automated from the squash commits on `main`.
 - Write commit messages and pull request descriptions without agent

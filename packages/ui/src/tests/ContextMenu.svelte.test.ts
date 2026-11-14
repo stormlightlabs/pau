@@ -61,6 +61,16 @@ test('keeps the menu on screen when its anchor starts off the left and top edges
 	expect(bounds.top).toBe(8);
 });
 
+test('keeps the menu on screen when its anchor starts past the right and bottom edges', async () => {
+	await renderMenu(vi.fn(), vi.fn(), { x: innerWidth + 200, y: innerHeight + 50 });
+	const menu = page.getByRole('menu', { name: 'Session actions' });
+
+	await expect.element(menu).toBeInViewport({ ratio: 1 });
+	const bounds = menu.element().getBoundingClientRect();
+	expect(bounds.right).toBe(innerWidth - 8);
+	expect(bounds.bottom).toBe(innerHeight - 8);
+});
+
 test('explains a disabled item and refuses it', async () => {
 	const { onSelect, onClose } = await renderMenu();
 	const archive = page.getByRole('menuitem', { name: 'Archive' });

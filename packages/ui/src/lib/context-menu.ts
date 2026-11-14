@@ -18,7 +18,10 @@ export type ContextMenuRequest = {
 	/** Viewport coordinates of the menu's top-left corner before it is kept on screen. */
 	x: number;
 	y: number;
-	/** Whether the keyboard opened the menu, which skips the entry animation. */
+	/**
+	 * Whether the keyboard opened the menu. It skips the entry animation, and
+	 * the menu moves to the invoker once a pane around it stops sliding.
+	 */
 	keyboard: boolean;
 	/** The element that opened the menu. Focus returns to it when the menu closes. */
 	invoker: HTMLElement;
@@ -53,8 +56,13 @@ export function contextMenuRequest(
 	const invoker = focusable && owner.contains(focusable) ? focusable : owner;
 	const pointer = event instanceof MouseEvent && (event.clientX !== 0 || event.clientY !== 0);
 	if (pointer) return { label, items, x: event.clientX, y: event.clientY, keyboard: false, invoker, onSelect };
-	const bounds = invoker.getBoundingClientRect();
-	return { label, items, x: bounds.left + 8, y: bounds.bottom, keyboard: true, invoker, onSelect };
+	return { label, items, ...keyboardAnchor(invoker), keyboard: true, invoker, onSelect };
+}
+
+/** Where a keyboard-opened menu starts: just inside the element's left edge, below it. */
+export function keyboardAnchor(element: Element): { x: number; y: number } {
+	const bounds = element.getBoundingClientRect();
+	return { x: bounds.left + 8, y: bounds.bottom };
 }
 
 /** Names the action that shows a path in the system file manager. */

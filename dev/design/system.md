@@ -338,6 +338,8 @@ on a 15% accent band. Everything under the head hangs from the question's
 leading edge. Its actions carry key caps, and Allow once is the primary. While
 Pau reconnects, the card stays visible and its actions disable with a reason.
 
+### Context menu
+
 Sessions, workspaces, files, and transcript messages open a context menu on
 right-click, `Shift+F10`, or the menu key. The menu is an in-app popover in the
 top layer, not a native menu, so it uses the theme tokens, behaves the same in
@@ -347,6 +349,8 @@ or that the item's state refuses, stays visible and disabled with its reason
 underneath. Escape, Tab, or a choice closes the menu and returns focus to the
 item. File menus can reveal a file in the system file manager but never launch
 it in another application, because the webview renders agent-generated content.
+
+### Select and pickers
 
 Single-choice settings use the shared `Select` dropdown instead of a native
 `<select>`. The trigger is a field: control row height, control radius, the
@@ -368,6 +372,8 @@ open their list and error upward from the top of the footer, and below only
 when the space above is too short, so neither covers Attach image or Send
 prompt when the actions sit on the row above them.
 
+### Transcript entries
+
 Transcript entries start at the transcript's left edge, where assistant prose
 and the session title start. Everything else in an entry starts on one inset,
 `space/5` in from that edge: user message text, disclosure summaries, tool
@@ -386,8 +392,12 @@ right chevron centered in the inset that turns down while the entry is open,
 muted summary text that turns to normal text on hover, and no native marker. A
 failed tool row colors its chevron with the danger role.
 
+### Status marks
+
 Status marks in a row get a column as wide as the mark and sit `space/2` from
 the label, in the bay as in the page header.
+
+### Hover and press
 
 Hover and press change color only. No control moves, scales, or resizes when
 pressed, so a pressed row never shifts its neighbors. The shared rules in
@@ -468,8 +478,7 @@ Running and travels to the top of Needs you.
   state reads before the strip moves.
 - The travel takes 640ms from the strip's visible place. Over the first 15%,
   the strip lifts 4px, takes the lift shadow and moves from the bay to the
-  raised surface. It moves on the exponential ease-out and settles on the
-  standard curve.
+  raised surface. It moves on `ease-out` and settles on `ease-settle`.
 - The strips and headings it passes slide aside over 480ms on the same
   ease-out, after a 90ms delay.
 - Under reduced motion, the strip changes place at once and its band fades in
@@ -484,15 +493,15 @@ next to the scale tokens. `packages/ui/src/motion.ts` exports the same values
 for Svelte transitions, and a contract test keeps the two in sync. No
 component uses a literal duration or easing keyword.
 
-| Token               | Value                           | Use                                       |
-| ------------------- | ------------------------------- | ----------------------------------------- |
-| `duration-feedback` | 120ms                           | Hover, press, selection and state color   |
-| `duration-move`     | 240ms                           | Overlays, menus, dialogs and disclosures  |
-| `arrival-travel`    | 640ms                           | The arrival                               |
-| `arrival-displace`  | 480ms after a 90ms delay        | Strips the arrival passes                 |
-| `mark-spin`         | 900ms per turn, linear          | The running mark only                     |
-| `ease-out`          | `cubic-bezier(0.16, 1, 0.3, 1)` | Every transition and the arrival's travel |
-| `ease-settle`       | `cubic-bezier(0.2, 0, 0, 1)`    | The arrival's lift and settle             |
+| Token              | Value                           | Use                                       |
+| ------------------ | ------------------------------- | ----------------------------------------- |
+| `duration-quick`   | 120ms                           | Hover, press, selection and state color   |
+| `duration-move`    | 240ms                           | Overlays, menus, dialogs and disclosures  |
+| `arrival-travel`   | 640ms                           | The arrival                               |
+| `arrival-displace` | 480ms after a 90ms delay        | Strips the arrival passes                 |
+| `mark-spin`        | 900ms per turn, linear          | The running mark only                     |
+| `ease-out`         | `cubic-bezier(0.16, 1, 0.3, 1)` | Every transition and the arrival's travel |
+| `ease-settle`      | `cubic-bezier(0.2, 0, 0, 1)`    | The arrival's lift and settle             |
 
 The root element's `data-motion` attribute collapses movement distances to
 zero under reduced motion, so a slide becomes a fade.
@@ -507,24 +516,24 @@ tool row or session status, are not delayed.
 
 ### Rules by component class
 
-| Component                   | Enter                               | Exit     | Notes                        |
-| --------------------------- | ----------------------------------- | -------- | ---------------------------- |
-| Hover and press             | feedback, color only                | feedback | Instant in dense lists       |
-| Focus ring                  | instant                             | instant  | Never transition `outline`   |
-| Selection                   | feedback, color                     | feedback | No sliding indicator         |
-| Session status              | feedback, color                     | feedback | One spinner only for running |
-| Strip entering Needs you    | the arrival                         | instant  | Fade only when reduced       |
-| Disclosure (tool, thinking) | move, rows 0fr to 1fr               | feedback | Instant if streaming or tall |
-| Popover, menu (pointer)     | move, fade                          | feedback | Origin at the anchor         |
-| Completion list (keyboard)  | instant                             | instant  |                              |
-| Command palette             | instant, feedback fade from pointer | instant  | No fade under reduced motion |
-| Dialog                      | move, fade                          | feedback | Backdrop fades with it       |
-| Narrow workspace overlay    | move, slide from the right          | feedback | Scrim fades with it          |
-| Task-surface change         | instant                             | instant  | No cross-fade between views  |
-| Terminal tab                | instant                             | instant  | Never animate the canvas     |
-| Diff hunk update            | 1s background tint fade             | —        | Static marker when reduced   |
-| Transcript streaming        | none                                | —        | Append per frame, no fades   |
-| Follow-mode scroll          | jump                                | —        | No smooth scrolling          |
+| Component                   | Enter                            | Exit    | Notes                        |
+| --------------------------- | -------------------------------- | ------- | ---------------------------- |
+| Hover and press             | quick, color only                | quick   | Instant in dense lists       |
+| Focus ring                  | instant                          | instant | Never transition `outline`   |
+| Selection                   | quick, color                     | quick   | No sliding indicator         |
+| Session status              | quick, color                     | quick   | One spinner only for running |
+| Strip entering Needs you    | the arrival                      | instant | Fade only when reduced       |
+| Disclosure (tool, thinking) | move, rows 0fr to 1fr            | quick   | Instant if streaming or tall |
+| Popover, menu (pointer)     | move, fade                       | quick   | Origin at the anchor         |
+| Completion list (keyboard)  | instant                          | instant |                              |
+| Command palette             | instant, quick fade from pointer | instant | No fade under reduced motion |
+| Dialog                      | move, fade                       | quick   | Backdrop fades with it       |
+| Narrow workspace overlay    | move, slide from the right       | quick   | Scrim fades with it          |
+| Task-surface change         | instant                          | instant | No cross-fade between views  |
+| Terminal tab                | instant                          | instant | Never animate the canvas     |
+| Diff hunk update            | 1s background tint fade          | —       | Static marker when reduced   |
+| Transcript streaming        | none                             | —       | Append per frame, no fades   |
+| Follow-mode scroll          | jump                             | —       | No smooth scrolling          |
 
 Interaction rules:
 
@@ -556,7 +565,7 @@ Under reduced motion:
 
 - Movement distances collapse, so movement becomes a fade.
 - The arrival becomes an instant move and a 100ms fade.
-- Opacity and color feedback stays at `feedback` duration or less.
+- Opacity and color feedback stays at `duration-quick` or less.
 - The running mark stops spinning and shows a static ring.
 - Svelte transitions read the shared motion setting and drop movement.
 - Smooth scrolling is off.

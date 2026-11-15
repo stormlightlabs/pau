@@ -47,7 +47,7 @@ typography:
     fontFamily: 'Overpass, ui-sans-serif, sans-serif'
     fontSize: '14px'
     fontWeight: 500
-    lineHeight: '16px'
+    lineHeight: '24px'
   meta:
     fontFamily: 'Overpass, ui-sans-serif, sans-serif'
     fontSize: '12px'
@@ -302,8 +302,8 @@ changes a role's size, weight or line height.
   75ch measure.
 - **Row** (400, 14px, 20px): one-line rows and control text. Buttons use 14px
   at 500, the primary at 600.
-- **Strip name** (500, 14px): the first line of a strip. Mono names drop to
-  13px. The state line is 13px.
+- **Strip name** (500, 14px, 24px): the first line of a strip. Mono names
+  drop to 13px. The state line is 13px on the same 24px line.
 - **Meta** (400, 12px, 16px, Mist): agent names, figures, timestamps and
   chips.
 - **Label** (600, 11px, 0.06em, uppercase, Mist): bay and column section
@@ -469,20 +469,23 @@ session's permission request and a resource's change preview share it.
 - **Default:** raised surface, `line-control` border. Hover moves to selected
   with `line-strong`, press to the bay tone.
 - **Primary:** green fill, Green Ink label at 600. One per surface. Hover
-  mixes 14% white, press 12% black. Disabled drops to raised with Mist and a
-  `line` border, so it never reads as enabled.
+  moves the green a quarter toward the text colour, press nearly half.
+  Disabled drops to raised with Mist and no accent, so it never reads as
+  enabled.
 - **Quiet:** no border at rest, Mist label, raised on hover.
 - **Danger:** Rose label and a 60% Rose border, kept apart from the other
   actions after a header rule. Stop is the example.
 - **Icon:** 32px square with an accessible name.
-- **Disabled:** Ash label, dashed border, transparent ground, no hover.
+- **Disabled:** Mist label and no hover or press. A disabled default button
+  fades its border to half, and a disabled quiet button fades its Mist label
+  further.
 
 ### Inputs
 
 - **Field:** 32px, ground fill, `line-control` border, 3px corner, an
-  optional leading icon and trailing key cap. Focus draws a cyan border and
-  a 1px cyan outline. Invalid turns the border Rose.
-- **Select and picker:** 32px. Pickers are borderless 13px Mist triggers that
+  optional leading icon and trailing key cap. Focus draws the shared 2px cyan
+  ring, 2px outside the field. Invalid turns the border Rose.
+- **Select and picker:** 32px. Pickers are borderless 14px Mist triggers that
   lift to raised on hover and when open.
 - **Check:** 16px square, 3px corner, fills with text colour when checked.
 

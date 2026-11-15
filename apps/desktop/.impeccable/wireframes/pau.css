@@ -555,18 +555,20 @@ kbd {
 		border-color var(--duration-quick) var(--ease-out),
 		color var(--duration-quick) var(--ease-out);
 }
-.btn:hover {
+.btn:hover:not(:disabled, [aria-disabled='true']) {
 	background: var(--selected);
 	border-color: var(--line-strong);
 }
-.btn:active {
+.btn:active:not(:disabled, [aria-disabled='true']) {
 	background: var(--bay);
 }
+/* A disabled button drops to muted text and ignores hover and press. A
+   disabled secondary fades its outline, so in a row of unavailable actions
+   the primary still ranks first. */
 .btn:disabled,
 .btn[aria-disabled='true'] {
-	color: var(--text-disabled);
-	border-style: dashed;
-	background: transparent;
+	color: var(--text-muted);
+	border-color: color-mix(in srgb, var(--line-control) 50%, transparent);
 	cursor: not-allowed;
 }
 .btn svg.icon {
@@ -584,19 +586,20 @@ kbd {
 	color: var(--text-on-accent);
 	font-weight: 600;
 }
-.btn--primary:hover {
-	background: color-mix(in srgb, var(--accent) 86%, white);
-	border-color: color-mix(in srgb, var(--accent) 86%, white);
+/* Hover moves the accent a quarter toward the text colour, press nearly half. */
+.btn--primary:hover:not(:disabled, [aria-disabled='true']) {
+	background: color-mix(in srgb, var(--accent) 75%, var(--text));
+	border-color: color-mix(in srgb, var(--accent) 75%, var(--text));
 }
-.btn--primary:active {
-	background: color-mix(in srgb, var(--accent) 88%, black);
+.btn--primary:active:not(:disabled, [aria-disabled='true']) {
+	background: color-mix(in srgb, var(--accent) 55%, var(--text));
+	border-color: color-mix(in srgb, var(--accent) 55%, var(--text));
 }
 /* A disabled primary drops the accent for the raised surface and muted
    text, so it never reads as enabled. */
 .btn--primary:disabled,
 .btn--primary[aria-disabled='true'] {
-	border-style: solid;
-	border-color: var(--line);
+	border-color: var(--raised);
 	background: var(--raised);
 	color: var(--text-muted);
 	font-weight: 500;
@@ -607,13 +610,16 @@ kbd {
 	border-color: transparent;
 	color: var(--text-muted);
 }
-.btn--quiet:hover {
+.btn--quiet:hover:not(:disabled, [aria-disabled='true']) {
 	background: var(--raised);
 	border-color: transparent;
 	color: var(--text);
 }
+/* A quiet button rests in muted text, so a disabled one fades it further. */
+.btn--quiet:disabled,
 .btn--quiet[aria-disabled='true'] {
 	border-color: transparent;
+	color: color-mix(in srgb, var(--text-muted) 55%, transparent);
 }
 
 .btn--danger {
@@ -621,7 +627,7 @@ kbd {
 	border-color: color-mix(in srgb, var(--danger) 60%, var(--bay));
 	color: var(--danger);
 }
-.btn--danger:hover {
+.btn--danger:hover:not(:disabled, [aria-disabled='true']) {
 	background: var(--danger-wash);
 	border-color: var(--danger);
 	color: color-mix(in srgb, var(--danger) 80%, white);
@@ -655,9 +661,10 @@ kbd {
 .field:hover {
 	border-color: var(--line-strong);
 }
+/* The field draws the shared focus ring for its input. */
 .field:focus-within {
-	border-color: var(--focus);
-	outline: 1px solid var(--focus);
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
 }
 .field__input {
 	flex: 1;
@@ -691,7 +698,7 @@ kbd {
 	border-radius: var(--radius-control);
 	background: transparent;
 	color: var(--text-muted);
-	font-size: var(--size-13);
+	font-size: var(--size-14);
 	line-height: var(--leading-tight);
 	white-space: nowrap;
 	cursor: pointer;
@@ -952,7 +959,7 @@ button.strip {
 	white-space: nowrap;
 	color: var(--text);
 	font-size: var(--size-14);
-	line-height: var(--leading-tight);
+	line-height: var(--leading-prose);
 	font-weight: 500;
 }
 .strip__name.mono {
@@ -973,7 +980,7 @@ button.strip {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	font-size: var(--size-13);
-	line-height: var(--leading-tight);
+	line-height: var(--leading-prose);
 }
 .strip__state.mono {
 	font-size: var(--size-12);
@@ -996,6 +1003,7 @@ button.strip {
 }
 .strip--row .strip__name {
 	font-size: var(--size-13);
+	line-height: var(--leading-ui);
 	font-weight: 400;
 }
 .strip--row .strip__name.mono {
@@ -2553,27 +2561,6 @@ a.tool__target:hover {
 	.views .btn:hover > .views__tip {
 		display: block;
 	}
-}
-/* A disabled danger button keeps the neutral dashed outline. */
-.btn--danger[aria-disabled='true'] {
-	border-color: var(--line-control);
-}
-/* Disabled buttons ignore hover and press. */
-.btn[aria-disabled='true']:hover,
-.btn[aria-disabled='true']:active {
-	background: transparent;
-	border-color: var(--line-control);
-}
-.btn--quiet[aria-disabled='true']:hover,
-.btn--quiet[aria-disabled='true']:active {
-	border-color: transparent;
-	color: var(--text-disabled);
-}
-.btn--primary[aria-disabled='true']:hover,
-.btn--primary[aria-disabled='true']:active {
-	background: var(--raised);
-	border-color: var(--line);
-	color: var(--text-muted);
 }
 /* A disabled view keeps its quiet icon at half strength. */
 .views .btn[aria-disabled='true'] > svg.icon {

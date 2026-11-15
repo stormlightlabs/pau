@@ -44,6 +44,12 @@ PAU_SANDBOX_POLICY_FILE=/path/to/session/host/policy.json \
   pi --extension packages/sandbox/src/pi-extension.ts
 ```
 
+When the session starts, the extension starts the tool host and sets the
+`pau.sandbox` extension status to `{"state":"ready"}`, or to
+`{"state":"unavailable","message":…}` with the reason. Pau waits for that record
+before it reports a sandboxed session as started, stops Pi when it reports
+`unavailable` or never arrives, and does not show the record in the session.
+
 ## Credential references
 
 A sandbox profile can reference a tool credential by its host environment

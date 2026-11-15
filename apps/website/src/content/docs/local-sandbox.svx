@@ -13,8 +13,10 @@ and to their child processes. Terminals and editors that Pau opens stay
 unsandboxed.
 
 When you choose a sandbox, Pau shows the effective access for Pi or Claude
-before any tool runs. If the sandbox cannot start, tool calls fail. Pau never
-runs them outside the sandbox instead.
+before any tool runs. A new Pi session starts only after its sandbox is
+running. If the sandbox cannot start, the session does not start and Pau shows
+why. Pau never runs tools outside the sandbox instead. Sandboxed Claude Code
+sessions cannot start from the desktop app yet.
 
 ## Requirements
 

@@ -8,7 +8,8 @@
  * truncation behavior, denial reports for failed calls, a tool host crash, an
  * operator `!` command, grants applied to a running session, a contained stdio MCP server, an unreviewed
  * extension tool, per-call approval for a tool enabled outside the sandbox,
- * and failing closed when the sandbox cannot start.
+ * the readiness record Pau waits for, and failing closed when the sandbox
+ * cannot start.
  */
 import { spawn } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
@@ -229,6 +230,8 @@ type RunOptions = {
 type PiRun = {
 	ends: ToolEnd[];
 	dialogs: string[];
+	/** Texts of the extension's `pau.sandbox` readiness records, in order. */
+	readiness: string[];
 	stderr: () => string;
 	command: (id: string, body: Record<string, unknown>) => Promise<Record<string, unknown>>;
 	close: () => Promise<void>;
@@ -272,6 +275,7 @@ async function runPi(steps: SmokeStep[], options: RunOptions): Promise<PiRun> {
 	const ends: ToolEnd[] = [];
 	const updates = new Map<string, number>();
 	const dialogs: string[] = [];
+	const readiness: string[] = [];
 	const confirmations = [...(options.confirmations ?? [])];
 	const responses = new Map<string, (data: Record<string, unknown>) => void>();
 	const settled = Promise.withResolvers<void>();
@@ -284,6 +288,7 @@ async function runPi(steps: SmokeStep[], options: RunOptions): Promise<PiRun> {
 	const run: PiRun = {
 		ends,
 		dialogs,
+		readiness,
 		stderr: () => stderr,
 		command,
 		close: async () => {
@@ -311,6 +316,9 @@ async function runPi(steps: SmokeStep[], options: RunOptions): Promise<PiRun> {
 		} else if (event.type === 'extension_ui_request' && event.method === 'confirm' && event.id) {
 			dialogs.push(String((event as { title?: string }).title ?? ''));
 			write({ type: 'extension_ui_response', id: event.id, confirmed: confirmations.shift() ?? false });
+		} else if (event.type === 'extension_ui_request' && event.method === 'setStatus') {
+			const status = event as { statusKey?: string; statusText?: string };
+			if (status.statusKey === 'pau.sandbox') readiness.push(status.statusText ?? '');
 		} else if (event.type === 'agent_settled') {
 			settled.resolve();
 		} else if (event.type === 'response' && event.id) {
@@ -347,6 +355,11 @@ const main = await runPi(
 	{ policyFile: writePolicy(workspaceWrite) }
 );
 reportChecks(main, checks, '');
+report(
+	main.readiness[0] === JSON.stringify({ state: 'ready' }),
+	'the extension reports that the tool host started',
+	main.readiness.join(' | ') || 'no report'
+);
 const operator = await main.command('operator-bash', {
 	type: 'bash',
 	command: `printenv ANTHROPIC_API_KEY; touch ${path.join(outside, 'operator.txt')} 2>&1; echo operator-ok`
@@ -468,6 +481,13 @@ if (process.platform === 'linux') {
 		end?.isError === true && end.text.includes('Sandbox unavailable') && !existsSync(unavailable),
 		'tool calls fail closed when the sandbox cannot start',
 		end?.text.slice(0, 100) ?? 'no result'
+	);
+	const [readiness] = failed.readiness;
+	const parsed = JSON.parse(readiness ?? '{}') as { state?: string; message?: string };
+	report(
+		parsed.state === 'unavailable' && parsed.message?.includes('permission denied') === true,
+		'the extension reports why the sandbox cannot start',
+		readiness ?? 'no report'
 	);
 	await failed.close();
 }

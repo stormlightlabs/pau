@@ -52,7 +52,13 @@ pub(crate) static FIXTURE_PATH: LazyLock<String> = LazyLock::new(|| {
 
 /// A Pi RPC stand-in. It records every command in the workspace, answers the
 /// controls the session API sends, and exits with status 3 without answering
-/// a prompt whose text is `exit`. Shell commands other than `echo hi` and
+/// a prompt whose text is `exit`. Started with a sandbox policy file, it
+/// records the file's path and, after answering the first `get_state`,
+/// reports the sandbox the way Pau's extension does: unavailable when the
+/// workspace holds `sandbox-fails`, never when it holds `sandbox-silent`, and
+/// ready otherwise.
+///
+/// Beyond that, shell commands other than `echo hi` and
 /// `sleep 60`, which runs until `abort_bash`, fail. A resumed session answers `get_messages`
 /// with the messages of its file, after a summary once it has compacted, and
 /// renders that file into `export_html`'s output path. A new session, which
@@ -62,6 +68,8 @@ if [ "$1" = '--version' ]; then echo 1.0.0; exit 0; fi
 [ "$1" = '--mode' ] && [ "$2" = 'rpc' ] || exit 64
 printf '%s\n' "$*" > "$PWD/args.txt"
 printf '%s' "$PATH" > "$PWD/path.txt"
+sandbox=${PAU_SANDBOX_POLICY_FILE:+pending}
+[ -n "$sandbox" ] && printf '%s' "$PAU_SANDBOX_POLICY_FILE" > "$PWD/policy-file.txt"
 current=model-one
 session_file=
 [ "$3" = '--session' ] && session_file=$4
@@ -74,6 +82,14 @@ while IFS= read -r command; do
     case "$command" in
         *'"type":"get_state"'*)
             printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"%s","sessionFile":"%s/session.jsonl","thinkingLevel":"%s","sessionName":"%s","model":{"provider":"fixture","id":"%s"}}}\n' "$id" "$native" "$PWD" "$level" "$name" "$current"
+            if [ "$sandbox" = pending ]; then
+                sandbox=reported
+                if [ -f "$PWD/sandbox-fails" ]; then
+                    printf '%s\n' '{"type":"extension_ui_request","id":"sandbox","method":"setStatus","statusKey":"pau.sandbox","statusText":"{\"state\":\"unavailable\",\"message\":\"self-test exited 1: bwrap: setting up uid map: Permission denied\"}"}'
+                elif [ ! -f "$PWD/sandbox-silent" ]; then
+                    printf '%s\n' '{"type":"extension_ui_request","id":"sandbox","method":"setStatus","statusKey":"pau.sandbox","statusText":"{\"state\":\"ready\"}"}'
+                fi
+            fi
             ;;
         *'"type":"get_available_thinking_levels"'*)
             levels='["off","minimal","low","medium","high","xhigh"]'
@@ -247,6 +263,18 @@ impl Fixture {
         fs::set_permissions(&pi, fs::Permissions::from_mode(0o755)).unwrap();
         let workspace_root = directory.path().join("project");
         fs::create_dir(&workspace_root).unwrap();
+        // Stand-ins for the containment executables, so sandboxed starts
+        // resolve on every host. The fake Pi never runs them.
+        let tools = directory.path().join("sandbox-tools");
+        fs::create_dir(&tools).unwrap();
+        for (name, script) in [
+            ("rg", "#!/bin/sh\nexit 0\n"),
+            ("socat", "#!/bin/sh\nexit 0\n"),
+            ("bwrap", "#!/bin/sh\necho bubblewrap 0.12.0\n"),
+        ] {
+            fs::write(tools.join(name), script).unwrap();
+            fs::set_permissions(tools.join(name), fs::Permissions::from_mode(0o755)).unwrap();
+        }
         let database = Database::open(":memory:").await.unwrap();
         let workspaces = WorkspaceService::new(database.workspaces());
         let workspace = workspaces.open(&workspace_root, None).await.unwrap();
@@ -262,7 +290,8 @@ impl Fixture {
                 working_directory: directory.path().to_path_buf(),
             },
             events.clone(),
-        );
+        )
+        .with_sandbox_start_timeout(Duration::from_secs(3));
         let app = router_with_services(
             ApiToken::configured(TOKEN).unwrap(),
             events.clone(),
@@ -272,7 +301,7 @@ impl Fixture {
             Some(SandboxApi::new(
                 database.sandbox_selection(),
                 directory.path().join("sandbox"),
-                std::env::var_os("PATH").unwrap_or_default(),
+                format!("{}:{}", tools.display(), *FIXTURE_PATH).into(),
             )),
             Some(sessions),
         );
@@ -310,6 +339,30 @@ impl Fixture {
             Some(json!({"workspace_id": self.workspace_id, "model": model})),
         )
         .await
+    }
+
+    /// Selects the workspace-write sandbox as the workspace default.
+    async fn select_sandbox(&self) {
+        let sandboxed: SandboxSelection = serde_json::from_value(json!({
+            "mode": "sandboxed",
+            "settings": {
+                "profile": "workspace-write",
+                "grants": {"domains": [], "writable_roots": [], "unix_sockets": false},
+            },
+        }))
+        .unwrap();
+        self.database
+            .sandbox_selection()
+            .set_workspace_default(&self.workspace_id, &sandboxed, &diagnostic_timestamp())
+            .await
+            .unwrap();
+    }
+
+    /// Entries in the parent of the per-session sandbox directories.
+    fn sandbox_directories(&self) -> Vec<PathBuf> {
+        fs::read_dir(self._directory.path().join("sandbox"))
+            .map(|entries| entries.map(|entry| entry.unwrap().path()).collect())
+            .unwrap_or_default()
     }
 
     /// Command types the fake Pi received, in order.
@@ -927,23 +980,133 @@ async fn refuses_to_start_without_a_usable_launch() {
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 
-    let sandboxed: SandboxSelection = serde_json::from_value(json!({
-        "mode": "sandboxed",
-        "settings": {
-            "profile": "workspace-write",
-            "grants": {"domains": [], "writable_roots": [], "unix_sockets": false},
-        },
-    }))
-    .unwrap();
-    fixture
-        .database
-        .sandbox_selection()
-        .set_workspace_default(&fixture.workspace_id, &sandboxed, &diagnostic_timestamp())
-        .await
-        .unwrap();
-    let (status, error) = fixture.start(None).await;
+    fixture.select_sandbox().await;
+    let claude = json!({"workspace_id": fixture.workspace_id, "agent": "claude"});
+    let (status, error) = fixture.call("POST", "/api/sessions", Some(claude)).await;
     assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
     assert_eq!(error["code"], "sandboxed_session_unsupported");
+}
+
+#[tokio::test]
+async fn starts_pi_with_the_sandbox_extension_and_waits_for_its_tool_host() {
+    let fixture = Fixture::new(None).await;
+    fixture.select_sandbox().await;
+    let mut stream = fixture.events.subscribe(None);
+
+    let (status, session) = fixture.start(None).await;
+    assert_eq!(status, StatusCode::CREATED, "{session}");
+    let id = session["id"].as_str().unwrap().to_owned();
+
+    // Pi loads the extension from this checkout and reads the policy Pau
+    // wrote for this workspace into the session's own directory.
+    let extension =
+        fs::canonicalize(Path::new(SANDBOX_PACKAGE).join("src/pi-extension.ts")).unwrap();
+    let arguments = fs::read_to_string(fixture.workspace_root.join("args.txt")).unwrap();
+    assert!(
+        arguments.contains(&format!(
+            "--extension {}",
+            Path::new(SANDBOX_PACKAGE)
+                .join("src/pi-extension.ts")
+                .display()
+        )),
+        "{arguments}"
+    );
+    assert!(extension.is_file());
+    let policy_file =
+        PathBuf::from(fs::read_to_string(fixture.workspace_root.join("policy-file.txt")).unwrap());
+    let [directory] = fixture.sandbox_directories().try_into().unwrap();
+    assert!(
+        policy_file.starts_with(&directory),
+        "{}",
+        policy_file.display()
+    );
+    let policy: pau_core::sandbox::SandboxPolicyFile =
+        serde_json::from_slice(&fs::read(&policy_file).unwrap()).unwrap();
+    let root = fs::canonicalize(&fixture.workspace_root).unwrap();
+    assert_eq!(Path::new(&policy.workspace), root);
+    assert!(
+        policy
+            .environment
+            .keys()
+            .all(|name| !name.contains("API_KEY")),
+        "{:?}",
+        policy.environment
+    );
+
+    // The placeholders the sandbox creates are recorded with the process.
+    let process = fixture
+        .database
+        .processes()
+        .get(&id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        process
+            .sandbox_placeholders
+            .contains(&root.join(".mcp.json").to_string_lossy().into_owned()),
+        "{:?}",
+        process.sandbox_placeholders
+    );
+
+    // The readiness record is Pau's own and never reaches clients.
+    let (_, ui) = fixture
+        .call("GET", &format!("/api/sessions/{id}/extension-ui"), None)
+        .await;
+    assert_eq!(ui["statuses"], json!([]));
+
+    let (status, _) = fixture
+        .call("DELETE", &format!("/api/sessions/{id}"), None)
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    next_event(&mut stream, session_changed("stopped")).await;
+    assert!(fixture.sandbox_directories().is_empty());
+    assert!(!stream_has(&mut stream, |event| event
+        .payload
+        .contains("pau.sandbox")));
+}
+
+#[tokio::test]
+async fn fails_a_sandboxed_start_when_the_sandbox_cannot_start() {
+    for (marker, reason) in [
+        (
+            "sandbox-fails",
+            "bwrap: setting up uid map: Permission denied",
+        ),
+        ("sandbox-silent", "did not confirm the sandbox"),
+    ] {
+        let fixture = Fixture::new(None).await;
+        fixture.select_sandbox().await;
+        fs::write(fixture.workspace_root.join(marker), "").unwrap();
+        let mut stream = fixture.events.subscribe(None);
+
+        let (status, error) = fixture.start(None).await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{error}");
+        assert_eq!(error["code"], "sandbox_unavailable");
+        let message = error["message"].as_str().unwrap();
+        assert!(
+            message.starts_with("The sandbox could not start: "),
+            "{message}"
+        );
+        assert!(message.contains(reason), "{message}");
+
+        // Pi stopped, and nothing of the session is left.
+        assert_eq!(
+            fixture.call("GET", "/api/sessions", None).await.1,
+            json!([])
+        );
+        assert!(fixture.sandbox_directories().is_empty());
+        assert!(!stream_has(&mut stream, |event| event.kind
+            == ServerEventKind::SessionChanged));
+    }
+}
+
+/// Whether an event already published matches, without waiting for more.
+fn stream_has(
+    subscription: &mut EventSubscription,
+    mut matches: impl FnMut(&ServerEvent) -> bool,
+) -> bool {
+    std::iter::from_fn(|| subscription.receiver.try_recv().ok()).any(|event| matches(&event))
 }
 
 /// Writes a Pi session file into the fixture workspace's session directory.

@@ -89,7 +89,11 @@
 
 use std::{
     collections::HashMap,
+    ffi::OsStr,
+    fs,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use axum::{
@@ -103,6 +107,7 @@ use pau_agent::{
     AgentSessionStatus, ClaudeSession, DiscoverClaudeOptions, PromptQueueChoice, ThinkingLevel,
 };
 use pau_core::readiness::AgentReadinessReport;
+use pau_core::sandbox::{SandboxError, SandboxSettings};
 use pau_core::{
     ServerEventKind,
     keybindings::{
@@ -123,18 +128,34 @@ use pau_core::{
     },
 };
 use pau_pi::{
-    DiscoverPiOptions, PiCommand, PiCommandSource, PiExtensionUiRequest, PiExtensionUiResponse,
-    PiExtensionWidgetPlacement, PiImage, PiKeybindingSource, PiModel, PiProcessError,
-    PiProcessOutput, PiSession, PiSessionError, PiSessionOutput, PiSessionRegistry,
-    PiSessionRegistryError, PiSessionUsage, StartRegisteredPiSession, discover_pi,
-    find_pi_session_file, list_pi_session_files, pi_configuration_paths, read_pi_keybindings,
+    DiscoverPiMcpOptions, DiscoverPiOptions, PiCommand, PiCommandSource, PiExtensionUiRequest,
+    PiExtensionUiResponse, PiExtensionWidgetPlacement, PiImage, PiKeybindingSource, PiModel,
+    PiProcessError, PiProcessOutput, PiSandboxLaunch, PiSession, PiSessionError, PiSessionOutput,
+    PiSessionRegistry, PiSessionRegistryError, PiSessionUsage, PreparePiSandbox,
+    StartRegisteredPiSession, discover_pi, discover_pi_mcp, find_pi_session_file,
+    list_pi_session_files, pi_configuration_paths, prepare_pi_sandbox, read_pi_keybindings,
 };
 use serde::Deserialize;
 use serde_json::Value;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::sync::broadcast;
 
-use crate::{ApiError, ApiState, EventHub, diagnostic_timestamp, workspace_service};
+use crate::{
+    ApiError, ApiState, EventHub, SandboxApi, credential_environment, diagnostic_timestamp,
+    workspace_service,
+};
+
+/// The `packages/sandbox` directory of the checkout this server was built
+/// from. Sandboxed Pi sessions load its extension, and its tool host reads
+/// the checkout's `node_modules`.
+const SANDBOX_PACKAGE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../packages/sandbox");
+
+/// Status key under which the sandbox extension reports whether a session's
+/// tool host started. Pau consumes the record and never shows it.
+const SANDBOX_STATUS_KEY: &str = "pau.sandbox";
+
+/// How long a sandboxed start waits for the sandbox extension's report.
+const SANDBOX_START_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Matches a search returns when the request sets no limit.
 const DEFAULT_SEARCH_MATCHES: usize = 50;
@@ -153,6 +174,9 @@ struct SessionRecord {
     /// What Pi last reported about the session. Shared between clones so
     /// output forwarding describes the latest state.
     native: Arc<Mutex<NativeState>>,
+    /// Pau-owned directory that holds a sandboxed session's policy and
+    /// temporary files, removed when the process exits.
+    sandbox_directory: Option<PathBuf>,
 }
 
 /// The session state Pi owns, refreshed from `get_state`.
@@ -189,6 +213,8 @@ pub(crate) struct SessionApi {
     events: EventHub,
     /// The last agent readiness report and when it was made. See `readiness`.
     readiness: Arc<tokio::sync::Mutex<Option<(std::time::Instant, AgentReadinessReport)>>>,
+    /// How long a sandboxed start waits for the sandbox extension's report.
+    sandbox_start_timeout: Duration,
 }
 
 impl std::fmt::Debug for SessionApi {
@@ -221,9 +247,32 @@ impl SessionApi {
             extension_ui: Arc::default(),
             events,
             readiness: Arc::default(),
+            sandbox_start_timeout: SANDBOX_START_TIMEOUT,
         };
         tokio::spawn(api.clone().forward(api.registry.subscribe()));
         api
+    }
+
+    /// Shortens the wait for the sandbox extension's report.
+    #[cfg(test)]
+    pub(crate) fn with_sandbox_start_timeout(mut self, timeout: Duration) -> Self {
+        self.sandbox_start_timeout = timeout;
+        self
+    }
+
+    /// Forgets a session whose start failed, stops its process if it runs,
+    /// and removes its sandbox directory. Clients never saw the session, so
+    /// its exit is not published.
+    async fn discard(&self, id: &str) {
+        let record = self
+            .records
+            .lock()
+            .expect("session records lock poisoned")
+            .remove(id);
+        let _ = self.registry.stop(id, diagnostic_timestamp()).await;
+        if let Some(directory) = record.and_then(|record| record.sandbox_directory) {
+            remove_sandbox_directory(&directory);
+        }
     }
 
     /// Replaces the Claude discovery settings, which otherwise search the
@@ -583,6 +632,8 @@ impl SessionApi {
                 continue;
             };
             match tagged.output {
+                // Pau's own record, which `start_session` consumes.
+                PiProcessOutput::Event(event) if sandbox_status(&event).is_some() => {}
                 PiProcessOutput::Event(event) => {
                     if event.get("type").and_then(Value::as_str) == Some("extension_ui_request") {
                         self.apply_extension_request(
@@ -613,6 +664,9 @@ impl SessionApi {
                         .lock()
                         .expect("session records lock poisoned")
                         .remove(&tagged.session_id);
+                    if let Some(directory) = &record.sandbox_directory {
+                        remove_sandbox_directory(directory);
+                    }
                     self.clear_dialogs(&tagged.session_id, &tagged.workspace_id, "exited");
                     self.extension_ui
                         .lock()
@@ -976,8 +1030,14 @@ pub(crate) async fn list_native_sessions(
     }))
 }
 
-/// Starts an unsandboxed session of the requested agent in a registered
-/// workspace, resuming a stored native session when the request names one.
+/// Starts a session of the requested agent in a registered workspace,
+/// resuming a stored native session when the request names one.
+///
+/// When the workspace selects a sandbox, Pi starts with the sandbox extension
+/// and the start returns only after the extension reports that its tool host
+/// runs inside the sandbox. A sandbox that cannot start stops Pi and answers
+/// `503 sandbox_unavailable` with the reason. A sandboxed Claude session is
+/// `501 sandboxed_session_unsupported`.
 ///
 /// An unknown agent is `400 unknown_agent`. A missing or unsupported Pi is
 /// `503 pi_unavailable`, and any other agent that cannot start is
@@ -994,19 +1054,23 @@ pub(crate) async fn start_session(
     let root = workspace_service(&state)?
         .root(&request.workspace_id)
         .await?;
-    // Sandboxed launches are not wired to the desktop yet. Refusing keeps a
-    // sandboxed workspace from silently running tools with full access.
-    if let Some(sandbox) = &state.sandbox {
-        let selection = sandbox
+    let sandbox = match &state.sandbox {
+        Some(sandbox) => sandbox
             .selections
             .get(&request.workspace_id, None)
             .await
-            .map_err(|error| ApiError::from(pau_core::workspace::WorkspaceError::from(error)))?;
-        if selection.effective().settings().is_some() {
+            .map_err(|error| ApiError::from(pau_core::workspace::WorkspaceError::from(error)))?
+            .effective()
+            .settings()
+            .map(|settings| (sandbox.clone(), settings.clone())),
+        None => None,
+    };
+    if agent == AgentKind::Claude {
+        // Refusing keeps a sandboxed workspace from running Claude's tools
+        // with full access.
+        if sandbox.is_some() {
             return Err(ApiError::SandboxedSessionUnsupported);
         }
-    }
-    if agent == AgentKind::Claude {
         let summary = api.start_claude(request, root).await?;
         return Ok((StatusCode::CREATED, Json(summary)));
     }
@@ -1035,46 +1099,79 @@ pub(crate) async fn start_session(
         .map_err(|error| ApiError::PiUnavailable(error.to_string()))?;
 
     let id = uuid::Uuid::new_v4().to_string();
+    let mut process = pi.process_options(root.clone(), arguments);
+    let mut sandbox_placeholders = Vec::new();
+    let mut sandbox_directory = None;
+    if let Some((sandbox, settings)) = sandbox {
+        // A short name keeps MCP relay sockets inside the Unix socket path
+        // limit.
+        let directory = sandbox.sessions.join(&id[..8]);
+        let prepare = PiSandboxRequest {
+            sandbox,
+            settings,
+            workspace: root,
+            directory: directory.clone(),
+            agent_directory: pi.configuration.agent_directory.clone(),
+        };
+        let launch = tokio::task::spawn_blocking(move || prepare.prepare())
+            .await
+            .map_err(|error| ApiError::SandboxUnavailable(error.to_string()))?;
+        let launch = match launch {
+            Ok(launch) => launch,
+            Err(error) => {
+                remove_sandbox_directory(&directory);
+                return Err(error);
+            }
+        };
+        launch.apply(&mut process);
+        sandbox_placeholders = launch.placeholders;
+        sandbox_directory = Some(directory);
+    }
     let record = SessionRecord {
         agent: AgentKind::Pi,
         workspace_id: request.workspace_id.clone(),
         started_at: diagnostic_timestamp(),
         capabilities: pau_pi::PI_RPC_CAPABILITIES,
         native: Arc::default(),
+        sandbox_directory,
     };
     api.records
         .lock()
         .expect("session records lock poisoned")
         .insert(id.clone(), record.clone());
+    // Subscribe before Pi starts, so the sandbox report cannot be missed.
+    let mut output = api.registry.subscribe();
     let started = api
         .registry
         .start(StartRegisteredPiSession {
             id: id.clone(),
             workspace_id: request.workspace_id,
             started_at: record.started_at.clone(),
-            process: pi.process_options(root, arguments),
-            sandbox_placeholders: Vec::new(),
+            process,
+            sandbox_placeholders,
         })
         .await;
     let session = match started {
         Ok(session) => session,
         Err(error) => {
-            api.records
-                .lock()
-                .expect("session records lock poisoned")
-                .remove(&id);
+            api.discard(&id).await;
             return Err(error.into());
         }
     };
+    if record.sandbox_directory.is_some()
+        && let Err(reason) = sandbox_started(&mut output, &id, api.sandbox_start_timeout).await
+    {
+        api.discard(&id).await;
+        return Err(ApiError::SandboxUnavailable(format!(
+            "The sandbox could not start: {}.",
+            reason.trim_end_matches('.')
+        )));
+    }
+    drop(output);
     if let Some(SessionModelSelection { provider, model_id }) = request.model
         && let Err(error) = session.select_model(provider, model_id).await
     {
-        // Clients never saw this session, so its exit is not published.
-        api.records
-            .lock()
-            .expect("session records lock poisoned")
-            .remove(&id);
-        let _ = api.registry.stop(&id, diagnostic_timestamp()).await;
+        api.discard(&id).await;
         return Err(error.into());
     }
 
@@ -1083,6 +1180,171 @@ pub(crate) async fn start_session(
     let summary = describe(&id, &record, session_status(session.status().await));
     api.publish(&summary);
     Ok((StatusCode::CREATED, Json(summary)))
+}
+
+/// One sandboxed Pi launch to prepare.
+struct PiSandboxRequest {
+    sandbox: SandboxApi,
+    settings: SandboxSettings,
+    workspace: PathBuf,
+    /// Pau-owned directory for the session's policy and temporary files.
+    directory: PathBuf,
+    /// Pi's agent directory, whose settings say whether pi-mcp-adapter runs.
+    agent_directory: PathBuf,
+}
+
+impl PiSandboxRequest {
+    /// Resolves the policy and writes the policy file and session MCP
+    /// configuration. Blocks on the filesystem.
+    fn prepare(self) -> Result<PiSandboxLaunch, ApiError> {
+        let executables = self
+            .sandbox
+            .executables
+            .as_ref()
+            .map_err(|error| ApiError::SandboxUnavailable(error.clone()))?;
+        let package = Path::new(SANDBOX_PACKAGE);
+        let extension = package.join("src/pi-extension.ts");
+        if !extension.is_file() {
+            return Err(ApiError::SandboxUnavailable(format!(
+                "This build of Pau cannot find its sandbox extension at {}. Turn off the sandbox for this workspace to start a session.",
+                extension.display()
+            )));
+        }
+        // The tool host runs Pi's `node` on the extension's sources and their
+        // dependencies, which a profile that hides the home directory must
+        // still let it read.
+        let mut runtime_roots = vec![package.join("../..")];
+        runtime_roots.extend(node_directory(OsStr::new(&self.sandbox.tool_path)));
+        // pi-mcp-adapter would start every server in the Pi process, outside
+        // the sandbox, unless Pi gets a session configuration of contained
+        // servers.
+        let mcp = discover_pi_mcp(&DiscoverPiMcpOptions {
+            home_directory: self.sandbox.home.clone(),
+            agent_directory: self.agent_directory,
+            workspace: self.workspace.clone(),
+        })
+        .map_err(|error| {
+            ApiError::SandboxUnavailable(format!(
+                "Pau could not read Pi's MCP configuration, so it cannot keep MCP servers inside the sandbox: {error}"
+            ))
+        })?;
+        let mcp_servers = mcp
+            .native_configuration_active
+            .then_some(mcp.configuration.servers);
+        prepare_pi_sandbox(&PreparePiSandbox {
+            settings: &self.settings,
+            workspace: &self.workspace,
+            home: &self.sandbox.home,
+            session_directory: &self.directory,
+            executables,
+            extension: &extension,
+            runtime_roots: &runtime_roots,
+            tool_path: &self.sandbox.tool_path,
+            credential_environment: &credential_environment(&self.settings),
+            mcp_servers: mcp_servers.as_deref(),
+        })
+        .map_err(|error| match error {
+            SandboxError::Invalid(message) => ApiError::InvalidSandbox(message),
+            other => ApiError::SandboxUnavailable(other.to_string()),
+        })
+    }
+}
+
+/// The directory of the first `node` on `path`, after following links.
+fn node_directory(path: &OsStr) -> Option<PathBuf> {
+    pau_agent::absolute_path_entries(path)
+        .map(|directory| directory.join("node"))
+        .find(|candidate| candidate.is_file())
+        .and_then(|node| fs::canonicalize(node).ok())
+        .and_then(|node| node.parent().map(Path::to_path_buf))
+}
+
+/// What the sandbox extension reports once a session's tool host started
+/// or failed to start, as the text of its [`SANDBOX_STATUS_KEY`] status.
+#[derive(Deserialize)]
+#[serde(tag = "state", rename_all = "lowercase")]
+enum SandboxReadiness {
+    Ready,
+    Unavailable { message: String },
+}
+
+/// The text of a sandbox extension status record, if `event` is one.
+fn sandbox_status(event: &Value) -> Option<&str> {
+    (event.get("type")?.as_str()? == "extension_ui_request"
+        && event.get("method")?.as_str()? == "setStatus"
+        && event.get("statusKey")?.as_str()? == SANDBOX_STATUS_KEY)
+        .then(|| {
+            event
+                .get("statusText")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+        })
+}
+
+/// Waits for the sandbox extension to report whether session `id`'s tool
+/// host runs inside the sandbox, and returns why not.
+///
+/// Pi keeps running when an extension fails to load, and its built-in tools
+/// would then run with full access, so a session that never reports fails
+/// too.
+async fn sandbox_started(
+    output: &mut broadcast::Receiver<PiSessionOutput>,
+    id: &str,
+    timeout: Duration,
+) -> Result<(), String> {
+    let report = async {
+        loop {
+            let tagged = match output.recv().await {
+                Ok(tagged) => tagged,
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => {
+                    return Err("Pau stopped before the sandbox started".to_owned());
+                }
+            };
+            if tagged.session_id != id {
+                continue;
+            }
+            match tagged.output {
+                PiProcessOutput::Event(event) => {
+                    let Some(text) = sandbox_status(&event) else {
+                        continue;
+                    };
+                    return match serde_json::from_str(text) {
+                        Ok(SandboxReadiness::Ready) => Ok(()),
+                        Ok(SandboxReadiness::Unavailable { message }) => Err(message),
+                        Err(_) => {
+                            Err("the sandbox extension sent a report Pau cannot read".to_owned())
+                        }
+                    };
+                }
+                PiProcessOutput::Exit(_) => {
+                    return Err("Pi exited before the sandbox started".to_owned());
+                }
+                PiProcessOutput::Diagnostic(_) => {}
+            }
+        }
+    };
+    tokio::time::timeout(timeout, report).await.unwrap_or_else(|_| {
+        Err(format!(
+            "Pi did not confirm the sandbox within {} seconds. Check that Pi can load Pau's sandbox extension.",
+            timeout.as_secs()
+        ))
+    })
+}
+
+/// Removes a sandboxed session's directory. A failure leaves only Pau's own
+/// files behind, so it is logged rather than reported.
+fn remove_sandbox_directory(directory: &Path) {
+    if let Err(error) = fs::remove_dir_all(directory)
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        tracing::warn!(
+            event = "session.sandbox_cleanup_failed",
+            path = %directory.display(),
+            %error,
+            "could not remove a sandboxed session's directory"
+        );
+    }
 }
 
 /// The refusal of a start request that names an agent Pau does not support.

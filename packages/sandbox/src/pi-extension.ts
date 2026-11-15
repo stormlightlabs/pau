@@ -20,6 +20,7 @@ import {
 	type ExtensionContext
 } from '@earendil-works/pi-coding-agent';
 import { explainFailure } from './denials.ts';
+import { SandboxUnavailableError } from './launcher.ts';
 import { startMcpRelays } from './mcp-relay.ts';
 import type { PreloadDenial } from './preload.ts';
 import { SandboxSession } from './sandbox-session.ts';
@@ -40,6 +41,14 @@ const definitions = {
  * with a session MCP configuration that lists contained servers alone.
  */
 const MCP_ADAPTER_SOURCE = /[/\\]pi-mcp-adapter[/\\]/;
+
+/**
+ * Status key of the record that tells Pau whether the tool host started. Its
+ * text is `{"state":"ready"}` or `{"state":"unavailable","message":…}`. Pau
+ * waits for it before a sandboxed session counts as started and never shows
+ * it.
+ */
+const READINESS_STATUS_KEY = 'pau.sandbox';
 
 export default function pauSandbox(pi: ExtensionAPI): void {
 	const policyFile = process.env.PAU_SANDBOX_POLICY_FILE;
@@ -112,6 +121,22 @@ export default function pauSandbox(pi: ExtensionAPI): void {
 		operations: { exec: (command, _cwd, options) => session.run((client) => client.executeBash(command, options)) }
 	}));
 
+	const reportReadiness = async (ctx: ExtensionContext): Promise<void> => {
+		let state: Record<string, string> = { state: 'ready' };
+		try {
+			await session.connect();
+		} catch (error) {
+			const message =
+				error instanceof SandboxUnavailableError
+					? error.reasons.join('; ')
+					: error instanceof Error
+						? error.message
+						: String(error);
+			state = { state: 'unavailable', message };
+		}
+		ctx.ui.setStatus(READINESS_STATUS_KEY, JSON.stringify(state));
+	};
+
 	pi.on('session_start', (_event, ctx) => {
 		context = ctx;
 		const enabled = new Set(session.policy.unsandboxedTools);
@@ -122,6 +147,9 @@ export default function pauSandbox(pi: ExtensionAPI): void {
 		if (disabled.length > 0) {
 			process.stderr.write(`[pau-sandbox] disabled unreviewed tools: ${disabled.join(', ')}\n`);
 		}
+		// Start the tool host now, so a sandbox that cannot start fails the
+		// session start instead of the first tool call. Pi does not wait for it.
+		void reportReadiness(ctx);
 	});
 
 	// A second guard for tools that another extension activates later, and the

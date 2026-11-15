@@ -117,6 +117,20 @@ export default function pauSandbox(pi: ExtensionAPI): void {
 		});
 	}
 
+	// Pi's built-in MCP support starts the servers in its `mcp.json` files in
+	// the Pi process, outside the sandbox. Pi leaves that built-in extension
+	// out when another extension registers `/mcp`, and has no flag to turn it
+	// off. pi-mcp-adapter registers `/mcp` itself whenever Pau gives it a
+	// session MCP configuration, and a second `/mcp` would rename both.
+	if (session.policy.mcpConfig === null) {
+		pi.registerCommand('mcp', {
+			description: 'MCP servers are unavailable while the Pau sandbox is active',
+			async handler(_args, ctx) {
+				ctx.ui.notify("Pi's built-in MCP support does not run in sandboxed sessions yet.", 'warning');
+			}
+		});
+	}
+
 	pi.on('user_bash', () => ({
 		operations: { exec: (command, _cwd, options) => session.run((client) => client.executeBash(command, options)) }
 	}));

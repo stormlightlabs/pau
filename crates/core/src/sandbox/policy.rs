@@ -582,6 +582,8 @@ fn adapter_tools(adapter: SandboxAdapter) -> (Vec<String>, Vec<String>) {
                 .collect(),
             vec![
                 "Tools from other Pi extensions".to_owned(),
+                "Servers from Pi's built-in MCP support, which does not run in sandboxed sessions yet"
+                    .to_owned(),
                 "Remote MCP servers outside the granted domains".to_owned(),
             ],
         ),
@@ -1069,6 +1071,12 @@ mod tests {
                 .disabled_tools
                 .iter()
                 .any(|tool| tool.contains("other Pi extensions"))
+        );
+        assert!(
+            effective
+                .disabled_tools
+                .iter()
+                .any(|tool| tool.contains("Pi's built-in MCP support"))
         );
         assert!(effective.mechanism.contains("Bubblewrap 0.12.0"));
         assert_eq!(effective.executables.len(), 3);

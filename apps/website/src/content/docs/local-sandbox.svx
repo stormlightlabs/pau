@@ -117,6 +117,11 @@ Tools from other Pi extensions are disabled. To allow one, add its name under
 **Tools allowed outside the sandbox**. Each call then asks for your approval and
 runs with your normal access.
 
+Pi's built-in MCP support does not run in sandboxed sessions yet, because it
+would start the servers in `~/.pi/agent/mcp.json` and `.pi/mcp.json` outside the
+sandbox. Without `pi-mcp-adapter`, those servers run only in sessions without a
+sandbox.
+
 With `pi-mcp-adapter` installed, Pau gives the session its own MCP list:
 
 - A stdio server starts inside the sandbox with the same restrictions as every

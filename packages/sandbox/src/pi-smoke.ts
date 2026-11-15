@@ -9,7 +9,8 @@
  * operator `!` command, grants applied to a running session, a contained stdio MCP server, an unreviewed
  * extension tool, per-call approval for a tool enabled outside the sandbox,
  * the readiness record Pau waits for, a profile that hides the real home
- * directory, and failing closed when the sandbox cannot start.
+ * directory, Pi's built-in MCP servers staying stopped in a sandboxed session,
+ * and failing closed when the sandbox cannot start.
  */
 import { spawn } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
@@ -233,6 +234,12 @@ type RunOptions = {
 	confirmations?: boolean[];
 	/** Abort the agent when the tool call with this index starts. */
 	abortAt?: number;
+	/** Start Pi without the sandbox extension, as an unsandboxed session. */
+	unsandboxed?: boolean;
+	/** Trust the workspace's `.pi` files, which Pi otherwise ignores. */
+	approve?: boolean;
+	/** More extensions to load after the sandbox extension. */
+	extensions?: string[];
 };
 
 /** One Pi RPC process running a scripted prompt through the sandbox extension. */
@@ -254,15 +261,15 @@ async function runPi(steps: SmokeStep[], options: RunOptions): Promise<PiRun> {
 			'--mode',
 			'rpc',
 			'--no-session',
-			'--no-approve',
+			options.approve ? '--approve' : '--no-approve',
 			'--provider',
 			'pau-faux',
 			'--model',
 			'scripted',
 			'--extension',
 			source('smoke-extensions.ts'),
-			'--extension',
-			source('pi-extension.ts')
+			...(options.unsandboxed ? [] : ['--extension', source('pi-extension.ts')]),
+			...(options.extensions ?? []).flatMap((extension) => ['--extension', extension])
 		],
 		{
 			cwd: workspace,
@@ -502,6 +509,74 @@ report(
 );
 await hidden.close();
 if (failures.length > 0) console.log(`\nPi stderr:\n${hidden.stderr().trim()}`);
+
+// Pi's built-in MCP support would start these servers in the Pi process,
+// outside the sandbox, so a sandboxed session must not start them. Direct
+// exposure makes the first prompt wait until Pi has started its servers.
+const builtInMcp = (marker: string): string =>
+	JSON.stringify({
+		mcpServers: {
+			[path.basename(marker, '.txt')]: {
+				command: '/bin/sh',
+				args: ['-c', `echo started > ${marker}`],
+				exposure: 'direct'
+			}
+		}
+	});
+const mcpFiles = {
+	[path.join(home, '.pi/agent/mcp.json')]: path.join(outside, 'global-mcp.txt'),
+	[path.join(workspace, '.pi/mcp.json')]: path.join(outside, 'project-mcp.txt')
+};
+const mcpMarkers = Object.values(mcpFiles);
+for (const [file, marker] of Object.entries(mcpFiles)) writeFileSync(file, builtInMcp(marker));
+const startedServers = (): string[] =>
+	mcpMarkers.filter((marker) => existsSync(marker)).map((marker) => path.basename(marker));
+const sandboxedMcp = await runPi([], { policyFile: writePolicy(workspaceWrite), approve: true });
+report(
+	startedServers().length === 0,
+	"Pi's built-in MCP servers do not start in a sandboxed session",
+	startedServers().join(', ')
+);
+await sandboxedMcp.close();
+const unsandboxedMcp = await runPi([], { policyFile: writePolicy(workspaceWrite), approve: true, unsandboxed: true });
+report(
+	startedServers().length === mcpMarkers.length,
+	"Pi's built-in MCP servers start in an unsandboxed session",
+	startedServers().join(', ') || 'none started'
+);
+await unsandboxedMcp.close();
+if (failures.length > 0) console.log(`\nPi stderr:\n${sandboxedMcp.stderr().trim()}`);
+for (const marker of mcpMarkers) rmSync(marker, { force: true });
+
+// With pi-mcp-adapter loaded, Pau gives it a session MCP configuration and
+// the adapter owns `/mcp`, so the sandbox extension must not register a
+// second one. The stand-in adapter registers only the command.
+const adapter = path.join(fixture.root, 'pi-mcp-adapter/index.ts');
+mkdirSync(path.dirname(adapter));
+writeFileSync(
+	adapter,
+	"export default (pi) => pi.registerCommand('mcp', { description: 'adapter', handler: async () => {} });\n"
+);
+const adapterPolicy = writePolicy(workspaceWrite);
+const policy = JSON.parse(readFileSync(adapterPolicy, 'utf8')) as Record<string, unknown>;
+writeFileSync(adapterPolicy, JSON.stringify({ ...policy, mcpConfig: path.join(session, 'host/mcp.json') }));
+const withAdapter = await runPi([], { policyFile: adapterPolicy, approve: true, extensions: [adapter] });
+const listed = (await withAdapter.command('commands', { type: 'get_commands' })) as {
+	commands?: { name: string; sourceInfo?: { path?: string } }[];
+};
+const mcpCommands = (listed.commands ?? []).filter((command) => command.name.startsWith('mcp'));
+report(
+	startedServers().length === 0 &&
+		mcpCommands.length === 1 &&
+		mcpCommands[0]?.name === 'mcp' &&
+		mcpCommands[0].sourceInfo?.path === adapter,
+	'pi-mcp-adapter keeps `/mcp` and the built-in MCP servers stay stopped',
+	mcpCommands.map((command) => `${command.name} ${command.sourceInfo?.path ?? ''}`).join(', ') ||
+		startedServers().join(', ')
+);
+await withAdapter.close();
+if (failures.length > 0) console.log(`\nPi stderr:\n${withAdapter.stderr().trim()}`);
+for (const file of [...Object.keys(mcpFiles), ...mcpMarkers]) rmSync(file, { force: true });
 
 // When Bubblewrap cannot run, tool calls fail instead of running in the Pi
 // process. The fake bwrap reports a version, so Pau's resolver pins it.

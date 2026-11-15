@@ -76,7 +76,11 @@ const effective: EffectiveSandboxView = {
 	],
 	sandboxedTools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls', 'MCP server docs'],
 	unsandboxedTools: [],
-	disabledTools: ['Tools from other Pi extensions', 'MCP server linear: its host is not a granted domain'],
+	disabledTools: [
+		'Tools from other Pi extensions',
+		"Servers from Pi's built-in MCP support, which does not run in sandboxed sessions yet",
+		'MCP server linear: its host is not a granted domain'
+	],
 	placeholders: ['/home/me/work/pau/.mcp.json', '/home/me/work/pau/.claude'],
 	knownGaps: [
 		'Unix sockets cannot be filtered by path, so the socket grant allows all of them',

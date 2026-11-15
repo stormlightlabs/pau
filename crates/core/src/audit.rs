@@ -160,6 +160,9 @@ enum Command {
 pub struct AuditLog {
     sender: Option<mpsc::UnboundedSender<Command>>,
     redactor: Redactor,
+    /// How long [`AuditLog::close`] waits: [`AUDIT_CLOSE_LIMIT`] outside
+    /// tests. The default log has no writer, so it never waits.
+    close_limit: Duration,
 }
 
 impl std::fmt::Debug for AuditLog {
@@ -214,7 +217,16 @@ impl AuditLog {
         Self {
             sender: Some(sender),
             redactor,
+            close_limit: AUDIT_CLOSE_LIMIT,
         }
+    }
+
+    /// Makes [`AuditLog::close`] wait at most `limit`, so a test can reach
+    /// the limit on the real clock, which SQLite's thread runs on.
+    #[cfg(test)]
+    fn with_close_limit(mut self, limit: Duration) -> Self {
+        self.close_limit = limit;
+        self
     }
 
     /// Queues one entry, timestamped now, and returns without waiting.
@@ -272,12 +284,12 @@ impl AuditLog {
         if sender.send(Command::Close(done)).is_err() {
             return true;
         }
-        match tokio::time::timeout(AUDIT_CLOSE_LIMIT, closed).await {
+        match tokio::time::timeout(self.close_limit, closed).await {
             Ok(_) => true,
             Err(_) => {
                 tracing::warn!(
                     event = "audit.close_timed_out",
-                    limit_ms = AUDIT_CLOSE_LIMIT.as_millis(),
+                    limit_ms = self.close_limit.as_millis(),
                     "audit records were still being written when the limit passed"
                 );
                 false
@@ -438,21 +450,36 @@ mod tests {
         assert_eq!(exit_codes, (0..200).collect::<Vec<_>>());
     }
 
-    #[tokio::test(start_paused = true)]
+    /// Runs on the real clock: SQLite's thread does, so a paused clock would
+    /// reach the limit while a healthy insert was still running.
+    #[tokio::test]
     async fn close_gives_up_on_a_stuck_disk_after_the_limit() {
+        let limit = Duration::from_millis(300);
         let directory = tempdir().unwrap();
         let path = directory.path().join("pau.sqlite3");
         let database = Database::open(&path).await.unwrap();
-        let log = AuditLog::new(database.audit(), Redactor::default());
-        // Another writer holds the database, so the insert waits on SQLite's
-        // busy timeout, which runs on the real clock.
+
+        // On a working disk, Close replies well before the limit.
+        let healthy = AuditLog::new(database.audit(), Redactor::default()).with_close_limit(limit);
+        healthy.record(stop(0));
+        let started = std::time::Instant::now();
+        assert!(healthy.close().await);
+        assert!(started.elapsed() < limit);
+
+        // Another connection holds the write lock, so the insert waits on
+        // SQLite's five-second busy timeout and Close cannot reply in time.
+        let stuck = AuditLog::new(database.audit(), Redactor::default()).with_close_limit(limit);
         let blocker = tokio_rusqlite::rusqlite::Connection::open(&path).unwrap();
         blocker.execute_batch("BEGIN IMMEDIATE").unwrap();
-        log.record(stop(0));
-
-        let started = tokio::time::Instant::now();
-        assert!(!log.close().await);
-        assert_eq!(started.elapsed(), AUDIT_CLOSE_LIMIT);
+        stuck.record(stop(1));
+        let started = std::time::Instant::now();
+        assert!(!stuck.close().await);
+        let elapsed = started.elapsed();
+        assert!(elapsed >= limit, "returned after {elapsed:?}");
+        assert!(
+            elapsed < Duration::from_secs(4),
+            "returned after {elapsed:?}"
+        );
         blocker.execute_batch("ROLLBACK").unwrap();
     }
 

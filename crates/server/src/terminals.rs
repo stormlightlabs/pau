@@ -40,7 +40,7 @@ use uuid::Uuid;
 
 use super::{
     ApiError, ApiErrorBody, ApiState, EventHub, audit::PendingAudit, diagnostic_timestamp,
-    workspace_service,
+    stop_or_kill, workspace_service,
 };
 
 /// Time a closing terminal has to exit after `SIGHUP` before `SIGKILL`.
@@ -76,11 +76,12 @@ impl TerminalRegistry {
     /// Pau's.
     ///
     /// Terminals close at the same time, so shutdown waits at most about one
-    /// [`CLOSE_GRACE`] however many are open. Each leaves the registry before
-    /// it closes, so its exit watcher does not record the stop again. A
-    /// terminal whose process had already exited was recorded by its watcher
-    /// and is only forgotten.
-    pub(crate) async fn stop_all(&self, audit: &AuditLog) {
+    /// [`CLOSE_GRACE`] however many are open, and a terminal still running
+    /// at `kill_at` is killed. Each leaves the registry before it closes, so
+    /// its exit watcher does not record the stop again. A terminal whose
+    /// process had already exited was recorded by its watcher and is only
+    /// forgotten.
+    pub(crate) async fn stop_all(&self, audit: &AuditLog, kill_at: tokio::time::Instant) {
         let terminals: Vec<_> = self
             .0
             .lock()
@@ -95,7 +96,10 @@ impl TerminalRegistry {
         {
             let audit = audit.clone();
             closing.spawn(async move {
-                let status = managed.terminal.close(CLOSE_GRACE).await;
+                let status = stop_or_kill(managed.terminal.close(CLOSE_GRACE), kill_at, || {
+                    managed.terminal.kill();
+                })
+                .await;
                 audit.record(AuditEntry {
                     workspace_id: Some(managed.workspace_id.clone()),
                     target: Some(managed.id.clone()),

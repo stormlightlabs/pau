@@ -1467,42 +1467,50 @@ impl ServerHandle {
     /// audit records, all within [`SHUTDOWN_LIMIT`].
     ///
     /// Callers must await this before the Tokio runtime ends, so the final
-    /// audit records reach the database. A step that does not finish in its
-    /// share of the limit is abandoned and logged, and an abandoned listener
-    /// returns a [`io::ErrorKind::TimedOut`] error.
+    /// audit records reach the database. The listener gets
+    /// [`LISTENER_STOP_LIMIT`] to finish open requests and is then aborted,
+    /// which returns a [`io::ErrorKind::TimedOut`] error. Sessions and
+    /// terminals then stop at the same time. Any still running
+    /// [`KILL_GRACE`] before the drain's share begins are killed with their
+    /// process groups, so nothing Pau started outlives it.
     pub async fn shutdown(mut self) -> io::Result<()> {
+        let started = tokio::time::Instant::now();
         self.request_shutdown();
-        let task = self
+        let mut task = self
             .task
             .take()
             .expect("server task is present until shutdown");
-        let mut listener = None;
+        let result = match tokio::time::timeout(LISTENER_STOP_LIMIT, &mut task).await {
+            Ok(joined) => joined.map_err(io::Error::other).and_then(|result| result),
+            Err(_) => {
+                task.abort();
+                tracing::warn!(
+                    event = "server.listener_aborted",
+                    limit_ms = LISTENER_STOP_LIMIT.as_millis(),
+                    "open requests kept the listener running, so shutdown aborted it"
+                );
+                Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "open requests kept the listener running past its limit",
+                ))
+            }
+        };
+        let kill_at = started + SHUTDOWN_LIMIT - AUDIT_CLOSE_LIMIT - KILL_GRACE;
         stop_within_limit(
             vec![
                 ShutdownStep {
-                    name: "listener",
-                    work: Box::pin(async {
-                        listener = Some(task.await.map_err(io::Error::other).and_then(|r| r));
-                    }),
-                },
-                ShutdownStep {
                     name: "sessions",
-                    work: Box::pin(self.sessions.stop_all()),
+                    work: Box::pin(self.sessions.stop_all(kill_at)),
                 },
                 ShutdownStep {
                     name: "terminals",
-                    work: Box::pin(self.terminals.stop_all(&self.audit)),
+                    work: Box::pin(self.terminals.stop_all(&self.audit, kill_at)),
                 },
             ],
+            started,
             &self.audit,
         )
         .await;
-        let result = listener.unwrap_or_else(|| {
-            Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "the listener did not stop before the shutdown limit",
-            ))
-        });
         self.diagnostics.record(DiagnosticRecordInput {
             timestamp: diagnostic_timestamp(),
             component: "pau-server".to_owned(),
@@ -1532,6 +1540,16 @@ impl ServerHandle {
 /// the rest.
 pub const SHUTDOWN_LIMIT: Duration = Duration::from_secs(10);
 
+/// Longest time shutdown waits for open requests before it aborts the
+/// listener, so a client that stalls mid-request cannot use up the time the
+/// session and terminal stops need.
+const LISTENER_STOP_LIMIT: Duration = Duration::from_secs(1);
+
+/// Time shutdown leaves between killing the sessions and terminals still
+/// running and the start of the audit drain, for the killed processes to be
+/// reaped and their stops recorded.
+const KILL_GRACE: Duration = Duration::from_secs(1);
+
 /// One shutdown step that runs before the audit drain.
 struct ShutdownStep<'a> {
     /// Names the step in the log when it does not finish.
@@ -1539,25 +1557,29 @@ struct ShutdownStep<'a> {
     work: Pin<Box<dyn Future<Output = ()> + Send + 'a>>,
 }
 
-/// Runs `steps` in order, then writes the records queued on `audit`, and
-/// returns within [`SHUTDOWN_LIMIT`].
+/// Runs `steps` at the same time, then writes the records queued on `audit`,
+/// and returns within [`SHUTDOWN_LIMIT`] of `started`.
 ///
 /// The steps must finish before the limit minus [`AUDIT_CLOSE_LIMIT`], so the
 /// drain keeps its share however slow they are. A step still running at
-/// that point is dropped, and the later steps do not start. Returns the
-/// names of the steps that did not finish, which it also logs.
-async fn stop_within_limit(steps: Vec<ShutdownStep<'_>>, audit: &AuditLog) -> Vec<&'static str> {
-    let steps_deadline = tokio::time::Instant::now() + (SHUTDOWN_LIMIT - AUDIT_CLOSE_LIMIT);
-    let mut unfinished = Vec::new();
-    for step in steps {
-        if !unfinished.is_empty()
-            || tokio::time::timeout_at(steps_deadline, step.work)
-                .await
-                .is_err()
-        {
-            unfinished.push(step.name);
+/// that point is dropped. Returns the names of the steps that did not
+/// finish, which it also logs.
+async fn stop_within_limit(
+    steps: Vec<ShutdownStep<'_>>,
+    started: tokio::time::Instant,
+    audit: &AuditLog,
+) -> Vec<&'static str> {
+    let mut running = steps;
+    let all = std::future::poll_fn(|context| {
+        running.retain_mut(|step| step.work.as_mut().poll(context).is_pending());
+        if running.is_empty() {
+            std::task::Poll::Ready(())
+        } else {
+            std::task::Poll::Pending
         }
-    }
+    });
+    let _ = tokio::time::timeout_at(started + (SHUTDOWN_LIMIT - AUDIT_CLOSE_LIMIT), all).await;
+    let mut unfinished: Vec<_> = running.iter().map(|step| step.name).collect();
     if !audit.close().await {
         unfinished.push("audit");
     }
@@ -1570,6 +1592,24 @@ async fn stop_within_limit(steps: Vec<ShutdownStep<'_>>, audit: &AuditLog) -> Ve
         );
     }
     unfinished
+}
+
+/// Runs `stop` and, when it is still running at `kill_at`, calls `kill` and
+/// keeps waiting, so the stop ends with the killed process's exit and its
+/// caller still records it.
+pub(crate) async fn stop_or_kill<T>(
+    stop: impl Future<Output = T>,
+    kill_at: tokio::time::Instant,
+    kill: impl FnOnce(),
+) -> T {
+    let mut stop = std::pin::pin!(stop);
+    tokio::select! {
+        output = &mut stop => output,
+        () = tokio::time::sleep_until(kill_at) => {
+            kill();
+            stop.await
+        }
+    }
 }
 
 impl Drop for ServerHandle {
@@ -2592,6 +2632,81 @@ pub(crate) mod tests {
         );
     }
 
+    /// A client that stops halfway through a request must not keep the
+    /// listener open long enough to cost the stops that follow it.
+    #[tokio::test]
+    async fn shutdown_aborts_a_listener_held_by_a_stalled_request() {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("project");
+        fs::create_dir(&root).unwrap();
+        let ServerDatabase(database) = open_database_at(Path::new(":memory:")).await.unwrap();
+        let server = start_with_database(
+            (Ipv4Addr::LOCALHOST, 0).into(),
+            test_token(),
+            ServerOptions::default(),
+            ServerDatabase(database.clone()),
+        )
+        .await
+        .unwrap();
+        let address = server.local_addr();
+        let workspace = json_body(
+            &response(
+                address,
+                &post("/api/workspaces", &serde_json::json!({ "path": root })),
+                true,
+            )
+            .await,
+        );
+        response(
+            address,
+            &post(
+                "/api/terminals",
+                &serde_json::json!({
+                    "workspace_id": workspace["id"],
+                    "command": ["/bin/sh", "-c", "sleep 30"],
+                    "size": {"cols": 80, "rows": 24},
+                }),
+            ),
+            true,
+        )
+        .await;
+        // The client asks to continue, so the server's reply shows the
+        // handler is waiting on the body, which never comes in full.
+        let mut stalled = TcpStream::connect(address).await.unwrap();
+        stalled
+            .write_all(
+                format!(
+                    "POST /api/terminals HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {TEST_TOKEN}\r\nContent-Type: application/json\r\nContent-Length: 100\r\nExpect: 100-continue\r\n\r\n"
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let mut reply = [0_u8; 25];
+        stalled.read_exact(&mut reply).await.unwrap();
+        assert!(reply.starts_with(b"HTTP/1.1 100 Continue"));
+        stalled.write_all(b"{\"workspace_id\":").await.unwrap();
+
+        let started = tokio::time::Instant::now();
+        let error = server.shutdown().await.unwrap_err();
+
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+        assert!(started.elapsed() < SHUTDOWN_LIMIT - AUDIT_CLOSE_LIMIT);
+        let operations: Vec<_> = database
+            .audit()
+            .list()
+            .await
+            .unwrap()
+            .iter()
+            .map(|record| record.entry.operation)
+            .collect();
+        assert_eq!(
+            operations,
+            [AuditOperation::TerminalStart, AuditOperation::TerminalStop]
+        );
+        drop(stalled);
+    }
+
     /// A request for `path` with a JSON `body` and the test token.
     fn post(path: &str, body: &serde_json::Value) -> String {
         let body = body.to_string();
@@ -2715,10 +2830,6 @@ pub(crate) mod tests {
         let unfinished = stop_within_limit(
             vec![
                 ShutdownStep {
-                    name: "listener",
-                    work: Box::pin(async {}),
-                },
-                ShutdownStep {
                     name: "sessions",
                     work: Box::pin(std::future::pending()),
                 },
@@ -2727,12 +2838,13 @@ pub(crate) mod tests {
                     work: Box::pin(async {}),
                 },
             ],
+            started,
             &audit,
         )
         .await;
 
         assert_eq!(started.elapsed(), SHUTDOWN_LIMIT - AUDIT_CLOSE_LIMIT);
-        assert_eq!(unfinished, ["sessions", "terminals"]);
+        assert_eq!(unfinished, ["sessions"]);
         let exit_codes: Vec<_> = database
             .audit()
             .list()

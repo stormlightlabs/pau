@@ -401,6 +401,14 @@ impl PiProcess {
             .ok_or(PiProcessError::KillTimeout)
     }
 
+    /// Kills Pi's whole process group now, without waiting.
+    ///
+    /// A [`shutdown`](Self::shutdown) in progress then returns with the
+    /// killed process's exit. Does nothing once Pi has exited.
+    pub fn kill(&self) {
+        let _ = self.kill.try_send(());
+    }
+
     #[cfg(unix)]
     async fn send_signal(&self, signal: i32) -> Result<(), PiProcessError> {
         signal_process_group(self.process_id, signal).map_err(PiProcessError::Signal)

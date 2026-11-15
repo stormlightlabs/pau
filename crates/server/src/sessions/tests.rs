@@ -19,7 +19,8 @@ use tower::ServiceExt;
 
 use super::*;
 use crate::{
-    ApiServices, ApiToken, EventSubscription, SandboxApi, default_diagnostics, router_with_services,
+    ApiServices, ApiToken, EventSubscription, SandboxApi, ServerHandle, default_diagnostics,
+    router_with_services, terminals::TerminalRegistry,
 };
 
 const TOKEN: &str = "0123456789abcdef0123456789abcdef";
@@ -241,6 +242,8 @@ struct Fixture {
     database: Database,
     events: EventHub,
     audit: AuditLog,
+    sessions: SessionApi,
+    terminals: TerminalRegistry,
     app: Router,
 }
 
@@ -272,6 +275,7 @@ impl Fixture {
             events.clone(),
             audit.clone(),
         );
+        let terminals = TerminalRegistry::default();
         let app = router_with_services(
             ApiToken::configured(TOKEN).unwrap(),
             events.clone(),
@@ -283,8 +287,9 @@ impl Fixture {
                     directory.path().join("sandbox"),
                     std::env::var_os("PATH").unwrap_or_default(),
                 )),
-                sessions: Some(sessions),
+                sessions: Some(sessions.clone()),
                 audit: audit.clone(),
+                terminals: terminals.clone(),
                 ..ApiServices::default()
             },
         );
@@ -295,6 +300,8 @@ impl Fixture {
             database,
             events,
             audit,
+            sessions,
+            terminals,
             app,
         }
     }
@@ -1937,4 +1944,97 @@ async fn keeps_seeded_values_out_of_audit_records_events_logs_and_exports() {
             "a seeded value reached the {place}: {text}"
         );
     }
+}
+
+/// Whether any process is left in the group that `leader` led.
+fn group_exists(leader: &str) -> bool {
+    let group: libc::pid_t = leader.trim().parse().unwrap();
+    // SAFETY: signal 0 only checks that the group exists.
+    unsafe { libc::killpg(group, 0) == 0 }
+}
+
+/// Waits for `path`, which a fake process writes once it is ready.
+async fn read_when_written(path: &std::path::Path) -> String {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            match fs::read_to_string(path) {
+                Ok(text) if text.ends_with('\n') => return text,
+                _ => tokio::time::sleep(Duration::from_millis(20)).await,
+            }
+        }
+    })
+    .await
+    .unwrap()
+}
+
+/// A Pi that ignores every stop signal but `SIGKILL`, and a terminal job
+/// that does the same, must still be gone when shutdown returns, with
+/// their stops recorded. Pi's staged stop alone takes longer than
+/// shutdown leaves for it.
+#[tokio::test]
+async fn shutdown_kills_sessions_and_terminals_that_ignore_signals() {
+    let fixture = Fixture::new(Some("stubborn pi")).await;
+    let directory = fixture.workspace_root.parent().unwrap();
+    fs::write(
+        directory.join("stubborn pi"),
+        "#!/bin/sh\n\
+         [ \"$1\" = --version ] && exec \"$(dirname \"$0\")/fake pi\" \"$@\"\n\
+         trap '' INT TERM HUP\n\
+         echo $$ > \"$PWD/pi.pid\"\n\
+         \"$(dirname \"$0\")/fake pi\" \"$@\"\n\
+         exec sleep 600\n",
+    )
+    .unwrap();
+    fs::set_permissions(
+        directory.join("stubborn pi"),
+        fs::Permissions::from_mode(0o755),
+    )
+    .unwrap();
+    let (status, session) = fixture.start(None).await;
+    assert_eq!(status, StatusCode::CREATED, "{session}");
+    let (status, terminal) = fixture
+        .call(
+            "POST",
+            "/api/terminals",
+            Some(json!({
+                "workspace_id": fixture.workspace_id,
+                "command": ["/bin/sh", "-c", "trap '' INT TERM HUP; echo $$ > job.pid; exec sleep 600"],
+                "size": {"cols": 80, "rows": 24},
+            })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{terminal}");
+    let pi = read_when_written(&fixture.workspace_root.join("pi.pid")).await;
+    let job = read_when_written(&fixture.workspace_root.join("job.pid")).await;
+
+    let server = ServerHandle {
+        address: (std::net::Ipv4Addr::LOCALHOST, 0).into(),
+        token: ApiToken::configured(TOKEN).unwrap(),
+        events: fixture.events.clone(),
+        diagnostics: default_diagnostics(),
+        sessions: fixture.sessions.clone(),
+        terminals: fixture.terminals.clone(),
+        audit: fixture.audit.clone(),
+        shutdown: None,
+        task: Some(tokio::spawn(async { Ok(()) })),
+    };
+    let started = std::time::Instant::now();
+    server.shutdown().await.unwrap();
+
+    assert!(started.elapsed() < crate::SHUTDOWN_LIMIT);
+    assert!(!group_exists(&pi), "Pi outlived shutdown");
+    assert!(!group_exists(&job), "the terminal job outlived shutdown");
+    let stops: Vec<_> = fixture
+        .database
+        .audit()
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|record| record.entry.actor == pau_core::audit::AuditActor::Pau)
+        .map(|record| record.entry.operation)
+        .collect();
+    assert_eq!(stops.len(), 2, "{stops:?}");
+    assert!(stops.contains(&pau_core::audit::AuditOperation::SessionStop));
+    assert!(stops.contains(&pau_core::audit::AuditOperation::TerminalStop));
 }

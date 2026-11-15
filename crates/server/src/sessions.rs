@@ -133,12 +133,12 @@ use pau_pi::{
 use serde::Deserialize;
 use serde_json::Value;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
-use tokio::sync::broadcast;
+use tokio::{sync::broadcast, task::JoinSet};
 
 use crate::{
     ApiError, ApiState, EventHub,
     audit::{PendingAudit, export_target},
-    diagnostic_timestamp, workspace_service,
+    diagnostic_timestamp, stop_or_kill, workspace_service,
 };
 
 /// Matches a search returns when the request sets no limit.
@@ -244,26 +244,48 @@ impl SessionApi {
         self
     }
 
-    /// Stops every live session through staged shutdown.
-    pub(crate) async fn stop_all(&self) {
-        self.stop_all_claude().await;
+    /// Stops every live session at once through staged shutdown, and
+    /// records each stop as Pau's.
+    ///
+    /// A session still stopping at `kill_at` is killed with its children,
+    /// and so is one whose staged stop failed, so no agent process outlives
+    /// shutdown.
+    pub(crate) async fn stop_all(&self, kill_at: tokio::time::Instant) {
+        let mut stopping = JoinSet::new();
+        for id in self.claude_ids() {
+            stopping.spawn(self.clone().stop_claude_at_shutdown(id, kill_at));
+        }
         for id in self.registry.active_ids().await {
-            let record = self.record(&id);
-            let stopped = self.registry.stop(&id, diagnostic_timestamp()).await;
-            self.audit.record(shutdown_stop(
-                record,
-                &id,
-                stopped.as_ref().ok().copied().flatten(),
-                stopped.is_ok(),
-            ));
-            if let Err(error) = stopped {
-                tracing::warn!(
-                    event = "session.stop_failed",
-                    session_id = %id,
-                    %error,
-                    "could not stop a Pi session during shutdown"
-                );
-            }
+            stopping.spawn(self.clone().stop_pi_at_shutdown(id, kill_at));
+        }
+        stopping.join_all().await;
+    }
+
+    async fn stop_pi_at_shutdown(self, id: String, kill_at: tokio::time::Instant) {
+        let Some(session) = self.registry.get(&id).await else {
+            return;
+        };
+        let record = self.record(&id);
+        let stopped = stop_or_kill(
+            self.registry.stop(&id, diagnostic_timestamp()),
+            kill_at,
+            || session.kill(),
+        )
+        .await;
+        self.audit.record(shutdown_stop(
+            record,
+            &id,
+            stopped.as_ref().ok().copied().flatten(),
+            stopped.is_ok(),
+        ));
+        if let Err(error) = stopped {
+            session.kill();
+            tracing::warn!(
+                event = "session.stop_failed",
+                session_id = %id,
+                %error,
+                "could not stop a Pi session during shutdown"
+            );
         }
     }
 

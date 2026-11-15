@@ -27,7 +27,7 @@ use serde_json::json;
 use tokio::sync::broadcast;
 
 use super::{SessionApi, SessionRecord, describe, session_status, shutdown_stop, unrequested_stop};
-use crate::{ApiError, diagnostic_timestamp};
+use crate::{ApiError, diagnostic_timestamp, stop_or_kill};
 
 #[cfg(all(test, unix))]
 mod tests;
@@ -60,27 +60,27 @@ impl SessionApi {
         ))
     }
 
-    pub(super) async fn stop_all_claude(&self) {
-        for id in self.claude_ids() {
-            let Some(session) = self.claude_session(&id) else {
-                continue;
-            };
-            let record = self.record(&id);
-            let stopped = session.stop().await;
-            self.audit.record(shutdown_stop(
-                record,
-                &id,
-                stopped.as_ref().ok().and_then(|exit| exit.code),
-                stopped.is_ok(),
-            ));
-            if let Err(error) = stopped {
-                tracing::warn!(
-                    event = "session.stop_failed",
-                    session_id = %id,
-                    %error,
-                    "could not stop a Claude session during shutdown"
-                );
-            }
+    /// Stops one Claude session as [`SessionApi::stop_all`] does.
+    pub(super) async fn stop_claude_at_shutdown(self, id: String, kill_at: tokio::time::Instant) {
+        let Some(session) = self.claude_session(&id) else {
+            return;
+        };
+        let record = self.record(&id);
+        let stopped = stop_or_kill(session.stop(), kill_at, || session.kill()).await;
+        self.audit.record(shutdown_stop(
+            record,
+            &id,
+            stopped.as_ref().ok().and_then(|exit| exit.code),
+            stopped.is_ok(),
+        ));
+        if let Err(error) = stopped {
+            session.kill();
+            tracing::warn!(
+                event = "session.stop_failed",
+                session_id = %id,
+                %error,
+                "could not stop a Claude session during shutdown"
+            );
         }
     }
 

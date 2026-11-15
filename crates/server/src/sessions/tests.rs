@@ -59,7 +59,9 @@ pub(crate) static FIXTURE_PATH: LazyLock<String> = LazyLock::new(|| {
 /// records the file's path and its environment and, after answering the
 /// first `get_state`, reports the sandbox the way Pau's extension does:
 /// unavailable when the workspace holds `sandbox-fails`, never when it holds
-/// `sandbox-silent`, and ready otherwise.
+/// `sandbox-silent`, and ready otherwise. While the workspace holds
+/// `sandbox-held`, it waits to report, so a test can act on a session whose
+/// sandbox is unconfirmed without racing the start's deadline.
 ///
 /// Beyond that, shell commands other than `echo hi` and
 /// `sleep 60`, which runs until `abort_bash`, fail. A resumed session answers `get_messages`
@@ -87,6 +89,7 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"%s","sessionFile":"%s/session.jsonl","thinkingLevel":"%s","sessionName":"%s","model":{"provider":"fixture","id":"%s"}}}\n' "$id" "$native" "$PWD" "$level" "$name" "$current"
             if [ "$sandbox" = pending ]; then
                 sandbox=reported
+                while [ -f "$PWD/sandbox-held" ]; do sleep 0.02; done
                 if [ -f "$PWD/sandbox-fails" ]; then
                     printf '%s\n' '{"type":"extension_ui_request","id":"sandbox","method":"setStatus","statusKey":"pau.sandbox","statusText":"{\"state\":\"unavailable\",\"message\":\"self-test exited 1: bwrap: setting up uid map: Permission denied\"}"}'
                 elif [ ! -f "$PWD/sandbox-silent" ]; then
@@ -371,12 +374,16 @@ impl Fixture {
     /// Waits until Pi runs for a session that has not been confirmed yet,
     /// and returns its ID from the process records.
     async fn pending_session(&self) -> String {
-        loop {
-            if let Some(process) = self.database.processes().list().await.unwrap().pop() {
-                return process.id;
+        tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                if let Some(process) = self.database.processes().list().await.unwrap().pop() {
+                    return process.id;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
+        })
+        .await
+        .expect("Pi never started")
     }
 
     /// Entries in the parent of the per-session sandbox directories.
@@ -1127,11 +1134,12 @@ async fn assert_sandbox_unavailable(fixture: &Fixture, reason: &str) {
         == ServerEventKind::SessionChanged));
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn a_session_waiting_for_its_sandbox_is_hidden_and_refuses_prompts() {
     let fixture = Fixture::new(None).await;
     fixture.select_sandbox(json!({})).await;
-    fs::write(fixture.workspace_root.join("sandbox-silent"), "").unwrap();
+    let held = fixture.workspace_root.join("sandbox-held");
+    fs::write(&held, "").unwrap();
 
     let mut start = Box::pin(fixture.start(None));
     let id = tokio::select! {
@@ -1164,6 +1172,15 @@ async fn a_session_waiting_for_its_sandbox_is_hidden_and_refuses_prompts() {
         let (status, error) = fixture.call(method, &path, body).await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{method} {path}: {error}");
     }
+
+    // Once the sandbox confirms, the session starts and is listed, and Pi
+    // never received the refused commands.
+    fs::remove_file(&held).unwrap();
+    let (status, session) = start.await;
+    assert_eq!(status, StatusCode::CREATED, "{session}");
+    assert_eq!(session["id"], id);
+    let (_, sessions) = fixture.call("GET", "/api/sessions", None).await;
+    assert_eq!(sessions.as_array().unwrap().len(), 1, "{sessions}");
     assert!(
         !fixture
             .commands()
@@ -1172,31 +1189,36 @@ async fn a_session_waiting_for_its_sandbox_is_hidden_and_refuses_prompts() {
         "{:?}",
         fixture.commands()
     );
-
-    let (status, _) = start.await;
-    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    let (status, _) = fixture.call("DELETE", &base, None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn a_cancelled_sandboxed_start_still_stops_its_unconfirmed_session() {
     let fixture = Fixture::new(None).await;
     fixture.select_sandbox(json!({})).await;
-    fs::write(fixture.workspace_root.join("sandbox-silent"), "").unwrap();
+    let held = fixture.workspace_root.join("sandbox-held");
+    fs::write(&held, "").unwrap();
+    fs::write(fixture.workspace_root.join("sandbox-fails"), "").unwrap();
 
-    // The client gives up once Pi has started and the start waits for a
-    // sandbox report that never comes.
+    // The client gives up once Pi has started and the start waits for the
+    // sandbox report.
     let mut start = Box::pin(fixture.start(None));
-    tokio::select! {
+    let id = tokio::select! {
         (status, body) = &mut start => panic!("the start finished first: {status} {body}"),
-        _ = fixture.pending_session() => {}
-    }
+        id = fixture.pending_session() => id,
+    };
     drop(start);
 
-    // The launch goes on without the client: it gives up on the report,
-    // stops Pi, and discards the session and its directory.
+    // The launch goes on without the client: when the sandbox reports that
+    // it cannot start, the launch stops Pi and discards the session and its
+    // directory.
+    fs::remove_file(&held).unwrap();
     for _ in 0..600 {
         let (_, sessions) = fixture.call("GET", "/api/sessions", None).await;
         if sessions == json!([]) && fixture.sandbox_directories().is_empty() {
+            let process = fixture.database.processes().get(&id).await.unwrap();
+            assert!(process.unwrap().ended_at.is_some());
             return;
         }
         tokio::time::sleep(Duration::from_millis(100)).await;

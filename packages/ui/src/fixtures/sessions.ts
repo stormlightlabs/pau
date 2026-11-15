@@ -443,6 +443,19 @@ export const sessionFixtures = {
 			]
 		}
 	],
+	/** A session whose Pi stopped answering, beside sessions in other states. */
+	notResponding: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [
+				session('running', { title: 'Fix diff gutter' }),
+				session('not_responding', { title: 'Migrate the session registry to the new event store' }),
+				session('idle', { title: 'Review fixtures' }),
+				session('stopped', { title: 'Update the changelog tooling' })
+			]
+		}
+	],
 	failed: [
 		{
 			id: 'pau',

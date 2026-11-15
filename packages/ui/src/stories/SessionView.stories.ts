@@ -424,6 +424,21 @@ export const ResourcePressure: Story = {
 	}
 };
 export const Waiting: Story = { args: { workspaces: sessionFixtures.waiting, initialSessionId: 'session-waiting' } };
+export const NotResponding: Story = {
+	args: { workspaces: sessionFixtures.notResponding, initialSessionId: 'session-not_responding' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		// The rail and the session header both show the state.
+		await expect(canvas.getAllByRole('img', { name: 'Not responding' })).toHaveLength(2);
+		const composer = within(canvas.getByRole('form', { name: 'Prompt composer' }));
+		await expect(composer.getByRole('textbox')).toBeDisabled();
+		await expect(
+			composer.getByText('Pi stopped responding. Stop this session and start a new one.')
+		).toBeInTheDocument();
+		await userEvent.click(canvas.getByRole('button', { name: 'Stop' }));
+		await expect(canvas.getByText('session-not_responding: stop')).toBeInTheDocument();
+	}
+};
 export const Failed: Story = {
 	args: { workspaces: sessionFixtures.failed, initialSessionId: 'session-failed' },
 	play: async ({ canvasElement }) => {

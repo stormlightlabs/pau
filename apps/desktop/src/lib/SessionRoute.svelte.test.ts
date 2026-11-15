@@ -228,6 +228,7 @@ test('recalls earlier prompts fetched when the session opens', async () => {
 
 test.each([
 	['pi_unavailable', 503, 'Pau could not find a working Pi installation.'],
+	['agent_not_responding', 504, 'Pi stopped responding.'],
 	['sandboxed_session_unsupported', 501, 'This workspace uses a sandbox']
 ])('explains a %s start failure', async (code, status, expected) => {
 	const { props } = setup({ 'POST /api/sessions': () => json({ code, message: 'backend detail' }, status) });

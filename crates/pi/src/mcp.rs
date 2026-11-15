@@ -976,7 +976,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         use std::time::Duration;
 
-        use crate::{PiProcessOutput, PiShutdownTimeouts, StartPiProcessOptions};
+        use crate::{PiProcessOutput, PiReplyTimeouts, PiShutdownTimeouts, StartPiProcessOptions};
 
         let directory = tempdir().unwrap();
         let executable = directory.path().join("pi-fixture");
@@ -1008,6 +1008,7 @@ for line in sys.stdin:
             working_directory: directory.path().to_path_buf(),
             arguments: Vec::new(),
             environment: Vec::new(),
+            reply_timeouts: PiReplyTimeouts::default(),
             shutdown_timeouts: PiShutdownTimeouts {
                 protocol: Duration::from_millis(100),
                 interrupt: Duration::from_millis(100),

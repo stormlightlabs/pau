@@ -605,6 +605,17 @@ impl SessionApi {
                         self.publish(&describe(&tagged.session_id, &record, status));
                     }
                 }
+                PiProcessOutput::NotResponding => {
+                    self.publish(&describe(
+                        &tagged.session_id,
+                        &record,
+                        SessionStatus::NotResponding,
+                    ));
+                }
+                // Pi wrote again, so the session returns to the status its
+                // events set. The record that showed it follows and publishes
+                // any lifecycle change it carries.
+                PiProcessOutput::Responding => self.publish_current(&tagged.session_id).await,
                 // Stderr can contain anything Pi or its extensions print,
                 // including secrets, so it stays out of the event stream.
                 PiProcessOutput::Diagnostic(_) => {}
@@ -701,6 +712,7 @@ fn session_status(status: AgentSessionStatus) -> SessionStatus {
         AgentSessionStatus::Idle => SessionStatus::Idle,
         AgentSessionStatus::Running => SessionStatus::Running,
         AgentSessionStatus::Waiting => SessionStatus::Waiting,
+        AgentSessionStatus::NotResponding => SessionStatus::NotResponding,
         AgentSessionStatus::Stopping => SessionStatus::Stopping,
         AgentSessionStatus::Stopped => SessionStatus::Stopped,
         AgentSessionStatus::Failed => SessionStatus::Failed,
@@ -789,7 +801,8 @@ fn thinking_level(level: SessionThinkingLevel) -> ThinkingLevel {
 /// the control at all (`unsupported_control`), the session is in the wrong
 /// state (`invalid_session_state`), and the agent refused the request
 /// (`control_rejected`). A process that exits before it answers is
-/// `session_exited`.
+/// `session_exited`, and one that stops answering while it runs is
+/// `agent_not_responding`.
 ///
 /// A failed transcript write gets fixed text rather than the I/O error's,
 /// which can name the temporary file and its folder.
@@ -852,6 +865,9 @@ pub(crate) fn error_response(error: &PiSessionRegistryError) -> (StatusCode, &'s
             }
             PiSessionError::Process(PiProcessError::Start(_)) => {
                 (StatusCode::SERVICE_UNAVAILABLE, "pi_unavailable")
+            }
+            PiSessionError::Process(PiProcessError::NotResponding { .. }) => {
+                (StatusCode::GATEWAY_TIMEOUT, "agent_not_responding")
             }
             PiSessionError::Process(_) | PiSessionError::Export(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal_error")

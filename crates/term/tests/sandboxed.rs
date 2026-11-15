@@ -53,10 +53,49 @@ fn search_path() -> Option<OsString> {
     std::env::join_paths(std::iter::once(directory).chain(std::env::split_paths(&inherited))).ok()
 }
 
+/// Whether this host can start a sandbox, found once per test binary.
+static SANDBOX: tokio::sync::OnceCell<Result<(), String>> = tokio::sync::OnceCell::const_new();
+
 /// Starts a sandboxed shell in a fresh workspace, or returns `None` when this
 /// host cannot run the sandbox. `script` receives a directory outside the
 /// workspace and returns the shell script.
-fn start(script: impl FnOnce(&Path) -> String) -> Option<Fixture> {
+///
+/// A host may have `srt` and still refuse to start a sandbox, as a CI runner
+/// that cannot create nested user namespaces does. A no-op shell, started
+/// once, tells the two apart, so such a host skips the tests rather than
+/// failing every one with the runtime's error.
+async fn start(script: impl FnOnce(&Path) -> String) -> Option<Fixture> {
+    if let Err(output) = SANDBOX.get_or_init(probe_sandbox).await {
+        eprintln!("skipped: this host cannot start a sandbox: {output}");
+        return None;
+    }
+    launch(script)
+}
+
+/// Runs a shell that only prints a marker under the sandbox. Returns the
+/// runtime's output when the marker never appears. A host without `srt`
+/// passes, and [`launch`] reports the skip.
+async fn probe_sandbox() -> Result<(), String> {
+    let Some(mut fixture) = launch(|_| "echo sandbox-ready".into()) else {
+        return Ok(());
+    };
+    let mut seen = Vec::new();
+    let _ = timeout(STEP_LIMIT, async {
+        while let Some(chunk) = fixture.output.recv().await {
+            seen.extend_from_slice(&chunk);
+        }
+    })
+    .await;
+    let seen = String::from_utf8_lossy(&seen);
+    if seen.contains("sandbox-ready") {
+        Ok(())
+    } else {
+        Err(seen.trim().to_owned())
+    }
+}
+
+/// Starts a sandboxed shell without checking that this host can sandbox.
+fn launch(script: impl FnOnce(&Path) -> String) -> Option<Fixture> {
     let Some(path) = search_path() else {
         eprintln!("skipped: srt was not found; run pnpm install or set PAU_SRT");
         return None;
@@ -148,7 +187,8 @@ async fn exit_status(terminal: &Terminal) -> TerminalStatus {
 
 #[tokio::test]
 async fn runs_the_shell_on_a_pty_under_the_sandbox() {
-    let Some(mut fixture) = start(|_| "tty; stty size; read _; stty size; exit 5".into()) else {
+    let Some(mut fixture) = start(|_| "tty; stty size; read _; stty size; exit 5".into()).await
+    else {
         return;
     };
     let seen = read_until(&mut fixture.output, "24 80").await;
@@ -194,7 +234,9 @@ echo done
 "#,
             outside.display()
         )
-    }) else {
+    })
+    .await
+    else {
         return;
     };
     let seen = read_until(&mut fixture.output, "done").await;
@@ -290,7 +332,9 @@ case "$result" in *own=injected*) read -r injected; eval "$injected" ;; esac
 echo done
 "#
         )
-    }) else {
+    })
+    .await
+    else {
         // SAFETY: both descriptors are open and closed only here.
         unsafe {
             libc::close(leader);
@@ -392,7 +436,9 @@ set -m; sleep 0 & fg %1 >/dev/null && echo job-control=ok
 echo done
 "#
         )
-    }) else {
+    })
+    .await
+    else {
         return;
     };
     let seen = read_until(&mut fixture.output, "done").await;
@@ -419,7 +465,9 @@ async fn stops_nohup_jobs_when_the_shell_or_its_parent_goes() {
         "trap '' HUP; nohup sleep 9999 >/dev/null 2>&1 & echo job=$! ready; \
          kill -9 $PPID 2>/dev/null; exit 0"
             .into()
-    }) else {
+    })
+    .await
+    else {
         return;
     };
     let seen = read_until(&mut fixture.output, "ready").await;
@@ -443,7 +491,9 @@ async fn stops_a_chain_that_forks_and_exits() {
          while(1){exit if fork; ++$n % 16 or open(my $f, q(>), q(beat)) and print $f $$}' & \
          echo ready; read _; exit 0"
             .into()
-    }) else {
+    })
+    .await
+    else {
         return;
     };
     let beat = fixture.workspace.join("beat");
@@ -466,7 +516,7 @@ async fn beating(beat: &Path) -> bool {
 /// `--nocapture` to see the figure.
 #[tokio::test]
 async fn measures_the_srt_process() {
-    let Some(mut fixture) = start(|_| "echo ready; read _".into()) else {
+    let Some(mut fixture) = start(|_| "echo ready; read _".into()).await else {
         return;
     };
     read_until(&mut fixture.output, "ready").await;

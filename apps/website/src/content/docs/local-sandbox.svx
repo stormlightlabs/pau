@@ -10,7 +10,8 @@ Agent tools run with your normal access unless you choose a sandbox. Open a
 workspace's **Agent sandbox** view to set the default for new agent sessions. A
 session can override that default. The sandbox applies to tools the agent calls
 and to their child processes. Terminals and editors that Pau opens stay
-unsandboxed unless you open a [sandboxed terminal](#terminals).
+unsandboxed unless you open a sandboxed terminal, as **Terminals** below
+describes.
 
 When you choose a sandbox, Pau shows the effective access for Pi or Claude
 before any tool runs. If the sandbox cannot start, tool calls fail. Pau never

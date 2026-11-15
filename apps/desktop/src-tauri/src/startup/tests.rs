@@ -1,4 +1,4 @@
-use std::{sync::Mutex, time::Duration};
+use std::{ffi::OsString, sync::Mutex, time::Duration};
 
 use pau_core::{
     readiness::{AgentReadiness, AgentReadinessReport},
@@ -8,25 +8,57 @@ use pau_core::{
     },
 };
 use pau_server::ServerOptions;
+use tokio::sync::Semaphore;
 use tokio_rusqlite::rusqlite::Connection;
 
-use super::{Launcher, PauLauncher, StartupState, StepFailure, run};
+use super::{Launcher, PauLauncher, ProcessPath, StartupState, StepFailure, run};
 
 const TOKEN: &str = "abcdefghijklmnopqrstuvwxyz0123456789";
+const LOGIN_PATH: &str = "/login/bin:/usr/bin";
 
 /// Steps that succeed at once and report the agents they are given.
 struct FakeLauncher {
     agents: Vec<AgentReadiness>,
+    /// What the `PATH` step resolves to.
+    path: ProcessPath,
+    /// Holds the `PATH` step until a permit is available.
+    path_gate: Semaphore,
+    /// The `PATH` the backend step received.
+    backend_path: Mutex<Option<OsString>>,
+}
+
+impl FakeLauncher {
+    fn new(agents: Vec<AgentReadiness>) -> Self {
+        Self {
+            agents,
+            path: ProcessPath {
+                path: LOGIN_PATH.into(),
+                failure: None,
+            },
+            path_gate: Semaphore::new(1),
+            backend_path: Mutex::new(None),
+        }
+    }
 }
 
 impl Launcher for FakeLauncher {
     type Database = ();
 
+    async fn read_path(&self) -> ProcessPath {
+        let _permit = self.path_gate.acquire().await.unwrap();
+        self.path.clone()
+    }
+
     async fn open_database(&self) -> Result<(), StepFailure> {
         Ok(())
     }
 
-    async fn start_backend(&self, (): ()) -> Result<DesktopConnection, StepFailure> {
+    async fn start_backend(
+        &self,
+        (): (),
+        path: OsString,
+    ) -> Result<DesktopConnection, StepFailure> {
+        *self.backend_path.lock().unwrap() = Some(path);
         Ok(connection())
     }
 
@@ -87,10 +119,8 @@ fn transitions(snapshots: &[StartupProgress]) -> Vec<(StartupStepId, StartupStep
 
 #[tokio::test]
 async fn runs_each_step_in_order_and_hands_over_the_connection_last() {
-    let state = StartupState::new(Ok(()));
-    let launcher = FakeLauncher {
-        agents: vec![pi(true)],
-    };
+    let state = StartupState::new();
+    let launcher = FakeLauncher::new(vec![pi(true)]);
 
     let (result, snapshots) = run_recorded(&launcher, &state).await;
 
@@ -98,6 +128,7 @@ async fn runs_each_step_in_order_and_hands_over_the_connection_last() {
     assert_eq!(
         transitions(&snapshots),
         [
+            (StartupStepId::LoginShellPath, StartupStepState::Running),
             (StartupStepId::LoginShellPath, StartupStepState::Done),
             (StartupStepId::Database, StartupStepState::Running),
             (StartupStepId::Database, StartupStepState::Done),
@@ -116,14 +147,54 @@ async fn runs_each_step_in_order_and_hands_over_the_connection_last() {
     assert_eq!(last.phase, StartupPhase::Ready);
     assert_eq!(last.connection, Some(connection()));
     assert_eq!(last.readiness.unwrap().agents, [pi(true)]);
+    assert_eq!(
+        launcher.backend_path.lock().unwrap().as_deref(),
+        Some(LOGIN_PATH.as_ref())
+    );
+}
+
+/// The window shows progress while the login shell is still running, and
+/// nothing that needs its `PATH` starts before it finishes.
+#[tokio::test]
+async fn shows_the_path_step_running_and_waits_for_it() {
+    let state = StartupState::new();
+    let launcher = FakeLauncher {
+        path_gate: Semaphore::new(0),
+        ..FakeLauncher::new(vec![pi(true)])
+    };
+    let startup = run_recorded(&launcher, &state);
+    tokio::pin!(startup);
+
+    tokio::select! {
+        _ = &mut startup => panic!("startup finished before the PATH step"),
+        () = tokio::time::sleep(Duration::from_millis(100)) => {}
+    }
+    let waiting = state.snapshot();
+    assert_eq!(
+        waiting.step(StartupStepId::LoginShellPath).state,
+        StartupStepState::Running
+    );
+    for id in [
+        StartupStepId::Database,
+        StartupStepId::Backend,
+        StartupStepId::AgentReadiness,
+    ] {
+        assert_eq!(waiting.step(id).state, StartupStepState::Pending, "{id:?}");
+    }
+    assert_eq!(waiting.connection, None);
+    assert_eq!(*launcher.backend_path.lock().unwrap(), None);
+
+    launcher.path_gate.add_permits(1);
+    let (result, _) = startup.await;
+
+    assert_eq!(result, Ok(()));
+    assert_eq!(state.snapshot().phase, StartupPhase::Ready);
 }
 
 #[tokio::test]
 async fn reports_a_missing_pi_and_still_opens() {
-    let state = StartupState::new(Ok(()));
-    let launcher = FakeLauncher {
-        agents: vec![pi(false)],
-    };
+    let state = StartupState::new();
+    let launcher = FakeLauncher::new(vec![pi(false)]);
 
     let (result, _) = run_recorded(&launcher, &state).await;
 
@@ -148,10 +219,8 @@ async fn ignores_another_agent_that_is_not_ready() {
         reason: Some("Claude Code was not found.".to_owned()),
         ..pi(false)
     };
-    let state = StartupState::new(Ok(()));
-    let launcher = FakeLauncher {
-        agents: vec![pi(true), claude],
-    };
+    let state = StartupState::new();
+    let launcher = FakeLauncher::new(vec![pi(true), claude]);
 
     run_recorded(&launcher, &state).await.0.unwrap();
 
@@ -174,16 +243,11 @@ async fn offers_a_pi_update_or_a_pi_run_for_other_readiness_failures() {
         (outdated, StartupAction::UpdatePi),
         (no_models, StartupAction::RunPi),
     ] {
-        let state = StartupState::new(Ok(()));
-        run_recorded(
-            &FakeLauncher {
-                agents: vec![agent],
-            },
-            &state,
-        )
-        .await
-        .0
-        .unwrap();
+        let state = StartupState::new();
+        run_recorded(&FakeLauncher::new(vec![agent]), &state)
+            .await
+            .0
+            .unwrap();
         let progress = state.snapshot();
         assert_eq!(
             progress.step(StartupStepId::AgentReadiness).action,
@@ -195,15 +259,19 @@ async fn offers_a_pi_update_or_a_pi_run_for_other_readiness_failures() {
 #[tokio::test]
 async fn a_slow_login_shell_fails_its_step_without_stopping_startup() {
     #[cfg(target_os = "macos")]
-    let login = super::login_path_outcome(Err(crate::login_path::LoginPathError::TimedOut));
+    let failure = super::login_path_failure(crate::login_path::LoginPathError::TimedOut);
     #[cfg(not(target_os = "macos"))]
-    let login = Err(StepFailure {
+    let failure = StepFailure {
         reason: "Your login shell took too long.".to_owned(),
         action: None,
-    });
-    let state = StartupState::new(login);
+    };
+    let state = StartupState::new();
     let launcher = FakeLauncher {
-        agents: vec![pi(true)],
+        path: ProcessPath {
+            path: "/usr/bin".into(),
+            failure: Some(failure),
+        },
+        ..FakeLauncher::new(vec![pi(true)])
     };
 
     let (result, _) = run_recorded(&launcher, &state).await;
@@ -220,6 +288,76 @@ async fn a_slow_login_shell_fails_its_step_without_stopping_startup() {
         step.reason
     );
     assert_eq!(progress.phase, StartupPhase::Ready);
+    assert_eq!(
+        launcher.backend_path.lock().unwrap().as_deref(),
+        Some("/usr/bin".as_ref())
+    );
+}
+
+/// Writes an executable script that stands in for the login shell.
+#[cfg(target_os = "macos")]
+fn fake_shell(directory: &std::path::Path, body: &str) -> OsString {
+    use std::os::unix::fs::PermissionsExt;
+
+    let path = directory.join("shell");
+    std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    path.into_os_string()
+}
+
+/// A slow login shell runs off the async runtime, which keeps serving other
+/// work while it runs, and its `PATH` comes first.
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn reads_a_slow_login_shell_off_the_runtime() {
+    let directory = tempfile::tempdir().unwrap();
+    let shell = fake_shell(
+        directory.path(),
+        "sleep 1; printf '__PAU_LOGIN_PATH__/login/bin__PAU_LOGIN_PATH__'",
+    );
+    let launcher = PauLauncher::new(None, ServerOptions::default()).with_shell(shell);
+    // The test runtime has one thread, so the ticks advance only while the
+    // shell runs elsewhere.
+    let ticks = std::cell::Cell::new(0);
+    let count = async {
+        loop {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            ticks.set(ticks.get() + 1);
+        }
+    };
+
+    let path = tokio::select! {
+        path = launcher.read_path() => path,
+        () = count => unreachable!(),
+    };
+
+    assert!(ticks.get() >= 10, "{} ticks", ticks.get());
+    assert_eq!(path.failure, None);
+    let entries: Vec<_> = std::env::split_paths(&path.path).collect();
+    assert_eq!(
+        entries.first(),
+        Some(&std::path::PathBuf::from("/login/bin"))
+    );
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn keeps_the_inherited_path_when_the_login_shell_reports_none() {
+    let directory = tempfile::tempdir().unwrap();
+    let shell = fake_shell(directory.path(), "exit 0");
+    let launcher = PauLauncher::new(None, ServerOptions::default()).with_shell(shell);
+
+    let path = launcher.read_path().await;
+
+    assert_eq!(path.path, std::env::var_os("PATH").unwrap_or_default());
+    let failure = path.failure.unwrap();
+    assert!(
+        failure
+            .reason
+            .starts_with("Pau could not read your login shell"),
+        "{}",
+        failure.reason
+    );
 }
 
 #[tokio::test]
@@ -230,8 +368,11 @@ async fn reports_a_database_from_a_newer_version_and_stops() {
         .unwrap()
         .pragma_update(None, "user_version", 999)
         .unwrap();
-    let state = StartupState::new(Ok(()));
+    let state = StartupState::new();
     let launcher = PauLauncher::new(Some(path), ServerOptions::default());
+    // Keep the developer's own login shell out of the test.
+    #[cfg(target_os = "macos")]
+    let launcher = launcher.with_shell(fake_shell(directory.path(), "exit 0"));
 
     let (result, snapshots) = run_recorded(&launcher, &state).await;
 
@@ -260,7 +401,7 @@ async fn reports_a_database_from_a_newer_version_and_stops() {
 
 #[tokio::test]
 async fn waits_for_a_page_before_the_dialog_fallback() {
-    let state = StartupState::new(Ok(()));
+    let state = StartupState::new();
     assert!(!state.wait_for_page(Duration::from_millis(100)).await);
 
     state.attach_page();

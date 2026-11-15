@@ -1,6 +1,8 @@
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
-    env, fmt, fs, io,
+    env,
+    ffi::OsString,
+    fmt, fs, io,
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -149,19 +151,20 @@ struct SandboxApi {
     selections: SandboxSelectionRepository,
     /// Executables pinned at startup, or why none could be resolved.
     executables: Result<SandboxExecutables, String>,
+    /// The `PATH` a sandboxed tool receives.
+    tool_path: String,
     home: PathBuf,
     /// Parent of per-session sandbox directories.
     sessions: PathBuf,
 }
 
 impl SandboxApi {
-    /// Pins the containment executables from the startup `PATH`.
-    fn new(selections: SandboxSelectionRepository, sessions: PathBuf) -> Self {
-        let search_path = env::var_os("PATH").unwrap_or_default();
+    /// Pins the containment executables found on `path`.
+    fn new(selections: SandboxSelectionRepository, sessions: PathBuf, path: OsString) -> Self {
         Self {
             selections,
-            executables: SandboxExecutables::resolve(&search_path)
-                .map_err(|error| error.to_string()),
+            executables: SandboxExecutables::resolve(&path).map_err(|error| error.to_string()),
+            tool_path: path.to_string_lossy().into_owned(),
             home: dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")),
             sessions,
         }
@@ -1197,7 +1200,6 @@ fn describe(
         .executables
         .as_ref()
         .map_err(|error| ApiError::SandboxUnavailable(error.clone()))?;
-    let tool_path = env::var("PATH").unwrap_or_default();
     let credential_environment = settings
         .credential_references
         .iter()
@@ -1215,7 +1217,7 @@ fn describe(
         session_directory: &sandbox.sessions.join(format!("preview-{workspace_id}")),
         executables,
         runtime_roots: &[],
-        tool_path: &tool_path,
+        tool_path: &sandbox.tool_path,
         credential_environment: &credential_environment,
     })
     .map(|resolved| Some(resolved.effective))
@@ -1417,11 +1419,18 @@ impl Drop for ServerHandle {
     }
 }
 
-/// Observation-only options selected at process startup.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// Options selected at process startup.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ServerOptions {
     /// Enables release diagnostics before the settings UI is available.
     pub diagnostics: bool,
+    /// The `PATH` used to find agents and sandbox tools and given to every
+    /// child process: agents, terminals, Git, and discovery probes. `None`
+    /// uses the server's own.
+    ///
+    /// The desktop app passes its login shell `PATH` here instead of
+    /// changing its own environment, which its other threads may be reading.
+    pub path: Option<OsString>,
 }
 
 /// Starts the shared API with a new per-launch token.
@@ -1522,11 +1531,16 @@ pub async fn start_with_database(
         .await
         .map_err(io::Error::other)?
         .is_some_and(|setting| setting.value == "true");
-    let workspaces =
-        WorkspaceService::new(database.workspaces()).with_processes(database.processes());
+    let path = options
+        .path
+        .unwrap_or_else(|| env::var_os("PATH").unwrap_or_default());
+    let workspaces = WorkspaceService::new(database.workspaces())
+        .with_processes(database.processes())
+        .with_path(path.clone());
     let sandbox = SandboxApi::new(
         database.sandbox_selection(),
         state_directory()?.join("sandbox"),
+        path.clone(),
     );
     let processes = database.processes();
     let diagnostics = default_diagnostics();
@@ -1540,7 +1554,10 @@ pub async fn start_with_database(
     let events = EventHub::default().with_diagnostics(diagnostics.clone());
     let sessions = SessionApi::new(
         pau_pi::PiSessionRegistry::new(processes),
-        pau_pi::DiscoverPiOptions::default(),
+        pau_pi::DiscoverPiOptions {
+            path,
+            ..pau_pi::DiscoverPiOptions::default()
+        },
         events.clone(),
     );
     let server_sessions = sessions.clone();
@@ -2023,6 +2040,7 @@ mod tests {
         let sandbox = SandboxApi::new(
             database.sandbox_selection(),
             directory.path().join("sandbox"),
+            env::var_os("PATH").unwrap_or_default(),
         );
         let available = sandbox.executables.is_ok();
         let app = router_with_services(

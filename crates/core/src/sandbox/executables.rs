@@ -65,7 +65,7 @@ impl SandboxExecutables {
             });
         }
         let mut bubblewrap = required_executable("bwrap", search_path)?;
-        let version = executable_version(Path::new(&bubblewrap.path))
+        let version = executable_version(Path::new(&bubblewrap.path), search_path)
             .ok_or_else(|| SandboxError::Executable("bwrap did not report a version".into()))?;
         let number = version.trim_start_matches("bubblewrap").trim();
         if !version_at_least(number, MINIMUM_BUBBLEWRAP) {
@@ -123,8 +123,12 @@ fn is_executable(path: &Path) -> bool {
     path.is_file()
 }
 
-fn executable_version(path: &Path) -> Option<String> {
-    let output = Command::new(path).arg("--version").output().ok()?;
+fn executable_version(path: &Path, search_path: &OsStr) -> Option<String> {
+    let output = Command::new(path)
+        .arg("--version")
+        .env("PATH", search_path)
+        .output()
+        .ok()?;
     output
         .status
         .success()

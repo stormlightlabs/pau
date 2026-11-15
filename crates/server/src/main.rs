@@ -176,7 +176,10 @@ async fn serve(token: String, diagnostics: bool) -> io::Result<()> {
     let server = pau_server::start_with_token_and_options(
         address,
         ApiToken::configured(token)?,
-        ServerOptions { diagnostics },
+        ServerOptions {
+            diagnostics,
+            ..ServerOptions::default()
+        },
     )
     .await?;
     tokio::signal::ctrl_c().await?;

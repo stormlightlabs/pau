@@ -19,7 +19,7 @@ durable interaction changes.
 | Diagnostics           | default                                               | Inspect and export redacted support data           |
 | Resources             | default                                               | Inspect scope, trust, and capability               |
 | Agent sandbox         | sandboxed, unsandboxed                                | Choose containment and review access before launch |
-| Settings              | default                                               | Change product and editor preferences              |
+| Settings              | default                                               | Change appearance, agent, editor and shell choices |
 | Website and docs      | overview, guide, reference (dark)                     | Evaluate Pau, learn a task, or check its status    |
 | Launch                | starting, service, checking, attention, failed, ready | Understand current startup work                    |
 | Reconnect             | offline, trying, restored                             | Recover UI connectivity without implying lost work |
@@ -36,9 +36,9 @@ Priority order:
 3. A direct path into the selected session.
 4. Changed files and checks on request.
 
-Use one main list rather than permanent workspace and detail rails. Workspace
+Use one main list rather than permanent workspace and detail columns. Workspace
 and status filters belong in the list toolbar. Changed files and checks open in
-a toggleable activity panel from the top app bar. Do not repeat harness health
+a toggleable activity panel from the page header. Do not repeat harness health
 when session state already reports whether each process is usable.
 
 At narrow widths, keep the attention item and work list. Hide the optional
@@ -50,12 +50,16 @@ Preserve status text alongside color.
 The transcript and composer lead. Tool activity is compact and can open detail
 without turning the transcript into a log viewer. Sandbox denials appear inline
 at the point of failure and name the blocked file or network destination when
-Pau can identify it. The session rail and inspector can close independently
-from controls in the top app bar. Focus mode removes all surrounding navigation
-while preserving the active session and composer.
+Pau can identify it. Focus mode removes all surrounding navigation while
+preserving the active session and composer.
+
+The page header holds the session title, its state chip, and its actions, with
+Stop set apart after a rule. A permission request is the focal point of the
+view: it renders as the request card at the end of the transcript.
 
 The terminal dock is the only secondary surface that splits the main column.
-The inspector shows a compact machine-resource summary with current and peak
+The workspace column shows the session's changed files, branch and terminals,
+and a compact machine-resource summary with current and peak
 use. The composer distinguishes queueing a follow-up from steering the current
 turn and keeps model, thinking, permission, and context choices visible. Configured
 Pi extensions may add string widgets around the composer. A status line under
@@ -78,21 +82,20 @@ once the session runs. Compact, Export and Stop stay hidden until then.
 On launch, Pau returns to the workspace view that was open last. A session
 that is still running opens as it was. A session that ended with the app shows
 its name, a Stopped status, and the same notice under the header with Resume.
-The session rail lists it as the selected row under its workspace and keeps it
-like other stopped sessions until it resumes. Pau never resumes it on its own,
+The bay shows it as the open strip in Settled and keeps it like other stopped
+sessions until it resumes. Pau never resumes it on its own,
 because resuming starts Pi. When the
 workspace or saved session no longer exists, launch opens the session list
 without an error.
 
-Under its live and stopped sessions, each workspace in the session rail lists
-its three newest saved Pi sessions that no row above already shows, with a
-Stopped status. Clicking one resumes it, as Resume does in the picker that the
-workspace's history button opens. A workspace with neither shows "No sessions
-yet". When the saved list cannot load, the rail says so under the workspace
+Settled also lists each workspace's three newest saved Pi sessions that no
+strip above already shows, with a Stopped status. Clicking one resumes it, as
+Resume does in the saved-session picker. With no sessions at all, the bay says
+"No sessions yet". When the saved list cannot load, the bay says so in Settled
 and offers Try again.
 
-Each workspace in the session rail has a start control, which starts Pi. The
-workspace menu and a newly opened workspace also start Claude Code. When the
+New session at the top of the bay starts Pi in the current workspace. Its menu
+and a newly opened workspace also start Claude Code. When the
 readiness report says Claude Code cannot start, those controls are disabled
 and show its reason. The Claude Code notice offers Check again, which reads the
 report anew once the operator has fixed the cause. When a session cannot
@@ -102,8 +105,8 @@ down, the session stays readable but sending, starting, and stopping are
 disabled until Pau reconnects. A control the agent does not
 support is hidden, and the composer explains when no delivery mode is left.
 
-The session rail starts with an Open workspace control. With no workspace
-registered, the task surface asks the operator to open a folder. The desktop
+With no workspace registered, the main surface asks the operator to open a
+folder. The desktop
 app shows the system folder picker. The browser development build asks for the
 folder path instead. A folder that is missing or is a file shows the reason
 beside the control. A newly opened workspace without sessions offers to start
@@ -117,9 +120,9 @@ Terminal-only custom extension components show an explicit limitation instead
 of an empty or broken control. The message directs the operator to vanilla Pi
 in a Pau terminal.
 
-At narrow widths, the transcript gets the full task area. Session navigation and
-inspection move out of the grid. Composer controls may wrap, but sending and the
-delivery mode remain reachable.
+At narrow widths, the bay narrows and the workspace column becomes an overlay,
+so the transcript gets the rest of the window. Composer controls may wrap, but
+sending and the delivery mode remain reachable.
 
 ## Harness control
 
@@ -129,10 +132,10 @@ between sessions.
 
 Use a session-manager layout rather than a control-room table:
 
-- A compact rail groups and filters sessions
+- The bay groups and filters sessions
 - The main surface follows one selected run
 - Current activity, changes, and checks stay in that run's context
-- Low-frequency process metadata and capabilities open from the top app bar
+- Low-frequency process metadata and capabilities open from the page header
 - Recent events stay collapsed until requested
 
 The details panel shows only controls and capabilities reported by the selected
@@ -170,7 +173,7 @@ Scratchpads hold incomplete workspace notes without exposing them to an agent.
 A note can remain private, become a saved prompt, or be sent with explicitly
 selected context.
 
-The editor leads. The right rail makes the target session and attached files
+The editor leads. The workspace column makes the target session and attached files
 visible before send. Sending creates a user message; it does not create an
 agent-to-agent handoff.
 
@@ -179,14 +182,15 @@ keeps a useful measure.
 
 ## Editor and review
 
-CodeMirror handles built-in editing, quick changes, and file previews. The file
-tree supplies workspace context; the review inspector supplies changed files and
-hunks. A file or workspace can open in the preferred external editor without
-hiding CodeMirror's dirty or external-change state. The file rail provides
-content search and explicit controls for hidden and ignored files. Tree rows use
-arrow-key navigation and preserve full paths through accessible labels when
-visible names must truncate. The code surface remains
-wider than either rail.
+CodeMirror handles built-in editing, quick changes, and file previews. In
+Files, the workspace column holds the file tree, with content search and
+explicit controls for hidden and ignored files. In Review, it holds the changed
+files, and the main surface shows their hunks. A file or workspace can open in
+the external editor that Settings names without hiding CodeMirror's dirty or
+external-change state. Tab width and line wrap come from Settings unless the
+workspace's `.editorconfig` sets them. Tree rows use arrow-key navigation and
+preserve full paths through accessible labels when visible names must truncate.
+The code surface stays wider than the workspace column.
 
 The tree, Git status, and open file follow changes on disk without a refresh
 control. A clean file reloads in place and keeps its cursor and scroll
@@ -198,7 +202,7 @@ state, external changes, read-only files, binary files, and oversized files need
 explicit states.
 
 At narrow widths, the editor owns the full surface. File navigation and review
-open separately. Do not compress code between two narrow rails.
+open as the workspace overlay. Do not compress code between two narrow columns.
 
 ## Embedded editor study
 
@@ -231,9 +235,9 @@ in the output and window switches keep it open, and only Escape or Close end
 the search and return focus to the terminal.
 
 Terminals sit in one of two places. The Terminal view gives them the whole
-main surface, with a status rail of open terminals. In Sessions, a dock under
+main surface, with a column of open terminals as strips. In Sessions, a dock under
 the transcript holds the same terminals, so the operator can watch a build
-while reading the agent's work. The dock opens from the top bar toggle or
+while reading the agent's work. The dock opens from the page header toggle or
 `` Ctrl+` ``, which also works from inside a docked terminal, and starts at 40% of
 the main column. Its top edge resizes it and leaves the transcript at least
 160px. On narrow windows an open dock takes the whole main surface instead of
@@ -241,8 +245,8 @@ a strip. Each bar has a button that moves the terminals to the other place.
 They keep running through the move, and focus lands in the active terminal.
 Hiding the dock returns focus to whatever opened it.
 
-A background tab that prints output shows an accent dot, and its rail row
-reads "New output", until the operator opens it. An exited tab shows its exit
+A background tab that prints output shows an accent dot, and its strip reads
+"New output", until the operator opens it. An exited tab shows its exit
 badge in place of the dot.
 
 A shield button beside New terminal opens a terminal in the workspace's
@@ -288,13 +292,14 @@ Fault injection belongs to a separate development-only surface, not this view.
 ## Resources
 
 The list answers what is installed, its scope, trust, validation, and source.
-The inspector answers what the selected resource can do, which agents can use
-it, and what file or command an update will change. For MCP servers, it also
-shows native connection state, startup diagnostics, and negotiated capabilities.
+The detail pane beside it answers what the selected resource can do, which
+agents can use it, and what file or command an update will change. For MCP
+servers, it also shows native connection state, startup diagnostics, and
+negotiated capabilities.
 Create, edit, enable, disable, authenticate, test, and remove actions stay with
 the selected server.
 
-The contextual rail holds one view per kind: Skills, Prompts, Extensions,
+A section rail holds one view per kind: Skills, Prompts, Extensions,
 Themes, and Packages, each with its count. A view leads with a name filter and
 scope and trust choices, then one row per resource with its name and
 description, scope, source kind, and one state: invalid or not installed in
@@ -307,11 +312,11 @@ list.
 
 The list is a listbox. Arrow keys, Home, and End move the selection, Down
 Arrow moves from the filter into the list, and only the selected row is in
-the tab order. On a wide window the selection fills the inspector.
+the tab order. On a wide window the selection fills the detail pane.
 
 Selection must not imply trust. Invalid and untrusted resources remain
 inspectable. Disabled and failed servers keep their details and a direct next
-action. Below the inspector's docking width, choosing a resource replaces the
+action. At narrow widths, choosing a resource replaces the
 list with its detail and a Back button that takes focus. Back or Escape
 returns to the filtered list with focus on the same row.
 
@@ -339,21 +344,15 @@ pairs, and the save action spans the width.
 ## Settings
 
 Settings group durable choices by user intent. Scope and consequence appear next
-to each setting. Theme, font, agent discovery, preferred editor, and terminal
-editor launch behavior remain distinct choices.
+to each setting. Theme, fonts, agent readiness, the external editor, and the
+shell environment remain distinct choices.
 
-Settings opens from the app menu, the product rail, and ⌘, (Ctrl+, on Linux).
-The context rail lists the sections: Appearance, Notifications, Keyboard,
-Editor, and Shell. Choosing one moves focus to it. A section with nothing to
-set yet says so. Each setting saves when it changes. A failed save keeps the
-previous choice and shows the reason under the setting. Settings that belong
-to one view, such as the agent sandbox, MCP servers, and diagnostics, stay in
-that view.
-
-Appearance shows each theme as a card painted in that theme's own colors: a
-line of code in its syntax colors and a strip of its terminal palette. The
-selected card takes the active accent. Each font choice is set in its own
-typeface. Motion sits with them.
+Settings opens from the app menu, the view row, and ⌘, (Ctrl+, on Linux). It
+gives the workspace column to the main surface. A section rail lists the
+sections in this order: Appearance, Agents, Sandbox, Notifications, Editor,
+Shell, Keyboard and About. Choosing one moves focus to it, and the rail marks
+the section in view. Each setting saves when it changes. A failed save keeps
+the previous choice and shows the reason under the setting.
 
 Each setting is one column with one spacing rhythm. The name and its scope
 chip share the first line, centered on their capitals. The description follows
@@ -363,19 +362,52 @@ always wider than any gap inside one. Theme cards span the section. Other
 descriptions and controls stop at 40rem, so on a wide window each control stays
 near its name.
 
-Notifications offers three policies. The default notifies when a session out
-of view waits for input, asks a question, or fails. The second also notifies
-when a turn finishes. Off sends no notifications and leaves the app icon badge
-alone. The session rail still marks sessions that need attention.
+Appearance shows each theme as a card painted in that theme's own colors: a
+line of code in its syntax colors and a strip of its terminal palette. Eldritch
+comes first. The selected card takes an accent border. The interface font and
+the code font follow, each choice set in its own typeface: Overpass Mono, IBM
+Plex Mono and JetBrains Mono for code. Text size and Motion (System,
+Reduce, Full) close the section.
+
+Agents shows each agent's readiness with the path it found or the fix it
+needs, and the default model for new Pi sessions, with a filter over the full
+model list.
+
+Sandbox summarizes the workspace's default profile and the effective access a
+new Pi session gets. Editing grants and credentials happens in the Agent
+sandbox view, which the section links to.
+
+Notifications has one checkbox per event for sessions out of view: waits for
+you, fails, finishes a turn, and stops responding. Finishes a turn starts off.
+Two more checkboxes control the app icon badge, which counts sessions in Needs
+you, and a sound with each notification. The bay marks sessions that need
+attention whatever these say.
+
+Editor sets where Open in editor sends a file or workspace: the system
+default, a detected editor, a terminal editor that opens in a Pau terminal, or
+a custom command in which Pau fills in `{file}` and `{line}`. Editors run
+outside the sandbox. Tab width and long-line wrap apply to the built-in editor
+and diffs, and a workspace `.editorconfig` overrides them.
+
+Shell names the login shell Pau reads `PATH` from at launch, so agents find the
+tools a terminal finds, with Read again to reread it. Terminals start this
+shell. The workspace environment setting can load the workspace's `.envrc`
+through direnv when direnv is installed. A blocked `.envrc` stays blocked
+until the operator runs `direnv allow`. The sandbox still decides which
+variables an agent sees.
 
 Keyboard lists Pau's shortcuts in the shortcut dialog's groups. Each one names
 its scope, such as All views, Sessions, or Desktop app, and whether it gives
 way while a text field has focus. The list is read-only. A Pi binding that
 takes a chord is noted as it is in the dialog.
 
+About shows the build, Copy details, the data directory, and the theme and font
+credits.
+
 Pau themes apply only to Pau surfaces. External and terminal editors retain
-their own configuration and colors. At narrow widths, section navigation
-collapses before controls lose their labels or descriptions.
+their own configuration and colors. At narrow widths, the section rail becomes
+a row of tabs above the settings before any control loses its label or
+description.
 
 ## Website and documentation
 

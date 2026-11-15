@@ -8,6 +8,14 @@ behind decorative summaries.
 This document owns durable visual and interaction decisions. Product behavior
 comes from the Product specification, and architecture and implementation
 policy from the Technical plan. Both live in the project's issue tracker.
+[`apps/desktop/DESIGN.md`](../../apps/desktop/DESIGN.md) lists the token
+values, and `apps/desktop/.impeccable/wireframes/` holds a static wireframe of
+each surface. Where either disagrees with this document, this document wins.
+
+This document describes the target design. Until the implementation work
+lands, the desktop app still ships the previous layout, with the product rail,
+the inspector and an 800px minimum window width. Code that disagrees with a
+rule here may predate it.
 
 ## Surface mode
 
@@ -25,69 +33,82 @@ The primary path is:
 
 ## Visual thesis
 
-Use a flat, dark workbench divided by alignment and restrained rules. The main
-task surface leads. Rails and inspectors remain visibly secondary. Small areas
-of bright color identify action, selection, focus, and state.
+The system is the Strip Bay: every session is a strip in a bay, racked by what
+it needs from the operator. The window answers one question first: which
+sessions need me?
 
-The interface should be recognizable by:
+The workbench is flat and dark, built from tonal layers on an 8px grid. Depth
+comes from tone, and shadows belong to overlays. Every list of live things,
+from sessions to tool calls, changed files, terminals and resources, uses the
+same strip, so its fields line up on one baseline in every list. Small areas of
+bright color mark what needs the operator, focus and state.
 
-- precise multi-pane composition;
-- compact but readable type;
-- mostly square geometry, hairline separators, and slight rounding on
-  free-standing controls and overlays;
-- visible native-process and workspace state;
-- agent, file, Git, terminal, and editor details that use their real visual
-  vocabulary.
+Pau is neither a three-pane IDE (file tree, tabbed editor, bottom panel) nor a
+chat app. Transcript prose sits in a reading column, tool calls render as
+inline strips, and the agent is never drawn as a person.
 
 Avoid nested cards, floating glass surfaces, heavy shadows, ornamental terminal
 motifs, and large dashboard metrics without an operator task.
 
 ## Layout regions
 
-The wide application shell may contain:
+The wide shell has three columns:
 
-- a persistent product rail;
-- a contextual workspace or section rail;
-- one main task surface;
-- an optional inspector;
-- a terminal dock that splits only the main column.
+- The bay, 344px, on the left. A filter field and New session sit at its top,
+  the racked strips fill the middle, and the view row sits at its foot.
+- The main surface, which keeps the largest useful width.
+- The workspace column, 304px, on the right. It shows the open session's
+  changes, branch, checks and terminals. It holds detail and never becomes a
+  second navigation column.
 
-The main surface must retain the largest useful width. The inspector holds
-selected detail, plans, checks, permissions, diffs, or resource configuration.
-It must not become a second navigation rail.
+A view without workspace detail, such as Settings, gives the workspace column
+to the main surface. The terminal dock is the only surface that splits the main
+column.
 
-Each product rail item opens a working view and marks the current one. An item
-whose view is not ready yet stays visible but disabled, with a "Coming soon"
-tooltip. Workspace views stay disabled until a workspace is open. A view
-without a contextual rail gives that column to the main surface.
+Every column starts with a 48px header, so the three header rules form one
+line across the window. The page header in the main surface holds the view
+title, a status chip centered on the title line, and the view's actions at the
+far end. A destructive action, such as Stop, sits apart from the others after
+a rule.
+
+### View row
+
+Product navigation is the view row: one 32px quiet icon button per view across
+the bay's foot: Sessions, Files, Review, Terminal, Resources and
+Settings. The current view takes the selected treatment. Each button names its
+view and shortcut in a tooltip on hover and on keyboard focus. A view that needs
+a workspace stays disabled until one is open, and its tooltip gives the reason.
+A view that is not ready yet stays visible and disabled with a "Coming soon"
+tooltip.
+
+### Breakpoints
+
+- Wide, 1200px and up: bay, main surface and workspace column side by side.
+- Narrow, 900 to 1199px: the bay narrows to 288px and hides the agent name on
+  strips. The workspace column becomes an overlay that slides in from the
+  right over a scrim. The header opens it, and the scrim or Escape closes it.
+  It stays closed until the operator opens it, so new detail never covers the
+  main surface. Section rails become tab rows. Buttons marked collapsible drop
+  to their icon. An open terminal dock takes the whole main surface.
+- Below 900px is not a supported layout. The window keeps a 900px minimum
+  width.
+
+Do not scale the wide composition down. Recompose it.
 
 The application shell fills the viewport and prevents document overscroll.
-Persistent rails and the main task surface scroll independently, so navigation
-and task context remain available with long content. Nested panes contain their
-scroll instead of chaining it into the shell.
+The bay, the main surface and the workspace column scroll independently, so
+navigation and task context remain available with long content. Nested panes
+contain their scroll instead of chaining it into the shell.
 
-At narrower widths:
-
-1. Remove the inspector from the grid and open it as an overlay or full view.
-   Keep it closed until the operator opens it, so new detail never covers the
-   main surface.
-2. Collapse the contextual rail.
-3. Keep the product rail while its destinations still fit and remain useful.
-4. Give conversation, editor, and terminal surfaces the remaining area.
-5. Use a focused full-surface view when the task cannot tolerate persistent
-   chrome.
-
-Do not scale the desktop composition down. Recompose it.
+### Composer
 
 The composer footer holds two groups: quiet options (delivery mode, model,
 thinking, permission, context) and the actions. They share one row when both
-fit, such as at 1440×900 with the session rail hidden. When they no longer
-fit, including at 1440×900 with both the session rail and the context rail
-open, the actions keep the first row under the field and the options wrap
-below them. In a narrow footer, the context meter shows only the share used,
-and its details still list the window and token totals. Completion lists open
-as a popover above the composer, so the composer keeps its height and the
-transcript does not move.
+fit. When they no longer fit, the actions keep the first row under the field
+and the options wrap below them. In a narrow footer, the context meter shows
+only the share used, and its details still list the window and token totals.
+Completion lists open as a popover above the composer, so the composer keeps
+its height and the transcript does not move.
 
 While files are dragged over the composer, a drop target covers the
 composer's own box and dashes its border: focus color when the drop would
@@ -102,60 +123,83 @@ shrink, and extension statuses wrap to a second row.
 
 ## Spatial system
 
-The spacing scale uses 4, 8, 12, 16, 24, and 32px steps, named `space/1` to
-`space/6`. Use tight intervals within controls and rows, medium intervals within
-a section, and larger intervals between distinct tasks.
+All spacing comes from the 8px grid. The scale uses 4, 8, 12, 16, 24, 32, 40,
+48, and 64px steps, named `space/1` to `space/9`, where 4 and 12px are half
+steps for control insets. The 40px step sets the height of section headings and
+bars, 48px pads empty states, and 64px sets the composer input's minimum height
+and the fade over collapsed tool output. Items inside a group sit 8px apart, and
+distinct blocks in the transcript sit 24px apart. A value off the grid needs a
+measured reason, such as the 6px descender padding in the cap-centring rule.
 
-The spacing, type, radius, border, row, and rail values have slash-separated
+The spacing, type, radius, border, row, and column values have slash-separated
 token names. `packages/ui/src/styles/tokens.css` records them as CSS custom
 properties, so `space/3` becomes `--pau-space-3` and `size/row-md` becomes
 `--pau-size-row-md`. Type sizes use `--pau-type-*` because `--pau-text` names
 the text color.
 
-Content in a rail, and in a view that runs edge to edge such as Files, starts
-`space/4` in from the column's edge. Rail headings, section labels, the branch
-row, the search field, top-level tree rows, the view title, and the bars under
-it share that leading edge. An edge-to-edge view cancels the main surface's
-padding with the shell's own value at every width, so it never overhangs the
-column.
+Content in the bay, the workspace column, and a view that runs edge to edge
+such as Files, starts `space/4` in from the column's edge. Bay headings,
+section labels, the branch row, the search field, top-level tree rows, the
+view title, and the bars under it share that leading edge. An edge-to-edge
+view cancels the main surface's padding with the shell's own value at every
+width, so it never overhangs the column.
 
 - Desktop window: first opens at 1440×900, within 90% of the screen, and never
-  smaller than 800×560, so the context rail always fits beside the session.
+  narrower than 900px or shorter than 560px.
   Later launches restore the last size, position, and maximized state. If the
   saved position is off every connected display, the window opens centered at
   the first-launch size.
-- Product rail: about 48–56px.
-- Context rail: about 224–256px.
-- Inspector: about 288–320px.
-- Compact rows: 28–36px when keyboard and pointer use dominate.
+- Bay: 344px wide, 288px narrow.
+- Workspace column: 304px.
+- Column headers: 48px.
+- Strips: 56px with two 24px lines. Rows and controls: 32px.
+- Bay headings: 40px, so a label sits 16px below whatever is above it.
 - Coarse-pointer targets: at least 44px even when the visible icon is smaller.
 
-Use faint 0.5 CSS pixel rules where a stable pane boundary needs a divider.
-Increase them to one pixel when the user requests more contrast. Adjacent rails
-and sidebars may rely on surface color and spacing instead of a border.
-Selected-row indicators stay stronger than structural rules. Reserve shadows
-for overlays that occlude content. Keep pane boundaries, rows, tabs, and
-attached controls square. Free-standing controls use a 3px radius. Floating
-surfaces and overlays may use up to 5px.
+Pane boundaries and rows use 1px rules in the line token. Selected-row rings
+stay stronger than structural rules. Depth runs ground, bay, raised, selected,
+each one tint lighter. Reserve shadows for overlays that cover content, and for
+a strip while it travels over other strips. Keep pane boundaries, rows, strips,
+tabs, and attached controls square, so the bay reads as one rack. Controls,
+chips, key caps, notices and cards use a 3px radius. Menus, popovers and
+tooltips use 5px.
 
 ## Typography
 
-Overpass Variable is the default application face. Operators may select IBM
+Overpass Variable is the default interface face. Operators may select IBM
 Plex Sans Variable, Inter Variable, Atkinson Hyperlegible Next Variable, or
-Atkinson Hyperlegible Soft. Font choice must not change layout roles. Overpass
-Mono Variable sets code, commands, paths, and identifiers in every UI font
-choice.
+Atkinson Hyperlegible Soft. Overpass Mono Variable is the default code face,
+and operators may select JetBrains Mono or IBM Plex Mono instead. The code
+face sets code, commands, paths, identifiers, counts and durations, with
+ligatures off. A font choice never changes a role's size, weight or line
+height.
 
-Use the fixed product type scale of 11, 12, 13, 14, 16, and 18px and the
-weights 400, 500, and 600. Fold any heavier weight into 600.
+Every piece of text takes one of these roles. A surface never sets a size of
+its own.
 
-| Element                              | Size    | Weight |
-| ------------------------------------ | ------- | ------ |
-| Main task heading                    | 18px    | 600    |
-| Application body                     | 14px    | 400    |
-| Workspace names and inspector values | 13px    | 500    |
-| Commands, paths, and metadata        | 12–13px | 400    |
-| Section labels                       | 11px    | 600    |
+| Role       | Size | Line height | Weight | Use                                        |
+| ---------- | ---- | ----------- | ------ | ------------------------------------------ |
+| Title      | 18px | 24px        | 600    | The view or session title in the header    |
+| Heading    | 16px | 24px        | 600    | Section titles and the permission question |
+| Body       | 14px | 24px        | 400    | Transcript prose and descriptions          |
+| Row        | 14px | 20px        | 400    | One-line rows and control text             |
+| Strip name | 14px | 24px        | 500    | A strip's first line, 13px when mono       |
+| State line | 13px | 24px        | 400    | A strip's second line                      |
+| Meta       | 12px | 16px        | 400    | Agent names, figures, timestamps and chips |
+| Label      | 11px | 16px        | 600    | Uppercase, 0.06em tracked section labels   |
+| Code       | 12px | 20px        | 400    | Tool output, diffs and terminals, mono     |
+
+Buttons use the row role at 500, and the primary at 600. Meta and labels use
+muted text unless a state recolors them.
+
+Every single-line label in a control or row sits in its own element, and that
+element trims its box to the cap height and the baseline
+(`text-box: trim-both cap alphabetic`). Flex centring then lines the capitals
+up with icons, marks and checkboxes in every UI font. Where `text-box` is
+missing, the label moves down by the measured offset of the face, 0.11em for
+Overpass. A label that truncates gives its descenders back as 6px block
+padding and takes the same space back as negative margin, so its centre does
+not move.
 
 - Set transcript prose, the composer, dialog and settings body text, and the
   primary text of list rows at 14px. The session header, transcript,
@@ -168,17 +212,15 @@ weights 400, 500, and 600. Fold any heavier weight into 600.
   text and item text starts `space/5` in. A number ends `space/2` before its
   item's text, so numbers line up on the period, and a list whose last number
   needs more room widens its indent.
-- Keep metadata readable at 12–13px with sufficient contrast and line height.
-  No product text goes below 12px, except uppercase, letter-spaced section
-  labels, which may use 11px.
-- Every main surface names its task with the one view title role
-  (`pau-view-title`, 18px/600): the session title, Files, Processes,
-  Diagnostics, MCP, Sandbox, the saved-session picker, and an empty state that
-  fills the surface. A count or status chip beside the title centers on the
-  title line.
-- Labels that name a pane region, such as rail headings, "Search files", and
-  "Queued", use the one section label role (`pau-section-label`): 11px/600,
-  uppercase, and tracked, in muted text unless a state recolors it.
+- No product text goes below 12px, except the uppercase label role and key
+  caps, which use 11px.
+- Every main surface names its task with the title role (`pau-view-title`):
+  the session title, Files, Processes, Diagnostics, MCP, Sandbox, the
+  saved-session picker, and an empty state that fills the surface. A count or
+  status chip beside the title centers on the title line.
+- Labels that name a pane region, such as bay headings, "Search files", and
+  "Queued", use the label role (`pau-section-label`). A bay or column heading
+  always carries a mono count at its far end.
 - Markdown headings descend one step per level, all at 600: h1 18px, h2 16px,
   h3 14px, and h4–h6 13px, with h5 and h6 muted.
 - Use weight and spacing before large size jumps.
@@ -198,12 +240,24 @@ Every theme maps the same semantic roles:
 - syntax, diff, editor, and terminal ANSI roles.
 
 The first release themes are Eldritch, Nord, Iceberg, Catppuccin Mocha, and
-Vitesse Dark. Palette values come from their upstream projects and retain the
-required attribution.
+Vitesse Dark, in that order. Eldritch leads the dark themes and is the default.
+Palette values come from their upstream projects and retain the required
+attribution.
 
-Spend accent color on the primary action, current selection, focus, and active
-state. Muted copy must remain legible on every surface. State always combines
-color with text, shape, icon, or position.
+Green, the accent, means the operator is needed. It marks the Needs you
+heading and count, the waiting mark and state line, the request card, the
+activity dot on a background terminal, and the one primary action a surface
+allows, such as Send prompt, Save or Allow once. A second green element on a
+surface is a defect.
+
+Cyan, the focus role, draws the focus ring, the text caret and the text
+selection wash, and nothing else. Selecting a row, tab or view is neutral: the
+selected surface plus a 1px ring in the control border token.
+
+State colors live on marks and state lines, never on fills, row backgrounds or
+titles. Every mark pairs its color with a shape (filled dot, spinning ring,
+dashed ring, diamond, square) and a text label. Muted copy keeps AA contrast on
+every surface.
 
 A warning notice with rounded corners, such as the Pi readiness notice or a
 resource browser warning, takes the warning tone on the whole box: a thin
@@ -220,7 +274,7 @@ Use one control vocabulary across screens:
 - primary button for the action that advances the current task;
 - secondary button for alternatives;
 - quiet or icon button for local utilities;
-- left-edge indicator plus surface change for selected rows;
+- the selected surface plus a control-strength ring for selected rows;
 - compact chips for scope, branch, model, state, and attached context;
 - section labels for stable pane regions, not as decoration above every block.
 
@@ -235,16 +289,63 @@ remove or end something use the danger variant. A disabled primary drops the
 accent fill for the raised surface and muted text, and never relies on
 opacity, so it cannot read as enabled. A disabled secondary fades its outline,
 so a row of unavailable actions still ranks the primary first. The shared
-`pau-button` variants in `packages/ui` own these colors and the size: a
-`row-md` (32px) height and `type-md` (14px) text in every view, toolbars and
-banners included. Components place and space buttons but do not resize them.
+`pau-button` variants in `packages/ui` own these colors and the size.
+
+Every button, field, picker and select is 32px tall (`row-md`) with 14px text
+(`type-md`), in toolbars, rows, notices, cards and banners alike. A container
+that holds a button is at least 40px tall. Components place and space controls
+but do not resize them.
 A button centers its label on the capitals, from cap height to baseline,
 rather than on the font's line box, which sits higher or lower in each UI font.
 An icon in a button centers on the same line. An icon, the label, a count,
 and a key hint inside a button sit `space/2` apart.
 
-Controls that show or hide a rail, sidebar, or inspector belong in the top app
-bar. Keep task-specific actions in the task surface.
+The control that opens the workspace column at narrow widths belongs in the
+page header. Keep task-specific actions in the task surface.
+
+### Strip
+
+The strip is the one fixed-height row for every list of live things:
+sessions, tool calls, changed files, terminals, resources and menus. Its grid
+is lead, main and meta.
+
+- The 56px strip has two 24px lines, name and agent, then the state line and
+  figures, led by an 8px mark.
+- The icon strip leads with a 16px icon instead of a mark.
+- The 32px row strip has one line.
+- Hover moves to the raised surface. Selection, set with `aria-current` or
+  `aria-selected`, takes the selected surface and the control-strength ring,
+  and turns icons from muted to text color.
+- Arrow keys step through the bay's strips.
+
+### Bay
+
+The bay racks session strips by what they need, in three sections, each under
+a label and a mono count:
+
+- Needs you: sessions waiting on the operator, failed or not responding. The
+  label and count turn green. Its strips sit on the raised surface, separated
+  by 1px rules in the bay color, and carry the only full-contrast names in the
+  bay. State lines take their state color.
+- Running: names step back to muted text at weight 500. The spinning mark and
+  the mono state line keep the section ahead of Settled.
+- Settled: idle and stopped sessions, with muted names at weight 400.
+
+Only Needs you holds full contrast. Running and Settled recede through color
+and weight, never through opacity, so their text keeps AA contrast on the bay.
+The open session and a hovered strip return to text color in every section.
+
+### Request card
+
+The request card is the one green surface on a view: something waits on the
+operator. The session's permission request and a resource's change preview
+share it. It has a 1px accent border and a 6% accent wash over the raised
+surface. Its head holds the waiting mark and the question in the heading role,
+on a 15% accent band. Everything under the head hangs from the question's
+leading edge. Its actions carry key caps, and Allow once is the primary. While
+Pau reconnects, the card stays visible and its actions disable with a reason.
+
+### Context menu
 
 Sessions, workspaces, files, and transcript messages open a context menu on
 right-click, `Shift+F10`, or the menu key. The menu is an in-app popover in the
@@ -255,6 +356,8 @@ or that the item's state refuses, stays visible and disabled with its reason
 underneath. Escape, Tab, or a choice closes the menu and returns focus to the
 item. File menus can reveal a file in the system file manager but never launch
 it in another application, because the webview renders agent-generated content.
+
+### Select and pickers
 
 Single-choice settings use the shared `Select` dropdown instead of a native
 `<select>`. The trigger is a field: control row height, control radius, the
@@ -276,6 +379,8 @@ open their list and error upward from the top of the footer, and below only
 when the space above is too short, so neither covers Attach image or Send
 prompt when the actions sit on the row above them.
 
+### Transcript entries
+
 Transcript entries start at the transcript's left edge, where assistant prose
 and the session title start. Everything else in an entry starts on one inset,
 `space/5` in from that edge: user message text, disclosure summaries, tool
@@ -294,11 +399,12 @@ right chevron centered in the inset that turns down while the entry is open,
 muted summary text that turns to normal text on hover, and no native marker. A
 failed tool row colors its chevron with the danger role.
 
+### Status marks
+
 Status marks in a row get a column as wide as the mark and sit `space/2` from
-the label, in the session rail as in the session header. Session rail names
-start at the same offset as the shell context rail's labels, and the mark lines
-up with the workspace name above it. The rail's icon buttons match the
-`size/row-md` height of its Open workspace button.
+the label, in the bay as in the page header.
+
+### Hover and press
 
 Hover and press change color only. No control moves, scales, or resizes when
 pressed, so a pressed row never shifts its neighbors. The shared rules in
@@ -307,10 +413,10 @@ pressed, so a pressed row never shifts its neighbors. The shared rules in
 - Buttons: secondary, quiet, and danger buttons tint their fill and strengthen
   the border on hover, and tint further on press. The primary moves its accent
   toward the text color, a quarter on hover and nearly half on press.
-- Utility buttons (`pau-utility-button`), such as rail icons, toolbar icons,
-  and Copy: muted rest, normal text and a tint on hover, a stronger tint on
+- Utility buttons (`pau-utility-button`), such as view row icons, toolbar
+  icons, and Copy: muted rest, normal text and a tint on hover, a stronger tint on
   press.
-- Rows (`pau-row`): rail rows, tree rows, tabs, result rows, and completion
+- Rows (`pau-row`): strips, tree rows, tabs, result rows, and completion
   options use the same tints and turn muted text to normal text. A selected
   row keeps its selection fill under the pointer.
 - Popover options (`pau-option`) on the raised surface take the selection fill
@@ -367,7 +473,25 @@ took a chord from Pau and where it applies.
 ## Motion
 
 Motion shows cause, continuity, and state. It never decorates, never delays
-input, and never moves content the operator is reading.
+input, and never moves content the operator is reading. The system has one
+authored moment, the arrival. Everything else is feedback.
+
+### Arrival
+
+When a running session starts waiting on the operator, its strip lifts out of
+Running and travels to the top of Needs you.
+
+- The strip's mark, state line and section counts change first, so the new
+  state reads before the strip moves.
+- The travel takes 640ms from the strip's visible place. Over the first 15%,
+  the strip lifts 4px, takes the lift shadow and moves from the bay to the
+  raised surface. It moves on `ease-out` and settles on `ease-settle`.
+- The strips and headings it passes slide aside over 480ms on the same
+  ease-out, after a 90ms delay.
+- Under reduced motion, the strip changes place at once and its band fades in
+  over 100ms.
+
+The attention marker does not pulse, and nothing else in the system travels.
 
 ### Tokens
 
@@ -376,47 +500,18 @@ next to the scale tokens. `packages/ui/src/motion.ts` exports the same values
 for Svelte transitions, and a contract test keeps the two in sync. No
 component uses a literal duration or easing keyword.
 
-```css
-:root {
-	--pau-duration-instant: 0ms;
-	--pau-duration-feedback: 100ms;
-	--pau-duration-small: 150ms;
-	--pau-duration-medium: 200ms;
-	--pau-duration-large: 250ms;
+| Token              | Value                           | Use                                       |
+| ------------------ | ------------------------------- | ----------------------------------------- |
+| `duration-quick`   | 120ms                           | Hover, press, selection and state color   |
+| `duration-move`    | 240ms                           | Overlays, menus, dialogs and disclosures  |
+| `arrival-travel`   | 640ms                           | The arrival                               |
+| `arrival-displace` | 480ms after a 90ms delay        | Strips the arrival passes                 |
+| `mark-spin`        | 900ms per turn, linear          | The running mark only                     |
+| `ease-out`         | `cubic-bezier(0.16, 1, 0.3, 1)` | Every transition and the arrival's travel |
+| `ease-settle`      | `cubic-bezier(0.2, 0, 0, 1)`    | The arrival's lift and settle             |
 
-	--pau-ease-standard: cubic-bezier(0.2, 0, 0, 1);
-	--pau-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
-	--pau-ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
-	--pau-ease-linear: linear;
-
-	--pau-motion-offset-sm: 0.25rem;
-	--pau-motion-offset-md: 0.5rem;
-	--pau-motion-scale-enter: 0.98;
-	--pau-motion-travel: 1;
-}
-
-:root[data-motion='reduce'] {
-	--pau-motion-offset-sm: 0;
-	--pau-motion-offset-md: 0;
-	--pau-motion-scale-enter: 1;
-	--pau-motion-travel: 0;
-}
-```
-
-`--pau-motion-travel` multiplies full-width travel, such as a rail sliding in
-from its edge.
-
-- `instant`: keyboard-initiated and high-frequency actions.
-- `feedback`: hover, press, selection, state color, chevron rotation.
-- `small`: popover and menu entry, scrim fade, content fade after a pane
-  toggle.
-- `medium`: dialog entry, overlay rail entry, toast entry, disclosure
-  expansion.
-- `large`: task-surface changes. Nothing routine exceeds it.
-- `standard` easing moves and recolors elements that stay on screen.
-- `enter` easing brings elements in. `exit` easing takes them out.
-- `linear` is for progress and spinners only.
-- Exits use the next shorter duration than their entrance.
+The root element's `data-motion` attribute collapses movement distances to
+zero under reduced motion, so a slide becomes a fade.
 
 `busyIndicatorTiming` in `motion.ts` holds the busy-indicator timing: show
 after 400ms and stay visible for at least 500ms. `BusyIndicator` in
@@ -428,26 +523,24 @@ tool row or session status, are not delayed.
 
 ### Rules by component class
 
-| Component                      | Enter                                 | Exit     | Notes                          |
-| ------------------------------ | ------------------------------------- | -------- | ------------------------------ |
-| Hover and press                | feedback, color only                  | feedback | Instant in dense lists         |
-| Focus ring                     | instant                               | instant  | Never transition `outline`     |
-| Selection indicator            | feedback, color                       | feedback | No sliding indicator           |
-| Session status                 | feedback, color                       | feedback | One spinner only for running   |
-| Attention marker               | one 600ms pulse                       | instant  | Static badge after the pulse   |
-| Disclosure (tool, thinking)    | medium, rows 0fr to 1fr               | small    | Instant if streaming or tall   |
-| Popover, menu (pointer)        | small, fade and scale-enter           | feedback | Origin at the anchor           |
-| Completion list (keyboard)     | instant                               | instant  |                                |
-| Command palette                | instant, feedback fade from a pointer | instant  | No fade under reduced motion   |
-| Dialog                         | medium, fade and scale-enter          | small    | Backdrop fades with it         |
-| Overlay rail, narrow inspector | medium, translate from edge           | small    | Scrim fades over small         |
-| Wide inspector, rail toggle    | instant layout, small fade            | instant  | No per-frame reflow            |
-| Toast                          | medium, offset-md from edge           | small    | Same edge in and out           |
-| Task-surface change            | large, fade and offset-sm             | none     | Keyboard navigation is instant |
-| Terminal tab                   | instant                               | instant  | Never animate the canvas       |
-| Diff hunk update               | 1s background tint fade               | —        | Static marker when reduced     |
-| Transcript streaming           | none                                  | —        | Append per frame, no fades     |
-| Follow-mode scroll             | jump                                  | —        | No smooth scrolling            |
+| Component                   | Enter                            | Exit    | Notes                        |
+| --------------------------- | -------------------------------- | ------- | ---------------------------- |
+| Hover and press             | quick, color only                | quick   | Instant in dense lists       |
+| Focus ring                  | instant                          | instant | Never transition `outline`   |
+| Selection                   | quick, color                     | quick   | No sliding indicator         |
+| Session status              | quick, color                     | quick   | One spinner only for running |
+| Strip entering Needs you    | the arrival                      | instant | Fade only when reduced       |
+| Disclosure (tool, thinking) | move, rows 0fr to 1fr            | quick   | Instant if streaming or tall |
+| Popover, menu (pointer)     | move, fade                       | quick   | Origin at the anchor         |
+| Completion list (keyboard)  | instant                          | instant |                              |
+| Command palette             | instant, quick fade from pointer | instant | No fade under reduced motion |
+| Dialog                      | move, fade                       | quick   | Backdrop fades with it       |
+| Narrow workspace overlay    | move, slide from the right       | quick   | Scrim fades with it          |
+| Task-surface change         | instant                          | instant | No cross-fade between views  |
+| Terminal tab                | instant                          | instant | Never animate the canvas     |
+| Diff hunk update            | 1s background tint fade          | —       | Static marker when reduced   |
+| Transcript streaming        | none                             | —       | Append per frame, no fades   |
+| Follow-mode scroll          | jump                             | —       | No smooth scrolling          |
 
 Interaction rules:
 
@@ -471,15 +564,16 @@ Interaction rules:
 
 The root element's `data-motion` attribute is `reduce` or `full`. When it is
 absent, the OS `prefers-reduced-motion` query applies, in `tokens.css` and in
-`isReducedMotion()` from `motion.ts`. The operator's motion setting (system,
-reduce, or full) will write the attribute. Storybook's reduced-motion control
-sets it directly.
+`isReducedMotion()` from `motion.ts`. The Motion setting in Appearance (System,
+Reduce or Full) writes the attribute. Storybook's reduced-motion control sets
+it directly.
 
 Under reduced motion:
 
-- Distance and scale tokens collapse, so movement becomes a fade.
-- Opacity and color feedback stays at `feedback` duration or less.
-- Spinners and pulses become static marks.
+- Movement distances collapse, so movement becomes a fade.
+- The arrival becomes an instant move and a 100ms fade.
+- Opacity and color feedback stays at `duration-quick` or less.
+- The running mark stops spinning and shows a static ring.
 - Svelte transitions read the shared motion setting and drop movement.
 - Smooth scrolling is off.
 
@@ -487,15 +581,15 @@ Under reduced motion:
 
 Every focusable control draws the same ring: `--pau-focus-width` (2px) in
 `--pau-focus`, offset by `--pau-focus-offset` (2px) outside the control. Inside
-scroll containers, edge-to-edge rows, and overlay rails, where an outset ring
-would be clipped, use `--pau-focus-offset-inset` (-2px) so the ring stays
+scroll containers, edge-to-edge rows, and the workspace overlay, where an
+outset ring would be clipped, use `--pau-focus-offset-inset` (-2px) so the ring stays
 inside the control. Controls that draw focus another way, such as the pane
 resizer's separator line, use the same color and width.
 
 ### Increased contrast
 
-Under `prefers-contrast: more`, hairline rules become 1px, muted text moves
-toward normal text, and `--pau-focus-width` becomes 3px. Under
+Under `prefers-contrast: more`, rules take the strong border token, muted text
+moves toward normal text, and `--pau-focus-width` becomes 3px. Under
 `forced-colors: active`, focus and selection use system colors.
 
 ### Performance budgets

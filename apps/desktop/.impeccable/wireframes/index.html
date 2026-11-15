@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Pau wireframes</title>
+		<link rel="stylesheet" href="pau.css" />
+		<style>
+			/* Index of every surface and state. Everything shared lives in pau.css. */
+			.index {
+				flex: 1;
+				min-height: 0;
+				overflow-y: auto;
+			}
+			.index__list {
+				display: grid;
+				gap: var(--space-5);
+				padding-block: var(--space-5) var(--space-6);
+			}
+			.index .rows {
+				background: var(--ground);
+			}
+			.surface {
+				background: var(--bay);
+			}
+			.surface:hover {
+				background: var(--raised);
+			}
+			.note {
+				color: var(--text-muted);
+			}
+			@media (max-width: 1199.98px) {
+				.note {
+					display: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+			<symbol id="v-sessions" viewBox="0 0 16 16">
+				<path d="M6.5 4h7M6.5 8h7M6.5 12h7" />
+				<circle cx="3.25" cy="4" r="1" />
+				<circle cx="3.25" cy="8" r="1" />
+				<circle cx="3.25" cy="12" r="1" />
+			</symbol>
+			<symbol id="v-files" viewBox="0 0 16 16">
+				<path d="M4.5 2.5h4.25L11.5 5.25v8.25h-7z" />
+				<path d="M8.5 2.5v3h3" />
+			</symbol>
+			<symbol id="v-review" viewBox="0 0 16 16">
+				<rect x="2.25" y="2.25" width="11.5" height="11.5" rx="1.5" />
+				<path d="M8 4.75v3.5M6.25 6.5h3.5M6.25 10.75h3.5" />
+			</symbol>
+			<symbol id="v-terminal" viewBox="0 0 16 16">
+				<rect x="2.25" y="3" width="11.5" height="10" rx="1.5" />
+				<path d="m5 6.5 2 1.5-2 1.5M8.5 10h2.5" />
+			</symbol>
+			<symbol id="v-resources" viewBox="0 0 16 16">
+				<path d="M8 2.25 13.25 5v6L8 13.75 2.75 11V5z" />
+				<path d="M2.75 5 8 7.75 13.25 5M8 7.75v6" />
+			</symbol>
+			<symbol id="v-settings" viewBox="0 0 16 16">
+				<path d="M2.75 5h5.5M11.75 5h1.5M2.75 11h1.5M7.75 11h5.5" />
+				<circle cx="10" cy="5" r="1.75" />
+				<circle cx="6" cy="11" r="1.75" />
+			</symbol>
+			<symbol id="v-states" viewBox="0 0 16 16">
+				<rect x="2.25" y="3" width="11.5" height="10" rx="1.5" />
+				<path d="M2.25 6h11.5M5.5 3v3" />
+			</symbol>
+			<symbol id="i-go" viewBox="0 0 16 16"><path d="M5.5 10.5 10.5 5.5M6.5 5.5h4v4" /></symbol>
+			<symbol id="i-search" viewBox="0 0 16 16">
+				<circle cx="7" cy="7" r="4.25" />
+				<path d="m10.25 10.25 3 3" />
+			</symbol>
+			<symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9" /></symbol>
+		</svg>
+
+		<div class="shell shell--no-workspace">
+			<nav class="bay" aria-label="Sessions">
+				<div class="bay__top">
+					<label class="field">
+						<svg class="icon"><use href="#i-search" /></svg>
+						<input class="field__input" type="search" placeholder="Filter sessions" aria-label="Filter sessions" />
+						<kbd><span>/</span></kbd>
+					</label>
+					<button class="btn btn--collapse" type="button" aria-label="New session">
+						<svg class="icon"><use href="#i-plus" /></svg><span>New</span>
+					</button>
+				</div>
+				<div class="bay__scroll">
+					<section aria-labelledby="h-needs">
+						<h2 class="bay-heading bay-heading--attention">
+							<span class="section-label" id="h-needs">Needs you</span><span class="bay-heading__count">4</span>
+						</h2>
+						<ul class="bay__list bay__list--attention">
+							<li>
+								<a class="strip" href="shell-session.html" data-state="waiting">
+									<span class="mark mark--waiting" role="img" aria-label="Waiting"></span>
+									<span class="strip__line"
+										><span class="strip__name">Sandbox Pi sessions</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-sandbox</span>
+									<span></span>
+									<span class="strip__state tone-waiting">Allow write to crates/server/src/sessions.rs?</span>
+									<span class="strip__figure mono">4m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--waiting" role="img" aria-label="Waiting"></span>
+									<span class="strip__line"
+										><span class="strip__name">Resource scope picker</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-scope</span>
+									<span></span>
+									<span class="strip__state tone-waiting">Run pnpm install in packages/ui?</span>
+									<span class="strip__figure mono">9m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--failed" role="img" aria-label="Failed"></span>
+									<span class="strip__line"
+										><span class="strip__name">Terminal relay PTY</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-pty</span>
+									<span></span>
+									<span class="strip__state tone-failed">Failed: srt exited with status 1</span>
+									<span class="strip__figure mono">6m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--unresponsive" role="img" aria-label="Not responding"></span>
+									<span class="strip__line"
+										><span class="strip__name">Pi RPC timeout</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-rpc</span>
+									<span></span>
+									<span class="strip__state tone-unresponsive">Not responding for 1m</span>
+									<span class="strip__figure mono">1m</span>
+								</a>
+							</li>
+						</ul>
+					</section>
+
+					<section aria-labelledby="h-running">
+						<h2 class="bay-heading">
+							<span class="section-label" id="h-running">Running</span><span class="bay-heading__count">4</span>
+						</h2>
+						<ul class="bay__list">
+							<li>
+								<a class="strip" href="shell-session.html#running" data-state="running">
+									<span class="mark mark--running" role="img" aria-label="Running"></span>
+									<span class="strip__line"
+										><span class="strip__name">Audit log shutdown drain</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-audit</span>
+									<span></span>
+									<span class="strip__state mono">cargo test -p pau-core audit</span>
+									<span class="strip__figure mono">12m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--running" role="img" aria-label="Running"></span>
+									<span class="strip__line"
+										><span class="strip__name">Design audit</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau</span>
+									<span></span>
+									<span class="strip__state">Reading dev/design/system.md</span>
+									<span class="strip__figure mono">31m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html" data-session="pau-diff">
+									<span class="mark mark--running" role="img" aria-label="Running"></span>
+									<span class="strip__line"
+										><span class="strip__name">Diff gutter numbers</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-diff</span>
+									<span></span>
+									<span class="strip__state">Editing packages/ui/src/diff/DiffGutter.svelte</span>
+									<span class="strip__figure mono">7m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--starting" role="img" aria-label="Starting"></span>
+									<span class="strip__line"
+										><span class="strip__name">Model list filter</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-models</span>
+									<span></span>
+									<span class="strip__state">Starting Claude Code</span>
+									<span class="strip__figure mono">8s</span>
+								</a>
+							</li>
+						</ul>
+					</section>
+
+					<section aria-labelledby="h-settled">
+						<h2 class="bay-heading">
+							<span class="section-label" id="h-settled">Settled</span><span class="bay-heading__count">6</span>
+						</h2>
+						<ul class="bay__list">
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--idle" role="img" aria-label="Idle"></span>
+									<span class="strip__line"
+										><span class="strip__name">Theme contrast pass</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-themes</span>
+									<span></span>
+									<span class="strip__state">Idle</span>
+									<span class="strip__figure mono">40m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--idle" role="img" aria-label="Idle"></span>
+									<span class="strip__line"
+										><span class="strip__name">Token test flake</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-tokens</span>
+									<span></span>
+									<span class="strip__state">Idle</span>
+									<span class="strip__figure mono">2h</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--idle" role="img" aria-label="Idle"></span>
+									<span class="strip__line"
+										><span class="strip__name">Website changelog feed</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">thndrs</span>
+									<span></span>
+									<span class="strip__state">Idle</span>
+									<span class="strip__figure mono">3h</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--stopped" role="img" aria-label="Stopped"></span>
+									<span class="strip__line"
+										><span class="strip__name">Migration guard</span><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-migrate</span>
+									<span></span>
+									<span class="strip__state">Stopped</span>
+									<span class="strip__figure mono">5h</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--stopped" role="img" aria-label="Stopped"></span>
+									<span class="strip__line"
+										><span class="strip__name">Rewrite README</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">thndrs</span>
+									<span></span>
+									<span class="strip__state">Stopped</span>
+									<span class="strip__figure mono">1d</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--stopped" role="img" aria-label="Stopped"></span>
+									<span class="strip__line"
+										><span class="strip__name">Zellij smoke run</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau</span>
+									<span></span>
+									<span class="strip__state">Stopped</span>
+									<span class="strip__figure mono">1d</span>
+								</a>
+							</li>
+						</ul>
+					</section>
+				</div>
+				<ul class="views" aria-label="Views">
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="shell-session.html"
+							aria-label="Sessions"
+							aria-describedby="tip-sessions"
+							><svg class="icon"><use href="#v-sessions" /></svg
+							><span class="views__tip" role="tooltip" id="tip-sessions">Sessions</span></a
+						>
+					</li>
+					<li>
+						<a class="btn btn--quiet btn--icon" href="files.html" aria-label="Files" aria-describedby="tip-files"
+							><svg class="icon"><use href="#v-files" /></svg
+							><span class="views__tip" role="tooltip" id="tip-files">Files</span></a
+						>
+					</li>
+					<li>
+						<a class="btn btn--quiet btn--icon" href="review.html" aria-label="Review" aria-describedby="tip-review"
+							><svg class="icon"><use href="#v-review" /></svg
+							><span class="views__tip" role="tooltip" id="tip-review">Review</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="terminal.html"
+							aria-label="Terminal"
+							aria-describedby="tip-terminal"
+							><svg class="icon"><use href="#v-terminal" /></svg
+							><span class="views__tip" role="tooltip" id="tip-terminal">Terminal</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="resources.html"
+							aria-label="Pi resources"
+							aria-describedby="tip-resources"
+							><svg class="icon"><use href="#v-resources" /></svg
+							><span class="views__tip" role="tooltip" id="tip-resources">Pi resources</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="settings.html"
+							aria-label="Settings"
+							aria-describedby="tip-settings"
+							><svg class="icon"><use href="#v-settings" /></svg
+							><span class="views__tip" role="tooltip" id="tip-settings"
+								>Settings<kbd><span>⌘,</span></kbd></span
+							></a
+						>
+					</li>
+				</ul>
+			</nav>
+
+			<main class="main">
+				<header class="page-header">
+					<h1 class="header-title">Wireframes</h1>
+					<span class="header-spacer"></span>
+					<span class="role-meta cap">7 surfaces, 30 states</span>
+				</header>
+				<div class="index">
+					<div class="index__list column">
+						<section class="rows" aria-label="Sessions">
+							<a class="strip strip--icon surface" href="shell-session.html">
+								<svg class="icon"><use href="#v-sessions" /></svg>
+								<span class="strip__line"
+									><span class="strip__name">Sessions</span
+									><span class="strip__agent mono">shell-session.html</span></span
+								>
+								<span class="strip__meta">3 states</span>
+								<span></span>
+								<span class="strip__state"
+									>The strip bay, a session waiting on a permission request, and the workspace column.</span
+								>
+								<span></span>
+							</a>
+							<a class="strip strip--row" href="shell-session.html"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>Waiting for you<span class="note"> A write to sessions.rs waits on Allow or Deny</span></span
+								><span class="strip__figure mono">default</span></a
+							>
+							<a class="strip strip--row" href="shell-session.html#running"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>Running<span class="note"> Live tool output while the audit tests run</span></span
+								><span class="strip__figure mono">#running</span></a
+							>
+							<a class="strip strip--row" href="shell-session.html#arrive"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>A session needs you<span class="note"> A running strip lifts into Needs you and settles</span></span
+								><span class="strip__figure mono">#arrive</span></a
+							>
+						</section>
+						<section class="rows" aria-label="Files">
+							<a class="strip strip--icon surface" href="files.html">
+								<svg class="icon"><use href="#v-files" /></svg>
+								<span class="strip__line"
+									><span class="strip__name">Files</span><span class="strip__agent mono">files.html</span></span
+								>
+								<span class="strip__meta">3 states</span>
+								<span></span>
+								<span class="strip__state"
+									>The editor with the file tree in the workspace column: a large worktree, filters for hidden and
+									ignored files.</span
+								>
+								<span></span>
+							</a>
+							<a class="strip strip--row" href="files.html"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>Unsaved edits<span class="note"> sessions.rs open with a changed line</span></span
+								><span class="strip__figure mono">default</span></a
+							>
+							<a class="strip strip--row" href="files.html#external"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>Changed on disk<span class="note"> Pi wrote the file while your edits were unsaved</span></span
+								><span class="strip__figure mono">#external</span></a
+							>
+							<a class="strip strip--row" href="files.html#empty"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name">Empty folder<span class="note"> A workspace with no files yet</span></span
+								><span class="strip__figure mono">#empty</span></a
+							>
+						</section>
+						<section class="rows" aria-label="Review">
+							<a class="strip strip--icon surface" href="review.html">
+								<svg class="icon"><use href="#v-review" /></svg>
+								<span class="strip__line"
+									><span class="strip__name">Review</span><span class="strip__agent mono">review.html</span></span
+								>
+								<span class="strip__meta">2 states</span>
+								<span></span>
+								<span class="strip__state">Every change in the worktree as hunks you stage, revert or comment on.</span>
+								<span></span>
+							</a>
+							<a class="strip strip--row" href="review.html"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>Four changed files<span class="note"> One line comment on its way to the composer</span></span
+								><span class="strip__figure mono">default</span></a
+							>
+							<a class="strip strip--row" href="review.html#clean"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>Nothing to review<span class="note"> The working tree matches the branch</span></span
+								><span class="strip__figure mono">#clean</span></a
+							>
+						</section>
+						<section class="rows" aria-label="Terminal">
+							<a class="strip strip--icon surface" href="terminal.html">
+								<svg class="icon"><use href="#v-terminal" /></svg>
+								<span class="strip__line"
+									><span class="strip__name">Terminal</span><span class="strip__agent mono">terminal.html</span></span
+								>
+								<span class="strip__meta">4 states</span>
+								<span></span>
+								<span class="strip__state"
+									>Open terminals as strips beside the canvas, and the same terminals docked under a session.</span
+								>
+								<span></span>
+							</a>
+							<a class="strip strip--row" href="terminal.html"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>zsh active<span class="note"> A failing test with a detected link and its tip</span></span
+								><span class="strip__figure mono">default</span></a
+							>
+							<a class="strip strip--row" href="terminal.html#no-profile"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>No sandbox profile<span class="note">
+										New sandboxed terminal is unavailable, with the reason</span
+									></span
+								><span class="strip__figure mono">#no-profile</span></a
+							>
+							<a class="strip strip--row" href="terminal.html#exited"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name">Exited terminal<span class="note"> Storybook exited with code 1</span></span
+								><span class="strip__figure mono">#exited</span></a
+							>
+							<a class="strip strip--row" href="terminal.html#dock"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>Docked under a session<span class="note"> cargo watch in the dock while the session runs</span></span
+								><span class="strip__figure mono">#dock</span></a
+							>
+						</section>
+						<section class="rows" aria-label="Pi resources">
+							<a class="strip strip--icon surface" href="resources.html">
+								<svg class="icon"><use href="#v-resources" /></svg>
+								<span class="strip__line"
+									><span class="strip__name">Pi resources</span
+									><span class="strip__agent mono">resources.html</span></span
+								>
+								<span class="strip__meta">4 states</span>
+								<span></span>
+								<span class="strip__state"
+									>Skills, extensions, packages, prompt templates and MCP servers across scopes.</span
+								>
+								<span></span>
+							</a>
+							<a class="strip strip--row" href="resources.html"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>A skill selected<span class="note"> The writing skill and its facts</span></span
+								><span class="strip__figure mono">default</span></a
+							>
+							<a class="strip strip--row" href="resources.html#confirm"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>Change preview<span class="note">
+										Turning a skill off shows the settings.json change first</span
+									></span
+								><span class="strip__figure mono">#confirm</span></a
+							>
+							<a class="strip strip--row" href="resources.html#mcp"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>Failed MCP server<span class="note"> The github server exited before it connected</span></span
+								><span class="strip__figure mono">#mcp</span></a
+							>
+							<a class="strip strip--row" href="resources.html#empty"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name">No matches<span class="note"> A filter that matches nothing</span></span
+								><span class="strip__figure mono">#empty</span></a
+							>
+						</section>
+						<section class="rows" aria-label="Settings">
+							<a class="strip strip--icon surface" href="settings.html">
+								<svg class="icon"><use href="#v-settings" /></svg>
+								<span class="strip__line"
+									><span class="strip__name">Settings</span><span class="strip__agent mono">settings.html</span></span
+								>
+								<span class="strip__meta">8 states</span>
+								<span></span>
+								<span class="strip__state">Appearance, agents, sandbox, notifications, keyboard and this build.</span>
+								<span></span>
+							</a>
+							<a class="strip strip--row" href="settings.html#appearance"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>Appearance<span class="note"> Themes, fonts, text size and motion</span></span
+								><span class="strip__figure mono">#appearance</span></a
+							>
+							<a class="strip strip--row" href="settings.html#agents"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name">Agents<span class="note"> Readiness and the full model list</span></span
+								><span class="strip__figure mono">#agents</span></a
+							>
+							<a class="strip strip--row" href="settings.html#sandbox"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name">Sandbox<span class="note"> Default profile and effective access</span></span
+								><span class="strip__figure mono">#sandbox</span></a
+							>
+							<a class="strip strip--row" href="settings.html#notifications"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>Notifications<span class="note"> When Pau tells you about a session</span></span
+								><span class="strip__figure mono">#notifications</span></a
+							>
+							<a class="strip strip--row" href="settings.html#editor"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name">Editor<span class="note"> External editor, tab width and wrap</span></span
+								><span class="strip__figure mono">#editor</span></a
+							>
+							<a class="strip strip--row" href="settings.html#shell"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name">Shell<span class="note"> Login shell and workspace environment</span></span
+								><span class="strip__figure mono">#shell</span></a
+							>
+							<a class="strip strip--row" href="settings.html#keyboard"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name">Keyboard<span class="note"> Every shortcut and where it works</span></span
+								><span class="strip__figure mono">#keyboard</span></a
+							>
+							<a class="strip strip--row" href="settings.html#about"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name">About<span class="note"> Version, data directory and credits</span></span
+								><span class="strip__figure mono">#about</span></a
+							>
+						</section>
+						<section class="rows" aria-label="App states">
+							<a class="strip strip--icon surface" href="states.html">
+								<svg class="icon"><use href="#v-states" /></svg>
+								<span class="strip__line"
+									><span class="strip__name">App states</span><span class="strip__agent mono">states.html</span></span
+								>
+								<span class="strip__meta">6 states</span>
+								<span></span>
+								<span class="strip__state">Whole windows for first run, startup, failure and lost connection.</span>
+								<span></span>
+							</a>
+							<a class="strip strip--row" href="states.html#first-run"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name">First run<span class="note"> No workspace open yet</span></span
+								><span class="strip__figure mono">#first-run</span></a
+							>
+							<a class="strip strip--row" href="states.html#no-sessions"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name">No sessions<span class="note"> A workspace with nothing running</span></span
+								><span class="strip__figure mono">#no-sessions</span></a
+							>
+							<a class="strip strip--row" href="states.html#starting"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name">Starting<span class="note"> Startup steps in progress</span></span
+								><span class="strip__figure mono">#starting</span></a
+							>
+							<a class="strip strip--row" href="states.html#start-failed"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name">Start failed<span class="note"> Pi is not installed</span></span
+								><span class="strip__figure mono">#start-failed</span></a
+							>
+							<a class="strip strip--row" href="states.html#reconnecting"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name">Reconnecting<span class="note"> The backend connection dropped</span></span
+								><span class="strip__figure mono">#reconnecting</span></a
+							>
+							<a class="strip strip--row" href="states.html#error"
+								><svg class="icon"><use href="#i-go" /></svg
+								><span class="strip__name"
+									>Error notice<span class="note"> A failed session with Copy details</span></span
+								><span class="strip__figure mono">#error</span></a
+							>
+						</section>
+					</div>
+				</div>
+			</main>
+		</div>
+	</body>
+</html>

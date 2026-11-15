@@ -1067,14 +1067,12 @@ async fn marks_a_session_whose_pi_stops_answering() {
     );
 
     // Later commands fail at once instead of waiting on Pi again.
-    let sent = fixture.commands().len();
     let (status, again) = fixture
         .call("POST", &prompt, Some(json!({"message": "hello"})))
         .await;
     assert_eq!(status, StatusCode::GATEWAY_TIMEOUT);
     assert_eq!(again["code"], "agent_not_responding");
     assert_eq!(again["message"], message);
-    assert_eq!(fixture.commands().len(), sent);
 
     // Pi answers late and settles, so the session returns to idle and takes
     // commands again.
@@ -1085,6 +1083,16 @@ async fn marks_a_session_whose_pi_stops_answering() {
         .call("POST", &prompt, Some(json!({"message": "hello"})))
         .await;
     assert_eq!(status, StatusCode::ACCEPTED);
+    // Pi reads its input in order and logged this prompt before answering it,
+    // so a rejected prompt that reached Pi would be logged by now. Counting
+    // only prompts keeps the check independent of when the stand-in logs the
+    // unanswered `get_state`, which the paused clock can time out first.
+    let prompts = fixture
+        .commands()
+        .into_iter()
+        .filter(|command| command == "prompt")
+        .count();
+    assert_eq!(prompts, 2, "the rejected prompt reached Pi");
 
     let (status, _) = fixture.call("DELETE", &base, None).await;
     assert_eq!(status, StatusCode::NO_CONTENT);

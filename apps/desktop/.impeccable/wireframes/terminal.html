@@ -1,0 +1,1082 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Pau terminal</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link rel="stylesheet" href="pau.css" />
+		<style>
+			/* Terminal surface. Everything shared lives in pau.css.
+
+   States: default is the Terminal view with zsh active. #no-profile: the
+   workspace has no sandbox profile. #exited: the exited tab is open. #dock:
+   the same terminals docked under a session transcript. */
+
+			:root {
+				--rail-width: 256px;
+			}
+
+			.view {
+				display: flex;
+				flex-direction: column;
+				flex: 1;
+				min-height: 0;
+			}
+			.view--dock {
+				display: none;
+			}
+			:root:has(#dock:target) .view--terminal {
+				display: none;
+			}
+			:root:has(#dock:target) .view--dock {
+				display: flex;
+			}
+
+			:root:not(:has(#no-profile:target)) .when-no-profile,
+			:root:has(#no-profile:target) .when-profile,
+			:root:not(:has(#exited:target)) .when-exited,
+			:root:has(#exited:target) .when-live {
+				display: none;
+			}
+			/* Selection follows the state: zsh by default, storybook in #exited. */
+			:root:has(#exited:target) .term-tab--zsh {
+				background: none;
+				box-shadow: none;
+			}
+			:root:has(#exited:target) .term-tab--zsh:hover {
+				background: var(--raised);
+			}
+			:root:has(#exited:target) .term-tab--zsh > svg.icon {
+				color: var(--text-muted);
+			}
+			:root:has(#exited:target) .term-tab--sb > svg.icon {
+				color: var(--text);
+			}
+			:root:has(#exited:target) .term-tab--sb {
+				background: var(--selected);
+				box-shadow: inset 0 0 0 1px var(--line-control);
+			}
+
+			/* ------------------------------------------------------------ the rail */
+
+			.term-body {
+				display: grid;
+				grid-template-columns: var(--rail-width) minmax(0, 1fr);
+				flex: 1;
+				min-height: 0;
+			}
+			.term-rail {
+				display: flex;
+				flex-direction: column;
+				min-height: 0;
+				background: var(--bay);
+				border-right: 1px solid var(--line);
+			}
+			.term-rail__list {
+				margin: 0;
+				padding: 0;
+				list-style: none;
+			}
+			.term-rail__new {
+				display: grid;
+				gap: var(--space-2);
+				margin-top: auto;
+				padding: var(--space-4);
+				border-top: 1px solid var(--line);
+			}
+			.term-rail__new .btn {
+				justify-content: flex-start;
+			}
+			.term-rail__reason {
+				margin: 0;
+				color: var(--text-muted);
+				font-size: var(--size-12);
+				line-height: var(--leading-tight);
+			}
+			.term-rail__reason a {
+				color: var(--text);
+			}
+
+			/* ------------------------------------------------------------ the canvas */
+
+			.xterm {
+				position: relative;
+				display: flex;
+				flex-direction: column;
+				justify-content: flex-end;
+				min-width: 0;
+				min-height: 0;
+				overflow: hidden;
+				padding: var(--space-2) var(--space-2) var(--space-3) var(--space-4);
+				background: var(--ground);
+			}
+			.xterm pre {
+				margin: 0;
+				color: var(--text);
+				font-size: var(--size-13);
+				line-height: var(--leading-ui);
+				white-space: pre-wrap;
+				overflow-wrap: anywhere;
+			}
+			.xterm pre ::selection {
+				background: color-mix(in srgb, var(--ansi-green) 22%, var(--ground));
+			}
+			.cursor {
+				background: var(--term-cursor);
+				color: var(--ground);
+			}
+			.exit-notice {
+				margin: var(--space-2) var(--space-2) auto 0;
+			}
+
+			/* ------------------------------------------------------------ dock state */
+
+			.view--dock .log {
+				min-height: 160px;
+			}
+			.view--dock .composer-dock {
+				padding-bottom: var(--space-4);
+			}
+
+			.dock {
+				position: relative;
+				display: flex;
+				flex-direction: column;
+				flex: 0 0 40%;
+				min-height: 0;
+				border-top: 1px solid var(--line-control);
+			}
+			/* The top edge resizes the dock. A 9px hit area centred on the rule. */
+			.dock__grip {
+				position: absolute;
+				inset: -5px 0 auto;
+				height: 9px;
+				cursor: row-resize;
+				z-index: 2;
+			}
+			.dock__bar {
+				display: flex;
+				align-items: center;
+				gap: var(--space-1);
+				height: var(--space-7);
+				padding: 0 var(--space-2) 0 var(--space-3);
+				background: var(--bay);
+				border-bottom: 1px solid var(--line);
+				flex: none;
+			}
+			.dock__rule {
+				width: 1px;
+				height: var(--space-4);
+				margin: 0 var(--space-1);
+				background: var(--line);
+				flex: none;
+			}
+			/* On a narrow window the active tab keeps its full name, inactive tabs
+   give way first (a long name ends in an ellipsis; the icon, the
+   new-output dot and the exit badge keep their size), and a tab that still
+   has no room moves into the overflow menu. The menu's button counts the
+   moved tabs and carries the worst state among them, so an exited
+   terminal is never hidden. */
+			.dock__tabs {
+				flex: 0 1 auto;
+			}
+			.dock__tabs > .strip {
+				flex: 0 1 auto;
+				min-width: min-content;
+				grid-template-columns: 16px minmax(3ch, max-content) auto;
+			}
+			.dock__tabs .strip__line {
+				min-width: 0;
+			}
+			.dock__tabs .strip .strip__name {
+				overflow: hidden;
+			}
+			.dock__tabs .strip > .badge,
+			.dock__tabs .strip > .activity {
+				flex: none;
+			}
+			.dock__tabs > .strip[aria-selected='true'] {
+				flex-shrink: 0;
+				grid-template-columns: 16px max-content auto;
+			}
+			.dock__more {
+				display: none;
+				position: relative;
+			}
+			.dock__more > summary {
+				list-style: none;
+				padding: 0 var(--space-2);
+			}
+			.dock__more > summary::-webkit-details-marker {
+				display: none;
+			}
+			.dock__more > summary svg.icon {
+				width: 12px;
+				height: 12px;
+			}
+			.dock__more[open] > summary {
+				background: var(--raised);
+				color: var(--text);
+			}
+			.dock__more .menu {
+				position: absolute;
+				top: calc(100% + var(--space-2));
+				left: 0;
+			}
+			.dock__more .menu__item {
+				text-decoration: none;
+			}
+			.dock__more .menu__item .strip__name {
+				font-size: var(--size-13);
+			}
+			.dock__more .menu__item > svg.icon {
+				color: var(--text-muted);
+			}
+			.dock__more .menu__item .activity {
+				margin-right: 0;
+			}
+			.dock .xterm {
+				flex: 1;
+				padding-top: var(--space-1);
+			}
+
+			/* ------------------------------------------------------------ narrow */
+
+			@media (max-width: 1199.98px) {
+				/* The canvas takes the full surface; the rail becomes one bar of tabs
+	   above it, so switching stays one click away. */
+				.term-body {
+					grid-template-columns: minmax(0, 1fr);
+					grid-template-rows: auto minmax(0, 1fr);
+				}
+				.term-rail {
+					flex-direction: row;
+					align-items: center;
+					gap: var(--space-1);
+					height: var(--space-7);
+					padding: 0 var(--space-2) 0 var(--space-3);
+					border-right: 0;
+					border-bottom: 1px solid var(--line);
+				}
+				.term-rail > .bay-heading {
+					display: none;
+				}
+				.term-rail__new {
+					display: flex;
+					gap: var(--space-1);
+					margin: 0 0 0 auto;
+					padding: 0;
+					border: 0;
+				}
+				.term-rail__reason {
+					display: none;
+				}
+				.page-header .header-where {
+					display: none;
+				}
+				/* An open dock takes the whole main surface on a narrow window, as
+	   surfaces.md asks: the transcript waits under the dock until it is
+	   hidden again from the header or the dock bar. */
+				.view--dock .log,
+				.view--dock .composer-dock,
+				.dock__grip {
+					display: none;
+				}
+				.dock {
+					flex: 1 1 auto;
+					border-top: 0;
+				}
+				.dock__more {
+					display: block;
+				}
+				.dock__tabs > .dock__tab--spill {
+					display: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<i id="no-profile" class="state-anchor" aria-hidden="true"></i>
+		<i id="exited" class="state-anchor" aria-hidden="true"></i>
+		<i id="dock" class="state-anchor" aria-hidden="true"></i>
+
+		<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+			<symbol id="i-search" viewBox="0 0 16 16">
+				<circle cx="7" cy="7" r="4.25" />
+				<path d="m10.25 10.25 3 3" />
+			</symbol>
+			<symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9" /></symbol>
+			<symbol id="i-chev" viewBox="0 0 16 16"><path d="M4.5 6.5 8 10l3.5-3.5" /></symbol>
+			<symbol id="i-prompt" viewBox="0 0 16 16"><path d="m5 4.5 3.5 3.5L5 11.5" /></symbol>
+			<symbol id="i-file" viewBox="0 0 16 16">
+				<path d="M4.5 2.5h4.25L11.5 5.25v8.25h-7z" />
+				<path d="M8.5 2.5v3h3" />
+			</symbol>
+			<symbol id="i-term" viewBox="0 0 16 16">
+				<rect x="2.25" y="3" width="11.5" height="10" rx="1.5" />
+				<path d="m5 6.5 2 1.5-2 1.5M8.5 10h2.5" />
+			</symbol>
+			<symbol id="i-stop" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1" /></symbol>
+			<symbol id="i-export" viewBox="0 0 16 16"><path d="M8 2.5v7.5M5 5.25 8 2.5l3 2.75M3 9.5v4h10v-4" /></symbol>
+			<symbol id="i-send" viewBox="0 0 16 16"><path d="M3 8h9.5M8.5 4l4 4-4 4" /></symbol>
+			<symbol id="i-branch" viewBox="0 0 16 16">
+				<circle cx="5" cy="3.75" r="1.25" />
+				<circle cx="5" cy="12.25" r="1.25" />
+				<circle cx="11" cy="5.5" r="1.25" />
+				<path d="M5 5v6M11 6.75c0 2.75-6 2-6 4.25" />
+			</symbol>
+			<symbol id="i-panel" viewBox="0 0 16 16">
+				<rect x="2.25" y="3" width="11.5" height="10" rx="1.5" />
+				<path d="M10 3v10" />
+			</symbol>
+			<symbol id="i-close" viewBox="0 0 16 16"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7" /></symbol>
+			<symbol id="i-check" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7" /></symbol>
+			<symbol id="i-shield" viewBox="0 0 16 16">
+				<path d="M8 2.25 13 4v4c0 3-2.25 5-5 5.75C5.25 13 3 11 3 8V4z" />
+			</symbol>
+			<symbol id="i-shield-plus" viewBox="0 0 16 16">
+				<path d="M8 2.25 13 4v4c0 3-2.25 5-5 5.75C5.25 13 3 11 3 8V4z" />
+				<path d="M8 6v4M6 8h4" />
+			</symbol>
+			<symbol id="i-open" viewBox="0 0 16 16"><path d="M9 3h4v4M13 3 7.5 8.5M11 9.5V13H3V5h3.5" /></symbol>
+			<symbol id="i-folder" viewBox="0 0 16 16"><path d="M2.5 4.5v8h11V6h-5.5L6.5 4.5z" /></symbol>
+			<symbol id="i-dock" viewBox="0 0 16 16">
+				<rect x="2.25" y="3" width="11.5" height="10" rx="1.5" />
+				<path d="M2.25 9.5h11.5" />
+			</symbol>
+			<symbol id="i-max" viewBox="0 0 16 16">
+				<path d="M9.5 2.75h3.75V6.5M6.5 13.25H2.75V9.5M13.25 2.75 9 7M2.75 13.25 7 9" />
+			</symbol>
+			<symbol id="i-down" viewBox="0 0 16 16"><path d="M4.5 6.5 8 10l3.5-3.5" /></symbol>
+			<symbol id="i-restart" viewBox="0 0 16 16">
+				<path d="M3 8a5 5 0 1 0 1.6-3.7" />
+				<path d="M3 2.75V5.5h2.75" />
+			</symbol>
+			<symbol id="i-alert" viewBox="0 0 16 16">
+				<circle cx="8" cy="8" r="5.75" />
+				<path d="M8 5v3.5M8 11h.01" />
+			</symbol>
+		</svg>
+
+		<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+			<symbol id="v-sessions" viewBox="0 0 16 16">
+				<path d="M6.5 4h7M6.5 8h7M6.5 12h7" />
+				<circle cx="3.25" cy="4" r="1" />
+				<circle cx="3.25" cy="8" r="1" />
+				<circle cx="3.25" cy="12" r="1" />
+			</symbol>
+			<symbol id="v-files" viewBox="0 0 16 16">
+				<path d="M4.5 2.5h4.25L11.5 5.25v8.25h-7z" />
+				<path d="M8.5 2.5v3h3" />
+			</symbol>
+			<symbol id="v-review" viewBox="0 0 16 16">
+				<rect x="2.25" y="2.25" width="11.5" height="11.5" rx="1.5" />
+				<path d="M8 4.75v3.5M6.25 6.5h3.5M6.25 10.75h3.5" />
+			</symbol>
+			<symbol id="v-terminal" viewBox="0 0 16 16">
+				<rect x="2.25" y="3" width="11.5" height="10" rx="1.5" />
+				<path d="m5 6.5 2 1.5-2 1.5M8.5 10h2.5" />
+			</symbol>
+			<symbol id="v-resources" viewBox="0 0 16 16">
+				<path d="M8 2.25 13.25 5v6L8 13.75 2.75 11V5z" />
+				<path d="M2.75 5 8 7.75 13.25 5M8 7.75v6" />
+			</symbol>
+			<symbol id="v-settings" viewBox="0 0 16 16">
+				<path d="M2.75 5h5.5M11.75 5h1.5M2.75 11h1.5M7.75 11h5.5" />
+				<circle cx="10" cy="5" r="1.75" />
+				<circle cx="6" cy="11" r="1.75" />
+			</symbol>
+		</svg>
+
+		<div class="shell shell--no-workspace">
+			<nav class="bay" aria-label="Sessions">
+				<div class="bay__top">
+					<label class="field">
+						<svg class="icon"><use href="#i-search" /></svg>
+						<input class="field__input" type="search" placeholder="Filter sessions" aria-label="Filter sessions" />
+						<kbd><span>/</span></kbd>
+					</label>
+					<button class="btn btn--collapse" type="button" aria-label="New session">
+						<svg class="icon"><use href="#i-plus" /></svg><span>New</span>
+					</button>
+				</div>
+				<div class="bay__scroll">
+					<section aria-labelledby="h-needs">
+						<h2 class="bay-heading bay-heading--attention">
+							<span class="section-label" id="h-needs">Needs you</span><span class="bay-heading__count">4</span>
+						</h2>
+						<ul class="bay__list bay__list--attention">
+							<li>
+								<a class="strip" href="shell-session.html" data-state="waiting" aria-current="true">
+									<span class="mark mark--waiting" role="img" aria-label="Waiting"></span>
+									<span class="strip__line"
+										><span class="strip__name">Sandbox Pi sessions</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-sandbox</span>
+									<span></span>
+									<span class="strip__state tone-waiting">Allow write to crates/server/src/sessions.rs?</span>
+									<span class="strip__figure mono">4m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--waiting" role="img" aria-label="Waiting"></span>
+									<span class="strip__line"
+										><span class="strip__name">Resource scope picker</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-scope</span>
+									<span></span>
+									<span class="strip__state tone-waiting">Run pnpm install in packages/ui?</span>
+									<span class="strip__figure mono">9m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--failed" role="img" aria-label="Failed"></span>
+									<span class="strip__line"
+										><span class="strip__name">Terminal relay PTY</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-pty</span>
+									<span></span>
+									<span class="strip__state tone-failed">Failed: srt exited with status 1</span>
+									<span class="strip__figure mono">6m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--unresponsive" role="img" aria-label="Not responding"></span>
+									<span class="strip__line"
+										><span class="strip__name">Pi RPC timeout</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-rpc</span>
+									<span></span>
+									<span class="strip__state tone-unresponsive">Not responding for 1m</span>
+									<span class="strip__figure mono">1m</span>
+								</a>
+							</li>
+						</ul>
+					</section>
+
+					<section aria-labelledby="h-running">
+						<h2 class="bay-heading">
+							<span class="section-label" id="h-running">Running</span><span class="bay-heading__count">4</span>
+						</h2>
+						<ul class="bay__list">
+							<li>
+								<a class="strip" href="shell-session.html#running" data-state="running">
+									<span class="mark mark--running" role="img" aria-label="Running"></span>
+									<span class="strip__line"
+										><span class="strip__name">Audit log shutdown drain</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-audit</span>
+									<span></span>
+									<span class="strip__state mono">cargo test -p pau-core audit</span>
+									<span class="strip__figure mono">12m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--running" role="img" aria-label="Running"></span>
+									<span class="strip__line"
+										><span class="strip__name">Design audit</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau</span>
+									<span></span>
+									<span class="strip__state">Reading dev/design/system.md</span>
+									<span class="strip__figure mono">31m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html" data-session="pau-diff">
+									<span class="mark mark--running" role="img" aria-label="Running"></span>
+									<span class="strip__line"
+										><span class="strip__name">Diff gutter numbers</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-diff</span>
+									<span></span>
+									<span class="strip__state">Editing packages/ui/src/diff/DiffGutter.svelte</span>
+									<span class="strip__figure mono">7m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--starting" role="img" aria-label="Starting"></span>
+									<span class="strip__line"
+										><span class="strip__name">Model list filter</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-models</span>
+									<span></span>
+									<span class="strip__state">Starting Claude Code</span>
+									<span class="strip__figure mono">8s</span>
+								</a>
+							</li>
+						</ul>
+					</section>
+
+					<section aria-labelledby="h-settled">
+						<h2 class="bay-heading">
+							<span class="section-label" id="h-settled">Settled</span><span class="bay-heading__count">6</span>
+						</h2>
+						<ul class="bay__list">
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--idle" role="img" aria-label="Idle"></span>
+									<span class="strip__line"
+										><span class="strip__name">Theme contrast pass</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-themes</span>
+									<span></span>
+									<span class="strip__state">Idle</span>
+									<span class="strip__figure mono">40m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--idle" role="img" aria-label="Idle"></span>
+									<span class="strip__line"
+										><span class="strip__name">Token test flake</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-tokens</span>
+									<span></span>
+									<span class="strip__state">Idle</span>
+									<span class="strip__figure mono">2h</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--idle" role="img" aria-label="Idle"></span>
+									<span class="strip__line"
+										><span class="strip__name">Website changelog feed</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">thndrs</span>
+									<span></span>
+									<span class="strip__state">Idle</span>
+									<span class="strip__figure mono">3h</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--stopped" role="img" aria-label="Stopped"></span>
+									<span class="strip__line"
+										><span class="strip__name">Migration guard</span><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-migrate</span>
+									<span></span>
+									<span class="strip__state">Stopped</span>
+									<span class="strip__figure mono">5h</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--stopped" role="img" aria-label="Stopped"></span>
+									<span class="strip__line"
+										><span class="strip__name">Rewrite README</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">thndrs</span>
+									<span></span>
+									<span class="strip__state">Stopped</span>
+									<span class="strip__figure mono">1d</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--stopped" role="img" aria-label="Stopped"></span>
+									<span class="strip__line"
+										><span class="strip__name">Zellij smoke run</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau</span>
+									<span></span>
+									<span class="strip__state">Stopped</span>
+									<span class="strip__figure mono">1d</span>
+								</a>
+							</li>
+						</ul>
+					</section>
+				</div>
+				<ul class="views" aria-label="Views">
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="shell-session.html"
+							aria-label="Sessions"
+							aria-describedby="tip-sessions"
+							><svg class="icon"><use href="#v-sessions" /></svg
+							><span class="views__tip" role="tooltip" id="tip-sessions">Sessions</span></a
+						>
+					</li>
+					<li>
+						<a class="btn btn--quiet btn--icon" href="files.html" aria-label="Files" aria-describedby="tip-files"
+							><svg class="icon"><use href="#v-files" /></svg
+							><span class="views__tip" role="tooltip" id="tip-files">Files</span></a
+						>
+					</li>
+					<li>
+						<a class="btn btn--quiet btn--icon" href="review.html" aria-label="Review" aria-describedby="tip-review"
+							><svg class="icon"><use href="#v-review" /></svg
+							><span class="views__tip" role="tooltip" id="tip-review">Review</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="terminal.html"
+							aria-current="page"
+							aria-label="Terminal"
+							aria-describedby="tip-terminal"
+							><svg class="icon"><use href="#v-terminal" /></svg
+							><span class="views__tip" role="tooltip" id="tip-terminal">Terminal</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="resources.html"
+							aria-label="Pi resources"
+							aria-describedby="tip-resources"
+							><svg class="icon"><use href="#v-resources" /></svg
+							><span class="views__tip" role="tooltip" id="tip-resources">Pi resources</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="settings.html"
+							aria-label="Settings"
+							aria-describedby="tip-settings"
+							><svg class="icon"><use href="#v-settings" /></svg
+							><span class="views__tip" role="tooltip" id="tip-settings"
+								>Settings<kbd><span>⌘,</span></kbd></span
+							></a
+						>
+					</li>
+				</ul>
+			</nav>
+
+			<main class="main">
+				<!-- ======================================================= Terminal view -->
+				<div class="view view--terminal">
+					<header class="page-header">
+						<h1 class="header-title">Terminal</h1>
+						<span class="header-where mono"
+							><svg class="icon"><use href="#i-folder" /></svg><span class="cap">pau-worktrees/pau-sandbox</span></span
+						>
+						<span class="header-spacer"></span>
+						<div class="header-actions">
+							<button
+								class="btn btn--quiet btn--collapse"
+								type="button"
+								aria-label="Find in terminal"
+								title="Find in terminal (⌘F)">
+								<svg class="icon"><use href="#i-search" /></svg><span>Find</span>
+							</button>
+							<a
+								class="btn btn--quiet btn--collapse"
+								href="#dock"
+								aria-label="Move to Sessions dock"
+								title="Move to Sessions dock"
+								><svg class="icon"><use href="#i-dock" /></svg><span>Move to dock</span></a
+							>
+							<span class="header-rule" aria-hidden="true"></span>
+							<button class="btn btn--danger when-live" type="button">
+								<svg class="icon"><use href="#i-close" /></svg><span>Close zsh</span>
+							</button>
+							<button class="btn btn--danger when-exited" type="button">
+								<svg class="icon"><use href="#i-close" /></svg><span>Close storybook</span>
+							</button>
+						</div>
+					</header>
+
+					<div class="term-body">
+						<nav class="term-rail" aria-label="Terminals">
+							<h2 class="bay-heading">
+								<span class="section-label" id="h-open">Open terminals</span
+								><span class="bay-heading__count"
+									><span class="when-profile">4</span><span class="when-no-profile">3</span></span
+								>
+							</h2>
+							<ul class="term-rail__list tabs--narrow" role="tablist" aria-labelledby="h-open">
+								<li>
+									<a class="strip strip--icon term-tab--zsh" href="#" role="tab" aria-selected="true">
+										<svg class="icon"><use href="#i-term" /></svg>
+										<span class="strip__line"><span class="strip__name mono">zsh</span></span>
+										<span></span>
+										<span></span>
+										<span class="strip__state">Running</span>
+										<span class="strip__figure mono">2h</span>
+									</a>
+								</li>
+								<li>
+									<a class="strip strip--icon" href="#dock" role="tab" aria-selected="false">
+										<svg class="icon"><use href="#i-term" /></svg>
+										<span class="strip__line"><span class="strip__name mono">cargo watch</span></span>
+										<span class="activity" role="img" aria-label="New output"></span>
+										<span></span>
+										<span class="strip__state">New output</span>
+										<span class="strip__figure mono">48m</span>
+									</a>
+								</li>
+								<li class="when-profile">
+									<a
+										class="strip strip--icon"
+										href="#"
+										role="tab"
+										aria-selected="false"
+										title="Sandboxed with workspace-write">
+										<svg class="icon" role="img" aria-label="Sandboxed"><use href="#i-shield" /></svg>
+										<span class="strip__line"
+											><span class="strip__name mono">zsh</span
+											><span class="strip__agent mono">workspace-write</span></span
+										>
+										<span></span>
+										<span></span>
+										<span class="strip__state">Running in the sandbox</span>
+										<span class="strip__figure mono">6m</span>
+									</a>
+								</li>
+								<li>
+									<a class="strip strip--icon term-tab--sb" href="#exited" role="tab" aria-selected="false">
+										<svg class="icon"><use href="#i-term" /></svg>
+										<span class="strip__line"><span class="strip__name mono">storybook</span></span>
+										<span class="badge badge--danger"><span>exit 1</span></span>
+										<span></span>
+										<span class="strip__state tone-failed">Exited with code 1</span>
+										<span class="strip__figure mono">14m</span>
+									</a>
+								</li>
+							</ul>
+
+							<div class="term-rail__new">
+								<button class="btn btn--collapse" type="button" aria-label="New terminal" title="New terminal">
+									<svg class="icon"><use href="#i-plus" /></svg><span>New terminal</span>
+								</button>
+								<button
+									class="btn btn--collapse when-profile"
+									type="button"
+									aria-label="New sandboxed terminal"
+									title="New sandboxed terminal (workspace-write)">
+									<svg class="icon"><use href="#i-shield-plus" /></svg><span>New sandboxed terminal</span>
+								</button>
+								<button
+									class="btn btn--collapse when-no-profile"
+									type="button"
+									aria-disabled="true"
+									aria-label="New sandboxed terminal"
+									aria-describedby="no-profile-why"
+									title="Choose a sandbox profile for this workspace first">
+									<svg class="icon"><use href="#i-shield-plus" /></svg><span>New sandboxed terminal</span>
+								</button>
+								<p class="term-rail__reason when-no-profile" id="no-profile-why">
+									This workspace has no sandbox profile. Choose one in <a href="settings.html#sandbox">Settings</a>.
+								</p>
+							</div>
+						</nav>
+
+						<div class="xterm when-live" role="tabpanel" aria-label="zsh terminal" tabindex="0">
+							<pre
+								class="mono"><span class="a-cyan">pau-sandbox</span> <span class="a-magenta">claude/sandbox</span> <span class="a-green">❯</span> gh pr checks 29
+<span class="a-green">✓</span> Check            2m41s  <span class="xlink">https://github.com/stormlightlabs/pau/actions/runs/14829105537</span>
+<span class="a-green">✓</span> storm/review     0s     <span class="xlink">https://github.com/stormlightlabs/pau/pull/29</span>
+<span class="a-cyan">pau-sandbox</span> <span class="a-magenta">claude/sandbox</span> <span class="a-green">❯</span> pnpm --filter @stormlightlabs/pau-ui exec vitest run terminal-links
+<span class="a-dim"> RUN  v3.2.4 ~/Projects/pau-worktrees/pau-sandbox/packages/ui</span>
+ <span class="a-green">✓</span> <span class="xlink">src/tests/terminal-links.test.ts</span> <span class="a-dim">(18 tests) 41ms</span>
+<span class="a-dim"> Test Files </span> <span class="a-green a-bold">1 passed</span> <span class="a-dim">(1)</span>
+<span class="a-dim">      Tests </span> <span class="a-green a-bold">18 passed</span> <span class="a-dim">(18)</span>
+<span class="a-cyan">pau-sandbox</span> <span class="a-magenta">claude/sandbox</span> <span class="a-green">❯</span> cargo test -p pau-server --lib terminal
+<span class="a-green a-bold">   Compiling</span> pau-core v0.14.0-dev (~/Projects/pau-worktrees/pau-sandbox/crates/core)
+<span class="a-green a-bold">   Compiling</span> pau-server v0.14.0-dev (~/Projects/pau-worktrees/pau-sandbox/crates/server)
+<span class="a-green a-bold">    Finished</span> `test` profile [unoptimized + debuginfo] target(s) in 38.42s
+<span class="a-green a-bold">     Running</span> unittests src/lib.rs (target/debug/deps/pau_server-3f9c1e2a7b6d4f10)
+
+running 24 tests
+test terminal::links::tests::links_a_workspace_file_with_line_and_column ... <span class="a-green">ok</span>
+test terminal::links::tests::keeps_absolute_paths_plain ... <span class="a-green">ok</span>
+test terminal::links::tests::keeps_parent_directory_paths_plain ... <span class="a-green">ok</span>
+test terminal::links::tests::skips_versions ... <span class="a-red a-bold">FAILED</span>
+test terminal::replay::tests::keeps_the_last_megabyte_of_output ... <span class="a-green">ok</span>
+test terminal::replay::tests::reports_a_gap_after_a_dropped_client ... <span class="a-green">ok</span>
+test terminal::pty::tests::resizes_without_losing_the_cursor ... <span class="a-green">ok</span>
+test terminal::pty::tests::reports_the_exit_code_of_an_early_exit ... <span class="a-green">ok</span>
+<span class="a-dim">test result truncated: 16 more tests ... ok</span>
+
+failures:
+
+---- terminal::links::tests::skips_versions stdout ----
+
+thread 'terminal::links::tests::skips_versions' panicked at <span class="xlink xlink--hover">crates/server/src/terminal/links.rs:214:9<span class="link-tip" role="tooltip"><svg class="icon"><use href="#i-file"/></svg><span>Open links.rs at line 214 in Files</span><kbd><span>⌘</span></kbd></span></span>:
+assertion `left == right` failed
+  left: [Link { text: "v0.14.0", line: None }]
+ right: []
+<span class="a-dim">note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</span>
+
+failures:
+    terminal::links::tests::skips_versions
+
+test result: <span class="a-red a-bold">FAILED</span>. 23 passed; 1 failed; 0 ignored; 0 measured; 112 filtered out; finished in 0.84s
+
+<span class="a-red a-bold">error</span>: test failed, to rerun pass `-p pau-server --lib`
+<span class="a-cyan">pau-sandbox</span> <span class="a-magenta">claude/sandbox</span> <span class="a-red">❯</span> <span class="cursor"> </span></pre>
+						</div>
+
+						<div class="xterm when-exited" role="tabpanel" aria-label="storybook terminal" tabindex="0">
+							<div class="notice notice--danger exit-notice" role="status">
+								<svg class="icon"><use href="#i-alert" /></svg>
+								<div>
+									<p class="notice__title">The process exited with code 1.</p>
+									<p class="notice__body">The output stays here until you close the tab.</p>
+								</div>
+								<div class="notice__actions">
+									<button class="btn" type="button">
+										<svg class="icon"><use href="#i-restart" /></svg><span>Run again</span>
+									</button>
+								</div>
+							</div>
+							<pre
+								class="mono"><span class="a-dim">&gt; @stormlightlabs/pau-ui@0.14.0 storybook ~/Projects/pau-worktrees/pau-sandbox/packages/ui</span>
+<span class="a-dim">&gt; storybook dev -p 6006 --no-open</span>
+
+<span class="a-blue">@storybook/core v9.1.4</span>
+
+<span class="a-cyan">info</span> =&gt; Starting manager..
+<span class="a-cyan">info</span> =&gt; Starting preview..
+<span class="a-red a-bold">Error</span>: Port 6006 is not available. Another Storybook may already be running at <span class="xlink">http://localhost:6006/</span>
+    at getServerPort (<span class="a-dim">~/Projects/pau/node_modules/.pnpm/@storybook+core@9.1.4/node_modules/@storybook/core/dist/core-server/index.cjs:4127:11</span>)
+
+<span class="a-red"> ELIFECYCLE </span> Command failed with exit code 1.
+<span class="a-dim">~/Projects/pau-worktrees/pau-sandbox/packages/ui:</span>
+<span class="a-red"> ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL </span> @stormlightlabs/pau-ui@0.14.0 storybook: `storybook dev -p 6006 --no-open`
+Exit status 1</pre>
+						</div>
+					</div>
+				</div>
+
+				<!-- ========================================================= Dock state -->
+				<div class="view view--dock">
+					<header class="page-header">
+						<h1 class="header-title">Audit log shutdown drain</h1>
+						<span class="state tone-running"
+							><span class="mark mark--running" aria-hidden="true"></span><span>Running</span></span
+						>
+						<span class="header-spacer"></span>
+						<div class="header-actions">
+							<a
+								class="btn btn--quiet btn--collapse"
+								href="shell-session.html#running"
+								aria-pressed="true"
+								aria-label="Hide terminal dock"
+								title="Hide terminal dock (Ctrl+`)"
+								><svg class="icon"><use href="#i-term" /></svg><span>Terminal</span></a
+							>
+							<button class="btn btn--quiet btn--collapse" type="button" aria-label="Export transcript">
+								<svg class="icon"><use href="#i-export" /></svg><span>Export</span>
+							</button>
+							<span class="header-rule" aria-hidden="true"></span>
+							<button class="btn btn--danger" type="button">
+								<svg class="icon"><use href="#i-stop" /></svg><span>Stop</span>
+							</button>
+						</div>
+					</header>
+
+					<div class="log">
+						<div class="log__inner column" role="log" aria-label="Transcript">
+							<div class="prose">
+								<p>
+									The drain now flushes pending audit records before the server exits. <code>cargo watch</code> in the
+									dock still flags an unused variable in the writer, so I'll clean that up once the audit tests pass.
+								</p>
+							</div>
+							<div class="rows">
+								<div class="tool">
+									<svg class="icon"><use href="#i-file" /></svg><span>edit</span
+									><a class="tool__target" href="files.html">crates/core/src/audit/drain.rs</a
+									><span class="tool__time">0.3s</span
+									><span class="tool__result"><span class="diff-add">+18</span> <span class="diff-del">-4</span></span>
+								</div>
+								<div class="tool">
+									<svg class="icon"><use href="#i-term" /></svg><span>bash</span
+									><span class="tool__target">cargo test -p pau-core audit</span><span class="tool__time">12m</span
+									><span class="tool__result tone-running">running</span>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="composer-dock column">
+						<div class="composer">
+							<textarea
+								class="composer__input"
+								rows="1"
+								placeholder="Steer this session"
+								aria-label="Message"
+								style="min-height: 48px"></textarea>
+							<div class="composer__bar">
+								<button class="picker" type="button">
+									<span class="mono">claude-opus-5-5</span><svg class="icon"><use href="#i-chev" /></svg>
+								</button>
+								<span class="header-spacer"></span>
+								<span class="composer__meter mono cap">44% of 200k</span>
+								<button class="btn" type="button">
+									<svg class="icon"><use href="#i-send" /></svg><span>Send</span>
+								</button>
+							</div>
+						</div>
+					</div>
+
+					<section class="dock" aria-label="Terminal dock">
+						<div
+							class="dock__grip"
+							role="separator"
+							aria-orientation="horizontal"
+							aria-label="Resize terminal dock"
+							aria-valuenow="40"
+							aria-valuemin="20"
+							aria-valuemax="80"
+							tabindex="0"></div>
+						<div class="dock__bar">
+							<div class="dock__tabs tabs" role="tablist" aria-label="Open terminals">
+								<a class="strip strip--icon" href="#" role="tab" aria-selected="false">
+									<svg class="icon"><use href="#i-term" /></svg>
+									<span class="strip__line"><span class="strip__name mono">zsh</span></span>
+									<span class="activity" role="img" aria-label="New output"></span>
+								</a>
+								<a class="strip strip--icon" href="#dock" role="tab" aria-selected="true">
+									<svg class="icon"><use href="#i-term" /></svg>
+									<span class="strip__line"><span class="strip__name mono">cargo watch</span></span>
+									<span></span>
+								</a>
+								<a class="strip strip--icon" href="#" role="tab" aria-selected="false">
+									<svg class="icon" role="img" aria-label="Sandboxed"><use href="#i-shield" /></svg>
+									<span class="strip__line"
+										><span class="strip__name mono">zsh</span
+										><span class="strip__agent mono">workspace-write</span></span
+									>
+									<span></span>
+								</a>
+								<a class="strip strip--icon dock__tab--spill" href="#exited" role="tab" aria-selected="false">
+									<svg class="icon"><use href="#i-term" /></svg>
+									<span class="strip__line"><span class="strip__name mono">storybook</span></span>
+									<span class="badge badge--danger"><span>exit 1</span></span>
+								</a>
+							</div>
+							<details class="dock__more">
+								<summary class="btn btn--quiet" aria-label="1 more terminal, exited" title="More terminals">
+									<span>+1</span><span class="mark mark--failed" aria-hidden="true"></span
+									><svg class="icon"><use href="#i-chev" /></svg>
+								</summary>
+								<div class="menu" role="menu" aria-label="Open terminals">
+									<a class="menu__item" role="menuitem" href="#"
+										><svg class="icon"><use href="#i-term" /></svg><span class="strip__name mono">zsh</span
+										><span class="activity" role="img" aria-label="New output"></span
+									></a>
+									<a class="menu__item" role="menuitem" href="#dock" aria-current="true"
+										><svg class="icon"><use href="#i-term" /></svg><span class="strip__name mono">cargo watch</span
+										><span></span
+									></a>
+									<a class="menu__item" role="menuitem" href="#"
+										><svg class="icon" role="img" aria-label="Sandboxed"><use href="#i-shield" /></svg
+										><span class="strip__name mono">zsh workspace-write</span><span></span
+									></a>
+									<a class="menu__item" role="menuitem" href="#exited"
+										><svg class="icon"><use href="#i-term" /></svg><span class="strip__name mono">storybook</span
+										><span class="badge badge--danger"><span>exit 1</span></span></a
+									>
+								</div>
+							</details>
+							<span class="header-spacer"></span>
+							<button class="btn btn--quiet btn--icon" type="button" aria-label="New terminal" title="New terminal">
+								<svg class="icon"><use href="#i-plus" /></svg>
+							</button>
+							<button
+								class="btn btn--quiet btn--icon"
+								type="button"
+								aria-label="New sandboxed terminal"
+								title="New sandboxed terminal (workspace-write)">
+								<svg class="icon"><use href="#i-shield-plus" /></svg>
+							</button>
+							<span class="dock__rule" aria-hidden="true"></span>
+							<button
+								class="btn btn--quiet btn--icon"
+								type="button"
+								aria-label="Find in terminal"
+								title="Find in terminal (⌘F)">
+								<svg class="icon"><use href="#i-search" /></svg>
+							</button>
+							<a
+								class="btn btn--quiet btn--icon"
+								href="terminal.html"
+								aria-label="Move to Terminal view"
+								title="Move to Terminal view"
+								><svg class="icon"><use href="#i-max" /></svg
+							></a>
+							<a
+								class="btn btn--quiet btn--icon"
+								href="shell-session.html#running"
+								aria-label="Hide terminal dock"
+								title="Hide terminal dock (Ctrl+`)"
+								><svg class="icon"><use href="#i-down" /></svg
+							></a>
+						</div>
+						<div class="xterm" role="tabpanel" aria-label="cargo watch terminal" tabindex="0">
+							<pre class="mono"><span class="a-yellow">[Running 'cargo check -p pau-core']</span>
+<span class="a-green a-bold">    Checking</span> pau-core v0.14.0-dev (~/Projects/pau-worktrees/pau-audit/crates/core)
+<span class="a-green a-bold">    Finished</span> `dev` profile [unoptimized + debuginfo] target(s) in 1.94s
+<span class="a-yellow">[Finished running. Exit status: 0]</span>
+<span class="a-yellow">[Running 'cargo check -p pau-core']</span>
+<span class="a-green a-bold">    Checking</span> pau-core v0.14.0-dev (~/Projects/pau-worktrees/pau-audit/crates/core)
+<span class="a-red a-bold">error[E0425]</span><span class="a-bold">: cannot find value `queue` in this scope</span>
+  <span class="a-blue a-bold">--&gt;</span> <span class="xlink">crates/core/src/audit/writer.rs:91:9</span>
+<span class="a-red a-bold">error</span>: could not compile `pau-core` (lib) due to 1 previous error
+<span class="a-yellow">[Finished running. Exit status: 101]</span>
+<span class="a-yellow">[Running 'cargo check -p pau-core']</span>
+<span class="a-green a-bold">    Checking</span> pau-core v0.14.0-dev (~/Projects/pau-worktrees/pau-audit/crates/core)
+<span class="a-yellow a-bold">warning</span><span class="a-bold">: unused variable: `pending`</span>
+  <span class="a-blue a-bold">--&gt;</span> <span class="xlink">crates/core/src/audit/writer.rs:88:13</span>
+   <span class="a-blue a-bold">|</span>
+<span class="a-blue a-bold">88</span> <span class="a-blue a-bold">|</span>         let pending = self.queue.len();
+   <span class="a-blue a-bold">|</span>             <span class="a-yellow a-bold">^^^^^^^</span> <span class="a-yellow a-bold">help: if this is intentional, prefix it with an underscore: `_pending`</span>
+
+<span class="a-yellow a-bold">warning</span>: `pau-core` (lib) generated 1 warning
+<span class="a-green a-bold">    Finished</span> `dev` profile [unoptimized + debuginfo] target(s) in 2.31s
+<span class="a-yellow">[Finished running. Exit status: 0]</span></pre>
+						</div>
+					</section>
+				</div>
+			</main>
+		</div>
+
+		<script>
+			// Wireframe behaviour only: the dock state is the running session in
+			// Sessions, so the bay and the product navigation mark those.
+			const sync = () => {
+				const dock = location.hash === '#dock';
+				document.querySelectorAll('.bay [data-state]').forEach((strip) => {
+					strip.toggleAttribute('aria-current', strip.dataset.state === (dock ? 'running' : 'waiting'));
+					if (strip.hasAttribute('aria-current')) strip.setAttribute('aria-current', 'true');
+				});
+				document.querySelectorAll('.views a[href]').forEach((link) => {
+					const on = link.getAttribute('href') === (dock ? 'shell-session.html' : 'terminal.html');
+					on ? link.setAttribute('aria-current', 'page') : link.removeAttribute('aria-current');
+				});
+			};
+			addEventListener('hashchange', sync);
+			sync();
+
+			// The overflow menu closes on Escape or a press outside it.
+			const more = document.querySelector('.dock__more');
+			document.addEventListener('click', (event) => {
+				if (more.open && !more.contains(event.target)) more.open = false;
+			});
+			document.addEventListener('keydown', (event) => {
+				if (event.key === 'Escape' && more.open) {
+					more.open = false;
+					more.querySelector('summary').focus();
+				}
+			});
+		</script>
+	</body>
+</html>

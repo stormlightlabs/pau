@@ -17,15 +17,19 @@ recorded system or surface contract.
 
 ## Settled direction
 
-The settled direction now lives in [`system.md`](system.md). Keep this index
-focused on document ownership and sketch provenance.
+The settled direction is the Strip Bay, recorded in [`system.md`](system.md).
+[`apps/desktop/DESIGN.md`](../../apps/desktop/DESIGN.md) lists its token
+values, and `apps/desktop/.impeccable/wireframes/` holds a static wireframe of
+each desktop surface. Open a wireframe's HTML file in a browser to see it.
+Where these disagree with this directory, this directory wins.
 
 ## What the sketches explore
 
 ### Workspace and session
 
-[`ws-eldritch.png`](ws-eldritch.png) explores the main operating layout: a
+[`ws-eldritch.png`](ws-eldritch.png) explored an earlier operating layout: a
 product rail, workspace and session rail, central conversation, and inspector.
+The Strip Bay replaced it.
 It also shows session attention states, tool activity, checks, a plan, and the
 composer in one view.
 

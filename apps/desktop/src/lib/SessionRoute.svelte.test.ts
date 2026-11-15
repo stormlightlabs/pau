@@ -636,6 +636,57 @@ test('reloads earlier turns and applies only newer output on top', async () => {
 	await expect.poll(() => transcript.getByText('Gutter fixed.').all()).toHaveLength(2);
 });
 
+/** A 1×1 PNG as base64, the form Pi stores prompt images in. */
+const pixel = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+const promptWithImage = [
+	{ type: 'text', text: 'Describe this.' },
+	{ type: 'image', mimeType: 'image/png', data: pixel }
+];
+
+test('shows a compaction marker and prompt images from saved history', async () => {
+	const messages = [
+		{ role: 'compactionSummary', summary: 'Fixed the gutter.', tokensBefore: 9000, timestamp: 1 },
+		{ role: 'user', content: promptWithImage, timestamp: 2 }
+	];
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/sessions/session-1/messages': () => json({ sequence: 0, messages, truncated: false })
+	});
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+
+	const transcript = page.getByLabelText('Transcript');
+	const marker = transcript.getByRole('group', { name: 'Compacted context' });
+	await expect.element(marker.getByText('Context compacted', { exact: true })).toBeVisible();
+	await expect.element(marker.getByText('9,000 tokens before')).toBeVisible();
+	await expect.element(transcript.getByText('Describe this.')).toBeVisible();
+	await expect
+		.element(transcript.getByRole('img', { name: 'Image 1 of 1' }))
+		.toHaveAttribute('src', `data:image/png;base64,${pixel}`);
+});
+
+test('shows a compaction marker and prompt images from live events', async () => {
+	const { props, sockets } = setup({ 'GET /api/sessions': () => json([idleSession]) });
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+	sockets[0]?.open();
+
+	sockets[0]?.receive(output({ type: 'compaction_start', reason: 'threshold' }));
+	sockets[0]?.receive(
+		output({
+			type: 'compaction_end',
+			reason: 'threshold',
+			result: { summary: 'Fixed the gutter.', firstKeptEntryId: 'e1', tokensBefore: 9000 }
+		})
+	);
+	sockets[0]?.receive(output({ type: 'message_start', message: { role: 'user', content: promptWithImage } }));
+
+	const transcript = page.getByLabelText('Transcript');
+	const marker = transcript.getByRole('group', { name: 'Compacted context' });
+	await expect.element(marker.getByText('Context compacted automatically')).toBeVisible();
+	await expect
+		.element(transcript.getByRole('img', { name: 'Image 1 of 1' }))
+		.toHaveAttribute('src', `data:image/png;base64,${pixel}`);
+});
+
 test('selects the live session that already runs a saved session instead of resuming it', async () => {
 	const start = vi.fn(() => json(idleSession, 201));
 	const changes: string[] = [];

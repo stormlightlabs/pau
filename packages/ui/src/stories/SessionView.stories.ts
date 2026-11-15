@@ -792,6 +792,27 @@ export const Compacted: Story = {
 		await expect(within(marker).getByText(/renderer in src\/diff\/gutter.ts/)).toBeVisible();
 	}
 };
+export const PromptImagesFromHistory: Story = {
+	args: { workspaces: sessionFixtures.promptImages, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const marker = canvas.getByLabelText('Compacted context');
+		await expect(within(marker).getByText('Context compacted')).toBeVisible();
+		await expect(within(marker).getByText('96,400 tokens before')).toBeVisible();
+		await expect(canvas.getByRole('img', { name: 'Image 2 of 2' })).toBeVisible();
+		await expect(canvas.getAllByRole('img', { name: 'Image 1 of 1' })).toHaveLength(1);
+		await expect(canvas.getAllByText('Older image not shown')).toHaveLength(3);
+		await expect(canvas.getByText('2 images not shown: too large')).toBeVisible();
+		await expect(canvas.getByText('Image not shown: damaged or unsupported')).toBeVisible();
+		const thumbnail = canvas.getByRole('img', { name: 'Image 2 of 2' });
+		await expect(thumbnail).toHaveAttribute('loading', 'lazy');
+		await expect(thumbnail).toHaveAttribute('decoding', 'async');
+		const placeholder = canvas.getAllByText('Older image not shown')[0]?.getBoundingClientRect();
+		const image = thumbnail.getBoundingClientRect();
+		await expect([placeholder?.width, placeholder?.height]).toEqual([image.width, image.height]);
+		await expect(canvas.getAllByRole('button', { name: 'Copy your message' })).toHaveLength(3);
+	}
+};
 export const CompactedAutomatically: Story = {
 	args: { workspaces: sessionFixtures.compactedAutomatically, initialSessionId: 'session-idle' },
 	play: async ({ canvasElement }) => {

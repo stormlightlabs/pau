@@ -10,7 +10,7 @@ export { default as DiffReview } from './lib/DiffReview.svelte';
 export { default as FileEditor } from './lib/FileEditor.svelte';
 export { externalLinkContext, type ExternalLinkOpener } from './lib/external-links';
 export { COMPOSER_ATTRIBUTE, createFocusReturn, returnFocus, type FocusReturn } from './lib/focus-return';
-export type { PromptImage } from './lib/composer-images';
+export { isImageType, maxImageBytes, maxRequestImageBytes, type PromptImage } from './lib/composer-images';
 export type { EditorFileContent, FileEditorSource } from './lib/types/file-editor';
 export { default as Icon, type IconProps } from './lib/Icon.svelte';
 export { default as KeyboardShortcuts } from './lib/KeyboardShortcuts.svelte';
@@ -156,6 +156,7 @@ export type {
 	SessionWorkspace,
 	TranscriptCompaction,
 	TranscriptEntry,
+	HiddenImages,
 	ThinkingLevel,
 	TranscriptTool,
 	ShellCommand,

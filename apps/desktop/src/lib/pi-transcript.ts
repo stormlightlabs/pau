@@ -1,15 +1,22 @@
-import type {
-	AutoRetry,
-	BashToolCall,
-	CompactionReason,
-	CompactionState,
-	MessageQueue,
-	ToolCallDetails,
-	ToolEdit,
-	ToolTruncation,
-	TranscriptEntry,
-	TranscriptTool
+import {
+	isImageType,
+	maxImageBytes,
+	maxRequestImageBytes,
+	type AutoRetry,
+	type BashToolCall,
+	type CompactionReason,
+	type CompactionState,
+	type HiddenImages,
+	type MessageQueue,
+	type PromptImage,
+	type ToolCallDetails,
+	type ToolEdit,
+	type ToolTruncation,
+	type TranscriptEntry,
+	type TranscriptTool
 } from '@stormlightlabs/pau-ui';
+
+import { imageSize, maxImagePixels } from './image-size';
 
 /**
  * Display transcript rebuilt from native Pi messages and events.
@@ -357,17 +364,91 @@ export function findTranscriptEntry(
 	return found;
 }
 
+/** Base64 length of `bytes` bytes, padding included. */
+const base64Length = (bytes: number) => Math.ceil(bytes / 3) * 4;
+
+/** Longest base64 text of an image within {@link maxImageBytes}. */
+const MAX_IMAGE_BASE64 = base64Length(maxImageBytes);
+
+/** Most base64 text the images of one message may hold, within {@link maxRequestImageBytes}. */
+const MAX_MESSAGE_IMAGE_BASE64 = base64Length(maxRequestImageBytes);
+
 /**
- * Labels for Pi's context summaries. A compaction summary stands in for the
- * turns it replaced, and a branch summary for the branch left behind.
- *
- * Both render as labelled messages until the transcript has a dedicated
- * compaction marker.
+ * Most base64 text the images of a whole transcript may hold: four full
+ * requests. Every image is a `data:` URL in state and in the DOM, so a long
+ * history of screenshots would otherwise hold hundreds of megabytes.
  */
-const SUMMARY_LABELS: Record<string, string> = {
-	compactionSummary: 'Earlier conversation, summarized',
-	branchSummary: 'Previous branch, summarized'
-};
+const MAX_TRANSCRIPT_IMAGE_BASE64 = 4 * MAX_MESSAGE_IMAGE_BASE64;
+
+/**
+ * Reads the images in a user message's content. An image shows only with a
+ * type Pau accepts for prompts, base64 data that can decode, and a header
+ * that records its size; any other counts as unreadable. An image over
+ * {@link maxImageBytes} or {@link maxImagePixels}, or one that takes the
+ * message past {@link maxRequestImageBytes}, counts as too large. The view
+ * names both counts, so a prompt of only hidden images still shows its turn.
+ */
+function promptImages(content: unknown): { images?: PromptImage[]; hiddenImages?: HiddenImages } {
+	if (!Array.isArray(content)) return {};
+	const images: PromptImage[] = [];
+	let tooLarge = 0;
+	let unreadable = 0;
+	let total = 0;
+	for (const block of content) {
+		if (!isObject(block) || block.type !== 'image') continue;
+		const mimeType = text(block.mimeType) ?? '';
+		const data = text(block.data) ?? '';
+		if (!data || !isImageType(mimeType)) {
+			unreadable += 1;
+			continue;
+		}
+		if (data.length > MAX_IMAGE_BASE64 || total + data.length > MAX_MESSAGE_IMAGE_BASE64) {
+			tooLarge += 1;
+			continue;
+		}
+		// A length of 1 mod 4 leaves a lone sextet that decodes to no byte.
+		const size = data.length % 4 !== 1 && /^[A-Za-z0-9+/]+={0,2}$/.test(data) ? imageSize(mimeType, data) : undefined;
+		if (!size) {
+			unreadable += 1;
+			continue;
+		}
+		if (size.width * size.height > maxImagePixels) {
+			tooLarge += 1;
+			continue;
+		}
+		images.push({ mimeType, data });
+		total += data.length;
+	}
+	const hiddenImages = { ...(tooLarge > 0 && { tooLarge }), ...(unreadable > 0 && { unreadable }) };
+	return { ...(images.length > 0 && { images }), ...((tooLarge > 0 || unreadable > 0) && { hiddenImages }) };
+}
+
+/**
+ * Keeps the transcript's images within {@link MAX_TRANSCRIPT_IMAGE_BASE64}.
+ * The newest images win: walking back from the end, each image past the
+ * budget leaves its message and counts as older. The view keeps a placeholder
+ * the size of the thumbnail for each older image, so a new prompt that pushes
+ * earlier images out of the budget does not move the content above a reader
+ * who has scrolled up, and their data still leaves memory. Entries that keep
+ * all their images are returned unchanged.
+ */
+function limitImages(entries: TranscriptEntry[]): TranscriptEntry[] {
+	let total = 0;
+	let changed = false;
+	const limited = entries.toReversed().map((entry) => {
+		if (entry.kind !== 'message' || !entry.images) return entry;
+		const kept = entry.images.filter((image) => {
+			if (total + image.data.length > MAX_TRANSCRIPT_IMAGE_BASE64) return false;
+			total += image.data.length;
+			return true;
+		});
+		if (kept.length === entry.images.length) return entry;
+		changed = true;
+		const older = (entry.hiddenImages?.older ?? 0) + entry.images.length - kept.length;
+		return { ...entry, images: kept.length > 0 ? kept : undefined, hiddenImages: { ...entry.hiddenImages, older } };
+	});
+	return changed ? limited.toReversed() : entries;
+}
 
 /** Projects one authoritative or starting message into transcript entries. */
 function projectMessage(
@@ -377,10 +458,18 @@ function projectMessage(
 	complete: boolean
 ): TranscriptEntry[] {
 	const role = message.role;
-	const summaryLabel = typeof role === 'string' ? SUMMARY_LABELS[role] : undefined;
-	if (summaryLabel) {
+	// A compaction in saved history shows as the marker a live compaction adds.
+	if (role === 'compactionSummary') {
+		const summary = text(message.summary);
+		return summary
+			? [{ id: `${key}:0`, kind: 'compaction', summary, tokensBefore: numberField(message.tokensBefore) }]
+			: [];
+	}
+	if (role === 'branchSummary') {
 		const body = text(message.summary);
-		return body ? [{ id: `${key}:0`, kind: 'message', role: 'assistant', label: summaryLabel, body }] : [];
+		return body
+			? [{ id: `${key}:0`, kind: 'message', role: 'assistant', label: 'Previous branch, summarized', body }]
+			: [];
 	}
 	if (role === 'user') {
 		const content = message.content;
@@ -391,7 +480,9 @@ function projectMessage(
 						.flatMap((block) => (isObject(block) && block.type === 'text' ? [text(block.text) ?? ''] : []))
 						.join('\n')
 				: '');
-		return body ? [{ id: `${key}:0`, kind: 'message', role: 'user', body }] : [];
+		const images = promptImages(content);
+		if (!body && !images.images && !images.hiddenImages) return [];
+		return [{ id: `${key}:0`, kind: 'message', role: 'user', body, ...images }];
 	}
 	if (role === 'bashExecution') {
 		const command = text(message.command);
@@ -451,7 +542,8 @@ function replaceMessage(entries: TranscriptEntry[], key: string, projected: Tran
 	const first = entries.findIndex((entry) => owned(entry));
 	const kept = entries.filter((entry) => !owned(entry));
 	const at = first === -1 ? kept.length : entries.slice(0, first).filter((entry) => !owned(entry)).length;
-	return [...kept.slice(0, at), ...projected, ...kept.slice(at)];
+	const next = [...kept.slice(0, at), ...projected, ...kept.slice(at)];
+	return projected.some((entry) => entry.kind === 'message' && entry.images) ? limitImages(next) : next;
 }
 
 function applyMessageUpdate(state: PiTranscript, update: JsonObject): PiTranscript {

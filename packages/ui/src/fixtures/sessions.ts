@@ -162,6 +162,61 @@ const automaticCompaction: SessionViewModel['transcript'][number] = {
 	willRetry: true
 };
 
+/**
+ * A session resumed from saved history: a compaction with no recorded cause,
+ * then prompts with screenshots, some left out as older, too large, or damaged.
+ */
+const promptImagesTranscript: SessionViewModel['transcript'] = [
+	{
+		id: 'compaction-history',
+		kind: 'compaction',
+		summary: 'The user is fixing gutter markers that drift under soft-wrap.',
+		tokensBefore: 96_400
+	},
+	{
+		id: 'prompt-images-older',
+		kind: 'message',
+		role: 'user',
+		body: 'This is how the gutter looked before the wrap change.',
+		hiddenImages: { older: 3 }
+	},
+	{
+		id: 'prompt-images',
+		kind: 'message',
+		role: 'user',
+		body: 'The markers still drift in these two layouts. Compare them with the wrap tests.',
+		images: [
+			{
+				mimeType: 'image/png',
+				data: 'iVBORw0KGgoAAAANSUhEUgAAAKAAAAB4CAIAAAD6wG44AAAA2ElEQVR42u3RQQ0AIAwAsQnbGxGIQM40IWsqeLA0OQXXyHM1uLAAsAALsAALsAALMGABFmABFmABFmDAAizAAizAAizAAgxYgAVYgAVYgAUYsAALsAALsAALMGABFmABFmABFmABBizAAizAAizAAgxYgAVYgAVYgAUYsAuABViABViABViAAQuwvgBetTU4wIAFWIAFWIAFWIABC7AAC7AAC7AAAxZgARZgARZgARZgwAIswAIswAIswIAFWIAFWIAFWIABC7AAC7AAC7AACzBgARZgAdbDGraZGOytTlWeAAAAAElFTkSuQmCC'
+			},
+			{
+				mimeType: 'image/png',
+				data: 'iVBORw0KGgoAAAANSUhEUgAAAHgAAACgCAIAAABIaz/HAAABMElEQVR42u3bQQ0AIBADQYShDk0o4Y0IJCCjl9wkNdD573h3R3bWjCz1d4AGDRo0aNCgQYMGDRo0aNCgQYMGDRo0aNCgQYMGDRo0aNCgQYMGDRo0aNCgQYMGDRo0aNCgQYMGDRo0aNAFobsdTv0FDRo0aNCgQYMGDRo0aNCgQYMGDRo0aNCgQYMGDRo0aNCgQYMGDRo0aNCgQYMGDRo0aNCgQYMGDRo0aNCgK0ILOpWzoEGDBg0aNGjQoEGDBg0aNGjQoEGDBg0aNGjQoEGDBg0aNGjQoEGDBg0aNGjQoEGDBg0aNGjQoEGDBg26L7SgUzkLGjRo0KBBgwYNGjRo0KBBgwYNGjRo0KBBgwYNGjRo0KBBgwYNGjRo0KBBgwYNGjRo0KBBgwYNGjRo0KDbQn8iZWDprJSG6AAAAABJRU5ErkJggg=='
+			}
+		]
+	},
+	{
+		id: 'prompt-image-only',
+		kind: 'message',
+		role: 'user',
+		body: '',
+		images: [
+			{
+				mimeType: 'image/png',
+				data: 'iVBORw0KGgoAAAANSUhEUgAAAKAAAAB4CAIAAAD6wG44AAAA2ElEQVR42u3RQQ0AIAwAsQnbGxGIQM40IWsqeLA0OQXXyHM1uLAAsAALsAALsAALMGABFmABFmABFmDAAizAAizAAizAAgxYgAVYgAVYgAUYsAALsAALsAALMGABFmABFmABFmABBizAAizAAizAAgxYgAVYgAVYgAUYsAuABViABViABViAAQuwvgBetTU4wIAFWIAFWIAFWIABC7AAC7AAC7AAAxZgARZgARZgARZgwAIswAIswAIswIAFWIAFWIAFWIABC7AAC7AAC7AACzBgARZgAdbDGraZGOytTlWeAAAAAElFTkSuQmCC'
+			}
+		]
+	},
+	{
+		id: 'prompt-images-hidden',
+		kind: 'message',
+		role: 'user',
+		body: 'And these recordings.',
+		hiddenImages: { tooLarge: 2, unreadable: 1 }
+	}
+];
+
 const extensionUi = {
 	notifications: [{ id: 'notification-fixture', message: 'The extension is ready.', level: 'info' as const }],
 	statuses: [{ key: 'fixture', text: 'Waiting for your response' }],
@@ -266,6 +321,13 @@ export const sessionFixtures = {
 			id: 'pau',
 			name: 'Pau',
 			sessions: [session('idle', { title: 'Fix diff gutter', transcript: [automaticCompaction] })]
+		}
+	],
+	promptImages: [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [session('idle', { title: 'Fix diff gutter', transcript: promptImagesTranscript })]
 		}
 	],
 	compactionFailed: [

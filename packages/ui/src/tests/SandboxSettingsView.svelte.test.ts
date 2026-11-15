@@ -182,10 +182,10 @@ test('offers the workspace default for a session override and reports errors', a
 	await expect.element(page.getByRole('button', { name: 'Apply to this session' })).toBeVisible();
 });
 
-test('shows the sandbox mode as the same outlined chip as the other mode indicators', async () => {
+test('shows the sandbox mode as the same chip as the other mode indicators', async () => {
 	applyTheme();
 	await render(SandboxSettingsView, { selection: sandboxFixtures.unsandboxed });
 
 	await expect.element(page.getByText('Sandbox off')).toBeVisible();
-	expect(getComputedStyle(page.getByText('Sandbox off').element()).borderTopStyle).toBe('solid');
+	expect(page.getByText('Sandbox off').element().closest('.pau-chip')).not.toBeNull();
 });

@@ -604,7 +604,7 @@
 		padding: var(--pau-space-2);
 		color: var(--pau-text);
 		background: var(--pau-canvas);
-		border: 1px solid var(--pau-border);
+		border: 1px solid var(--pau-border-control);
 		border-radius: var(--pau-radius-control);
 		font: var(--pau-type-sm)/1.4 var(--pau-font-code);
 		resize: vertical;

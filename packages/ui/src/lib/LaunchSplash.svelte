@@ -79,7 +79,7 @@ the splash fades out over it, or disappears instantly under reduced motion.
 
 	/** Fades the splash over the app. Reduced motion removes it at once. */
 	function leave(node: Element) {
-		return fade(node, { duration: isReducedMotion() ? 0 : motion.duration.small });
+		return fade(node, { duration: isReducedMotion() ? 0 : motion.duration.quick });
 	}
 </script>
 

@@ -60,15 +60,16 @@
 	 * Opens the menu at an anchor, flipping it to the left or above when it
 	 * would overflow, then holds it inside all four viewport edges. A keyboard
 	 * anchor can start off screen, such as a row in a rail that is still
-	 * sliding in.
+	 * sliding in. The menu lands on whole pixels, so its border stays crisp
+	 * and it never straddles a viewport edge by a fraction.
 	 */
 	function place(x: number, y: number): void {
 		if (!menu) return;
 		const { width, height } = menu.getBoundingClientRect();
 		const preferredLeft = x + width + edge > innerWidth ? x - width : x;
 		const preferredTop = y + height + edge > innerHeight ? y - height : y;
-		left = Math.max(edge, Math.min(preferredLeft, innerWidth - width - edge));
-		top = Math.max(edge, Math.min(preferredTop, innerHeight - height - edge));
+		left = Math.round(Math.max(edge, Math.min(preferredLeft, innerWidth - width - edge)));
+		top = Math.round(Math.max(edge, Math.min(preferredTop, innerHeight - height - edge)));
 		origin = `${top < y ? 'bottom' : 'top'} ${left < x ? 'right' : 'left'}`;
 	}
 
@@ -158,7 +159,7 @@
 	role="menu"
 	tabindex="-1"
 	aria-label={request.label}
-	class="context-menu"
+	class="context-menu pau-menu"
 	class:context-menu--keyboard={request.keyboard}
 	style:left={`${left}px`}
 	style:top={`${top}px`}
@@ -195,19 +196,10 @@
 		position: fixed;
 		inset: auto;
 		display: grid;
-		min-width: 12rem;
 		max-width: min(20rem, calc(100vw - 1rem));
-		margin: 0;
-		padding: var(--pau-space-1);
 		overflow: visible;
-		color: var(--pau-text);
-		font: inherit;
-		font-size: var(--pau-type-md);
-		background: var(--pau-surface-raised);
-		border: var(--pau-border-thin, 1px) solid var(--pau-border);
-		border-radius: var(--pau-radius-surface);
-		box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 28%);
-		animation: context-menu-enter var(--pau-duration-small) var(--pau-ease-enter);
+		font-family: inherit;
+		animation: context-menu-enter var(--pau-duration-move) var(--pau-ease-out);
 	}
 
 	.context-menu--keyboard {
@@ -217,7 +209,8 @@
 	.context-menu__item {
 		display: grid;
 		gap: 2px;
-		min-height: var(--pau-size-row-sm);
+		align-content: center;
+		min-height: var(--pau-size-row-md);
 		padding: var(--pau-space-1) var(--pau-space-2);
 		font: inherit;
 		text-align: left;
@@ -232,7 +225,7 @@
 
 	.context-menu__item:focus-visible,
 	.context-menu__item:focus {
-		background-color: var(--pau-selection);
+		background-color: var(--pau-surface-selected);
 	}
 
 	.context-menu__item:focus-visible {

@@ -129,7 +129,11 @@
 		return EditorView.theme({
 			'&': { height: '100%', color: 'var(--pau-text)', backgroundColor: 'var(--pau-canvas)' },
 			'.cm-scroller': { alignItems: 'stretch', overflow: 'auto' },
-			'.cm-content': { caretColor: 'var(--pau-accent)', fontFamily: 'var(--pau-font-code)' },
+			'.cm-content': {
+				caretColor: 'var(--pau-accent)',
+				fontFamily: 'var(--pau-font-code)',
+				fontVariantLigatures: 'none'
+			},
 			'.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--pau-accent)' },
 			'&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
 				backgroundColor: 'var(--pau-selection)'

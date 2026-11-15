@@ -214,7 +214,7 @@ test('lists select options with one selected row and reserves the accent for the
 	const background = (name: string): string =>
 		getComputedStyle(page.getByRole('button', { name }).element()).backgroundColor;
 	expect(background('Select')).toBe(tokenColor(document.documentElement, '--pau-accent'));
-	expect(background('Cancel')).toBe('rgba(0, 0, 0, 0)');
+	expect(background('Cancel')).toBe(tokenColor(document.documentElement, '--pau-surface-raised'));
 
 	await userEvent.click(page.getByRole('button', { name: 'Select' }));
 	expect(onRespond).toHaveBeenCalledWith({ id: 'pick', value: 'Ship' });

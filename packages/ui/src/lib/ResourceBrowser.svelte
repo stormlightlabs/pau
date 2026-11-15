@@ -249,14 +249,16 @@
 			</dl>
 		</section>
 		{#if resource.warnings.length > 0}
-			<section class="pau-notice resource-notice" aria-labelledby="resource-detail-warnings">
+			<section class="pau-notice pau-notice--warning" aria-labelledby="resource-detail-warnings">
 				<Icon name="warning" size={16} />
-				<h3 id="resource-detail-warnings" class="resource-notice__title">Warnings</h3>
-				<ul class="resource-notice__body">
-					{#each resource.warnings as warning, position (position)}
-						<li>{warning}</li>
-					{/each}
-				</ul>
+				<div class="pau-notice__text">
+					<h3 id="resource-detail-warnings" class="pau-notice__title">Warnings</h3>
+					<ul class="pau-notice__body">
+						{#each resource.warnings as warning, position (position)}
+							<li>{warning}</li>
+						{/each}
+					</ul>
+				</div>
 			</section>
 		{/if}
 	</section>
@@ -304,19 +306,21 @@
 			{:else}
 				{#if untrustedProject}
 					<section
-						class="pau-notice resource-notice resources__trust"
+						class="pau-notice pau-notice--warning resources__trust"
 						role="status"
 						aria-labelledby="resources-trust-title">
 						<Icon name="warning" size={16} />
-						<h2 id="resources-trust-title" class="resource-notice__title">
-							<span class="pau-visually-hidden">Warning:</span>
-							{index.project_trust === 'untrusted' ? 'Workspace not trusted' : 'Workspace not trusted yet'}
-						</h2>
-						<p class="resource-notice__body">
-							{index.project_trust === 'untrusted'
-								? "You declined to trust this workspace, so Pi skips its project resources. They're listed here so you can review them."
-								: "Pi skips this workspace's project resources until you trust it with /trust in Pi. Review them here first."}
-						</p>
+						<div class="pau-notice__text">
+							<h2 id="resources-trust-title" class="pau-notice__title">
+								<span class="pau-visually-hidden">Warning:</span>
+								{index.project_trust === 'untrusted' ? 'Workspace not trusted' : 'Workspace not trusted yet'}
+							</h2>
+							<p class="pau-notice__body">
+								{index.project_trust === 'untrusted'
+									? "You declined to trust this workspace, so Pi skips its project resources. They're listed here so you can review them."
+									: "Pi skips this workspace's project resources until you trust it with /trust in Pi. Review them here first."}
+							</p>
+						</div>
 					</section>
 				{/if}
 
@@ -394,14 +398,18 @@
 				{/if}
 
 				{#if index.warnings.length > 0}
-					<section class="pau-notice resource-notice resources__warnings" aria-labelledby="resources-warnings-title">
+					<section
+						class="pau-notice pau-notice--warning resources__warnings"
+						aria-labelledby="resources-warnings-title">
 						<Icon name="warning" size={16} />
-						<h2 id="resources-warnings-title" class="resource-notice__title">Discovery warnings</h2>
-						<ul class="resource-notice__body">
-							{#each index.warnings as warning, position (position)}
-								<li><code>{warning.path}</code><span>{warning.message}</span></li>
-							{/each}
-						</ul>
+						<div class="pau-notice__text">
+							<h2 id="resources-warnings-title" class="pau-notice__title">Discovery warnings</h2>
+							<ul class="pau-notice__body">
+								{#each index.warnings as warning, position (position)}
+									<li><code>{warning.path}</code><span>{warning.message}</span></li>
+								{/each}
+							</ul>
+						</div>
 					</section>
 				{/if}
 			{/if}
@@ -434,36 +442,8 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	/*
-	 * A warning notice takes its border, tint, and icon color from the shared
-	 * `pau-notice` rule. The icon centers on the title's line and the
-	 * body starts under the title, so the text keeps one leading edge.
-	 */
-	.resource-notice {
-		display: grid;
-		grid-template-columns: auto minmax(0, 1fr);
-		align-items: center;
-		column-gap: var(--pau-space-2);
-		row-gap: var(--pau-space-1);
-		padding: var(--pau-space-3) var(--pau-space-4);
-	}
-
-	.resource-notice__title {
-		margin: 0;
-		font-size: var(--pau-type-md);
-		font-weight: var(--pau-weight-semibold);
-		line-height: var(--row-name-line);
-	}
-
-	.resource-notice__body {
-		grid-column: 2;
-		margin: 0;
-		color: var(--pau-text-muted);
-		font-size: var(--pau-type-sm);
-		line-height: 1.5;
-	}
-
-	ul.resource-notice__body {
+	/* A warning list in a notice keeps one item per row. */
+	ul.pau-notice__body {
 		display: grid;
 		gap: var(--pau-space-2);
 		padding: 0;
@@ -503,7 +483,7 @@
 		height: var(--pau-size-row-md);
 		padding-inline: var(--pau-space-2);
 		color: var(--pau-text-muted);
-		border: 1px solid var(--pau-border);
+		border: 1px solid var(--pau-border-control);
 		border-radius: var(--pau-radius-control, 3px);
 	}
 
@@ -612,6 +592,7 @@
 	code {
 		overflow-wrap: anywhere;
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: var(--pau-type-xs);
 	}
 

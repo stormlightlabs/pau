@@ -1,0 +1,105 @@
+/*
+ * The request card: the one green surface on a view, because something waits
+ * on the operator. The session's permission request and a resource's change
+ * preview share it. A 1px accent border and a 6% accent wash over the raised
+ * surface set it apart without a shadow. Its head holds the waiting mark and
+ * the question in the heading role, on a 15% accent band above a 40% accent
+ * rule. Everything under the head hangs from the question's leading edge.
+ *
+ *   <section class="pau-request" aria-labelledby="…">
+ *     <div class="pau-request__head">
+ *       <span class="pau-mark pau-mark--waiting" aria-hidden="true"></span>
+ *       <h2 class="pau-request__title" id="…">…</h2>
+ *     </div>
+ *     <p class="pau-request__body">…</p>
+ *     <div class="pau-request__actions">
+ *       <button class="pau-button pau-button--primary"><span>Allow once</span><kbd><span>Y</span></kbd></button>
+ *       …
+ *       <span class="pau-request__aside">Asked 4m ago</span>
+ *     </div>
+ *   </section>
+ *
+ * Allow once is the primary. Secondary buttons step up to the strong border
+ * on the wash. While Pau reconnects, the card stays visible and its actions
+ * disable with a reason.
+ */
+.pau-request {
+	--pau-request-inset: calc(0.5rem + 2 * var(--pau-space-1) + var(--pau-space-3));
+
+	display: grid;
+	gap: var(--pau-space-3);
+	min-width: 0;
+	padding: 0 var(--pau-space-4) var(--pau-space-4);
+	overflow: hidden;
+	background-color: color-mix(in srgb, var(--pau-accent) 6%, var(--pau-surface-raised));
+	border: 1px solid var(--pau-accent);
+	border-radius: var(--pau-radius-control);
+}
+
+.pau-request > :not(.pau-request__head) {
+	margin-inline-start: var(--pau-request-inset);
+}
+
+.pau-request__head {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--pau-space-3);
+	min-width: 0;
+	margin-inline: calc(-1 * var(--pau-space-4));
+	padding: var(--pau-space-4);
+	background-color: color-mix(in srgb, var(--pau-accent) 15%, var(--pau-surface-raised));
+	border-bottom: 1px solid color-mix(in srgb, var(--pau-accent) 40%, var(--pau-surface-raised));
+}
+
+/*
+ * The mark centers on the question's first line of capitals. The title is
+ * trimmed to cap height and baseline, so that line starts at the head's
+ * padding edge and is one cap tall.
+ */
+.pau-request__head > .pau-mark {
+	margin: calc((1cap - 0.5rem) / 2) var(--pau-space-1) 0;
+	font-size: var(--pau-type-lg);
+	font-weight: var(--pau-weight-semibold);
+}
+
+.pau-request__title {
+	min-width: 0;
+	margin: 0;
+	font-size: var(--pau-type-lg);
+	font-weight: var(--pau-weight-semibold);
+	line-height: var(--pau-leading-prose);
+	overflow-wrap: anywhere;
+	text-box: trim-both cap alphabetic;
+}
+
+.pau-request__title code {
+	font-family: var(--pau-font-code);
+	font-variant-ligatures: none;
+	font-size: var(--pau-type-md);
+	font-weight: var(--pau-weight-medium);
+}
+
+.pau-request__body {
+	max-width: 75ch;
+	margin-block: 0;
+	color: var(--pau-text-muted);
+	line-height: var(--pau-leading-prose);
+}
+
+.pau-request__actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--pau-space-2);
+}
+
+.pau-request__actions > .pau-button--secondary:not(:disabled, [aria-disabled='true']) {
+	border-color: var(--pau-border-strong);
+}
+
+.pau-request__aside {
+	margin-inline-start: auto;
+	color: var(--pau-text-muted);
+	font-size: var(--pau-type-xs);
+	line-height: var(--pau-leading-tight);
+}

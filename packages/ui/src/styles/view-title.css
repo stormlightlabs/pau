@@ -8,4 +8,6 @@
 .pau-view-title {
 	font-size: var(--pau-type-xl);
 	font-weight: var(--pau-weight-semibold);
+	line-height: var(--pau-leading-prose);
+	letter-spacing: -0.01em;
 }

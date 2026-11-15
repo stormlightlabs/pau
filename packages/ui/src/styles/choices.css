@@ -2,7 +2,8 @@
  * Radio and checkbox rows. A label marked `pau-choice` keeps its input one
  * spacing step from the label text. Browsers add a few pixels of margin around
  * native inputs, which pushes the gap off the spacing scale, so the input's
- * margin is cleared here. Components still own the row's layout and alignment.
+ * margin is cleared here. A one-line choice sits on a 32px row, like every
+ * other control. Components own the row's placement.
  *
  * The label text goes in an element, such as a `span`, after the input. Where
  * `text-box` is supported, that element is trimmed to cap height and
@@ -13,12 +14,16 @@
  * row's font and is one `em` square, so engines agree on its size and the
  * offsets below can use it.
  *
- * The input stays native and fills with the accent. Hover and press on the
- * row move that fill toward text, as `states.css` describes for other
- * controls, and a disabled input mutes the whole row.
+ * The input stays native and fills with the text color when checked, because
+ * green stays reserved for what waits on the operator. A disabled input mutes
+ * the whole row.
  */
 .pau-choice {
+	display: inline-flex;
+	align-items: center;
 	gap: var(--pau-space-2);
+	min-height: var(--pau-size-row-md);
+	cursor: pointer;
 }
 
 .pau-choice > input {
@@ -27,11 +32,13 @@
 	width: 1em;
 	height: 1em;
 	margin: 0;
-	accent-color: var(--pau-accent);
+	accent-color: var(--pau-text);
+	cursor: inherit;
 }
 
 .pau-choice--multiline {
 	align-items: flex-start;
+	min-height: 0;
 }
 
 .pau-choice--multiline > input {
@@ -48,14 +55,18 @@
 	}
 }
 
+/*
+ * Hover and press move the checked fill from text toward muted text, color
+ * only, as other controls do.
+ */
 @media (hover: hover) {
 	.pau-choice:hover > input:not(:disabled) {
-		accent-color: var(--pau-accent-hover);
+		accent-color: color-mix(in srgb, var(--pau-text) 75%, var(--pau-text-muted));
 	}
 }
 
 .pau-choice:active > input:not(:disabled) {
-	accent-color: var(--pau-accent-press);
+	accent-color: var(--pau-text-muted);
 }
 
 .pau-choice > input:focus-visible {

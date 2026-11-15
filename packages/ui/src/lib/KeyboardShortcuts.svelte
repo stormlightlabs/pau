@@ -81,7 +81,7 @@
 		color: var(--pau-text);
 		background: var(--pau-surface);
 		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-surface);
+		border-radius: var(--pau-radius-overlay);
 		box-shadow: 0 1rem 3rem color-mix(in srgb, var(--pau-canvas) 85%, transparent);
 		font-family: var(--pau-font-ui);
 		font-size: var(--pau-type-md);
@@ -90,7 +90,7 @@
 	}
 
 	.keyboard-shortcuts[open] {
-		animation: keyboard-shortcuts-enter var(--pau-duration-medium) var(--pau-ease-enter);
+		animation: keyboard-shortcuts-enter var(--pau-duration-move) var(--pau-ease-out);
 	}
 
 	.keyboard-shortcuts::backdrop {
@@ -98,7 +98,7 @@
 	}
 
 	.keyboard-shortcuts[open]::backdrop {
-		animation: keyboard-shortcuts-fade var(--pau-duration-medium) var(--pau-ease-enter);
+		animation: keyboard-shortcuts-fade var(--pau-duration-move) var(--pau-ease-out);
 	}
 
 	@keyframes keyboard-shortcuts-enter {

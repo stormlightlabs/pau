@@ -191,8 +191,8 @@
 		padding: var(--pau-space-2);
 		background: var(--pau-surface-raised);
 		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-surface);
-		animation: transcript-search-enter var(--pau-duration-medium) var(--pau-ease-enter);
+		border-radius: var(--pau-radius-overlay);
+		animation: transcript-search-enter var(--pau-duration-move) var(--pau-ease-out);
 	}
 
 	@keyframes transcript-search-enter {
@@ -216,7 +216,7 @@
 		padding-inline: var(--pau-space-2);
 		color: var(--pau-text);
 		background: var(--pau-canvas);
-		border: 1px solid var(--pau-border);
+		border: 1px solid var(--pau-border-control);
 		border-radius: var(--pau-radius-control);
 		font: inherit;
 		font-size: var(--pau-type-md);

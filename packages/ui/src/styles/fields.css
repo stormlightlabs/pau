@@ -1,0 +1,154 @@
+/*
+ * Fields: text inputs and the triggers of dropdowns and pickers.
+ *
+ * `pau-field` goes on an `<input>`, on a `<button>` that opens a list, or on
+ * a wrapper that holds an optional leading icon, an `<input>` and an
+ * optional trailing `kbd`. A field is 32px tall with 14px text on the
+ * canvas fill, inside the control border, which keeps 3:1 on every surface.
+ * Focus draws the shared 2px ring outside the field, also when the focus is
+ * on the input inside a wrapper. An invalid field, marked with
+ * `aria-invalid="true"` on itself or its input, turns its border to the
+ * danger color.
+ *
+ * `pau-field--quiet` is the borderless picker in the composer footer and in
+ * toolbars: muted text that lifts to the raised surface on hover and while
+ * its list is open.
+ *
+ * Components place fields and set their width, but do not change their
+ * height, border, fill or text.
+ */
+.pau-field {
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	gap: var(--pau-space-2);
+	min-width: 0;
+	height: var(--pau-size-row-md);
+	padding-inline: var(--pau-space-3) var(--pau-space-2);
+	color: var(--pau-text);
+	background-color: var(--pau-canvas);
+	border: 1px solid var(--pau-border-control);
+	border-radius: var(--pau-radius-control);
+	font: inherit;
+	font-size: var(--pau-type-md);
+	font-weight: var(--pau-weight-regular);
+	line-height: var(--pau-leading-tight);
+	text-align: start;
+	transition:
+		color var(--pau-duration-quick) var(--pau-ease-out),
+		background-color var(--pau-duration-quick) var(--pau-ease-out),
+		border-color var(--pau-duration-quick) var(--pau-ease-out);
+}
+
+input.pau-field {
+	padding-inline: var(--pau-space-3);
+}
+
+button.pau-field {
+	cursor: pointer;
+}
+
+.pau-field > input {
+	box-sizing: border-box;
+	flex: 1;
+	min-width: 0;
+	height: 100%;
+	padding: 0;
+	color: inherit;
+	background: none;
+	border: 0;
+	font: inherit;
+	outline: none;
+}
+
+/*
+ * Input text centers on its capitals, as labels do. Chromium trims input
+ * text with `text-box`. WebKit ignores it there, so the field moves the text
+ * by the face's measured `--pau-input-shift` instead. WebKit is the only
+ * engine that supports `hanging-punctuation`, which selects it.
+ */
+input.pau-field,
+.pau-field > input {
+	text-box: trim-both cap alphabetic;
+}
+
+@supports (hanging-punctuation: first) {
+	input.pau-field,
+	.pau-field > input {
+		padding-block: max(0px, 2 * var(--pau-input-shift)) max(0px, -2 * var(--pau-input-shift));
+	}
+}
+
+.pau-field > .pau-icon {
+	flex: none;
+	color: var(--pau-text-muted);
+}
+
+.pau-field::placeholder,
+.pau-field > input::placeholder {
+	color: var(--pau-text-muted);
+	opacity: 1;
+}
+
+@media (hover: hover) {
+	.pau-field:hover:not(:disabled, [aria-disabled='true'], :has(> input:disabled)) {
+		border-color: var(--pau-border-strong);
+	}
+}
+
+button.pau-field:active:not(:disabled, [aria-disabled='true']) {
+	background-image: linear-gradient(var(--pau-press), var(--pau-press));
+	border-color: var(--pau-border-strong);
+}
+
+.pau-field:focus-visible,
+.pau-field:has(> input:focus-visible) {
+	outline: var(--pau-focus-width) solid var(--pau-focus);
+	outline-offset: var(--pau-focus-offset);
+}
+
+.pau-field:is([aria-invalid='true'], :has(> input[aria-invalid='true'])) {
+	border-color: var(--pau-danger);
+}
+
+.pau-field:is(:disabled, [aria-disabled='true'], :has(> input:disabled)) {
+	color: var(--pau-text-muted);
+	border-color: color-mix(in srgb, var(--pau-border-control) 50%, transparent);
+	cursor: not-allowed;
+}
+
+.pau-field--quiet {
+	padding-inline: var(--pau-space-2);
+	color: var(--pau-text-muted);
+	background-color: transparent;
+	border-color: transparent;
+}
+
+.pau-field--quiet[aria-expanded='true'] {
+	color: var(--pau-text);
+	background-color: var(--pau-surface-raised);
+}
+
+@media (hover: hover) {
+	.pau-field--quiet:hover:not(:disabled, [aria-disabled='true']) {
+		color: var(--pau-text);
+		background-color: var(--pau-surface-raised);
+		border-color: transparent;
+	}
+}
+
+button.pau-field--quiet:active:not(:disabled, [aria-disabled='true']) {
+	border-color: transparent;
+}
+
+/* A disabled quiet picker fades its muted text further, as a quiet button does. */
+.pau-field--quiet:is(:disabled, [aria-disabled='true']) {
+	color: color-mix(in srgb, var(--pau-text-muted) 55%, transparent);
+	border-color: transparent;
+}
+
+@media (pointer: coarse) {
+	.pau-field {
+		height: var(--pau-size-target-touch);
+	}
+}

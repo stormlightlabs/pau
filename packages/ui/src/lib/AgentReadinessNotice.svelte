@@ -10,6 +10,7 @@ once the operator has applied it.
 	import '../styles/tokens.css';
 	import { codeSpans } from './code-spans';
 	import CopyButton from './CopyButton.svelte';
+	import Icon from './Icon.svelte';
 	import type { AgentReadinessProblem, AgentSetupAction } from './types/launch';
 	import { agentLabel } from './types/session';
 
@@ -58,65 +59,52 @@ once the operator has applied it.
 	const titleId = $props.id();
 </script>
 
-<section class="pau-notice agent-readiness" aria-labelledby={titleId}>
-	<h2 id={titleId}>{agentName} is not ready</h2>
-	<p id={reasonId}>
-		{#each codeSpans(problem.reason) as span, index (index)}{#if span.code}<code>{span.text}</code
-				>{:else}{span.text}{/if}{/each}
-	</p>
-	{#if step}
-		<p>{step.instruction}</p>
-		<div class="agent-readiness__command">
-			<code>{step.command}</code>
-			<CopyButton text={step.command} label="Copy command" />
-		</div>
-		{#if onOpenTerminal}
-			<button type="button" class="pau-button pau-button--secondary agent-readiness__terminal" onclick={onOpenTerminal}
-				>Open terminal</button>
+<section class="pau-notice pau-notice--warning agent-readiness" aria-labelledby={titleId}>
+	<Icon name="warning" size={16} />
+	<div class="pau-notice__text agent-readiness__text">
+		<h2 class="pau-notice__title" id={titleId}>{agentName} is not ready</h2>
+		<p class="pau-notice__body" id={reasonId}>
+			{#each codeSpans(problem.reason) as span, index (index)}{#if span.code}<code>{span.text}</code
+					>{:else}{span.text}{/if}{/each}
+		</p>
+		{#if step}
+			<p class="pau-notice__body">{step.instruction}</p>
+			<div class="agent-readiness__command">
+				<code>{step.command}</code>
+				<CopyButton text={step.command} label="Copy command" />
+			</div>
+			{#if onOpenTerminal}
+				<button
+					type="button"
+					class="pau-button pau-button--secondary agent-readiness__terminal"
+					onclick={onOpenTerminal}>Open terminal</button>
+			{/if}
 		{/if}
-	{/if}
-	{#if onCheckAgain}
-		<button
-			type="button"
-			class="pau-button pau-button--secondary agent-readiness__action"
-			disabled={checking}
-			onclick={() => void checkAgain()}>{checking ? 'Checking…' : 'Check again'}</button>
-	{/if}
+		{#if onCheckAgain}
+			<button
+				type="button"
+				class="pau-button pau-button--secondary agent-readiness__action"
+				disabled={checking}
+				onclick={() => void checkAgain()}>{checking ? 'Checking…' : 'Check again'}</button>
+		{/if}
+	</div>
 </section>
 
 <style>
 	.agent-readiness {
-		display: grid;
-		gap: var(--pau-space-2);
 		margin-block-start: var(--pau-space-5);
-		padding: var(--pau-space-4);
 	}
 
-	.agent-readiness h2,
-	.agent-readiness p {
-		margin: 0;
-	}
-
-	.agent-readiness h2 {
-		font-size: var(--pau-type-md);
-		font-weight: var(--pau-weight-semibold);
-	}
-
-	.agent-readiness p {
-		color: var(--pau-text-muted);
-	}
-
-	.agent-readiness p code {
-		font-family: var(--pau-font-code);
-		font-size: var(--pau-type-sm);
-		color: var(--pau-text);
+	.agent-readiness__text {
+		gap: var(--pau-space-2);
 	}
 
 	.agent-readiness__command {
 		display: flex;
 		align-items: center;
 		gap: var(--pau-space-2);
-		padding: var(--pau-space-2) var(--pau-space-3);
+		padding: var(--pau-space-1) var(--pau-space-1) var(--pau-space-1) var(--pau-space-3);
+		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
 		background: var(--pau-canvas);
 	}
@@ -125,7 +113,8 @@ once the operator has applied it.
 		flex: 1;
 		min-width: 0;
 		font-family: var(--pau-font-code);
-		font-size: var(--pau-type-sm);
+		font-variant-ligatures: none;
+		font-size: var(--pau-type-xs);
 		white-space: nowrap;
 		overflow-x: auto;
 	}

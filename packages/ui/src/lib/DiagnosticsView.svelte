@@ -288,7 +288,7 @@
 		padding-inline: var(--pau-space-2);
 		color: var(--pau-text);
 		background: var(--pau-canvas);
-		border: 1px solid var(--pau-border);
+		border: 1px solid var(--pau-border-control);
 		font: inherit;
 	}
 
@@ -325,6 +325,7 @@
 	.diagnostics-view__records,
 	.diagnostics-view__review strong {
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 	}
 
 	.diagnostics-view__versions strong,

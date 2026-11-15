@@ -1164,9 +1164,9 @@
 			opacity: 0;
 			visibility: hidden;
 			transition:
-				transform var(--pau-duration-medium) var(--pau-ease-standard),
-				opacity var(--pau-duration-medium) var(--pau-ease-standard),
-				visibility var(--pau-duration-medium);
+				transform var(--pau-duration-move) var(--pau-ease-out),
+				opacity var(--pau-duration-move) var(--pau-ease-out),
+				visibility var(--pau-duration-move);
 		}
 
 		/* 0% matches the closed value's unit when travel is 0, so reduced motion starts no transform transition. */

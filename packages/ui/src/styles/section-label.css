@@ -9,6 +9,7 @@
 	color: var(--pau-text-muted);
 	font-size: var(--pau-type-label);
 	font-weight: var(--pau-weight-semibold);
-	letter-spacing: 0.055em;
+	line-height: var(--pau-leading-tight);
+	letter-spacing: 0.06em;
 	text-transform: uppercase;
 }

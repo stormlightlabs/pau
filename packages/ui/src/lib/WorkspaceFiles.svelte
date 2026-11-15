@@ -836,6 +836,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-weight: var(--pau-weight-medium);
 	}
 
@@ -845,6 +846,7 @@
 		display: flex;
 		min-width: 0;
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 	}
 
 	.workspace-files__git-dir {
@@ -990,7 +992,7 @@
 		gap: var(--pau-space-2);
 		height: var(--pau-size-row-md);
 		padding-inline: var(--pau-space-2);
-		border: 1px solid var(--shell-border);
+		border: 1px solid var(--pau-border-control);
 		background: var(--shell-surface);
 	}
 
@@ -1096,6 +1098,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 	}
 
 	.workspace-files__state,
@@ -1228,6 +1231,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: var(--pau-type-xs);
 		font-weight: var(--pau-weight-medium);
 	}

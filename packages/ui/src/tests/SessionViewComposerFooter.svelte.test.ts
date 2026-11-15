@@ -88,7 +88,7 @@ test('keeps keyboard control of the footer pickers and meter', async () => {
 });
 
 test('keeps a rejected thinking level message inside the main surface at the minimum window size', async () => {
-	await page.viewport(800, 560);
+	await page.viewport(900, 560);
 	const { onSelectThinkingLevel } = await setup('idle');
 	onSelectThinkingLevel.mockRejectedValue(new Error('Pi rejected the request: Level not supported'));
 

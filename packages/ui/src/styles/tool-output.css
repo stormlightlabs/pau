@@ -1,0 +1,70 @@
+/*
+ * Tool output under a tool call. The body is capped at 12 lines of the code
+ * role, so a long result never turns the transcript into a log. It shows
+ * the end of a command's output, where the result is, or the start of a
+ * file, and fades out toward the lines it leaves out. The bar under a capped
+ * body names how much is shown and offers Show all, which opens the whole
+ * output in a box that scrolls after 30 lines.
+ *
+ * `ToolOutput` renders this markup. `pau-tool-output--expanded` marks the
+ * open state and `pau-tool-output--head` a body that keeps the first lines.
+ */
+.pau-tool-output {
+	--pau-tool-output-lines: 12;
+
+	position: relative;
+	min-width: 0;
+	background-color: var(--pau-canvas);
+}
+
+.pau-tool-output__body {
+	box-sizing: border-box;
+	max-height: calc(var(--pau-tool-output-lines) * var(--pau-leading-row) + 2 * var(--pau-space-2));
+	margin: 0;
+	padding: var(--pau-space-2) var(--pau-space-3);
+	overflow: hidden;
+	color: var(--pau-text);
+	font-family: var(--pau-font-code);
+	font-variant-ligatures: none;
+	font-size: var(--pau-type-xs);
+	line-height: var(--pau-leading-row);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.pau-tool-output--capped .pau-tool-output__body {
+	mask-image: linear-gradient(to bottom, transparent 0, #000 var(--pau-space-9));
+}
+
+.pau-tool-output--capped.pau-tool-output--head .pau-tool-output__body {
+	mask-image: linear-gradient(to top, transparent 0, #000 var(--pau-space-9));
+}
+
+.pau-tool-output--expanded {
+	--pau-tool-output-lines: 30;
+}
+
+.pau-tool-output--expanded .pau-tool-output__body {
+	overflow: auto;
+	mask-image: none;
+}
+
+.pau-tool-output__body:focus-visible {
+	outline: var(--pau-focus-width) solid var(--pau-focus);
+	outline-offset: var(--pau-focus-offset-inset);
+}
+
+.pau-tool-output__bar {
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--pau-space-3);
+	height: var(--pau-space-7);
+	padding-inline: var(--pau-space-3) var(--pau-space-1);
+	color: var(--pau-text-muted);
+	background-color: var(--pau-surface);
+	border-top: 1px solid var(--pau-border);
+	font-size: var(--pau-type-xs);
+	line-height: var(--pau-leading-tight);
+}

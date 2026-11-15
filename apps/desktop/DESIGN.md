@@ -182,8 +182,8 @@ components:
 ## Overview
 
 This file describes the target design. Until the implementation work lands,
-the desktop app still ships the previous layout, with the product rail, the
-inspector and an 800px minimum window width.
+the desktop app still ships the previous layout, with the product rail and the
+inspector.
 
 **Creative North Star: "The Strip Bay"**
 

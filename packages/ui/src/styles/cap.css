@@ -1,0 +1,94 @@
+/*
+ * Cap centring. Flex centring places a label's line box, and each UI font
+ * puts a different amount of space above its capitals and below its
+ * baseline, so an Overpass label sits about 1.7px high next to an icon or a
+ * mark. Every single-line label in a control or row therefore sits in its
+ * own element, and that element trims its box to the cap height and the
+ * baseline. Flex centring then lines the capitals up with icons, marks and
+ * checkboxes in every UI font.
+ *
+ * Put `pau-cap` on a label, or use a shared class below that includes it.
+ * Buttons and choice rows center their labels in `buttons.css` and
+ * `choices.css`.
+ *
+ * Where `text-box` is missing, as in older WebKitGTK, the label moves down
+ * by the offset measured for Overpass instead.
+ */
+.pau-cap,
+.pau-chip > span:not(.pau-icon),
+.pau-state > span:not(.pau-mark),
+.pau-count,
+.pau-section-label,
+.pau-page-header__title,
+.pau-strip__name,
+.pau-strip__agent,
+.pau-strip__state,
+.pau-strip__meta,
+.pau-strip__figure,
+.pau-menu__item > span:not(.pau-icon),
+.pau-field > span:not(.pau-icon),
+.pau-kbd > span,
+.pau-button > kbd > span,
+.pau-field > kbd > span,
+.pau-menu__item > kbd > span,
+.pau-tool-output__bar > span,
+.pau-request__aside {
+	text-box: trim-both cap alphabetic;
+}
+
+@supports not (text-box: trim-both cap alphabetic) {
+	.pau-cap,
+	.pau-chip > span:not(.pau-icon),
+	.pau-state > span:not(.pau-mark),
+	.pau-count,
+	.pau-section-label,
+	.pau-page-header__title,
+	.pau-strip__name,
+	.pau-strip__agent,
+	.pau-strip__state,
+	.pau-strip__meta,
+	.pau-strip__figure,
+	.pau-menu__item > span:not(.pau-icon),
+	.pau-field > span:not(.pau-icon),
+	.pau-kbd > span,
+	.pau-button > kbd > span,
+	.pau-field > kbd > span,
+	.pau-menu__item > kbd > span,
+	.pau-tool-output__bar > span,
+	.pau-request__aside {
+		position: relative;
+		top: var(--pau-cap-shift);
+	}
+}
+
+/*
+ * A trimmed box ends at the capitals and the baseline, so a label that
+ * truncates with `overflow: hidden` would clip its descenders. The label
+ * gives the ink back as block padding and takes the same space back as
+ * negative margin, so its center does not move.
+ */
+.pau-cap--truncate,
+.pau-chip > span:not(.pau-icon),
+.pau-field > span:not(.pau-icon),
+.pau-menu__item > span:not(.pau-icon),
+.pau-page-header__title,
+.pau-strip__name,
+.pau-strip__state {
+	min-width: 0;
+	padding-block: 6px;
+	margin-block: -6px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* A count beside a label or at the end of a row, in the code face. */
+.pau-count {
+	flex: none;
+	color: var(--pau-text-muted);
+	font-family: var(--pau-font-code);
+	font-variant-ligatures: none;
+	font-size: var(--pau-type-xs);
+	line-height: var(--pau-leading-tight);
+	white-space: nowrap;
+}

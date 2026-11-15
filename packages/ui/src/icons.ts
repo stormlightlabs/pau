@@ -46,6 +46,8 @@ export const ICONS = {
 	settings: 'i-tabler-adjustments-horizontal',
 	sidebar: 'i-tabler-layout-sidebar',
 	warning: 'i-tabler-alert-triangle',
+	error: 'i-tabler-alert-circle',
+	info: 'i-tabler-info-circle',
 	dock: 'i-tabler-layout-bottombar',
 	maximize: 'i-tabler-arrows-maximize'
 } as const;

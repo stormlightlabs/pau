@@ -1,15 +1,17 @@
 /**
  * TypeScript mirror of the motion tokens in `styles/tokens.css`, for Svelte
  * transitions that need numbers. A contract test keeps both in sync.
+ *
+ * `quick` is for hover, press, selection and state color, `move` for
+ * overlays, menus, dialogs and disclosures. The arrival, the system's one
+ * authored motion, has its own travel, displacement and delay. Every
+ * transition eases out; the arrival lifts and settles on `settle`.
  */
 export const motion = {
-	duration: { instant: 0, feedback: 100, small: 150, medium: 200, large: 250 },
-	ease: {
-		standard: 'cubic-bezier(0.2, 0, 0, 1)',
-		enter: 'cubic-bezier(0.05, 0.7, 0.1, 1)',
-		exit: 'cubic-bezier(0.3, 0, 0.8, 0.15)',
-		linear: 'linear'
-	},
+	duration: { quick: 120, move: 240 },
+	arrival: { travel: 640, displace: 480, delay: 90 },
+	markSpin: 900,
+	ease: { out: 'cubic-bezier(0.16, 1, 0.3, 1)', settle: 'cubic-bezier(0.2, 0, 0, 1)' },
 	/** Distances in rem. */
 	offset: { sm: 0.25, md: 0.5 },
 	scaleEnter: 0.98

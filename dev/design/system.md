@@ -13,9 +13,8 @@ values, and `apps/desktop/.impeccable/wireframes/` holds a static wireframe of
 each surface. Where either disagrees with this document, this document wins.
 
 This document describes the target design. Until the implementation work
-lands, the desktop app still ships the previous layout, with the product rail,
-the inspector and an 800px minimum window width. Code that disagrees with a
-rule here may predate it.
+lands, the desktop app still ships the previous layout, with the product rail
+and the inspector. Code that disagrees with a rule here may predate it.
 
 ## Surface mode
 
@@ -422,10 +421,13 @@ pressed, so a pressed row never shifts its neighbors. The shared rules in
 - Popover options (`pau-option`) on the raised surface take the selection fill
   on hover, as keyboard movement shows it, and step down to the surface on
   press.
-- Dropdown triggers (`pau-field`), including the composer's quiet triggers,
-  draw the accent border on hover and tint on press.
-- Choice rows move the native input's accent fill, disclosure summaries lift to
-  normal text and tint on press, and links move the accent toward text.
+- Fields (`pau-field`), including dropdown triggers, step up to the strong
+  border on hover, and triggers tint on press. The composer's quiet triggers
+  lift to the raised surface instead. Green stays off fields, because it
+  marks only what needs the operator.
+- Choice rows move the native input's text-colored fill toward muted text,
+  disclosure summaries lift to normal text and tint on press, and links move
+  the accent toward text.
 
 The hover and press tints are 5% and 8% of the theme's text color laid over
 the control's own fill, so one value works on the canvas and the surface. Press

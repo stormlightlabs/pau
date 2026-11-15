@@ -2884,7 +2884,7 @@
 					title="Jump to latest (Ctrl+End)"
 					onmousedown={(event) => event.preventDefault()}
 					onclick={scrollToLatest}
-					transition:fade={{ duration: isReducedMotion() ? 0 : motion.duration.small }}>
+					transition:fade={{ duration: isReducedMotion() ? 0 : motion.duration.quick }}>
 					<Icon name="chevronDown" size={14} /><span>Jump to latest</span>{#if newEntries > 0}<small
 							>{newEntries} new</small
 						>{/if}
@@ -3266,7 +3266,7 @@
 	}
 
 	/*
-	 * The status mark gets its own 0.75rem column and sits one spacing step
+	 * The status mark gets a column as wide as the mark and sits one spacing step
 	 * from the name, as it does beside the status in the session header. The
 	 * mark lines up with the workspace name above it, and the session name
 	 * starts where the shell's context rail starts its labels. A shared
@@ -3275,7 +3275,7 @@
 	 */
 	.session-rail button:where(:not(.pau-button)) {
 		display: grid;
-		grid-template-columns: 0.75rem minmax(0, 1fr) auto;
+		grid-template-columns: 0.5rem minmax(0, 1fr) auto;
 		align-items: center;
 		gap: var(--pau-space-2);
 		width: 100%;
@@ -3290,7 +3290,7 @@
 
 	.session-rail button.active {
 		color: var(--pau-text);
-		background-color: var(--pau-selection);
+		background-color: var(--pau-surface-selected);
 		box-shadow: inset 2px 0 0 var(--pau-accent);
 	}
 
@@ -3312,8 +3312,6 @@
 		height: 0.5rem;
 		border-radius: 50%;
 		background: var(--pau-info);
-		/* One pulse draws the eye when the marker appears, then it holds still. */
-		animation: session-rail-marker-pulse var(--pau-duration-large) var(--pau-ease-standard) 1;
 	}
 
 	.session-rail__marker--waiting {
@@ -3322,22 +3320,6 @@
 
 	.session-rail__marker--failed {
 		background: var(--pau-danger);
-	}
-
-	@keyframes session-rail-marker-pulse {
-		50% {
-			transform: scale(1.8);
-		}
-	}
-
-	:global(:root[data-motion='reduce']) .session-rail__marker {
-		animation: none;
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		:global(:root:not([data-motion])) .session-rail__marker {
-			animation: none;
-		}
 	}
 
 	.session-rail small {
@@ -3386,10 +3368,11 @@
 		padding-inline: var(--pau-space-3);
 		color: var(--pau-text);
 		background: var(--pau-surface);
-		border: 1px solid var(--pau-border);
+		border: 1px solid var(--pau-border-control);
 		border-radius: var(--pau-radius-control);
 		font: inherit;
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 	}
 
 	.session-open__actions {
@@ -3539,6 +3522,7 @@
 
 	.session-view__failure code {
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: var(--pau-type-sm);
 	}
 
@@ -3673,7 +3657,7 @@
 
 	/* Marks the entry a search selection scrolled to, then fades. */
 	.session-view__transcript :global([data-found]) {
-		animation: session-found 1600ms var(--pau-ease-standard);
+		animation: session-found 1600ms var(--pau-ease-out);
 	}
 
 	@keyframes session-found {
@@ -3802,7 +3786,7 @@
 		padding: var(--pau-space-2);
 		color: var(--pau-text);
 		background: transparent;
-		border: 1px solid var(--pau-border);
+		border: 1px solid var(--pau-border-control);
 		border-radius: var(--pau-radius-control);
 		font: inherit;
 		resize: vertical;
@@ -3842,6 +3826,7 @@
 		overflow-wrap: anywhere;
 		color: var(--pau-text);
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: var(--pau-type-xs);
 	}
 
@@ -4075,8 +4060,8 @@
 		overflow: hidden;
 		background: var(--pau-surface-raised);
 		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-surface);
-		box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 28%);
+		border-radius: var(--pau-radius-overlay);
+		box-shadow: var(--pau-shadow-overlay);
 	}
 
 	.session-composer__completion > :global(*) {
@@ -4161,6 +4146,16 @@
 		align-items: center;
 		gap: var(--pau-space-2);
 		min-width: 0;
+	}
+
+	/*
+	 * The footer pickers keep the footer's meta size and a 4px inset, so the
+	 * options still share one row with the actions in today's composer
+	 * column. They keep the shared 32px height.
+	 */
+	.session-composer__options :global(.pau-field--quiet) {
+		padding-inline: var(--pau-space-1);
+		font-size: inherit;
 	}
 
 	/* Svelte leaves whitespace and anchors behind, so :empty never matches. */

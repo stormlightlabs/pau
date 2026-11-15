@@ -162,7 +162,7 @@
 	<button
 		bind:this={trigger}
 		type="button"
-		class="model-picker__trigger pau-field"
+		class="model-picker__trigger pau-field pau-field--quiet"
 		aria-label={`Model: ${label}`}
 		aria-haspopup="true"
 		aria-expanded={open}
@@ -179,7 +179,7 @@
 		<div
 			bind:this={panel}
 			popover="manual"
-			class="model-picker__panel"
+			class="model-picker__panel pau-menu"
 			class:model-picker__panel--keyboard={keyboardOpen}
 			class:model-picker__panel--below={!above}
 			style:left={`${left}px`}
@@ -252,21 +252,11 @@
 	}
 
 	.model-picker__trigger {
-		display: flex;
-		align-items: center;
-		gap: var(--pau-space-2);
 		max-width: 100%;
-		min-height: var(--pau-size-row-sm);
-		padding-inline: var(--pau-space-1);
-		text-align: start;
 	}
 
 	.model-picker__value {
 		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 
 	.model-picker__trigger :global(.model-picker__chevron) {
@@ -281,18 +271,10 @@
 		width: 20rem;
 		max-width: min(24rem, calc(100vw - 1rem));
 		max-height: 18rem;
-		margin: 0;
-		padding: var(--pau-space-1);
 		overflow-y: auto;
-		color: var(--pau-text);
-		font: inherit;
-		font-size: var(--pau-type-md);
-		background: var(--pau-surface-raised);
-		border: var(--pau-border-thin, 1px) solid var(--pau-border);
-		border-radius: var(--pau-radius-surface);
-		box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 28%);
+		font-family: inherit;
 		transform-origin: bottom left;
-		animation: model-picker-enter var(--pau-duration-small) var(--pau-ease-enter);
+		animation: model-picker-enter var(--pau-duration-move) var(--pau-ease-out);
 	}
 
 	.model-picker__panel--below {
@@ -333,7 +315,7 @@
 	}
 
 	li button:focus-visible {
-		background-color: var(--pau-selection);
+		background-color: var(--pau-surface-selected);
 	}
 
 	li button :global(.model-picker__check) {

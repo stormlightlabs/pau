@@ -418,8 +418,8 @@
 		padding: var(--pau-space-1);
 		background: var(--pau-surface-raised);
 		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-surface);
-		box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 28%);
+		border-radius: var(--pau-radius-overlay);
+		box-shadow: var(--pau-shadow-overlay);
 	}
 
 	.terminal-view__field {
@@ -434,7 +434,7 @@
 		padding-inline: var(--pau-space-2);
 		color: var(--pau-text-muted);
 		background: var(--pau-canvas);
-		border: 1px solid var(--pau-border);
+		border: 1px solid var(--pau-border-control);
 		border-radius: var(--pau-radius-control);
 	}
 

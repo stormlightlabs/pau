@@ -150,6 +150,7 @@
 	.terminal-surface__title {
 		overflow: hidden;
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}

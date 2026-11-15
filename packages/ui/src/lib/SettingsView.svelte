@@ -407,8 +407,9 @@
 		color: var(--preview-text);
 		background: var(--preview-canvas);
 		border: 1px solid var(--preview-border);
-		border-radius: var(--pau-radius-surface);
+		border-radius: var(--pau-radius-control);
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: var(--pau-type-xs);
 		white-space: nowrap;
 		overflow: hidden;

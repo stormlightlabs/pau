@@ -271,6 +271,7 @@
 		border-radius: var(--pau-radius-control);
 		background: var(--pau-surface-raised);
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: 0.92em;
 	}
 
@@ -279,9 +280,10 @@
 		overflow-x: auto;
 		overflow-wrap: normal;
 		border: var(--pau-border-thin) solid var(--pau-border);
-		border-radius: var(--pau-radius-surface);
+		border-radius: var(--pau-radius-control);
 		background: var(--pau-surface);
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: var(--pau-type-sm);
 		line-height: 1.55;
 	}

@@ -51,7 +51,7 @@ test.each(states)('keeps the %s header actions where the idle header puts them',
 
 test.each(states)('reports the %s state in the header status', async (_name, workspaces, label) => {
 	await render(SessionView, open(workspaces));
-	expect(document.querySelector('.session-view__status svg')?.getAttribute('aria-label')).toBe(label);
+	expect(document.querySelector('.session-view__status .pau-mark')?.getAttribute('aria-label')).toBe(label);
 	expect(document.querySelector('.session-view__status')?.textContent?.trim()).toBe(label);
 	await expect
 		.element(page.getByRole('button', { name: 'Compact' }))

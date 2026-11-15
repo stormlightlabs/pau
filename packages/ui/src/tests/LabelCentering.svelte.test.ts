@@ -1,3 +1,4 @@
+import { page } from 'vitest/browser';
 import { afterEach, expect, test } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
@@ -5,7 +6,17 @@ import { diagnosticFixtures } from '../fixtures/diagnostics';
 import { sandboxFixtures } from '../fixtures/sandbox';
 import DiagnosticsView from '../lib/DiagnosticsView.svelte';
 import SandboxSettingsView from '../lib/SandboxSettingsView.svelte';
+import { longCommandOutput } from '../fixtures/foundation';
+import ToolOutput from '../lib/ToolOutput.svelte';
+import ButtonsDemo from '../stories/ButtonsDemo.svelte';
+import ChipsDemo from '../stories/ChipsDemo.svelte';
 import ControlStatesDemo from '../stories/ControlStatesDemo.svelte';
+import FieldsDemo from '../stories/FieldsDemo.svelte';
+import MenusDemo from '../stories/MenusDemo.svelte';
+import NoticesDemo from '../stories/NoticesDemo.svelte';
+import PageHeaderDemo from '../stories/PageHeaderDemo.svelte';
+import RequestCardDemo from '../stories/RequestCardDemo.svelte';
+import StripsDemo from '../stories/StripsDemo.svelte';
 import { themeCssProperties, UI_FONTS, type UiFontName } from '../theme';
 
 function firstText(element: Element): Text {
@@ -168,3 +179,139 @@ test.each(Object.keys(UI_FONTS) as UiFontName[])(
 		expect(fallback.kbd).toBeCloseTo(trimmed.kbd, 0);
 	}
 );
+
+/** Renders every component sheet in one font and waits for the font to load. */
+async function renderSheets(font: UiFontName) {
+	await page.viewport(1440, 900);
+	const family = themeCssProperties('eldritch', font)['--pau-font-ui']!;
+	document.documentElement.style.setProperty('--pau-font-ui', family);
+	for (const sheet of [ButtonsDemo, FieldsDemo, ChipsDemo, StripsDemo, PageHeaderDemo, MenusDemo, NoticesDemo]) {
+		await render(sheet);
+	}
+	await render(RequestCardDemo);
+	await render(ToolOutput, { lines: longCommandOutput, label: 'cargo test output', from: 'tail' });
+	await document.fonts.load(`500 14px ${family}`);
+	await document.fonts.ready;
+}
+
+/** The vertical center of an element's box, for icons, marks, inputs and boxes. */
+const box = (selector: string, scope: ParentNode = document) =>
+	[...scope.querySelectorAll(selector)].map((element) => ({ name: selector, center: middle(element) }));
+
+/** The cap center of each element's text, for labels. */
+const caps = (selector: string, scope: ParentNode = document) =>
+	[...scope.querySelectorAll(selector)].map((element) => ({ name: `${selector} text`, center: capCenter(element) }));
+
+/**
+ * Every row of controls, with what must share its center line: the boxes of
+ * icons, marks, inputs and controls, and the capitals of every label.
+ */
+function rows() {
+	const groups: { name: string; items: { name: string; center: number }[] }[] = [];
+	const add = (name: string, scope: Element, items: { name: string; center: number }[]) => {
+		groups.push({ name, items: [{ name: 'row', center: middle(scope) }, ...items] });
+	};
+
+	for (const row of document.querySelectorAll<HTMLElement>('[data-row="field"], [data-row="select"]')) {
+		add(row.dataset.row!, row.querySelector('.pau-field')!, [
+			...box('.pau-field, .pau-button, .pau-chip, .pau-field > .pau-icon, kbd', row),
+			...caps('.pau-button, .pau-field > span:not(.pau-icon), .pau-chip > span:not(.pau-icon), kbd > span', row)
+		]);
+	}
+	for (const row of document.querySelectorAll<HTMLElement>('[data-row="choice"], [data-row="radio"]')) {
+		add(row.dataset.row!, row.querySelector('input')!, [...box('input', row), ...caps('.pau-choice > span', row)]);
+	}
+	for (const row of document.querySelectorAll<HTMLElement>('[data-status]:has(> .pau-state)')) {
+		add(`mark ${row.dataset.status}`, row.querySelector('.pau-mark')!, caps('.pau-state > span:not(.pau-mark)', row));
+	}
+	const chips = document.querySelector('[data-row="chips"]')!;
+	for (const chip of chips.querySelectorAll('.pau-chip')) {
+		add('chip', chip, [...box('.pau-icon', chip), ...caps(':scope > span:not(.pau-icon)', chip)]);
+	}
+	for (const strip of document.querySelectorAll('.pau-strip:not(.pau-strip--row)')) {
+		const top = strip.getBoundingClientRect().top + 4;
+		groups.push(
+			{
+				name: `strip ${strip.textContent}`,
+				items: [
+					{ name: 'first line', center: top + 12 },
+					...box(':scope > .pau-mark', strip),
+					...caps('.pau-strip__name, .pau-strip__agent, .pau-strip__meta', strip)
+				]
+			},
+			{
+				name: `strip state ${strip.textContent}`,
+				items: [{ name: 'second line', center: top + 36 }, ...caps('.pau-strip__state, .pau-strip__figure', strip)]
+			}
+		);
+	}
+	for (const row of document.querySelectorAll('.pau-strip--row')) {
+		add(`row strip ${row.textContent}`, row, [
+			...box('.pau-icon', row),
+			...caps('.pau-strip__name, .pau-strip__meta', row)
+		]);
+	}
+	for (const heading of document.querySelectorAll('.pau-bay-heading')) {
+		const label = heading.querySelector('.pau-section-label')!;
+		groups.push({
+			name: 'bay heading',
+			items: [{ name: 'label', center: capCenter(label) }, ...caps('.pau-count', heading)]
+		});
+	}
+	for (const header of document.querySelectorAll<HTMLElement>('.pau-page-header')) {
+		add(`page header ${header.dataset.header}`, header, [
+			...box('.pau-mark, .pau-button, .pau-button > .pau-icon', header),
+			...caps(
+				'.pau-page-header__title, .pau-state > span:not(.pau-mark), .pau-count, .pau-button:not(.pau-button--icon)',
+				header
+			)
+		]);
+	}
+	for (const item of document.querySelectorAll('.pau-menu__item')) {
+		add(`menu ${item.textContent}`, item, [
+			...box('.pau-icon, kbd', item),
+			...caps(':scope > span:not(.pau-icon)', item)
+		]);
+	}
+	for (const actions of document.querySelectorAll(
+		'.pau-request__actions, .pau-notice__actions, .pau-tool-output__bar'
+	)) {
+		add(actions.className, actions.querySelector('.pau-button')!, [
+			...box('.pau-button, kbd', actions),
+			...caps('.pau-button, kbd > span, .pau-request__aside, :scope > span', actions)
+		]);
+	}
+	const head = document.querySelector('.pau-request__head')!;
+	groups.push({
+		name: 'request head',
+		items: [
+			{ name: 'question', center: capCenter(head.querySelector('.pau-request__title')!) },
+			...box('.pau-mark', head)
+		]
+	});
+	return groups;
+}
+
+test.each(Object.keys(UI_FONTS) as UiFontName[])(
+	'keeps every control and row on one center line in %s',
+	async (font) => {
+		await renderSheets(font);
+		const groups = rows();
+		expect(groups.length).toBeGreaterThan(40);
+		for (const group of groups) {
+			const [reference, ...items] = group.items;
+			for (const item of items) {
+				expect(Math.abs(item.center - reference!.center), `${group.name}: ${item.name}`).toBeLessThanOrEqual(precision);
+			}
+		}
+	}
+);
+
+test('makes every button, field and select 32px tall', async () => {
+	await renderSheets('overpass');
+	const controls = document.querySelectorAll('.pau-button, .pau-field, [role="combobox"]');
+	expect(controls.length).toBeGreaterThan(40);
+	for (const control of controls) {
+		expect(control.getBoundingClientRect().height, control.textContent ?? '').toBe(32);
+	}
+});

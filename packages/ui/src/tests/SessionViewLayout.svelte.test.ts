@@ -106,18 +106,18 @@ test('sets the rail status mark one spacing step from the name, as in the header
 	await render(SessionView, { workspaces: sessionFixtures.idle, activeSessionId: 'session-idle' });
 
 	const row = page.getByRole('button', { name: /Fix diff gutter/ }).element();
-	const mark = rect(row.querySelector('.session-status-mark')!);
+	const mark = rect(row.querySelector('.pau-mark')!);
 	const name = rect(row.querySelector('.session-rail__name')!);
 	expect(name.left - mark.right).toBe(8);
 
 	const header = document.querySelector('.session-view__status')!;
-	const headerMark = rect(header.querySelector('.session-status-mark')!);
-	const headerLabel = rect(header.querySelector('span')!);
+	const headerMark = rect(header.querySelector('.pau-mark')!);
+	const headerLabel = rect(header.querySelector('span:not(.pau-mark)')!);
 	expect(headerLabel.left - headerMark.right).toBe(8);
 
-	// Names start where the shell's context rail starts its labels: 20px row inset, 8px dot column, 8px gap.
+	// Names start after the 16px row inset, the 8px mark column and the 8px gap.
 	const rail = rect(document.querySelector('.session-rail')!);
-	expect(name.left - rail.left).toBe(36);
+	expect(name.left - rail.left).toBe(32);
 	// The mark lines up with the workspace name above it.
 	expect(mark.left).toBe(inset(page.getByRole('heading', { name: 'Pau' }).element()));
 });

@@ -302,7 +302,7 @@ test('opens a keyboard menu beside its row when the narrow rail is still sliding
 		.poll(() => {
 			const box = menu.element().getBoundingClientRect();
 			const bounds = readme.getBoundingClientRect();
-			return [box.left - bounds.left, box.top - bounds.bottom];
+			return [box.left - Math.round(bounds.left), box.top - Math.round(bounds.bottom)];
 		})
 		.toEqual([8, 0]);
 	await expect.element(menu).toBeInViewport({ ratio: 1 });

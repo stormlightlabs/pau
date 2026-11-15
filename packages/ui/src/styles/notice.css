@@ -1,18 +1,105 @@
 /*
- * A rounded warning notice, such as the agent readiness notice or a resource
- * browser warning. The whole box takes the warning tone: a thin warning
- * border on every side and a light warning tint. A colored side border on a
- * rounded box curves and tapers at the corners, so a rounded notice never
- * uses one. Square-cornered notices may keep a side border. A notice with an
- * icon colors the icon in the warning tone too. Components own the notice's
- * layout and padding.
+ * Notices. A notice sits in the flow, never sticky over content, on the
+ * raised surface inside a rule-colored border, with the control radius. It
+ * reads in three columns: an optional 16px icon, the text, and optional
+ * actions centered on the text. Actions are secondary buttons, so a notice
+ * never competes with its surface's primary.
+ *
+ *   <section class="pau-notice pau-notice--warning">
+ *     <Icon name="warning" size={16} />
+ *     <div class="pau-notice__text">
+ *       <h2 class="pau-notice__title">…</h2>
+ *       <p class="pau-notice__body">…</p>
+ *     </div>
+ *     <div class="pau-notice__actions">…</div>
+ *   </section>
+ *
+ * A warning or danger notice takes its tone on the whole box: a border in
+ * the tone on every side, a light tint, and the icon in the tone. A colored
+ * side border on a rounded box tapers at the corners, so a notice never uses
+ * one. An information notice keeps the rule border and colors its icon only.
  */
 .pau-notice {
-	border: var(--pau-border-thin) solid var(--pau-warning);
-	border-radius: var(--pau-radius-surface);
-	background: color-mix(in srgb, var(--pau-warning) 12%, var(--pau-surface));
+	display: flex;
+	align-items: flex-start;
+	gap: var(--pau-space-3);
+	min-width: 0;
+	padding: var(--pau-space-3) var(--pau-space-4);
+	background-color: var(--pau-surface-raised);
+	border: 1px solid var(--pau-border);
+	border-radius: var(--pau-radius-control);
 }
 
+/* The icon centers on the title's 24px line. */
 .pau-notice > .pau-icon {
+	flex: none;
+	margin-top: var(--pau-space-1);
+}
+
+.pau-notice__text {
+	display: grid;
+	flex: 1;
+	gap: var(--pau-space-1);
+	min-width: 0;
+}
+
+.pau-notice__title {
+	margin: 0;
+	font-size: var(--pau-type-md);
+	font-weight: var(--pau-weight-semibold);
+	line-height: var(--pau-leading-prose);
+}
+
+.pau-notice__body {
+	margin: 0;
+	color: var(--pau-text-muted);
+	font-size: var(--pau-type-sm);
+	line-height: var(--pau-leading-row);
+}
+
+.pau-notice__body code {
+	color: var(--pau-text);
+	font-family: var(--pau-font-code);
+	font-variant-ligatures: none;
+	font-size: var(--pau-type-xs);
+}
+
+.pau-notice__actions {
+	display: flex;
+	flex: none;
+	flex-wrap: wrap;
+	align-items: center;
+	align-self: center;
+	gap: var(--pau-space-2);
+}
+
+.pau-notice--info > .pau-icon {
+	color: var(--pau-info);
+}
+
+.pau-notice--warning {
+	background-color: color-mix(in srgb, var(--pau-warning) 8%, var(--pau-surface-raised));
+	border-color: var(--pau-warning);
+}
+
+.pau-notice--warning > .pau-icon {
 	color: var(--pau-warning);
+}
+
+.pau-notice--danger {
+	background-color: color-mix(in srgb, var(--pau-danger) 8%, var(--pau-surface-raised));
+	border-color: var(--pau-danger);
+}
+
+.pau-notice--danger > .pau-icon {
+	color: var(--pau-danger);
+}
+
+/*
+ * The slot under a page header that holds a notice, on the content's
+ * leading edge. Content under it starts 16px below the notice.
+ */
+.pau-notice-slot {
+	flex: none;
+	padding: var(--pau-space-4) var(--pau-space-5);
 }

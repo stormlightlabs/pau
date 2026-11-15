@@ -53,7 +53,7 @@ export const BashTruncated: Story = {
 		await expect(canvas.getByText('/tmp/pi-bash-7f3a.log')).toBeInTheDocument();
 		await expect(output).toHaveTextContent('test 1200 ... ok');
 		await expect(output).not.toHaveTextContent('test 1000 ... ok');
-		await userEvent.click(canvas.getByRole('button', { name: 'Show 200 earlier lines' }));
+		await userEvent.click(canvas.getByRole('button', { name: 'Show all 1,200 lines' }));
 		await expect(canvas.getByLabelText('Command output')).toHaveTextContent('test 801 ... ok');
 	}
 };
@@ -65,7 +65,7 @@ export const Read: Story = {
 		await expect(canvas.getByText('lines 10–14', { exact: false })).toBeInTheDocument();
 		await expect(canvas.getByLabelText('Contents of src/diff/gutter.ts')).toHaveTextContent('gutterRows');
 		await expect(canvas.getByText(/Pi kept the first 450 of 3000 lines because of the size limit/)).toBeInTheDocument();
-		await expect(canvas.getByRole('button', { name: 'Show 200 more lines' })).toBeInTheDocument();
+		await expect(canvas.getByRole('button', { name: 'Show all 450 lines' })).toBeInTheDocument();
 	}
 };
 

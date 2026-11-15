@@ -17,7 +17,7 @@
 	color: var(--pau-text-muted);
 	list-style: none;
 	cursor: pointer;
-	transition: color var(--pau-duration-feedback) var(--pau-ease-standard);
+	transition: color var(--pau-duration-quick) var(--pau-ease-out);
 }
 
 /* WebKit draws its own disclosure triangle unless the marker is hidden. */
@@ -47,7 +47,7 @@
 	top: 50%;
 	left: calc((var(--pau-space-5) - var(--disclosure-rule, 0px) - 0.875rem) / 2);
 	translate: 0 -50%;
-	transition: rotate var(--pau-duration-feedback) var(--pau-ease-standard);
+	transition: rotate var(--pau-duration-quick) var(--pau-ease-out);
 }
 
 .pau-disclosure[open] > summary > .pau-disclosure__chevron {

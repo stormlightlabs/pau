@@ -20,7 +20,8 @@ pub enum SessionStatus {
     /// The agent is waiting for operator input.
     Waiting,
     /// The process still runs but stopped answering. Commands to the session
-    /// fail with `agent_not_responding`; stopping it still works.
+    /// fail with `agent_not_responding` until it writes output again;
+    /// stopping it still works.
     NotResponding,
     /// The process is shutting down.
     Stopping,

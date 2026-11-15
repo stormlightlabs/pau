@@ -53,7 +53,9 @@ pub(crate) static FIXTURE_PATH: LazyLock<String> = LazyLock::new(|| {
 /// A Pi RPC stand-in. It records every command in the workspace, answers the
 /// controls the session API sends, and exits with status 3 without answering
 /// a prompt whose text is `exit`. After a prompt whose text is `hang`, it
-/// reads every command and answers none. Shell commands other than `echo hi` and
+/// reads every command and answers none. Once the file `answer` appears in
+/// the workspace, it answers the prompt late, settles, and answers again.
+/// Shell commands other than `echo hi` and
 /// `sleep 60`, which runs until `abort_bash`, fail. A resumed session answers `get_messages`
 /// with the messages of its file, after a summary once it has compacted, and
 /// renders that file into `export_html`'s output path. A new session, which
@@ -71,7 +73,17 @@ level=medium
 native=native
 while IFS= read -r command; do
     printf '%s\n' "$command" >> "$PWD/commands.jsonl"
-    [ -n "$hung" ] && continue
+    if [ -n "$hung" ]; then
+        case "$command" in
+            *'"type":"get_state"'*)
+                while [ ! -e "$PWD/answer" ]; do sleep 0.05; done
+                hung=
+                printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$hung_id"
+                printf '{"type":"agent_settled"}\n'
+                ;;
+        esac
+        continue
+    fi
     id=$(printf '%s' "$command" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
     case "$command" in
         *'"type":"get_state"'*)
@@ -83,7 +95,7 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"get_available_thinking_levels","success":true,"data":{"levels":%s}}\n' "$id" "$levels"
             ;;
         *'"message":"exit"'*) exit 3 ;;
-        *'"message":"hang"'*) hung=1 ;;
+        *'"message":"hang"'*) hung=1; hung_id=$id ;;
         *'"message":"dialogs"'*)
             printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
             printf '{"type":"extension_ui_request","id":"ui-select","method":"select","title":"Pick","options":["a","b"]}\n'
@@ -938,6 +950,16 @@ async fn marks_a_session_whose_pi_stops_answering() {
     assert_eq!(again["code"], "agent_not_responding");
     assert_eq!(again["message"], message);
     assert_eq!(fixture.commands().len(), sent);
+
+    // Pi answers late and settles, so the session returns to idle and takes
+    // commands again.
+    fs::write(fixture.workspace_root.join("answer"), "").unwrap();
+    next_event(&mut stream, session_changed("idle")).await;
+    assert_eq!(fixture.call("GET", &base, None).await.1["status"], "idle");
+    let (status, _) = fixture
+        .call("POST", &prompt, Some(json!({"message": "hello"})))
+        .await;
+    assert_eq!(status, StatusCode::ACCEPTED);
 
     let (status, _) = fixture.call("DELETE", &base, None).await;
     assert_eq!(status, StatusCode::NO_CONTENT);

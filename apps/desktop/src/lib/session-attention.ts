@@ -14,7 +14,7 @@ import { isExtensionEvent, opensDialog } from './extension-ui';
  * Why a session notifies the operator. `finished` is a turn that ended
  * without asking for anything, which notifies only under the `all` policy.
  */
-export type AttentionReason = 'waiting' | 'question' | 'failed' | 'finished';
+export type AttentionReason = 'waiting' | 'question' | 'failed' | 'not_responding' | 'finished';
 
 /** Text for one native notification. */
 export type AttentionNotification = { title: string; body: string };
@@ -36,8 +36,10 @@ export type AttentionView = { windowFocused: boolean; viewedSessionId: string | 
  * The first status seen for a session is never a change: it comes from a
  * snapshot or a session that just started. A repeated status is the same
  * transition delivered again. A session that fails while stopping was
- * stopped by the operator, who needs no notice of it. A running session that
- * goes idle has finished its turn, unless the operator interrupted it.
+ * stopped by the operator, who needs no notice of it. A session whose agent
+ * stops answering needs the operator as much as one that failed. A running
+ * session that goes idle has finished its turn, unless the operator
+ * interrupted it.
  */
 export function statusAttention(
 	previous: SessionStatus | undefined,
@@ -47,6 +49,7 @@ export function statusAttention(
 	if (previous === undefined || previous === next) return undefined;
 	if (next === 'waiting') return 'waiting';
 	if (next === 'failed' && previous !== 'stopping') return 'failed';
+	if (next === 'not_responding') return 'not_responding';
 	if (next === 'idle' && previous === 'running' && !interrupted) return 'finished';
 	return undefined;
 }
@@ -60,6 +63,7 @@ const BODIES: Record<AttentionReason, (agent: string) => string> = {
 	waiting: (agent) => `${agent} is waiting for your input.`,
 	question: (agent) => `${agent} needs your answer to continue.`,
 	failed: (agent) => `${agent} exited unexpectedly.`,
+	not_responding: (agent) => `${agent} stopped responding.`,
 	finished: (agent) => `${agent} finished its turn.`
 };
 
@@ -100,7 +104,8 @@ export type SessionAttentionOptions = {
 
 /**
  * Sends a native notification and badges the app icon when a session out of
- * the operator's view starts waiting, asks a question, or fails. Under the
+ * the operator's view starts waiting, asks a question, fails, or stops
+ * responding. Under the
  * `all` policy a finished turn notifies too, and under `off` nothing notifies
  * or adds to the badge.
  *

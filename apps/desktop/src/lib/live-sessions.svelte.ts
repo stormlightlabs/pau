@@ -575,12 +575,14 @@ export class LiveSessions {
 
 	/**
 	 * Raises an attention marker when a session outside the operator's view
-	 * starts waiting, fails, or returns to idle after running a turn.
+	 * starts waiting, fails, stops responding, or returns to idle after running
+	 * a turn.
 	 */
 	#markUnseen(previous: AgentSession | undefined, next: AgentSession): void {
 		if (!previous || previous.status === next.status || next.id === this.#viewed) return;
 		const finished = previous.status === 'running' && next.status === 'idle';
-		if (finished || next.status === 'waiting' || next.status === 'failed') this.#unseen.add(next.id);
+		const attention = ['waiting', 'failed', 'not_responding'].includes(next.status);
+		if (finished || attention) this.#unseen.add(next.id);
 	}
 
 	/** Holds transcript output until the next frame, then commits the burst at once. */

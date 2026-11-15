@@ -285,14 +285,6 @@ impl SessionApi {
         ))
     }
 
-    /// Whether the live Pi session `id` stopped answering commands.
-    async fn not_responding(&self, id: &str) -> bool {
-        self.registry
-            .get(id)
-            .await
-            .is_some_and(|session| session.not_responding())
-    }
-
     /// Returns a live Pi session. A Claude session with this ID is refused as
     /// an unsupported control, since only Pi offers the routes that call this.
     async fn live(&self, id: &str) -> Result<(SessionRecord, Arc<PiSession>), ApiError> {
@@ -609,11 +601,7 @@ impl SessionApi {
                     if reports_usage(&event) {
                         self.publish_usage(tagged.workspace_id, tagged.session_id.clone());
                     }
-                    // A stuck Pi keeps its not-responding status whatever
-                    // late events it writes.
-                    if let Some(status) = lifecycle_status(&event)
-                        && !self.not_responding(&tagged.session_id).await
-                    {
+                    if let Some(status) = lifecycle_status(&event) {
                         self.publish(&describe(&tagged.session_id, &record, status));
                     }
                 }
@@ -624,6 +612,10 @@ impl SessionApi {
                         SessionStatus::NotResponding,
                     ));
                 }
+                // Pi wrote again, so the session returns to the status its
+                // events set. The record that showed it follows and publishes
+                // any lifecycle change it carries.
+                PiProcessOutput::Responding => self.publish_current(&tagged.session_id).await,
                 // Stderr can contain anything Pi or its extensions print,
                 // including secrets, so it stays out of the event stream.
                 PiProcessOutput::Diagnostic(_) => {}

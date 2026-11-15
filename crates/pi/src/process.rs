@@ -144,8 +144,12 @@ pub enum PiProcessOutput {
     /// The child process exited.
     Exit(PiProcessExit),
     /// Pi stopped answering commands, as [`PiProcessError::NotResponding`]
-    /// describes. Sent once, when the first command fails this way.
+    /// describes. Sent when a command first fails this way, and again after
+    /// [`Self::Responding`] if Pi stops answering once more.
     NotResponding,
+    /// Pi wrote to stdout after [`Self::NotResponding`], so commands reach it
+    /// again. Sent before the record that showed it.
+    Responding,
 }
 
 /// A Pi process or RPC transport failure.
@@ -166,7 +170,8 @@ pub enum PiProcessError {
     ///
     /// Pau then treats Pi as stuck: every later command and record fails at
     /// once with this same error, naming the command that first went
-    /// unanswered. Only shutdown still reaches the process.
+    /// unanswered. Only shutdown still reaches the process, until Pi writes
+    /// to stdout again. Pau never recovers a Pi whose input it closed.
     NotResponding {
         /// The `type` of the command that went unanswered.
         command: String,
@@ -231,6 +236,26 @@ type PendingCommands = Arc<Mutex<HashMap<String, oneshot::Sender<(u64, Value)>>>
 /// by [`PiProcess::sequenced_events`].
 type SequencedEvents = Arc<std::sync::OnceLock<mpsc::UnboundedSender<(u64, Value)>>>;
 
+/// The command Pi left unanswered while Pau treats it as stuck, or `None`
+/// while Pi answers.
+///
+/// Pau sets it and the stdout reader clears it only while holding the
+/// [`PendingCommands`] lock. A record therefore either reaches its command
+/// before Pau gives up, or arrives after the mark is set and clears it.
+type Unanswered = Arc<std::sync::Mutex<Option<UnansweredCommand>>>;
+
+/// The first command that went unanswered since Pi last answered.
+#[derive(Clone, Debug)]
+struct UnansweredCommand {
+    /// The command's `type`.
+    command: String,
+    /// Whether the check Pau sent during `command` went unanswered.
+    during_check: bool,
+    /// Whether Pau closed Pi's input after a cut-off write. Commands can no
+    /// longer reach Pi, so later output does not clear the mark.
+    input_closed: bool,
+}
+
 /// Owns one supervised `pi --mode rpc` child process.
 pub struct PiProcess {
     stdin: Mutex<Option<tokio::process::ChildStdin>>,
@@ -246,9 +271,8 @@ pub struct PiProcess {
     process_id: u32,
     shutdown_timeouts: PiShutdownTimeouts,
     reply_timeouts: PiReplyTimeouts,
-    /// The command that Pi first left unanswered, and whether its check went
-    /// unanswered, once Pau has given up on Pi.
-    not_responding: std::sync::OnceLock<(String, bool)>,
+    /// The command Pi left unanswered while Pau treats it as stuck.
+    not_responding: Unanswered,
     shutdown_requested: Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -287,14 +311,16 @@ impl PiProcess {
         let (activity_sender, activity) = watch::channel(0);
         let (kill_sender, mut kill_receiver) = tokio::sync::mpsc::channel(1);
         let shutdown_requested = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let not_responding = Unanswered::default();
 
-        tokio::spawn(read_stdout(
+        tokio::spawn(read_stdout(StdoutReader {
             stdout,
-            activity_sender,
-            Arc::clone(&pending),
-            output.clone(),
-            Arc::clone(&sequenced_events),
-        ));
+            activity: activity_sender,
+            pending: Arc::clone(&pending),
+            output: output.clone(),
+            sequenced_events: Arc::clone(&sequenced_events),
+            not_responding: Arc::clone(&not_responding),
+        }));
         tokio::spawn(read_stderr(stderr, output.clone()));
 
         let watcher_output = output.clone();
@@ -334,7 +360,7 @@ impl PiProcess {
             process_id,
             shutdown_timeouts: options.shutdown_timeouts,
             reply_timeouts: options.reply_timeouts,
-            not_responding: std::sync::OnceLock::new(),
+            not_responding,
             shutdown_requested,
         })
     }
@@ -402,58 +428,91 @@ impl PiProcess {
         let mut activity = self.activity.clone();
         activity.borrow_and_update();
         let (command_type, mut response) = self.send_command(id.clone(), command, deadline).await?;
+        let long_running = LONG_RUNNING_COMMANDS.contains(&command_type.as_str());
 
-        let outcome = if LONG_RUNNING_COMMANDS.contains(&command_type.as_str()) {
-            wait_while_alive(&mut response, activity, self.reply_timeouts.silence, || {
-                self.answers_probe()
-            })
+        loop {
+            let outcome = if long_running {
+                wait_while_alive(
+                    &mut response,
+                    &mut activity,
+                    self.reply_timeouts.silence,
+                    || self.answers_probe(),
+                )
+                .await
+            } else {
+                tokio::time::timeout_at(deadline, &mut response).await.ok()
+            };
+            return match outcome {
+                Some(Ok(response)) => Ok(response),
+                Some(Err(_)) => Err(self.exited().await),
+                None => {
+                    let mut pending = self.pending.lock().await;
+                    // Pi wrote records while the check waited, so it is still
+                    // working.
+                    if long_running && activity.has_changed().unwrap_or(false) {
+                        continue;
+                    }
+                    pending.remove(&id);
+                    // The answer may have arrived after the wait ended.
+                    if let Ok(response) = response.try_recv() {
+                        return Ok(response);
+                    }
+                    Err(self.give_up(&command_type, long_running, false))
+                }
+            };
+        }
+    }
+
+    /// Returns the [`PiProcessError::Exited`] error once Pi's exit is known.
+    async fn exited(&self) -> PiProcessError {
+        let exit = wait_for_exit(self.exit.clone())
             .await
-        } else {
-            tokio::time::timeout_at(deadline, &mut response).await.ok()
-        };
-        match outcome {
-            Some(Ok(response)) => Ok(response),
-            Some(Err(_)) => {
-                let exit = wait_for_exit(self.exit.clone())
-                    .await
-                    .unwrap_or(PiProcessExit {
-                        code: None,
-                        signal: None,
-                        requested: false,
-                    });
-                Err(PiProcessError::Exited(exit))
-            }
-            None => {
-                self.pending.lock().await.remove(&id);
-                let during_check = LONG_RUNNING_COMMANDS.contains(&command_type.as_str());
-                Err(self.give_up(&command_type, during_check))
-            }
-        }
+            .unwrap_or(PiProcessExit {
+                code: None,
+                signal: None,
+                requested: false,
+            });
+        PiProcessError::Exited(exit)
     }
 
-    /// Records that Pi left `command` unanswered, announces it once on the
-    /// output stream, and returns the error every later command gets.
-    fn give_up(&self, command: &str, during_check: bool) -> PiProcessError {
-        if self
+    /// Records that Pi left `command` unanswered, announces it on the output
+    /// stream unless Pau already treats Pi as stuck, and returns the error
+    /// every later command gets until Pi writes again.
+    ///
+    /// Callers that remove a pending command hold the [`PendingCommands`]
+    /// lock, as [`Unanswered`] requires.
+    fn give_up(&self, command: &str, during_check: bool, input_closed: bool) -> PiProcessError {
+        let mut unanswered = self
             .not_responding
-            .set((command.to_owned(), during_check))
-            .is_ok()
-        {
-            let _ = self.output.send(PiProcessOutput::NotResponding);
+            .lock()
+            .expect("the unanswered command lock is never poisoned");
+        match unanswered.as_mut() {
+            Some(first) => first.input_closed |= input_closed,
+            None => {
+                *unanswered = Some(UnansweredCommand {
+                    command: command.to_owned(),
+                    during_check,
+                    input_closed,
+                });
+                let _ = self.output.send(PiProcessOutput::NotResponding);
+            }
         }
+        drop(unanswered);
         self.not_responding()
-            .expect("the first unanswered command was just recorded")
+            .expect("the unanswered command was just recorded")
     }
 
-    /// Returns the [`PiProcessError::NotResponding`] error once Pi has left a
-    /// command unanswered.
+    /// Returns the [`PiProcessError::NotResponding`] error while Pau treats Pi
+    /// as stuck.
     pub(crate) fn not_responding(&self) -> Option<PiProcessError> {
         self.not_responding
-            .get()
-            .map(|(command, during_check)| PiProcessError::NotResponding {
-                command: command.clone(),
+            .lock()
+            .expect("the unanswered command lock is never poisoned")
+            .as_ref()
+            .map(|unanswered| PiProcessError::NotResponding {
+                command: unanswered.command.clone(),
                 limit: self.reply_timeouts.reply,
-                during_check: *during_check,
+                during_check: unanswered.during_check,
             })
     }
 
@@ -490,7 +549,14 @@ impl PiProcess {
 
     /// Whether Pi answers `get_state` within the reply limit, or has exited,
     /// in which case the caller's response channel closes on its own.
+    ///
+    /// Once shutdown starts, Pi's input is closed and it may never answer, so
+    /// the check passes without asking and the caller waits for the exit.
     async fn answers_probe(&self) -> bool {
+        let shutting_down = || self.shutdown_requested.load(Ordering::SeqCst);
+        if shutting_down() {
+            return true;
+        }
         let deadline = Instant::now() + self.reply_timeouts.reply;
         let id = self.next_command_id();
         let response = match self
@@ -498,13 +564,13 @@ impl PiProcess {
             .await
         {
             Ok((_, response)) => response,
-            Err(error) => return matches!(error, PiProcessError::Exited(_)),
+            Err(error) => return matches!(error, PiProcessError::Exited(_)) || shutting_down(),
         };
         match tokio::time::timeout_at(deadline, response).await {
             Ok(_) => true,
             Err(_) => {
                 self.pending.lock().await.remove(&id);
-                false
+                shutting_down()
             }
         }
     }
@@ -520,10 +586,9 @@ impl PiProcess {
         encoded: &[u8],
         deadline: Instant,
     ) -> Result<(), PiProcessError> {
-        let not_responding = || self.give_up(command_type, false);
         let mut stdin = tokio::time::timeout_at(deadline, self.stdin.lock())
             .await
-            .map_err(|_| not_responding())?;
+            .map_err(|_| self.give_up(command_type, false, false))?;
         let pipe = stdin.as_mut().ok_or_else(|| {
             PiProcessError::Write(std::io::Error::new(
                 std::io::ErrorKind::BrokenPipe,
@@ -538,7 +603,7 @@ impl PiProcess {
             Ok(result) => result.map_err(PiProcessError::Write),
             Err(_) => {
                 stdin.take();
-                Err(not_responding())
+                Err(self.give_up(command_type, false, true))
             }
         }
     }
@@ -603,10 +668,11 @@ impl PiProcess {
 ///
 /// Each line Pi writes, which `activity` counts, restarts the `silence`
 /// clock. When the clock runs out, `probe` checks that Pi still answers.
-/// Returns `None` when the check fails.
+/// Returns `None` when the check fails. Lines Pi writes while the check waits
+/// stay unseen in `activity`.
 async fn wait_while_alive<P, F>(
     response: &mut oneshot::Receiver<(u64, Value)>,
-    mut activity: watch::Receiver<u64>,
+    activity: &mut watch::Receiver<u64>,
     silence: Duration,
     mut probe: P,
 ) -> Option<Result<(u64, Value), oneshot::error::RecvError>>
@@ -625,8 +691,7 @@ where
             }
             () = tokio::time::sleep(silence) => {
                 if !probe().await {
-                    // The answer may have arrived while the check waited.
-                    return response.try_recv().ok().map(Ok);
+                    return None;
                 }
             }
         }
@@ -652,13 +717,28 @@ fn encode_record(mut command: Map<String, Value>) -> Vec<u8> {
     encoded
 }
 
-async fn read_stdout(
+/// What the stdout reader task shares with [`PiProcess`].
+struct StdoutReader {
     stdout: ChildStdout,
     activity: watch::Sender<u64>,
     pending: PendingCommands,
     output: broadcast::Sender<PiProcessOutput>,
     sequenced_events: SequencedEvents,
-) {
+    not_responding: Unanswered,
+}
+
+/// Reads Pi's stdout records and routes each one. Any line shows that Pi
+/// runs again, so it first clears a not-responding mark, as [`Unanswered`]
+/// describes.
+async fn read_stdout(reader: StdoutReader) {
+    let StdoutReader {
+        stdout,
+        activity,
+        pending,
+        output,
+        sequenced_events,
+        not_responding,
+    } = reader;
     let mut reader = BufReader::new(stdout);
     let mut bytes = Vec::new();
     let mut position = 0;
@@ -669,10 +749,20 @@ async fn read_stdout(
             Ok(_) => {
                 activity.send_modify(|lines| *lines += 1);
                 trim_record_ending(&mut bytes);
+                let mut pending = pending.lock().await;
+                {
+                    let mut unanswered = not_responding
+                        .lock()
+                        .expect("the unanswered command lock is never poisoned");
+                    if unanswered.as_ref().is_some_and(|first| !first.input_closed) {
+                        *unanswered = None;
+                        let _ = output.send(PiProcessOutput::Responding);
+                    }
+                }
                 match serde_json::from_slice::<Value>(&bytes) {
                     Ok(record) => {
                         position += 1;
-                        route_record(record, position, &pending, &output, &sequenced_events).await;
+                        route_record(record, position, &mut pending, &output, &sequenced_events);
                     }
                     Err(error) => {
                         let _ = output.send(PiProcessOutput::Diagnostic(PiDiagnostic {
@@ -693,10 +783,10 @@ async fn read_stdout(
     }
 }
 
-async fn route_record(
+fn route_record(
     record: Value,
     position: u64,
-    pending: &PendingCommands,
+    pending: &mut HashMap<String, oneshot::Sender<(u64, Value)>>,
     output: &broadcast::Sender<PiProcessOutput>,
     sequenced_events: &SequencedEvents,
 ) {
@@ -704,7 +794,7 @@ async fn route_record(
     let id = record.get("id").and_then(Value::as_str);
     if is_response
         && let Some(id) = id
-        && let Some(sender) = pending.lock().await.remove(id)
+        && let Some(sender) = pending.remove(id)
     {
         let _ = sender.send((position, record));
         return;
@@ -966,6 +1056,134 @@ cat >/dev/null
         assert!(process.pending.lock().await.is_empty());
     }
 
+    /// Answers `id` while holding the pending lock, as the stdout reader
+    /// does when it routes a response.
+    fn answer(pending: &mut HashMap<String, oneshot::Sender<(u64, Value)>>, id: &str) {
+        let sender = pending.remove(id).expect("the command is still pending");
+        sender
+            .send((1, json!({"id": id, "type": "response", "success": true})))
+            .unwrap();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn keeps_an_answer_that_arrives_as_the_deadline_passes() {
+        let fixture = FakePi::new(SILENT_PI);
+        let process = Arc::new(fixture.start(PiShutdownTimeouts::default()));
+        let waiting = Arc::clone(&process);
+        let command =
+            tokio::spawn(async move { waiting.command(json!({"type": "get_state"})).await });
+
+        // Hold the lock across the deadline, so the answer reaches the
+        // command after its wait has ended.
+        tokio::time::sleep(Duration::from_secs(29)).await;
+        let mut pending = process.pending.lock().await;
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        answer(&mut pending, "pau-1");
+        drop(pending);
+
+        assert_eq!(command.await.unwrap().unwrap()["id"], "pau-1");
+        assert!(process.not_responding().is_none());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn keeps_an_answer_that_arrives_as_a_check_fails() {
+        let fixture = FakePi::new(SILENT_PI);
+        let process = Arc::new(fixture.start(PiShutdownTimeouts::default()));
+        let waiting = Arc::clone(&process);
+        let command = tokio::spawn(async move {
+            waiting
+                .command(json!({"type": "bash", "command": "make"}))
+                .await
+        });
+
+        // Wait for the check, then hold the lock until it has failed.
+        while !process.pending.lock().await.contains_key("pau-2") {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+        let pending = process.pending.lock().await;
+        tokio::time::sleep(Duration::from_secs(31)).await;
+        drop(pending);
+        // The mutex is fair: the failed check takes the lock next, then this
+        // task, which answers `bash` before the command can give up on it.
+        let mut pending = process.pending.lock().await;
+        assert!(!pending.contains_key("pau-2"));
+        answer(&mut pending, "pau-1");
+        drop(pending);
+
+        assert_eq!(command.await.unwrap().unwrap()["id"], "pau-1");
+        assert!(process.not_responding().is_none());
+    }
+
+    /// Stop closes Pi's input during a silent `bash`, so a check written
+    /// afterwards would fail. The command must end with Pi's exit instead.
+    #[tokio::test(start_paused = true)]
+    async fn waits_for_the_exit_when_stopped_during_a_silent_command() {
+        let fixture = FakePi::new("while read -r line; do :; done\nexec sleep 1000\n");
+        let process = Arc::new(fixture.start(PiShutdownTimeouts {
+            protocol: Duration::from_secs(45),
+            ..PiShutdownTimeouts::default()
+        }));
+        let mut output = process.subscribe();
+        let running = Arc::clone(&process);
+        let command = tokio::spawn(async move {
+            running
+                .command(json!({"type": "bash", "command": "make"}))
+                .await
+        });
+
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let stopping = Arc::clone(&process);
+        tokio::spawn(async move { stopping.shutdown().await });
+
+        let error = command.await.unwrap().unwrap_err();
+        assert!(
+            matches!(
+                error,
+                PiProcessError::Exited(PiProcessExit {
+                    requested: true,
+                    ..
+                })
+            ),
+            "{error}"
+        );
+        assert!(process.not_responding().is_none());
+        while let Ok(record) = output.try_recv() {
+            assert_ne!(record, PiProcessOutput::NotResponding);
+        }
+    }
+
+    /// Pi goes quiet past the reply limit, then writes its late answer and
+    /// answers every later command.
+    #[tokio::test]
+    async fn answers_again_once_a_quiet_pi_writes() {
+        let fixture = FakePi::new(
+            r#"read -r line
+while [ ! -e answer ]; do sleep 0.05; done
+printf '{"id":"pau-1","type":"response","command":"get_state","success":true}\n'
+while read -r line; do
+  id=$(printf '%s' "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+  printf '{"id":"%s","type":"response","command":"get_state","success":true}\n' "$id"
+done
+"#,
+        );
+        let process = fixture.start(PiShutdownTimeouts::default());
+        let mut output = process.subscribe();
+
+        tokio::time::pause();
+        let error = process.command(json!({"type": "get_state"})).await;
+        tokio::time::resume();
+        assert!(matches!(error, Err(PiProcessError::NotResponding { .. })));
+        assert_eq!(output.recv().await.unwrap(), PiProcessOutput::NotResponding);
+
+        fs::write(fixture.root.path().join("answer"), "").unwrap();
+        let recovered = tokio::time::timeout(Duration::from_secs(5), output.recv()).await;
+        assert_eq!(recovered.unwrap().unwrap(), PiProcessOutput::Responding);
+        assert!(process.not_responding().is_none());
+        let response = process.command(json!({"type": "get_state"})).await;
+        assert_eq!(response.unwrap()["id"], "pau-2");
+        process.shutdown().await.unwrap();
+    }
+
     /// Streams events for well past the silence limit while ignoring every
     /// `get_state` check, then answers `prompt`. The records it writes must
     /// keep the command alive; without them the first check fails it.
@@ -1022,19 +1240,24 @@ cat >/dev/null
         S: FnOnce(watch::Sender<u64>, oneshot::Sender<(u64, Value)>) -> F,
         F: Future<Output = ()> + Send + 'static,
     {
-        let (activity_sender, activity) = watch::channel(0);
+        let (activity_sender, mut activity) = watch::channel(0);
         let (response_sender, mut response) = oneshot::channel();
         tokio::spawn(script(activity_sender, response_sender));
         let checks = std::sync::atomic::AtomicUsize::new(0);
-        let outcome = wait_while_alive(&mut response, activity, Duration::from_secs(30), || {
-            checks.fetch_add(1, Ordering::SeqCst);
-            async move {
-                if !check_answers {
-                    tokio::time::sleep(Duration::from_secs(30)).await;
+        let outcome = wait_while_alive(
+            &mut response,
+            &mut activity,
+            Duration::from_secs(30),
+            || {
+                checks.fetch_add(1, Ordering::SeqCst);
+                async move {
+                    if !check_answers {
+                        tokio::time::sleep(Duration::from_secs(30)).await;
+                    }
+                    check_answers
                 }
-                check_answers
-            }
-        })
+            },
+        )
         .await;
         (outcome, checks.into_inner())
     }

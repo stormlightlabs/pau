@@ -293,12 +293,22 @@ impl PiSession {
 
     /// Returns the latest session status observed from accepted controls and Pi events.
     pub async fn status(&self) -> AgentSessionStatus {
-        *self.status.lock().await
+        let status = *self.status.lock().await;
+        let ended = matches!(
+            status,
+            AgentSessionStatus::Stopping | AgentSessionStatus::Stopped | AgentSessionStatus::Failed
+        );
+        if !ended && self.not_responding() {
+            AgentSessionStatus::NotResponding
+        } else {
+            status
+        }
     }
 
-    /// Whether Pi stopped answering commands. Such a session reports
-    /// [`AgentSessionStatus::NotResponding`] from here on, and every command
-    /// fails with [`PiProcessError::NotResponding`].
+    /// Whether Pi stopped answering commands. While it has, the session
+    /// reports [`AgentSessionStatus::NotResponding`] and every command fails
+    /// with [`PiProcessError::NotResponding`]. The status Pi's events set is
+    /// kept underneath and returns once Pi writes again.
     pub fn not_responding(&self) -> bool {
         self.process.not_responding().is_some()
     }
@@ -1052,8 +1062,7 @@ impl PiSession {
             AgentSessionStatus::Starting
             | AgentSessionStatus::Idle
             | AgentSessionStatus::Running
-            | AgentSessionStatus::Waiting
-            | AgentSessionStatus::NotResponding => {}
+            | AgentSessionStatus::Waiting => {}
             _ => {
                 return Err(self.invalid_state(
                     control,
@@ -1132,12 +1141,9 @@ impl PiSession {
 
     /// Sets the status that a command response at `position` established, so
     /// that lifecycle events Pi wrote before that response no longer apply.
-    /// `status` must be the guard of `self.status`. A session whose Pi
-    /// stopped answering stays [`AgentSessionStatus::NotResponding`].
+    /// `status` must be the guard of `self.status`.
     fn set_status(&self, status: &mut AgentSessionStatus, next: AgentSessionStatus, position: u64) {
-        if self.process.not_responding().is_none() {
-            *status = next;
-        }
+        *status = next;
         self.status_position.fetch_max(position, Ordering::Relaxed);
     }
 }
@@ -1420,8 +1426,7 @@ fn observe_lifecycle(
                     if position > status_position.load(Ordering::Relaxed)
                         && !matches!(
                             *current,
-                            AgentSessionStatus::NotResponding
-                                | AgentSessionStatus::Stopping
+                            AgentSessionStatus::Stopping
                                 | AgentSessionStatus::Stopped
                                 | AgentSessionStatus::Failed
                         )
@@ -1440,18 +1445,14 @@ fn observe_lifecycle(
                         };
                         break;
                     }
-                    Ok(PiProcessOutput::NotResponding) => {
-                        let mut current = status.lock().await;
-                        if !matches!(
-                            *current,
-                            AgentSessionStatus::Stopping
-                                | AgentSessionStatus::Stopped
-                                | AgentSessionStatus::Failed
-                        ) {
-                            *current = AgentSessionStatus::NotResponding;
-                        }
-                    }
-                    Ok(PiProcessOutput::Event(_) | PiProcessOutput::Diagnostic(_))
+                    // `PiSession::status` reads the not-responding mark from
+                    // the process, so the status here keeps following Pi.
+                    Ok(
+                        PiProcessOutput::Event(_)
+                        | PiProcessOutput::Diagnostic(_)
+                        | PiProcessOutput::NotResponding
+                        | PiProcessOutput::Responding,
+                    )
                     | Err(broadcast::error::RecvError::Lagged(_)) => {}
                     Err(broadcast::error::RecvError::Closed) => break,
                 },

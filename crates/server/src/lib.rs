@@ -158,6 +158,7 @@ struct ApiServices {
     sandbox: Option<SandboxApi>,
     sessions: Option<SessionApi>,
     audit: AuditLog,
+    terminals: terminals::TerminalRegistry,
 }
 
 /// Sandbox selections and the host facts needed to describe a profile.
@@ -617,7 +618,7 @@ fn router_with_services(
             sandbox: services.sandbox,
             sessions: services.sessions,
             audit: services.audit,
-            terminals: terminals::TerminalRegistry::default(),
+            terminals: services.terminals,
             watches: WorkspaceWatches::default(),
         })
 }
@@ -1410,6 +1411,8 @@ pub struct ServerHandle {
     events: EventHub,
     diagnostics: Diagnostics,
     sessions: SessionApi,
+    terminals: terminals::TerminalRegistry,
+    audit: AuditLog,
     shutdown: Option<oneshot::Sender<()>>,
     task: Option<JoinHandle<io::Result<()>>>,
 }
@@ -1459,7 +1462,12 @@ impl ServerHandle {
         }
     }
 
-    /// Stops the server and waits for its listener task.
+    /// Stops the server, its sessions and its terminals, and waits for the
+    /// listener task.
+    ///
+    /// Callers must await this before the Tokio runtime ends, so the final
+    /// audit records reach the database. Writing them waits at most
+    /// [`pau_core::audit::AUDIT_CLOSE_LIMIT`].
     pub async fn shutdown(mut self) -> io::Result<()> {
         self.request_shutdown();
         let result = self
@@ -1467,8 +1475,11 @@ impl ServerHandle {
             .take()
             .expect("server task is present until shutdown")
             .await
-            .map_err(io::Error::other)?;
+            .map_err(io::Error::other)
+            .and_then(|result| result);
         self.sessions.stop_all().await;
+        self.terminals.stop_all(&self.audit).await;
+        self.audit.close().await;
         self.diagnostics.record(DiagnosticRecordInput {
             timestamp: diagnostic_timestamp(),
             component: "pau-server".to_owned(),
@@ -1638,10 +1649,13 @@ pub async fn start_with_database(
         events.clone(),
         audit.clone(),
     );
+    let terminals = terminals::TerminalRegistry::default();
     let server_sessions = sessions.clone();
     let server_events = events.clone();
     let server_diagnostics = diagnostics.clone();
     let server_settings = settings.clone();
+    let server_audit = audit.clone();
+    let server_terminals = terminals.clone();
     let dispatch = tracing::dispatcher::get_default(Clone::clone);
     let task = tokio::spawn(
         async move {
@@ -1656,7 +1670,8 @@ pub async fn start_with_database(
                         settings: Some(server_settings),
                         sandbox: Some(sandbox),
                         sessions: Some(server_sessions),
-                        audit,
+                        audit: server_audit,
+                        terminals: server_terminals,
                     },
                 ),
             )
@@ -1689,6 +1704,8 @@ pub async fn start_with_database(
         events,
         diagnostics,
         sessions,
+        terminals,
+        audit,
         shutdown: Some(shutdown),
         task: Some(task),
     })
@@ -2499,6 +2516,103 @@ pub(crate) mod tests {
                 .await
                 .unwrap()
                 .is_err()
+        );
+    }
+
+    /// A request for `path` with a JSON `body` and the test token.
+    fn post(path: &str, body: &serde_json::Value) -> String {
+        let body = body.to_string();
+        format!(
+            "POST {path} HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {TEST_TOKEN}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        )
+    }
+
+    /// The JSON body of a response read to its end.
+    fn json_body(response: &str) -> serde_json::Value {
+        let (_, body) = response.split_once("\r\n\r\n").unwrap();
+        serde_json::from_str(body).unwrap()
+    }
+
+    /// The server binary drops its runtime as soon as shutdown returns, which
+    /// cancels every task still running, so shutdown must have stored its own
+    /// records by then.
+    #[test]
+    fn shutdown_stores_its_stops_before_the_runtime_ends() {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("project");
+        fs::create_dir(&root).unwrap();
+        let database_path = directory.path().join("pau.sqlite3");
+
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let terminal_id = runtime.block_on(async {
+            let database = open_database_at(&database_path).await.unwrap();
+            let server = start_with_database(
+                (Ipv4Addr::LOCALHOST, 0).into(),
+                test_token(),
+                ServerOptions::default(),
+                database,
+            )
+            .await
+            .unwrap();
+            let address = server.local_addr();
+            let workspace = json_body(
+                &response(
+                    address,
+                    &post("/api/workspaces", &serde_json::json!({ "path": root })),
+                    true,
+                )
+                .await,
+            );
+            let terminal = json_body(
+                &response(
+                    address,
+                    &post(
+                        "/api/terminals",
+                        &serde_json::json!({
+                            "workspace_id": workspace["id"],
+                            "command": ["/bin/sh", "-c", "sleep 30"],
+                            "size": {"cols": 80, "rows": 24},
+                        }),
+                    ),
+                    true,
+                )
+                .await,
+            );
+            server.shutdown().await.unwrap();
+            terminal["id"].as_str().unwrap().to_owned()
+        });
+        drop(runtime);
+
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let records = runtime.block_on(async {
+            let database = Database::open(&database_path).await.unwrap();
+            database.audit().list().await.unwrap()
+        });
+        let summary: Vec<_> = records
+            .iter()
+            .map(|record| {
+                (
+                    record.entry.actor,
+                    record.entry.operation,
+                    record.entry.target.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            summary,
+            [
+                (
+                    pau_core::audit::AuditActor::Operator,
+                    AuditOperation::TerminalStart,
+                    Some(terminal_id.as_str())
+                ),
+                (
+                    pau_core::audit::AuditActor::Pau,
+                    AuditOperation::TerminalStop,
+                    Some(terminal_id.as_str())
+                ),
+            ]
         );
     }
 

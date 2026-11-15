@@ -4,7 +4,7 @@
 //! terminal also has a WebSocket stream: binary frames carry raw input and
 //! output, and text frames carry [`TerminalClientMessage`] and
 //! [`TerminalServerMessage`] values. Terminals outlive their streams and stop
-//! only when closed, when their process exits, or when the server drops them.
+//! only when closed, when their process exits, or when the server shuts down.
 //! A stream that attaches first receives the terminal's scrollback.
 
 use std::{
@@ -27,7 +27,7 @@ use axum::{
 };
 use pau_core::{
     ServerEventKind,
-    audit::{AuditActor, AuditEntry, AuditOperation, AuditResult},
+    audit::{AuditActor, AuditEntry, AuditLog, AuditOperation, AuditResult},
     terminal::{
         CreateTerminalRequest, TerminalClientMessage, TerminalInfo, TerminalServerMessage,
         TerminalSignalRequest, TerminalSize, TerminalStatus,
@@ -35,6 +35,7 @@ use pau_core::{
     workspace::WorkspaceError,
 };
 use pau_term::{AttachedOutput, Terminal, TerminalCommand, TerminalError, TerminalScrollback};
+use tokio::task::JoinSet;
 use uuid::Uuid;
 
 use super::{
@@ -53,6 +54,14 @@ static OPENED: AtomicU64 = AtomicU64::new(0);
 #[derive(Clone, Default)]
 pub(crate) struct TerminalRegistry(Arc<Mutex<HashMap<String, Arc<ManagedTerminal>>>>);
 
+impl std::fmt::Debug for TerminalRegistry {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("TerminalRegistry")
+            .finish_non_exhaustive()
+    }
+}
+
 impl TerminalRegistry {
     fn get(&self, id: &str) -> Result<Arc<ManagedTerminal>, TerminalApiError> {
         self.0
@@ -61,6 +70,45 @@ impl TerminalRegistry {
             .get(id)
             .cloned()
             .ok_or(TerminalApiError::NotFound)
+    }
+
+    /// Closes every running terminal at shutdown and records each stop as
+    /// Pau's.
+    ///
+    /// Terminals close at the same time, so shutdown waits at most about one
+    /// [`CLOSE_GRACE`] however many are open. Each leaves the registry before
+    /// it closes, so its exit watcher does not record the stop again. A
+    /// terminal whose process had already exited was recorded by its watcher
+    /// and is only forgotten.
+    pub(crate) async fn stop_all(&self, audit: &AuditLog) {
+        let terminals: Vec<_> = self
+            .0
+            .lock()
+            .expect("terminal registry lock poisoned")
+            .drain()
+            .map(|(_, managed)| managed)
+            .collect();
+        let mut closing = JoinSet::new();
+        for managed in terminals
+            .into_iter()
+            .filter(|managed| matches!(managed.terminal.status(), TerminalStatus::Running))
+        {
+            let audit = audit.clone();
+            closing.spawn(async move {
+                let status = managed.terminal.close(CLOSE_GRACE).await;
+                audit.record(AuditEntry {
+                    workspace_id: Some(managed.workspace_id.clone()),
+                    target: Some(managed.id.clone()),
+                    exit_code: exit_code(&status),
+                    ..AuditEntry::new(
+                        AuditActor::Pau,
+                        AuditOperation::TerminalStop,
+                        AuditResult::Succeeded,
+                    )
+                });
+            });
+        }
+        closing.join_all().await;
     }
 }
 

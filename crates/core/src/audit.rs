@@ -10,12 +10,14 @@
 //! Recording never changes the operation it describes. Callers record after
 //! the operation has run, [`AuditLog::record`] neither blocks nor fails, and a
 //! record that cannot be stored is dropped with a warning in the server log.
+//! Records are written in the background, so a server that shuts down awaits
+//! [`AuditLog::close`] last, after its final records are made.
 //!
 //! Records hold no file content, process arguments, environment, or sandbox
 //! grants. The free-text fields are redacted before they are stored: see
 //! [`AuditLog::record`].
 
-use std::{fs, io::Write as _, path::Path};
+use std::{fs, io::Write as _, path::Path, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -30,6 +32,12 @@ use crate::{
 
 /// Records the audit log keeps. Older records are dropped as new ones arrive.
 pub const AUDIT_RETENTION: usize = 10_000;
+
+/// Longest time [`AuditLog::close`] waits for queued records to be written.
+///
+/// A write takes milliseconds on a working disk. The limit only keeps a stuck
+/// disk from holding up exit.
+pub const AUDIT_CLOSE_LIMIT: Duration = Duration::from_secs(5);
 
 /// Who asked for an audited change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -136,6 +144,7 @@ pub struct AuditRecord {
 enum Command {
     Record(String, AuditEntry),
     List(oneshot::Sender<Result<Vec<AuditRecord>>>),
+    Close(oneshot::Sender<()>),
 }
 
 /// Writes audit records in the order they are recorded.
@@ -195,6 +204,10 @@ impl AuditLog {
                     Command::List(reply) => {
                         let _ = reply.send(repository.list().await);
                     }
+                    Command::Close(done) => {
+                        let _ = done.send(());
+                        break;
+                    }
                 }
             }
         });
@@ -243,6 +256,33 @@ impl AuditLog {
         response
             .await
             .map_err(|_| tokio_rusqlite::Error::ConnectionClosed)?
+    }
+
+    /// Writes every record queued before this call, then stops the writer,
+    /// waiting at most [`AUDIT_CLOSE_LIMIT`].
+    ///
+    /// Returns `false` when the limit passed first, in which case the records
+    /// still queued are lost. Every clone shares the writer, so records made
+    /// after the writer stops, through any clone, are discarded.
+    pub async fn close(&self) -> bool {
+        let Some(sender) = &self.sender else {
+            return true;
+        };
+        let (done, closed) = oneshot::channel();
+        if sender.send(Command::Close(done)).is_err() {
+            return true;
+        }
+        match tokio::time::timeout(AUDIT_CLOSE_LIMIT, closed).await {
+            Ok(_) => true,
+            Err(_) => {
+                tracing::warn!(
+                    event = "audit.close_timed_out",
+                    limit_ms = AUDIT_CLOSE_LIMIT.as_millis(),
+                    "audit records were still being written when the limit passed"
+                );
+                false
+            }
+        }
     }
 
     /// Writes the retained records to a new JSON file at `path`, as an array
@@ -355,6 +395,65 @@ mod tests {
             assert!(!text.contains(SECRET), "a seeded value reached a file");
             assert!(!text.contains("someone"), "a home path reached a file");
         }
+    }
+
+    fn stop(exit_code: i32) -> AuditEntry {
+        AuditEntry {
+            exit_code: Some(exit_code),
+            ..AuditEntry::new(
+                AuditActor::Pau,
+                AuditOperation::SessionStop,
+                AuditResult::Succeeded,
+            )
+        }
+    }
+
+    #[test]
+    fn close_writes_every_queued_record_before_the_runtime_ends() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("pau.sqlite3");
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let database = Database::open(&path).await.unwrap();
+            let log = AuditLog::new(database.audit(), Redactor::default());
+            for index in 0..200 {
+                log.record(stop(index));
+            }
+            assert!(log.close().await);
+            log.record(stop(200));
+        });
+        // The server binary drops its runtime right after shutdown, which
+        // cancels the writer.
+        drop(runtime);
+
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let stored = runtime.block_on(async {
+            let database = Database::open(&path).await.unwrap();
+            database.audit().list().await.unwrap()
+        });
+        let exit_codes: Vec<_> = stored
+            .iter()
+            .map(|record| record.entry.exit_code.unwrap())
+            .collect();
+        assert_eq!(exit_codes, (0..200).collect::<Vec<_>>());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn close_gives_up_on_a_stuck_disk_after_the_limit() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("pau.sqlite3");
+        let database = Database::open(&path).await.unwrap();
+        let log = AuditLog::new(database.audit(), Redactor::default());
+        // Another writer holds the database, so the insert waits on SQLite's
+        // busy timeout, which runs on the real clock.
+        let blocker = tokio_rusqlite::rusqlite::Connection::open(&path).unwrap();
+        blocker.execute_batch("BEGIN IMMEDIATE").unwrap();
+        log.record(stop(0));
+
+        let started = tokio::time::Instant::now();
+        assert!(!log.close().await);
+        assert_eq!(started.elapsed(), AUDIT_CLOSE_LIMIT);
+        blocker.execute_batch("ROLLBACK").unwrap();
     }
 
     #[tokio::test]

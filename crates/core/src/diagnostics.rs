@@ -160,8 +160,10 @@ pub struct DiagnosticBundle {
 ///
 /// It replaces every registered value, such as the API token, with
 /// `[REDACTED]`, and replaces the whole value when it looks like an absolute
-/// path or a URL, which can name a user or carry credentials. Values are cut to
-/// 256 bytes first. Clones share one set of registered values.
+/// path or a URL, which can name a user or carry credentials. The result is
+/// then cut to 256 bytes. Replacing before cutting keeps a registered value
+/// that crosses the cut from leaving its first bytes behind. Clones share one
+/// set of registered values.
 #[derive(Clone, Debug, Default)]
 pub struct Redactor(Arc<RwLock<HashSet<String>>>);
 
@@ -181,7 +183,6 @@ impl Redactor {
     /// Returns `value` with registered values, paths, and URLs removed.
     pub fn redact(&self, value: impl Into<String>) -> String {
         let mut value = value.into();
-        value.truncate(value.floor_char_boundary(256));
         for sensitive in self.0.read().expect("redactor lock poisoned").iter() {
             if value.contains(sensitive.as_str()) {
                 value = value.replace(sensitive.as_str(), REDACTED);
@@ -190,6 +191,7 @@ impl Redactor {
         if value.contains("://") || value.starts_with('/') || value.starts_with('~') {
             return REDACTED.to_owned();
         }
+        value.truncate(value.floor_char_boundary(256));
         value
     }
 }
@@ -532,6 +534,27 @@ mod tests {
             process_id: Some("process-1".to_owned()),
             session_id: Some("session-1".to_owned()),
             metadata: BTreeMap::from([("sequence".to_owned(), index.to_string())]),
+        }
+    }
+
+    #[test]
+    fn redacts_registered_values_at_every_offset_around_the_cut() {
+        let token = "pau-secret-token-0123456789abcdef";
+        let redactor = Redactor::default();
+        redactor.register(token);
+        // Offsets put the token wholly before the cut, ending at it,
+        // straddling it, starting at it, and past it.
+        for offset in [0, 200, 256 - token.len(), 240, 250, 255, 256, 300] {
+            let value = format!("{}{token}{}", "a".repeat(offset), "b".repeat(64));
+            let redacted = redactor.redact(value);
+            assert!(redacted.len() <= 256, "offset {offset}");
+            for end in 4..=token.len() {
+                assert!(
+                    !redacted.contains(&token[..end]),
+                    "offset {offset} kept {:?}",
+                    &token[..end]
+                );
+            }
         }
     }
 

@@ -3,7 +3,7 @@
 use pau_agent::AgentSessionStatus;
 use pau_core::persistence::{Database, ProcessMetadata, Workspace};
 use pau_pi::{
-    PiProcessOutput, PiSessionRegistry, PiShutdownTimeouts, StartPiProcessOptions,
+    PiProcessOutput, PiReplyTimeouts, PiSessionRegistry, PiShutdownTimeouts, StartPiProcessOptions,
     StartRegisteredPiSession,
 };
 use std::fs;
@@ -195,6 +195,7 @@ impl FakePi {
                 working_directory: self.workspace(name),
                 arguments: Vec::new(),
                 environment: Vec::new(),
+                reply_timeouts: PiReplyTimeouts::default(),
                 shutdown_timeouts: PiShutdownTimeouts {
                     protocol: Duration::from_secs(1),
                     interrupt: Duration::from_secs(1),

@@ -894,6 +894,24 @@ async fn reports_a_session_that_exits_during_a_request() {
     panic!("the exited session stayed listed");
 }
 
+#[test]
+fn reports_a_session_that_stops_answering() {
+    let error =
+        PiSessionRegistryError::Session(PiSessionError::Process(PiProcessError::NotResponding {
+            command: "get_state".to_owned(),
+            limit: Duration::from_secs(30),
+        }));
+
+    let (status, code, message) = error_response(&error);
+
+    assert_eq!(status, StatusCode::GATEWAY_TIMEOUT);
+    assert_eq!(code, "agent_not_responding");
+    assert_eq!(
+        message,
+        "Pi is not responding: it did not answer `get_state` within 30s"
+    );
+}
+
 #[tokio::test]
 async fn refuses_to_start_without_a_usable_launch() {
     let fixture = Fixture::new(Some("missing pi")).await;

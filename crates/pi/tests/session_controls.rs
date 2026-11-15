@@ -7,8 +7,8 @@ use pau_agent::{
 use pau_pi::{
     PI_RPC_CAPABILITIES, PiBashResult, PiCommand, PiCommandSource, PiCompactionOutcome,
     PiCompactionReason, PiContextUsage, PiEventPayload, PiEventReducer, PiExtensionUiResponse,
-    PiImage, PiModel, PiProcess, PiProcessOutput, PiSession, PiSessionError, PiSessionUsage,
-    PiShutdownTimeouts, PiTokenUsage, StartPiProcessOptions,
+    PiImage, PiModel, PiProcess, PiProcessOutput, PiReplyTimeouts, PiSession, PiSessionError,
+    PiSessionUsage, PiShutdownTimeouts, PiTokenUsage, StartPiProcessOptions,
 };
 use serde_json::Value;
 use std::fs;
@@ -1321,6 +1321,7 @@ impl FakePi {
             working_directory: self.root.path().to_path_buf(),
             arguments: Vec::new(),
             environment: Vec::new(),
+            reply_timeouts: PiReplyTimeouts::default(),
             shutdown_timeouts: PiShutdownTimeouts {
                 protocol: Duration::from_secs(1),
                 interrupt: Duration::from_secs(1),

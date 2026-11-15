@@ -129,8 +129,9 @@ pub const PI_INPUT_HISTORY_LIMIT: usize = 100;
 
 /// How long [`PiSession::export_html`] waits for Pi to render a transcript.
 ///
-/// Pi's RPC commands have no timeout of their own, and a long session can take
-/// Pi several seconds to render, so this leaves wide room.
+/// The process waits for a long-running command such as this one for as long
+/// as Pi keeps answering. A long session can take Pi several seconds to
+/// render, so this cap leaves wide room.
 const EXPORT_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// How full the model's context window is.

@@ -2,7 +2,10 @@
 
 use pau_agent::DiscoveredMcpServer;
 use pau_core::sandbox::{SandboxExecutables, SandboxPolicyFile, SandboxSettings};
-use pau_pi::{PiShutdownTimeouts, PreparePiSandbox, StartPiProcessOptions, prepare_pi_sandbox};
+use pau_pi::{
+    PiReplyTimeouts, PiShutdownTimeouts, PreparePiSandbox, StartPiProcessOptions,
+    prepare_pi_sandbox,
+};
 use serde_json::{Value, json};
 use std::ffi::OsString;
 use std::fs;
@@ -52,6 +55,7 @@ fn prepares_the_extension_policy_and_exclusive_session_mcp() {
         working_directory: workspace.clone(),
         arguments: vec!["--no-session".into()],
         environment: Vec::new(),
+        reply_timeouts: PiReplyTimeouts::default(),
         shutdown_timeouts: PiShutdownTimeouts::default(),
     };
     launch.apply(&mut options);

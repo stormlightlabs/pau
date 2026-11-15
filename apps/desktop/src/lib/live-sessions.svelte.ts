@@ -167,6 +167,9 @@ export function sessionErrorMessage(
 		case 'session_exited': {
 			return 'This session has ended. Start a new session to continue.';
 		}
+		case 'agent_not_responding': {
+			return 'Pi stopped responding. Stop this session and start a new one.';
+		}
 		case 'unsupported_control': {
 			return 'This session does not support that action.';
 		}

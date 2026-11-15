@@ -3040,6 +3040,7 @@ dependencies = [
  "dotenvy",
  "futures-util",
  "getrandom 0.3.4",
+ "libc",
  "pau-agent",
  "pau-core",
  "pau-pi",

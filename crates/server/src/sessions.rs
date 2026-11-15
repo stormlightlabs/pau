@@ -89,7 +89,7 @@
 
 use std::{
     collections::HashMap,
-    ffi::OsStr,
+    ffi::{OsStr, OsString},
     fs,
     os::unix::fs::DirBuilderExt,
     path::{Path, PathBuf},
@@ -107,6 +107,7 @@ use pau_agent::{
     AgentCapabilities, AgentControl, AgentControlError, AgentKind, AgentMessageQueue,
     AgentSessionStatus, ClaudeSession, DiscoverClaudeOptions, PromptQueueChoice, ThinkingLevel,
 };
+use pau_core::audit::{AuditActor, AuditEntry, AuditLog, AuditOperation, AuditResult};
 use pau_core::readiness::AgentReadinessReport;
 use pau_core::sandbox::{SandboxError, SandboxSettings};
 use pau_core::{
@@ -129,21 +130,23 @@ use pau_core::{
     },
 };
 use pau_pi::{
-    DiscoverPiMcpOptions, DiscoverPiOptions, PiCommand, PiCommandSource, PiExtensionUiRequest,
-    PiExtensionUiResponse, PiExtensionWidgetPlacement, PiImage, PiKeybindingSource,
-    PiMcpAdapterState, PiModel, PiProcessError, PiProcessOutput, PiSandboxLaunch, PiSession,
-    PiSessionError, PiSessionOutput, PiSessionRegistry, PiSessionRegistryError, PiSessionUsage,
-    PreparePiSandbox, StartRegisteredPiSession, discover_pi, discover_pi_mcp, find_pi_session_file,
-    list_pi_session_files, pi_configuration_paths, prepare_pi_sandbox, read_pi_keybindings,
+    DiscoverPiMcpOptions, DiscoverPiOptions, PiCommand, PiCommandSource, PiDiscovery,
+    PiExtensionUiRequest, PiExtensionUiResponse, PiExtensionWidgetPlacement, PiImage,
+    PiKeybindingSource, PiMcpAdapterState, PiModel, PiProcessError, PiProcessOutput,
+    PiSandboxLaunch, PiSession, PiSessionError, PiSessionOutput, PiSessionRegistry,
+    PiSessionRegistryError, PiSessionUsage, PreparePiSandbox, StartRegisteredPiSession,
+    discover_pi, discover_pi_mcp, find_pi_session_file, list_pi_session_files,
+    pi_configuration_paths, prepare_pi_sandbox, read_pi_keybindings,
 };
 use serde::Deserialize;
 use serde_json::Value;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
-use tokio::sync::broadcast;
+use tokio::{sync::broadcast, task::JoinSet};
 
 use crate::{
-    ApiError, ApiState, EventHub, SandboxApi, credential_environment, diagnostic_timestamp,
-    workspace_service,
+    ApiError, ApiState, EventHub, SandboxApi,
+    audit::{PendingAudit, export_target},
+    credential_environment, diagnostic_timestamp, stop_or_kill, workspace_service,
 };
 
 /// The `packages/sandbox` directory of the checkout this server was built
@@ -218,6 +221,8 @@ pub(crate) struct SessionApi {
     /// Current extension UI per live session. See the module documentation.
     extension_ui: Arc<Mutex<HashMap<String, SessionExtensionUi>>>,
     events: EventHub,
+    /// Records process starts and stops. See the `audit` module.
+    audit: AuditLog,
     /// The last agent readiness report and when it was made. See `readiness`.
     readiness: Arc<tokio::sync::Mutex<Option<(std::time::Instant, AgentReadinessReport)>>>,
 }
@@ -229,7 +234,8 @@ impl std::fmt::Debug for SessionApi {
 }
 
 impl SessionApi {
-    /// Creates the service and starts forwarding registry output to `events`.
+    /// Creates the service, starts forwarding registry output to `events`,
+    /// and records process starts and stops in `audit`.
     ///
     /// Claude discovery searches the same `PATH` as `discovery`, and every
     /// agent process receives it.
@@ -239,6 +245,7 @@ impl SessionApi {
         registry: PiSessionRegistry,
         discovery: DiscoverPiOptions,
         events: EventHub,
+        audit: AuditLog,
     ) -> Self {
         let api = Self {
             registry: Arc::new(registry),
@@ -251,6 +258,7 @@ impl SessionApi {
             records: Arc::default(),
             extension_ui: Arc::default(),
             events,
+            audit,
             readiness: Arc::default(),
         };
         tokio::spawn(api.clone().forward(api.registry.subscribe()));
@@ -280,18 +288,48 @@ impl SessionApi {
         self
     }
 
-    /// Stops every live session through staged shutdown.
-    pub(crate) async fn stop_all(&self) {
-        self.stop_all_claude().await;
+    /// Stops every live session at once through staged shutdown, and
+    /// records each stop as Pau's.
+    ///
+    /// A session still stopping at `kill_at` is killed with its children,
+    /// and so is one whose staged stop failed, so no agent process outlives
+    /// shutdown.
+    pub(crate) async fn stop_all(&self, kill_at: tokio::time::Instant) {
+        let mut stopping = JoinSet::new();
+        for id in self.claude_ids() {
+            stopping.spawn(self.clone().stop_claude_at_shutdown(id, kill_at));
+        }
         for id in self.registry.active_ids().await {
-            if let Err(error) = self.registry.stop(&id, diagnostic_timestamp()).await {
-                tracing::warn!(
-                    event = "session.stop_failed",
-                    session_id = %id,
-                    %error,
-                    "could not stop a Pi session during shutdown"
-                );
-            }
+            stopping.spawn(self.clone().stop_pi_at_shutdown(id, kill_at));
+        }
+        stopping.join_all().await;
+    }
+
+    async fn stop_pi_at_shutdown(self, id: String, kill_at: tokio::time::Instant) {
+        let Some(session) = self.registry.get(&id).await else {
+            return;
+        };
+        let record = self.record(&id);
+        let stopped = stop_or_kill(
+            self.registry.stop(&id, diagnostic_timestamp()),
+            kill_at,
+            || session.kill(),
+        )
+        .await;
+        self.audit.record(shutdown_stop(
+            record,
+            &id,
+            stopped.as_ref().ok().copied().flatten(),
+            stopped.is_ok(),
+        ));
+        if let Err(error) = stopped {
+            session.kill();
+            tracing::warn!(
+                event = "session.stop_failed",
+                session_id = %id,
+                %error,
+                "could not stop a Pi session during shutdown"
+            );
         }
     }
 
@@ -656,6 +694,19 @@ impl SessionApi {
                         self.publish(&describe(&tagged.session_id, &record, status));
                     }
                 }
+                // A session whose sandbox is unconfirmed stays unlisted.
+                PiProcessOutput::NotResponding if record.pending => {}
+                PiProcessOutput::NotResponding => {
+                    self.publish(&describe(
+                        &tagged.session_id,
+                        &record,
+                        SessionStatus::NotResponding,
+                    ));
+                }
+                // Pi wrote again, so the session returns to the status its
+                // events set. The record that showed it follows and publishes
+                // any lifecycle change it carries.
+                PiProcessOutput::Responding => self.publish_current(&tagged.session_id).await,
                 // Stderr can contain anything Pi or its extensions print,
                 // including secrets, so it stays out of the event stream.
                 PiProcessOutput::Diagnostic(_) => {}
@@ -675,6 +726,9 @@ impl SessionApi {
                     let status = if exit.requested {
                         SessionStatus::Stopped
                     } else {
+                        // A requested stop is recorded by whoever asked.
+                        self.audit
+                            .record(unrequested_stop(&tagged.session_id, &record, exit.code));
                         SessionStatus::Failed
                     };
                     let mut session = describe(&tagged.session_id, &record, status);
@@ -684,6 +738,45 @@ impl SessionApi {
                 }
             }
         }
+    }
+}
+
+/// The record of a session process that exited without being asked to.
+fn unrequested_stop(id: &str, record: &SessionRecord, exit_code: Option<i32>) -> AuditEntry {
+    AuditEntry {
+        workspace_id: Some(record.workspace_id.clone()),
+        session_id: Some(id.to_owned()),
+        target: Some(record.agent.id().to_owned()),
+        exit_code,
+        ..AuditEntry::new(
+            AuditActor::Process,
+            AuditOperation::SessionStop,
+            AuditResult::Failed,
+        )
+    }
+}
+
+/// The record of a session Pau stopped while shutting down.
+fn shutdown_stop(
+    record: Option<SessionRecord>,
+    id: &str,
+    exit_code: Option<i32>,
+    stopped: bool,
+) -> AuditEntry {
+    AuditEntry {
+        workspace_id: record.as_ref().map(|record| record.workspace_id.clone()),
+        session_id: Some(id.to_owned()),
+        target: record.map(|record| record.agent.id().to_owned()),
+        exit_code,
+        ..AuditEntry::new(
+            AuditActor::Pau,
+            AuditOperation::SessionStop,
+            if stopped {
+                AuditResult::Succeeded
+            } else {
+                AuditResult::Failed
+            },
+        )
     }
 }
 
@@ -755,6 +848,7 @@ fn session_status(status: AgentSessionStatus) -> SessionStatus {
         AgentSessionStatus::Idle => SessionStatus::Idle,
         AgentSessionStatus::Running => SessionStatus::Running,
         AgentSessionStatus::Waiting => SessionStatus::Waiting,
+        AgentSessionStatus::NotResponding => SessionStatus::NotResponding,
         AgentSessionStatus::Stopping => SessionStatus::Stopping,
         AgentSessionStatus::Stopped => SessionStatus::Stopped,
         AgentSessionStatus::Failed => SessionStatus::Failed,
@@ -843,7 +937,8 @@ fn thinking_level(level: SessionThinkingLevel) -> ThinkingLevel {
 /// the control at all (`unsupported_control`), the session is in the wrong
 /// state (`invalid_session_state`), and the agent refused the request
 /// (`control_rejected`). A process that exits before it answers is
-/// `session_exited`.
+/// `session_exited`, and one that stops answering while it runs is
+/// `agent_not_responding`.
 ///
 /// A failed transcript write gets fixed text rather than the I/O error's,
 /// which can name the temporary file and its folder.
@@ -906,6 +1001,9 @@ pub(crate) fn error_response(error: &PiSessionRegistryError) -> (StatusCode, &'s
             }
             PiSessionError::Process(PiProcessError::Start(_)) => {
                 (StatusCode::SERVICE_UNAVAILABLE, "pi_unavailable")
+            }
+            PiSessionError::Process(PiProcessError::NotResponding { .. }) => {
+                (StatusCode::GATEWAY_TIMEOUT, "agent_not_responding")
             }
             PiSessionError::Process(_) | PiSessionError::Export(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
@@ -1041,17 +1139,58 @@ pub(crate) async fn list_native_sessions(
 ///
 /// An unknown agent is `400 unknown_agent`. A missing or unsupported Pi is
 /// `503 pi_unavailable`, and any other agent that cannot start is
-/// `503 agent_unavailable`, each with discovery's corrective message.
+/// `503 agent_unavailable`, each with discovery's corrective message. Once
+/// shutdown begins, a start is `503 shutting_down`, as [`crate::StartGate`]
+/// describes.
 pub(crate) async fn start_session(
     State(state): State<ApiState>,
     Json(request): Json<StartSessionRequest>,
 ) -> Result<(StatusCode, Json<AgentSession>), ApiError> {
-    let api = session_api(&state)?;
+    let mut audit = Some(PendingAudit::operator(
+        &state.audit,
+        AuditOperation::SessionStart,
+        Some(request.workspace_id.clone()),
+        Some(
+            request
+                .agent
+                .clone()
+                .unwrap_or_else(|| AgentKind::Pi.id().to_owned()),
+        ),
+    ));
+    let result = state
+        .starts
+        .run(start_agent_session(&state, request, &mut audit))
+        .await;
+    if let Some(audit) = audit {
+        finish_start_audit(audit, &result);
+    }
+    result
+}
+
+/// Records a session start's result, naming the session it started.
+fn finish_start_audit(
+    mut audit: PendingAudit,
+    result: &Result<(StatusCode, Json<AgentSession>), ApiError>,
+) {
+    if let Ok((_, Json(session))) = result {
+        audit.session(session.id.clone());
+    }
+    audit.finish(result);
+}
+
+/// Starts the session `request` asks for. A Pi launch takes `audit` and
+/// records its own result, since it outlives a cancelled request.
+async fn start_agent_session(
+    state: &ApiState,
+    request: StartSessionRequest,
+    audit: &mut Option<PendingAudit>,
+) -> Result<(StatusCode, Json<AgentSession>), ApiError> {
+    let api = session_api(state)?;
     let agent = match request.agent.as_deref() {
         None => AgentKind::Pi,
         Some(id) => AgentKind::from_id(id).ok_or_else(|| unknown_agent(id))?,
     };
-    let root = workspace_service(&state)?
+    let root = workspace_service(state)?
         .root(&request.workspace_id)
         .await?;
     let sandbox = match &state.sandbox {
@@ -1101,95 +1240,118 @@ pub(crate) async fn start_session(
     // The launch runs in its own task, so a client that cancels the request
     // cannot leave a started session behind whose sandbox nobody confirmed.
     // The task confirms the sandbox, or stops Pi and discards the session.
+    // It passes the start gate itself and owns the audit record, so shutdown
+    // waits for it and its result is recorded even after a cancellation.
     let api = api.clone();
+    let starts = state.starts.clone();
+    let audit = audit.take();
     tokio::spawn(async move {
-        let id = uuid::Uuid::new_v4().to_string();
-        let mut process = pi.process_options(root.clone(), arguments);
-        let mut sandbox_placeholders = Vec::new();
-        let mut sandbox_directory = None;
-        if let Some((sandbox, settings)) = sandbox {
-            let prepare = PiSandboxRequest {
-                sandbox,
-                settings,
-                workspace: root,
-                id: id.clone(),
-                agent_directory: pi.configuration.agent_directory.clone(),
-            };
-            // The directory guard removes the directory when preparing fails
-            // or panics.
-            let (directory, launch) = tokio::task::spawn_blocking(move || prepare.prepare())
-                .await
-                .map_err(|error| ApiError::SandboxUnavailable(error.to_string()))??;
-            launch.apply(&mut process);
-            sandbox_placeholders = launch.placeholders;
-            sandbox_directory = Some(directory.keep());
-        }
-        let record = SessionRecord {
-            agent: AgentKind::Pi,
-            workspace_id: request.workspace_id.clone(),
-            started_at: diagnostic_timestamp(),
-            capabilities: pau_pi::PI_RPC_CAPABILITIES,
-            native: Arc::default(),
-            pending: sandbox_directory.is_some(),
-            sandbox_directory,
-        };
-        api.records
-            .lock()
-            .expect("session records lock poisoned")
-            .insert(id.clone(), record.clone());
-        // The session's own output, subscribed before Pi starts, so the
-        // sandbox report can be neither missed nor crowded out by other
-        // sessions' output.
-        let started = api
-            .registry
-            .start_subscribed(StartRegisteredPiSession {
-                id: id.clone(),
-                workspace_id: request.workspace_id,
-                started_at: record.started_at.clone(),
-                process,
-                sandbox_placeholders,
-            })
+        let result = starts
+            .run(launch_pi(api, pi, root, arguments, sandbox, request))
             .await;
-        let (session, mut output) = match started {
-            Ok(started) => started,
-            Err(error) => {
-                api.discard(&id).await;
-                return Err(error.into());
-            }
-        };
-        if record.pending {
-            if let Err(reason) = sandbox_started(&mut output).await {
-                api.discard(&id).await;
-                return Err(ApiError::SandboxUnavailable(format!(
-                    "The sandbox could not start: {}.",
-                    reason.trim_end_matches('.')
-                )));
-            }
-            if let Some(record) = api
-                .records
-                .lock()
-                .expect("session records lock poisoned")
-                .get_mut(&id)
-            {
-                record.pending = false;
-            }
+        if let Some(audit) = audit {
+            finish_start_audit(audit, &result);
         }
-        drop(output);
-        if let Some(SessionModelSelection { provider, model_id }) = request.model
-            && let Err(error) = session.select_model(provider, model_id).await
-        {
-            api.discard(&id).await;
-            return Err(error.into());
-        }
-
-        api.refresh_native(&record, &session).await;
-        api.refresh_thinking_levels(&record, &session).await;
-        let summary = describe(&id, &record, session_status(session.status().await));
-        api.publish(&summary);
-        Ok((StatusCode::CREATED, Json(summary)))
+        result
     })
     .await
     .map_err(|error| ApiError::PiUnavailable(error.to_string()))?
+}
+
+/// Launches Pi for `request`, confirms its sandbox when it has one, and
+/// publishes the new session. A launch that fails discards the session.
+async fn launch_pi(
+    api: SessionApi,
+    pi: PiDiscovery,
+    root: PathBuf,
+    arguments: Vec<OsString>,
+    sandbox: Option<(SandboxApi, SandboxSettings)>,
+    request: StartSessionRequest,
+) -> Result<(StatusCode, Json<AgentSession>), ApiError> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let mut process = pi.process_options(root.clone(), arguments);
+    let mut sandbox_placeholders = Vec::new();
+    let mut sandbox_directory = None;
+    if let Some((sandbox, settings)) = sandbox {
+        let prepare = PiSandboxRequest {
+            sandbox,
+            settings,
+            workspace: root,
+            id: id.clone(),
+            agent_directory: pi.configuration.agent_directory.clone(),
+        };
+        // The directory guard removes the directory when preparing fails
+        // or panics.
+        let (directory, launch) = tokio::task::spawn_blocking(move || prepare.prepare())
+            .await
+            .map_err(|error| ApiError::SandboxUnavailable(error.to_string()))??;
+        launch.apply(&mut process);
+        sandbox_placeholders = launch.placeholders;
+        sandbox_directory = Some(directory.keep());
+    }
+    let record = SessionRecord {
+        agent: AgentKind::Pi,
+        workspace_id: request.workspace_id.clone(),
+        started_at: diagnostic_timestamp(),
+        capabilities: pau_pi::PI_RPC_CAPABILITIES,
+        native: Arc::default(),
+        pending: sandbox_directory.is_some(),
+        sandbox_directory,
+    };
+    api.records
+        .lock()
+        .expect("session records lock poisoned")
+        .insert(id.clone(), record.clone());
+    // The session's own output, subscribed before Pi starts, so the
+    // sandbox report can be neither missed nor crowded out by other
+    // sessions' output.
+    let started = api
+        .registry
+        .start_subscribed(StartRegisteredPiSession {
+            id: id.clone(),
+            workspace_id: request.workspace_id,
+            started_at: record.started_at.clone(),
+            process,
+            sandbox_placeholders,
+        })
+        .await;
+    let (session, mut output) = match started {
+        Ok(started) => started,
+        Err(error) => {
+            api.discard(&id).await;
+            return Err(error.into());
+        }
+    };
+    if record.pending {
+        if let Err(reason) = sandbox_started(&mut output).await {
+            api.discard(&id).await;
+            return Err(ApiError::SandboxUnavailable(format!(
+                "The sandbox could not start: {}.",
+                reason.trim_end_matches('.')
+            )));
+        }
+        if let Some(record) = api
+            .records
+            .lock()
+            .expect("session records lock poisoned")
+            .get_mut(&id)
+        {
+            record.pending = false;
+        }
+    }
+    drop(output);
+    if let Some(SessionModelSelection { provider, model_id }) = request.model
+        && let Err(error) = session.select_model(provider, model_id).await
+    {
+        api.discard(&id).await;
+        return Err(error.into());
+    }
+
+    api.refresh_native(&record, &session).await;
+    api.refresh_thinking_levels(&record, &session).await;
+    let summary = describe(&id, &record, session_status(session.status().await));
+    api.publish(&summary);
+    Ok((StatusCode::CREATED, Json(summary)))
 }
 
 /// A new per-session sandbox directory, removed when the guard drops unless
@@ -1407,7 +1569,9 @@ async fn sandbox_started(output: &mut broadcast::Receiver<PiProcessOutput>) -> R
                 PiProcessOutput::Exit(_) => {
                     return Err("Pi exited before the sandbox started".to_owned());
                 }
-                PiProcessOutput::Diagnostic(_) => {}
+                PiProcessOutput::Diagnostic(_)
+                | PiProcessOutput::NotResponding
+                | PiProcessOutput::Responding => {}
             }
         }
     };
@@ -1457,16 +1621,32 @@ pub(crate) async fn stop_session(
     State(state): State<ApiState>,
     AxumPath(session_id): AxumPath<String>,
 ) -> Result<StatusCode, ApiError> {
-    let api = session_api(&state)?;
-    if let Some(session) = api.claude_session(&session_id) {
-        session.stop().await.map_err(claude::session_error)?;
-        return Ok(StatusCode::NO_CONTENT);
+    let mut audit = PendingAudit::operator(&state.audit, AuditOperation::SessionStop, None, None);
+    audit.session(session_id.clone());
+    let stopped = async {
+        let api = session_api(&state)?;
+        if let Some(record) = api.record(&session_id) {
+            audit.workspace(record.workspace_id);
+            audit.target(record.agent.id());
+        }
+        if let Some(session) = api.claude_session(&session_id) {
+            return session
+                .stop()
+                .await
+                .map(|exit| exit.code)
+                .map_err(claude::session_error);
+        }
+        api.live(&session_id).await?;
+        Ok(api
+            .registry
+            .stop(&session_id, diagnostic_timestamp())
+            .await?)
     }
-    api.live(&session_id).await?;
-    api.registry
-        .stop(&session_id, diagnostic_timestamp())
-        .await?;
-    Ok(StatusCode::NO_CONTENT)
+    .await;
+    let exit_code = stopped.as_ref().ok().copied().flatten();
+    let result = stopped.map(|_| StatusCode::NO_CONTENT);
+    audit.finish_with_exit(&result, exit_code);
+    result
 }
 
 /// Largest decoded size of one prompt image.
@@ -1738,9 +1918,23 @@ pub(crate) async fn export_session(
     AxumPath(session_id): AxumPath<String>,
     Json(request): Json<SessionExportRequest>,
 ) -> Result<StatusCode, ApiError> {
-    let (_, session) = session_api(&state)?.live(&session_id).await?;
-    session.export_html(request.destination.into()).await?;
-    Ok(StatusCode::NO_CONTENT)
+    let destination = std::path::PathBuf::from(request.destination);
+    let mut audit = PendingAudit::operator(
+        &state.audit,
+        AuditOperation::FileExport,
+        None,
+        export_target(&destination),
+    );
+    audit.session(session_id.clone());
+    let result = async {
+        let (record, session) = session_api(&state)?.live(&session_id).await?;
+        audit.workspace(record.workspace_id);
+        session.export_html(destination).await?;
+        Ok(StatusCode::NO_CONTENT)
+    }
+    .await;
+    audit.finish(&result);
+    result
 }
 
 /// Sets the session's display name and publishes the updated session.

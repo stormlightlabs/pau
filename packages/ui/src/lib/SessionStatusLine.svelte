@@ -96,8 +96,6 @@
 		gap: var(--pau-space-1) var(--pau-space-4);
 		/* Without it, the full path's width would widen the composer column. */
 		min-width: 0;
-		/* The composer's 1px border and footer padding, so the line starts and ends with its controls. */
-		padding-inline: calc(var(--pau-space-2) + 1px);
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
 		line-height: 1.5;

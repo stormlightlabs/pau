@@ -94,8 +94,8 @@ composer's own box and dashes its border: focus color when the drop would
 attach images, danger color with the reason when it would not. The composer
 and the status line keep their size and place.
 
-The status line under the composer starts and ends with the composer's
-controls and sets the folder, branch, and figures in the mono metadata role.
+The status line under the composer starts and ends on the composer's edges
+and sets the folder, branch, and figures in the mono metadata role.
 Figures that are still zero stay hidden. When space runs short, the path loses
 its start first, the branch keeps its name up to a cap, the figures never
 shrink, and extension statuses wrap to a second row.
@@ -158,8 +158,16 @@ weights 400, 500, and 600. Fold any heavier weight into 600.
 | Section labels                       | 11px    | 600    |
 
 - Set transcript prose, the composer, dialog and settings body text, and the
-  primary text of list rows at 14px. Keep ordinary transcript prose to a
-  maximum measure of about 74 characters.
+  primary text of list rows at 14px. The session header, transcript,
+  composer, and status line share one column, at most 58rem wide, so they
+  start and end on the same edges. Paragraph and list text in the transcript
+  keeps a measure of 75ch from the column's left edge, so list items at every
+  level end where paragraphs end. Code, tool output, diffs, and tables use
+  the full column.
+- In transcript lists, a bullet sits on the left edge of the surrounding
+  text and item text starts `space/5` in. A number ends `space/2` before its
+  item's text, so numbers line up on the period, and a list whose last number
+  needs more room widens its indent.
 - Keep metadata readable at 12–13px with sufficient contrast and line height.
   No product text goes below 12px, except uppercase, letter-spaced section
   labels, which may use 11px.
@@ -230,6 +238,10 @@ so a row of unavailable actions still ranks the primary first. The shared
 `pau-button` variants in `packages/ui` own these colors and the size: a
 `row-md` (32px) height and `type-md` (14px) text in every view, toolbars and
 banners included. Components place and space buttons but do not resize them.
+A button centers its label on the capitals, from cap height to baseline,
+rather than on the font's line box, which sits higher or lower in each UI font.
+An icon in a button centers on the same line. An icon, the label, a count,
+and a key hint inside a button sit `space/2` apart.
 
 Controls that show or hide a rail, sidebar, or inspector belong in the top app
 bar. Keep task-specific actions in the task surface.
@@ -267,18 +279,20 @@ prompt when the actions sit on the row above them.
 Transcript entries start at the transcript's left edge, where assistant prose
 and the session title start. Everything else in an entry starts on one inset,
 `space/5` in from that edge: user message text, disclosure summaries, tool
-bodies, and the calls inside a tool group. A left rule, such as the user
-message bar or a tool row's line, counts toward the inset, so the text does not
-move with the rule's width. Calls inside a group sit under the group's rule
-with no further indent. Images sent with a prompt sit under its text on the
-same inset, as the same square thumbnails the composer shows. An image too
-large or damaged to show leaves a short muted line under the prompt. An older
-image dropped to keep the transcript's images within its memory budget leaves
-a dashed placeholder the size of a thumbnail, so the content above the reader
-does not move. Thinking, tool rows, tool groups, and compaction markers share
-one disclosure treatment from `disclosure.css`: a right chevron centered in
-the inset that turns down while the entry is open, muted summary text that
-turns to normal text on hover, and no native marker. A failed tool row colors its chevron with the danger role.
+bodies, the calls inside a tool group, and the text of a Markdown list item,
+whose bullet, number, or task checkbox sits on the left edge. A left rule,
+such as the user message bar or a tool row's line, counts toward the inset, so
+the text does not move with the rule's width. Calls inside a group sit under
+the group's rule with no further indent. Images sent with a prompt sit under
+its text on the same inset, as the same square thumbnails the composer shows.
+An image too large or damaged to show leaves a short muted line under the
+prompt. An older image dropped to keep the transcript's images within its
+memory budget leaves a dashed placeholder the size of a thumbnail, so the
+content above the reader does not move. Thinking, tool rows, tool groups, and
+compaction markers share one disclosure treatment from `disclosure.css`: a
+right chevron centered in the inset that turns down while the entry is open,
+muted summary text that turns to normal text on hover, and no native marker. A
+failed tool row colors its chevron with the danger role.
 
 Status marks in a row get a column as wide as the mark and sit `space/2` from
 the label, in the session rail as in the session header. Session rail names
@@ -322,8 +336,9 @@ path where practical.
 
 Radio buttons and checkboxes stay native and sit `space/2` from their labels.
 The shared `pau-choice` row clears the browser's input margin, which would
-otherwise push the gap off the spacing scale. Text fields and settings panels
-draw their edges with the theme border token.
+otherwise push the gap off the spacing scale. The input is one `em` square and
+centers on the capitals of its label's first line, as button labels do. Text
+fields and settings panels draw their edges with the theme border token.
 
 ## Keyboard
 
@@ -511,7 +526,8 @@ connection shows no label, because "Connected" reads as a claim that Pi works.
 
 Representative surfaces should cover:
 
-- starting, idle, running, waiting, stopping, stopped, and failed sessions;
+- starting, idle, running, waiting, not responding, stopping, stopped, and
+  failed sessions;
 - disconnected UI with surviving native work;
 - loading, empty, error, success, disabled, and permission states;
 - long paths, session names, output, and translated labels;

@@ -1,10 +1,11 @@
 //! How the browser development server receives its API token.
 
 use std::{
-    io::{Read, Write},
-    net::{TcpListener, TcpStream},
+    io::{BufRead, BufReader, Read, Write},
+    net::{SocketAddr, TcpStream},
     path::Path,
-    process::{Child, Command, ExitStatus, Stdio},
+    process::{Child, ChildStdout, Command, ExitStatus, Stdio},
+    sync::mpsc::{self, RecvTimeoutError},
     thread,
     time::{Duration, Instant},
 };
@@ -61,10 +62,9 @@ impl Drop for Running {
     }
 }
 
-/// Sends a health request with `token` and returns the response status line,
-/// or `None` while the server is not listening.
-fn request(port: u16, token: &str) -> Option<String> {
-    let mut stream = TcpStream::connect(("127.0.0.1", port)).ok()?;
+/// Sends a health request with `token` and returns the response status line.
+fn request(port: u16, token: &str) -> String {
+    let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
     stream.set_read_timeout(Some(DEADLINE)).unwrap();
     write!(
         stream,
@@ -73,18 +73,22 @@ fn request(port: u16, token: &str) -> Option<String> {
     .unwrap();
     let mut response = String::new();
     stream.read_to_string(&mut response).unwrap();
-    Some(response.lines().next().unwrap_or_default().to_owned())
+    response.lines().next().unwrap_or_default().to_owned()
 }
 
 /// Starts `command`, writes `stdin` when given, checks that the server accepts
 /// `TOKEN` and rejects `OTHER`, stops it, and returns its standard error.
+///
+/// The server binds port 0 and the test reads the port it got from its
+/// `server.started` log line. Picking a free port in the test and passing it
+/// on would leave the port unbound until the server starts, and another
+/// process's short-lived listener could take it in that window. A request
+/// sent to that listener is reset when it closes.
 fn serve(mut command: Command, stdin: Option<&str>) -> String {
-    let port = TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port();
-    command.env("PAU_SERVER_ADDR", format!("127.0.0.1:{port}"));
+    command
+        .env("PAU_SERVER_ADDR", "127.0.0.1:0")
+        .env("RUST_LOG", "pau_server=info")
+        .stdout(Stdio::piped());
     command.stdin(if stdin.is_some() {
         Stdio::piped()
     } else {
@@ -95,20 +99,48 @@ fn serve(mut command: Command, stdin: Option<&str>) -> String {
         writeln!(child.0.stdin.take().unwrap(), "{input}").unwrap();
     }
 
-    let deadline = Instant::now() + DEADLINE;
-    let status = loop {
-        if let Some(status) = request(port, TOKEN) {
-            break status;
-        }
-        assert!(Instant::now() < deadline, "the server did not start");
-        assert!(child.0.try_wait().unwrap().is_none(), "the server exited");
-        thread::sleep(Duration::from_millis(50));
-    };
+    let port = started_port(child.0.stdout.take().unwrap());
+    let status = request(port, TOKEN);
     let rejected = request(port, OTHER);
     let stderr = child.stop();
     assert_eq!(status, "HTTP/1.1 200 OK");
-    assert_eq!(rejected.as_deref(), Some("HTTP/1.1 401 Unauthorized"));
+    assert_eq!(rejected, "HTTP/1.1 401 Unauthorized");
     stderr
+}
+
+/// Reads the server's JSON log from `stdout` until its `server.started` event
+/// and returns the port in it. The server logs that event after it binds its
+/// listener, so requests sent afterwards reach it.
+///
+/// A thread reads the log so the wait can end at the deadline, and keeps
+/// draining it until the server exits so the server never blocks on a full
+/// pipe.
+fn started_port(stdout: ChildStdout) -> u16 {
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        for line in BufReader::new(stdout).lines() {
+            let Ok(line) = line else { return };
+            let Ok(record) = serde_json::from_str::<serde_json::Value>(&line) else {
+                continue;
+            };
+            let fields = &record["fields"];
+            if fields["event"] == "server.started"
+                && let Some(address) = fields["address"].as_str()
+            {
+                let _ = sender.send(address.to_owned());
+            }
+        }
+    });
+    match receiver.recv_timeout(DEADLINE) {
+        Ok(address) => address
+            .parse::<SocketAddr>()
+            .unwrap_or_else(|error| {
+                panic!("the server logged an invalid address {address:?}: {error}")
+            })
+            .port(),
+        Err(RecvTimeoutError::Timeout) => panic!("the server did not start"),
+        Err(RecvTimeoutError::Disconnected) => panic!("the server exited before it started"),
+    }
 }
 
 /// Runs `command`, which must exit on its own within the deadline, and

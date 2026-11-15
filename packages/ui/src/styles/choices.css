@@ -4,6 +4,15 @@
  * native inputs, which pushes the gap off the spacing scale, so the input's
  * margin is cleared here. Components still own the row's layout and alignment.
  *
+ * The label text goes in an element, such as a `span`, after the input. Where
+ * `text-box` is supported, that element is trimmed to cap height and
+ * baseline, so a row that centers its items puts the input on the center of
+ * the capitals rather than the center of the font's taller line box. A row
+ * whose label runs to more lines adds `pau-choice--multiline`, which puts
+ * the input on the center of the first line instead. The input takes the
+ * row's font and is one `em` square, so engines agree on its size and the
+ * offsets below can use it.
+ *
  * The input stays native and fills with the accent. Hover and press on the
  * row move that fill toward text, as `states.css` describes for other
  * controls, and a disabled input mutes the whole row.
@@ -14,8 +23,29 @@
 
 .pau-choice > input {
 	flex: none;
+	font: inherit;
+	width: 1em;
+	height: 1em;
 	margin: 0;
 	accent-color: var(--pau-accent);
+}
+
+.pau-choice--multiline {
+	align-items: flex-start;
+}
+
+.pau-choice--multiline > input {
+	margin-top: calc((1lh - 1em) / 2);
+}
+
+@supports (text-box: trim-both cap alphabetic) {
+	.pau-choice > :not(input) {
+		text-box: trim-both cap alphabetic;
+	}
+
+	.pau-choice--multiline > input {
+		margin-top: calc((1cap - 1em) / 2);
+	}
 }
 
 @media (hover: hover) {

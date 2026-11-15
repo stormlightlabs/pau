@@ -228,6 +228,7 @@ test('recalls earlier prompts fetched when the session opens', async () => {
 
 test.each([
 	['pi_unavailable', 503, 'Pau could not find a working Pi installation.'],
+	['agent_not_responding', 504, 'Pi stopped responding.'],
 	['sandboxed_session_unsupported', 501, 'sandboxed Claude Code sessions cannot start'],
 	['sandbox_unavailable', 503, 'Pau did not start the session outside the sandbox.']
 ])('explains a %s start failure', async (code, status, expected) => {

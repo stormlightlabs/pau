@@ -148,6 +148,19 @@ test('explains a failed saved-session load and tries again', async () => {
 	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 	await expect.element(page.getByText('Saved sessions did not load.')).toBeVisible();
 	await expect.element(page.getByText('No sessions yet')).not.toBeInTheDocument();
+
+	// The retry keeps the shared button layout that centers its label, not the rail row's.
+	const retryButton = page.getByRole('button', { name: 'Try again' }).element();
+	const retry = getComputedStyle(retryButton);
+	const reference = document.createElement('button');
+	retryButton.parentElement!.append(reference);
+	reference.className = 'pau-button pau-button--secondary';
+	reference.textContent = 'Retry';
+	const shared = getComputedStyle(reference);
+	for (const property of ['display', 'padding-top', 'padding-left', 'height', 'border-top-width'] as const) {
+		expect(retry.getPropertyValue(property), property).toBe(shared.getPropertyValue(property));
+	}
+	reference.remove();
 	await userEvent.click(page.getByRole('button', { name: 'Try again' }));
 
 	await vi.waitFor(() => expect(recentTitles()).toEqual(['Wire the picker']));

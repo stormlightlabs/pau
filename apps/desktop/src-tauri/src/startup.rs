@@ -369,15 +369,22 @@ impl PauLauncher {
         self
     }
 
-    /// Asks a started backend to shut down. Does nothing before it starts.
-    pub fn stop(&self) {
-        if let Some(server) = self
+    /// Shuts a started backend down and waits until its sessions and
+    /// terminals have stopped and its audit records are stored, or until
+    /// [`pau_server::SHUTDOWN_LIMIT`] passes. Does nothing before it starts.
+    ///
+    /// The app awaits this before its async runtime ends, which would
+    /// otherwise cancel the backend's tasks with records still queued.
+    pub async fn shutdown(&self) {
+        let server = self
             .server
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .as_mut()
+            .take();
+        if let Some(server) = server
+            && let Err(error) = server.shutdown().await
         {
-            server.request_shutdown();
+            tracing::warn!(%error, "the Pau backend stopped with an error");
         }
     }
 }

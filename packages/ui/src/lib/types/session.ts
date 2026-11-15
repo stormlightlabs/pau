@@ -12,7 +12,8 @@ export function agentLabel(agent: string): string {
 }
 
 /** Lifecycle states shown by the session surface. */
-export type SessionStatus = 'starting' | 'idle' | 'running' | 'waiting' | 'stopping' | 'stopped' | 'failed';
+export type SessionStatus =
+	'starting' | 'idle' | 'running' | 'waiting' | 'not_responding' | 'stopping' | 'stopped' | 'failed';
 
 /** Controls that an agent adapter makes available to the session surface. */
 export type SessionCapabilities = {

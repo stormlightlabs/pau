@@ -88,6 +88,9 @@ describe('which status changes ask for attention', () => {
 		['idle', 'failed', 'failed'],
 		['starting', 'failed', 'failed'],
 		['stopping', 'failed', undefined],
+		['running', 'not_responding', 'not_responding'],
+		['idle', 'not_responding', 'not_responding'],
+		['not_responding', 'idle', undefined],
 		['stopping', 'stopped', undefined],
 		['running', 'idle', 'finished'],
 		['idle', 'running', undefined],
@@ -135,6 +138,16 @@ test('notifies when a session out of view waits, asks, or fails, and badges the 
 	send(changed('failed'));
 	expect(notifier.notify).toHaveBeenLastCalledWith({ title: 'Fix the login bug', body: 'Pi exited unexpectedly.' });
 	expect(notifier.setBadgeCount).toHaveBeenCalledTimes(2);
+});
+
+test('notifies when a session out of view stops responding', () => {
+	const { attention, notifier, send } = setup([changed('running')]);
+	attention.view('session-3');
+
+	send(changed('not_responding'));
+
+	expect(notifier.notify).toHaveBeenCalledWith({ title: 'Fix the login bug', body: 'Pi stopped responding.' });
+	expect(notifier.setBadgeCount).toHaveBeenCalledWith(1);
 });
 
 describe('notification policy', () => {

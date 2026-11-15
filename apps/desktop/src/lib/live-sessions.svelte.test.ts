@@ -123,6 +123,7 @@ test('applies message_end after batched text', async () => {
 test.each([
 	['waits for input', 'waiting', ['waiting']],
 	['fails', 'failed', ['running', 'failed']],
+	['stops responding', 'not_responding', ['running', 'not_responding']],
 	['finishes a turn', 'idle', ['running', 'idle']]
 ] as const)('marks a session out of view that %s', async (_name, _final, statuses) => {
 	const { sessions, change, unseen } = await setup();

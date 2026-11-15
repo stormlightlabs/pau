@@ -2356,7 +2356,7 @@
 								<p>Saved sessions did not load.</p>
 								<button
 									type="button"
-									class="pau-button pau-button--secondary session-rail__retry"
+									class="pau-button pau-button--secondary"
 									disabled={disconnected}
 									onclick={() => void loadRecent(workspace.id)}>Try again</button>
 							</div>
@@ -2880,9 +2880,9 @@
 					onmousedown={(event) => event.preventDefault()}
 					onclick={scrollToLatest}
 					transition:fade={{ duration: isReducedMotion() ? 0 : motion.duration.small }}>
-					<Icon name="chevronDown" size={14} />
-					<span>Jump to latest</span>
-					{#if newEntries > 0}<small>{newEntries} new</small>{/if}
+					<Icon name="chevronDown" size={14} /><span>Jump to latest</span>{#if newEntries > 0}<small
+							>{newEntries} new</small
+						>{/if}
 				</button>
 			{/if}
 
@@ -3103,8 +3103,7 @@
 											class="pau-button pau-button--secondary"
 											disabled={disconnected}
 											onclick={() => void interrupt()}>
-											Interrupt{#if interruptShortcut}
-												<kbd>{interruptShortcut}</kbd>{/if}
+											<span>Interrupt</span>{#if interruptShortcut}<kbd>{interruptShortcut}</kbd>{/if}
 										</button>
 									{/if}
 									{#if shellRunning && onStopShellCommands}
@@ -3113,22 +3112,24 @@
 											class="pau-button pau-button--secondary"
 											disabled={disconnected}
 											onclick={() => void stopShellCommands()}>
-											Stop command{#if interruptShortcut && activeSession.status !== 'running'}
-												<kbd>{interruptShortcut}</kbd>{/if}
+											<span>Stop command</span>{#if interruptShortcut && activeSession.status !== 'running'}<kbd
+													>{interruptShortcut}</kbd
+												>{/if}
 										</button>
 									{/if}
 									<button
 										type="submit"
 										class="pau-button pau-button--primary"
 										disabled={!draft.trim() || sending || composerUnavailable !== undefined}>
-										{sending
-											? 'Sending…'
-											: onRunShellCommand && draftShell && activeSession.capabilities.shellCommands
-												? 'Run command'
-												: activeQueue === 'follow-up' && activeSession.status === 'running'
-													? 'Queue prompt'
-													: 'Send prompt'}
-										{#if submitShortcut}<kbd>{submitShortcut}</kbd>{/if}
+										<span
+											>{sending
+												? 'Sending…'
+												: onRunShellCommand && draftShell && activeSession.capabilities.shellCommands
+													? 'Run command'
+													: activeQueue === 'follow-up' && activeSession.status === 'running'
+														? 'Queue prompt'
+														: 'Send prompt'}</span
+										>{#if submitShortcut}<kbd>{submitShortcut}</kbd>{/if}
 									</button>
 								</div>
 							</div>
@@ -3263,9 +3264,11 @@
 	 * The status mark gets its own 0.75rem column and sits one spacing step
 	 * from the name, as it does beside the status in the session header. The
 	 * mark lines up with the workspace name above it, and the session name
-	 * starts where the shell's context rail starts its labels.
+	 * starts where the shell's context rail starts its labels. A shared
+	 * `pau-button` in the rail, such as Try again, keeps the shared style.
+	 * `:where` keeps this rule's weight, so rail classes still override it.
 	 */
-	.session-rail button {
+	.session-rail button:where(:not(.pau-button)) {
 		display: grid;
 		grid-template-columns: 0.75rem minmax(0, 1fr) auto;
 		align-items: center;
@@ -3424,21 +3427,6 @@
 		color: var(--pau-danger);
 	}
 
-	/* The retry is a shared secondary button, not a session row. */
-	.session-rail .session-rail__retry {
-		display: inline-flex;
-		width: auto;
-		padding: 0 var(--pau-space-3);
-		color: var(--pau-text);
-		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-control);
-	}
-
-	.session-rail .session-rail__retry:disabled {
-		color: var(--pau-text-muted);
-		cursor: not-allowed;
-	}
-
 	.session-rail__rename {
 		width: 100%;
 		min-height: var(--pau-size-row-md);
@@ -3473,6 +3461,11 @@
 		grid-template-rows: auto auto minmax(0, 1fr) auto;
 		height: 100%;
 		min-height: 0;
+		/*
+		 * The header, transcript, composer, and status line share one column,
+		 * so all four start and end on the same edges. Only transcript prose
+		 * keeps a narrower reading measure inside it.
+		 */
 		max-width: 58rem;
 		margin-inline: auto;
 	}
@@ -3613,7 +3606,6 @@
 		z-index: 1;
 		align-self: end;
 		justify-self: center;
-		gap: var(--pau-space-2);
 		margin-bottom: var(--pau-space-3);
 		background-color: var(--pau-surface);
 		box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 24%);
@@ -3623,8 +3615,14 @@
 		color: var(--pau-text-muted);
 	}
 
+	/*
+	 * The scroll box reaches `space/4` past the column's right edge, so an
+	 * overlay scrollbar draws beside the text instead of over it.
+	 */
 	.session-view__transcript {
 		grid-area: transcript;
+		margin-right: calc(var(--pau-space-4) * -1);
+		padding-right: var(--pau-space-4);
 		overflow: auto;
 	}
 
@@ -3637,6 +3635,16 @@
 
 	.session-message {
 		position: relative;
+	}
+
+	/*
+	 * Paragraph and list text keeps a 75ch reading measure from the column's
+	 * left edge. The cap goes on the list, not its items, so items at every
+	 * level end where paragraphs end instead of one indent further right.
+	 * Code, tool output, diffs, and tables use the full column.
+	 */
+	.session-view__transcript :global(p),
+	.session-view__transcript :global(:is(ul, ol)) {
 		max-width: 75ch;
 	}
 
@@ -3716,7 +3724,6 @@
 	}
 
 	.session-thinking {
-		max-width: 75ch;
 		color: var(--pau-text-muted);
 	}
 
@@ -3732,7 +3739,6 @@
 	}
 
 	.session-compaction {
-		max-width: 75ch;
 		padding-block: var(--pau-space-1);
 		color: var(--pau-text-muted);
 		border-block: 1px dashed var(--pau-border);
@@ -3806,7 +3812,6 @@
 	.session-denial {
 		display: grid;
 		gap: var(--pau-space-2);
-		max-width: 75ch;
 		padding: var(--pau-space-3) var(--pau-space-4);
 		background: var(--pau-canvas);
 		border-left: 2px solid var(--pau-danger);
@@ -4169,7 +4174,6 @@
 	}
 
 	.session-composer kbd {
-		margin-left: var(--pau-space-1);
 		color: inherit;
 		font: inherit;
 		font-size: var(--pau-type-xs);

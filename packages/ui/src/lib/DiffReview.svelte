@@ -134,7 +134,7 @@
 					disabled={chunks.length === 0}
 					onclick={() => (mode = 'hunk')}>Hunk</button>
 			</div>
-			<label><input type="checkbox" bind:checked={wrapLines} /> Wrap lines</label>
+			<label class="pau-choice"><input type="checkbox" bind:checked={wrapLines} /><span>Wrap lines</span></label>
 		</div>
 	</header>
 
@@ -240,7 +240,6 @@
 	.diff-review__controls label {
 		display: flex;
 		align-items: center;
-		gap: var(--pau-space-1);
 		min-height: var(--pau-size-row-sm);
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);

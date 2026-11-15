@@ -197,7 +197,7 @@
 				type="button"
 				class="resource-detail__back pau-button pau-button--quiet"
 				onclick={() => void closeDetail()}>
-				<Icon name="chevronLeft" size={16} />Back to {label}
+				<Icon name="chevronLeft" size={16} /><span>Back to {label}</span>
 			</button>
 		{/if}
 		<header class="resource-detail__header">
@@ -637,7 +637,6 @@
 
 	.resource-detail__back {
 		justify-self: start;
-		gap: var(--pau-space-1);
 		/* The icon starts on the content edge, under the title. */
 		margin-left: calc(var(--pau-space-3) * -1);
 	}

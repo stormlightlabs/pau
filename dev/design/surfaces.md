@@ -347,8 +347,13 @@ line of code in its syntax colors and a strip of its terminal palette. The
 selected card takes the active accent. Each font choice is set in its own
 typeface. Motion sits with them.
 
-Theme cards span the section. Other setting rows stop at 40rem, so on a wide
-window each control stays near its name.
+Each setting is one column with one spacing rhythm. The name and its scope
+chip share the first line, centered on their capitals. The description follows
+`space/1` below, and the control `space/2` below that, starting on the name's
+left edge. Settings sit `space/5` apart, so the gap between two settings is
+always wider than any gap inside one. Theme cards span the section. Other
+descriptions and controls stop at 40rem, so on a wide window each control stays
+near its name.
 
 Notifications offers three policies. The default notifies when a session out
 of view waits for input, asks a question, or fails. The second also notifies

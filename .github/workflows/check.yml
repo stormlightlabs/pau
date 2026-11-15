@@ -61,7 +61,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Install browser
-        run: pnpm --filter @stormlightlabs/pau-ui exec playwright install --with-deps chromium
+        run: pnpm --filter @stormlightlabs/pau-ui exec playwright install --with-deps chromium webkit
       - name: Run the gate
         run: pnpm gate
       - name: Run the desktop integration tests

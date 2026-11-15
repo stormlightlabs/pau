@@ -159,6 +159,8 @@
 	/**
 	 * Brings the tree, Git status, and open file up to date after a change on
 	 * disk. Listings refresh in place, so expanded folders and focus stay put.
+	 * A changed folder may have been replaced by another under the same name,
+	 * so its loaded subfolders refresh too, and those that are gone collapse.
 	 */
 	function followDiskChanges(changes: WorkspaceFileChanges): void {
 		void loadGitStatus(true);
@@ -166,7 +168,9 @@
 		const stale = changes.truncated
 			? loaded
 			: loaded.filter((directory) =>
-					changes.paths.some((path) => path === directory || parentPath(path) === directory)
+					changes.paths.some(
+						(path) => path === directory || parentPath(path) === directory || directory.startsWith(`${path}/`)
+					)
 				);
 		for (const directory of stale) void refreshDirectory(directory);
 		if (selectedPath && (changes.truncated || changes.paths.includes(selectedPath))) openFileDiskChanges += 1;
@@ -211,7 +215,11 @@
 		}
 	}
 
-	/** Replaces a loaded listing without a loading state. A folder that is gone collapses. */
+	/**
+	 * Replaces a loaded listing without a loading state. A folder that is gone
+	 * collapses and forgets its subfolders, so a folder that later reappears
+	 * under the same name does not show their old listings.
+	 */
 	async function refreshDirectory(path: string): Promise<void> {
 		const version = requestVersion;
 		try {
@@ -221,8 +229,9 @@
 		} catch (error) {
 			if (version !== requestVersion) return;
 			if (path && errorCode(error) === 'not_found') {
-				delete directories[path];
-				expanded.delete(path);
+				const gone = (candidate: string) => candidate === path || candidate.startsWith(`${path}/`);
+				for (const directory of Object.keys(directories)) if (gone(directory)) delete directories[directory];
+				for (const directory of expanded) if (gone(directory)) expanded.delete(directory);
 			} else {
 				directories[path] = { entries: [], error: errorMessage(error), loading: false };
 			}

@@ -43,6 +43,7 @@ async fn api(directory: &TempDir, executable_path: PathBuf) -> SessionApi {
             working_directory: directory.path().to_path_buf(),
         },
         EventHub::default(),
+        Default::default(),
     )
 }
 

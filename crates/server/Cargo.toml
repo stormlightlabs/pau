@@ -28,7 +28,9 @@ uuid.workspace = true
 
 [dev-dependencies]
 futures-util.workspace = true
+libc.workspace = true
 tempfile = "3.27.0"
+tokio = { workspace = true, features = ["test-util"] }
 tokio-tungstenite = "0.29.0"
 tower.workspace = true
 

@@ -1,9 +1,9 @@
-import { spawn } from 'node:child_process';
+import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { access, constants, mkdtemp, rm } from 'node:fs/promises';
-import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
 import type { TestProject } from 'vitest/node';
@@ -30,13 +30,33 @@ async function findExecutable(name: string): Promise<string | null> {
 	return null;
 }
 
-async function freePort(): Promise<number> {
+/**
+ * Resolves with the address from the server's `server.started` log event,
+ * which it writes after binding its listener. Rejects when the server exits
+ * first or the deadline passes. The reader keeps draining standard output
+ * afterwards so the server never blocks on a full pipe.
+ */
+function startedAddress(server: ChildProcessWithoutNullStreams, deadline: number): Promise<string> {
 	return new Promise((resolve, reject) => {
-		const server = createServer();
-		server.once('error', reject);
-		server.listen(0, '127.0.0.1', () => {
-			const address = server.address();
-			server.close(() => resolve(typeof address === 'object' && address ? address.port : 0));
+		const timer = setTimeout(
+			() => reject(new Error('pau-server did not start within 15 seconds.')),
+			deadline - Date.now()
+		);
+		server.once('exit', (code, signal) => {
+			clearTimeout(timer);
+			const status = code === null ? `signal ${signal}` : `code ${code}`;
+			reject(new Error(`pau-server exited with ${status} before it started.`));
+		});
+		createInterface({ input: server.stdout }).on('line', (line) => {
+			let record: { fields?: { event?: unknown; address?: unknown } };
+			try {
+				record = JSON.parse(line);
+			} catch {
+				return;
+			}
+			if (record.fields?.event !== 'server.started' || typeof record.fields.address !== 'string') return;
+			clearTimeout(timer);
+			resolve(record.fields.address);
 		});
 	});
 }
@@ -48,9 +68,7 @@ async function freePort(): Promise<number> {
  */
 export default async function setup(project: TestProject): Promise<() => Promise<void>> {
 	const root = await mkdtemp(path.join(tmpdir(), 'pau-integration-'));
-	const port = await freePort();
 	const token = randomBytes(24).toString('base64url');
-	const origin = `http://127.0.0.1:${port}`;
 	// A token in the server's environment is readable by other processes, so
 	// it arrives on standard input.
 	const environment = { ...process.env };
@@ -58,14 +76,18 @@ export default async function setup(project: TestProject): Promise<() => Promise
 	const server = spawn(binary, ['--token-stdin'], {
 		env: {
 			...environment,
-			PAU_SERVER_ADDR: `127.0.0.1:${port}`,
+			// The server binds a port of its own choosing and reports it in its
+			// `server.started` log event. A port picked here and passed on would
+			// sit unbound until the server starts, free for another process.
+			PAU_SERVER_ADDR: '127.0.0.1:0',
+			RUST_LOG: 'pau_server=info',
 			PAU_DATABASE_PATH: path.join(root, 'pau.db'),
 			SHELL: '/bin/sh',
 			ENV: '',
 			BASH_SILENCE_DEPRECATION_WARNING: '1',
 			PS1: 'pau$ '
 		},
-		stdio: ['pipe', 'ignore', 'inherit']
+		stdio: ['pipe', 'pipe', 'inherit']
 	});
 	server.stdin.end(`${token}\n`);
 	const stop = async () => {
@@ -73,33 +95,25 @@ export default async function setup(project: TestProject): Promise<() => Promise
 		await rm(root, { recursive: true, force: true });
 	};
 
-	const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-	const deadline = Date.now() + 15_000;
-	for (;;) {
-		if (server.exitCode !== null) throw new Error(`pau-server exited with code ${server.exitCode}.`);
-		try {
-			const health = await fetch(`${origin}/api/health`, { headers });
-			if (health.ok) break;
-		} catch {
-			// The server is still binding its port.
+	// Any failure after the spawn stops the server, so a failed run leaves no
+	// orphaned server or temporary database behind.
+	let origin: string;
+	let workspace: { id: string };
+	try {
+		origin = `http://${await startedAddress(server, Date.now() + 15_000)}`;
+		const response = await fetch(`${origin}/api/workspaces`, {
+			method: 'POST',
+			headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+			body: JSON.stringify({ path: root, name: 'integration' })
+		});
+		if (!response.ok) {
+			throw new Error(`Opening the integration workspace failed with HTTP ${response.status}.`);
 		}
-		if (Date.now() > deadline) {
-			await stop();
-			throw new Error('pau-server did not become healthy within 15 seconds.');
-		}
-		await new Promise((resolve) => setTimeout(resolve, 100));
-	}
-
-	const response = await fetch(`${origin}/api/workspaces`, {
-		method: 'POST',
-		headers,
-		body: JSON.stringify({ path: root, name: 'integration' })
-	});
-	if (!response.ok) {
+		workspace = (await response.json()) as { id: string };
+	} catch (error) {
 		await stop();
-		throw new Error(`Opening the integration workspace failed with HTTP ${response.status}.`);
+		throw error;
 	}
-	const workspace = (await response.json()) as { id: string };
 	const editors = Object.fromEntries(
 		await Promise.all(EDITORS.map(async (name) => [name, await findExecutable(name)] as const))
 	) as Record<(typeof EDITORS)[number], string | null>;

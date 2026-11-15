@@ -258,12 +258,13 @@ impl PiSessionRegistry {
         ids
     }
 
-    /// Stops one session and records its exit without affecting other sessions.
+    /// Stops one session and records its exit without affecting other
+    /// sessions. Returns the exit code, when the platform reported one.
     pub async fn stop(
         &self,
         id: &str,
         ended_at: impl Into<String>,
-    ) -> Result<(), PiSessionRegistryError> {
+    ) -> Result<Option<i32>, PiSessionRegistryError> {
         let session = self
             .get(id)
             .await
@@ -282,6 +283,7 @@ impl PiSessionRegistry {
             })?;
         metadata.ended_at = Some(ended_at.into());
         metadata.exit_code = exit.code;
+        let exit_code = exit.code;
         // sandbox-runtime removes its placeholders when the extension shuts
         // down. A killed Pi leaves them, and the session's lease removes any
         // that no other sandbox in the workspace still needs.
@@ -292,7 +294,7 @@ impl PiSessionRegistry {
             .map_err(|error| PiSessionRegistryError::Persistence(error.to_string()))?;
 
         self.state.lock().await.remove(id, &session);
-        Ok(())
+        Ok(exit_code)
     }
 
     /// Removes placeholders recorded by sessions that are no longer live,

@@ -4,7 +4,7 @@
 //! terminal also has a WebSocket stream: binary frames carry raw input and
 //! output, and text frames carry [`TerminalClientMessage`] and
 //! [`TerminalServerMessage`] values. Terminals outlive their streams and stop
-//! only when closed, when their process exits, or when the server drops them.
+//! only when closed, when their process exits, or when the server shuts down.
 //! A stream that attaches first receives the terminal's scrollback.
 
 use std::{
@@ -28,24 +28,26 @@ use axum::{
 };
 use pau_core::{
     ServerEventKind,
+    audit::{AuditActor, AuditEntry, AuditLog, AuditOperation, AuditResult},
     sandbox::{
         PlaceholderLease, SandboxError, SandboxLaunchInput, SandboxProfileName,
         TerminalSandboxInput, prepare_terminal_sandbox,
     },
     terminal::{
         CreateTerminalRequest, TerminalClientMessage, TerminalInfo, TerminalServerMessage,
-        TerminalSignalRequest, TerminalSize,
+        TerminalSignalRequest, TerminalSize, TerminalStatus,
     },
     workspace::WorkspaceError,
 };
 use pau_term::{
     AttachedOutput, Terminal, TerminalCommand, TerminalError, TerminalMode, TerminalScrollback,
 };
+use tokio::{sync::Mutex as AsyncMutex, task::JoinSet};
 use uuid::Uuid;
 
 use super::{
-    ApiError, ApiErrorBody, ApiState, EventHub, diagnostic_timestamp, sandbox_api,
-    workspace_service,
+    ApiError, ApiErrorBody, ApiState, EventHub, audit::PendingAudit, diagnostic_timestamp,
+    sandbox_api, stop_or_kill, workspace_service,
 };
 
 /// Time a closing terminal has to exit after `SIGHUP` before `SIGKILL`.
@@ -59,6 +61,14 @@ static OPENED: AtomicU64 = AtomicU64::new(0);
 #[derive(Clone, Default)]
 pub(crate) struct TerminalRegistry(Arc<Mutex<HashMap<String, Arc<ManagedTerminal>>>>);
 
+impl std::fmt::Debug for TerminalRegistry {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("TerminalRegistry")
+            .finish_non_exhaustive()
+    }
+}
+
 impl TerminalRegistry {
     fn get(&self, id: &str) -> Result<Arc<ManagedTerminal>, TerminalApiError> {
         self.0
@@ -67,6 +77,53 @@ impl TerminalRegistry {
             .get(id)
             .cloned()
             .ok_or(TerminalApiError::NotFound)
+    }
+
+    /// Closes every running terminal at shutdown and records each stop as
+    /// Pau's.
+    ///
+    /// Terminals close at the same time, so shutdown waits at most about one
+    /// [`CLOSE_GRACE`] however many are open, and a terminal still running
+    /// at `kill_at` is killed. Each leaves the registry before it closes, so
+    /// its exit watcher does not record the stop again. A terminal whose
+    /// process had already exited was recorded by its watcher and is only
+    /// forgotten.
+    ///
+    /// A sandboxed terminal's process sweep runs before its exit is
+    /// reported, and its sandbox files and placeholder lease are released
+    /// here rather than left to an exit watcher the runtime may never run.
+    pub(crate) async fn stop_all(&self, audit: &AuditLog, kill_at: tokio::time::Instant) {
+        let terminals: Vec<_> = self
+            .0
+            .lock()
+            .expect("terminal registry lock poisoned")
+            .drain()
+            .map(|(_, managed)| managed)
+            .collect();
+        let mut closing = JoinSet::new();
+        for managed in terminals {
+            let audit = audit.clone();
+            closing.spawn(async move {
+                if matches!(managed.terminal.status(), TerminalStatus::Running) {
+                    let status = stop_or_kill(managed.terminal.close(CLOSE_GRACE), kill_at, || {
+                        managed.terminal.kill();
+                    })
+                    .await;
+                    audit.record(AuditEntry {
+                        workspace_id: Some(managed.workspace_id.clone()),
+                        target: Some(managed.audit_target()),
+                        exit_code: exit_code(&status),
+                        ..AuditEntry::new(
+                            AuditActor::Pau,
+                            AuditOperation::TerminalStop,
+                            AuditResult::Succeeded,
+                        )
+                    });
+                }
+                release(&managed.leftovers).await;
+            });
+        }
+        closing.join_all().await;
     }
 }
 
@@ -84,6 +141,9 @@ struct ManagedTerminal {
     workspace_id: String,
     command: Vec<String>,
     sandbox: Option<SandboxProfileName>,
+    /// Shared with the exit watcher, so whichever sees the exit first
+    /// releases a sandboxed terminal's files and placeholder lease.
+    leftovers: Arc<AsyncMutex<Option<SandboxLeftovers>>>,
     terminal: Terminal,
     scrollback: TerminalScrollback,
 }
@@ -98,6 +158,32 @@ impl ManagedTerminal {
             status: self.terminal.status(),
             sandbox: self.sandbox,
         }
+    }
+
+    /// What the terminal's audit records name: the sandbox profile of a
+    /// sandboxed terminal, and otherwise the terminal ID.
+    fn audit_target(&self) -> String {
+        self.sandbox.map_or_else(|| self.id.clone(), profile_name)
+    }
+}
+
+/// A sandbox profile's name as the API spells it, such as `workspace-write`.
+fn profile_name(profile: SandboxProfileName) -> String {
+    serde_json::to_value(profile)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_default()
+}
+
+/// Releases a sandboxed terminal's files and placeholder lease once its
+/// process has exited.
+///
+/// The lock is held until the removal finishes, so a caller that finds
+/// nothing left to release returns only after the files are gone.
+async fn release(leftovers: &AsyncMutex<Option<SandboxLeftovers>>) {
+    let mut slot = leftovers.lock().await;
+    if let Some(taken) = slot.take() {
+        let _ = tokio::task::spawn_blocking(move || taken.remove()).await;
     }
 }
 
@@ -154,23 +240,36 @@ impl From<TerminalError> for TerminalApiError {
     }
 }
 
-impl IntoResponse for TerminalApiError {
-    fn into_response(self) -> Response {
-        let (status, code, message) = match self {
-            Self::Api(error) => return error.into_response(),
+impl TerminalApiError {
+    /// The response status, stable error code, and message.
+    pub(crate) fn parts(&self) -> (StatusCode, &'static str, String) {
+        match self {
+            Self::Api(error) => error.parts(),
             Self::NotFound => (
                 StatusCode::NOT_FOUND,
                 "terminal_not_found",
                 "terminal does not exist".to_owned(),
             ),
-            Self::Invalid(message) => (StatusCode::BAD_REQUEST, "invalid_terminal", message),
+            Self::Invalid(message) => {
+                (StatusCode::BAD_REQUEST, "invalid_terminal", message.clone())
+            }
             Self::Start(message) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "terminal_start_failed",
-                message,
+                message.clone(),
             ),
-            Self::Failed(message) => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error", message),
-        };
+            Self::Failed(message) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal_error",
+                message.clone(),
+            ),
+        }
+    }
+}
+
+impl IntoResponse for TerminalApiError {
+    fn into_response(self) -> Response {
+        let (status, code, message) = self.parts();
         (status, Json(ApiErrorBody { code, message })).into_response()
     }
 }
@@ -189,11 +288,32 @@ struct SandboxLeftovers {
 /// through `srt`, and on Linux the `pau-term` relay. It fails rather than open an
 /// unsandboxed shell when the workspace has no profile or the sandbox cannot
 /// start.
+///
+/// Once shutdown begins, an open is `503 shutting_down`, as
+/// [`crate::StartGate`] describes.
 pub(crate) async fn create_terminal(
     State(state): State<ApiState>,
     Json(request): Json<CreateTerminalRequest>,
 ) -> Result<(StatusCode, Json<TerminalInfo>), TerminalApiError> {
-    let workspaces = workspace_service(&state)?;
+    let mut audit = PendingAudit::operator(
+        &state.audit,
+        AuditOperation::TerminalStart,
+        Some(request.workspace_id.clone()),
+        None,
+    );
+    let result = state.starts.run(open_terminal(&state, request)).await;
+    if let Ok((_, Json(info))) = &result {
+        audit.target(info.sandbox.map_or_else(|| info.id.clone(), profile_name));
+    }
+    audit.finish(&result);
+    result
+}
+
+async fn open_terminal(
+    state: &ApiState,
+    request: CreateTerminalRequest,
+) -> Result<(StatusCode, Json<TerminalInfo>), TerminalApiError> {
+    let workspaces = workspace_service(state)?;
     let root = workspaces.root(&request.workspace_id).await?;
     let id = Uuid::new_v4().to_string();
     let shell = TerminalCommand::shell(&root, request.size);
@@ -209,7 +329,7 @@ pub(crate) async fn create_terminal(
     let mut leftovers = None;
     let mut sandbox = None;
     let command = if request.sandboxed {
-        let api = sandbox_api(&state)?;
+        let api = sandbox_api(state)?;
         let selection = api
             .selections
             .get(&request.workspace_id, None)
@@ -299,12 +419,14 @@ pub(crate) async fn create_terminal(
     };
 
     let mut exit = terminal.exit();
+    let released = Arc::new(AsyncMutex::new(leftovers));
     let managed = Arc::new(ManagedTerminal {
         id,
         opened: OPENED.fetch_add(1, Ordering::Relaxed),
         workspace_id: request.workspace_id,
         command: argv,
         sandbox,
+        leftovers: Arc::clone(&released),
         terminal,
         scrollback: TerminalScrollback::follow(output),
     });
@@ -317,12 +439,17 @@ pub(crate) async fn create_terminal(
 
     let weak: Weak<ManagedTerminal> = Arc::downgrade(&managed);
     let events = state.events.clone();
+    let registry = state.terminals.clone();
+    let audit = state.audit.clone();
     tokio::spawn(async move {
-        exit.wait().await;
-        if let Some(leftovers) = leftovers {
-            let _ = tokio::task::spawn_blocking(move || leftovers.remove()).await;
-        }
+        let status = exit.wait().await;
+        release(&released).await;
         if let Some(managed) = weak.upgrade() {
+            // A closed terminal leaves the registry first, and its close
+            // request records the stop.
+            if registry.get(&managed.id).is_ok() {
+                audit.record(unrequested_stop(&managed, status));
+            }
             publish(&events, &managed.info());
         }
     });
@@ -395,15 +522,57 @@ pub(crate) async fn close_terminal(
     State(state): State<ApiState>,
     AxumPath(terminal_id): AxumPath<String>,
 ) -> Result<Json<TerminalInfo>, TerminalApiError> {
-    let managed = state
-        .terminals
-        .0
-        .lock()
-        .expect("terminal registry lock poisoned")
-        .remove(&terminal_id)
-        .ok_or(TerminalApiError::NotFound)?;
-    managed.terminal.close(CLOSE_GRACE).await;
-    Ok(Json(managed.info()))
+    let mut audit = PendingAudit::operator(
+        &state.audit,
+        AuditOperation::TerminalStop,
+        None,
+        Some(terminal_id.clone()),
+    );
+    let closed = async {
+        let managed = state
+            .terminals
+            .0
+            .lock()
+            .expect("terminal registry lock poisoned")
+            .remove(&terminal_id)
+            .ok_or(TerminalApiError::NotFound)?;
+        audit.workspace(managed.workspace_id.clone());
+        audit.target(managed.audit_target());
+        let status = managed.terminal.close(CLOSE_GRACE).await;
+        Ok((managed.info(), exit_code(&status)))
+    }
+    .await;
+    let exit = closed.as_ref().ok().and_then(|(_, exit)| *exit);
+    let result = closed.map(|(info, _)| Json(info));
+    audit.finish_with_exit(&result, exit);
+    result
+}
+
+/// The exit code an audit record keeps for a terminal status.
+fn exit_code(status: &TerminalStatus) -> Option<i32> {
+    match status {
+        TerminalStatus::Exited { exit_code, .. } => i32::try_from(*exit_code).ok(),
+        TerminalStatus::Running => None,
+    }
+}
+
+/// The record of a terminal whose process ended without a close request.
+fn unrequested_stop(managed: &ManagedTerminal, status: TerminalStatus) -> AuditEntry {
+    let exit_code = exit_code(&status);
+    AuditEntry {
+        workspace_id: Some(managed.workspace_id.clone()),
+        target: Some(managed.audit_target()),
+        exit_code,
+        ..AuditEntry::new(
+            AuditActor::Process,
+            AuditOperation::TerminalStop,
+            if exit_code == Some(0) {
+                AuditResult::Succeeded
+            } else {
+                AuditResult::Failed
+            },
+        )
+    }
 }
 
 /// Attaches a WebSocket to a terminal's input and output.
@@ -518,7 +687,9 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
-    use crate::{ApiToken, default_diagnostics, router_with_services};
+    use pau_core::audit::{AuditLog, AuditRecord};
+
+    use crate::{ApiServices, ApiToken, default_diagnostics, router_with_services};
 
     const TOKEN: &str = "0123456789abcdef0123456789abcdef";
     /// Upper bound for one real-process step. It only turns a hang into a
@@ -535,6 +706,7 @@ mod tests {
         _directory: TempDir,
         app: Router,
         events: EventHub,
+        audit: AuditLog,
         workspace_id: String,
         address: SocketAddr,
     }
@@ -548,14 +720,16 @@ mod tests {
             WorkspaceService::new(database.workspaces()).with_path(PROCESS_PATH.into());
         let workspace = workspaces.open(&root, None).await.unwrap();
         let events = EventHub::default();
+        let audit = AuditLog::new(database.audit(), Default::default());
         let app = router_with_services(
             ApiToken::configured(TOKEN).unwrap(),
             events.clone(),
-            Some(workspaces),
             default_diagnostics(),
-            None,
-            None,
-            None,
+            ApiServices {
+                workspaces: Some(workspaces),
+                audit: audit.clone(),
+                ..ApiServices::default()
+            },
         );
         let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
         let address = listener.local_addr().unwrap();
@@ -564,6 +738,7 @@ mod tests {
             _directory: directory,
             app,
             events,
+            audit,
             workspace_id: workspace.id,
             address,
         }
@@ -929,9 +1104,22 @@ mod tests {
         }
     }
 
+    /// A router with sandbox selections, and the parts tests inspect.
+    struct SandboxFixture {
+        directory: TempDir,
+        app: Router,
+        workspace_id: String,
+        /// Parent of each sandboxed terminal's session directory.
+        sessions: PathBuf,
+        audit: AuditLog,
+        terminals: TerminalRegistry,
+    }
+
     /// Starts a router with sandbox selections whose `srt` is a fake that
-    /// records its arguments and environment and exits.
-    async fn sandbox_fixture(relay: bool) -> (TempDir, Router, String, PathBuf) {
+    /// records its arguments and environment and exits. With a `hold` file
+    /// it keeps running, and with a `nohup` file it first starts a job that
+    /// ignores hangups and writes the job's process ID to `job.pid`.
+    async fn sandbox_fixture(relay: bool) -> SandboxFixture {
         let directory = tempdir().unwrap();
         let root = directory.path().join("project");
         let bin = directory.path().join("bin");
@@ -942,6 +1130,8 @@ mod tests {
             &srt,
             format!(
                 "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{0}/args'\nenv > '{0}/env'\n\
+                 if [ -e '{0}/nohup' ]; then nohup sleep 600 >/dev/null 2>&1 & \
+                 echo $! > '{0}/job.pid'; fi\n\
                  if [ -e '{0}/hold' ]; then exec sleep 600; fi\n",
                 directory.path().display()
             ),
@@ -963,17 +1153,29 @@ mod tests {
         // The fake also stands in for the relay executable, which only has
         // to exist for the profile to count as available.
         .with_terminal_relay(relay.then(|| srt.clone()));
+        let audit = AuditLog::new(database.audit(), Default::default());
+        let terminals = TerminalRegistry::default();
         let app = router_with_services(
             ApiToken::configured(TOKEN).unwrap(),
             EventHub::default(),
-            Some(workspaces),
             default_diagnostics(),
-            None,
-            Some(sandbox),
-            None,
+            ApiServices {
+                workspaces: Some(workspaces),
+                sandbox: Some(sandbox),
+                audit: audit.clone(),
+                terminals: terminals.clone(),
+                ..ApiServices::default()
+            },
         );
         let sessions = directory.path().join("sandbox");
-        (directory, app, workspace.id, sessions)
+        SandboxFixture {
+            directory,
+            app,
+            workspace_id: workspace.id,
+            sessions,
+            audit,
+            terminals,
+        }
     }
 
     async fn request(
@@ -997,7 +1199,14 @@ mod tests {
 
     #[tokio::test]
     async fn opens_sandboxed_terminals_only_under_the_workspace_profile() {
-        let (directory, app, workspace_id, sessions) = sandbox_fixture(true).await;
+        let SandboxFixture {
+            directory,
+            app,
+            workspace_id,
+            sessions,
+            audit,
+            ..
+        } = sandbox_fixture(true).await;
         let create = serde_json::json!({
             "workspace_id": workspace_id,
             "size": {"cols": 80, "rows": 24},
@@ -1060,11 +1269,38 @@ mod tests {
         assert!(environment.contains("PAU_SANDBOX=1"), "{environment}");
         assert!(environment.contains("TERM=xterm-256color"), "{environment}");
         assert!(!environment.contains("CARGO_MANIFEST_DIR"), "{environment}");
+
+        // Sandboxed terminal records name the profile, as sandbox records do.
+        let records: Vec<AuditRecord> = audit.list().await.unwrap();
+        let terminal_records: Vec<_> = records
+            .iter()
+            .filter(|record| record.entry.target.is_some())
+            .filter(|record| {
+                matches!(
+                    record.entry.operation,
+                    AuditOperation::TerminalStart | AuditOperation::TerminalStop
+                )
+            })
+            .map(|record| (record.entry.operation, record.entry.target.as_deref()))
+            .collect();
+        assert_eq!(
+            terminal_records,
+            [
+                (AuditOperation::TerminalStart, Some("workspace-write")),
+                (AuditOperation::TerminalStop, Some("workspace-write")),
+            ]
+        );
     }
 
     #[tokio::test]
     async fn keeps_placeholders_while_another_sandbox_in_the_workspace_runs() {
-        let (directory, app, workspace_id, sessions) = sandbox_fixture(true).await;
+        let SandboxFixture {
+            directory,
+            app,
+            workspace_id,
+            sessions,
+            ..
+        } = sandbox_fixture(true).await;
         let sandbox_path = format!("/api/workspaces/{workspace_id}/sandbox");
         let selection = serde_json::json!({"mode": "sandboxed", "settings": {
             "profile": "workspace-write",
@@ -1123,9 +1359,80 @@ mod tests {
         );
     }
 
+    /// Shutdown must leave no job of a sandboxed terminal running, even one
+    /// that ignores hangups, and must release its files and placeholders.
+    #[tokio::test]
+    async fn shutdown_stops_sandboxed_jobs_and_releases_placeholders() {
+        let SandboxFixture {
+            directory,
+            app,
+            workspace_id,
+            sessions,
+            audit,
+            terminals,
+        } = sandbox_fixture(true).await;
+        let sandbox_path = format!("/api/workspaces/{workspace_id}/sandbox");
+        let selection = serde_json::json!({"mode": "sandboxed", "settings": {
+            "profile": "workspace-write",
+        }});
+        let (status, _) = request(&app, "PUT", &sandbox_path, Some(selection)).await;
+        if status == StatusCode::SERVICE_UNAVAILABLE {
+            return;
+        }
+        fs::write(directory.path().join("hold"), "").unwrap();
+        fs::write(directory.path().join("nohup"), "").unwrap();
+        let (status, body) = request(
+            &app,
+            "POST",
+            "/api/terminals",
+            Some(serde_json::json!({
+                "workspace_id": workspace_id,
+                "size": {"cols": 80, "rows": 24},
+                "sandboxed": true,
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+        let id = body["id"].as_str().unwrap().to_owned();
+        let job_pid = directory.path().join("job.pid");
+        let job: libc::pid_t = timeout(STEP_LIMIT, async {
+            loop {
+                if let Some(pid) = fs::read_to_string(&job_pid)
+                    .ok()
+                    .and_then(|text| text.trim().parse().ok())
+                {
+                    return pid;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("the job did not start");
+        let placeholder = directory.path().join("project/.mcp.json");
+        fs::write(&placeholder, "").unwrap();
+
+        terminals
+            .stop_all(&audit, tokio::time::Instant::now() + STEP_LIMIT)
+            .await;
+
+        // SAFETY: signal 0 only checks that the process exists.
+        assert_ne!(
+            unsafe { libc::kill(job, 0) },
+            0,
+            "the job outlived shutdown"
+        );
+        assert!(!sessions.join(format!("terminal-{id}")).exists());
+        assert!(!placeholder.exists(), "shutdown left the placeholder");
+    }
+
     #[tokio::test]
     async fn reports_sandboxed_terminals_unavailable_without_a_relay() {
-        let (_directory, app, workspace_id, _) = sandbox_fixture(false).await;
+        let SandboxFixture {
+            directory: _directory,
+            app,
+            workspace_id,
+            ..
+        } = sandbox_fixture(false).await;
         let sandbox_path = format!("/api/workspaces/{workspace_id}/sandbox");
         let selection = serde_json::json!({"mode": "sandboxed", "settings": {
             "profile": "read-only",
@@ -1154,6 +1461,151 @@ mod tests {
         assert_eq!(body["code"], "sandbox_unavailable");
         let (_, terminals) = request(&app, "GET", "/api/terminals", None).await;
         assert_eq!(terminals, serde_json::json!([]));
+    }
+
+    #[tokio::test]
+    async fn records_terminal_starts_and_stops() {
+        let fixture = fixture().await;
+        let mut events = fixture.events.subscribe(None);
+        let exiting = fixture.create("exit 4").await;
+        timeout(STEP_LIMIT, async {
+            loop {
+                let event = events.receiver.recv().await.unwrap();
+                if event.session_id.as_deref() == Some(exiting.id.as_str())
+                    && event.payload.contains("exited")
+                {
+                    return;
+                }
+            }
+        })
+        .await
+        .unwrap();
+        let running = fixture.create("sleep 30").await;
+        let (status, _) = fixture
+            .call("DELETE", &format!("/api/terminals/{}", running.id), None)
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        let create = |command: serde_json::Value| {
+            fixture.call(
+                "POST",
+                "/api/terminals",
+                Some(serde_json::json!({
+                    "workspace_id": fixture.workspace_id,
+                    "command": command,
+                    "size": {"cols": 80, "rows": 24},
+                })),
+            )
+        };
+        assert_eq!(
+            create(serde_json::json!([""])).await.0,
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            create(serde_json::json!([
+                "/nonexistent/program",
+                "--token=secret"
+            ]))
+            .await
+            .0,
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+        let (status, _) = fixture.call("DELETE", "/api/terminals/unknown", None).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+
+        let records: Vec<AuditRecord> = fixture.audit.list().await.unwrap();
+        let summary: Vec<_> = records
+            .iter()
+            .map(|record| {
+                (
+                    serde_json::to_value(record.entry.actor).unwrap(),
+                    serde_json::to_value(record.entry.operation).unwrap(),
+                    serde_json::to_value(record.entry.result).unwrap(),
+                    record.entry.target.clone(),
+                    record.entry.reason.clone(),
+                    record.entry.exit_code,
+                )
+            })
+            .collect();
+        let row = |actor: &str,
+                   operation: &str,
+                   result: &str,
+                   target: Option<&str>,
+                   reason: Option<&str>,
+                   exit_code: Option<i32>| {
+            (
+                serde_json::json!(actor),
+                serde_json::json!(operation),
+                serde_json::json!(result),
+                target.map(str::to_owned),
+                reason.map(str::to_owned),
+                exit_code,
+            )
+        };
+        assert_eq!(
+            summary,
+            [
+                row(
+                    "operator",
+                    "terminal_start",
+                    "succeeded",
+                    Some(&exiting.id),
+                    None,
+                    None
+                ),
+                row(
+                    "process",
+                    "terminal_stop",
+                    "failed",
+                    Some(&exiting.id),
+                    None,
+                    Some(4)
+                ),
+                row(
+                    "operator",
+                    "terminal_start",
+                    "succeeded",
+                    Some(&running.id),
+                    None,
+                    None
+                ),
+                row(
+                    "operator",
+                    "terminal_stop",
+                    "succeeded",
+                    Some(&running.id),
+                    None,
+                    Some(1)
+                ),
+                row(
+                    "operator",
+                    "terminal_start",
+                    "denied",
+                    None,
+                    Some("invalid_terminal"),
+                    None
+                ),
+                row(
+                    "operator",
+                    "terminal_start",
+                    "failed",
+                    None,
+                    Some("terminal_start_failed"),
+                    None
+                ),
+                row(
+                    "operator",
+                    "terminal_stop",
+                    "denied",
+                    Some("unknown"),
+                    Some("terminal_not_found"),
+                    None
+                ),
+            ]
+        );
+        assert!(records[..4].iter().all(|record| {
+            record.entry.workspace_id.as_deref() == Some(fixture.workspace_id.as_str())
+        }));
+        assert!(!serde_json::to_string(&records).unwrap().contains("secret"));
     }
 
     #[test]

@@ -108,7 +108,7 @@ mod tests {
     use tokio_tungstenite::tungstenite::{self, client::IntoClientRequest, http::HeaderValue};
 
     use super::*;
-    use crate::{ApiToken, default_diagnostics, router_with_services};
+    use crate::{ApiServices, ApiToken, default_diagnostics, router_with_services};
 
     const TOKEN: &str = "0123456789abcdef0123456789abcdef";
     /// Upper bound for the operating system to report a change. It only
@@ -157,11 +157,11 @@ mod tests {
         let app = router_with_services(
             ApiToken::configured(TOKEN).unwrap(),
             events.clone(),
-            Some(workspaces),
             default_diagnostics(),
-            None,
-            None,
-            None,
+            ApiServices {
+                workspaces: Some(workspaces),
+                ..ApiServices::default()
+            },
         );
         let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
         let address = listener.local_addr().unwrap();

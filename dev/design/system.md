@@ -526,7 +526,8 @@ connection shows no label, because "Connected" reads as a claim that Pi works.
 
 Representative surfaces should cover:
 
-- starting, idle, running, waiting, stopping, stopped, and failed sessions;
+- starting, idle, running, waiting, not responding, stopping, stopped, and
+  failed sessions;
 - disconnected UI with surviving native work;
 - loading, empty, error, success, disabled, and permission states;
 - long paths, session names, output, and translated labels;

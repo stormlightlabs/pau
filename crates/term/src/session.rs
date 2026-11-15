@@ -142,6 +142,28 @@ fn macos_state(pid: libc::pid_t) -> State {
     }
 }
 
+/// Blocks until `pid` exits, and leaves it a zombie.
+///
+/// A zombie keeps its process ID, so the ID cannot name a new process or
+/// session until the caller reaps it. [`kill_leftovers`] relies on that.
+pub(crate) fn wait_unreaped(pid: libc::pid_t) {
+    loop {
+        let mut info = std::mem::MaybeUninit::<libc::siginfo_t>::zeroed();
+        // SAFETY: `info` is a valid, writable `siginfo_t`.
+        let result = unsafe {
+            libc::waitid(
+                libc::P_PID,
+                pid as libc::id_t,
+                info.as_mut_ptr(),
+                libc::WEXITED | libc::WNOWAIT,
+            )
+        };
+        if result == 0 || std::io::Error::last_os_error().raw_os_error() != Some(libc::EINTR) {
+            return;
+        }
+    }
+}
+
 /// Stops every process left in a session whose leader has exited.
 ///
 /// Killing a listed process ID cannot stop a chain that forks and exits
@@ -161,6 +183,8 @@ fn macos_state(pid: libc::pid_t) -> State {
 ///
 /// Only processes whose session ID matches are signalled. The leader's
 /// process group is not, because a reaped leader's process ID can be reused.
+/// Callers sweep before reaping the leader, as [`wait_unreaped`] allows, so
+/// the session ID cannot be reused during the sweep.
 pub(crate) fn kill_leftovers(session: libc::pid_t) {
     let freeze_until = Instant::now() + FREEZE_LIMIT;
     loop {

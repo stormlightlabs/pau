@@ -1,8 +1,8 @@
 #![cfg(unix)]
 
 use pau_pi::{
-    PiExtensionUiRequest, PiExtensionUiResponse, PiProcessOutput, PiSession, PiShutdownTimeouts,
-    StartPiProcessOptions,
+    PiExtensionUiRequest, PiExtensionUiResponse, PiProcessOutput, PiReplyTimeouts, PiSession,
+    PiShutdownTimeouts, StartPiProcessOptions,
 };
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -25,6 +25,7 @@ async fn exercises_the_fixture_extension_through_pi_rpc() {
                 fixture.into_os_string(),
             ],
             environment: Vec::new(),
+            reply_timeouts: PiReplyTimeouts::default(),
             shutdown_timeouts: PiShutdownTimeouts::default(),
         })
         .unwrap(),

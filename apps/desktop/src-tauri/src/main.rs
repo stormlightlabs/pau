@@ -156,8 +156,8 @@ fn main() {
         .expect("failed to build the Pau desktop application");
 
     application.run(|app, event| {
-        if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
-            app.state::<PauLauncher>().stop();
+        if matches!(event, RunEvent::Exit) {
+            tauri::async_runtime::block_on(app.state::<PauLauncher>().shutdown());
         }
     });
 }

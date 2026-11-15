@@ -30,7 +30,7 @@ pub use native_sessions::{
 };
 pub use process::{
     PiDiagnostic, PiDiagnosticSource, PiProcess, PiProcessError, PiProcessExit, PiProcessOutput,
-    PiShutdownTimeouts, StartPiProcessOptions,
+    PiReplyTimeouts, PiShutdownTimeouts, StartPiProcessOptions,
 };
 pub use projection::{
     PiCompactionOutcome, PiCompactionReason, PiCompactionResult, PiEventPayload, PiEventReducer,
@@ -193,6 +193,7 @@ impl PiDiscovery {
             working_directory,
             arguments,
             environment: vec![("PATH".into(), self.path.clone())],
+            reply_timeouts: PiReplyTimeouts::default(),
             shutdown_timeouts: PiShutdownTimeouts::default(),
         }
     }

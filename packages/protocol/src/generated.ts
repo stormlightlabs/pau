@@ -156,6 +156,90 @@ dropped_records: number,
  */
 revision: number, };
 
+export type AuditActor = "operator" | "pau" | "process";
+
+export type AuditOperation = "session_start" | "session_stop" | "terminal_start" | "terminal_stop" | "file_write" | "file_export" | "sandbox_update";
+
+export type AuditResult = "succeeded" | "denied" | "failed" | "cancelled";
+
+export type AuditEntry = {
+/**
+ * Workspace the change applies to, when there is one.
+ */
+workspace_id: string | null,
+/**
+ * Agent session the change applies to, when there is one.
+ */
+session_id: string | null,
+/**
+ * Who asked for the change.
+ */
+actor: AuditActor,
+/**
+ * What the change did.
+ */
+operation: AuditOperation,
+/**
+ * How it ended.
+ */
+result: AuditResult,
+/**
+ * What was changed: an agent name, a terminal ID, a workspace-relative
+ * path, an export's file name, or a sandbox profile name.
+ */
+target: string | null,
+/**
+ * The API error code of a refused or failed request.
+ */
+reason: string | null,
+/**
+ * Exit code of a stopped process, when the platform reported one.
+ */
+exit_code: number | null, };
+
+export type AuditRecord = {
+/**
+ * Increasing record number. Numbers are never reused.
+ */
+sequence: number,
+/**
+ * RFC 3339 time the change was recorded.
+ */
+recorded_at: string,
+/**
+ * Workspace the change applies to, when there is one.
+ */
+workspace_id: string | null,
+/**
+ * Agent session the change applies to, when there is one.
+ */
+session_id: string | null,
+/**
+ * Who asked for the change.
+ */
+actor: AuditActor,
+/**
+ * What the change did.
+ */
+operation: AuditOperation,
+/**
+ * How it ended.
+ */
+result: AuditResult,
+/**
+ * What was changed: an agent name, a terminal ID, a workspace-relative
+ * path, an export's file name, or a sandbox profile name.
+ */
+target: string | null,
+/**
+ * The API error code of a refused or failed request.
+ */
+reason: string | null,
+/**
+ * Exit code of a stopped process, when the platform reported one.
+ */
+exit_code: number | null, };
+
 export type Workspace = {
 /**
  * Stable application identifier.
@@ -918,7 +1002,7 @@ adapter: SandboxAdapter,
  */
 selection: SandboxSelection, };
 
-export type SessionStatus = "starting" | "idle" | "running" | "waiting" | "stopping" | "stopped" | "failed";
+export type SessionStatus = "starting" | "idle" | "running" | "waiting" | "not_responding" | "stopping" | "stopped" | "failed";
 
 export type SessionCapabilities = {
 /**

@@ -549,6 +549,14 @@ impl ClaudeBridgeProcess {
             .ok_or(ClaudeBridgeProcessError::KillTimeout)
     }
 
+    /// Kills the host's whole process group now, without waiting.
+    ///
+    /// A [`shutdown`](Self::shutdown) in progress then returns with the
+    /// killed host's exit. Does nothing once the host has exited.
+    pub fn kill(&self) {
+        let _ = self.kill.try_send(());
+    }
+
     #[cfg(unix)]
     async fn send_signal(&self, signal: i32) -> Result<(), ClaudeBridgeProcessError> {
         signal_process_group(self.process_id, signal).map_err(ClaudeBridgeProcessError::Signal)
@@ -800,6 +808,12 @@ impl ClaudeSession {
         let exit = self.process.shutdown().await?;
         *self.status.lock().await = AgentSessionStatus::Stopped;
         Ok(exit)
+    }
+
+    /// Kills the bridge host and Claude now, without waiting. A
+    /// [`stop`](Self::stop) in progress then returns with the host's exit.
+    pub fn kill(&self) {
+        self.process.kill();
     }
 }
 

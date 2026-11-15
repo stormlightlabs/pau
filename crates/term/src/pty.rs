@@ -268,12 +268,17 @@ impl Terminal {
             write_input(writer, input_receiver)
         })?;
         spawn_thread("pau-term-waiter", move || {
-            let waited = child.wait();
             if sandboxed {
                 // Before the status goes out, so an exited sandboxed
-                // terminal has nothing left running.
-                session::kill_leftovers(process_id as libc::pid_t);
+                // terminal has nothing left running. The sweep runs before
+                // the shell is reaped: the sweep matches on the shell's
+                // process ID, which a reaped shell could pass to another
+                // terminal's shell.
+                let session = process_id as libc::pid_t;
+                session::wait_unreaped(session);
+                session::kill_leftovers(session);
             }
+            let waited = child.wait();
             let status = match waited {
                 Ok(status) => TerminalStatus::Exited {
                     exit_code: status.exit_code(),
@@ -411,6 +416,16 @@ impl Terminal {
         exit.wait().await
     }
 
+    /// Sends `SIGKILL` to the shell's process group and the foreground
+    /// process group now, without waiting. A [`close`](Self::close) in
+    /// progress then returns with the child's exit. Does nothing once the
+    /// child has exited.
+    pub fn kill(&self) {
+        if self.is_running() {
+            self.signal_session(libc::SIGKILL);
+        }
+    }
+
     fn is_running(&self) -> bool {
         matches!(self.status(), TerminalStatus::Running)
     }
@@ -436,9 +451,7 @@ impl Terminal {
 
 impl Drop for Terminal {
     fn drop(&mut self) {
-        if self.is_running() {
-            self.signal_session(libc::SIGKILL);
-        }
+        self.kill();
     }
 }
 

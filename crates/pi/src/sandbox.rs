@@ -14,7 +14,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use pau_agent::DiscoveredMcpServer;
+use pau_agent::{DiscoveredMcpServer, McpConfigurationScope};
 use pau_core::sandbox::{
     EffectiveSandbox, SandboxAdapter, SandboxError, SandboxExecutables, SandboxLaunchInput,
     SandboxSettings, SandboxedMcpServer, prepare_sandbox, resolve_sandbox, write_private_file,
@@ -109,7 +109,7 @@ pub fn prepare_pi_sandbox(input: &PreparePiSandbox<'_>) -> Result<PiSandboxLaunc
     if let Some(servers) = input.mcp_servers {
         let session_mcp = session_mcp(
             servers,
-            &input.settings.grants.domains,
+            input.settings,
             &resolved.host_directory,
             Path::new(&resolved.policy.workspace),
         )?;
@@ -158,10 +158,16 @@ struct SessionMcp {
 
 fn session_mcp(
     servers: &[DiscoveredMcpServer],
-    domains: &[String],
+    settings: &SandboxSettings,
     host_directory: &Path,
     workspace: &Path,
 ) -> Result<SessionMcp, SandboxError> {
+    let domains = &settings.grants.domains;
+    let credential_sources: Vec<String> = settings
+        .credential_references
+        .iter()
+        .map(|reference| reference.source.clone())
+        .collect();
     let mut entries = Map::new();
     let mut contained = Vec::new();
     let mut sandboxed = Vec::new();
@@ -207,6 +213,11 @@ fn session_mcp(
                             .collect()
                     })
                     .unwrap_or_else(BTreeMap::new),
+                variables: if user_scope_only(server) {
+                    None
+                } else {
+                    Some(credential_sources.clone())
+                },
             });
             sandboxed.push(format!("MCP server {}", server.name));
         } else if let Some(url) = definition.get("url").and_then(Value::as_str) {
@@ -235,6 +246,16 @@ fn session_mcp(
         sandboxed,
         disabled,
     })
+}
+
+/// Whether only user-scope files, which the operator wrote, define the
+/// server. A server without recorded sources does not count.
+fn user_scope_only(server: &DiscoveredMcpServer) -> bool {
+    !server.sources.is_empty()
+        && server
+            .sources
+            .iter()
+            .all(|source| source.scope == McpConfigurationScope::User)
 }
 
 fn strings(value: Option<&Value>) -> Vec<String> {
@@ -276,6 +297,8 @@ fn domain_granted(host: &str, domains: &[String]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pau_agent::{McpConfigurationKind, McpServerSource};
+    use pau_core::sandbox::SandboxCredentialReference;
 
     fn server(name: &str, definition: Value) -> DiscoveredMcpServer {
         DiscoveredMcpServer {
@@ -286,6 +309,38 @@ mod tests {
         }
     }
 
+    /// `server` defined by files of the given scopes, in precedence order.
+    fn scoped(
+        name: &str,
+        definition: Value,
+        scopes: &[McpConfigurationScope],
+    ) -> DiscoveredMcpServer {
+        DiscoveredMcpServer {
+            sources: scopes
+                .iter()
+                .map(|scope| McpServerSource {
+                    path: PathBuf::from("/config/mcp.json"),
+                    scope: *scope,
+                    kind: McpConfigurationKind::Shared,
+                })
+                .collect(),
+            ..server(name, definition)
+        }
+    }
+
+    /// Workspace-write settings with `domains` granted and one credential
+    /// reference to `PAU_TEST_CREDENTIAL`.
+    fn settings(domains: &[&str]) -> SandboxSettings {
+        let mut settings = SandboxSettings::workspace_write();
+        settings.grants.domains = domains.iter().map(|domain| (*domain).to_owned()).collect();
+        settings.credential_references = vec![SandboxCredentialReference {
+            source: "PAU_TEST_CREDENTIAL".into(),
+            shape: Default::default(),
+            destinations: vec!["api.example.com".into()],
+        }];
+        settings
+    }
+
     #[test]
     fn contains_stdio_servers_and_granted_remote_servers() {
         // A set variable shows that its value stays out of the policy.
@@ -294,9 +349,17 @@ mod tests {
         let host = Path::new("/state/session/host");
         let workspace = Path::new("/work");
         let servers = [
-            server(
+            scoped(
                 "files",
                 json!({"command": "files-mcp", "args": ["--root", "."], "cwd": "tools", "env": {"MODE": "ro", "TOKEN": "${PAU_TEST_MCP_TOKEN}"}, "lifecycle": "lazy"}),
+                &[McpConfigurationScope::User],
+            ),
+            // A project file that only adds a variable still restricts the
+            // user's server.
+            scoped(
+                "repo",
+                json!({"command": "repo-mcp", "env": {"T": "${GITHUB_TOKEN}"}}),
+                &[McpConfigurationScope::User, McpConfigurationScope::Project],
             ),
             server(
                 "docs",
@@ -310,28 +373,41 @@ mod tests {
             },
         ];
         let session =
-            session_mcp(&servers, &["*.example.com".to_owned()], host, workspace).unwrap();
+            session_mcp(&servers, &settings(&["*.example.com"]), host, workspace).unwrap();
 
         assert_eq!(
             session.configuration,
             json!({"mcpServers": {
                 "files": {"socket": "/state/session/host/mcp-0.sock", "lifecycle": "lazy"},
+                "repo": {"socket": "/state/session/host/mcp-1.sock"},
                 "docs": {"url": "https://docs.example.com/mcp", "auth": "oauth"},
             }})
         );
         assert_eq!(
             session.contained,
-            [SandboxedMcpServer {
-                name: "files".into(),
-                socket: "/state/session/host/mcp-0.sock".into(),
-                command: "files-mcp".into(),
-                args: vec!["--root".into(), ".".into()],
-                cwd: "tools".into(),
-                env: BTreeMap::from([
-                    ("MODE".into(), "ro".into()),
-                    ("TOKEN".into(), "${PAU_TEST_MCP_TOKEN}".into()),
-                ]),
-            }]
+            [
+                SandboxedMcpServer {
+                    name: "files".into(),
+                    socket: "/state/session/host/mcp-0.sock".into(),
+                    command: "files-mcp".into(),
+                    args: vec!["--root".into(), ".".into()],
+                    cwd: "tools".into(),
+                    env: BTreeMap::from([
+                        ("MODE".into(), "ro".into()),
+                        ("TOKEN".into(), "${PAU_TEST_MCP_TOKEN}".into()),
+                    ]),
+                    variables: None,
+                },
+                SandboxedMcpServer {
+                    name: "repo".into(),
+                    socket: "/state/session/host/mcp-1.sock".into(),
+                    command: "repo-mcp".into(),
+                    args: Vec::new(),
+                    cwd: "/work".into(),
+                    env: BTreeMap::from([("T".into(), "${GITHUB_TOKEN}".into())]),
+                    variables: Some(vec!["PAU_TEST_CREDENTIAL".into()]),
+                }
+            ]
         );
         assert_eq!(session.disabled.len(), 2);
         assert!(
@@ -352,7 +428,7 @@ mod tests {
     fn rejects_relay_sockets_that_do_not_fit() {
         let host = PathBuf::from(format!("/{}", "long/".repeat(30)));
         let servers = [server("files", json!({"command": "files-mcp"}))];
-        assert!(session_mcp(&servers, &[], &host, Path::new("/work")).is_err());
+        assert!(session_mcp(&servers, &settings(&[]), &host, Path::new("/work")).is_err());
     }
 
     #[test]

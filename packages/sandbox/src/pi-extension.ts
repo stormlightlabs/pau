@@ -43,6 +43,36 @@ const definitions = {
 const MCP_ADAPTER_SOURCE = /[/\\]pi-mcp-adapter[/\\]/;
 
 /**
+ * Why MCP servers may be running in the Pi process, outside the sandbox, or
+ * `null`.
+ *
+ * Without a session MCP configuration, Pau found no MCP adapter, and this
+ * extension registers the only `/mcp` command, which keeps Pi's built-in MCP
+ * support off. Any MCP tool, or a second `/mcp` command, then comes from an
+ * adapter Pau missed, whose servers start in the Pi process. The session
+ * must fail instead of running them.
+ */
+export function unsandboxedMcp(
+	policy: { mcpConfig: string | null },
+	tools: Array<{ name: string; sourceInfo: { path: string } }>,
+	commands: Array<{ name: string }>
+): string | null {
+	if (policy.mcpConfig !== null) return null;
+	const mcpTools = tools
+		.filter(
+			(tool) => tool.name === 'mcp' || tool.name.startsWith('mcp__') || MCP_ADAPTER_SOURCE.test(tool.sourceInfo.path)
+		)
+		.map((tool) => tool.name);
+	if (mcpTools.length > 0) {
+		return `an extension Pau did not recognize as an MCP adapter registered MCP tools (${mcpTools.join(', ')}), and its servers would run outside the sandbox`;
+	}
+	if (commands.filter((command) => /^mcp(:\d+)?$/.test(command.name)).length > 1) {
+		return 'an extension Pau did not recognize as an MCP adapter registered /mcp, and its servers would run outside the sandbox';
+	}
+	return null;
+}
+
+/**
  * Status key of the record that tells Pau whether the tool host started. Its
  * text is `{"state":"ready"}` or `{"state":"unavailable","message":…}`. Pau
  * waits for it before a sandboxed session counts as started and never shows
@@ -139,6 +169,10 @@ export default function pauSandbox(pi: ExtensionAPI): void {
 		let state: Record<string, string> = { state: 'ready' };
 		try {
 			await session.connect();
+			// Checked after the tool host starts, which gives an adapter's
+			// eager servers time to register their tools.
+			const reason = unsandboxedMcp(session.policy, pi.getAllTools(), pi.getCommands());
+			if (reason !== null) state = { state: 'unavailable', message: reason };
 		} catch (error) {
 			const message =
 				error instanceof SandboxUnavailableError

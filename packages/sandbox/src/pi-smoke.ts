@@ -411,7 +411,8 @@ const mcpServer: SandboxedMcpServer = {
 	command: process.execPath,
 	args: [source('probe.ts'), 'mcp-server', path.join(home, '.ssh/id_ed25519'), path.join(outside, 'mcp.txt')],
 	cwd: workspace,
-	env: {}
+	env: {},
+	variables: []
 };
 const withTool = sandboxSettings('workspace-write', { unsandboxed_tools: ['host_probe'] });
 const approvedMarker = path.join(outside, 'approved.txt');

@@ -126,6 +126,7 @@ impl SessionApi {
             capabilities: CLAUDE_BRIDGE_CAPABILITIES,
             native: Arc::default(),
             sandbox_directory: None,
+            pending: false,
         };
         // A resumed session reports its ID only after its first turn, so the
         // requested ID stands in until then. Without it, stopping the session

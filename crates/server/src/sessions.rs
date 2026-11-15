@@ -179,6 +179,11 @@ struct SessionRecord {
     /// Pau-owned directory that holds a sandboxed session's policy and
     /// temporary files, removed when the process exits.
     sandbox_directory: Option<PathBuf>,
+    /// Whether the session still waits for its sandbox to confirm. Until it
+    /// does, its tools might run with full access, so [`SessionApi::live`]
+    /// treats it as absent: it is not listed and refuses every control,
+    /// including prompts.
+    pending: bool,
 }
 
 /// The session state Pi owns, refreshed from `get_state`.
@@ -333,7 +338,10 @@ impl SessionApi {
             return Err(claude::unsupported());
         }
         let not_found = || ApiError::from(PiSessionRegistryError::NotFound(id.to_owned()));
-        let record = self.record(id).ok_or_else(not_found)?;
+        let record = self
+            .record(id)
+            .filter(|record| !record.pending)
+            .ok_or_else(not_found)?;
         let session = self.registry.get(id).await.ok_or_else(not_found)?;
         Ok((record, session))
     }
@@ -1122,17 +1130,19 @@ pub(crate) async fn start_session(
             started_at: diagnostic_timestamp(),
             capabilities: pau_pi::PI_RPC_CAPABILITIES,
             native: Arc::default(),
+            pending: sandbox_directory.is_some(),
             sandbox_directory,
         };
         api.records
             .lock()
             .expect("session records lock poisoned")
             .insert(id.clone(), record.clone());
-        // Subscribe before Pi starts, so the sandbox report cannot be missed.
-        let mut output = api.registry.subscribe();
+        // The session's own output, subscribed before Pi starts, so the
+        // sandbox report can be neither missed nor crowded out by other
+        // sessions' output.
         let started = api
             .registry
-            .start(StartRegisteredPiSession {
+            .start_subscribed(StartRegisteredPiSession {
                 id: id.clone(),
                 workspace_id: request.workspace_id,
                 started_at: record.started_at.clone(),
@@ -1140,21 +1150,29 @@ pub(crate) async fn start_session(
                 sandbox_placeholders,
             })
             .await;
-        let session = match started {
-            Ok(session) => session,
+        let (session, mut output) = match started {
+            Ok(started) => started,
             Err(error) => {
                 api.discard(&id).await;
                 return Err(error.into());
             }
         };
-        if record.sandbox_directory.is_some()
-            && let Err(reason) = sandbox_started(&mut output, &id).await
-        {
-            api.discard(&id).await;
-            return Err(ApiError::SandboxUnavailable(format!(
-                "The sandbox could not start: {}.",
-                reason.trim_end_matches('.')
-            )));
+        if record.pending {
+            if let Err(reason) = sandbox_started(&mut output).await {
+                api.discard(&id).await;
+                return Err(ApiError::SandboxUnavailable(format!(
+                    "The sandbox could not start: {}.",
+                    reason.trim_end_matches('.')
+                )));
+            }
+            if let Some(record) = api
+                .records
+                .lock()
+                .expect("session records lock poisoned")
+                .get_mut(&id)
+            {
+                record.pending = false;
+            }
         }
         drop(output);
         if let Some(SessionModelSelection { provider, model_id }) = request.model
@@ -1356,29 +1374,24 @@ fn sandbox_status(event: &Value) -> Option<&str> {
         })
 }
 
-/// Waits for the sandbox extension to report whether session `id`'s tool
-/// host runs inside the sandbox, and returns why not.
+/// Waits for the sandbox extension to report, on its session's own `output`,
+/// whether the session's tool host runs inside the sandbox, and returns why
+/// not.
 ///
 /// Pi keeps running when an extension fails to load, and its built-in tools
 /// would then run with full access, so a session that never reports fails
 /// too.
-async fn sandbox_started(
-    output: &mut broadcast::Receiver<PiSessionOutput>,
-    id: &str,
-) -> Result<(), String> {
+async fn sandbox_started(output: &mut broadcast::Receiver<PiProcessOutput>) -> Result<(), String> {
     let report = async {
         loop {
-            let tagged = match output.recv().await {
-                Ok(tagged) => tagged,
+            let output = match output.recv().await {
+                Ok(output) => output,
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(broadcast::error::RecvError::Closed) => {
                     return Err("Pau stopped before the sandbox started".to_owned());
                 }
             };
-            if tagged.session_id != id {
-                continue;
-            }
-            match tagged.output {
+            match output {
                 PiProcessOutput::Event(event) => {
                     let Some(text) = sandbox_status(&event) else {
                         continue;

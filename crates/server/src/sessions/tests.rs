@@ -368,6 +368,17 @@ impl Fixture {
             .unwrap();
     }
 
+    /// Waits until Pi runs for a session that has not been confirmed yet,
+    /// and returns its ID from the process records.
+    async fn pending_session(&self) -> String {
+        loop {
+            if let Some(process) = self.database.processes().list().await.unwrap().pop() {
+                return process.id;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
     /// Entries in the parent of the per-session sandbox directories.
     fn sandbox_directories(&self) -> Vec<PathBuf> {
         fs::read_dir(self._directory.path().join("sandbox"))
@@ -1117,6 +1128,56 @@ async fn assert_sandbox_unavailable(fixture: &Fixture, reason: &str) {
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_session_waiting_for_its_sandbox_is_hidden_and_refuses_prompts() {
+    let fixture = Fixture::new(None).await;
+    fixture.select_sandbox(json!({})).await;
+    fs::write(fixture.workspace_root.join("sandbox-silent"), "").unwrap();
+
+    let mut start = Box::pin(fixture.start(None));
+    let id = tokio::select! {
+        (status, body) = &mut start => panic!("the start finished first: {status} {body}"),
+        id = fixture.pending_session() => id,
+    };
+    assert_eq!(
+        fixture.call("GET", "/api/sessions", None).await.1,
+        json!([])
+    );
+    let base = format!("/api/sessions/{id}");
+    for (method, path, body) in [
+        (
+            "POST",
+            format!("{base}/prompt"),
+            Some(json!({"message": "hi"})),
+        ),
+        (
+            "POST",
+            format!("{base}/follow-up"),
+            Some(json!({"message": "hi"})),
+        ),
+        (
+            "POST",
+            format!("{base}/shell"),
+            Some(json!({"command": "echo hi", "exclude_from_context": false})),
+        ),
+        ("GET", base.clone(), None),
+    ] {
+        let (status, error) = fixture.call(method, &path, body).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{method} {path}: {error}");
+    }
+    assert!(
+        !fixture
+            .commands()
+            .iter()
+            .any(|command| command == "prompt" || command == "follow_up" || command == "bash"),
+        "{:?}",
+        fixture.commands()
+    );
+
+    let (status, _) = start.await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_cancelled_sandboxed_start_still_stops_its_unconfirmed_session() {
     let fixture = Fixture::new(None).await;
     fixture.select_sandbox(json!({})).await;
@@ -1125,14 +1186,9 @@ async fn a_cancelled_sandboxed_start_still_stops_its_unconfirmed_session() {
     // The client gives up once Pi has started and the start waits for a
     // sandbox report that never comes.
     let mut start = Box::pin(fixture.start(None));
-    let started = async {
-        while fixture.call("GET", "/api/sessions", None).await.1 == json!([]) {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    };
     tokio::select! {
         (status, body) = &mut start => panic!("the start finished first: {status} {body}"),
-        () = started => {}
+        _ = fixture.pending_session() => {}
     }
     drop(start);
 

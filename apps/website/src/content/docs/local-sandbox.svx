@@ -131,6 +131,19 @@ With `pi-mcp-adapter` installed, Pau gives the session its own MCP list:
   the sandbox proxy.
 - Other servers are disabled for the session.
 
+A stdio server's settings can name environment variables, such as
+`${GITHUB_TOKEN}`. Pau fills them in from its own environment when the server
+starts. A server defined only in your user files, such as
+`~/.pi/agent/mcp.json`, can name any variable. When a project file, such as the
+workspace's `.mcp.json`, defines or changes a server, that server can name only
+the variables your profile lists as credential references, and it receives
+their real values, not sentinels. A server that names any other variable does
+not start, and its error names the variable but never its value.
+
+If Pau does not recognize an installed MCP adapter and the adapter registers
+MCP tools, the session fails to start instead of running that adapter's servers
+outside the sandbox.
+
 ## Claude
 
 Pau starts Claude Code with its own sandbox and the same profile. Claude's

@@ -38,7 +38,8 @@ async function relay(session: SandboxSession, server: SandboxedMcpServer, connec
 		connection.on('data', (data: Buffer) => stream.write(data));
 		connection.once('close', () => stream.close());
 	} catch (error) {
-		process.stderr.write(`[pau-sandbox] MCP server ${server.name} unavailable: ${String(error)}\n`);
+		const reason = error instanceof Error ? error.message : String(error);
+		process.stderr.write(`[pau-sandbox] MCP server ${server.name} unavailable: ${reason}\n`);
 		connection.destroy();
 	}
 }
@@ -50,16 +51,27 @@ async function relay(session: SandboxSession, server: SandboxedMcpServer, connec
  * process's environment, which is Pau's, so they reach the tool host over
  * its socket and never the policy file. An unset variable expands to
  * nothing, and a relative working directory resolves against the workspace.
+ *
+ * When `server.variables` lists names, because a project or package file
+ * shapes the server, a reference to any other name throws an error that
+ * names the variable but not its value, and the server does not start.
  */
 export function expandMcpServer(
 	server: SandboxedMcpServer,
 	workspace: string,
 	env: NodeJS.ProcessEnv = process.env
 ): SandboxedMcpServer {
+	const allowed = server.variables === null ? null : new Set(server.variables);
 	const expand = (value: string): string => {
 		const home = value.startsWith('~/') && env.HOME !== undefined ? `${env.HOME}/${value.slice(2)}` : value;
 		return home.replace(/\$\{([^}]+)\}|\$env:([A-Za-z0-9_]+)/g, (_match, braced?: string, named?: string) => {
-			return env[braced ?? named ?? ''] ?? '';
+			const name = braced ?? named ?? '';
+			if (allowed !== null && !allowed.has(name)) {
+				throw new Error(
+					`its configuration reads the variable ${name}, which a project or package MCP file may read only when the sandbox profile grants it as a credential reference`
+				);
+			}
+			return env[name] ?? '';
 		});
 	};
 	return {

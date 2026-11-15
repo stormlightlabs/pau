@@ -53,6 +53,9 @@ pub enum ServerEventKind {
     /// Interface preferences were saved. The payload is a
     /// [`preferences::UiPreferences`].
     PreferencesChanged,
+    /// A workspace's default sandbox selection was saved. The payload is the
+    /// stored [`sandbox::SandboxSelection`].
+    SandboxChanged,
     /// Files changed on disk in a watched workspace. The payload is a
     /// [`workspace_watch::WorkspaceFileChanges`].
     ///

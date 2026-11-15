@@ -1,7 +1,8 @@
 import type { TerminalInfo, TerminalServerMessage, TerminalSize } from '@stormlightlabs/pau-protocol';
 import type { TerminalSource, TerminalTab } from '@stormlightlabs/pau-ui';
 
-import { closeTerminal, createTerminal, listTerminals, resolveTerminalSocket } from './api';
+import { closeTerminal, createTerminal, getWorkspaceSandbox, listTerminals, resolveTerminalSocket } from './api';
+import { EventStreamClient } from './event-stream';
 
 /** Size requested for a new terminal before its view measures the real grid. */
 const INITIAL_SIZE = { cols: 80, rows: 24 };
@@ -30,7 +31,11 @@ export function createTerminalSource(browserOrigin: string, workspaceId: string)
 		const program = info.command[0]?.split('/').at(-1) || 'shell';
 		const count = (opened.get(program) ?? 0) + 1;
 		opened.set(program, count);
-		return { id: info.id, title: count === 1 ? program : `${program} ${count}` };
+		return {
+			id: info.id,
+			title: count === 1 ? program : `${program} ${count}`,
+			...(info.sandbox && { sandbox: info.sandbox })
+		};
 	}
 
 	return {
@@ -38,7 +43,32 @@ export function createTerminalSource(browserOrigin: string, workspaceId: string)
 			const terminals = await listTerminals();
 			return terminals.filter((info) => info.workspace_id === workspaceId).map((info) => tab(info));
 		},
-		create: async () => tab(await createTerminal(workspaceId, INITIAL_SIZE)),
+		create: async (options) =>
+			tab(
+				await createTerminal({ workspace_id: workspaceId, size: INITIAL_SIZE, sandboxed: options?.sandboxed ?? false })
+			),
+		sandbox: async () => {
+			const { selection, terminal_unavailable } = await getWorkspaceSandbox(workspaceId);
+			return {
+				profile: selection.mode === 'sandboxed' ? selection.settings.profile : null,
+				unavailable: terminal_unavailable
+			};
+		},
+		watchSandbox: (listener) => {
+			const stream = new EventStreamClient({
+				browserOrigin,
+				replay: false,
+				onState: (_state, event) => {
+					if (event?.kind === 'sandbox_changed' && event.workspace_id === workspaceId) listener();
+				},
+				// A change made while the stream was down arrives in no event.
+				onConnectionChange: (connected) => {
+					if (connected) listener();
+				}
+			});
+			stream.connect();
+			return () => stream.stop();
+		},
 		connect: (id, events) => {
 			// Unset until the view measures its grid. A hidden view never does, and
 			// sending the creation size on each open would shrink its program.

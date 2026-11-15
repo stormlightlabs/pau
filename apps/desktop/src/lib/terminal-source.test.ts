@@ -180,3 +180,57 @@ test('lists the workspace terminals in opening order and numbers repeated progra
 		{ id: 'd', title: 'zsh 2' }
 	]);
 });
+
+test('opens sandboxed terminals and reports the workspace profile for them', async () => {
+	const requests: { url: string; body?: unknown }[] = [];
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async (url: string, init?: RequestInit) => {
+			requests.push({ url, body: init?.body && JSON.parse(String(init.body)) });
+			if (url.endsWith('/sandbox')) {
+				return Response.json({
+					selection: { mode: 'sandboxed', settings: { profile: 'read-only' } },
+					unavailable: null,
+					terminal_unavailable: 'srt was not found'
+				});
+			}
+			return Response.json({ ...info('a', 'workspace', '/bin/zsh'), sandbox: 'read-only' }, { status: 201 });
+		})
+	);
+	const source = createTerminalSource('http://localhost:5173', 'workspace');
+
+	await expect(source.sandbox?.()).resolves.toEqual({ profile: 'read-only', unavailable: 'srt was not found' });
+	await expect(source.create({ sandboxed: true })).resolves.toEqual({ id: 'a', title: 'zsh', sandbox: 'read-only' });
+	expect(requests.at(-1)?.body).toEqual({
+		workspace_id: 'workspace',
+		size: { cols: 80, rows: 24 },
+		sandboxed: true,
+		command: null
+	});
+});
+
+test('asks for the profile again when this workspace saves a sandbox selection', () => {
+	const listener = vi.fn();
+	const stop = createTerminalSource('http://localhost:5173', 'workspace').watchSandbox?.(listener);
+	const socket = FakeSocket.opened[0]!;
+	const publish = (sequence: number, kind: string, workspaceId: string) =>
+		socket.dispatchEvent(
+			Object.assign(new Event('message'), {
+				data: JSON.stringify({
+					type: 'event',
+					event: { sequence, timestamp: '', workspace_id: workspaceId, session_id: null, kind, payload: '{}' }
+				})
+			})
+		);
+
+	socket.accept();
+	expect(listener).toHaveBeenCalledOnce();
+	publish(1, 'sandbox_changed', 'other');
+	publish(2, 'terminal_changed', 'workspace');
+	expect(listener).toHaveBeenCalledOnce();
+	publish(3, 'sandbox_changed', 'workspace');
+	expect(listener).toHaveBeenCalledTimes(2);
+
+	stop?.();
+	expect(socket.readyState).toBe(3);
+});

@@ -1,5 +1,6 @@
 import type {
 	AgentResourceIndex,
+	CreateTerminalRequest,
 	AgentKeybindings,
 	AgentReadinessReport,
 	AgentSession,
@@ -43,7 +44,6 @@ import type {
 	SessionUsage,
 	StartSessionRequest,
 	TerminalInfo,
-	TerminalSize,
 	UiPreferences,
 	VersionResponse,
 	Workspace,
@@ -784,16 +784,15 @@ export async function listTerminals(fetcher: typeof fetch = fetch): Promise<Term
 	return responseJson<TerminalInfo[]>(response);
 }
 
-/** Opens the user's shell in a workspace root. */
+/** Opens the user's shell in a workspace root, under its sandbox profile when `sandboxed` is set. */
 export async function createTerminal(
-	workspaceId: string,
-	size: TerminalSize,
+	request: Omit<CreateTerminalRequest, 'command'>,
 	fetcher: typeof fetch = fetch
 ): Promise<TerminalInfo> {
 	const response = await fetcher(`${apiConnection().origin}/api/terminals`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', ...authorization() },
-		body: JSON.stringify({ workspace_id: workspaceId, command: null, size })
+		body: JSON.stringify({ ...request, command: null })
 	});
 	return responseJson<TerminalInfo>(response);
 }

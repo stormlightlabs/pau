@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { createTerminalFixture } from '../fixtures/terminals';
 	import TerminalSurface from '../lib/TerminalSurface.svelte';
-	import type { TerminalExit } from '../lib/types/terminal';
+	import type { TerminalExit, TerminalSandboxChoice } from '../lib/types/terminal';
 	import type { ThemeName, UiFontName } from '../theme';
 
 	type Props = {
@@ -13,6 +13,8 @@
 		history?: string[];
 		running?: number;
 		listError?: string;
+		sandbox?: TerminalSandboxChoice;
+		sandboxError?: string;
 		/** Workspace files that paths in the output link to. */
 		linkedFiles?: string[];
 	};
@@ -26,10 +28,14 @@
 		history,
 		running,
 		listError,
+		sandbox,
+		sandboxError,
 		linkedFiles
 	}: Props = $props();
 
-	const { source } = $derived(createTerminalFixture({ exitOnConnect, createError, history, running, listError }));
+	const { source } = $derived(
+		createTerminalFixture({ exitOnConnect, createError, history, running, listError, sandbox, sandboxError })
+	);
 	const fileLinks = $derived(
 		linkedFiles && {
 			files: async (directory: string) =>

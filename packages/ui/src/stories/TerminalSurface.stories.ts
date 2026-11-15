@@ -37,6 +37,43 @@ export const Tabs: Story = {
 	}
 };
 
+export const Sandboxed: Story = {
+	args: { sandbox: { profile: 'workspace-write', unavailable: null } },
+	play: async (context) => {
+		await openTerminal(context);
+		const canvas = within(context.canvasElement);
+		await userEvent.click(canvas.getByRole('button', { name: 'New sandboxed terminal (Workspace write)' }));
+		await expect(await canvas.findByRole('tab', { name: /^zsh 2.*workspace write$/ })).toHaveAttribute(
+			'aria-selected',
+			'true'
+		);
+	}
+};
+
+export const SandboxUnavailable: Story = {
+	args: {
+		sandbox: { profile: 'workspace-write', unavailable: "sandbox-runtime's srt command was not found on PATH." }
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByRole('button', { name: 'New sandboxed terminal (Workspace write)' })).toBeDisabled();
+	}
+};
+
+export const SandboxRelayFailed: Story = {
+	args: {
+		sandbox: { profile: 'read-only', unavailable: null },
+		sandboxError: 'The terminal relay exited before it started.'
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const button = canvas.getByRole('button', { name: 'New sandboxed terminal (Read only)' });
+		await userEvent.click(button);
+		await expect(await canvas.findByRole('alert')).toHaveTextContent('The terminal relay exited before it started.');
+		await expect(button).toBeDisabled();
+	}
+};
+
 export const Find: Story = {
 	args: {
 		history: [

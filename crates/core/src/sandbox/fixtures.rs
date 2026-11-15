@@ -27,6 +27,11 @@ pub(super) fn executables() -> SandboxExecutables {
             path: "/pinned/rg".into(),
             version: None,
         },
+        srt: Some(SandboxExecutable {
+            name: "srt".into(),
+            path: "/pinned/srt".into(),
+            version: None,
+        }),
     }
 }
 

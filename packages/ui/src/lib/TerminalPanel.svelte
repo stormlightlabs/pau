@@ -1,5 +1,11 @@
 <script lang="ts" module>
+	import type { SandboxProfile } from './types/sandbox';
 	import type { TerminalExit, TerminalTab } from './types/terminal';
+
+	const PROFILE_LABELS: Record<SandboxProfile, string> = {
+		'workspace-write': 'Workspace write',
+		'read-only': 'Read only'
+	};
 
 	/** A tab's lifecycle as reported by its connection. */
 	export type TerminalTabState = TerminalTab & {
@@ -32,7 +38,7 @@
 	import EmptyState from './EmptyState.svelte';
 	import Icon from './Icon.svelte';
 	import TerminalView from './TerminalView.svelte';
-	import type { TerminalFileLinks, TerminalSource } from './types/terminal';
+	import type { TerminalFileLinks, TerminalSandboxChoice, TerminalSource } from './types/terminal';
 
 	type Props = {
 		source: TerminalSource;
@@ -73,6 +79,17 @@
 	let error = $state('');
 	let views: Record<string, TerminalView | undefined> = $state({});
 	let activeTab = $derived(tabs.find((tab) => tab.id === activeId));
+	let sandbox = $state<TerminalSandboxChoice>();
+	/** Why the last sandboxed terminal failed to start. The profile stays unavailable after it. */
+	let sandboxFailure = $state('');
+	/** Why a sandboxed terminal cannot open now, or an empty string when it can. */
+	let sandboxBlocked = $derived(
+		!sandbox
+			? 'Checking the sandbox profile.'
+			: sandboxFailure ||
+					sandbox.unavailable ||
+					(sandbox.profile ? '' : 'This workspace has no sandbox profile. Choose one in its sandbox settings.')
+	);
 
 	$effect(() => {
 		if (activeTab?.activity) activeTab.activity = false;
@@ -111,19 +128,46 @@
 		}
 	}
 
+	/** Counts profile reads, so a slow earlier read cannot replace a newer one. */
+	let sandboxReads = 0;
+
+	async function loadSandbox(): Promise<void> {
+		if (!source.sandbox) return;
+		const read = ++sandboxReads;
+		let choice: TerminalSandboxChoice;
+		try {
+			choice = await source.sandbox();
+		} catch (cause) {
+			choice = { profile: null, unavailable: `Could not read the sandbox profile. ${message(cause)}` };
+		}
+		if (read === sandboxReads) sandbox = choice;
+	}
+
 	onMount(() => {
 		void restoreTerminals();
+		void loadSandbox();
+		// A new selection may make a sandboxed terminal possible again.
+		return source.watchSandbox?.(() => {
+			sandboxFailure = '';
+			void loadSandbox();
+		});
 	});
 
-	async function openTerminal(): Promise<void> {
+	/** Opens a terminal. A sandboxed one that fails never falls back to normal access. */
+	async function openTerminal(sandboxed = false): Promise<void> {
 		creating = true;
 		error = '';
 		try {
-			const tab = await source.create();
+			const tab = await source.create(sandboxed ? { sandboxed } : undefined);
 			tabs.push(opened(tab));
 			activeId = tab.id;
 		} catch (cause) {
-			error = `Could not open a terminal. ${message(cause)}`;
+			if (sandboxed) {
+				sandboxFailure = message(cause);
+				error = `Could not open a sandboxed terminal. ${sandboxFailure}`;
+			} else {
+				error = `Could not open a terminal. ${message(cause)}`;
+			}
 		} finally {
 			creating = false;
 		}
@@ -202,8 +246,14 @@
 					tabindex={tab.id === activeId ? 0 : -1}
 					onclick={() => (activeId = tab.id)}
 					onkeydown={(event) => handleTabKey(event, index)}>
-					<Icon name="terminal" size={14} />
+					<Icon name={tab.sandbox ? 'sandbox' : 'terminal'} size={14} />
 					<span>{tab.title}</span>
+					{#if tab.sandbox}
+						<small class="terminal-panel__badge" title={`Sandboxed: ${PROFILE_LABELS[tab.sandbox]}`}>
+							<span class="pau-visually-hidden">Sandboxed:</span>
+							{PROFILE_LABELS[tab.sandbox].toLowerCase()}
+						</small>
+					{/if}
 					{#if tab.state !== 'running'}
 						<small class={['terminal-panel__badge', { failed: terminalFailed(tab) }]}>
 							{tab.state === 'disconnected' ? 'offline' : tab.exit?.signal || `exit ${tab.exit?.exitCode}`}
@@ -224,6 +274,24 @@
 			onclick={() => void openTerminal()}>
 			<Icon name="plus" size={16} />
 		</button>
+		{#if source.sandbox}
+			{@const label = sandbox?.profile
+				? `New sandboxed terminal (${PROFILE_LABELS[sandbox.profile]})`
+				: 'New sandboxed terminal'}
+			<button
+				type="button"
+				class="terminal-panel__icon-button pau-utility-button"
+				aria-label={label}
+				aria-describedby={sandboxBlocked ? 'terminal-panel-sandbox-reason' : undefined}
+				title={sandboxBlocked || label}
+				disabled={Boolean(sandboxBlocked) || creating || restoring || disconnected}
+				onclick={() => void openTerminal(true)}>
+				<Icon name="sandbox" size={16} />
+			</button>
+			{#if sandboxBlocked}
+				<span id="terminal-panel-sandbox-reason" class="pau-visually-hidden">{sandboxBlocked}</span>
+			{/if}
+		{/if}
 		<div class="terminal-panel__actions">
 			<button
 				type="button"

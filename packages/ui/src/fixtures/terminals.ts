@@ -1,4 +1,4 @@
-import type { TerminalExit, TerminalSource, TerminalTab } from '../lib/types/terminal';
+import type { TerminalExit, TerminalSandboxChoice, TerminalSource, TerminalTab } from '../lib/types/terminal';
 
 /** Options for the in-memory terminal used by stories and component tests. */
 export type TerminalFixtureOptions = {
@@ -12,6 +12,10 @@ export type TerminalFixtureOptions = {
 	running?: number;
 	/** Rejects listing the running terminals with this message. */
 	listError?: string;
+	/** The workspace's sandbox profile for new terminals. Without it, the source offers none. */
+	sandbox?: TerminalSandboxChoice;
+	/** Rejects sandboxed terminals with this message, as when the relay cannot start. */
+	sandboxError?: string;
 };
 
 /** An in-memory terminal source and the input and sizes it received. */
@@ -21,6 +25,8 @@ export type TerminalFixture = {
 	input: Map<string, string>;
 	/** Prints output to a connected terminal, as a program running in it would. */
 	print: (id: string, text: string) => void;
+	/** Replaces the sandbox profile, as saving the workspace's sandbox settings elsewhere would. */
+	setSandbox: (choice: TerminalSandboxChoice) => void;
 };
 
 const PROMPT = '\u{1B}[1;34m~/pau\u{1B}[0m $ ';
@@ -41,9 +47,12 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 	const printers = new Map<string, (text: string) => void>();
 	const connected = new Set<string>();
 	let created = 0;
-	const openTerminal = (): TerminalTab => {
+	let sandbox = options.sandbox;
+	const sandboxWatchers = new Set<() => void>();
+	const openTerminal = (profile?: TerminalTab['sandbox']): TerminalTab => {
 		created += 1;
-		const tab = { id: `fixture-${created}`, title: created === 1 ? 'zsh' : `zsh ${created}` };
+		const tab: TerminalTab = { id: `fixture-${created}`, title: created === 1 ? 'zsh' : `zsh ${created}` };
+		if (profile) tab.sandbox = profile;
 		open.push(tab);
 		return tab;
 	};
@@ -54,10 +63,21 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 			if (options.listError) throw new Error(options.listError);
 			return [...open];
 		},
-		create: async () => {
+		create: async (request) => {
 			if (options.createError) throw new Error(options.createError);
-			return openTerminal();
+			if (!request?.sandboxed) return openTerminal();
+			if (options.sandboxError) throw new Error(options.sandboxError);
+			const profile = sandbox?.profile;
+			if (!profile || sandbox?.unavailable) throw new Error('No sandbox profile is available.');
+			return openTerminal(profile);
 		},
+		...(sandbox && {
+			sandbox: async () => sandbox as TerminalSandboxChoice,
+			watchSandbox: (listener: () => void) => {
+				sandboxWatchers.add(listener);
+				return () => sandboxWatchers.delete(listener);
+			}
+		}),
 		connect: (id, events) => {
 			let line = '';
 			let exited = false;
@@ -131,5 +151,14 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 			);
 		}
 	};
-	return { source, sizes, input, print: (id, text) => printers.get(id)?.(text) };
+	return {
+		source,
+		sizes,
+		input,
+		print: (id, text) => printers.get(id)?.(text),
+		setSandbox: (choice) => {
+			sandbox = choice;
+			for (const listener of sandboxWatchers) listener();
+		}
+	};
 }

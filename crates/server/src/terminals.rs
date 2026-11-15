@@ -8,7 +8,8 @@
 //! A stream that attaches first receives the terminal's scrollback.
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
     sync::{
         Arc, Mutex, Weak,
         atomic::{AtomicU64, Ordering},
@@ -28,19 +29,25 @@ use axum::{
 use pau_core::{
     ServerEventKind,
     audit::{AuditActor, AuditEntry, AuditLog, AuditOperation, AuditResult},
+    sandbox::{
+        PlaceholderLease, SandboxError, SandboxLaunchInput, SandboxProfileName,
+        TerminalSandboxInput, prepare_terminal_sandbox,
+    },
     terminal::{
         CreateTerminalRequest, TerminalClientMessage, TerminalInfo, TerminalServerMessage,
         TerminalSignalRequest, TerminalSize, TerminalStatus,
     },
     workspace::WorkspaceError,
 };
-use pau_term::{AttachedOutput, Terminal, TerminalCommand, TerminalError, TerminalScrollback};
-use tokio::task::JoinSet;
+use pau_term::{
+    AttachedOutput, Terminal, TerminalCommand, TerminalError, TerminalMode, TerminalScrollback,
+};
+use tokio::{sync::Mutex as AsyncMutex, task::JoinSet};
 use uuid::Uuid;
 
 use super::{
     ApiError, ApiErrorBody, ApiState, EventHub, audit::PendingAudit, diagnostic_timestamp,
-    stop_or_kill, workspace_service,
+    sandbox_api, stop_or_kill, workspace_service,
 };
 
 /// Time a closing terminal has to exit after `SIGHUP` before `SIGKILL`.
@@ -81,6 +88,10 @@ impl TerminalRegistry {
     /// its exit watcher does not record the stop again. A terminal whose
     /// process had already exited was recorded by its watcher and is only
     /// forgotten.
+    ///
+    /// A sandboxed terminal's process sweep runs before its exit is
+    /// reported, and its sandbox files and placeholder lease are released
+    /// here rather than left to an exit watcher the runtime may never run.
     pub(crate) async fn stop_all(&self, audit: &AuditLog, kill_at: tokio::time::Instant) {
         let terminals: Vec<_> = self
             .0
@@ -90,26 +101,26 @@ impl TerminalRegistry {
             .map(|(_, managed)| managed)
             .collect();
         let mut closing = JoinSet::new();
-        for managed in terminals
-            .into_iter()
-            .filter(|managed| matches!(managed.terminal.status(), TerminalStatus::Running))
-        {
+        for managed in terminals {
             let audit = audit.clone();
             closing.spawn(async move {
-                let status = stop_or_kill(managed.terminal.close(CLOSE_GRACE), kill_at, || {
-                    managed.terminal.kill();
-                })
-                .await;
-                audit.record(AuditEntry {
-                    workspace_id: Some(managed.workspace_id.clone()),
-                    target: Some(managed.id.clone()),
-                    exit_code: exit_code(&status),
-                    ..AuditEntry::new(
-                        AuditActor::Pau,
-                        AuditOperation::TerminalStop,
-                        AuditResult::Succeeded,
-                    )
-                });
+                if matches!(managed.terminal.status(), TerminalStatus::Running) {
+                    let status = stop_or_kill(managed.terminal.close(CLOSE_GRACE), kill_at, || {
+                        managed.terminal.kill();
+                    })
+                    .await;
+                    audit.record(AuditEntry {
+                        workspace_id: Some(managed.workspace_id.clone()),
+                        target: Some(managed.audit_target()),
+                        exit_code: exit_code(&status),
+                        ..AuditEntry::new(
+                            AuditActor::Pau,
+                            AuditOperation::TerminalStop,
+                            AuditResult::Succeeded,
+                        )
+                    });
+                }
+                release(&managed.leftovers).await;
             });
         }
         closing.join_all().await;
@@ -129,6 +140,10 @@ struct ManagedTerminal {
     opened: u64,
     workspace_id: String,
     command: Vec<String>,
+    sandbox: Option<SandboxProfileName>,
+    /// Shared with the exit watcher, so whichever sees the exit first
+    /// releases a sandboxed terminal's files and placeholder lease.
+    leftovers: Arc<AsyncMutex<Option<SandboxLeftovers>>>,
     terminal: Terminal,
     scrollback: TerminalScrollback,
 }
@@ -141,7 +156,34 @@ impl ManagedTerminal {
             command: self.command.clone(),
             size: self.terminal.size(),
             status: self.terminal.status(),
+            sandbox: self.sandbox,
         }
+    }
+
+    /// What the terminal's audit records name: the sandbox profile of a
+    /// sandboxed terminal, and otherwise the terminal ID.
+    fn audit_target(&self) -> String {
+        self.sandbox.map_or_else(|| self.id.clone(), profile_name)
+    }
+}
+
+/// A sandbox profile's name as the API spells it, such as `workspace-write`.
+fn profile_name(profile: SandboxProfileName) -> String {
+    serde_json::to_value(profile)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_default()
+}
+
+/// Releases a sandboxed terminal's files and placeholder lease once its
+/// process has exited.
+///
+/// The lock is held until the removal finishes, so a caller that finds
+/// nothing left to release returns only after the files are gone.
+async fn release(leftovers: &AsyncMutex<Option<SandboxLeftovers>>) {
+    let mut slot = leftovers.lock().await;
+    if let Some(taken) = slot.take() {
+        let _ = tokio::task::spawn_blocking(move || taken.remove()).await;
     }
 }
 
@@ -172,6 +214,19 @@ impl From<ApiError> for TerminalApiError {
 impl From<WorkspaceError> for TerminalApiError {
     fn from(error: WorkspaceError) -> Self {
         Self::Api(error.into())
+    }
+}
+
+impl From<SandboxError> for TerminalApiError {
+    fn from(error: SandboxError) -> Self {
+        match error {
+            SandboxError::UnsupportedPlatform(_) | SandboxError::Executable(_) => {
+                Self::Api(ApiError::SandboxUnavailable(error.to_string()))
+            }
+            SandboxError::Invalid(_) | SandboxError::Io(_) => {
+                Self::Api(ApiError::InvalidSandbox(error.to_string()))
+            }
+        }
     }
 }
 
@@ -219,7 +274,20 @@ impl IntoResponse for TerminalApiError {
     }
 }
 
+/// Files a sandboxed terminal leaves behind, removed when its process exits.
+struct SandboxLeftovers {
+    session_directory: PathBuf,
+    /// Counts the terminal among the workspace's sandboxes, so its
+    /// placeholders stay while another sandbox there still relies on them.
+    placeholders: PlaceholderLease,
+}
+
 /// Opens a terminal in a workspace root and starts streaming its output.
+///
+/// A sandboxed request runs the shell under the workspace's sandbox profile
+/// through `srt`, and on Linux the `pau-term` relay. It fails rather than open an
+/// unsandboxed shell when the workspace has no profile or the sandbox cannot
+/// start.
 ///
 /// Once shutdown begins, an open is `503 shutting_down`, as
 /// [`crate::StartGate`] describes.
@@ -235,7 +303,7 @@ pub(crate) async fn create_terminal(
     );
     let result = state.starts.run(open_terminal(&state, request)).await;
     if let Ok((_, Json(info))) = &result {
-        audit.target(info.id.clone());
+        audit.target(info.sandbox.map_or_else(|| info.id.clone(), profile_name));
     }
     audit.finish(&result);
     result
@@ -247,39 +315,118 @@ async fn open_terminal(
 ) -> Result<(StatusCode, Json<TerminalInfo>), TerminalApiError> {
     let workspaces = workspace_service(state)?;
     let root = workspaces.root(&request.workspace_id).await?;
-    let mut command = match request.command {
-        None => TerminalCommand::shell(root, request.size),
-        Some(command) => {
-            let mut parts = command.into_iter();
-            let program = parts
-                .next()
-                .filter(|program| !program.is_empty())
-                .ok_or_else(|| TerminalApiError::Invalid("command must name a program".into()))?;
-            TerminalCommand {
-                program,
-                args: parts.collect(),
-                cwd: root,
-                environment: Vec::new(),
-                size: request.size,
-            }
+    let id = Uuid::new_v4().to_string();
+    let shell = TerminalCommand::shell(&root, request.size);
+    let argv = match request.command {
+        None => std::iter::once(shell.program.clone()).collect::<Vec<_>>(),
+        Some(command) => command,
+    };
+    let Some(program) = argv.first().filter(|program| !program.is_empty()) else {
+        return Err(TerminalApiError::Invalid(
+            "command must name a program".into(),
+        ));
+    };
+    let mut leftovers = None;
+    let mut sandbox = None;
+    let command = if request.sandboxed {
+        let api = sandbox_api(state)?;
+        let selection = api
+            .selections
+            .get(&request.workspace_id, None)
+            .await
+            .map_err(|error| ApiError::from(WorkspaceError::from(error)))?
+            .workspace_default;
+        let settings = selection.settings().ok_or_else(|| {
+            TerminalApiError::Invalid(
+                "This workspace has no sandbox profile. Choose one in its sandbox settings \
+                 first."
+                    .into(),
+            )
+        })?;
+        if let Some(reason) = api.terminal_unavailable() {
+            return Err(ApiError::SandboxUnavailable(reason).into());
+        }
+        let executables = api
+            .executables
+            .as_ref()
+            .map_err(|error| ApiError::SandboxUnavailable(error.clone()))?;
+        let relay = [
+            api.terminal_relay
+                .as_ref()
+                .map(|relay| relay.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            pau_term::relay::RELAY_ARGUMENT.to_owned(),
+        ];
+        let session_directory = api.sessions.join(format!("terminal-{id}"));
+        let launch = prepare_terminal_sandbox(&TerminalSandboxInput {
+            launch: SandboxLaunchInput {
+                adapter: pau_core::sandbox::SandboxAdapter::Terminal,
+                settings,
+                workspace: &root,
+                home: &api.home,
+                session_directory: &session_directory,
+                executables,
+                runtime_roots: &[],
+                tool_path: &api.tool_path,
+                credential_environment: &BTreeMap::new(),
+            },
+            relay: &relay,
+            command: &argv,
+            shell: &shell.program,
+        })?;
+        sandbox = Some(settings.profile);
+        leftovers = Some(SandboxLeftovers {
+            session_directory,
+            placeholders: api
+                .placeholders
+                .enter(&request.workspace_id, &launch.placeholders),
+        });
+        TerminalCommand {
+            program: launch.program,
+            args: launch.args,
+            cwd: root,
+            environment: launch.environment,
+            size: request.size,
+            mode: if launch.relay {
+                TerminalMode::Relay
+            } else {
+                TerminalMode::Sandboxed
+            },
+        }
+    } else {
+        TerminalCommand {
+            program: program.clone(),
+            args: argv[1..].to_vec(),
+            cwd: root,
+            environment: workspaces.process_environment(),
+            size: request.size,
+            mode: TerminalMode::Normal,
         }
     };
-    command.environment = workspaces.process_environment();
-    let argv = std::iter::once(command.program.clone())
-        .chain(command.args.iter().cloned())
-        .collect();
     // Spawning forks and waits for exec to report success, so keep it off
     // the runtime worker.
-    let (terminal, output) = tokio::task::spawn_blocking(move || Terminal::spawn(command))
+    let spawned = tokio::task::spawn_blocking(move || Terminal::spawn(command))
         .await
-        .map_err(|error| TerminalApiError::Failed(error.to_string()))??;
+        .map_err(|error| TerminalApiError::Failed(error.to_string()))?;
+    let (terminal, output) = match spawned {
+        Ok(spawned) => spawned,
+        Err(error) => {
+            if let Some(leftovers) = leftovers {
+                leftovers.remove();
+            }
+            return Err(error.into());
+        }
+    };
 
     let mut exit = terminal.exit();
+    let released = Arc::new(AsyncMutex::new(leftovers));
     let managed = Arc::new(ManagedTerminal {
-        id: Uuid::new_v4().to_string(),
+        id,
         opened: OPENED.fetch_add(1, Ordering::Relaxed),
         workspace_id: request.workspace_id,
         command: argv,
+        sandbox,
+        leftovers: Arc::clone(&released),
         terminal,
         scrollback: TerminalScrollback::follow(output),
     });
@@ -296,6 +443,7 @@ async fn open_terminal(
     let audit = state.audit.clone();
     tokio::spawn(async move {
         let status = exit.wait().await;
+        release(&released).await;
         if let Some(managed) = weak.upgrade() {
             // A closed terminal leaves the registry first, and its close
             // request records the stop.
@@ -309,6 +457,16 @@ async fn open_terminal(
     let info = managed.info();
     publish(&state.events, &info);
     Ok((StatusCode::CREATED, Json(info)))
+}
+
+impl SandboxLeftovers {
+    /// Removes the terminal's policy and temporary directory, and the
+    /// placeholders the runtime left when no other sandbox in the workspace
+    /// still runs.
+    fn remove(self) {
+        drop(self.placeholders);
+        let _ = std::fs::remove_dir_all(&self.session_directory);
+    }
 }
 
 /// Lists live terminals, oldest first.
@@ -340,7 +498,7 @@ pub(crate) async fn resize_terminal(
     Json(size): Json<TerminalSize>,
 ) -> Result<Json<TerminalInfo>, TerminalApiError> {
     let managed = state.terminals.get(&terminal_id)?;
-    managed.terminal.resize(size)?;
+    managed.terminal.resize(size).await?;
     Ok(Json(managed.info()))
 }
 
@@ -354,7 +512,8 @@ pub(crate) async fn signal_terminal(
         .terminals
         .get(&terminal_id)?
         .terminal
-        .signal(request.signal)?;
+        .signal(request.signal)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -378,6 +537,7 @@ pub(crate) async fn close_terminal(
             .remove(&terminal_id)
             .ok_or(TerminalApiError::NotFound)?;
         audit.workspace(managed.workspace_id.clone());
+        audit.target(managed.audit_target());
         let status = managed.terminal.close(CLOSE_GRACE).await;
         Ok((managed.info(), exit_code(&status)))
     }
@@ -401,7 +561,7 @@ fn unrequested_stop(managed: &ManagedTerminal, status: TerminalStatus) -> AuditE
     let exit_code = exit_code(&status);
     AuditEntry {
         workspace_id: Some(managed.workspace_id.clone()),
-        target: Some(managed.id.clone()),
+        target: Some(managed.audit_target()),
         exit_code,
         ..AuditEntry::new(
             AuditActor::Process,
@@ -450,10 +610,10 @@ async fn serve_stream(mut socket: WebSocket, managed: Arc<ManagedTerminal>) {
                 Some(Ok(Message::Text(text))) => {
                     match serde_json::from_str(&text) {
                         Ok(TerminalClientMessage::Resize { size }) => {
-                            let _ = managed.terminal.resize(size);
+                            let _ = managed.terminal.resize(size).await;
                         }
                         Ok(TerminalClientMessage::Signal { signal }) => {
-                            let _ = managed.terminal.signal(signal);
+                            let _ = managed.terminal.signal(signal).await;
                         }
                         Err(_) => {}
                     }
@@ -502,7 +662,7 @@ async fn send_exited(socket: &mut WebSocket, managed: &ManagedTerminal) -> Resul
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, net::SocketAddr};
+    use std::{fs, net::SocketAddr, path::PathBuf};
 
     use axum::{
         Router,
@@ -942,6 +1102,365 @@ mod tests {
             assert_eq!(status, expected, "{response}");
             assert_eq!(response["code"], code);
         }
+    }
+
+    /// A router with sandbox selections, and the parts tests inspect.
+    struct SandboxFixture {
+        directory: TempDir,
+        app: Router,
+        workspace_id: String,
+        /// Parent of each sandboxed terminal's session directory.
+        sessions: PathBuf,
+        audit: AuditLog,
+        terminals: TerminalRegistry,
+    }
+
+    /// Starts a router with sandbox selections whose `srt` is a fake that
+    /// records its arguments and environment and exits. With a `hold` file
+    /// it keeps running, and with a `nohup` file it first starts a job that
+    /// ignores hangups and writes the job's process ID to `job.pid`.
+    async fn sandbox_fixture(relay: bool) -> SandboxFixture {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("project");
+        let bin = directory.path().join("bin");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&bin).unwrap();
+        let srt = bin.join("srt");
+        fs::write(
+            &srt,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{0}/args'\nenv > '{0}/env'\n\
+                 if [ -e '{0}/nohup' ]; then nohup sleep 600 >/dev/null 2>&1 & \
+                 echo $! > '{0}/job.pid'; fi\n\
+                 if [ -e '{0}/hold' ]; then exec sleep 600; fi\n",
+                directory.path().display()
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&srt, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+        let database = Database::open(":memory:").await.unwrap();
+        let workspaces = WorkspaceService::new(database.workspaces());
+        let workspace = workspaces.open(&root, None).await.unwrap();
+        let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        )))
+        .unwrap();
+        let sandbox = crate::SandboxApi::new(
+            database.sandbox_selection(),
+            directory.path().join("sandbox"),
+            path,
+        )
+        // The fake also stands in for the relay executable, which only has
+        // to exist for the profile to count as available.
+        .with_terminal_relay(relay.then(|| srt.clone()));
+        let audit = AuditLog::new(database.audit(), Default::default());
+        let terminals = TerminalRegistry::default();
+        let app = router_with_services(
+            ApiToken::configured(TOKEN).unwrap(),
+            EventHub::default(),
+            default_diagnostics(),
+            ApiServices {
+                workspaces: Some(workspaces),
+                sandbox: Some(sandbox),
+                audit: audit.clone(),
+                terminals: terminals.clone(),
+                ..ApiServices::default()
+            },
+        );
+        let sessions = directory.path().join("sandbox");
+        SandboxFixture {
+            directory,
+            app,
+            workspace_id: workspace.id,
+            sessions,
+            audit,
+            terminals,
+        }
+    }
+
+    async fn request(
+        app: &Router,
+        method: &str,
+        path: &str,
+        body: Option<serde_json::Value>,
+    ) -> (StatusCode, serde_json::Value) {
+        let request = Request::builder()
+            .method(method)
+            .uri(path)
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(body.map_or_else(Body::empty, |body| Body::from(body.to_string())))
+            .unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        let status = response.status();
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        (status, serde_json::from_slice(&bytes).unwrap_or_default())
+    }
+
+    #[tokio::test]
+    async fn opens_sandboxed_terminals_only_under_the_workspace_profile() {
+        let SandboxFixture {
+            directory,
+            app,
+            workspace_id,
+            sessions,
+            audit,
+            ..
+        } = sandbox_fixture(true).await;
+        let create = serde_json::json!({
+            "workspace_id": workspace_id,
+            "size": {"cols": 80, "rows": 24},
+            "sandboxed": true,
+        });
+
+        let (status, body) = request(&app, "POST", "/api/terminals", Some(create.clone())).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+        assert_eq!(body["code"], "invalid_terminal");
+
+        let sandbox_path = format!("/api/workspaces/{workspace_id}/sandbox");
+        let selection = serde_json::json!({"mode": "sandboxed", "settings": {
+            "profile": "workspace-write",
+        }});
+        let (status, stored) = request(&app, "PUT", &sandbox_path, Some(selection)).await;
+        if status == StatusCode::SERVICE_UNAVAILABLE {
+            // No sandbox runs on this host, so a sandboxed terminal must not
+            // start either.
+            let (status, body) = request(&app, "POST", "/api/terminals", Some(create)).await;
+            assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+            return;
+        }
+        assert_eq!(status, StatusCode::OK, "{stored}");
+        assert_eq!(stored["terminal_unavailable"], serde_json::Value::Null);
+
+        let (status, body) = request(&app, "POST", "/api/terminals", Some(create)).await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+        let info: TerminalInfo = serde_json::from_value(body).unwrap();
+        assert_eq!(info.sandbox, Some(SandboxProfileName::WorkspaceWrite));
+        let shell = TerminalCommand::shell("/", TerminalSize { cols: 1, rows: 1 }).program;
+        assert_eq!(info.command, std::slice::from_ref(&shell));
+
+        let session = sessions.join(format!("terminal-{}", info.id));
+        timeout(STEP_LIMIT, async {
+            loop {
+                let (_, body) =
+                    request(&app, "GET", &format!("/api/terminals/{}", info.id), None).await;
+                if body["status"]["state"] == "exited" && !session.exists() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("the terminal did not exit and clean up");
+
+        let args = fs::read_to_string(directory.path().join("args")).unwrap();
+        let args: Vec<_> = args.lines().collect();
+        assert_eq!(args[0], "--settings");
+        assert!(args[1].starts_with(&*session.to_string_lossy()), "{args:?}");
+        assert_eq!(args[2], "-c");
+        assert!(args[3].ends_with(&format!(" '{shell}'")), "{args:?}");
+        // Only Linux runs the shell through the relay.
+        assert_eq!(
+            args[3].contains("'--pau-term-relay'"),
+            cfg!(target_os = "linux"),
+            "{args:?}"
+        );
+        let environment = fs::read_to_string(directory.path().join("env")).unwrap();
+        assert!(environment.contains("PAU_SANDBOX=1"), "{environment}");
+        assert!(environment.contains("TERM=xterm-256color"), "{environment}");
+        assert!(!environment.contains("CARGO_MANIFEST_DIR"), "{environment}");
+
+        // Sandboxed terminal records name the profile, as sandbox records do.
+        let records: Vec<AuditRecord> = audit.list().await.unwrap();
+        let terminal_records: Vec<_> = records
+            .iter()
+            .filter(|record| record.entry.target.is_some())
+            .filter(|record| {
+                matches!(
+                    record.entry.operation,
+                    AuditOperation::TerminalStart | AuditOperation::TerminalStop
+                )
+            })
+            .map(|record| (record.entry.operation, record.entry.target.as_deref()))
+            .collect();
+        assert_eq!(
+            terminal_records,
+            [
+                (AuditOperation::TerminalStart, Some("workspace-write")),
+                (AuditOperation::TerminalStop, Some("workspace-write")),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn keeps_placeholders_while_another_sandbox_in_the_workspace_runs() {
+        let SandboxFixture {
+            directory,
+            app,
+            workspace_id,
+            sessions,
+            ..
+        } = sandbox_fixture(true).await;
+        let sandbox_path = format!("/api/workspaces/{workspace_id}/sandbox");
+        let selection = serde_json::json!({"mode": "sandboxed", "settings": {
+            "profile": "workspace-write",
+        }});
+        let (status, _) = request(&app, "PUT", &sandbox_path, Some(selection)).await;
+        if status == StatusCode::SERVICE_UNAVAILABLE {
+            return;
+        }
+        // The fake `srt` keeps running until its terminal closes.
+        fs::write(directory.path().join("hold"), "").unwrap();
+        let create = serde_json::json!({
+            "workspace_id": workspace_id,
+            "size": {"cols": 80, "rows": 24},
+            "sandboxed": true,
+        });
+        let open = || async {
+            let (status, body) =
+                request(&app, "POST", "/api/terminals", Some(create.clone())).await;
+            assert_eq!(status, StatusCode::CREATED, "{body}");
+            serde_json::from_value::<TerminalInfo>(body).unwrap().id
+        };
+        let close = |id: String| {
+            let app = app.clone();
+            let session = sessions.join(format!("terminal-{id}"));
+            async move {
+                let (status, body) =
+                    request(&app, "DELETE", &format!("/api/terminals/{id}"), None).await;
+                assert_eq!(status, StatusCode::OK, "{body}");
+                timeout(STEP_LIMIT, async {
+                    while session.exists() {
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                })
+                .await
+                .expect("the terminal did not clean up");
+            }
+        };
+
+        // The first sandbox predicts `.mcp.json` and the runtime creates it.
+        // The second starts while it exists, so it predicts none there, yet
+        // its own deny rule relies on the same path.
+        let first = open().await;
+        let placeholder = directory.path().join("project/.mcp.json");
+        fs::write(&placeholder, "").unwrap();
+        let second = open().await;
+
+        close(first).await;
+        assert!(
+            placeholder.exists(),
+            "a running sandbox lost its placeholder"
+        );
+        close(second).await;
+        assert!(
+            !placeholder.exists(),
+            "the last sandbox left its placeholder"
+        );
+    }
+
+    /// Shutdown must leave no job of a sandboxed terminal running, even one
+    /// that ignores hangups, and must release its files and placeholders.
+    #[tokio::test]
+    async fn shutdown_stops_sandboxed_jobs_and_releases_placeholders() {
+        let SandboxFixture {
+            directory,
+            app,
+            workspace_id,
+            sessions,
+            audit,
+            terminals,
+        } = sandbox_fixture(true).await;
+        let sandbox_path = format!("/api/workspaces/{workspace_id}/sandbox");
+        let selection = serde_json::json!({"mode": "sandboxed", "settings": {
+            "profile": "workspace-write",
+        }});
+        let (status, _) = request(&app, "PUT", &sandbox_path, Some(selection)).await;
+        if status == StatusCode::SERVICE_UNAVAILABLE {
+            return;
+        }
+        fs::write(directory.path().join("hold"), "").unwrap();
+        fs::write(directory.path().join("nohup"), "").unwrap();
+        let (status, body) = request(
+            &app,
+            "POST",
+            "/api/terminals",
+            Some(serde_json::json!({
+                "workspace_id": workspace_id,
+                "size": {"cols": 80, "rows": 24},
+                "sandboxed": true,
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+        let id = body["id"].as_str().unwrap().to_owned();
+        let job_pid = directory.path().join("job.pid");
+        let job: libc::pid_t = timeout(STEP_LIMIT, async {
+            loop {
+                if let Some(pid) = fs::read_to_string(&job_pid)
+                    .ok()
+                    .and_then(|text| text.trim().parse().ok())
+                {
+                    return pid;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("the job did not start");
+        let placeholder = directory.path().join("project/.mcp.json");
+        fs::write(&placeholder, "").unwrap();
+
+        terminals
+            .stop_all(&audit, tokio::time::Instant::now() + STEP_LIMIT)
+            .await;
+
+        // SAFETY: signal 0 only checks that the process exists.
+        assert_ne!(
+            unsafe { libc::kill(job, 0) },
+            0,
+            "the job outlived shutdown"
+        );
+        assert!(!sessions.join(format!("terminal-{id}")).exists());
+        assert!(!placeholder.exists(), "shutdown left the placeholder");
+    }
+
+    #[tokio::test]
+    async fn reports_sandboxed_terminals_unavailable_without_a_relay() {
+        let SandboxFixture {
+            directory: _directory,
+            app,
+            workspace_id,
+            ..
+        } = sandbox_fixture(false).await;
+        let sandbox_path = format!("/api/workspaces/{workspace_id}/sandbox");
+        let selection = serde_json::json!({"mode": "sandboxed", "settings": {
+            "profile": "read-only",
+        }});
+        let (status, stored) = request(&app, "PUT", &sandbox_path, Some(selection)).await;
+        if status == StatusCode::OK {
+            assert!(
+                stored["terminal_unavailable"]
+                    .as_str()
+                    .is_some_and(|reason| reason.contains("relay")),
+                "{stored}"
+            );
+        }
+        let (status, body) = request(
+            &app,
+            "POST",
+            "/api/terminals",
+            Some(serde_json::json!({
+                "workspace_id": workspace_id,
+                "size": {"cols": 80, "rows": 24},
+                "sandboxed": true,
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+        assert_eq!(body["code"], "sandbox_unavailable");
+        let (_, terminals) = request(&app, "GET", "/api/terminals", None).await;
+        assert_eq!(terminals, serde_json::json!([]));
     }
 
     #[tokio::test]

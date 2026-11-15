@@ -34,8 +34,9 @@ use pau_core::{
     },
     preferences::{UiPreferences, UiPreferencesStore},
     sandbox::{
-        EffectiveSandbox, SandboxExecutables, SandboxLaunchInput, SandboxPreviewRequest,
-        SandboxSelection, SandboxSettings, WorkspaceSandbox, resolve_sandbox, validate_selection,
+        EffectiveSandbox, PlaceholderUsers, SandboxExecutables, SandboxLaunchInput,
+        SandboxPreviewRequest, SandboxSelection, SandboxSettings, WorkspaceSandbox,
+        resolve_sandbox, validate_selection,
     },
     workspace::{
         FileContent, FileEntry, GitDiff, GitStatus, SearchOptions, TraversalOptions,
@@ -178,6 +179,12 @@ struct SandboxApi {
     home: PathBuf,
     /// Parent of per-session sandbox directories.
     sessions: PathBuf,
+    /// Executable that runs the sandboxed terminal relay, from
+    /// [`ServerOptions::terminal_relay`].
+    terminal_relay: Option<PathBuf>,
+    /// Sandboxes running in each workspace, shared by terminals and Pi
+    /// sessions.
+    placeholders: PlaceholderUsers,
 }
 
 impl SandboxApi {
@@ -189,6 +196,28 @@ impl SandboxApi {
             tool_path: path.to_string_lossy().into_owned(),
             home: dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")),
             sessions,
+            terminal_relay: None,
+            placeholders: PlaceholderUsers::default(),
+        }
+    }
+
+    fn with_terminal_relay(mut self, relay: Option<PathBuf>) -> Self {
+        self.terminal_relay = relay;
+        self
+    }
+
+    /// Why a sandboxed terminal cannot start, when that is the case.
+    fn terminal_unavailable(&self) -> Option<String> {
+        let executables = match &self.executables {
+            Ok(executables) => executables,
+            Err(error) => return Some(error.clone()),
+        };
+        if let Err(error) = executables.srt() {
+            return Some(error.to_string());
+        }
+        match &self.terminal_relay {
+            Some(relay) if relay.is_file() => None,
+            _ => Some("This build of Pau cannot start the terminal relay".to_owned()),
         }
     }
 }
@@ -1208,6 +1237,7 @@ async fn workspace_sandbox(
     Ok(WorkspaceSandbox {
         selection,
         unavailable: sandbox.executables.as_ref().err().cloned(),
+        terminal_unavailable: sandbox.terminal_unavailable(),
     })
 }
 
@@ -1262,12 +1292,22 @@ async fn store_workspace_sandbox(
             },
         )?;
     }
+    let timestamp = diagnostic_timestamp();
     sandbox
         .selections
-        .set_workspace_default(workspace_id, &selection, &diagnostic_timestamp())
+        .set_workspace_default(workspace_id, &selection, &timestamp)
         .await
         .map_err(|error| ApiError::from(WorkspaceError::from(error)))?;
-    workspace_sandbox(state, workspace_id).await.map(Json)
+    let stored = workspace_sandbox(state, workspace_id).await?;
+    // Lets an open terminal panel offer or withdraw sandboxed terminals.
+    state.events.publish(
+        timestamp,
+        Some(workspace_id.to_owned()),
+        None,
+        ServerEventKind::SandboxChanged,
+        serde_json::to_string(&stored.selection).expect("selection is serializable"),
+    );
+    Ok(Json(stored))
 }
 
 /// Describes the profile a selection would enforce, before anything runs.
@@ -1665,6 +1705,11 @@ pub struct ServerOptions {
     /// The desktop app passes its login shell `PATH` here instead of
     /// changing its own environment, which its other threads may be reading.
     pub path: Option<OsString>,
+    /// Executable that runs the sandboxed terminal relay when its first
+    /// argument is [`pau_term::relay::RELAY_ARGUMENT`], usually the running
+    /// executable after it called [`pau_term::relay::run_if_requested`].
+    /// `None` makes sandboxed terminals unavailable.
+    pub terminal_relay: Option<PathBuf>,
 }
 
 /// Starts the shared API with a new per-launch token.
@@ -1775,7 +1820,8 @@ pub async fn start_with_database(
         database.sandbox_selection(),
         state_directory()?.join("sandbox"),
         path.clone(),
-    );
+    )
+    .with_terminal_relay(options.terminal_relay);
     let processes = database.processes();
     let diagnostics = default_diagnostics();
     diagnostics.register_sensitive_value(token.expose());
@@ -1788,7 +1834,8 @@ pub async fn start_with_database(
     let server_token = token.clone();
     let events = EventHub::default().with_diagnostics(diagnostics.clone());
     let sessions = SessionApi::new(
-        pau_pi::PiSessionRegistry::new(processes),
+        pau_pi::PiSessionRegistry::new(processes)
+            .with_placeholder_users(sandbox.placeholders.clone()),
         pau_pi::DiscoverPiOptions {
             path,
             ..pau_pi::DiscoverPiOptions::default()
@@ -2297,9 +2344,10 @@ pub(crate) mod tests {
             env::var_os("PATH").unwrap_or_default(),
         );
         let available = sandbox.executables.is_ok();
+        let events = EventHub::default();
         let app = router_with_services(
             test_token(),
-            EventHub::default(),
+            events.clone(),
             default_diagnostics(),
             ApiServices {
                 workspaces: Some(workspaces),
@@ -2379,6 +2427,20 @@ pub(crate) mod tests {
         );
         assert_eq!(stored["selection"]["settings"]["home_read_deny"], false);
         assert_eq!(call("GET", "sandbox", None).await.1, stored);
+        let initial = events.subscribe(None).initial;
+        let [ServerStreamMessage::Snapshot { snapshot }] = initial.as_slice() else {
+            panic!("expected a snapshot");
+        };
+        let changed = snapshot
+            .events
+            .iter()
+            .find(|event| event.kind == ServerEventKind::SandboxChanged)
+            .expect("a sandbox change event");
+        assert_eq!(changed.workspace_id.as_deref(), Some(workspace.id.as_str()));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&changed.payload).unwrap(),
+            stored["selection"]
+        );
 
         let (status, unsandboxed) = call(
             "POST",
@@ -2664,12 +2726,16 @@ pub(crate) mod tests {
 
         server.shutdown().await.unwrap();
 
-        assert!(
-            timeout(Duration::from_secs(1), TcpStream::connect(address))
-                .await
-                .unwrap()
-                .is_err()
-        );
+        // Once the port is free, the client can draw it as its own source
+        // port and connect to itself, which says nothing about the listener.
+        if let Ok(stream) = timeout(Duration::from_secs(1), TcpStream::connect(address))
+            .await
+            .unwrap()
+        {
+            let local = stream.local_addr().unwrap();
+            let peer = stream.peer_addr().unwrap();
+            assert_eq!(local, peer, "the listener still accepts connections");
+        }
     }
 
     /// A client that stops halfway through a request must not keep the

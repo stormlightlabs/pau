@@ -1,6 +1,6 @@
 use crate::{PiProcessOutput, PiSession, PiSessionError, StartPiProcessOptions};
 use pau_core::persistence::{ProcessMetadata, ProcessMetadataRepository};
-use pau_core::sandbox::remove_placeholders;
+use pau_core::sandbox::{PlaceholderLease, PlaceholderUsers, remove_placeholders};
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
@@ -106,6 +106,23 @@ impl From<PiSessionError> for PiSessionRegistryError {
 struct RegistryState {
     sessions: HashMap<String, Arc<PiSession>>,
     starting: HashSet<String>,
+    /// One lease per live sandboxed session, dropped when the session leaves
+    /// `sessions`.
+    sandboxes: HashMap<String, PlaceholderLease>,
+}
+
+impl RegistryState {
+    /// Forgets `session` if it is still the one registered under `id`.
+    fn remove(&mut self, id: &str, session: &Arc<PiSession>) {
+        if self
+            .sessions
+            .get(id)
+            .is_some_and(|registered| Arc::ptr_eq(registered, session))
+        {
+            self.sessions.remove(id);
+            self.sandboxes.remove(id);
+        }
+    }
 }
 
 /// Owns independent Pi processes and multiplexes their tagged output.
@@ -116,6 +133,7 @@ pub struct PiSessionRegistry {
     processes: ProcessMetadataRepository,
     state: Arc<Mutex<RegistryState>>,
     output: broadcast::Sender<PiSessionOutput>,
+    placeholders: PlaceholderUsers,
 }
 
 impl PiSessionRegistry {
@@ -126,7 +144,16 @@ impl PiSessionRegistry {
             processes,
             state: Arc::new(Mutex::new(RegistryState::default())),
             output,
+            placeholders: PlaceholderUsers::default(),
         }
+    }
+
+    /// Counts sandboxed sessions in `users`, which the other sandboxed
+    /// processes of the same workspaces share, so a session's exit removes
+    /// placeholders only when no other sandbox there still needs them.
+    pub fn with_placeholder_users(mut self, users: PlaceholderUsers) -> Self {
+        self.placeholders = users;
+        self
     }
 
     /// Subscribes to tagged output from every live session.
@@ -181,6 +208,10 @@ impl PiSessionRegistry {
         if !request.sandbox_placeholders.is_empty() {
             self.remove_leftover_placeholders().await?;
         }
+        let lease = (!request.sandbox_placeholders.is_empty()).then(|| {
+            self.placeholders
+                .enter(&request.workspace_id, &request.sandbox_placeholders)
+        });
         let session = Arc::new(
             PiSession::start(request.process.clone())
                 .map_err(PiSessionError::from)
@@ -214,11 +245,15 @@ impl PiSessionRegistry {
             return Err(PiSessionRegistryError::Persistence(error.to_string()));
         }
 
-        self.state
-            .lock()
-            .await
-            .sessions
-            .insert(request.id.clone(), Arc::clone(&session));
+        {
+            let mut state = self.state.lock().await;
+            state
+                .sessions
+                .insert(request.id.clone(), Arc::clone(&session));
+            if let Some(lease) = lease {
+                state.sandboxes.insert(request.id.clone(), lease);
+            }
+        }
         forward_output(
             native_output,
             self.output.clone(),
@@ -269,46 +304,33 @@ impl PiSessionRegistry {
         metadata.exit_code = exit.code;
         let exit_code = exit.code;
         // sandbox-runtime removes its placeholders when the extension shuts
-        // down. A killed Pi leaves them, so remove any that remain.
-        let recorded = std::mem::take(&mut metadata.sandbox_placeholders);
-        if !recorded.is_empty() {
-            let in_use = self.live_placeholders(Some(id)).await?;
-            remove_placeholders(
-                &recorded
-                    .into_iter()
-                    .map(PathBuf::from)
-                    .filter(|path| !in_use.contains(path))
-                    .collect::<Vec<_>>(),
-            );
-        }
+        // down. A killed Pi leaves them, and the session's lease removes any
+        // that no other sandbox in the workspace still needs.
+        metadata.sandbox_placeholders.clear();
         self.processes
             .upsert(metadata)
             .await
             .map_err(|error| PiSessionRegistryError::Persistence(error.to_string()))?;
 
-        let mut state = self.state.lock().await;
-        if state
-            .sessions
-            .get(id)
-            .is_some_and(|registered| Arc::ptr_eq(registered, &session))
-        {
-            state.sessions.remove(id);
-        }
+        self.state.lock().await.remove(id, &session);
         Ok(exit_code)
     }
 
     /// Removes placeholders recorded by sessions that are no longer live,
     /// such as those of a Pau process that crashed, before a new sandbox
-    /// starts. Placeholders recorded by a live session stay: removing one
-    /// would detach that sandbox's mount and lift the deny rule.
+    /// starts. Placeholders in a workspace where any sandbox runs stay:
+    /// removing one would detach that sandbox's mount and lift its deny rule.
     async fn remove_leftover_placeholders(&self) -> Result<(), PiSessionRegistryError> {
         let persistence = |error: pau_core::persistence::Result<()>| {
             error.map_err(|error| PiSessionRegistryError::Persistence(error.to_string()))
         };
         let live = self.live_ids().await;
-        let in_use = self.live_placeholders(None).await?;
         for record in self.records().await? {
-            if live.contains(&record.id) || record.sandbox_placeholders.is_empty() {
+            let in_use = record
+                .workspace_id
+                .as_deref()
+                .is_some_and(|workspace| self.placeholders.in_use(workspace));
+            if live.contains(&record.id) || record.sandbox_placeholders.is_empty() || in_use {
                 continue;
             }
             remove_placeholders(
@@ -316,7 +338,6 @@ impl PiSessionRegistry {
                     .sandbox_placeholders
                     .iter()
                     .map(PathBuf::from)
-                    .filter(|path| !in_use.contains(path))
                     .collect::<Vec<_>>(),
             );
             persistence(
@@ -326,22 +347,6 @@ impl PiSessionRegistry {
             )?;
         }
         Ok(())
-    }
-
-    /// Placeholders recorded by live sessions other than `except`.
-    async fn live_placeholders(
-        &self,
-        except: Option<&str>,
-    ) -> Result<HashSet<PathBuf>, PiSessionRegistryError> {
-        let live = self.live_ids().await;
-        Ok(self
-            .records()
-            .await?
-            .into_iter()
-            .filter(|record| live.contains(&record.id) && Some(record.id.as_str()) != except)
-            .flat_map(|record| record.sandbox_placeholders)
-            .map(PathBuf::from)
-            .collect())
     }
 
     async fn live_ids(&self) -> HashSet<String> {
@@ -404,14 +409,7 @@ fn forward_output(
                         output: event,
                     });
                     if exited {
-                        let mut state = state.lock().await;
-                        if state
-                            .sessions
-                            .get(&session_id)
-                            .is_some_and(|registered| Arc::ptr_eq(registered, &session))
-                        {
-                            state.sessions.remove(&session_id);
-                        }
+                        state.lock().await.remove(&session_id, &session);
                         break;
                     }
                 }

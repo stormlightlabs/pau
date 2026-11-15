@@ -23,8 +23,8 @@ export type SandboxSettingsModel = {
 /** Sandbox selection for agent tools. */
 export type SandboxSelectionModel = { mode: 'unsandboxed' } | { mode: 'sandboxed'; settings: SandboxSettingsModel };
 
-/** Agent whose execution boundary receives the profile. */
-export type SandboxAdapterName = 'pi' | 'claude';
+/** Agent or terminal whose execution boundary receives the profile. */
+export type SandboxAdapterName = 'pi' | 'claude' | 'terminal';
 
 /** Profile enforced by a launch, described before any sandboxed work starts. */
 export type EffectiveSandboxView = {

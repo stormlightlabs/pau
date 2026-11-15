@@ -10,7 +10,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::SandboxError;
+use super::{SandboxAdapter, SandboxError};
 
 /// Oldest Bubblewrap release whose behavior Pau has verified.
 const MINIMUM_BUBBLEWRAP: (u64, u64) = (0, 11);
@@ -36,6 +36,10 @@ pub struct SandboxExecutables {
     pub(super) bubblewrap: Option<SandboxExecutable>,
     pub(super) socat: Option<SandboxExecutable>,
     pub(super) ripgrep: SandboxExecutable,
+    /// sandbox-runtime's command-line launcher, which sandboxed terminals
+    /// need. Agent tools start the runtime from Node instead, so a missing
+    /// `srt` disables only terminals.
+    pub(super) srt: Option<SandboxExecutable>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,12 +60,14 @@ impl SandboxExecutables {
             other => return Err(SandboxError::UnsupportedPlatform(other.to_owned())),
         };
         let ripgrep = required_executable("rg", search_path)?;
+        let srt = required_executable("srt", search_path).ok();
         if platform == SandboxPlatform::MacOs {
             return Ok(Self {
                 platform,
                 bubblewrap: None,
                 socat: None,
                 ripgrep,
+                srt,
             });
         }
         let mut bubblewrap = required_executable("bwrap", search_path)?;
@@ -81,14 +87,33 @@ impl SandboxExecutables {
             bubblewrap: Some(bubblewrap),
             socat: Some(socat),
             ripgrep,
+            srt,
         })
     }
 
-    pub(super) fn listed(&self) -> Vec<SandboxExecutable> {
+    /// Returns the `srt` launcher, or why sandboxed terminals cannot start.
+    pub fn srt(&self) -> Result<&SandboxExecutable, SandboxError> {
+        self.srt.as_ref().ok_or_else(|| {
+            SandboxError::Executable(
+                "sandbox-runtime's srt command was not found on PATH. Install \
+                 @anthropic-ai/sandbox-runtime 0.0.77 to open sandboxed terminals"
+                    .into(),
+            )
+        })
+    }
+
+    /// Executables a launch for `adapter` uses, as the effective profile
+    /// lists them.
+    pub(super) fn listed(&self, adapter: SandboxAdapter) -> Vec<SandboxExecutable> {
+        let srt = self
+            .srt
+            .clone()
+            .filter(|_| adapter == SandboxAdapter::Terminal);
         [self.bubblewrap.clone(), self.socat.clone()]
             .into_iter()
             .flatten()
             .chain([self.ripgrep.clone()])
+            .chain(srt)
             .collect()
     }
 }

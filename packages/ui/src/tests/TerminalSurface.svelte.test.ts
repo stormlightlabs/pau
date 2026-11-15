@@ -404,3 +404,73 @@ test('offers a move to the dock only when the app supplies one', async () => {
 	await userEvent.click(page.getByRole('button', { name: 'Move to dock' }));
 	expect(onMoveToDock).toHaveBeenCalledOnce();
 });
+
+test('opens a sandboxed terminal and shows its profile on the tab', async () => {
+	const fixture = createTerminalFixture({ sandbox: { profile: 'read-only', unavailable: null } });
+	await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+
+	await userEvent.click(page.getByRole('button', { name: 'Open a terminal' }));
+	const plain = page.getByRole('tab', { name: 'zsh', exact: true });
+	await expect.element(plain).toBeVisible();
+	expect(plain.element().textContent).not.toContain('read only');
+
+	const sandboxed = page.getByRole('button', { name: 'New sandboxed terminal (Read only)' });
+	await expect.element(sandboxed).toBeEnabled();
+	await userEvent.click(sandboxed);
+	const tab = page.getByRole('tab', { name: /^zsh 2/ });
+	await expect.element(tab).toHaveAttribute('aria-selected', 'true');
+	await expect.element(tab).toHaveAccessibleName(/^zsh 2\s*Sandboxed:\s*read only$/);
+	await expect.poll(() => screenText('zsh 2 terminal')).toContain('Terminal ready');
+});
+
+test('offers no sandboxed terminal while the workspace has no profile', async () => {
+	const fixture = createTerminalFixture({ sandbox: { profile: null, unavailable: null } });
+	await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+
+	const button = page.getByRole('button', { name: 'New sandboxed terminal' });
+	await expect.element(button).toBeDisabled();
+	await expect.element(button).toHaveAccessibleDescription(/This workspace has no sandbox profile/);
+});
+
+test('offers a sandboxed terminal once the workspace gets a profile, without a remount', async () => {
+	const fixture = createTerminalFixture({ sandbox: { profile: null, unavailable: null } });
+	await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+	await expect.element(page.getByRole('button', { name: 'New sandboxed terminal' })).toBeDisabled();
+
+	fixture.setSandbox({ profile: 'workspace-write', unavailable: null });
+
+	const button = page.getByRole('button', { name: 'New sandboxed terminal (Workspace write)' });
+	await expect.element(button).toBeEnabled();
+	await userEvent.click(button);
+	await expect.element(page.getByRole('tab', { name: /^zsh/ })).toHaveAccessibleName(/Sandboxed:\s*workspace write$/);
+});
+
+test('keeps the sandboxed terminal unavailable when the host cannot start it', async () => {
+	const unavailable = "sandbox-runtime's srt command was not found on PATH.";
+	const fixture = createTerminalFixture({ sandbox: { profile: 'workspace-write', unavailable } });
+	await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+
+	const button = page.getByRole('button', { name: 'New sandboxed terminal (Workspace write)' });
+	await expect.element(button).toBeDisabled();
+	await expect.element(button).toHaveAccessibleDescription(unavailable);
+	await expect.element(page.getByRole('button', { name: 'Open a terminal' })).toBeEnabled();
+});
+
+test('keeps the profile unavailable after the relay fails to start, without opening a plain terminal', async () => {
+	const fixture = createTerminalFixture({
+		sandbox: { profile: 'workspace-write', unavailable: null },
+		sandboxError: 'The terminal relay exited before it started.'
+	});
+	await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+
+	const button = page.getByRole('button', { name: 'New sandboxed terminal (Workspace write)' });
+	await userEvent.click(button);
+
+	await expect
+		.element(page.getByRole('alert'))
+		.toHaveTextContent('Could not open a sandboxed terminal. The terminal relay exited before it started.');
+	await expect.element(button).toBeDisabled();
+	await expect.element(button).toHaveAccessibleDescription('The terminal relay exited before it started.');
+	expect(await fixture.source.list()).toEqual([]);
+	expect(page.getByRole('tab').query()).toBeNull();
+});

@@ -156,6 +156,9 @@ pub struct WorkspaceSandbox {
     pub selection: SandboxSelection,
     /// Why no sandbox can start on this host, when that is the case.
     pub unavailable: Option<String>,
+    /// Why a sandboxed terminal cannot start on this host, when that is the
+    /// case. Set whenever `unavailable` is.
+    pub terminal_unavailable: Option<String>,
 }
 
 /// Request for the effective profile of a selection before launch.
@@ -167,7 +170,7 @@ pub struct SandboxPreviewRequest {
     pub selection: SandboxSelection,
 }
 
-/// Agent adapter whose execution boundary receives a profile.
+/// Adapter or launch path whose execution boundary receives a profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
 #[ts(rename_all = "kebab-case")]
@@ -176,6 +179,9 @@ pub enum SandboxAdapter {
     Pi,
     /// Claude Code runs its Bash tool in its own sandbox.
     Claude,
+    /// An operator terminal runs its shell under sandbox-runtime's `srt`
+    /// through the `pau-term` relay.
+    Terminal,
 }
 
 /// Checks a selection without touching the filesystem.

@@ -3,8 +3,8 @@
 use std::time::Duration;
 
 use pau_term::{
-    Terminal, TerminalCommand, TerminalError, TerminalOutput, TerminalSignal, TerminalSize,
-    TerminalStatus,
+    Terminal, TerminalCommand, TerminalError, TerminalMode, TerminalOutput, TerminalSignal,
+    TerminalSize, TerminalStatus,
 };
 use tokio::time::timeout;
 
@@ -14,12 +14,17 @@ const STEP_LIMIT: Duration = Duration::from_secs(20);
 const SIZE: TerminalSize = TerminalSize { cols: 80, rows: 24 };
 
 fn sh(script: &str) -> (Terminal, TerminalOutput) {
+    sh_in(TerminalMode::Normal, script)
+}
+
+fn sh_in(mode: TerminalMode, script: &str) -> (Terminal, TerminalOutput) {
     Terminal::spawn(TerminalCommand {
         program: "/bin/sh".to_owned(),
         args: vec!["-c".to_owned(), script.to_owned()],
         cwd: std::env::temp_dir(),
         environment: Vec::new(),
         size: SIZE,
+        mode,
     })
     .unwrap()
 }
@@ -84,19 +89,20 @@ async fn applies_the_last_of_many_rapid_resizes() {
                 cols: 40 + step % 100,
                 rows: 10 + step % 50,
             })
+            .await
             .unwrap();
     }
     let last = TerminalSize {
         cols: 132,
         rows: 43,
     };
-    terminal.resize(last).unwrap();
+    terminal.resize(last).await.unwrap();
     terminal.write("\r").await.unwrap();
 
     read_until(&mut output, "43 132").await;
     assert_eq!(terminal.size(), last);
     assert!(matches!(
-        terminal.resize(TerminalSize { cols: 0, rows: 10 }),
+        terminal.resize(TerminalSize { cols: 0, rows: 10 }).await,
         Err(TerminalError::InvalidSize)
     ));
     assert_eq!(terminal.size(), last);
@@ -119,7 +125,7 @@ async fn reports_output_and_status_after_process_exit() {
     );
     assert_eq!(terminal.status(), status);
     // Signals after exit must not reach a process that reused the ID.
-    terminal.signal(TerminalSignal::Kill).unwrap();
+    terminal.signal(TerminalSignal::Kill).await.unwrap();
 }
 
 #[tokio::test]
@@ -142,7 +148,7 @@ async fn interrupts_the_foreground_process_group() {
         sh("trap 'echo caught; exit 7' INT; echo ready; while :; do sleep 1; done");
 
     read_until(&mut output, "ready").await;
-    terminal.signal(TerminalSignal::Interrupt).unwrap();
+    terminal.signal(TerminalSignal::Interrupt).await.unwrap();
     read_until(&mut output, "caught").await;
 
     assert_eq!(
@@ -222,6 +228,86 @@ async fn dropping_a_terminal_kills_its_child() {
     );
 }
 
+/// Waits until `pid` no longer exists, or fails after [`STEP_LIMIT`].
+async fn assert_gone(pid: i32, what: &str) {
+    let deadline = std::time::Instant::now() + STEP_LIMIT;
+    // SAFETY: signal 0 only checks that the process exists.
+    while unsafe { libc::kill(pid, 0) } == 0 {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "{what} {pid} survived"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+/// Reads the process ID the script printed after `job=`.
+fn job_pid(seen: &str) -> i32 {
+    seen.split("job=")
+        .nth(1)
+        .and_then(|rest| rest.split(' ').next())
+        .and_then(|pid| pid.parse().ok())
+        .expect("job pid")
+}
+
+#[tokio::test]
+async fn a_sandboxed_terminal_kills_jobs_left_in_its_session() {
+    // The ignored hangup is inherited, so the job survives the shell's exit
+    // without racing `nohup`.
+    let (terminal, mut output) = sh_in(
+        TerminalMode::Sandboxed,
+        "trap '' HUP; nohup sleep 9999 >/dev/null 2>&1 & echo job=$! ready; exit 0",
+    );
+    let job = job_pid(&read_until(&mut output, "ready").await);
+    timeout(STEP_LIMIT, terminal.exit().wait()).await.unwrap();
+
+    assert_gone(job, "the sandboxed shell's nohup job").await;
+}
+
+#[tokio::test]
+async fn a_sandboxed_terminal_stops_a_chain_that_forks_and_exits() {
+    let directory = tempfile::tempdir().unwrap();
+    let beat = directory.path().join("beat");
+    let (terminal, mut output) = sh_in(
+        TerminalMode::Sandboxed,
+        &format!("{} & echo ready; read _; exit 0", fork_chain(&beat)),
+    );
+    read_until(&mut output, "ready").await;
+    assert!(beating(&beat).await, "the chain did not start");
+    terminal.write("\r").await.unwrap();
+    timeout(STEP_LIMIT, terminal.exit().wait()).await.unwrap();
+
+    assert!(!beating(&beat).await, "the chain outlived the terminal");
+    let left = std::process::Command::new("pgrep")
+        .args(["-s", &terminal.process_id().to_string()])
+        .output()
+        .unwrap();
+    assert!(
+        left.stdout.is_empty(),
+        "processes left in the session: {}",
+        String::from_utf8_lossy(&left.stdout)
+    );
+}
+
+/// A shell command for a chain of processes that each fork and exit at once,
+/// so no process ID lasts long enough to be listed and then killed. Every
+/// 16th process writes its process ID to `beat`, because a fast chain also
+/// outruns tools such as `pgrep -f` that read each process after listing it.
+fn fork_chain(beat: &std::path::Path) -> String {
+    format!(
+        "perl -e '$SIG{{HUP}}=q(IGNORE); \
+         while(1){{exit if fork; ++$n % 16 or open(my $f, q(>), $ARGV[0]) and print $f $$}}' '{}'",
+        beat.display()
+    )
+}
+
+/// Whether some process rewrites `beat` within a short wait.
+async fn beating(beat: &std::path::Path) -> bool {
+    let first = std::fs::read(beat).ok();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    std::fs::read(beat).ok() != first
+}
+
 #[test]
 fn rejects_empty_dimensions_and_missing_programs() {
     let empty = Terminal::spawn(TerminalCommand {
@@ -236,6 +322,7 @@ fn rejects_empty_dimensions_and_missing_programs() {
         cwd: std::env::temp_dir(),
         environment: Vec::new(),
         size: SIZE,
+        mode: TerminalMode::Normal,
     });
     assert!(matches!(missing, Err(TerminalError::Spawn(_))));
 }

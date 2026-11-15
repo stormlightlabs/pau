@@ -10,7 +10,8 @@ Agent tools run with your normal access unless you choose a sandbox. Open a
 workspace's **Agent sandbox** view to set the default for new agent sessions. A
 session can override that default. The sandbox applies to tools the agent calls
 and to their child processes. Terminals and editors that Pau opens stay
-unsandboxed.
+unsandboxed unless you open a sandboxed terminal, as **Terminals** below
+describes.
 
 When you choose a sandbox, Pau shows the effective access for Pi or Claude
 before any tool runs. A new Pi session starts only after its sandbox is
@@ -153,6 +154,44 @@ Claude's permission rules rather than the operating-system sandbox. `WebFetch`
 and `WebSearch` are denied unless you allow them outside the sandbox, which
 makes Claude ask before each call. Claude's MCP servers are disabled because
 Claude would start them outside its sandbox.
+
+## Terminals
+
+A sandboxed terminal runs your shell under the workspace's sandbox profile, the
+one new sessions use. Open one with the shield button next to **New terminal**.
+Its tab shows the profile's name. Terminals opened with **New terminal** keep
+your normal access.
+
+The shell gets the profile's file, network, and environment limits, with `TERM`
+set to `xterm-256color` and `SHELL` set to your shell. Job control, Ctrl-C,
+Ctrl-Z, resizing, and terminal editors such as Neovim work as usual.
+
+Programs in the sandbox cannot open your other terminals, so they cannot read
+what you type there or type into them. Keystrokes that a program injects into
+its own terminal reach only programs in the same sandbox.
+
+When the shell exits or you close the terminal, Pau stops every process left
+in the terminal's session, including jobs started with `nohup` and programs
+that keep forking. It first pauses them all, so none can start another, then
+ends them. On Linux, the sandbox also ends every process it holds once the
+shell is gone. On macOS, Pau spends at most three seconds on this, so a program
+that forks faster than macOS can pause it may keep running.
+
+Some things differ from a sandboxed session:
+
+- Credential references do not apply. Their variables are not set in the
+  terminal.
+- Your shell cannot save its history or other files outside the writable
+  directories.
+- On macOS, a program that starts its own session, as a daemon does, keeps
+  running after the terminal closes.
+
+Sandboxed terminals need sandbox-runtime's `srt` command. Install it with
+`npm install --global @anthropic-ai/sandbox-runtime@0.0.77`, then restart Pau.
+Until then, the shield button is disabled and its tooltip says why. If a
+sandboxed terminal fails to start, the button stays disabled until the
+workspace's sandbox settings change. Pau does not open an unsandboxed shell
+instead.
 
 ## Denials
 

@@ -19,12 +19,13 @@ mod network;
 mod placeholders;
 mod policy;
 mod selection;
+mod terminal;
 
 use std::{fmt, io};
 
 pub use claude::{ClaudeSandboxLaunch, claude_settings, prepare_claude_sandbox};
 pub use executables::{SandboxExecutable, SandboxExecutables};
-pub use placeholders::{is_placeholder, remove_placeholders};
+pub use placeholders::{PlaceholderLease, PlaceholderUsers, is_placeholder, remove_placeholders};
 pub use policy::{
     EffectiveSandbox, ResolvedSandbox, SandboxCredentialAccess, SandboxLaunchInput,
     SandboxNetworkAccess, SandboxPolicyFile, SandboxReadAccess, SandboxedMcpServer,
@@ -35,6 +36,7 @@ pub use selection::{
     SandboxPreviewRequest, SandboxProfileName, SandboxSelection, SandboxSelectionState,
     SandboxSettings, WorkspaceSandbox, validate_selection,
 };
+pub use terminal::{TerminalSandboxInput, TerminalSandboxLaunch, prepare_terminal_sandbox};
 
 /// Current version of the policy file read by `packages/sandbox`.
 pub const SANDBOX_POLICY_VERSION: u32 = 3;

@@ -146,14 +146,68 @@ use tokio::{sync::broadcast, task::JoinSet};
 use crate::{
     ApiError, ApiState, EventHub, SandboxApi,
     audit::{PendingAudit, export_target},
+    build_info::Channel,
     credential_environment, diagnostic_timestamp, stop_or_kill, workspace_service,
 };
 
 /// The `packages/sandbox` directory of the checkout this server was built
-/// from. Sandboxed Pi sessions load its extension, and its tool host reads
-/// this package and the checkout's `node_modules`, the package's only
-/// read grants in the checkout.
+/// from, which development builds load the sandbox extension from.
 const SANDBOX_PACKAGE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../packages/sandbox");
+
+/// Directory under the desktop app's resources that holds the bundled
+/// sandbox package: its sources, `package.json` and production
+/// `node_modules`.
+const BUNDLED_SANDBOX_PACKAGE: &str = "sandbox";
+
+/// Where sandboxed Pi sessions load the sandbox extension from, and the
+/// directories its tool host may read to run it.
+///
+/// The tool host runs Pi's `node` on the extension's sources and their
+/// dependencies, which a profile that hides the home directory must still let
+/// it read. The read grants name only those directories, never the checkout
+/// or app bundle around them: a checkout can hold secrets such as `.env`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SandboxExtension {
+    package: PathBuf,
+    runtime_roots: Vec<PathBuf>,
+}
+
+impl SandboxExtension {
+    /// The package in this server's checkout, with the checkout's
+    /// `node_modules`, where pnpm keeps the package's dependencies.
+    pub(crate) fn checkout() -> Self {
+        let package = PathBuf::from(SANDBOX_PACKAGE);
+        Self {
+            runtime_roots: vec![package.clone(), package.join("../../node_modules")],
+            package,
+        }
+    }
+
+    /// The bundled package for a release build that runs from an app with
+    /// `resources`, and the checkout's otherwise. Release builds are made in
+    /// a temporary checkout that is gone once the app is installed, and
+    /// development builds never ship the bundle.
+    ///
+    /// The bundled package carries its own `node_modules` and is the only
+    /// directory granted, so the tool host cannot read the rest of the app.
+    pub(crate) fn locate(channel: Channel, resources: Option<&Path>) -> Self {
+        match (channel, resources) {
+            (Channel::Release, Some(resources)) => {
+                let package = resources.join(BUNDLED_SANDBOX_PACKAGE);
+                Self {
+                    runtime_roots: vec![package.clone()],
+                    package,
+                }
+            }
+            _ => Self::checkout(),
+        }
+    }
+
+    /// The extension Pi loads.
+    fn entry(&self) -> PathBuf {
+        self.package.join("src/pi-extension.ts")
+    }
+}
 
 /// Status key under which the sandbox extension reports whether a session's
 /// tool host started. Pau consumes the record and never shows it.
@@ -1423,19 +1477,14 @@ impl PiSandboxRequest {
             .executables
             .as_ref()
             .map_err(|error| ApiError::SandboxUnavailable(error.clone()))?;
-        let package = Path::new(SANDBOX_PACKAGE);
-        let extension = package.join("src/pi-extension.ts");
+        let extension = self.sandbox.extension.entry();
         if !extension.is_file() {
             return Err(ApiError::SandboxUnavailable(format!(
                 "This build of Pau cannot find its sandbox extension at {}. Turn off the sandbox for this workspace to start a session.",
                 extension.display()
             )));
         }
-        // The tool host runs Pi's `node` on the extension's sources and their
-        // dependencies, which a profile that hides the home directory must
-        // still let it read. Only those directories are granted, never the
-        // checkout around them, which can hold secrets such as `.env`.
-        let mut runtime_roots = vec![package.to_path_buf(), package.join("../../node_modules")];
+        let mut runtime_roots = self.sandbox.extension.runtime_roots.clone();
         runtime_roots.extend(node_directory(OsStr::new(&self.sandbox.tool_path)));
         runtime_roots.extend(denial_preload_library());
         // pi-mcp-adapter would start every server in the Pi process, outside

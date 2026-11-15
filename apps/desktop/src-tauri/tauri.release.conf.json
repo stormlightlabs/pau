@@ -1,0 +1,4 @@
+{
+	"build": { "beforeBuildCommand": "pnpm build:frontend && node scripts/bundle-sandbox.mjs" },
+	"bundle": { "resources": { "../../../target/sandbox-bundle/": "sandbox/" } }
+}

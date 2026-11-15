@@ -117,8 +117,11 @@ The first build takes a few minutes. Use `v0.6.0` or later.
 `pnpm release:macos`, which the install script runs, then:
 
 1. Builds the Apple Silicon app with the release identity
-   (`org.stormlightlabs.pau`, product name "Pau").
-2. Signs it with your Developer ID and the hardened runtime.
+   (`org.stormlightlabs.pau`, product name "Pau"). The app carries the sandbox
+   extension and its production dependencies in `Contents/Resources/sandbox`,
+   because the installed app has no checkout to load them from.
+2. Signs the native files among those dependencies, then the app, with your
+   Developer ID and the hardened runtime.
 3. Submits it to Apple for notarization and waits. The first submission can
    take from a few minutes to an hour. Later ones are usually quicker.
 4. Staples the notarization ticket and checks the result with `codesign` and
@@ -162,6 +165,9 @@ identity`.** `APPLE_SIGNING_IDENTITY` names an Apple Development certificate.
   and its lockfile disagree. Report that rather than committing on the tag.
 - **The version or tag check fails.** `HEAD` is not at the tag for the
   `Cargo.toml` version. Check with `git describe --tags --exact-match`.
+- **A sandboxed Pi session reports that Pau cannot find its sandbox
+  extension.** The app was built without the release configuration. Build it
+  with the install script or `pnpm release:macos`, not `tauri build`.
 - **`errSecInternalComponent` while signing.** The login keychain is locked or
   asked for access in a dialog you could not see. Run
   `security unlock-keychain ~/Library/Keychains/login.keychain-db` and try

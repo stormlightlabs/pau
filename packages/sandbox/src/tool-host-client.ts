@@ -8,7 +8,7 @@ import { SandboxManager } from '@anthropic-ai/sandbox-runtime';
 import { getAgentDir, type AgentToolResult } from '@earendil-works/pi-coding-agent';
 import type { SandboxedMcpServer } from '@stormlightlabs/pau-protocol';
 import { registerCredentialSubstitution } from './credential-proxy.ts';
-import { SandboxUnavailableError, spawnSandboxed, startSandbox } from './launcher.ts';
+import { SandboxUnavailableError, shellQuote, spawnSandboxed, startSandbox } from './launcher.ts';
 import type { SandboxPolicy } from './policy.ts';
 import { configurePreloadEnvironment, type PreloadDenial } from './preload.ts';
 import { SeatbeltDenialLog } from './seatbelt.ts';
@@ -44,7 +44,7 @@ function prepareAgentDir(tempDir: string, searchPath: string): Record<string, st
 		writeFileSync(
 			path.join(bin, 'rg'),
 			`#!/bin/sh
-exec ${process.execPath} ${wrapper} "$@"
+exec ${shellQuote(process.execPath)} ${shellQuote(wrapper)} "$@"
 `,
 			{ mode: 0o755 }
 		);
@@ -94,7 +94,7 @@ export class ToolHostClient {
 		const commandId = 'pau-tool-host';
 		const seatbeltDenials = new SeatbeltDenialLog(commandId);
 		try {
-			const child = await spawnSandboxed(`exec ${process.execPath} ${script}`, {
+			const child = await spawnSandboxed(`exec ${shellQuote(process.execPath)} ${shellQuote(script)}`, {
 				env,
 				cwd: policy.workspace,
 				commandId,

@@ -91,6 +91,10 @@ function verifyBundle(bundle, version) {
 	if (bundleIdentifier !== identifier) {
 		throw new Error(`${bundle} has the bundle identifier ${bundleIdentifier}, not ${identifier}.`);
 	}
+	// The installed app has no checkout to load the sandbox extension from.
+	if (!existsSync(path.join(bundle, 'Contents/Resources/sandbox/src/pi-extension.ts'))) {
+		throw new Error(`${bundle} does not carry the sandbox extension in Contents/Resources/sandbox.`);
+	}
 }
 
 function verifySignature(bundle) {

@@ -171,7 +171,8 @@ test('maps every bundled font to the component CSS contract', () => {
 	for (const fontName of Object.keys(UI_FONTS) as (keyof typeof UI_FONTS)[]) {
 		const properties = themeCssProperties('eldritch', fontName);
 		expect(properties['--pau-font-ui']).toContain(UI_FONTS[fontName].family);
-		expect(properties['--pau-input-shift']).toBe(`${UI_FONTS[fontName].inputShift}em`);
+		expect(properties['--pau-input-shift']).toBe(`${UI_FONTS[fontName].inputShift.webkit}em`);
+		expect(properties['--pau-input-shift-chromium']).toBe(`${UI_FONTS[fontName].inputShift.chromium}em`);
 	}
 });
 

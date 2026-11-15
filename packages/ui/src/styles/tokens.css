@@ -69,11 +69,12 @@
 	--pau-cap-shift: 0.11em;
 
 	/*
-	 * How far a text field moves its input text down in WebKit, which
-	 * ignores `text-box` on input text. `themeCssProperties` sets it for the
-	 * chosen UI font; this default is Overpass's. See `fields.css`.
+	 * How far a text field moves its input text down, in WebKit and in
+	 * Chromium. `themeCssProperties` sets both for the chosen UI font; these
+	 * defaults are Overpass's. See `fields.css`.
 	 */
-	--pau-input-shift: 0.09em;
+	--pau-input-shift: 0.11em;
+	--pau-input-shift-chromium: 0.14em;
 
 	--pau-weight-regular: 400;
 	--pau-weight-medium: 500;

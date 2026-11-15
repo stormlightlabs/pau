@@ -13,11 +13,10 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 /// The label of the only window, which receives startup progress.
 const MAIN_WINDOW: &str = "main";
 /// The preferred first-launch size in logical pixels, wide enough for the
-/// bay, the main surface, and the workspace column side by side.
+/// product rail, context rail, session, and inspector side by side.
 const WINDOW_SIZE: (f64, f64) = (1440.0, 900.0);
-/// The smallest size the window may take. Below 900px wide there is no
-/// supported layout: the narrow layout keeps a 288px bay beside the main
-/// surface and opens the workspace column as an overlay.
+/// The smallest size the window may take, and the narrowest the shared UI
+/// is laid out and tested for. It keeps the context rail beside the session.
 const WINDOW_MIN_SIZE: (f64, f64) = (900.0, 560.0);
 /// The share of the screen's work area a first-launch window may cover.
 const WINDOW_SCREEN_SHARE: f64 = 0.9;

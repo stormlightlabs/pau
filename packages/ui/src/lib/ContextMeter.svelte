@@ -181,8 +181,8 @@
 	}
 
 	/*
-	 * In a narrow container, such as the composer footer at the minimum window
-	 * size, the label keeps only the share used. The details still list the
+	 * In a narrow container, such as the composer footer in a phone-width
+	 * view, the label keeps only the share used. The details still list the
 	 * window and token totals, and display: none keeps the hidden form out of
 	 * the accessible name.
 	 */

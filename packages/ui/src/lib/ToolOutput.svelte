@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '../styles/tokens.css';
 	import CopyButton from './CopyButton.svelte';
-	import { diffLineKind, outputWindow, toolOutputLineCap } from './tool-call-format';
+	import { diffLineKind, outputWindow, toolOutputChunkLines, toolOutputLineCap } from './tool-call-format';
 
 	type Props = {
 		/** Output split into lines. */
@@ -21,6 +21,19 @@
 
 	const capped = $derived(lines.length > toolOutputLineCap);
 	const visible = $derived(expanded ? lines : outputWindow(lines, toolOutputLineCap, from).lines);
+	/*
+	 * Plain output renders as one text node per chunk of lines. Each chunk
+	 * after the first starts with its line break, so a full chunk's text never
+	 * changes again, and a streamed line rewrites only the last chunk.
+	 */
+	const chunks = $derived.by(() => {
+		const texts: string[] = [];
+		for (let start = 0; start < visible.length; start += toolOutputChunkLines) {
+			const text = visible.slice(start, start + toolOutputChunkLines).join('\n');
+			texts.push(start === 0 ? text : `\n${text}`);
+		}
+		return texts;
+	});
 	const count = $derived(lines.length.toLocaleString('en-US'));
 	const summary = $derived(
 		expanded ? `All ${count} lines` : `${from === 'tail' ? 'Last' : 'First'} ${toolOutputLineCap} of ${count} lines`
@@ -47,7 +60,7 @@
 		aria-label={label}
 		tabindex={expanded ? 0 : undefined}>{#if diff}{#each visible as line, index (index)}<span
 					class={`tool-output__line tool-output__line--${diffLineKind(line)}`}>{line}</span
-				>{/each}{:else}{visible.join('\n')}{/if}</pre>
+				>{/each}{:else}{#each chunks as chunk, index (index)}{chunk}{/each}{/if}</pre>
 	{#if capped}
 		<div class="pau-tool-output__bar">
 			<span>{summary}</span>

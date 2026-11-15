@@ -7,10 +7,15 @@ import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
-const browser = (reducedMotion?: 'reduce' | 'no-preference', engine: 'chromium' | 'webkit' = 'chromium') => ({
+type BrowserOptions = {
+	reducedMotion?: 'reduce' | 'no-preference';
+	engine?: 'chromium' | 'webkit';
+	deviceScaleFactor?: number;
+};
+const browser = ({ reducedMotion, engine = 'chromium', deviceScaleFactor }: BrowserOptions = {}) => ({
 	enabled: true,
 	headless: true,
-	provider: playwright(reducedMotion ? { contextOptions: { reducedMotion } } : undefined),
+	provider: playwright({ contextOptions: { reducedMotion, deviceScaleFactor } }),
 	instances: [{ browser: engine }]
 });
 
@@ -24,21 +29,23 @@ export default defineConfig({
 				test: {
 					name: 'components',
 					include: ['src/**/*.svelte.test.ts'],
-					exclude: ['src/tests/motion-query.svelte.test.ts'],
+					exclude: ['src/tests/motion-query.svelte.test.ts', 'src/tests/LabelCentering.svelte.test.ts'],
 					setupFiles: ['vitest-browser-svelte'],
 					browser: browser()
 				}
 			},
-			// The desktop app renders in WebKit, which places text differently.
-			{
-				extends: true,
+			// Text centering, measured at the Retina scale the desktop app draws
+			// at, in Chromium and in WebKit, the desktop app's engine, which
+			// places text differently.
+			...(['chromium', 'webkit'] as const).map((engine) => ({
+				extends: true as const,
 				test: {
-					name: 'components-webkit',
+					name: `centering-${engine}`,
 					include: ['src/tests/LabelCentering.svelte.test.ts'],
 					setupFiles: ['vitest-browser-svelte'],
-					browser: browser(undefined, 'webkit')
+					browser: browser({ engine, deviceScaleFactor: 2 })
 				}
-			},
+			})),
 			// The OS reduced-motion query, on and off, for the motion setting.
 			...(['reduce', 'no-preference'] as const).map((reducedMotion) => ({
 				extends: true as const,
@@ -46,7 +53,7 @@ export default defineConfig({
 					name: `motion-os-${reducedMotion}`,
 					include: ['src/tests/motion-query.svelte.test.ts'],
 					setupFiles: ['vitest-browser-svelte'],
-					browser: browser(reducedMotion)
+					browser: browser({ reducedMotion })
 				}
 			})),
 			{

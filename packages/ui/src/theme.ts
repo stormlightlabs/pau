@@ -101,26 +101,38 @@ export type PauTheme = {
  * bundled and never loaded from a remote origin.
  *
  * `inputShift` is how far, in em, a text field moves its input text down so
- * the capitals sit on the field's center line in WebKit, the desktop app's
- * engine. WebKit centers input text by the face's line box and ignores
- * `text-box` there, so each face needs its own measured offset; a negative
- * value moves the text up.
+ * the capitals sit on the field's center line; a negative value moves the
+ * text up. Fields cannot trim input text with `text-box`, which WebKit
+ * ignores on inputs and Chromium ignores on placeholders, so they center the
+ * face's line box and move it by this offset. WebKit, the desktop app's
+ * engine, and Chromium place that line box up to a pixel apart in some
+ * faces, and they snap the text to a whole device pixel and a whole CSS
+ * pixel. So each engine has its own value, measured from the drawn glyphs
+ * at twice the device scale and chosen so the snapped capitals land nearest
+ * the center. See `fields.css`.
  */
 export const UI_FONTS = {
-	overpass: { label: 'Overpass', family: "'Overpass Variable'", inputShift: 0.09 },
-	'ibm-plex-sans': { label: 'IBM Plex Sans', family: "'IBM Plex Sans Variable'", inputShift: -0.05 },
-	inter: { label: 'Inter', family: "'Inter Variable'", inputShift: 0 },
+	overpass: { label: 'Overpass', family: "'Overpass Variable'", inputShift: { webkit: 0.11, chromium: 0.14 } },
+	'ibm-plex-sans': {
+		label: 'IBM Plex Sans',
+		family: "'IBM Plex Sans Variable'",
+		inputShift: { webkit: -0.04, chromium: 0 }
+	},
+	inter: { label: 'Inter', family: "'Inter Variable'", inputShift: { webkit: 0, chromium: -0.07 } },
 	'atkinson-hyperlegible-next': {
 		label: 'Atkinson Hyperlegible Next',
 		family: "'Atkinson Hyperlegible Next Variable'",
-		inputShift: -0.02
+		inputShift: { webkit: 0, chromium: 0 }
 	},
 	'atkinson-hyperlegible-soft': {
 		label: 'Atkinson Hyperlegible Soft',
 		family: "'Atkinson Hyperlegible Soft'",
-		inputShift: 0
+		inputShift: { webkit: 0, chromium: 0.07 }
 	}
-} as const satisfies Record<UiFontName, { label: string; family: string; inputShift: number }>;
+} as const satisfies Record<
+	UiFontName,
+	{ label: string; family: string; inputShift: { webkit: number; chromium: number } }
+>;
 
 const theme = (value: PauTheme): PauTheme => value;
 
@@ -503,7 +515,8 @@ export function themeCssProperties(themeName: ThemeName, fontName: UiFontName): 
 		'--pau-syntax-variable': syntax.variable,
 		'--pau-syntax-invalid': syntax.invalid,
 		'--pau-font-ui': `${UI_FONTS[fontName].family}, ui-sans-serif, system-ui, sans-serif`,
-		'--pau-input-shift': `${UI_FONTS[fontName].inputShift}em`
+		'--pau-input-shift': `${UI_FONTS[fontName].inputShift.webkit}em`,
+		'--pau-input-shift-chromium': `${UI_FONTS[fontName].inputShift.chromium}em`
 	};
 }
 

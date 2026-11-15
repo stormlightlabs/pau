@@ -6,6 +6,9 @@
  *
  * `pau-menu__item` lays out one 32px row: an optional 16px icon or check
  * mark, the label in a `span`, and an optional hint or `kbd` at the end.
+ * A label with a second line, such as a description or the reason a row is
+ * disabled, goes in a `pau-menu__text` instead: the label in a `span`, then
+ * the second line in a `small`.
  * Pair it with `pau-option` from `states.css`, which owns the hover, press,
  * active and disabled colors. `pau-menu__divider` separates groups.
  */
@@ -41,6 +44,23 @@
 /* An item without a lead icon still starts its label on the label column. */
 .pau-menu__item > span:first-child:not(.pau-icon) {
 	grid-column: 2;
+}
+
+/*
+ * Two lines of text are not trimmed to the capitals like a one-line label,
+ * so the block pads itself and wraps long words instead of truncating.
+ */
+.pau-menu__text {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+	padding-block: var(--pau-space-1);
+	overflow-wrap: anywhere;
+}
+
+.pau-menu__text > small {
+	color: var(--pau-text-muted);
+	font-size: var(--pau-type-xs);
 }
 
 .pau-menu__item > .pau-icon {

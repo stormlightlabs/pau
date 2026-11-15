@@ -24,6 +24,8 @@
 	gap: var(--pau-space-2);
 	min-width: 0;
 	height: var(--pau-size-row-md);
+	/* Clears the button padding WebKit sets unevenly above and below. */
+	padding-block: 0;
 	padding-inline: var(--pau-space-3) var(--pau-space-2);
 	color: var(--pau-text);
 	background-color: var(--pau-canvas);
@@ -62,20 +64,32 @@ button.pau-field {
 }
 
 /*
- * Input text centers on its capitals, as labels do. Chromium trims input
- * text with `text-box`. WebKit ignores it there, so the field moves the text
- * by the face's measured `--pau-input-shift` instead. WebKit is the only
- * engine that supports `hanging-punctuation`, which selects it.
+ * Input text centers on its capitals, as labels do, but no engine can trim
+ * it: WebKit ignores `text-box` on inputs and Chromium ignores it on
+ * placeholders. So the field centers the untrimmed line box, and block
+ * padding moves it by the face's measured `--pau-input-shift`, the same for
+ * a value and a placeholder.
+ *
+ * Inputs never take `text-box`, so the shift cannot stack with a trim once
+ * an engine starts honoring one there. The engines place the line box up to
+ * a pixel apart in some faces and snap the text to different pixel grids,
+ * so each has its own measured shift. WebKit, the desktop app's engine,
+ * uses `--pau-input-shift`. Chromium, and any other engine without
+ * `hanging-punctuation`, which only WebKit supports, uses
+ * `--pau-input-shift-chromium`. The centering test measures the drawn
+ * glyphs in both engines and fails when either value drifts.
  */
 input.pau-field,
 .pau-field > input {
-	text-box: trim-both cap alphabetic;
+	--pau-field-input-shift: var(--pau-input-shift);
+
+	padding-block: max(0px, 2 * var(--pau-field-input-shift)) max(0px, -2 * var(--pau-field-input-shift));
 }
 
-@supports (hanging-punctuation: first) {
+@supports not (hanging-punctuation: first) {
 	input.pau-field,
 	.pau-field > input {
-		padding-block: max(0px, 2 * var(--pau-input-shift)) max(0px, -2 * var(--pau-input-shift));
+		--pau-field-input-shift: var(--pau-input-shift-chromium);
 	}
 }
 

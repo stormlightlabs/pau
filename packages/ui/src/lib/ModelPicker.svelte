@@ -202,16 +202,16 @@
 						<li>
 							<button
 								type="button"
-								class="pau-option"
+								class="pau-menu__item pau-option"
 								aria-current={model.current ? 'true' : undefined}
 								disabled={pendingId !== undefined}
 								onclick={() => void select(model)}>
 								<Icon name="check" class="model-picker__check" size="0.875rem" />
-								<span class="model-picker__name">
+								<span class="pau-menu__text">
 									<small>{model.provider}</small>
-									{modelLabel(model)}
+									<span>{modelLabel(model)}</span>
 								</span>
-								{#if model.reasoning}<span class="model-picker__badge">Reasoning</span>{/if}
+								{#if model.reasoning}<span class="pau-menu__hint">Reasoning</span>{/if}
 							</button>
 						</li>
 					{/each}
@@ -302,48 +302,17 @@
 		list-style: none;
 	}
 
-	li button {
-		display: flex;
-		align-items: center;
-		gap: var(--pau-space-2);
-		width: 100%;
-		min-height: var(--pau-size-row-md);
-		padding: var(--pau-space-1) var(--pau-space-3) var(--pau-space-1) var(--pau-space-2);
-		text-align: start;
-		border: 0;
-		cursor: default;
-	}
-
 	li button:focus-visible {
 		background-color: var(--pau-surface-selected);
 	}
 
 	li button :global(.model-picker__check) {
-		flex: none;
 		color: var(--pau-accent);
 		visibility: hidden;
 	}
 
 	li button[aria-current='true'] :global(.model-picker__check) {
 		visibility: visible;
-	}
-
-	.model-picker__name {
-		display: grid;
-		flex: 1;
-		gap: 2px;
-		min-width: 0;
-		overflow-wrap: anywhere;
-	}
-
-	.model-picker__name small,
-	.model-picker__badge {
-		color: var(--pau-text-muted);
-		font-size: var(--pau-type-xs);
-	}
-
-	.model-picker__badge {
-		flex: none;
 	}
 
 	/* Try again, after the list fails to load. */

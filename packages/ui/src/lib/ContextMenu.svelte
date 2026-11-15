@@ -177,15 +177,19 @@
 			type="button"
 			role="menuitem"
 			tabindex="-1"
-			class="context-menu__item pau-option"
+			class="context-menu__item pau-menu__item pau-option"
 			aria-disabled={item.disabled ? 'true' : undefined}
 			aria-labelledby={`${menuId}-${item.id}-label`}
 			aria-describedby={item.disabled && item.reason ? `${menuId}-${item.id}-reason` : undefined}
 			onpointermove={() => focusItem(index)}
 			onclick={() => choose(index)}>
-			<span id={`${menuId}-${item.id}-label`}>{item.label}</span>
 			{#if item.disabled && item.reason}
-				<small id={`${menuId}-${item.id}-reason`}>{item.reason}</small>
+				<span class="pau-menu__text">
+					<span id={`${menuId}-${item.id}-label`}>{item.label}</span>
+					<small id={`${menuId}-${item.id}-reason`}>{item.reason}</small>
+				</span>
+			{:else}
+				<span id={`${menuId}-${item.id}-label`}>{item.label}</span>
 			{/if}
 		</button>
 	{/each}
@@ -206,19 +210,6 @@
 		animation: none;
 	}
 
-	.context-menu__item {
-		display: grid;
-		gap: 2px;
-		align-content: center;
-		min-height: var(--pau-size-row-md);
-		padding: var(--pau-space-1) var(--pau-space-2);
-		font: inherit;
-		text-align: left;
-		border: 0;
-		border-radius: var(--pau-radius-control);
-		cursor: default;
-	}
-
 	.context-menu__item:focus {
 		outline: none;
 	}
@@ -231,11 +222,6 @@
 	.context-menu__item:focus-visible {
 		outline: var(--pau-focus-width) solid var(--pau-focus);
 		outline-offset: var(--pau-focus-offset-inset);
-	}
-
-	.context-menu__item small {
-		color: var(--pau-text-muted);
-		font-size: var(--pau-type-xs);
 	}
 
 	.context-menu__separator {

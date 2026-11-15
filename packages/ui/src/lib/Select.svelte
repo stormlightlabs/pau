@@ -400,7 +400,7 @@
 			<div
 				id={optionId(index)}
 				role="option"
-				class="select__option pau-option"
+				class="select__option pau-menu__item pau-option"
 				class:select__option--active={index === activeIndex}
 				class:pau-option--active={index === activeIndex}
 				aria-selected={index === selectedIndex}
@@ -416,11 +416,15 @@
 				onpointermove={() => (activeValue = option.value)}
 				onclick={() => choose(index)}>
 				<Icon name="check" class="select__check" size="0.875rem" />
-				<span class="select__text">
+				{#if option.description || (option.disabled && option.disabledReason)}
+					<span class="pau-menu__text">
+						<span id={labelId}>{option.label}</span>
+						{#if option.description}<small id={descriptionId}>{option.description}</small>{/if}
+						{#if option.disabled && option.disabledReason}<small id={reasonId}>{option.disabledReason}</small>{/if}
+					</span>
+				{:else}
 					<span id={labelId}>{option.label}</span>
-					{#if option.description}<small id={descriptionId}>{option.description}</small>{/if}
-					{#if option.disabled && option.disabledReason}<small id={reasonId}>{option.disabledReason}</small>{/if}
-				</span>
+				{/if}
 			</div>
 		{/each}
 	</div>
@@ -499,35 +503,13 @@
 		}
 	}
 
-	.select__option {
-		display: flex;
-		align-items: center;
-		gap: var(--pau-space-2);
-		min-height: var(--pau-size-row-md);
-		padding: var(--pau-space-1) var(--pau-space-3) var(--pau-space-1) var(--pau-space-2);
-		border-radius: var(--pau-radius-control);
-		cursor: default;
-	}
-
 	.select__option :global(.select__check) {
-		flex: none;
 		color: var(--pau-text);
 		visibility: hidden;
 	}
 
 	.select__option[aria-selected='true'] :global(.select__check) {
 		visibility: visible;
-	}
-
-	.select__text {
-		display: grid;
-		gap: 2px;
-		min-width: 0;
-	}
-
-	.select__text small {
-		color: var(--pau-text-muted);
-		font-size: var(--pau-type-xs);
 	}
 
 	.select__error {

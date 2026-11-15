@@ -134,11 +134,12 @@ function itemSpacing() {
 }
 
 /*
- * Chromium lays text out at fractional positions, so a centered label lands
- * within half a pixel. WebKit on Linux snaps boxes and hinted glyphs to whole
- * device pixels, so there the bound is one device pixel.
+ * Every centered label, mark and input text lands within half a CSS pixel of
+ * its center line, in both engines. The centering projects run at a device
+ * scale of 2, as on the Retina displays the desktop app draws on, so a
+ * snapped box or glyph in WebKit is off by at most a quarter pixel.
  */
-const precision = navigator.userAgent.includes('Chrome') ? 0.5 : 1 / devicePixelRatio;
+const precision = 0.5;
 
 const remPx = () => Number(getComputedStyle(document.documentElement).fontSize.replace('px', ''));
 
@@ -268,9 +269,11 @@ function rows() {
 		]);
 	}
 	for (const item of document.querySelectorAll('.pau-menu__item')) {
+		// Closed lists, such as a select's, are not laid out.
+		if (item.getClientRects().length === 0) continue;
 		add(`menu ${item.textContent}`, item, [
 			...box('.pau-icon, kbd', item),
-			...caps(':scope > span:not(.pau-icon)', item)
+			...caps(':scope > span:not(.pau-icon, .pau-menu__text)', item)
 		]);
 	}
 	for (const actions of document.querySelectorAll(
@@ -315,3 +318,91 @@ test('makes every button, field and select 32px tall', async () => {
 		expect(control.getBoundingClientRect().height, control.textContent ?? '').toBe(32);
 	}
 });
+
+/** A capture of the test frame, with how many image pixels make one CSS pixel. */
+async function captureFrame() {
+	const base64 = (await page.screenshot({ save: false })) as string;
+	const image = new Image();
+	image.src = `data:image/png;base64,${base64}`;
+	await image.decode();
+	const canvas = document.createElement('canvas');
+	canvas.width = image.width;
+	canvas.height = image.height;
+	const context = canvas.getContext('2d', { willReadFrequently: true })!;
+	context.drawImage(image, 0, 0);
+	return { pixels: context.getImageData(0, 0, image.width, image.height), scale: image.width / innerWidth };
+}
+
+/**
+ * How far the ink of an input's text sits from its field's center, in CSS
+ * pixels, counted from the drawn pixels rather than from any box. Each row of
+ * the input's content area gets the strongest contrast any of its pixels has
+ * with the field fill, as a fraction of the strongest in the area. Capitals
+ * with flat tops and a flat baseline make that profile a plateau with
+ * partial rows at its edges, so its weighted mean row is the cap center to a
+ * fraction of a device pixel.
+ */
+function inkOffset({ pixels, scale }: Awaited<ReturnType<typeof captureFrame>>, input: HTMLInputElement) {
+	const field = (input.closest('.pau-field') ?? input).getBoundingClientRect();
+	const box = input.getBoundingClientRect();
+	const style = getComputedStyle(input);
+	const inset = (side: 'Left' | 'Right') =>
+		Number(style[`padding${side}`].replace('px', '')) + Number(style[`border${side}Width`].replace('px', ''));
+	const left = Math.ceil((box.left + inset('Left')) * scale);
+	const right = Math.floor((box.right - inset('Right')) * scale);
+	const top = Math.ceil((field.top + 1) * scale);
+	const bottom = Math.floor((field.bottom - 1) * scale);
+	const at = (x: number, y: number) => (y * pixels.width + x) * 4;
+	const fill = at(right - 1, top + 1);
+	const contrast = (x: number, y: number) => {
+		const index = at(x, y);
+		return Math.max(
+			...[0, 1, 2].map((channel) => Math.abs(pixels.data[index + channel]! - pixels.data[fill + channel]!))
+		);
+	};
+	const profile: number[] = [];
+	for (let y = top; y < bottom; y++) {
+		let strongest = 0;
+		for (let x = left; x < right; x++) strongest = Math.max(strongest, contrast(x, y));
+		profile.push(strongest);
+	}
+	const peak = Math.max(...profile);
+	expect(peak, 'the input text has ink').toBeGreaterThan(64);
+	let weight = 0;
+	let moment = 0;
+	for (const [row, value] of profile.entries()) {
+		const share = value / peak;
+		weight += share;
+		moment += share * (top + row + 0.5);
+	}
+	return moment / weight / scale - (field.top + field.height / 2);
+}
+
+/** The text every field shows while its ink is measured: capitals with flat tops and baselines. */
+const CAPITALS = 'HIEFT';
+
+for (const mode of ['value', 'placeholder'] as const) {
+	test.each(Object.keys(UI_FONTS) as UiFontName[])(
+		`centers input ${mode} text on the field by its ink in %s`,
+		async (font) => {
+			await page.viewport(900, 700);
+			const properties = themeCssProperties('eldritch', font);
+			for (const [name, value] of Object.entries(properties)) document.documentElement.style.setProperty(name, value);
+			await render(FieldsDemo);
+			await document.fonts.load(`400 14px ${properties['--pau-font-ui']}`);
+			await document.fonts.ready;
+			const inputs = [...document.querySelectorAll<HTMLInputElement>('input.pau-field, .pau-field > input')];
+			expect(inputs.length).toBeGreaterThanOrEqual(5);
+			for (const input of inputs) {
+				input.value = mode === 'value' ? CAPITALS : '';
+				input.placeholder = CAPITALS;
+			}
+			const frame = await captureFrame();
+			expect(frame.scale).toBe(2);
+			for (const input of inputs) {
+				const offset = inkOffset(frame, input);
+				expect.soft(Math.abs(offset), input.ariaLabel!).toBeLessThanOrEqual(precision);
+			}
+		}
+	);
+}

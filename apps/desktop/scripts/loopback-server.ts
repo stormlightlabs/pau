@@ -42,9 +42,10 @@ function startedAddress(server: ChildProcessWithoutNullStreams, deadline: number
 			() => reject(new Error('pau-server did not start within 15 seconds.')),
 			deadline - Date.now()
 		);
-		server.once('exit', (code) => {
+		server.once('exit', (code, signal) => {
 			clearTimeout(timer);
-			reject(new Error(`pau-server exited with code ${code} before it started.`));
+			const status = code === null ? `signal ${signal}` : `code ${code}`;
+			reject(new Error(`pau-server exited with ${status} before it started.`));
 		});
 		createInterface({ input: server.stdout }).on('line', (line) => {
 			let record: { fields?: { event?: unknown; address?: unknown } };
@@ -94,26 +95,25 @@ export default async function setup(project: TestProject): Promise<() => Promise
 		await rm(root, { recursive: true, force: true });
 	};
 
+	// Any failure after the spawn stops the server, so a failed run leaves no
+	// orphaned server or temporary database behind.
 	let origin: string;
+	let workspace: { id: string };
 	try {
 		origin = `http://${await startedAddress(server, Date.now() + 15_000)}`;
+		const response = await fetch(`${origin}/api/workspaces`, {
+			method: 'POST',
+			headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+			body: JSON.stringify({ path: root, name: 'integration' })
+		});
+		if (!response.ok) {
+			throw new Error(`Opening the integration workspace failed with HTTP ${response.status}.`);
+		}
+		workspace = (await response.json()) as { id: string };
 	} catch (error) {
 		await stop();
 		throw error;
 	}
-
-	const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-
-	const response = await fetch(`${origin}/api/workspaces`, {
-		method: 'POST',
-		headers,
-		body: JSON.stringify({ path: root, name: 'integration' })
-	});
-	if (!response.ok) {
-		await stop();
-		throw new Error(`Opening the integration workspace failed with HTTP ${response.status}.`);
-	}
-	const workspace = (await response.json()) as { id: string };
 	const editors = Object.fromEntries(
 		await Promise.all(EDITORS.map(async (name) => [name, await findExecutable(name)] as const))
 	) as Record<(typeof EDITORS)[number], string | null>;

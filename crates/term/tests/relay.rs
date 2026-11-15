@@ -5,8 +5,8 @@
 use std::{path::Path, time::Duration};
 
 use pau_term::{
-    Terminal, TerminalCommand, TerminalOutput, TerminalSignal, TerminalSize, TerminalStatus,
-    relay::RELAY_ARGUMENT,
+    Terminal, TerminalCommand, TerminalMode, TerminalOutput, TerminalSignal, TerminalSize,
+    TerminalStatus, relay::RELAY_ARGUMENT,
 };
 use tokio::time::{sleep, timeout};
 
@@ -32,7 +32,7 @@ fn relayed(program: &str, args: &[&str]) -> (Terminal, TerminalOutput) {
             ("PS1".into(), "$ ".into()),
         ],
         size: SIZE,
-        relay: true,
+        mode: TerminalMode::Relay,
     })
     .unwrap()
 }
@@ -320,7 +320,7 @@ async fn keystrokes_injected_by_the_shell_reach_only_the_inner_pty() {
         cwd: std::env::temp_dir(),
         environment: vec![("PATH".into(), "/usr/bin:/bin:/opt/homebrew/bin".into())],
         size: SIZE,
-        relay: true,
+        mode: TerminalMode::Relay,
     })
     .unwrap();
 

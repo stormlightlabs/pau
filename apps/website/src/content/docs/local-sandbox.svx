@@ -143,10 +143,13 @@ your normal access.
 
 The shell gets the profile's file, network, and environment limits, with `TERM`
 set to `xterm-256color` and `SHELL` set to your shell. Job control, Ctrl-C,
-Ctrl-Z, resizing, and terminal editors such as Neovim work as usual. Keystrokes
-that a program in the sandbox injects into its terminal reach only the
-sandboxed shell. When the shell exits or you close the terminal, Pau stops the
-jobs it left running.
+Ctrl-Z, resizing, and terminal editors such as Neovim work as usual.
+
+Programs in the sandbox cannot open your other terminals, so they cannot read
+what you type there or type into them. Keystrokes that a program injects into
+its own terminal reach only programs in the same sandbox. When the shell exits
+or you close the terminal, Pau stops every process left in the terminal's
+session, including jobs started with `nohup`.
 
 Some things differ from a sandboxed session:
 
@@ -160,8 +163,9 @@ Some things differ from a sandboxed session:
 Sandboxed terminals need sandbox-runtime's `srt` command. Install it with
 `npm install --global @anthropic-ai/sandbox-runtime@0.0.77`, then restart Pau.
 Until then, the shield button is disabled and its tooltip says why. If a
-sandboxed terminal fails to start, the button stays disabled for that view.
-Pau does not open an unsandboxed shell instead.
+sandboxed terminal fails to start, the button stays disabled until the
+workspace's sandbox settings change. Pau does not open an unsandboxed shell
+instead.
 
 ## Denials
 

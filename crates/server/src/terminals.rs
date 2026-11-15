@@ -38,7 +38,9 @@ use pau_core::{
     },
     workspace::WorkspaceError,
 };
-use pau_term::{AttachedOutput, Terminal, TerminalCommand, TerminalError, TerminalScrollback};
+use pau_term::{
+    AttachedOutput, Terminal, TerminalCommand, TerminalError, TerminalMode, TerminalScrollback,
+};
 use uuid::Uuid;
 
 use super::{
@@ -182,7 +184,7 @@ struct SandboxLeftovers {
 /// Opens a terminal in a workspace root and starts streaming its output.
 ///
 /// A sandboxed request runs the shell under the workspace's sandbox profile
-/// through `srt` and the `pau-term` relay. It fails rather than open an
+/// through `srt`, and on Linux the `pau-term` relay. It fails rather than open an
 /// unsandboxed shell when the workspace has no profile or the sandbox cannot
 /// start.
 pub(crate) async fn create_terminal(
@@ -261,7 +263,11 @@ pub(crate) async fn create_terminal(
             cwd: root,
             environment: launch.environment,
             size: request.size,
-            relay: true,
+            mode: if launch.relay {
+                TerminalMode::Relay
+            } else {
+                TerminalMode::Sandboxed
+            },
         }
     } else {
         TerminalCommand {
@@ -270,7 +276,7 @@ pub(crate) async fn create_terminal(
             cwd: root,
             environment: workspaces.process_environment(),
             size: request.size,
-            relay: false,
+            mode: TerminalMode::Normal,
         }
     };
     // Spawning forks and waits for exec to report success, so keep it off
@@ -1037,8 +1043,11 @@ mod tests {
         assert_eq!(args[0], "--settings");
         assert!(args[1].starts_with(&*session.to_string_lossy()), "{args:?}");
         assert_eq!(args[2], "-c");
-        assert!(
-            args[3].ends_with(&format!("'--pau-term-relay' '{shell}'")),
+        assert!(args[3].ends_with(&format!(" '{shell}'")), "{args:?}");
+        // Only Linux runs the shell through the relay.
+        assert_eq!(
+            args[3].contains("'--pau-term-relay'"),
+            cfg!(target_os = "linux"),
             "{args:?}"
         );
         let environment = fs::read_to_string(directory.path().join("env")).unwrap();

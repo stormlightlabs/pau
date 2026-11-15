@@ -1195,12 +1195,22 @@ async fn update_workspace_sandbox(
             },
         )?;
     }
+    let timestamp = diagnostic_timestamp();
     sandbox
         .selections
-        .set_workspace_default(&workspace_id, &selection, &diagnostic_timestamp())
+        .set_workspace_default(&workspace_id, &selection, &timestamp)
         .await
         .map_err(|error| ApiError::from(WorkspaceError::from(error)))?;
-    workspace_sandbox(&state, &workspace_id).await.map(Json)
+    let stored = workspace_sandbox(&state, &workspace_id).await?;
+    // Lets an open terminal panel offer or withdraw sandboxed terminals.
+    state.events.publish(
+        timestamp,
+        Some(workspace_id),
+        None,
+        ServerEventKind::SandboxChanged,
+        serde_json::to_string(&stored.selection).expect("selection is serializable"),
+    );
+    Ok(Json(stored))
 }
 
 /// Describes the profile a selection would enforce, before anything runs.
@@ -2075,9 +2085,10 @@ mod tests {
             env::var_os("PATH").unwrap_or_default(),
         );
         let available = sandbox.executables.is_ok();
+        let events = EventHub::default();
         let app = router_with_services(
             test_token(),
-            EventHub::default(),
+            events.clone(),
             Some(workspaces),
             default_diagnostics(),
             None,
@@ -2156,6 +2167,20 @@ mod tests {
         );
         assert_eq!(stored["selection"]["settings"]["home_read_deny"], false);
         assert_eq!(call("GET", "sandbox", None).await.1, stored);
+        let initial = events.subscribe(None).initial;
+        let [ServerStreamMessage::Snapshot { snapshot }] = initial.as_slice() else {
+            panic!("expected a snapshot");
+        };
+        let changed = snapshot
+            .events
+            .iter()
+            .find(|event| event.kind == ServerEventKind::SandboxChanged)
+            .expect("a sandbox change event");
+        assert_eq!(changed.workspace_id.as_deref(), Some(workspace.id.as_str()));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&changed.payload).unwrap(),
+            stored["selection"]
+        );
 
         let (status, unsandboxed) = call(
             "POST",

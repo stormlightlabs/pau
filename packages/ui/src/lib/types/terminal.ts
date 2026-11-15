@@ -62,6 +62,12 @@ export type TerminalSource = {
 	create: (options?: { sandboxed?: boolean }) => Promise<TerminalTab>;
 	/** Reports the sandbox profile for new terminals. Without it, the panel offers no sandboxed terminal. */
 	sandbox?: () => Promise<TerminalSandboxChoice>;
+	/**
+	 * Calls `listener` whenever the workspace's sandbox selection may have
+	 * changed, so the panel reads `sandbox` again. Returns a function that stops
+	 * the calls.
+	 */
+	watchSandbox?: (listener: () => void) => () => void;
 	connect: (id: string, events: TerminalConnectionEvents) => TerminalConnection;
 	close: (id: string) => Promise<void>;
 };

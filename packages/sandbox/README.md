@@ -119,10 +119,12 @@ tool host crashes, grant changes during a session, a contained stdio MCP
 server, and per-call approval.
 
 Sandboxed terminals start sandbox-runtime's `srt` command with a policy from
-the same resolver, and `srt` runs the `pau-term` relay inside the sandbox. Their
-checks live in Rust. After `pnpm install`, this runs a shell under the real
-sandbox and checks its PTY, resizes, file and network limits, environment,
-background jobs, and keystroke injection:
+the same resolver. On Linux, `srt` runs the `pau-term` relay inside the sandbox.
+On macOS, the shell runs on Pau's PTY reopened as `/dev/tty`, and the policy
+denies every other terminal device, because `allowPty` would open them all.
+Their checks live in Rust. After `pnpm install`, this runs a shell under the
+real sandbox and checks its PTY, resizes, file and network limits, environment,
+background jobs, keystroke injection, and access to other terminals:
 
 ```sh
 cargo test -p pau-term --test sandboxed -- --nocapture

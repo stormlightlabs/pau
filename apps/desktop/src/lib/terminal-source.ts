@@ -2,6 +2,7 @@ import type { TerminalInfo, TerminalServerMessage, TerminalSize } from '@stormli
 import type { TerminalSource, TerminalTab } from '@stormlightlabs/pau-ui';
 
 import { closeTerminal, createTerminal, getWorkspaceSandbox, listTerminals, resolveTerminalSocket } from './api';
+import { EventStreamClient } from './event-stream';
 
 /** Size requested for a new terminal before its view measures the real grid. */
 const INITIAL_SIZE = { cols: 80, rows: 24 };
@@ -52,6 +53,21 @@ export function createTerminalSource(browserOrigin: string, workspaceId: string)
 				profile: selection.mode === 'sandboxed' ? selection.settings.profile : null,
 				unavailable: terminal_unavailable
 			};
+		},
+		watchSandbox: (listener) => {
+			const stream = new EventStreamClient({
+				browserOrigin,
+				replay: false,
+				onState: (_state, event) => {
+					if (event?.kind === 'sandbox_changed' && event.workspace_id === workspaceId) listener();
+				},
+				// A change made while the stream was down arrives in no event.
+				onConnectionChange: (connected) => {
+					if (connected) listener();
+				}
+			});
+			stream.connect();
+			return () => stream.stop();
 		},
 		connect: (id, events) => {
 			// Unset until the view measures its grid. A hidden view never does, and

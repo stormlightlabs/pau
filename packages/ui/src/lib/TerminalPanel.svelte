@@ -128,18 +128,29 @@
 		}
 	}
 
+	/** Counts profile reads, so a slow earlier read cannot replace a newer one. */
+	let sandboxReads = 0;
+
 	async function loadSandbox(): Promise<void> {
 		if (!source.sandbox) return;
+		const read = ++sandboxReads;
+		let choice: TerminalSandboxChoice;
 		try {
-			sandbox = await source.sandbox();
+			choice = await source.sandbox();
 		} catch (cause) {
-			sandbox = { profile: null, unavailable: `Could not read the sandbox profile. ${message(cause)}` };
+			choice = { profile: null, unavailable: `Could not read the sandbox profile. ${message(cause)}` };
 		}
+		if (read === sandboxReads) sandbox = choice;
 	}
 
 	onMount(() => {
 		void restoreTerminals();
 		void loadSandbox();
+		// A new selection may make a sandboxed terminal possible again.
+		return source.watchSandbox?.(() => {
+			sandboxFailure = '';
+			void loadSandbox();
+		});
 	});
 
 	/** Opens a terminal. A sandboxed one that fails never falls back to normal access. */

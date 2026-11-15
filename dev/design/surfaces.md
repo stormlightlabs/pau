@@ -249,8 +249,9 @@ A shield button beside New terminal opens a terminal in the workspace's
 sandbox profile. A sandboxed tab carries the shield icon and the profile's
 name, so a tab with normal access and a sandboxed one never look alike. When
 no sandboxed terminal can start, the button is disabled and its tooltip and
-description give the reason. A failed start keeps it disabled for that view
-and never opens a plain terminal instead.
+description give the reason. The button follows the workspace's sandbox
+settings while the panel is open. A failed start keeps it disabled until those
+settings change, and never opens a plain terminal instead.
 
 Plain-text web addresses and workspace file paths in the output open on
 click, as OSC 8 links do. A file path becomes a link only when the workspace

@@ -1,4 +1,5 @@
-//! The `pau-term` relay that a sandboxed terminal runs inside the sandbox.
+//! The `pau-term` relay that a sandboxed terminal runs inside the sandbox on
+//! Linux.
 //!
 //! sandbox-runtime starts Bubblewrap with `--new-session`, which detaches the
 //! sandboxed command from Pau's PTY. A shell started directly on that PTY has
@@ -28,6 +29,8 @@ use std::{
 
 use pau_core::terminal::{TerminalSignal, TerminalSize};
 use portable_pty::{CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
+
+use crate::session::{session_processes, signal_session};
 
 /// First argument that makes an executable run as the relay. The remaining
 /// arguments are the shell program and its arguments.
@@ -393,77 +396,6 @@ fn signal_set(signals: &[i32]) -> libc::sigset_t {
         }
         set.assume_init()
     }
-}
-
-/// Sends each signal to every process in the shell's session.
-///
-/// The shell is the session leader, so its process ID is the session ID.
-/// Background jobs sit in their own process groups but stay in the session
-/// unless they call `setsid`.
-fn signal_session(session: libc::pid_t, signals: &[i32]) {
-    let members = session_processes(session);
-    for signal in signals {
-        // SAFETY: `kill` and `killpg` have no memory-safety requirements.
-        unsafe {
-            libc::killpg(session, *signal);
-            for pid in &members {
-                libc::kill(*pid, *signal);
-            }
-        }
-    }
-}
-
-/// Lists the processes whose session ID is `session`.
-#[cfg(target_os = "linux")]
-fn session_processes(session: libc::pid_t) -> Vec<libc::pid_t> {
-    let Ok(entries) = std::fs::read_dir("/proc") else {
-        return Vec::new();
-    };
-    entries
-        .filter_map(|entry| {
-            entry
-                .ok()?
-                .file_name()
-                .to_str()?
-                .parse::<libc::pid_t>()
-                .ok()
-        })
-        .filter(|pid| {
-            // Fields after the parenthesized command name: state, parent,
-            // process group, session.
-            std::fs::read_to_string(format!("/proc/{pid}/stat"))
-                .ok()
-                .and_then(|stat| {
-                    let fields = stat.rsplit_once(')')?.1;
-                    fields
-                        .split_whitespace()
-                        .nth(3)?
-                        .parse::<libc::pid_t>()
-                        .ok()
-                })
-                == Some(session)
-        })
-        .collect()
-}
-
-/// Lists the processes whose session ID is `session`.
-#[cfg(target_os = "macos")]
-fn session_processes(session: libc::pid_t) -> Vec<libc::pid_t> {
-    // SAFETY: a null buffer asks only for the current process count.
-    let count = unsafe { libc::proc_listallpids(std::ptr::null_mut(), 0) };
-    if count <= 0 {
-        return Vec::new();
-    }
-    // Room for processes that start between the two calls.
-    let mut pids = vec![0 as libc::pid_t; count as usize + 64];
-    let bytes = (pids.len() * size_of::<libc::pid_t>()) as libc::c_int;
-    // SAFETY: `pids` holds `bytes` bytes.
-    let count = unsafe { libc::proc_listallpids(pids.as_mut_ptr().cast(), bytes) };
-    pids.truncate(count.max(0) as usize);
-    pids.into_iter()
-        // SAFETY: `getsid` has no memory-safety requirements.
-        .filter(|pid| *pid > 0 && unsafe { libc::getsid(*pid) } == session)
-        .collect()
 }
 
 /// Reads the window size of the terminal on `fd`.

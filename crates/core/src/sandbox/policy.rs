@@ -43,6 +43,15 @@ const HOME_CREDENTIAL_PATHS: &[&str] = &[
     ".codex/auth.json",
 ];
 
+/// Terminal devices a macOS sandbox may not open.
+///
+/// Seatbelt allows reads outside the denied paths, and the operator's other
+/// terminals are `/dev/ttys*` devices the operator owns, so without this deny
+/// a sandboxed process could read their keystrokes. `/dev/tty`, the process's
+/// own controlling terminal, stays open. Bubblewrap gives each sandbox its own
+/// `/dev`, so Linux needs no deny.
+const MACOS_TERMINAL_DEVICES: &[&str] = &["/dev/tty?*", "/dev/pty*"];
+
 /// Workspace files that commonly hold local secrets. `.env.example` and other
 /// samples stay readable.
 const WORKSPACE_SECRET_PATTERNS: &[&str] = &[".env", ".env.local", ".env.*.local"];
@@ -323,6 +332,10 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
     let mut deny_read = credentials.clone();
     deny_read.extend(secrets.iter().cloned());
     deny_read.push(host_directory.clone());
+    let macos = input.executables.platform == SandboxPlatform::MacOs;
+    if macos {
+        deny_read.extend(MACOS_TERMINAL_DEVICES.iter().map(PathBuf::from));
+    }
     let mut allow_read = Vec::new();
     if settings.home_read_deny {
         deny_read.push(home.clone());
@@ -376,9 +389,14 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
         runtime_config["network"]["tlsTerminate"] = json!({});
         runtime_config["credentials"] = json!({});
     }
-    if input.adapter == SandboxAdapter::Terminal {
-        // Lets the relay open its own PTY under Seatbelt. Bubblewrap ignores it.
-        runtime_config["allowPty"] = json!(true);
+    if macos && input.adapter == SandboxAdapter::Terminal {
+        // The shell reaches its PTY only as `/dev/tty`, its controlling
+        // terminal. sandbox-runtime's `allowPty` would instead open every
+        // `/dev/ttys*` device, so it stays off.
+        runtime_config["filesystem"]["allowWrite"]
+            .as_array_mut()
+            .expect("allowWrite is an array")
+            .push(json!("/dev/tty"));
     }
     if let (Some(bubblewrap), Some(socat)) =
         (&input.executables.bubblewrap, &input.executables.socat)
@@ -773,6 +791,55 @@ mod tests {
             resolved.policy.no_proxy,
             "localhost,127.0.0.1,::1,169.254.0.0/16,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
         );
+    }
+
+    #[test]
+    fn macos_profiles_deny_other_terminals() {
+        let fixture = fixture();
+        let mut executables = crate::sandbox::fixtures::executables();
+        executables.platform = SandboxPlatform::MacOs;
+        executables.bubblewrap = None;
+        executables.socat = None;
+        let settings = SandboxSettings::workspace_write();
+        for adapter in [
+            SandboxAdapter::Pi,
+            SandboxAdapter::Claude,
+            SandboxAdapter::Terminal,
+        ] {
+            let resolved = resolve_sandbox(&SandboxLaunchInput {
+                adapter,
+                settings: &settings,
+                workspace: &fixture.workspace,
+                home: &fixture.home,
+                session_directory: &fixture.session,
+                executables: &executables,
+                runtime_roots: &[],
+                tool_path: "/usr/bin:/bin",
+                credential_environment: &BTreeMap::new(),
+            })
+            .unwrap();
+            let config = &resolved.policy.runtime_config;
+            // allowPty would reopen every /dev/ttys* device after the deny.
+            assert_eq!(config.get("allowPty"), None, "{adapter:?}");
+            let deny_read = array(&config["filesystem"]["denyRead"]);
+            for device in ["/dev/tty?*", "/dev/pty*"] {
+                assert!(deny_read.contains(&device.to_owned()), "{adapter:?}");
+            }
+            assert!(!deny_read.contains(&"/dev/tty".to_owned()));
+            let tty_writable =
+                array(&config["filesystem"]["allowWrite"]).contains(&"/dev/tty".to_owned());
+            assert_eq!(tty_writable, adapter == SandboxAdapter::Terminal);
+        }
+
+        // Linux has a private /dev, so its profile names no devices.
+        let resolved = resolve(&fixture, SandboxAdapter::Terminal, &settings).unwrap();
+        let config = &resolved.policy.runtime_config;
+        assert!(
+            array(&config["filesystem"]["denyRead"])
+                .iter()
+                .all(|path| !path.starts_with("/dev/"))
+        );
+        assert_eq!(config.get("allowPty"), None);
     }
 
     #[test]

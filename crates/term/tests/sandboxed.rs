@@ -1,8 +1,8 @@
 //! Sandboxed terminals under the real sandbox runtime.
 //!
-//! Each test resolves a terminal profile with `pau-core`, starts sandbox-runtime's
-//! `srt` on a PTY owned by [`Terminal`], and runs the `pau-term` relay inside
-//! the sandbox. The tests need `srt`, Node, and ripgrep. They look for `srt`
+//! Each test resolves a terminal profile with `pau-core` and starts
+//! sandbox-runtime's `srt` on a PTY owned by [`Terminal`]. On Linux `srt` runs
+//! the `pau-term` relay inside the sandbox, and on macOS the shell itself. The tests need `srt`, Node, and ripgrep. They look for `srt`
 //! in `PAU_SRT` and then in `packages/sandbox` after `pnpm install`, and skip
 //! with a message when it is missing. Linux also needs Bubblewrap and socat.
 
@@ -21,7 +21,8 @@ use pau_core::sandbox::{
     prepare_terminal_sandbox,
 };
 use pau_term::{
-    Terminal, TerminalCommand, TerminalOutput, TerminalSize, TerminalStatus, relay::RELAY_ARGUMENT,
+    Terminal, TerminalCommand, TerminalMode, TerminalOutput, TerminalSize, TerminalStatus,
+    relay::RELAY_ARGUMENT,
 };
 use tokio::time::timeout;
 
@@ -103,7 +104,11 @@ fn start(script: impl FnOnce(&Path) -> String) -> Option<Fixture> {
         cwd: workspace.clone(),
         environment: launch.environment,
         size: SIZE,
-        relay: true,
+        mode: if launch.relay {
+            TerminalMode::Relay
+        } else {
+            TerminalMode::Sandboxed
+        },
     })
     .unwrap();
     Some(Fixture {
@@ -142,7 +147,7 @@ async fn exit_status(terminal: &Terminal) -> TerminalStatus {
 }
 
 #[tokio::test]
-async fn runs_the_shell_on_an_inner_pty_under_the_sandbox() {
+async fn runs_the_shell_on_a_pty_under_the_sandbox() {
     let Some(mut fixture) = start(|_| "tty; stty size; read _; stty size; exit 5".into()) else {
         return;
     };
@@ -226,19 +231,11 @@ echo done
         .and_then(|rest| rest.split(['\r', '\n']).next())
         .and_then(|pid| pid.trim().parse().ok())
         .expect("job pid");
-    let deadline = std::time::Instant::now() + STEP_LIMIT;
-    // SAFETY: signal 0 only checks that the process exists.
-    while unsafe { libc::kill(job, 0) } == 0 {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "background job {job} outlived the shell"
-        );
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
+    assert_gone(job, "the background job").await;
 }
 
 #[tokio::test]
-async fn keystrokes_injected_in_the_sandbox_reach_only_the_inner_pty() {
+async fn keystrokes_injected_in_the_sandbox_reach_only_the_sandboxed_shell() {
     let script = r#"
 for fd in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19; do
   if [ -t "$fd" ]; then echo "fd-tty=$(tty <&"$fd")"; fi
@@ -275,6 +272,94 @@ echo done
         assert!(seen.contains("INJECTED-2"), "{seen:?}");
     }
     exit_status(&fixture.terminal).await;
+}
+
+/// Waits until `pid` no longer exists, or fails after [`STEP_LIMIT`].
+async fn assert_gone(pid: i32, what: &str) {
+    let deadline = std::time::Instant::now() + STEP_LIMIT;
+    // SAFETY: signal 0 only checks that the process exists.
+    while unsafe { libc::kill(pid, 0) } == 0 {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "{what} {pid} survived"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+#[tokio::test]
+async fn cannot_open_other_terminals() {
+    // Another terminal, such as one of the operator's, with typed input
+    // waiting to be read.
+    let (mut leader, mut follower) = (0, 0);
+    // SAFETY: both out-pointers are valid, and the name, settings, and size
+    // pointers may be null.
+    let opened = unsafe {
+        libc::openpty(
+            &mut leader,
+            &mut follower,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    assert_eq!(opened, 0, "openpty failed");
+    // SAFETY: `follower` is an open terminal descriptor.
+    let other = unsafe { std::ffi::CStr::from_ptr(libc::ttyname(follower)) }
+        .to_string_lossy()
+        .into_owned();
+    // SAFETY: the buffer is valid for its length.
+    unsafe { libc::write(leader, b"typed-secret\n".as_ptr().cast(), 13) };
+
+    let Some(mut fixture) = start(|_| {
+        format!(
+            r#"
+head -c 4 '{other}' 2>/dev/null && echo read-other=ok
+echo injected 2>/dev/null > '{other}' && echo write-other=ok
+stty size
+set -m; sleep 0 & fg %1 >/dev/null && echo job-control=ok
+echo done
+"#
+        )
+    }) else {
+        return;
+    };
+    let seen = read_until(&mut fixture.output, "done").await;
+    // SAFETY: both descriptors are open and closed only here.
+    unsafe {
+        libc::close(leader);
+        libc::close(follower);
+    }
+
+    assert!(!seen.contains("read-other=ok"), "{seen:?}");
+    assert!(!seen.contains("typed-secret"), "{seen:?}");
+    assert!(!seen.contains("write-other=ok"), "{seen:?}");
+    // The shell's own terminal still works.
+    assert!(seen.contains("24 80"), "{seen:?}");
+    assert!(seen.contains("job-control=ok"), "{seen:?}");
+    exit_status(&fixture.terminal).await;
+}
+
+#[tokio::test]
+async fn stops_nohup_jobs_when_the_shell_or_its_parent_goes() {
+    // On Linux the shell's parent is the relay, inside the sandbox. On macOS
+    // it is outside, and Seatbelt refuses the signal, so the shell exits.
+    let Some(mut fixture) = start(|_| {
+        "trap '' HUP; nohup sleep 9999 >/dev/null 2>&1 & echo job=$! ready; \
+         kill -9 $PPID 2>/dev/null; exit 0"
+            .into()
+    }) else {
+        return;
+    };
+    let seen = read_until(&mut fixture.output, "ready").await;
+    let job: i32 = seen
+        .split("job=")
+        .nth(1)
+        .and_then(|rest| rest.split(' ').next())
+        .and_then(|pid| pid.parse().ok())
+        .expect("job pid");
+    exit_status(&fixture.terminal).await;
+    assert_gone(job, "the nohup job").await;
 }
 
 /// Records the resident memory of one terminal's `srt` process. Run with

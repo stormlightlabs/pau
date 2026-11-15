@@ -432,6 +432,19 @@ test('offers no sandboxed terminal while the workspace has no profile', async ()
 	await expect.element(button).toHaveAccessibleDescription(/This workspace has no sandbox profile/);
 });
 
+test('offers a sandboxed terminal once the workspace gets a profile, without a remount', async () => {
+	const fixture = createTerminalFixture({ sandbox: { profile: null, unavailable: null } });
+	await render(TerminalSurface, { workspaceName: 'pau', source: fixture.source });
+	await expect.element(page.getByRole('button', { name: 'New sandboxed terminal' })).toBeDisabled();
+
+	fixture.setSandbox({ profile: 'workspace-write', unavailable: null });
+
+	const button = page.getByRole('button', { name: 'New sandboxed terminal (Workspace write)' });
+	await expect.element(button).toBeEnabled();
+	await userEvent.click(button);
+	await expect.element(page.getByRole('tab', { name: /^zsh/ })).toHaveAccessibleName(/Sandboxed:\s*workspace write$/);
+});
+
 test('keeps the sandboxed terminal unavailable when the host cannot start it', async () => {
 	const unavailable = "sandbox-runtime's srt command was not found on PATH.";
 	const fixture = createTerminalFixture({ sandbox: { profile: 'workspace-write', unavailable } });

@@ -20,7 +20,10 @@ use pau_core::terminal::{TerminalSignal, TerminalSize, TerminalStatus};
 use portable_pty::{CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
 use tokio::sync::{Mutex as AsyncMutex, mpsc, watch};
 
-use crate::relay::{self, RelayFrame};
+use crate::{
+    relay::{self, RelayFrame},
+    session,
+};
 
 /// Largest chunk the reader thread forwards at once.
 const READ_CHUNK_BYTES: usize = 8 * 1024;
@@ -48,13 +51,28 @@ pub struct TerminalCommand {
     pub environment: Vec<(OsString, OsString)>,
     /// Initial dimensions.
     pub size: TerminalSize,
-    /// Whether the program is a `pau-term` relay, or a launcher such as
-    /// sandbox-runtime's `srt` that runs one with its standard streams.
+    /// How the program runs: with normal access, or in a sandbox.
+    pub mode: TerminalMode,
+}
+
+/// How a terminal's program runs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TerminalMode {
+    /// The program inherits the backend environment. Jobs it leaves behind
+    /// may outlive it, as `nohup` intends.
+    #[default]
+    Normal,
+    /// A sandbox launcher such as sandbox-runtime's `srt` runs the program
+    /// on this PTY.
     ///
-    /// A relay child receives only `environment`, not the backend
-    /// environment. Its PTY runs in raw mode, and input, resizes, and signals
-    /// reach it as frames that [`crate::relay`] describes.
-    pub relay: bool,
+    /// The child receives only the command's environment. When it exits,
+    /// Pau kills every process left in the PTY's session, so a job the
+    /// sandboxed shell left behind cannot keep running unwatched.
+    Sandboxed,
+    /// As [`Self::Sandboxed`], and the launcher runs a `pau-term` relay. The
+    /// PTY runs in raw mode, and input, resizes, and signals reach the relay
+    /// as frames that [`crate::relay`] describes.
+    Relay,
 }
 
 impl TerminalCommand {
@@ -72,7 +90,7 @@ impl TerminalCommand {
             cwd: cwd.into(),
             environment: Vec::new(),
             size,
-            relay: false,
+            mode: TerminalMode::Normal,
         }
     }
 }
@@ -168,6 +186,7 @@ pub struct Terminal {
     /// Held for a whole resize, so concurrent resizes leave the relay with
     /// the size the terminal last recorded.
     resizing: AsyncMutex<()>,
+    /// Whether the child is a relay that reads frames.
     relay: bool,
     exit: TerminalExit,
 }
@@ -188,14 +207,16 @@ impl Terminal {
     /// output stream.
     ///
     /// The child inherits the backend environment with the command's
-    /// variables added and `TERM` set to `xterm-256color`. A relay child
+    /// variables added and `TERM` set to `xterm-256color`. A sandboxed child
     /// receives only the command's variables and `TERM`.
     pub fn spawn(command: TerminalCommand) -> Result<(Self, TerminalOutput), TerminalError> {
         let size = pty_size(command.size)?;
         let pair = NativePtySystem::default()
             .openpty(size)
             .map_err(|error| TerminalError::Spawn(error.to_string()))?;
-        if command.relay {
+        let relay = command.mode == TerminalMode::Relay;
+        let sandboxed = command.mode != TerminalMode::Normal;
+        if relay {
             // Raw mode must be in place before the first frame is written,
             // or the line discipline would echo frames and turn their bytes
             // into signals for the launcher. Termios settings belong to the
@@ -209,7 +230,7 @@ impl Terminal {
         let mut builder = CommandBuilder::new(&command.program);
         builder.args(&command.args);
         builder.cwd(&command.cwd);
-        if command.relay {
+        if sandboxed {
             builder.env_clear();
         }
         for (name, value) in &command.environment {
@@ -247,7 +268,13 @@ impl Terminal {
             write_input(writer, input_receiver)
         })?;
         spawn_thread("pau-term-waiter", move || {
-            let status = match child.wait() {
+            let waited = child.wait();
+            if sandboxed {
+                // Before the status goes out, so an exited sandboxed
+                // terminal has nothing left running.
+                session::kill_leftovers(process_id as libc::pid_t);
+            }
+            let status = match waited {
                 Ok(status) => TerminalStatus::Exited {
                     exit_code: status.exit_code(),
                     signal: status.signal().map(str::to_owned),
@@ -268,7 +295,7 @@ impl Terminal {
                 process_id,
                 size: Mutex::new(command.size),
                 resizing: AsyncMutex::new(()),
-                relay: command.relay,
+                relay,
                 exit: TerminalExit(status_receiver),
             },
             TerminalOutput(output_receiver),

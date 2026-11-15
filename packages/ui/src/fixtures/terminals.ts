@@ -25,6 +25,8 @@ export type TerminalFixture = {
 	input: Map<string, string>;
 	/** Prints output to a connected terminal, as a program running in it would. */
 	print: (id: string, text: string) => void;
+	/** Replaces the sandbox profile, as saving the workspace's sandbox settings elsewhere would. */
+	setSandbox: (choice: TerminalSandboxChoice) => void;
 };
 
 const PROMPT = '\u{1B}[1;34m~/pau\u{1B}[0m $ ';
@@ -45,7 +47,8 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 	const printers = new Map<string, (text: string) => void>();
 	const connected = new Set<string>();
 	let created = 0;
-	const sandbox = options.sandbox;
+	let sandbox = options.sandbox;
+	const sandboxWatchers = new Set<() => void>();
 	const openTerminal = (profile?: TerminalTab['sandbox']): TerminalTab => {
 		created += 1;
 		const tab: TerminalTab = { id: `fixture-${created}`, title: created === 1 ? 'zsh' : `zsh ${created}` };
@@ -64,11 +67,17 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 			if (options.createError) throw new Error(options.createError);
 			if (!request?.sandboxed) return openTerminal();
 			if (options.sandboxError) throw new Error(options.sandboxError);
-			const profile = options.sandbox?.profile;
-			if (!profile || options.sandbox?.unavailable) throw new Error('No sandbox profile is available.');
+			const profile = sandbox?.profile;
+			if (!profile || sandbox?.unavailable) throw new Error('No sandbox profile is available.');
 			return openTerminal(profile);
 		},
-		...(sandbox && { sandbox: async () => sandbox }),
+		...(sandbox && {
+			sandbox: async () => sandbox as TerminalSandboxChoice,
+			watchSandbox: (listener: () => void) => {
+				sandboxWatchers.add(listener);
+				return () => sandboxWatchers.delete(listener);
+			}
+		}),
 		connect: (id, events) => {
 			let line = '';
 			let exited = false;
@@ -142,5 +151,14 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 			);
 		}
 	};
-	return { source, sizes, input, print: (id, text) => printers.get(id)?.(text) };
+	return {
+		source,
+		sizes,
+		input,
+		print: (id, text) => printers.get(id)?.(text),
+		setSandbox: (choice) => {
+			sandbox = choice;
+			for (const listener of sandboxWatchers) listener();
+		}
+	};
 }

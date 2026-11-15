@@ -556,7 +556,7 @@ disk_read_bytes: number | null,
  */
 disk_write_bytes: number | null, };
 
-export type ServerEventKind = "workspace_changed" | "session_changed" | "session_output" | "terminal_changed" | "preferences_changed" | "workspace_files_changed";
+export type ServerEventKind = "workspace_changed" | "session_changed" | "session_output" | "terminal_changed" | "preferences_changed" | "sandbox_changed" | "workspace_files_changed";
 
 export type ServerEvent = {
 /**

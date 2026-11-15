@@ -208,3 +208,29 @@ test('opens sandboxed terminals and reports the workspace profile for them', asy
 		command: null
 	});
 });
+
+test('asks for the profile again when this workspace saves a sandbox selection', () => {
+	const listener = vi.fn();
+	const stop = createTerminalSource('http://localhost:5173', 'workspace').watchSandbox?.(listener);
+	const socket = FakeSocket.opened[0]!;
+	const publish = (sequence: number, kind: string, workspaceId: string) =>
+		socket.dispatchEvent(
+			Object.assign(new Event('message'), {
+				data: JSON.stringify({
+					type: 'event',
+					event: { sequence, timestamp: '', workspace_id: workspaceId, session_id: null, kind, payload: '{}' }
+				})
+			})
+		);
+
+	socket.accept();
+	expect(listener).toHaveBeenCalledOnce();
+	publish(1, 'sandbox_changed', 'other');
+	publish(2, 'terminal_changed', 'workspace');
+	expect(listener).toHaveBeenCalledOnce();
+	publish(3, 'sandbox_changed', 'workspace');
+	expect(listener).toHaveBeenCalledTimes(2);
+
+	stop?.();
+	expect(socket.readyState).toBe(3);
+});

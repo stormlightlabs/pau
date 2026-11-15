@@ -151,7 +151,10 @@ export function sessionErrorMessage(
 			return 'Pau could not find a working Pi installation. Install Pi or add it to your PATH, then try again.';
 		}
 		case 'sandboxed_session_unsupported': {
-			return 'This workspace uses a sandbox, and sandboxed sessions cannot start from the desktop yet. Turn off the sandbox in the workspace settings to start a session.';
+			return 'This workspace uses a sandbox, and sandboxed Claude Code sessions cannot start from the desktop yet. Start a Pi session, or turn off the sandbox in the workspace settings.';
+		}
+		case 'sandbox_unavailable': {
+			return `${cause.message} Pau did not start the session outside the sandbox. Fix the problem, or turn off the sandbox in the workspace settings.`;
 		}
 		case 'native_session_not_found': {
 			return 'Pi no longer has that saved session. It may have been deleted. Pick another session or start a new one.';

@@ -914,18 +914,34 @@ socket: string,
  */
 command: string,
 /**
- * Arguments after interpolation.
+ * Arguments as configured.
  */
 args: Array<string>,
 /**
- * Working directory.
+ * Working directory as configured, relative to the workspace, or the
+ * workspace.
  */
 cwd: string,
 /**
  * Variables the server configuration sets. They are added to the tool
  * environment for this server only.
+ *
+ * The command, arguments, working directory, and these values keep
+ * their `~/`, `${NAME}`, and `$env:NAME` references. The Pi extension
+ * expands them from its own environment when it starts the server, so
+ * the values a reference names never reach the policy file.
  */
-env: { [key in string]: string }, };
+env: { [key in string]: string },
+/**
+ * Variables those references may name. `None` lets them name any of
+ * Pau's variables, for a server that only user-scope files, which the
+ * operator wrote, define. Otherwise a project or package file shapes
+ * the server, and only the credential reference sources the profile
+ * grants are listed: a cloned repository must not pull other secrets
+ * into a server that sandboxed tools can read. A reference to any other
+ * name fails the server's start.
+ */
+variables: Array<string> | null, };
 
 export type SandboxPolicyFile = {
 /**

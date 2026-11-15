@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use jsonc_parser::parse_to_serde_value;
@@ -173,6 +174,11 @@ pub struct PiMcpDiscovery {
     /// Whether Pi's already configured adapter remains active independently of
     /// Pau-managed enablement.
     pub native_configuration_active: bool,
+    /// Whether Pi also loads pi-mcp-adapter outside its settings packages: from
+    /// an extension directory, such as `~/.pi/agent/extensions/`, or a path
+    /// in a settings `extensions` list. Such a copy reads MCP configuration
+    /// like a package does, but Pau cannot report its version.
+    pub adapter_extension: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -269,6 +275,125 @@ pub fn discover_pi_mcp(
         configuration,
         adapter,
         native_configuration_active,
+        adapter_extension: adapter_extension(options, &user_settings, &project_settings),
+    })
+}
+
+/// Most bytes read from one extension file while looking for the adapter.
+const MAX_EXTENSION_SCAN_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Most files read from one extension directory while looking for the
+/// adapter.
+const MAX_EXTENSION_SCAN_FILES: usize = 200;
+
+/// Whether an extension Pi loads outside its settings packages is
+/// pi-mcp-adapter: an entry of the user or project extension directory, or a
+/// path a settings file lists under `extensions`, relative to that file.
+///
+/// A copy can carry any name, so beyond the name and the package manifest,
+/// this also reads the extension's sources: see [`reads_mcp_config`]. The
+/// sandbox extension still fails a session closed when an adapter this
+/// misses registers MCP tools.
+fn adapter_extension(
+    options: &DiscoverPiMcpOptions,
+    user_settings: &Path,
+    project_settings: &Path,
+) -> bool {
+    let mut candidates = Vec::new();
+    for directory in [
+        options.agent_directory.join("extensions"),
+        options.workspace.join(".pi/extensions"),
+    ] {
+        if let Ok(entries) = fs::read_dir(directory) {
+            candidates.extend(entries.flatten().map(|entry| entry.path()));
+        }
+    }
+    for settings_path in [user_settings, project_settings] {
+        let Ok(Some(settings)) = read_jsonc_optional(settings_path) else {
+            continue;
+        };
+        let base = settings_path.parent().unwrap_or_else(|| Path::new("."));
+        let entries = settings.get("extensions").and_then(Value::as_array);
+        candidates.extend(
+            entries
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(|entry| match entry.strip_prefix("~/") {
+                    Some(rest) => options.home_directory.join(rest),
+                    None => base.join(entry),
+                }),
+        );
+    }
+    candidates.iter().any(|candidate| {
+        let resolved = fs::canonicalize(candidate).unwrap_or_else(|_| candidate.clone());
+        [candidate, &resolved].into_iter().any(|path| {
+            // The entry itself, or the directory of an entry file such as
+            // `pi-mcp-adapter/index.ts`.
+            path.iter()
+                .rev()
+                .take(2)
+                .any(|name| name == "pi-mcp-adapter")
+                || read_jsonc_optional(&path.join("package.json"))
+                    .ok()
+                    .flatten()
+                    .is_some_and(|manifest| {
+                        manifest.get("name").and_then(Value::as_str) == Some("pi-mcp-adapter")
+                    })
+                || reads_mcp_config(path)
+        })
+    })
+}
+
+/// Whether an extension file, or a source file in an extension directory and
+/// its immediate subdirectories, names the adapter or the `mcp-config` flag
+/// that Pau passes it. Any copy that honors the session configuration must
+/// name that flag, whatever the file is called, such as a single-file
+/// `~/.pi/agent/extensions/mcp.ts`.
+///
+/// Reads are capped per file and per directory, so a large extension
+/// directory cannot stall a session start.
+fn reads_mcp_config(path: &Path) -> bool {
+    let is_source = |file: &Path| {
+        file.extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| {
+                matches!(extension, "ts" | "js" | "mjs" | "cjs" | "mts" | "cts")
+            })
+    };
+    let mut files = Vec::new();
+    if path.is_file() {
+        files.push(path.to_path_buf());
+    } else {
+        let mut directories = vec![path.to_path_buf()];
+        if let Ok(entries) = fs::read_dir(path) {
+            directories.extend(
+                entries
+                    .flatten()
+                    .map(|entry| entry.path())
+                    .filter(|entry| entry.is_dir() && !entry.ends_with("node_modules")),
+            );
+        }
+        for directory in directories {
+            let Ok(entries) = fs::read_dir(directory) else {
+                continue;
+            };
+            files.extend(
+                entries
+                    .flatten()
+                    .map(|entry| entry.path())
+                    .filter(|file| file.is_file() && is_source(file)),
+            );
+        }
+    }
+    files.iter().take(MAX_EXTENSION_SCAN_FILES).any(|file| {
+        let mut text = Vec::new();
+        fs::File::open(file)
+            .and_then(|file| file.take(MAX_EXTENSION_SCAN_BYTES).read_to_end(&mut text))
+            .is_ok()
+            && [b"mcp-config".as_slice(), b"pi-mcp-adapter"]
+                .iter()
+                .any(|needle| text.windows(needle.len()).any(|window| window == *needle))
     })
 }
 
@@ -889,6 +1014,81 @@ mod tests {
         assert_eq!(docs.definition["args"][0], "root");
         assert!(!docs.disabled);
         assert_eq!(docs.sources.len(), 4);
+    }
+
+    #[test]
+    fn finds_an_adapter_outside_settings_packages() {
+        let (_directory, options) = fixture("2.37.0", None);
+        fs::write(
+            options.agent_directory.join("settings.json"),
+            "{\"packages\":[]}",
+        )
+        .unwrap();
+        assert!(!discover_pi_mcp(&options).unwrap().adapter_extension);
+
+        // A checkout under another name in the user extension directory.
+        let copy = options.agent_directory.join("extensions/mcp");
+        fs::create_dir_all(&copy).unwrap();
+        fs::write(copy.join("package.json"), "{\"name\":\"pi-mcp-adapter\"}").unwrap();
+        let discovery = discover_pi_mcp(&options).unwrap();
+        assert!(discovery.adapter_extension);
+        assert_eq!(discovery.adapter.state, PiMcpAdapterState::Absent);
+        fs::remove_dir_all(&copy).unwrap();
+
+        // A path in the project's settings `extensions` list.
+        let listed = options.workspace.join("vendor/pi-mcp-adapter/index.ts");
+        fs::create_dir_all(listed.parent().unwrap()).unwrap();
+        fs::write(&listed, "").unwrap();
+        fs::write(
+            options.workspace.join(".pi/settings.json"),
+            "{\"extensions\":[\"../vendor/pi-mcp-adapter/index.ts\"]}",
+        )
+        .unwrap();
+        assert!(discover_pi_mcp(&options).unwrap().adapter_extension);
+    }
+
+    #[test]
+    fn finds_single_file_and_renamed_adapter_copies_by_their_sources() {
+        let (_directory, options) = fixture("2.37.0", None);
+        fs::write(
+            options.agent_directory.join("settings.json"),
+            "{\"packages\":[]}",
+        )
+        .unwrap();
+        let extensions = options.agent_directory.join("extensions");
+        fs::create_dir_all(&extensions).unwrap();
+        fs::write(
+            extensions.join("status.ts"),
+            "pi.registerCommand('status', {});",
+        )
+        .unwrap();
+        assert!(!discover_pi_mcp(&options).unwrap().adapter_extension);
+
+        // A single-file copy.
+        let single = extensions.join("mcp.ts");
+        fs::write(
+            &single,
+            "pi.registerFlag(\"mcp-config\", { type: \"string\" });",
+        )
+        .unwrap();
+        assert!(discover_pi_mcp(&options).unwrap().adapter_extension);
+        fs::remove_file(&single).unwrap();
+
+        // A renamed checkout whose manifest carries another name.
+        let renamed = extensions.join("tools");
+        fs::create_dir_all(renamed.join("src")).unwrap();
+        fs::write(renamed.join("package.json"), "{\"name\":\"my-tools\"}").unwrap();
+        fs::write(
+            renamed.join("index.ts"),
+            "export { default } from './src/main.ts';",
+        )
+        .unwrap();
+        fs::write(
+            renamed.join("src/main.ts"),
+            "const mode = process.env.PI_MCP_CONFIG_MODE; pi.getFlag('mcp-config');",
+        )
+        .unwrap();
+        assert!(discover_pi_mcp(&options).unwrap().adapter_extension);
     }
 
     #[test]

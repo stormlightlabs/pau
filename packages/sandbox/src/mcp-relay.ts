@@ -1,5 +1,6 @@
 import { chmodSync, rmSync } from 'node:fs';
 import net from 'node:net';
+import path from 'node:path';
 import type { SandboxedMcpServer } from '@stormlightlabs/pau-protocol';
 import type { SandboxSession } from './sandbox-session.ts';
 
@@ -27,7 +28,7 @@ async function relay(session: SandboxSession, server: SandboxedMcpServer, connec
 	try {
 		const client = await session.connect();
 		const stream = client.openMcp(
-			server,
+			expandMcpServer(server, session.policy.workspace),
 			(data) => connection.write(data),
 			(reason) => {
 				process.stderr.write(`[pau-sandbox] MCP server ${server.name} ${reason}\n`);
@@ -37,7 +38,47 @@ async function relay(session: SandboxSession, server: SandboxedMcpServer, connec
 		connection.on('data', (data: Buffer) => stream.write(data));
 		connection.once('close', () => stream.close());
 	} catch (error) {
-		process.stderr.write(`[pau-sandbox] MCP server ${server.name} unavailable: ${String(error)}\n`);
+		const reason = error instanceof Error ? error.message : String(error);
+		process.stderr.write(`[pau-sandbox] MCP server ${server.name} unavailable: ${reason}\n`);
 		connection.destroy();
 	}
+}
+
+/**
+ * Expand the `~/`, `${NAME}`, and `$env:NAME` references that Pau leaves in a
+ * contained server's command, arguments, working directory, and variables,
+ * the way pi-mcp-adapter does for stdio servers. Values come from this
+ * process's environment, which is Pau's, so they reach the tool host over
+ * its socket and never the policy file. An unset variable expands to
+ * nothing, and a relative working directory resolves against the workspace.
+ *
+ * When `server.variables` lists names, because a project or package file
+ * shapes the server, a reference to any other name throws an error that
+ * names the variable but not its value, and the server does not start.
+ */
+export function expandMcpServer(
+	server: SandboxedMcpServer,
+	workspace: string,
+	env: NodeJS.ProcessEnv = process.env
+): SandboxedMcpServer {
+	const allowed = server.variables === null ? null : new Set(server.variables);
+	const expand = (value: string): string => {
+		const home = value.startsWith('~/') && env.HOME !== undefined ? `${env.HOME}/${value.slice(2)}` : value;
+		return home.replace(/\$\{([^}]+)\}|\$env:([A-Za-z0-9_]+)/g, (_match, braced?: string, named?: string) => {
+			const name = braced ?? named ?? '';
+			if (allowed !== null && !allowed.has(name)) {
+				throw new Error(
+					`its configuration reads the variable ${name}, which a project or package MCP file may read only when the sandbox profile grants it as a credential reference`
+				);
+			}
+			return env[name] ?? '';
+		});
+	};
+	return {
+		...server,
+		command: expand(server.command),
+		args: server.args.map((arg) => expand(arg)),
+		cwd: path.resolve(workspace, expand(server.cwd)),
+		env: Object.fromEntries(Object.entries(server.env).map(([name, value]) => [name, expand(value)]))
+	};
 }

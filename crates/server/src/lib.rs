@@ -35,7 +35,7 @@ use pau_core::{
     preferences::{UiPreferences, UiPreferencesStore},
     sandbox::{
         EffectiveSandbox, SandboxExecutables, SandboxLaunchInput, SandboxPreviewRequest,
-        SandboxSelection, WorkspaceSandbox, resolve_sandbox, validate_selection,
+        SandboxSelection, SandboxSettings, WorkspaceSandbox, resolve_sandbox, validate_selection,
     },
     workspace::{
         FileContent, FileEntry, GitDiff, GitStatus, SearchOptions, TraversalOptions,
@@ -854,11 +854,13 @@ enum ApiError {
     ShuttingDown,
     /// The selection names an invalid grant, root, or tool.
     InvalidSandbox(String),
-    /// No sandbox can start on this host.
+    /// No sandbox can start on this host, or a session's sandbox failed to
+    /// start, with the reason.
     SandboxUnavailable(String),
     /// Pi is missing or unusable, with discovery's corrective message.
     PiUnavailable(String),
-    /// The workspace selects a sandbox, which session launches cannot apply.
+    /// The workspace selects a sandbox, which Claude session launches cannot
+    /// apply yet.
     SandboxedSessionUnsupported,
     /// A session request named an unknown agent, or a session of an agent
     /// other than Pi failed, with its status, code, and message.
@@ -901,7 +903,7 @@ impl ApiError {
             Self::SandboxedSessionUnsupported => (
                 StatusCode::NOT_IMPLEMENTED,
                 "sandboxed_session_unsupported",
-                "Sandboxed sessions cannot start from the desktop yet. Turn off the sandbox for this workspace to start a session.".to_owned(),
+                "Sandboxed Claude Code sessions cannot start from the desktop yet. Start a Pi session, or turn off the sandbox for this workspace.".to_owned(),
             ),
             Self::NativeSession(error) => {
                 let (status, code) = match error {
@@ -1291,15 +1293,7 @@ fn describe(
         .executables
         .as_ref()
         .map_err(|error| ApiError::SandboxUnavailable(error.clone()))?;
-    let credential_environment = settings
-        .credential_references
-        .iter()
-        .filter_map(|reference| {
-            env::var(&reference.source)
-                .ok()
-                .map(|value| (reference.source.clone(), value))
-        })
-        .collect();
+    let credential_environment = credential_environment(settings);
     resolve_sandbox(&SandboxLaunchInput {
         adapter: request.adapter,
         settings,
@@ -1313,6 +1307,20 @@ fn describe(
     })
     .map(|resolved| Some(resolved.effective))
     .map_err(|error| ApiError::InvalidSandbox(error.to_string()))
+}
+
+/// The host values of the variables a profile's credential references name.
+/// An unset variable is left out, and the resolver reports it.
+fn credential_environment(settings: &SandboxSettings) -> BTreeMap<String, String> {
+    settings
+        .credential_references
+        .iter()
+        .filter_map(|reference| {
+            env::var(&reference.source)
+                .ok()
+                .map(|value| (reference.source.clone(), value))
+        })
+        .collect()
 }
 
 #[derive(Deserialize)]
@@ -1910,6 +1918,7 @@ pub(crate) mod tests {
 
     const TEST_TOKEN: &str = "0123456789abcdef0123456789abcdef";
 
+    /// Collects formatted log output for assertions.
     #[derive(Clone, Default)]
     pub(crate) struct LogBuffer(Arc<Mutex<Vec<u8>>>);
 

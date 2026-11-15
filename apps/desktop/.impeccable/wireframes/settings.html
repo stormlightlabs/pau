@@ -1,0 +1,2197 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Pau settings</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&family=Atkinson+Hyperlegible+Next:wght@400;500&display=swap" />
+		<link rel="stylesheet" href="pau.css" />
+		<style>
+			/* Atkinson Hyperlegible Soft is not on Google Fonts; Pau bundles it. */
+			@font-face {
+				font-family: 'Atkinson Hyperlegible Soft';
+				src: url('../../../../packages/ui/src/assets/fonts/atkinson-hyperlegible-soft/AtkinsonHyperlegibleSoft-Regular.woff2')
+					format('woff2');
+				font-weight: 400;
+				font-display: swap;
+			}
+		</style>
+		<style>
+			/* Settings surface. Everything shared lives in pau.css. */
+
+			.settings {
+				flex: 1;
+				min-height: 0;
+				display: grid;
+				grid-template-columns: var(--section-nav-width) minmax(0, 1fr);
+			}
+
+			.settings-body {
+				min-height: 0;
+				overflow-y: auto;
+			}
+			.settings-section {
+				padding: var(--space-6) var(--space-5) var(--space-7);
+				border-bottom: 1px solid var(--line);
+				outline-offset: -2px;
+			}
+			.settings-section:focus-visible {
+				outline: none;
+			}
+			.settings-section:last-child {
+				border-bottom: 0;
+				min-height: 100%;
+			}
+			.settings-section > h2 {
+				margin: 0 0 var(--space-5);
+			}
+			.choice__hint {
+				color: var(--text-muted);
+				font-size: var(--size-12);
+			}
+
+			/* Theme cards, each painted in its own theme. */
+			/* Five cards share the section at 1440, so the cards sit 8px apart and
+   inset their content 12px top and bottom, 8px at the sides: the longest
+   name, Catppuccin Mocha, fits on one line in every engine. */
+			.themes {
+				display: grid;
+				grid-template-columns: repeat(5, minmax(0, 1fr));
+				gap: var(--space-2);
+			}
+			.theme {
+				display: grid;
+				gap: var(--space-3);
+				padding: var(--space-3) var(--space-2);
+				border: 1px solid var(--line-control);
+				border-radius: var(--radius-control);
+				background: var(--t-bg);
+				color: var(--t-text);
+				cursor: pointer;
+				transition: border-color var(--duration-quick) var(--ease-out);
+			}
+			.theme:hover {
+				border-color: var(--line-strong);
+			}
+			/* The selected card takes the active accent, as dev/design asks. */
+			.theme:has(:checked) {
+				border-color: var(--accent);
+				box-shadow: inset 0 0 0 1px var(--accent);
+			}
+			.theme:has(:focus-visible) {
+				outline: 2px solid var(--focus);
+				outline-offset: 2px;
+			}
+			.theme__head {
+				display: flex;
+				align-items: center;
+				gap: var(--space-2);
+				min-width: 0;
+			}
+			.theme__head .check {
+				border-color: color-mix(in srgb, var(--t-text) 55%, var(--t-bg));
+				background: var(--t-bg);
+			}
+			.theme__head .check:checked {
+				background: var(--t-text);
+				border-color: var(--t-text);
+			}
+			.theme__head .check:checked::after {
+				background: var(--t-bg);
+			}
+			.theme__name {
+				font-size: var(--size-13);
+				line-height: var(--leading-tight);
+				font-weight: 500;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				padding-block: 6px;
+				margin-block: -6px;
+			}
+			.theme__code {
+				margin: 0;
+				padding: var(--space-2);
+				border: 1px solid var(--t-raised);
+				border-radius: var(--radius-control);
+				background: var(--t-bg);
+				font-size: var(--size-12);
+				line-height: var(--leading-ui);
+				white-space: pre;
+				overflow: hidden;
+				color: var(--t-var);
+			}
+			.theme__code .k {
+				color: var(--t-kw);
+			}
+			.theme__code .f {
+				color: var(--t-fn);
+			}
+			.theme__code .s {
+				color: var(--t-str);
+			}
+			.theme__code .n {
+				color: var(--t-num);
+			}
+			.theme__code .t {
+				color: var(--t-type);
+			}
+			.theme__code .c {
+				color: var(--t-com);
+			}
+			.theme__ansi {
+				display: grid;
+				grid-template-columns: repeat(8, 1fr);
+				height: 8px;
+				border-radius: 2px;
+				overflow: hidden;
+			}
+			.theme__ansi > i:nth-child(1) {
+				background: var(--a0);
+			}
+			.theme__ansi > i:nth-child(2) {
+				background: var(--a1);
+			}
+			.theme__ansi > i:nth-child(3) {
+				background: var(--a2);
+			}
+			.theme__ansi > i:nth-child(4) {
+				background: var(--a3);
+			}
+			.theme__ansi > i:nth-child(5) {
+				background: var(--a4);
+			}
+			.theme__ansi > i:nth-child(6) {
+				background: var(--a5);
+			}
+			.theme__ansi > i:nth-child(7) {
+				background: var(--a6);
+			}
+			.theme__ansi > i:nth-child(8) {
+				background: var(--a7);
+			}
+
+			/* Agent readiness rows. */
+			.agent {
+				display: grid;
+				grid-template-columns: 16px minmax(0, 1fr) auto;
+				column-gap: var(--space-3);
+				row-gap: var(--space-2);
+				align-items: center;
+				padding: var(--space-3) var(--space-4);
+			}
+			.agent__line {
+				display: flex;
+				align-items: center;
+				gap: var(--space-2);
+				min-width: 0;
+			}
+			.agent__name {
+				font-size: var(--size-14);
+				line-height: var(--leading-tight);
+				font-weight: 500;
+			}
+			.agent__meta {
+				color: var(--text-muted);
+				font-size: var(--size-12);
+				line-height: var(--leading-tight);
+				white-space: nowrap;
+			}
+			.agent__state {
+				grid-column: 2 / -1;
+				margin: 0;
+				color: var(--text-muted);
+				font-size: var(--size-13);
+				line-height: var(--leading-ui);
+			}
+			.agent__state code {
+				font-size: var(--size-12);
+				color: var(--text);
+			}
+			.agent__actions {
+				grid-column: 2 / -1;
+				display: flex;
+				gap: var(--space-2);
+			}
+
+			.gaps {
+				margin-top: var(--space-3);
+			}
+			.gaps__title {
+				display: flex;
+				align-items: center;
+				gap: var(--space-2);
+				margin: 0 0 var(--space-1);
+				font-size: var(--size-13);
+				line-height: var(--leading-tight);
+				font-weight: 600;
+			}
+			.gaps__title svg.icon {
+				color: var(--warning);
+			}
+			.gaps ul {
+				margin: 0;
+				padding: 0 0 0 calc(16px + var(--space-2));
+				color: var(--text-muted);
+				font-size: var(--size-13);
+				line-height: var(--leading-ui);
+			}
+			.gaps li + li {
+				margin-top: var(--space-1);
+			}
+			.note {
+				margin: var(--space-3) 0 0;
+				color: var(--text-muted);
+				font-size: var(--size-13);
+				line-height: var(--leading-ui);
+			}
+			.row-actions {
+				display: flex;
+				flex-wrap: wrap;
+				gap: var(--space-2);
+				margin-top: var(--space-3);
+			}
+
+			.note code {
+				font-size: var(--size-12);
+				color: var(--text);
+			}
+
+			/* Shortcut table. */
+			.shortcuts {
+				width: 100%;
+				max-width: 48rem;
+				border-collapse: collapse;
+				font-size: var(--size-13);
+			}
+			.shortcuts th,
+			.shortcuts td {
+				height: var(--row-height);
+				padding: 0 var(--space-3);
+				text-align: left;
+				white-space: nowrap;
+			}
+			.shortcuts th:first-child,
+			.shortcuts td:first-child {
+				padding-left: 0;
+			}
+			.shortcuts thead th {
+				border-bottom: 1px solid var(--line-control);
+			}
+			.shortcuts tbody th {
+				padding-top: var(--space-4);
+				height: auto;
+				padding-bottom: var(--space-1);
+			}
+			.shortcuts tbody td {
+				border-bottom: 1px solid var(--line);
+			}
+			.shortcuts td:first-child {
+				color: var(--text);
+				white-space: normal;
+			}
+			.shortcuts td:not(:first-child) {
+				color: var(--text-muted);
+			}
+			.keys {
+				display: inline-flex;
+				gap: var(--space-1);
+				align-items: center;
+				vertical-align: middle;
+			}
+			.keys kbd {
+				color: var(--text);
+			}
+			.or {
+				color: var(--text-muted);
+				font-size: var(--size-12);
+			}
+
+			/* Narrow: the section rail becomes a row of tabs above the settings
+   before any control loses its label or description. */
+			@media (max-width: 1199.98px) {
+				.settings {
+					grid-template-columns: minmax(0, 1fr);
+					grid-template-rows: auto minmax(0, 1fr);
+				}
+				.settings .section-nav {
+					padding: var(--space-2) var(--space-4);
+					border-right: 0;
+					border-bottom: 1px solid var(--line);
+				}
+				.settings .section-nav .strip > svg.icon {
+					display: none;
+				}
+				.settings .section-nav .strip {
+					grid-template-columns: auto;
+				}
+				.themes {
+					grid-template-columns: repeat(3, minmax(0, 1fr));
+				}
+				.shortcuts td:nth-child(4),
+				.shortcuts th:nth-child(4) {
+					display: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+			<symbol id="i-search" viewBox="0 0 16 16">
+				<circle cx="7" cy="7" r="4.25" />
+				<path d="m10.25 10.25 3 3" />
+			</symbol>
+			<symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9" /></symbol>
+			<symbol id="i-chev" viewBox="0 0 16 16"><path d="M4.5 6.5 8 10l3.5-3.5" /></symbol>
+			<symbol id="i-prompt" viewBox="0 0 16 16"><path d="m5 4.5 3.5 3.5L5 11.5" /></symbol>
+			<symbol id="i-file" viewBox="0 0 16 16">
+				<path d="M4.5 2.5h4.25L11.5 5.25v8.25h-7z" />
+				<path d="M8.5 2.5v3h3" />
+			</symbol>
+			<symbol id="i-folder" viewBox="0 0 16 16">
+				<path d="M2.5 4.25c0-.55.45-1 1-1h2.75l1.5 1.5h4.75c.55 0 1 .45 1 1v6c0 .55-.45 1-1 1h-9c-.55 0-1-.45-1-1z" />
+			</symbol>
+			<symbol id="i-term" viewBox="0 0 16 16">
+				<rect x="2.25" y="3" width="11.5" height="10" rx="1.5" />
+				<path d="m5 6.5 2 1.5-2 1.5M8.5 10h2.5" />
+			</symbol>
+			<symbol id="i-stop" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1" /></symbol>
+			<symbol id="i-export" viewBox="0 0 16 16"><path d="M8 2.5v7.5M5 5.25 8 2.5l3 2.75M3 9.5v4h10v-4" /></symbol>
+			<symbol id="i-send" viewBox="0 0 16 16"><path d="M3 8h9.5M8.5 4l4 4-4 4" /></symbol>
+			<symbol id="i-branch" viewBox="0 0 16 16">
+				<circle cx="5" cy="3.75" r="1.25" />
+				<circle cx="5" cy="12.25" r="1.25" />
+				<circle cx="11" cy="5.5" r="1.25" />
+				<path d="M5 5v6M11 6.75c0 2.75-6 2-6 4.25" />
+			</symbol>
+			<symbol id="i-close" viewBox="0 0 16 16"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7" /></symbol>
+			<symbol id="i-check" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7" /></symbol>
+			<symbol id="i-shield" viewBox="0 0 16 16">
+				<path d="M8 2.25 13 4v4c0 3-2.25 5-5 5.75C5.25 13 3 11 3 8V4z" />
+			</symbol>
+			<symbol id="i-open" viewBox="0 0 16 16"><path d="M9 3h4v4M13 3 7.5 8.5M11 9.5V13H3V5h3.5" /></symbol>
+			<symbol id="i-palette" viewBox="0 0 16 16">
+				<circle cx="8" cy="8" r="5.5" />
+				<path d="M8 2.5v11" />
+				<path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor" stroke="none" />
+			</symbol>
+			<symbol id="i-agent" viewBox="0 0 16 16">
+				<rect x="2.25" y="3.25" width="11.5" height="9.5" rx="1.5" />
+				<path d="m5 7 1.75 1.25L5 9.5M8.75 9.5h2.25" />
+				<path d="M2.25 5.25h11.5" />
+			</symbol>
+			<symbol id="i-bell" viewBox="0 0 16 16">
+				<path d="M4.25 11V7.25a3.75 3.75 0 0 1 7.5 0V11l1 1.25h-9.5z" />
+				<path d="M6.75 13.75h2.5" />
+			</symbol>
+			<symbol id="i-keyboard" viewBox="0 0 16 16">
+				<rect x="1.75" y="4" width="12.5" height="8" rx="1.5" />
+				<path d="M4.5 6.5h.01M7 6.5h.01M9.5 6.5h.01M12 6.5h-.5M4.5 9h.01M5.75 9.25h4.5" />
+			</symbol>
+			<symbol id="i-info" viewBox="0 0 16 16">
+				<circle cx="8" cy="8" r="5.75" />
+				<path d="M8 7.25v3.5M8 5.25v.01" />
+			</symbol>
+			<symbol id="i-alert" viewBox="0 0 16 16">
+				<path d="M8 2.75 14 13H2z" />
+				<path d="M8 6.75v2.75M8 11.25v.01" />
+			</symbol>
+			<symbol id="i-fail" viewBox="0 0 16 16">
+				<circle cx="8" cy="8" r="5.75" />
+				<path d="m6 6 4 4M10 6l-4 4" />
+			</symbol>
+			<symbol id="i-ok" viewBox="0 0 16 16">
+				<circle cx="8" cy="8" r="5.75" />
+				<path d="m5.5 8.25 1.75 1.75 3.25-3.75" />
+			</symbol>
+			<symbol id="i-copy" viewBox="0 0 16 16">
+				<rect x="5.25" y="5.25" width="8" height="8" rx="1.25" />
+				<path d="M10.75 5.25V3.75c0-.55-.45-1-1-1h-6c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h1.5" />
+			</symbol>
+			<symbol id="i-retry" viewBox="0 0 16 16">
+				<path d="M12.75 8a4.75 4.75 0 1 1-1.4-3.36" />
+				<path d="M12.75 2.75v2.5h-2.5" />
+			</symbol>
+			<symbol id="i-plug" viewBox="0 0 16 16">
+				<path d="M6 2.75v2.5M10 2.75v2.5M4.5 5.25h7v2.5a3.5 3.5 0 0 1-7 0zM8 11.25v2" />
+			</symbol>
+			<symbol id="i-panel" viewBox="0 0 16 16">
+				<rect x="2.25" y="3" width="11.5" height="10" rx="1.5" />
+				<path d="M10 3v10" />
+			</symbol>
+			<symbol id="i-commit" viewBox="0 0 16 16">
+				<circle cx="8" cy="8" r="2.25" />
+				<path d="M2.5 8h3.25M10.25 8h3.25" />
+			</symbol>
+		</svg>
+
+		<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+			<symbol id="v-sessions" viewBox="0 0 16 16">
+				<path d="M6.5 4h7M6.5 8h7M6.5 12h7" />
+				<circle cx="3.25" cy="4" r="1" />
+				<circle cx="3.25" cy="8" r="1" />
+				<circle cx="3.25" cy="12" r="1" />
+			</symbol>
+			<symbol id="v-files" viewBox="0 0 16 16">
+				<path d="M4.5 2.5h4.25L11.5 5.25v8.25h-7z" />
+				<path d="M8.5 2.5v3h3" />
+			</symbol>
+			<symbol id="v-review" viewBox="0 0 16 16">
+				<rect x="2.25" y="2.25" width="11.5" height="11.5" rx="1.5" />
+				<path d="M8 4.75v3.5M6.25 6.5h3.5M6.25 10.75h3.5" />
+			</symbol>
+			<symbol id="v-terminal" viewBox="0 0 16 16">
+				<rect x="2.25" y="3" width="11.5" height="10" rx="1.5" />
+				<path d="m5 6.5 2 1.5-2 1.5M8.5 10h2.5" />
+			</symbol>
+			<symbol id="v-resources" viewBox="0 0 16 16">
+				<path d="M8 2.25 13.25 5v6L8 13.75 2.75 11V5z" />
+				<path d="M2.75 5 8 7.75 13.25 5M8 7.75v6" />
+			</symbol>
+			<symbol id="v-settings" viewBox="0 0 16 16">
+				<path d="M2.75 5h5.5M11.75 5h1.5M2.75 11h1.5M7.75 11h5.5" />
+				<circle cx="10" cy="5" r="1.75" />
+				<circle cx="6" cy="11" r="1.75" />
+			</symbol>
+		</svg>
+
+		<div class="shell shell--no-workspace">
+			<nav class="bay" aria-label="Sessions">
+				<div class="bay__top">
+					<label class="field">
+						<svg class="icon"><use href="#i-search" /></svg>
+						<input class="field__input" type="search" placeholder="Filter sessions" aria-label="Filter sessions" />
+						<kbd><span>/</span></kbd>
+					</label>
+					<button class="btn btn--collapse" type="button" aria-label="New session">
+						<svg class="icon"><use href="#i-plus" /></svg><span>New</span>
+					</button>
+				</div>
+				<div class="bay__scroll">
+					<section aria-labelledby="h-needs-set">
+						<h2 class="bay-heading bay-heading--attention">
+							<span class="section-label" id="h-needs-set">Needs you</span><span class="bay-heading__count">4</span>
+						</h2>
+						<ul class="bay__list bay__list--attention">
+							<li>
+								<a class="strip" href="shell-session.html" data-state="waiting">
+									<span class="mark mark--waiting" role="img" aria-label="Waiting"></span>
+									<span class="strip__line"
+										><span class="strip__name">Sandbox Pi sessions</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-62</span>
+									<span></span>
+									<span class="strip__state tone-waiting">Allow write to crates/server/src/sessions.rs?</span>
+									<span class="strip__figure mono">4m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--waiting" role="img" aria-label="Waiting"></span>
+									<span class="strip__line"
+										><span class="strip__name">Resource scope picker</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-288</span>
+									<span></span>
+									<span class="strip__state tone-waiting">Run pnpm install in packages/ui?</span>
+									<span class="strip__figure mono">9m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--failed" role="img" aria-label="Failed"></span>
+									<span class="strip__line"
+										><span class="strip__name">Terminal relay PTY</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-50</span>
+									<span></span>
+									<span class="strip__state tone-failed">Failed: srt exited with status 1</span>
+									<span class="strip__figure mono">6m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--unresponsive" role="img" aria-label="Not responding"></span>
+									<span class="strip__line"
+										><span class="strip__name">Pi RPC timeout</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-282</span>
+									<span></span>
+									<span class="strip__state tone-unresponsive">Not responding for 1m</span>
+									<span class="strip__figure mono">1m</span>
+								</a>
+							</li>
+						</ul>
+					</section>
+
+					<section aria-labelledby="h-running-set">
+						<h2 class="bay-heading">
+							<span class="section-label" id="h-running-set">Running</span><span class="bay-heading__count">4</span>
+						</h2>
+						<ul class="bay__list">
+							<li>
+								<a class="strip" href="shell-session.html#running" data-state="running">
+									<span class="mark mark--running" role="img" aria-label="Running"></span>
+									<span class="strip__line"
+										><span class="strip__name">Audit log shutdown drain</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-63</span>
+									<span></span>
+									<span class="strip__state mono">cargo test -p pau-core audit</span>
+									<span class="strip__figure mono">12m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--running" role="img" aria-label="Running"></span>
+									<span class="strip__line"
+										><span class="strip__name">Design audit</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau</span>
+									<span></span>
+									<span class="strip__state">Reading dev/design/system.md</span>
+									<span class="strip__figure mono">31m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html" data-session="pau-290">
+									<span class="mark mark--running" role="img" aria-label="Running"></span>
+									<span class="strip__line"
+										><span class="strip__name">Diff gutter numbers</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-290</span>
+									<span></span>
+									<span class="strip__state">Editing packages/ui/src/diff/DiffGutter.svelte</span>
+									<span class="strip__figure mono">7m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--starting" role="img" aria-label="Starting"></span>
+									<span class="strip__line"
+										><span class="strip__name">Model list filter</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-291</span>
+									<span></span>
+									<span class="strip__state">Starting Claude Code</span>
+									<span class="strip__figure mono">8s</span>
+								</a>
+							</li>
+						</ul>
+					</section>
+
+					<section aria-labelledby="h-settled-set">
+						<h2 class="bay-heading">
+							<span class="section-label" id="h-settled-set">Settled</span><span class="bay-heading__count">6</span>
+						</h2>
+						<ul class="bay__list">
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--idle" role="img" aria-label="Idle"></span>
+									<span class="strip__line"
+										><span class="strip__name">Theme contrast pass</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-286</span>
+									<span></span>
+									<span class="strip__state">Idle</span>
+									<span class="strip__figure mono">40m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--idle" role="img" aria-label="Idle"></span>
+									<span class="strip__line"
+										><span class="strip__name">Token test flake</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-275</span>
+									<span></span>
+									<span class="strip__state">Idle</span>
+									<span class="strip__figure mono">2h</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--idle" role="img" aria-label="Idle"></span>
+									<span class="strip__line"
+										><span class="strip__name">Website changelog feed</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">thndrs</span>
+									<span></span>
+									<span class="strip__state">Idle</span>
+									<span class="strip__figure mono">3h</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--stopped" role="img" aria-label="Stopped"></span>
+									<span class="strip__line"
+										><span class="strip__name">Migration guard</span><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-279</span>
+									<span></span>
+									<span class="strip__state">Stopped</span>
+									<span class="strip__figure mono">5h</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--stopped" role="img" aria-label="Stopped"></span>
+									<span class="strip__line"
+										><span class="strip__name">Rewrite README</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">thndrs</span>
+									<span></span>
+									<span class="strip__state">Stopped</span>
+									<span class="strip__figure mono">1d</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--stopped" role="img" aria-label="Stopped"></span>
+									<span class="strip__line"
+										><span class="strip__name">Zellij smoke run</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau</span>
+									<span></span>
+									<span class="strip__state">Stopped</span>
+									<span class="strip__figure mono">1d</span>
+								</a>
+							</li>
+						</ul>
+					</section>
+				</div>
+				<ul class="views" aria-label="Views">
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="shell-session.html"
+							aria-label="Sessions"
+							aria-describedby="tip-sessions-set"
+							><svg class="icon"><use href="#v-sessions" /></svg
+							><span class="views__tip" role="tooltip" id="tip-sessions-set">Sessions</span></a
+						>
+					</li>
+					<li>
+						<a class="btn btn--quiet btn--icon" href="files.html" aria-label="Files" aria-describedby="tip-files-set"
+							><svg class="icon"><use href="#v-files" /></svg
+							><span class="views__tip" role="tooltip" id="tip-files-set">Files</span></a
+						>
+					</li>
+					<li>
+						<a class="btn btn--quiet btn--icon" href="review.html" aria-label="Review" aria-describedby="tip-review-set"
+							><svg class="icon"><use href="#v-review" /></svg
+							><span class="views__tip" role="tooltip" id="tip-review-set">Review</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="terminal.html"
+							aria-label="Terminal"
+							aria-describedby="tip-terminal-set"
+							><svg class="icon"><use href="#v-terminal" /></svg
+							><span class="views__tip" role="tooltip" id="tip-terminal-set">Terminal</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="resources.html"
+							aria-label="Pi resources"
+							aria-describedby="tip-resources-set"
+							><svg class="icon"><use href="#v-resources" /></svg
+							><span class="views__tip" role="tooltip" id="tip-resources-set">Pi resources</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="settings.html"
+							aria-current="page"
+							aria-label="Settings"
+							aria-describedby="tip-settings-set"
+							><svg class="icon"><use href="#v-settings" /></svg
+							><span class="views__tip" role="tooltip" id="tip-settings-set"
+								>Settings<kbd><span>⌘,</span></kbd></span
+							></a
+						>
+					</li>
+				</ul>
+			</nav>
+
+			<main class="main">
+				<header class="page-header">
+					<h1 class="header-title">Settings</h1>
+					<span class="header-spacer"></span>
+					<div class="header-actions">
+						<a class="btn btn--quiet" href="shell-session.html"
+							><span>Close</span><kbd><span>Esc</span></kbd></a
+						>
+					</div>
+				</header>
+
+				<div class="settings">
+					<nav class="section-nav" aria-label="Settings sections">
+						<ul class="tabs--narrow">
+							<li>
+								<a class="strip strip--row" href="#appearance" aria-current="true"
+									><svg class="icon"><use href="#i-palette" /></svg><span class="strip__name">Appearance</span></a
+								>
+							</li>
+							<li>
+								<a class="strip strip--row" href="#agents"
+									><svg class="icon"><use href="#i-agent" /></svg><span class="strip__name">Agents</span></a
+								>
+							</li>
+							<li>
+								<a class="strip strip--row" href="#sandbox"
+									><svg class="icon"><use href="#i-shield" /></svg><span class="strip__name">Sandbox</span></a
+								>
+							</li>
+							<li>
+								<a class="strip strip--row" href="#notifications"
+									><svg class="icon"><use href="#i-bell" /></svg><span class="strip__name">Notifications</span></a
+								>
+							</li>
+							<li>
+								<a class="strip strip--row" href="#editor"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">Editor</span></a
+								>
+							</li>
+							<li>
+								<a class="strip strip--row" href="#shell"
+									><svg class="icon"><use href="#i-term" /></svg><span class="strip__name">Shell</span></a
+								>
+							</li>
+							<li>
+								<a class="strip strip--row" href="#keyboard"
+									><svg class="icon"><use href="#i-keyboard" /></svg><span class="strip__name">Keyboard</span></a
+								>
+							</li>
+							<li>
+								<a class="strip strip--row" href="#about"
+									><svg class="icon"><use href="#i-info" /></svg><span class="strip__name">About</span></a
+								>
+							</li>
+						</ul>
+					</nav>
+
+					<div class="settings-body">
+						<section class="settings-section" id="appearance" aria-labelledby="h-appearance" tabindex="-1">
+							<h2 class="role-heading" id="h-appearance">Appearance</h2>
+
+							<div
+								class="setting setting--wide"
+								role="radiogroup"
+								aria-labelledby="s-theme"
+								aria-describedby="s-theme-d">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-theme">Theme</h3>
+									<span class="chip"><span>All workspaces</span></span>
+								</div>
+								<p class="setting__desc" id="s-theme-d">
+									Colors for Pau, its code views and its terminals. External and terminal editors keep their own.
+								</p>
+								<div class="setting__control themes">
+									<label
+										class="theme"
+										style="
+											--t-bg: #12151d;
+											--t-raised: #202536;
+											--t-text: #e6e9f2;
+											--t-kw: #a48cf2;
+											--t-fn: #04d1f9;
+											--t-str: #37f499;
+											--t-num: #f1fc79;
+											--t-type: #f16c75;
+											--t-var: #ebfafa;
+											--t-com: #7d849c;
+											--a0: #454759;
+											--a1: #f16c75;
+											--a2: #37f499;
+											--a3: #f1fc79;
+											--a4: #7081d0;
+											--a5: #a48cf2;
+											--a6: #04d1f9;
+											--a7: #ebfafa;
+										">
+										<span class="theme__head"
+											><input class="check" type="radio" name="theme" checked /><span class="theme__name"
+												>Eldritch</span
+											></span
+										>
+										<pre
+											class="theme__code mono"
+											aria-hidden="true"><span class="k">fn</span> <span class="f">ready</span>(<span class="n">10</span>)
+<span class="t">Ok</span>(<span class="s">"up"</span>) <span class="c">// 4s</span></pre>
+										<span class="theme__ansi" aria-hidden="true"
+											><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i
+										></span>
+									</label>
+									<label
+										class="theme"
+										style="
+											--t-bg: #242933;
+											--t-raised: #3b4252;
+											--t-text: #eceff4;
+											--t-kw: #81a1c1;
+											--t-fn: #88c0d0;
+											--t-str: #a3be8c;
+											--t-num: #b48ead;
+											--t-type: #8fbcbb;
+											--t-var: #d8dee9;
+											--t-com: #8c97ad;
+											--a0: #4c566a;
+											--a1: #bf616a;
+											--a2: #a3be8c;
+											--a3: #ebcb8b;
+											--a4: #81a1c1;
+											--a5: #b48ead;
+											--a6: #88c0d0;
+											--a7: #e5e9f0;
+										">
+										<span class="theme__head"
+											><input class="check" type="radio" name="theme" /><span class="theme__name">Nord</span></span
+										>
+										<pre
+											class="theme__code mono"
+											aria-hidden="true"><span class="k">fn</span> <span class="f">ready</span>(<span class="n">10</span>)
+<span class="t">Ok</span>(<span class="s">"up"</span>) <span class="c">// 4s</span></pre>
+										<span class="theme__ansi" aria-hidden="true"
+											><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i
+										></span>
+									</label>
+									<label
+										class="theme"
+										style="
+											--t-bg: #11131d;
+											--t-raised: #1e2230;
+											--t-text: #c6c8d1;
+											--t-kw: #a093c7;
+											--t-fn: #84a0c6;
+											--t-str: #b4be82;
+											--t-num: #e2a478;
+											--t-type: #89b8c2;
+											--t-var: #c6c8d1;
+											--t-com: #8389a3;
+											--a0: #6b7089;
+											--a1: #e27878;
+											--a2: #b4be82;
+											--a3: #e2a478;
+											--a4: #84a0c6;
+											--a5: #a093c7;
+											--a6: #89b8c2;
+											--a7: #c6c8d1;
+										">
+										<span class="theme__head"
+											><input class="check" type="radio" name="theme" /><span class="theme__name">Iceberg</span></span
+										>
+										<pre
+											class="theme__code mono"
+											aria-hidden="true"><span class="k">fn</span> <span class="f">ready</span>(<span class="n">10</span>)
+<span class="t">Ok</span>(<span class="s">"up"</span>) <span class="c">// 4s</span></pre>
+										<span class="theme__ansi" aria-hidden="true"
+											><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i
+										></span>
+									</label>
+									<label
+										class="theme"
+										style="
+											--t-bg: #1e1e2e;
+											--t-raised: #313244;
+											--t-text: #cdd6f4;
+											--t-kw: #cba6f7;
+											--t-fn: #89b4fa;
+											--t-str: #a6e3a1;
+											--t-num: #fab387;
+											--t-type: #f9e2af;
+											--t-var: #cdd6f4;
+											--t-com: #9399b2;
+											--a0: #585b70;
+											--a1: #f38ba8;
+											--a2: #a6e3a1;
+											--a3: #f9e2af;
+											--a4: #89b4fa;
+											--a5: #f5c2e7;
+											--a6: #94e2d5;
+											--a7: #bac2de;
+										">
+										<span class="theme__head"
+											><input class="check" type="radio" name="theme" /><span class="theme__name"
+												>Catppuccin Mocha</span
+											></span
+										>
+										<pre
+											class="theme__code mono"
+											aria-hidden="true"><span class="k">fn</span> <span class="f">ready</span>(<span class="n">10</span>)
+<span class="t">Ok</span>(<span class="s">"up"</span>) <span class="c">// 4s</span></pre>
+										<span class="theme__ansi" aria-hidden="true"
+											><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i
+										></span>
+									</label>
+									<label
+										class="theme"
+										style="
+											--t-bg: #121212;
+											--t-raised: #222222;
+											--t-text: #dbd7ca;
+											--t-kw: #4d9375;
+											--t-fn: #80a665;
+											--t-str: #c98a7d;
+											--t-num: #4c9a91;
+											--t-type: #5da994;
+											--t-var: #bd976a;
+											--t-com: #869586;
+											--a0: #777777;
+											--a1: #cb7676;
+											--a2: #4d9375;
+											--a3: #e6cc77;
+											--a4: #6394bf;
+											--a5: #d9739f;
+											--a6: #5eaab5;
+											--a7: #dbd7ca;
+										">
+										<span class="theme__head"
+											><input class="check" type="radio" name="theme" /><span class="theme__name"
+												>Vitesse Dark</span
+											></span
+										>
+										<pre
+											class="theme__code mono"
+											aria-hidden="true"><span class="k">fn</span> <span class="f">ready</span>(<span class="n">10</span>)
+<span class="t">Ok</span>(<span class="s">"up"</span>) <span class="c">// 4s</span></pre>
+										<span class="theme__ansi" aria-hidden="true"
+											><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i
+										></span>
+									</label>
+								</div>
+							</div>
+
+							<div class="setting" role="radiogroup" aria-labelledby="s-ui-font" aria-describedby="s-ui-font-d">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-ui-font">Interface font</h3>
+									<span class="chip"><span>All workspaces</span></span>
+								</div>
+								<p class="setting__desc" id="s-ui-font-d">
+									The typeface for labels, messages and controls. Each choice is shown in its own face.
+								</p>
+								<div class="setting__control choices">
+									<label class="toggle"
+										><input class="check" type="radio" name="ui-font" checked /><span style="font-family: 'Overpass'"
+											>Overpass</span
+										></label
+									>
+									<label class="toggle"
+										><input class="check" type="radio" name="ui-font" /><span style="font-family: 'IBM Plex Sans'"
+											>IBM Plex Sans</span
+										></label
+									>
+									<label class="toggle"
+										><input class="check" type="radio" name="ui-font" /><span style="font-family: 'Inter'"
+											>Inter</span
+										></label
+									>
+									<label class="toggle"
+										><input class="check" type="radio" name="ui-font" /><span
+											style="font-family: 'Atkinson Hyperlegible Next'"
+											>Atkinson Hyperlegible Next</span
+										></label
+									>
+									<label class="toggle"
+										><input class="check" type="radio" name="ui-font" /><span
+											style="font-family: 'Atkinson Hyperlegible Soft'"
+											>Atkinson Hyperlegible Soft</span
+										></label
+									>
+								</div>
+							</div>
+
+							<div class="setting" role="radiogroup" aria-labelledby="s-mono-font" aria-describedby="s-mono-font-d">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-mono-font">Code font</h3>
+									<span class="chip"><span>All workspaces</span></span>
+								</div>
+								<p class="setting__desc" id="s-mono-font-d">
+									The typeface for code, paths, commands and terminals. Ligatures stay off.
+								</p>
+								<div class="setting__control choices">
+									<label class="toggle"
+										><input class="check" type="radio" name="mono-font" checked /><span
+											style="font-family: 'Overpass Mono'"
+											>Overpass Mono</span
+										></label
+									>
+									<label class="toggle"
+										><input class="check" type="radio" name="mono-font" /><span style="font-family: 'IBM Plex Mono'"
+											>IBM Plex Mono</span
+										></label
+									>
+									<label class="toggle"
+										><input class="check" type="radio" name="mono-font" /><span style="font-family: 'JetBrains Mono'"
+											>JetBrains Mono</span
+										></label
+									>
+								</div>
+							</div>
+
+							<div class="setting" role="radiogroup" aria-labelledby="s-size" aria-describedby="s-size-d">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-size">Text size</h3>
+									<span class="chip"><span>All workspaces</span></span>
+								</div>
+								<p class="setting__desc" id="s-size-d">
+									Scales all text and controls together. <kbd><span>⌘</span></kbd> <kbd><span>=</span></kbd> and
+									<kbd><span>⌘</span></kbd> <kbd><span>−</span></kbd> change it from anywhere.
+								</p>
+								<div class="setting__control choices choices--row">
+									<label class="toggle"><input class="check" type="radio" name="size" /><span>Small</span></label>
+									<label class="toggle"
+										><input class="check" type="radio" name="size" checked /><span>Default</span></label
+									>
+									<label class="toggle"><input class="check" type="radio" name="size" /><span>Large</span></label>
+									<label class="toggle"><input class="check" type="radio" name="size" /><span>Larger</span></label>
+								</div>
+							</div>
+
+							<div class="setting" role="radiogroup" aria-labelledby="s-motion" aria-describedby="s-motion-d">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-motion">Motion</h3>
+									<span class="chip"><span>All workspaces</span></span>
+								</div>
+								<p class="setting__desc" id="s-motion-d">
+									System follows the operating system. Reduce fades instead of sliding. Full always animates.
+								</p>
+								<div class="setting__control choices choices--row">
+									<label class="toggle"
+										><input class="check" type="radio" name="motion" checked /><span>System</span></label
+									>
+									<label class="toggle"><input class="check" type="radio" name="motion" /><span>Reduce</span></label>
+									<label class="toggle"><input class="check" type="radio" name="motion" /><span>Full</span></label>
+								</div>
+							</div>
+						</section>
+
+						<section class="settings-section" id="agents" aria-labelledby="h-agents" tabindex="-1">
+							<h2 class="role-heading" id="h-agents">Agents</h2>
+
+							<div class="setting">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-ready">Readiness</h3>
+									<span class="chip"><span>This computer</span></span>
+								</div>
+								<p class="setting__desc">Pau finds each agent on your shell <code>PATH</code> when it starts.</p>
+								<div class="setting__control rows" aria-labelledby="s-ready">
+									<div class="agent">
+										<svg class="icon tone-ok" role="img" aria-label="Ready"><use href="#i-ok" /></svg>
+										<span class="agent__line"
+											><span class="agent__name cap">Pi</span><span class="agent__meta mono cap">0.68.1</span></span
+										>
+										<span class="agent__meta mono cap">/opt/homebrew/bin/pi</span>
+										<p class="agent__state">Ready. Signed in to Anthropic, OpenAI, Google and OpenRouter.</p>
+									</div>
+									<div class="agent">
+										<svg class="icon tone-warning" role="img" aria-label="Needs setup"><use href="#i-alert" /></svg>
+										<span class="agent__line"
+											><span class="agent__name cap">Claude Code</span
+											><span class="agent__meta mono cap">2.0.14</span></span
+										>
+										<span class="agent__meta mono cap">~/.local/bin/claude</span>
+										<p class="agent__state">
+											Not signed in. Run <code>claude</code> in a terminal and log in, then check again.
+										</p>
+										<div class="agent__actions">
+											<button class="btn" type="button">
+												<svg class="icon"><use href="#i-term" /></svg><span>Open terminal</span>
+											</button>
+											<button class="btn btn--quiet" type="button">
+												<svg class="icon"><use href="#i-retry" /></svg><span>Check again</span>
+											</button>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<div class="setting">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-model">Default model</h3>
+									<span class="chip"><span>All workspaces</span></span>
+								</div>
+								<p class="setting__desc" id="s-model-d">
+									New Pi sessions start on this model. Switch models for one session from its composer.
+								</p>
+								<div class="setting__control models">
+									<div class="models__top">
+										<label class="field"
+											><svg class="icon"><use href="#i-search" /></svg
+											><input
+												class="field__input"
+												id="model-filter"
+												type="search"
+												placeholder="Filter by name, ID or provider"
+												aria-label="Filter models"
+												aria-controls="model-list"
+										/></label>
+										<span class="role-meta mono cap models__count" id="model-count" aria-live="polite">39 models</span>
+									</div>
+									<div
+										class="models__list"
+										id="model-list"
+										role="listbox"
+										aria-labelledby="s-model"
+										aria-describedby="s-model-d"
+										tabindex="0">
+										<div class="models__group" role="group" aria-labelledby="mp-anthropic">
+											<h4 class="models__heading">
+												<span class="section-label" id="mp-anthropic">Anthropic</span
+												><span class="bay-heading__count">7</span>
+											</h4>
+											<ul>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="claude opus 4.5 claude-opus-4-5 anthropic">
+													<span></span><span class="strip__name">Claude Opus 4.5</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">claude-opus-4-5</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="true"
+													data-search="claude sonnet 4.5 claude-sonnet-4-5 anthropic">
+													<svg class="icon"><use href="#i-check" /></svg
+													><span class="strip__name">Claude Sonnet 4.5</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">claude-sonnet-4-5</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="claude haiku 4.5 claude-haiku-4-5 anthropic">
+													<span></span><span class="strip__name">Claude Haiku 4.5</span
+													><span class="strip__figure model__meta"><span class="mono">claude-haiku-4-5</span></span>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="claude opus 4.1 claude-opus-4-1 anthropic">
+													<span></span><span class="strip__name">Claude Opus 4.1</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">claude-opus-4-1</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="claude sonnet 4 claude-sonnet-4 anthropic">
+													<span></span><span class="strip__name">Claude Sonnet 4</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">claude-sonnet-4</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="claude sonnet 3.7 claude-3-7-sonnet anthropic">
+													<span></span><span class="strip__name">Claude Sonnet 3.7</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">claude-3-7-sonnet</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="claude haiku 3.5 claude-3-5-haiku anthropic">
+													<span></span><span class="strip__name">Claude Haiku 3.5</span
+													><span class="strip__figure model__meta"><span class="mono">claude-3-5-haiku</span></span>
+												</li>
+											</ul>
+										</div>
+										<div class="models__group" role="group" aria-labelledby="mp-openai">
+											<h4 class="models__heading">
+												<span class="section-label" id="mp-openai">OpenAI</span
+												><span class="bay-heading__count">8</span>
+											</h4>
+											<ul>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="gpt-5 gpt-5 openai">
+													<span></span><span class="strip__name">GPT-5</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">gpt-5</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="gpt-5 mini gpt-5-mini openai">
+													<span></span><span class="strip__name">GPT-5 mini</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">gpt-5-mini</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="gpt-5 nano gpt-5-nano openai">
+													<span></span><span class="strip__name">GPT-5 nano</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">gpt-5-nano</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="gpt-5 codex gpt-5-codex openai">
+													<span></span><span class="strip__name">GPT-5 Codex</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">gpt-5-codex</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="gpt-4.1 gpt-4.1 openai">
+													<span></span><span class="strip__name">GPT-4.1</span
+													><span class="strip__figure model__meta"><span class="mono">gpt-4.1</span></span>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="gpt-4.1 mini gpt-4.1-mini openai">
+													<span></span><span class="strip__name">GPT-4.1 mini</span
+													><span class="strip__figure model__meta"><span class="mono">gpt-4.1-mini</span></span>
+												</li>
+												<li class="strip strip--row" role="option" aria-selected="false" data-search="o3 o3 openai">
+													<span></span><span class="strip__name">o3</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">o3</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="o4-mini o4-mini openai">
+													<span></span><span class="strip__name">o4-mini</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">o4-mini</span></span
+													>
+												</li>
+											</ul>
+										</div>
+										<div class="models__group" role="group" aria-labelledby="mp-google">
+											<h4 class="models__heading">
+												<span class="section-label" id="mp-google">Google</span
+												><span class="bay-heading__count">4</span>
+											</h4>
+											<ul>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="gemini 2.5 pro gemini-2.5-pro google">
+													<span></span><span class="strip__name">Gemini 2.5 Pro</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">gemini-2.5-pro</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="gemini 2.5 flash gemini-2.5-flash google">
+													<span></span><span class="strip__name">Gemini 2.5 Flash</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">gemini-2.5-flash</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="gemini 2.5 flash-lite gemini-2.5-flash-lite google">
+													<span></span><span class="strip__name">Gemini 2.5 Flash-Lite</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span
+														><span class="mono">gemini-2.5-flash-lite</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="gemini 2.0 flash gemini-2.0-flash google">
+													<span></span><span class="strip__name">Gemini 2.0 Flash</span
+													><span class="strip__figure model__meta"><span class="mono">gemini-2.0-flash</span></span>
+												</li>
+											</ul>
+										</div>
+										<div class="models__group" role="group" aria-labelledby="mp-openrouter">
+											<h4 class="models__heading">
+												<span class="section-label" id="mp-openrouter">OpenRouter</span
+												><span class="bay-heading__count">9</span>
+											</h4>
+											<ul>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="deepseek r1 deepseek/deepseek-r1 openrouter">
+													<span></span><span class="strip__name">DeepSeek R1</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span
+														><span class="mono">deepseek/deepseek-r1</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="deepseek v3.1 deepseek/deepseek-chat-v3.1 openrouter">
+													<span></span><span class="strip__name">DeepSeek V3.1</span
+													><span class="strip__figure model__meta"
+														><span class="mono">deepseek/deepseek-chat-v3.1</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="qwen3 coder 480b a35b qwen/qwen3-coder openrouter">
+													<span></span><span class="strip__name">Qwen3 Coder 480B A35B</span
+													><span class="strip__figure model__meta"><span class="mono">qwen/qwen3-coder</span></span>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="qwen3 235b a22b thinking qwen/qwen3-235b-a22b-thinking openrouter">
+													<span></span><span class="strip__name">Qwen3 235B A22B Thinking</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span
+														><span class="mono">qwen/qwen3-235b-a22b-thinking</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="kimi k2 moonshotai/kimi-k2 openrouter">
+													<span></span><span class="strip__name">Kimi K2</span
+													><span class="strip__figure model__meta"><span class="mono">moonshotai/kimi-k2</span></span>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="glm 4.6 z-ai/glm-4.6 openrouter">
+													<span></span><span class="strip__name">GLM 4.6</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">z-ai/glm-4.6</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="llama 4 maverick meta-llama/llama-4-maverick openrouter">
+													<span></span><span class="strip__name">Llama 4 Maverick</span
+													><span class="strip__figure model__meta"
+														><span class="mono">meta-llama/llama-4-maverick</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="grok 4 x-ai/grok-4 openrouter">
+													<span></span><span class="strip__name">Grok 4</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">x-ai/grok-4</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="grok code fast 1 x-ai/grok-code-fast-1 openrouter">
+													<span></span><span class="strip__name">Grok Code Fast 1</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span
+														><span class="mono">x-ai/grok-code-fast-1</span></span
+													>
+												</li>
+											</ul>
+										</div>
+										<div class="models__group" role="group" aria-labelledby="mp-groq">
+											<h4 class="models__heading">
+												<span class="section-label" id="mp-groq">Groq</span><span class="bay-heading__count">3</span>
+											</h4>
+											<ul>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="gpt oss 120b openai/gpt-oss-120b groq">
+													<span></span><span class="strip__name">GPT OSS 120B</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">openai/gpt-oss-120b</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="gpt oss 20b openai/gpt-oss-20b groq">
+													<span></span><span class="strip__name">GPT OSS 20B</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">openai/gpt-oss-20b</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="llama 3.3 70b versatile llama-3.3-70b-versatile groq">
+													<span></span><span class="strip__name">Llama 3.3 70B Versatile</span
+													><span class="strip__figure model__meta"
+														><span class="mono">llama-3.3-70b-versatile</span></span
+													>
+												</li>
+											</ul>
+										</div>
+										<div class="models__group" role="group" aria-labelledby="mp-mistral">
+											<h4 class="models__heading">
+												<span class="section-label" id="mp-mistral">Mistral</span
+												><span class="bay-heading__count">5</span>
+											</h4>
+											<ul>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="mistral large mistral-large-latest mistral">
+													<span></span><span class="strip__name">Mistral Large</span
+													><span class="strip__figure model__meta"><span class="mono">mistral-large-latest</span></span>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="mistral medium mistral-medium-latest mistral">
+													<span></span><span class="strip__name">Mistral Medium</span
+													><span class="strip__figure model__meta"
+														><span class="mono">mistral-medium-latest</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="codestral codestral-latest mistral">
+													<span></span><span class="strip__name">Codestral</span
+													><span class="strip__figure model__meta"><span class="mono">codestral-latest</span></span>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="devstral medium devstral-medium-latest mistral">
+													<span></span><span class="strip__name">Devstral Medium</span
+													><span class="strip__figure model__meta"
+														><span class="mono">devstral-medium-latest</span></span
+													>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="magistral medium magistral-medium-latest mistral">
+													<span></span><span class="strip__name">Magistral Medium</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span
+														><span class="mono">magistral-medium-latest</span></span
+													>
+												</li>
+											</ul>
+										</div>
+										<div class="models__group" role="group" aria-labelledby="mp-ollama">
+											<h4 class="models__heading">
+												<span class="section-label" id="mp-ollama">Ollama</span
+												><span class="bay-heading__count">3</span>
+											</h4>
+											<ul>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="qwen2.5-coder:32b qwen2.5-coder:32b ollama">
+													<span></span><span class="strip__name">qwen2.5-coder:32b</span
+													><span class="strip__figure model__meta"><span class="mono">qwen2.5-coder:32b</span></span>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="llama3.1:8b llama3.1:8b ollama">
+													<span></span><span class="strip__name">llama3.1:8b</span
+													><span class="strip__figure model__meta"><span class="mono">llama3.1:8b</span></span>
+												</li>
+												<li
+													class="strip strip--row"
+													role="option"
+													aria-selected="false"
+													data-search="gpt-oss:20b gpt-oss:20b ollama">
+													<span></span><span class="strip__name">gpt-oss:20b</span
+													><span class="strip__figure model__meta"
+														><span class="role-meta">Reasoning</span><span class="mono">gpt-oss:20b</span></span
+													>
+												</li>
+											</ul>
+										</div>
+										<p class="models__empty" id="model-empty" hidden>No models match <span id="model-query"></span>.</p>
+									</div>
+								</div>
+							</div>
+						</section>
+
+						<section class="settings-section" id="sandbox" aria-labelledby="h-sandbox" tabindex="-1">
+							<h2 class="role-heading" id="h-sandbox">Sandbox</h2>
+
+							<div class="setting" role="radiogroup" aria-labelledby="s-profile" aria-describedby="s-profile-d">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-profile">Default profile</h3>
+									<span class="chip"><span>pau-285</span></span>
+								</div>
+								<p class="setting__desc" id="s-profile-d">
+									New sessions in this workspace start with this profile. You can change it for one session when you
+									start it.
+								</p>
+								<div class="setting__control choices">
+									<div class="choice choice--described">
+										<label class="toggle"
+											><input class="check" type="radio" name="profile" aria-describedby="p-none" /><span
+												class="choice__label"
+												><span class="cap">None</span></span
+											></label
+										>
+										<p class="choice__desc" id="p-none">Agents run with your full user access.</p>
+									</div>
+									<div class="choice choice--described">
+										<label class="toggle"
+											><input class="check" type="radio" name="profile" aria-describedby="p-ro" /><span
+												class="choice__label"
+												><span class="cap">Read only</span></span
+											></label
+										>
+										<p class="choice__desc" id="p-ro">
+											Agents read the workspace and write only the session’s temporary directory.
+										</p>
+									</div>
+									<div class="choice choice--described">
+										<label class="toggle"
+											><input class="check" type="radio" name="profile" checked aria-describedby="p-ww" /><span
+												class="choice__label"
+												><span class="cap">Workspace write</span></span
+											></label
+										>
+										<p class="choice__desc" id="p-ww">
+											Agents also write inside the workspace. Git metadata and agent settings stay read only.
+										</p>
+									</div>
+								</div>
+							</div>
+
+							<div class="setting">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-effective">Effective access</h3>
+									<span class="chip"><span>Pi in pau-285</span></span>
+								</div>
+								<p class="setting__desc">What a new Pi session here can reach with Workspace write, before it runs.</p>
+								<div class="setting__control">
+									<dl class="facts" aria-labelledby="s-effective">
+										<dt>Enforced by</dt>
+										<dd>Seatbelt on macOS 26.4</dd>
+										<dt>Writable</dt>
+										<dd class="mono">~/Projects/pau-worktrees/pau-285<br />$TMPDIR/pau-session-7f3a</dd>
+										<dt>Read only</dt>
+										<dd class="mono">.git, .pi/settings.json, .claude/settings.json</dd>
+										<dt>Denied</dt>
+										<dd class="mono">~/.ssh, ~/.aws, ~/.config/gh, ~/Library/Keychains</dd>
+										<dt>Network</dt>
+										<dd>Off. The Pau backend socket stays reachable.</dd>
+										<dt>Credentials</dt>
+										<dd><span class="mono">ANTHROPIC_API_KEY</span> to api.anthropic.com only</dd>
+										<dt>Outside the sandbox</dt>
+										<dd>Terminals and editors you open</dd>
+									</dl>
+									<div class="gaps">
+										<h4 class="gaps__title">
+											<svg class="icon"><use href="#i-alert" /></svg><span class="cap">Known gaps</span>
+										</h4>
+										<ul>
+											<li>Seatbelt cannot cap memory or CPU, so this profile sets no limits on macOS.</li>
+											<li>Reads outside the workspace are allowed except for the denied paths.</li>
+											<li>A process the agent detaches keeps the sandbox but outlives the session.</li>
+										</ul>
+									</div>
+									<p class="note">Permission prompts decide when Pi asks you. They never widen the sandbox.</p>
+									<div class="row-actions">
+										<a class="btn" href="#sandbox"
+											><svg class="icon"><use href="#i-shield" /></svg><span>Edit grants in Agent sandbox</span></a
+										>
+									</div>
+								</div>
+							</div>
+						</section>
+
+						<section class="settings-section" id="notifications" aria-labelledby="h-notifications" tabindex="-1">
+							<h2 class="role-heading" id="h-notifications">Notifications</h2>
+
+							<div class="setting" role="group" aria-labelledby="s-notify" aria-describedby="s-notify-d">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-notify">Notify me when a session</h3>
+									<span class="chip"><span>All workspaces</span></span>
+								</div>
+								<p class="setting__desc" id="s-notify-d">
+									Only for sessions you are not looking at. The bay marks them either way.
+								</p>
+								<div class="setting__control choices">
+									<label class="toggle"
+										><input class="check" type="checkbox" checked /><span>Waits for you</span></label
+									>
+									<label class="toggle"><input class="check" type="checkbox" checked /><span>Fails</span></label>
+									<label class="toggle"><input class="check" type="checkbox" /><span>Finishes a turn</span></label>
+									<label class="toggle"
+										><input class="check" type="checkbox" checked /><span>Stops responding</span></label
+									>
+								</div>
+							</div>
+
+							<div class="setting" role="group" aria-labelledby="s-badge">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-badge">App icon</h3>
+									<span class="chip"><span>All workspaces</span></span>
+								</div>
+								<p class="setting__desc">The badge counts sessions in Needs you.</p>
+								<div class="setting__control choices">
+									<label class="toggle"
+										><input class="check" type="checkbox" checked /><span>Show a badge on the app icon</span></label
+									>
+									<label class="toggle"
+										><input class="check" type="checkbox" /><span>Play a sound with each notification</span></label
+									>
+								</div>
+							</div>
+						</section>
+
+						<section class="settings-section" id="editor" aria-labelledby="h-editor" tabindex="-1">
+							<h2 class="role-heading" id="h-editor">Editor</h2>
+
+							<div class="setting" role="radiogroup" aria-labelledby="s-ext-editor" aria-describedby="s-ext-editor-d">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-ext-editor">Open files in</h3>
+									<span class="chip"><span>All workspaces</span></span>
+								</div>
+								<p class="setting__desc" id="s-ext-editor-d">
+									Where Open in editor sends a file or the workspace. Terminal editors open in a Pau terminal. Editors
+									run outside the sandbox.
+								</p>
+								<div class="setting__control choices">
+									<label class="toggle"
+										><input class="check" type="radio" name="ext-editor" /><span>System default</span></label
+									>
+									<label class="toggle"
+										><input class="check" type="radio" name="ext-editor" checked /><span>Zed</span></label
+									>
+									<label class="toggle"
+										><input class="check" type="radio" name="ext-editor" /><span>Visual Studio Code</span></label
+									>
+									<label class="toggle"
+										><input class="check" type="radio" name="ext-editor" /><span>Neovim in a terminal</span></label
+									>
+									<label class="toggle"
+										><input class="check" type="radio" name="ext-editor" /><span>Custom command</span></label
+									>
+								</div>
+							</div>
+
+							<div class="setting" aria-labelledby="s-editor-cmd" aria-describedby="s-editor-cmd-d" role="group">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-editor-cmd">Custom command</h3>
+									<span class="chip"><span>All workspaces</span></span>
+								</div>
+								<p class="setting__desc" id="s-editor-cmd-d">
+									Used when Open files in is Custom command. Pau fills in <code>{file}</code> and <code>{line}</code>.
+								</p>
+								<div class="setting__control">
+									<label class="field"
+										><svg class="icon"><use href="#i-prompt" /></svg
+										><input
+											class="field__input mono"
+											type="text"
+											value="hx {file}:{line}"
+											aria-labelledby="s-editor-cmd"
+									/></label>
+								</div>
+							</div>
+
+							<div class="setting" role="radiogroup" aria-labelledby="s-tab" aria-describedby="s-tab-d">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-tab">Tab width</h3>
+									<span class="chip"><span>All workspaces</span></span>
+								</div>
+								<p class="setting__desc" id="s-tab-d">
+									For the built-in editor and diffs. An <code>.editorconfig</code> in the workspace wins.
+								</p>
+								<div class="setting__control choices choices--row">
+									<label class="toggle"><input class="check" type="radio" name="tab" /><span>2</span></label>
+									<label class="toggle"><input class="check" type="radio" name="tab" checked /><span>4</span></label>
+									<label class="toggle"><input class="check" type="radio" name="tab" /><span>8</span></label>
+								</div>
+							</div>
+
+							<div class="setting" role="group" aria-labelledby="s-wrap">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-wrap">Long lines</h3>
+									<span class="chip"><span>All workspaces</span></span>
+								</div>
+								<p class="setting__desc">Off keeps each line on one row and scrolls sideways.</p>
+								<div class="setting__control choices">
+									<label class="toggle"
+										><input class="check" type="checkbox" /><span>Wrap long lines in the editor and diffs</span></label
+									>
+								</div>
+							</div>
+						</section>
+
+						<section class="settings-section" id="shell" aria-labelledby="h-shell" tabindex="-1">
+							<h2 class="role-heading" id="h-shell">Shell</h2>
+
+							<div class="setting">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-login">Login shell</h3>
+									<span class="chip"><span>This computer</span></span>
+								</div>
+								<p class="setting__desc">
+									Pau reads <code>PATH</code> from your login shell when it starts, so agents find the tools your
+									terminal finds. Terminals start this shell.
+								</p>
+								<div class="setting__control">
+									<dl class="facts" aria-labelledby="s-login">
+										<dt>Shell</dt>
+										<dd class="mono">/bin/zsh</dd>
+										<dt>PATH</dt>
+										<dd>14 directories, read at 09:41</dd>
+									</dl>
+									<div class="row-actions">
+										<button class="btn btn--quiet" type="button">
+											<svg class="icon"><use href="#i-retry" /></svg><span>Read again</span>
+										</button>
+									</div>
+								</div>
+							</div>
+
+							<div class="setting" role="group" aria-labelledby="s-env" aria-describedby="s-env-d">
+								<div class="setting__head">
+									<h3 class="setting__name cap" id="s-env">Workspace environment</h3>
+									<span class="chip"><span>pau-285</span></span>
+								</div>
+								<p class="setting__desc" id="s-env-d">
+									Sessions and terminals in this workspace start with the login shell environment. The sandbox still
+									decides which variables an agent sees.
+								</p>
+								<div class="setting__control choices">
+									<div class="choice choice--described">
+										<label class="toggle"
+											><input class="check" type="checkbox" checked aria-describedby="e-direnv" /><span
+												class="choice__label"
+												><span class="cap">Load .envrc with direnv</span></span
+											></label
+										>
+										<p class="choice__desc" id="e-direnv">
+											direnv 2.35 found. A blocked <code>.envrc</code> stays blocked until you run
+											<code>direnv allow</code>.
+										</p>
+									</div>
+								</div>
+							</div>
+						</section>
+
+						<section class="settings-section" id="keyboard" aria-labelledby="h-keyboard" tabindex="-1">
+							<h2 class="role-heading" id="h-keyboard">Keyboard</h2>
+							<p class="setting__desc" style="margin-bottom: var(--space-4)">
+								Where one of your Pi key bindings uses the same chord, the Pi binding wins and the shortcut says so.
+							</p>
+							<table class="shortcuts">
+								<thead>
+									<tr>
+										<th scope="col"><span class="section-label">Action</span></th>
+										<th scope="col"><span class="section-label">Keys</span></th>
+										<th scope="col"><span class="section-label">Works in</span></th>
+										<th scope="col"><span class="section-label">While typing</span></th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr>
+										<th colspan="4" scope="rowgroup"><span class="section-label">General</span></th>
+									</tr>
+									<tr>
+										<td>Open the command palette</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌘</span></kbd
+												><kbd><span>K</span></kbd></span
+											>
+										</td>
+										<td>All views</td>
+										<td>Works</td>
+									</tr>
+									<tr>
+										<td>Show keyboard shortcuts</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌘</span></kbd
+												><kbd><span>/</span></kbd></span
+											>
+										</td>
+										<td>All views</td>
+										<td>Works</td>
+									</tr>
+									<tr>
+										<td>Open settings</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌘</span></kbd
+												><kbd><span>,</span></kbd></span
+											>
+										</td>
+										<td>All views</td>
+										<td>Works</td>
+									</tr>
+									<tr>
+										<td>Open workspace</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌘</span></kbd
+												><kbd><span>O</span></kbd></span
+											>
+										</td>
+										<td>All views</td>
+										<td>Gives way</td>
+									</tr>
+									<tr>
+										<th colspan="4" scope="rowgroup"><span class="section-label">Sessions</span></th>
+									</tr>
+									<tr>
+										<td>New session</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌘</span></kbd
+												><kbd><span>N</span></kbd></span
+											>
+										</td>
+										<td>All views</td>
+										<td>Gives way</td>
+									</tr>
+									<tr>
+										<td>Next session</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌃</span></kbd
+												><kbd><span>Tab</span></kbd></span
+											>
+										</td>
+										<td>Sessions</td>
+										<td>Gives way</td>
+									</tr>
+									<tr>
+										<td>Previous session</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌃</span></kbd
+												><kbd><span>⇧</span></kbd
+												><kbd><span>Tab</span></kbd></span
+											>
+										</td>
+										<td>Sessions</td>
+										<td>Gives way</td>
+									</tr>
+									<tr>
+										<td>Go to session 1 to 9</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌘</span></kbd
+												><kbd><span>1</span></kbd
+												><span class="or">to</span><kbd><span>9</span></kbd></span
+											>
+										</td>
+										<td>Sessions</td>
+										<td>Gives way</td>
+									</tr>
+									<tr>
+										<td>Clear attention markers</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⇧</span></kbd
+												><kbd><span>Esc</span></kbd></span
+											>
+										</td>
+										<td>Sessions</td>
+										<td>Gives way</td>
+									</tr>
+									<tr>
+										<td>Focus the composer</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌘</span></kbd
+												><kbd><span>L</span></kbd></span
+											>
+										</td>
+										<td>Sessions</td>
+										<td>Works</td>
+									</tr>
+									<tr>
+										<td>Previous prompt</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌃</span></kbd
+												><kbd><span>⇧</span></kbd
+												><kbd><span>↑</span></kbd></span
+											>
+										</td>
+										<td>Sessions</td>
+										<td>Gives way</td>
+									</tr>
+									<tr>
+										<td>Next prompt</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌃</span></kbd
+												><kbd><span>⇧</span></kbd
+												><kbd><span>↓</span></kbd></span
+											>
+										</td>
+										<td>Sessions</td>
+										<td>Gives way</td>
+									</tr>
+									<tr>
+										<th colspan="4" scope="rowgroup"><span class="section-label">Navigation</span></th>
+									</tr>
+									<tr>
+										<td>Go back</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌘</span></kbd
+												><kbd><span>[</span></kbd></span
+											>
+										</td>
+										<td>All views</td>
+										<td>Gives way</td>
+									</tr>
+									<tr>
+										<td>Go forward</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌘</span></kbd
+												><kbd><span>]</span></kbd></span
+											>
+										</td>
+										<td>All views</td>
+										<td>Gives way</td>
+									</tr>
+									<tr>
+										<th colspan="4" scope="rowgroup"><span class="section-label">Panels</span></th>
+									</tr>
+									<tr>
+										<td>Toggle the session bay</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌘</span></kbd
+												><kbd><span>B</span></kbd></span
+											>
+										</td>
+										<td>All views</td>
+										<td>Works</td>
+									</tr>
+									<tr>
+										<td>Toggle the workspace column</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌘</span></kbd
+												><kbd><span>⌥</span></kbd
+												><kbd><span>B</span></kbd></span
+											>
+										</td>
+										<td>All views</td>
+										<td>Works</td>
+									</tr>
+									<tr>
+										<td>Toggle the terminal dock</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌃</span></kbd
+												><kbd><span>`</span></kbd></span
+											>
+										</td>
+										<td>All views</td>
+										<td>Works</td>
+									</tr>
+									<tr>
+										<th colspan="4" scope="rowgroup"><span class="section-label">Zoom</span></th>
+									</tr>
+									<tr>
+										<td>Zoom in</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌘</span></kbd
+												><kbd><span>=</span></kbd></span
+											>
+										</td>
+										<td>Desktop app</td>
+										<td>Works</td>
+									</tr>
+									<tr>
+										<td>Zoom out</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌘</span></kbd
+												><kbd><span>−</span></kbd></span
+											>
+										</td>
+										<td>Desktop app</td>
+										<td>Works</td>
+									</tr>
+									<tr>
+										<td>Actual size</td>
+										<td>
+											<span class="keys"
+												><kbd><span>⌘</span></kbd
+												><kbd><span>0</span></kbd></span
+											>
+										</td>
+										<td>Desktop app</td>
+										<td>Works</td>
+									</tr>
+								</tbody>
+							</table>
+						</section>
+
+						<section class="settings-section" id="about" aria-labelledby="h-about" tabindex="-1">
+							<h2 class="role-heading" id="h-about">About</h2>
+							<div class="setting">
+								<div class="setting__head"><h3 class="setting__name cap" id="s-version">This build</h3></div>
+								<div class="setting__control">
+									<dl class="facts" aria-labelledby="s-version">
+										<dt>Version</dt>
+										<dd class="mono">0.8.7</dd>
+										<dt>Build</dt>
+										<dd>Signed release for macOS, Apple silicon</dd>
+										<dt>Data directory</dt>
+										<dd class="mono">~/Library/Application Support/org.stormlightlabs.pau</dd>
+										<dt>Database schema</dt>
+										<dd class="mono">14</dd>
+									</dl>
+									<div class="row-actions">
+										<button class="btn" type="button">
+											<svg class="icon"><use href="#i-copy" /></svg><span>Copy details</span>
+										</button>
+										<button class="btn btn--quiet" type="button">
+											<svg class="icon"><use href="#i-folder" /></svg><span>Show data directory</span>
+										</button>
+									</div>
+								</div>
+							</div>
+							<div class="setting">
+								<div class="setting__head"><h3 class="setting__name cap" id="s-credits">Themes and fonts</h3></div>
+								<div class="setting__control">
+									<dl class="facts" aria-labelledby="s-credits">
+										<dt>Eldritch</dt>
+										<dd>From eldritch.nvim by eldritch-theme, MIT</dd>
+										<dt>Nord</dt>
+										<dd>By Arctic Ice Studio and Sven Greb, MIT</dd>
+										<dt>Iceberg</dt>
+										<dd>By cocopon, MIT</dd>
+										<dt>Catppuccin Mocha</dt>
+										<dd>By the Catppuccin organization, MIT</dd>
+										<dt>Vitesse Dark</dt>
+										<dd>By Anthony Fu, MIT</dd>
+										<dt>Overpass</dt>
+										<dd>By Delve Withrington and Red Hat, SIL Open Font License</dd>
+									</dl>
+								</div>
+							</div>
+						</section>
+					</div>
+				</div>
+			</main>
+		</div>
+
+		<script>
+			/* Marks the section in view as current, and filters the model list. */
+			const body = document.querySelector('.settings-body');
+			const links = [...document.querySelectorAll('.section-nav a')];
+			function current() {
+				const top = body.getBoundingClientRect().top + 64;
+				let id = 'appearance';
+				for (const s of body.querySelectorAll('.settings-section')) if (s.getBoundingClientRect().top <= top) id = s.id;
+				return id;
+			}
+			const sync = () => {
+				for (const a of links) a.setAttribute('aria-current', a.hash === '#' + current() ? 'true' : 'false');
+			};
+			body.addEventListener('scroll', sync, { passive: true });
+			window.addEventListener('hashchange', () => {
+				document.getElementById(location.hash.slice(1))?.focus({ preventScroll: true });
+				sync();
+			});
+			sync();
+
+			const filter = document.getElementById('model-filter');
+			const count = document.getElementById('model-count');
+			const empty = document.getElementById('model-empty');
+			filter.addEventListener('input', () => {
+				const q = filter.value.trim().toLowerCase();
+				let shown = 0;
+				for (const group of document.querySelectorAll('.models__group')) {
+					let inGroup = 0;
+					for (const opt of group.querySelectorAll('[role=option]')) {
+						const hit = !q || opt.dataset.search.includes(q);
+						opt.hidden = !hit;
+						if (hit) inGroup++;
+					}
+					group.hidden = inGroup === 0;
+					group.querySelector('.bay-heading__count').textContent = inGroup;
+					shown += inGroup;
+				}
+				count.textContent = shown === 1 ? '1 model' : shown + ' models';
+				empty.hidden = shown > 0;
+				document.getElementById('model-query').textContent = '“' + filter.value.trim() + '”';
+			});
+		</script>
+	</body>
+</html>

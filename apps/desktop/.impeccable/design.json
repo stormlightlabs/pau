@@ -1,0 +1,429 @@
+{
+	"schemaVersion": 2,
+	"generatedAt": "2026-11-15T20:34:08+00:00",
+	"title": "Design System: Pau",
+	"extensions": {
+		"colorMeta": {
+			"ground": {
+				"role": "neutral",
+				"displayName": "Blue-Slate Ground",
+				"canonical": "oklch(19.6% 0.017 268.8)",
+				"tonalRamp": ["#0a0b0d", "#232529", "#404248", "#5e6169", "#7e828d", "#a1a5ae", "#c6c9d0", "#eceef3"]
+			},
+			"bay": {
+				"role": "neutral",
+				"displayName": "Bay Slate",
+				"canonical": "oklch(22.4% 0.024 270.1)",
+				"tonalRamp": ["#0a0b0e", "#23252a", "#3f424a", "#5d616d", "#7d8291", "#a0a5b2", "#c5c9d3", "#eceef6"]
+			},
+			"raised": {
+				"role": "neutral",
+				"displayName": "Raised Slate",
+				"canonical": "oklch(26.8% 0.033 271.4)",
+				"tonalRamp": ["#0a0b0f", "#22252c", "#3e424d", "#5b6171", "#7b8296", "#9fa5b6", "#c4c9d7", "#ebeef8"]
+			},
+			"selected": {
+				"role": "neutral",
+				"displayName": "Selected Slate",
+				"canonical": "oklch(31.3% 0.039 271.7)",
+				"tonalRamp": ["#0a0b0f", "#22252e", "#3d414f", "#5b6074", "#7a819a", "#9ea4b9", "#c3c9d9", "#eaeefa"]
+			},
+			"overlay": {
+				"role": "neutral",
+				"displayName": "Overlay Slate",
+				"canonical": "oklch(28.0% 0.032 271.5)",
+				"tonalRamp": ["#0a0b0f", "#22252c", "#3e424d", "#5c6171", "#7b8296", "#9fa5b6", "#c4c9d6", "#ebeef8"]
+			},
+			"text": {
+				"role": "neutral",
+				"displayName": "Paper White",
+				"canonical": "oklch(93.4% 0.013 271.3)",
+				"tonalRamp": ["#0b0b0c", "#242528", "#404246", "#5f6167", "#7f828a", "#a3a5ab", "#c7c9ce", "#edeef2"]
+			},
+			"text-muted": {
+				"role": "neutral",
+				"displayName": "Mist",
+				"canonical": "oklch(71.7% 0.039 270.3)",
+				"tonalRamp": ["#090b0f", "#22252e", "#3d4250", "#5a6174", "#79829a", "#9da5b9", "#c3c9d9", "#eaeefa"]
+			},
+			"text-disabled": {
+				"role": "neutral",
+				"displayName": "Ash",
+				"canonical": "oklch(61.6% 0.037 272.5)",
+				"tonalRamp": ["#0a0b0f", "#22252d", "#3e414f", "#5b6073", "#7a8199", "#9ea4b8", "#c4c9d8", "#ebeef9"]
+			},
+			"text-on-accent": {
+				"role": "primary",
+				"displayName": "Green Ink",
+				"canonical": "oklch(17.6% 0.024 159.6)",
+				"tonalRamp": ["#090c0a", "#212723", "#3b453f", "#58655d", "#77877d", "#9ba9a1", "#c2ccc6", "#e9f1ec"]
+			},
+			"line": {
+				"role": "neutral",
+				"displayName": "Pane Rule",
+				"canonical": "oklch(31.2% 0.037 269.3)",
+				"tonalRamp": ["#090b0f", "#22252d", "#3d424f", "#5a6173", "#798299", "#9da5b8", "#c3c9d8", "#eaeef9"]
+			},
+			"line-control": {
+				"role": "neutral",
+				"displayName": "Control Edge",
+				"canonical": "oklch(55.0% 0.039 276.2)",
+				"tonalRamp": ["#0a0b0f", "#23242e", "#3e414f", "#5c6074", "#7c819a", "#9fa4b9", "#c5c8d9", "#ebeefa"]
+			},
+			"line-strong": {
+				"role": "neutral",
+				"displayName": "Strong Edge",
+				"canonical": "oklch(66.0% 0.035 273.9)",
+				"tonalRamp": ["#0a0b0f", "#23252d", "#3e414e", "#5c6072", "#7c8198", "#9fa4b7", "#c4c8d7", "#ebeef9"]
+			},
+			"accent": {
+				"role": "primary",
+				"displayName": "Eldritch Green",
+				"canonical": "oklch(84.5% 0.184 158.1)",
+				"tonalRamp": ["#001104", "#003015", "#005329", "#00793e", "#00a156", "#3dc081", "#87dfae", "#c4ffdb"]
+			},
+			"focus": {
+				"role": "secondary",
+				"displayName": "Eldritch Cyan",
+				"canonical": "oklch(79.5% 0.143 218.3)",
+				"tonalRamp": ["#000e15", "#002c39", "#004c62", "#006f8d", "#0094ba", "#3ab6d5", "#85d7ef", "#c2f9ff"]
+			},
+			"success": {
+				"role": "tertiary",
+				"displayName": "Success Green",
+				"canonical": "oklch(82.9% 0.164 156.5)",
+				"tonalRamp": ["#001005", "#002f16", "#00512a", "#00773f", "#009e58", "#54bd83", "#92ddaf", "#cafddc"]
+			},
+			"warning": {
+				"role": "tertiary",
+				"displayName": "Amber",
+				"canonical": "oklch(83.6% 0.121 77.5)",
+				"tonalRamp": ["#120900", "#332102", "#583c04", "#80590a", "#aa7818", "#c79d5c", "#e4c493", "#ffebc9"]
+			},
+			"danger": {
+				"role": "tertiary",
+				"displayName": "Rose",
+				"canonical": "oklch(70.0% 0.154 14.5)",
+				"tonalRamp": ["#180406", "#40141a", "#6c2831", "#9c3d4a", "#cd5565", "#e7838d", "#ffb0b6", "#ffdee1"]
+			},
+			"info": {
+				"role": "tertiary",
+				"displayName": "Sky",
+				"canonical": "oklch(77.2% 0.121 218.2)",
+				"tonalRamp": ["#000e14", "#002b36", "#004b5d", "#006e86", "#0092b2", "#55b4cd", "#92d5e9", "#caf7ff"]
+			},
+			"purple": {
+				"role": "tertiary",
+				"displayName": "Violet",
+				"canonical": "oklch(70.4% 0.147 293.1)",
+				"tonalRamp": ["#0c0819", "#271e41", "#45376e", "#65519f", "#876fd0", "#a897e8", "#cbbfff", "#efe8ff"]
+			}
+		},
+		"derivedColors": [
+			{ "name": "ask-wash", "value": "color-mix(in srgb, #38ef9d 6%, #202536)", "purpose": "Request card body." },
+			{
+				"name": "ask-head",
+				"value": "color-mix(in srgb, #38ef9d 15%, #202536)",
+				"purpose": "Request card head band, one tint above the body."
+			},
+			{
+				"name": "danger-wash",
+				"value": "color-mix(in srgb, #ee7180 14%, transparent)",
+				"purpose": "Danger button hover."
+			},
+			{
+				"name": "selection-text",
+				"value": "color-mix(in srgb, #04d1f9 32%, transparent)",
+				"purpose": "Text selection."
+			},
+			{ "name": "scrim", "value": "rgb(6 8 14 / 0.56)", "purpose": "Behind the narrow workspace overlay." },
+			{ "name": "syn-keyword", "value": "#a48cf2", "purpose": "Syntax: keywords." },
+			{ "name": "syn-type", "value": "color-mix(in srgb, #43c7e8 72%, #e6e9f2)", "purpose": "Syntax: types." },
+			{ "name": "syn-fn", "value": "color-mix(in srgb, #a48cf2 30%, #e6e9f2)", "purpose": "Syntax: functions." },
+			{ "name": "syn-string", "value": "color-mix(in srgb, #f5bf69 62%, #e6e9f2)", "purpose": "Syntax: strings." },
+			{ "name": "syn-const", "value": "#f5bf69", "purpose": "Syntax: constants." },
+			{ "name": "syn-macro", "value": "color-mix(in srgb, #ee7180 55%, #a48cf2)", "purpose": "Syntax: macros." },
+			{ "name": "syn-comment", "value": "#9aa3bd", "purpose": "Syntax: comments." },
+			{ "name": "ansi-red", "value": "#f16c75", "purpose": "Terminal ANSI red (Eldritch theme)." },
+			{ "name": "ansi-green", "value": "#37f499", "purpose": "Terminal ANSI green." },
+			{ "name": "ansi-yellow", "value": "#f1fc79", "purpose": "Terminal ANSI yellow." },
+			{ "name": "ansi-blue", "value": "#7081d0", "purpose": "Terminal ANSI blue." },
+			{ "name": "ansi-magenta", "value": "#a48cf2", "purpose": "Terminal ANSI magenta." },
+			{ "name": "ansi-cyan", "value": "#04d1f9", "purpose": "Terminal ANSI cyan." }
+		],
+		"typographyMeta": {
+			"title": { "displayName": "Title", "purpose": "Session or page title in the header." },
+			"heading": { "displayName": "Heading", "purpose": "Section titles and the permission question." },
+			"body": { "displayName": "Body", "purpose": "Transcript prose and descriptions, 75ch measure." },
+			"row": { "displayName": "Row", "purpose": "One-line rows and control text." },
+			"strip-name": { "displayName": "Strip name", "purpose": "First line of a strip; 13px when mono." },
+			"meta": { "displayName": "Meta", "purpose": "Agent names, figures, timestamps, chips." },
+			"label": { "displayName": "Section label", "purpose": "Uppercase bay and column headings with a mono count." },
+			"code": {
+				"displayName": "Code",
+				"purpose": "Tool output, diffs, terminal peek; ligatures off, tabular numerals."
+			}
+		},
+		"textRules": [
+			{
+				"name": "cap-centring",
+				"value": "text-box: trim-both cap alphabetic",
+				"fallback": "position: relative; top: 0.11em",
+				"purpose": "Single-line labels centre on their capitals."
+			},
+			{
+				"name": "truncation-ink",
+				"value": "padding-block: 6px; margin-block: -6px",
+				"purpose": "A trimmed label that truncates keeps its descenders."
+			}
+		],
+		"sizes": [
+			{ "name": "control-height", "value": "32px", "purpose": "Every button, field, picker and select." },
+			{ "name": "row-height", "value": "32px", "purpose": "One-line row strip." },
+			{ "name": "strip-height", "value": "56px", "purpose": "Two-line strip." },
+			{ "name": "header-height", "value": "48px", "purpose": "Every column header, one rule across the window." },
+			{ "name": "bay-width", "value": "344px", "narrow": "288px" },
+			{ "name": "workspace-width", "value": "304px" },
+			{ "name": "section-nav-width", "value": "224px" },
+			{ "name": "column-max", "value": "58rem" },
+			{ "name": "measure", "value": "75ch" }
+		],
+		"shadows": [
+			{
+				"name": "overlay",
+				"value": "0 12px 32px -8px rgb(4 6 12 / 0.72), 0 2px 6px rgb(4 6 12 / 0.4)",
+				"purpose": "Menus, popovers, tooltips, narrow workspace overlay."
+			},
+			{
+				"name": "lift",
+				"value": "0 12px 24px -8px rgb(4 6 12 / 0.72), 0 2px 6px rgb(4 6 12 / 0.4)",
+				"purpose": "A strip in flight during the arrival motion only."
+			},
+			{ "name": "selected-ring", "value": "inset 0 0 0 1px #6b7089", "purpose": "Selected strip, tab or view." },
+			{
+				"name": "waiting-halo",
+				"value": "0 0 0 3px color-mix(in srgb, #38ef9d 22%, transparent)",
+				"purpose": "Halo on the waiting mark."
+			},
+			{
+				"name": "focus-ring",
+				"value": "outline: 2px solid #04d1f9; outline-offset: 2px",
+				"purpose": "Keyboard focus; -2px offset inside strips."
+			}
+		],
+		"motion": [
+			{
+				"name": "ease-out",
+				"value": "cubic-bezier(0.16, 1, 0.3, 1)",
+				"purpose": "Default easing for state transitions and the arrival travel."
+			},
+			{
+				"name": "ease-settle",
+				"value": "cubic-bezier(0.2, 0, 0, 1)",
+				"purpose": "Lift and settle phases of the arrival."
+			},
+			{ "name": "duration-quick", "value": "120ms", "purpose": "Hover and press colour transitions." },
+			{ "name": "duration-move", "value": "240ms", "purpose": "Narrow workspace overlay slide." },
+			{
+				"name": "arrival-travel",
+				"value": "640ms",
+				"purpose": "The one authored moment: a strip lifts 4px and travels into Needs you."
+			},
+			{ "name": "arrival-displace", "value": "480ms, 90ms delay", "purpose": "Strips the arrival passes slide aside." },
+			{
+				"name": "arrival-reduced",
+				"value": "100ms background fade",
+				"purpose": "Reduced motion: instant place change, band fades in."
+			},
+			{ "name": "mark-spin", "value": "900ms linear infinite", "purpose": "Running mark only." }
+		],
+		"breakpoints": [
+			{
+				"name": "narrow",
+				"value": "900px",
+				"purpose": "Minimum supported width. 900 to 1199px: bay 288px, workspace becomes an overlay, rails become tabs."
+			},
+			{ "name": "wide", "value": "1200px", "purpose": "Bay, main and workspace side by side." }
+		],
+		"settingsSections": [
+			{
+				"name": "Appearance",
+				"purpose": "Theme cards, interface font, code font (Overpass Mono, JetBrains Mono, IBM Plex Mono), text size, motion."
+			},
+			{ "name": "Agents", "purpose": "Readiness per agent with its fix, and the default model." },
+			{
+				"name": "Sandbox",
+				"purpose": "Default profile and effective access as a summary; grants are edited in the Agent sandbox view."
+			},
+			{
+				"name": "Notifications",
+				"purpose": "One checkbox per event (waits for you, fails, finishes a turn, stops responding), then badge and sound."
+			},
+			{
+				"name": "Editor",
+				"purpose": "Where Open in editor sends a file (system default, detected editor, terminal editor, custom command), tab width, long-line wrap."
+			},
+			{
+				"name": "Shell",
+				"purpose": "Login shell and its PATH with Read again, and the workspace environment including direnv."
+			},
+			{ "name": "Keyboard", "purpose": "Read-only shortcut table." },
+			{ "name": "About", "purpose": "Build details and theme and font credits." }
+		]
+	},
+	"components": [
+		{
+			"name": "Default Button",
+			"kind": "button",
+			"refersTo": "button",
+			"description": "Raised 32px button for every action that is not the surface's primary.",
+			"html": "<button class=\"ds-btn\"><span>Allow for session</span><kbd class=\"ds-kbd\">A</kbd></button>",
+			"css": ".ds-btn { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border: 1px solid #6b7089; border-radius: 3px; background: #202536; color: #e6e9f2; font: 500 14px/16px Overpass, ui-sans-serif, sans-serif; cursor: pointer; transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1), border-color 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn > span { text-box: trim-both cap alphabetic; } .ds-btn:hover { background: #2a3045; border-color: #8b91a8; } .ds-btn:active { background: #171b27; } .ds-btn:focus-visible { outline: 2px solid #04d1f9; outline-offset: 2px; } .ds-kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 4px; margin-right: -4px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 3px; font: 11px/1 'Overpass Mono', ui-monospace, monospace; }"
+		},
+		{
+			"name": "Primary Button",
+			"kind": "button",
+			"refersTo": "button-primary",
+			"description": "The one green action a surface may have, such as Save, Start a session or Allow once.",
+			"html": "<button class=\"ds-btn-primary\"><span>Allow once</span><kbd class=\"ds-kbd\">Y</kbd></button>",
+			"css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border: 1px solid #38ef9d; border-radius: 3px; background: #38ef9d; color: #07140d; font: 600 14px/16px Overpass, ui-sans-serif, sans-serif; cursor: pointer; transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-primary > span { text-box: trim-both cap alphabetic; } .ds-btn-primary:hover { background: color-mix(in srgb, #38ef9d 86%, white); border-color: color-mix(in srgb, #38ef9d 86%, white); } .ds-btn-primary:active { background: color-mix(in srgb, #38ef9d 88%, black); } .ds-btn-primary:focus-visible { outline: 2px solid #04d1f9; outline-offset: 2px; } .ds-kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 4px; margin-right: -4px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 3px; font: 11px/1 'Overpass Mono', ui-monospace, monospace; }"
+		},
+		{
+			"name": "Danger Button",
+			"kind": "button",
+			"refersTo": "button-danger",
+			"description": "Ends something, such as Stop. Kept apart from the other actions.",
+			"html": "<button class=\"ds-btn-danger\"><svg viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><rect x=\"4\" y=\"4\" width=\"8\" height=\"8\" rx=\"1\"/></svg><span>Stop</span></button>",
+			"css": ".ds-btn-danger { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border: 1px solid color-mix(in srgb, #ee7180 60%, #171b27); border-radius: 3px; background: transparent; color: #ee7180; font: 500 14px/16px Overpass, ui-sans-serif, sans-serif; cursor: pointer; transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-danger > span { text-box: trim-both cap alphabetic; } .ds-btn-danger svg { margin-inline: -2px; } .ds-btn-danger:hover { background: color-mix(in srgb, #ee7180 14%, transparent); border-color: #ee7180; color: color-mix(in srgb, #ee7180 80%, white); } .ds-btn-danger:focus-visible { outline: 2px solid #04d1f9; outline-offset: 2px; }"
+		},
+		{
+			"name": "Quiet Button",
+			"kind": "button",
+			"refersTo": "button-quiet",
+			"description": "Borderless header and toolbar action.",
+			"html": "<button class=\"ds-btn-quiet\"><svg viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"1.5\"/><path d=\"m5 7 2 1.5L5 10M8.5 10H11\"/></svg><span>Terminal</span></button>",
+			"css": ".ds-btn-quiet { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border: 1px solid transparent; border-radius: 3px; background: transparent; color: #9aa3bd; font: 500 14px/16px Overpass, ui-sans-serif, sans-serif; cursor: pointer; transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1), color 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-quiet > span { text-box: trim-both cap alphabetic; } .ds-btn-quiet svg { margin-inline: -2px; } .ds-btn-quiet:hover { background: #202536; color: #e6e9f2; } .ds-btn-quiet:focus-visible { outline: 2px solid #04d1f9; outline-offset: 2px; }"
+		},
+		{
+			"name": "Filter Field",
+			"kind": "input",
+			"refersTo": "field",
+			"description": "32px text field on the ground with a leading icon and trailing key cap.",
+			"html": "<label class=\"ds-field\"><svg viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><circle cx=\"7\" cy=\"7\" r=\"4.5\"/><path d=\"m10.5 10.5 3 3\"/></svg><input class=\"ds-field__input\" placeholder=\"Filter sessions\"><kbd class=\"ds-kbd\">/</kbd></label>",
+			"css": ".ds-field { display: flex; align-items: center; gap: 8px; width: 260px; height: 32px; padding: 0 8px 0 12px; border: 1px solid #6b7089; border-radius: 3px; background: #12151d; color: #9aa3bd; transition: border-color 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-field:hover { border-color: #8b91a8; } .ds-field:focus-within { border-color: #04d1f9; outline: 1px solid #04d1f9; } .ds-field__input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: none; color: #e6e9f2; font: 14px/16px Overpass, ui-sans-serif, sans-serif; outline: none; } .ds-field__input::placeholder { color: #9aa3bd; } .ds-kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 4px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 3px; font: 11px/1 'Overpass Mono', ui-monospace, monospace; }"
+		},
+		{
+			"name": "Session Strip",
+			"kind": "custom",
+			"refersTo": "strip",
+			"description": "The 56px two-line strip for every list of live things, shown as a Running and a Settled session.",
+			"html": "<div class=\"ds-bay\"><a class=\"ds-strip\" href=\"#\"><span class=\"ds-mark ds-mark--running\"></span><span class=\"ds-line\"><span class=\"ds-name\">Audit log shutdown drain</span><span class=\"ds-agent\">Claude Code</span></span><span class=\"ds-meta\">pau-63</span><span></span><span class=\"ds-line\"><span class=\"ds-state ds-mono\">cargo test -p pau-core audit</span></span><span class=\"ds-meta ds-mono\">12m</span></a><a class=\"ds-strip ds-strip--settled\" href=\"#\" aria-current=\"true\"><span class=\"ds-mark ds-mark--idle\"></span><span class=\"ds-line\"><span class=\"ds-name\">Theme contrast pass</span><span class=\"ds-agent\">Pi</span></span><span class=\"ds-meta\">pau-286</span><span></span><span class=\"ds-line\"><span class=\"ds-state\">Idle</span></span><span class=\"ds-meta ds-mono\">40m</span></a></div>",
+			"css": ".ds-bay { width: 344px; background: #171b27; font-family: Overpass, ui-sans-serif, sans-serif; } .ds-strip { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; grid-template-rows: 24px 24px; column-gap: 12px; align-items: center; height: 56px; padding: 4px 16px; color: #9aa3bd; text-decoration: none; transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-strip:hover { background: #202536; } .ds-strip:focus-visible { outline: 2px solid #04d1f9; outline-offset: -2px; } .ds-strip[aria-current='true'] { background: #2a3045; box-shadow: inset 0 0 0 1px #6b7089; } .ds-line { display: flex; align-items: center; gap: 8px; min-width: 0; } .ds-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9aa3bd; font-size: 14px; line-height: 16px; font-weight: 500; text-box: trim-both cap alphabetic; padding-block: 6px; margin-block: -6px; } .ds-strip--settled .ds-name { font-weight: 400; } .ds-strip:hover .ds-name, .ds-strip[aria-current='true'] .ds-name { color: #e6e9f2; } .ds-agent, .ds-meta { flex: none; white-space: nowrap; font-size: 12px; line-height: 16px; color: #9aa3bd; text-box: trim-both cap alphabetic; } .ds-meta { justify-self: end; } .ds-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 16px; text-box: trim-both cap alphabetic; } .ds-mono { font-family: 'Overpass Mono', ui-monospace, monospace; font-size: 12px; font-variant-ligatures: none; } .ds-mark { width: 8px; height: 8px; border-radius: 50%; display: inline-block; } .ds-mark--running { border: 1.5px solid color-mix(in srgb, #43c7e8 35%, transparent); border-top-color: #43c7e8; animation: ds-spin 900ms linear infinite; } .ds-mark--idle { border: 1.5px solid #6b7089; } @keyframes ds-spin { to { transform: rotate(1turn); } } @media (prefers-reduced-motion: reduce) { .ds-mark--running { animation-duration: 1ms; animation-iteration-count: 1; } }"
+		},
+		{
+			"name": "Needs You Band",
+			"kind": "custom",
+			"refersTo": "strip-attention",
+			"description": "The signature: a green-headed bay section whose strips sit one step lifted at full contrast.",
+			"html": "<div class=\"ds-bay\"><h2 class=\"ds-heading\"><span>Needs you</span><span class=\"ds-count\">2</span></h2><a class=\"ds-strip\" href=\"#\"><span class=\"ds-mark ds-mark--waiting\"></span><span class=\"ds-line\"><span class=\"ds-name\">Sandbox Pi sessions</span><span class=\"ds-agent\">Pi</span></span><span class=\"ds-meta\">pau-62</span><span></span><span class=\"ds-line\"><span class=\"ds-state ds-tone-waiting\">Allow write to crates/server/src/sessions.rs</span></span><span class=\"ds-meta ds-mono\">4m</span></a><a class=\"ds-strip\" href=\"#\"><span class=\"ds-mark ds-mark--failed\"></span><span class=\"ds-line\"><span class=\"ds-name\">Terminal relay PTY</span><span class=\"ds-agent\">Claude Code</span></span><span class=\"ds-meta\">pau-50</span><span></span><span class=\"ds-line\"><span class=\"ds-state ds-tone-failed\">Failed: srt exited with status 1</span></span><span class=\"ds-meta ds-mono\">6m</span></a></div>",
+			"css": ".ds-bay { width: 344px; padding-bottom: 8px; background: #171b27; font-family: Overpass, ui-sans-serif, sans-serif; } .ds-heading { display: flex; align-items: center; justify-content: space-between; height: 40px; margin: 0; padding: 16px 16px 0; font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #38ef9d; } .ds-heading > span { text-box: trim-both cap alphabetic; } .ds-count { font-family: 'Overpass Mono', ui-monospace, monospace; font-size: 12px; letter-spacing: 0; } .ds-strip { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; grid-template-rows: 24px 24px; column-gap: 12px; align-items: center; height: 56px; padding: 4px 16px; background: #202536; color: #9aa3bd; text-decoration: none; transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-strip + .ds-strip { border-top: 1px solid #171b27; } .ds-strip:hover { background: #2a3045; } .ds-strip:focus-visible { outline: 2px solid #04d1f9; outline-offset: -2px; } .ds-line { display: flex; align-items: center; gap: 8px; min-width: 0; } .ds-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #e6e9f2; font-size: 14px; line-height: 16px; font-weight: 500; text-box: trim-both cap alphabetic; padding-block: 6px; margin-block: -6px; } .ds-agent, .ds-meta { flex: none; white-space: nowrap; font-size: 12px; line-height: 16px; color: #9aa3bd; text-box: trim-both cap alphabetic; } .ds-meta { justify-self: end; } .ds-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 16px; text-box: trim-both cap alphabetic; } .ds-mono { font-family: 'Overpass Mono', ui-monospace, monospace; font-variant-ligatures: none; } .ds-tone-waiting { color: #38ef9d; } .ds-tone-failed { color: #ee7180; } .ds-mark { width: 8px; height: 8px; border-radius: 50%; display: inline-block; } .ds-mark--waiting { background: #38ef9d; box-shadow: 0 0 0 3px color-mix(in srgb, #38ef9d 22%, transparent); } .ds-mark--failed { background: #ee7180; }"
+		},
+		{
+			"name": "Request Card",
+			"kind": "card",
+			"refersTo": "ask",
+			"description": "The one green surface on a view: a permission request waiting on the developer.",
+			"html": "<section class=\"ds-ask\"><div class=\"ds-ask__head\"><span class=\"ds-mark\"></span><h3 class=\"ds-ask__title\">Allow write to <code>crates/server/src/sessions.rs</code>?</h3></div><p class=\"ds-ask__body\">Pi wants to apply its second edit to this file.</p><div class=\"ds-ask__actions\"><button class=\"ds-btn ds-btn--primary\"><span>Allow once</span></button><button class=\"ds-btn\"><span>Allow for session</span></button><button class=\"ds-btn\"><span>Deny</span></button><span class=\"ds-aside\">Asked 4m ago</span></div></section>",
+			"css": ".ds-ask { display: grid; gap: 12px; width: 560px; padding: 0 16px 16px; border: 1px solid #38ef9d; border-radius: 3px; background: color-mix(in srgb, #38ef9d 6%, #202536); overflow: hidden; color: #e6e9f2; font: 14px/24px Overpass, ui-sans-serif, sans-serif; } .ds-ask > :not(.ds-ask__head) { margin-left: 28px; } .ds-ask__head { display: flex; align-items: flex-start; gap: 12px; margin: 0 -16px; padding: 16px; border-bottom: 1px solid color-mix(in srgb, #38ef9d 40%, #202536); background: color-mix(in srgb, #38ef9d 15%, #202536); } .ds-mark { width: 8px; height: 8px; margin: 1.6px 4px 0; flex: none; border-radius: 50%; background: #38ef9d; box-shadow: 0 0 0 3px color-mix(in srgb, #38ef9d 22%, transparent); } .ds-ask__title { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; text-box: trim-both cap alphabetic; } .ds-ask__title code { font: 500 14px 'Overpass Mono', ui-monospace, monospace; font-variant-ligatures: none; } .ds-ask__body { margin: 0; max-width: 75ch; color: #9aa3bd; } .ds-ask__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; } .ds-aside { margin-left: auto; font-size: 12px; color: #9aa3bd; } .ds-btn { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border: 1px solid #8b91a8; border-radius: 3px; background: #202536; color: #e6e9f2; font: 500 14px/16px Overpass, ui-sans-serif, sans-serif; cursor: pointer; } .ds-btn > span { text-box: trim-both cap alphabetic; } .ds-btn:hover { background: #2a3045; } .ds-btn--primary { background: #38ef9d; border-color: #38ef9d; color: #07140d; font-weight: 600; } .ds-btn--primary:hover { background: color-mix(in srgb, #38ef9d 86%, white); } .ds-btn:focus-visible { outline: 2px solid #04d1f9; outline-offset: 2px; }"
+		},
+		{
+			"name": "View Row",
+			"kind": "nav",
+			"refersTo": "button-icon",
+			"description": "Product navigation at the bay's foot: square icon buttons with tooltips; workspace views disable until a workspace opens.",
+			"html": "<nav class=\"ds-views\"><button class=\"ds-view\" aria-current=\"page\" aria-label=\"Sessions\"><svg viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><path d=\"M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4h0M2.5 8h0M2.5 12h0\"/></svg></button><button class=\"ds-view\" aria-label=\"Files\"><svg viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"><path d=\"M4 2h5l3 3v9H4z\"/></svg></button><button class=\"ds-view\" aria-disabled=\"true\" aria-label=\"Terminal\"><svg viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"1.5\"/><path d=\"m5 7 2 1.5L5 10\"/></svg></button></nav>",
+			"css": ".ds-views { display: flex; align-items: center; justify-content: space-between; width: 312px; height: 48px; padding: 0 16px; border-top: 1px solid #293044; background: #171b27; } .ds-view { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 1px solid transparent; border-radius: 3px; background: transparent; color: #9aa3bd; cursor: pointer; transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1), color 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-view:hover { background: #202536; color: #e6e9f2; } .ds-view[aria-current='page'] { background: #2a3045; box-shadow: inset 0 0 0 1px #6b7089; color: #e6e9f2; } .ds-view[aria-disabled='true'] { color: #7d849c; cursor: not-allowed; background: transparent; } .ds-view[aria-disabled='true'] svg { opacity: 0.5; } .ds-view:focus-visible { outline: 2px solid #04d1f9; outline-offset: 2px; }"
+		}
+	],
+	"narrative": {
+		"northStar": "The Strip Bay",
+		"overview": "Every session is a strip in a bay, racked by what it needs from you. The developer runs many Pi and Claude Code sessions at once, keyboard first, for long stretches at a desk. The window answers one question before any other: which sessions need me? A 344px bay on the left holds every session as a fixed-height strip, sorted into Needs you, Running and Settled. The open session fills the centre. A 304px workspace column on the right shows its changes, branch and terminal.\n\nThe system is Eldritch at shell scale: a blue-slate ground, the bay one tonal step above it, and green spent only where it means something. The surfaces are flat. Depth comes from tone, and shadows belong to overlays. Density is high and regular: one 8px construction grid sets every strip, column and gutter, and every list of live things shares one strip shape, so fields line up on one baseline across the bay, tool calls, changed files, terminals and resources.\n\nThe world refuses two things by name: the three-pane IDE (file tree left, tabbed editor, bottom panel) and the chat app (bubbles, the agent drawn as a person). Transcript prose sits in a 75ch column, tool calls render as inline strips, and a permission request is the focal point of the view.",
+		"keyCharacteristics": [
+			"Sessions racked by attention, with Needs you as the only lifted green band",
+			"Fixed-height strips with the same fields on one baseline in every list",
+			"Flat tonal layers on an 8px grid, with shadows only on overlays",
+			"Overpass at a fixed scale with cap-centred controls, Overpass Mono for paths, numbers and durations",
+			"Green on what needs you and on one primary action per surface, cyan on focus only"
+		],
+		"rules": [
+			{
+				"name": "The Needs You Rule",
+				"body": "Green means the developer is needed. It appears on what waits for them and on the one primary action a surface allows, such as Save, Start a session or Allow once. A second green element on a surface is a defect.",
+				"section": "colors"
+			},
+			{
+				"name": "The Marks Only Rule",
+				"body": "State colours live on marks and state lines, never on fills, row backgrounds or titles. Every mark pairs its colour with a shape (filled dot, spinning ring, dashed ring, diamond, square) and a text label.",
+				"section": "colors"
+			},
+			{
+				"name": "The Cyan Is Focus Rule",
+				"body": "Cyan draws the focus ring, the caret and the selection wash. Selection of a row or tab is neutral: the selected surface plus a control-strength ring.",
+				"section": "colors"
+			},
+			{
+				"name": "The Fixed Scale Rule",
+				"body": "A surface picks one of the roles above and never a size of its own. No text goes below 12px except the uppercase section label and key caps (11px).",
+				"section": "typography"
+			},
+			{
+				"name": "The Cap-Centring Rule",
+				"body": "Every single-line label in a control or row sits in its own element, and that element trims its box to the cap height and the baseline (`text-box: trim-both cap alphabetic`). Flex centring then lines the capitals up with icons and marks. Where `text-box` is missing, the label moves down by the measured Overpass offset (0.11em). A label that truncates gives its descenders back as 6px block padding and takes the same space back as negative margin, so its centre does not move.",
+				"section": "typography"
+			},
+			{
+				"name": "The Mono Means Data Rule",
+				"body": "Mono marks something the machine owns: a path, a command, a number, a duration. It is never decoration.",
+				"section": "typography"
+			},
+			{
+				"name": "The One Grid Rule",
+				"body": "Every strip, column and gutter lands on the 8px grid. A value off the grid needs a measured reason, such as the 6px descender padding.",
+				"section": "layout"
+			},
+			{
+				"name": "The 32px Control Rule",
+				"body": "Every button, field, picker and select is 32px tall with 14px text, in toolbars, rows, notices, cards and banners alike. A container that holds a button is at least 40px tall.",
+				"section": "layout"
+			},
+			{
+				"name": "The Shadows Cover Rule",
+				"body": "A shadow means something covers other content. Resting surfaces never carry one.",
+				"section": "elevation"
+			},
+			{
+				"name": "The Attention Rack Rule",
+				"body": "The bay racks strips by what they need, and only Needs you holds full voice. Running and Settled recede through colour and weight, never through opacity, so their text keeps AA contrast on the bay.",
+				"section": "components"
+			}
+		],
+		"dos": [
+			"**Do** put every list of live things in strips: 56px two-line or 32px one-line, lead, main, meta.",
+			"**Do** keep Needs you as the only lifted, green-headed section in the bay.",
+			"**Do** make every control 32px tall, including buttons in notices, cards and banners.",
+			"**Do** centre labels on their capitals with a trimmed text box.",
+			"**Do** set paths, commands, counts and durations in Overpass Mono with ligatures off.",
+			"**Do** pair every state colour with a mark shape and a text label.",
+			"**Do** break long paths after a slash and long identifiers at `::` and `_`."
+		],
+		"donts": [
+			"**Don't** use green for anything beyond what waits on the developer and the surface's one primary action.",
+			"**Don't** fill rows, titles or backgrounds with state colours.",
+			"**Don't** recede text with opacity. Use Mist and a lighter weight.",
+			"**Don't** put a shadow on a resting surface.",
+			"**Don't** add a second authored motion, or animate the transcript or the terminal canvas.",
+			"**Don't** draw the agent as a person or the transcript as chat bubbles.",
+			"**Don't** add editor boilerplate such as encoding, line endings or indent to the status bar. It shows only the cursor position and the save state."
+		]
+	}
+}

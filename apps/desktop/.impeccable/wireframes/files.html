@@ -1,0 +1,3499 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Pau Files</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link rel="stylesheet" href="pau.css" />
+		<style>
+			/* Files surface. Everything shared lives in pau.css.
+   States: default (an open file with unsaved edits), #external (the file
+   changed on disk while the edit is open), #empty (a workspace with no
+   files). */
+			.when-empty {
+				display: none;
+			}
+			:root:not(:has(#external:target)) .when-external {
+				display: none;
+			}
+			:root:has(#empty:target) .when-empty {
+				display: flex;
+			}
+			:root:has(#empty:target) .when-file {
+				display: none;
+			}
+			:root:has(#external:target) .when-not-external {
+				display: none;
+			}
+
+			/* The session this worktree belongs to, on a bar under the header: the
+   editor is a view into that session's workspace, not a separate editor.
+   It names the session, says what the session is doing with this file,
+   and leads back to it. */
+			.file-session {
+				display: flex;
+				align-items: center;
+				gap: var(--space-2);
+				height: var(--space-7);
+				padding: 0 var(--space-2) 0 var(--space-4);
+				border-bottom: 1px solid var(--line);
+				background: var(--bay);
+				flex: none;
+				white-space: nowrap;
+			}
+			.file-session > .mark {
+				margin-right: var(--space-1);
+			}
+			.file-session__name {
+				color: var(--text);
+				font-size: var(--size-14);
+				line-height: var(--leading-tight);
+				font-weight: 500;
+			}
+			.file-session__what {
+				min-width: 0;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				font-size: var(--size-13);
+				line-height: var(--leading-tight);
+				padding-block: 6px;
+				margin-block: -6px;
+			}
+			.file-session .figs {
+				margin-right: var(--space-2);
+			}
+
+			/* The open file's folder, after its name. */
+			.file-dir {
+				min-width: 0;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+				color: var(--text-muted);
+				font-size: var(--size-12);
+				line-height: var(--leading-tight);
+				text-box: trim-both cap alphabetic;
+			}
+			.page-header .state {
+				margin-left: var(--space-2);
+			}
+
+			/* ------------------------------------------------------------ file rail */
+			.rail-tools {
+				display: grid;
+				gap: var(--space-1);
+				padding: var(--space-3) var(--space-4) var(--space-1);
+				border-bottom: 1px solid var(--line);
+				flex: none;
+			}
+			.rail-tools .field {
+				margin-bottom: var(--space-1);
+			}
+			.rail-tools .toggle {
+				color: var(--text-muted);
+				font-size: var(--size-13);
+				min-height: 28px;
+			}
+			.rail-tools .toggle:has(:checked) {
+				color: var(--text);
+			}
+			.files-rail .workspace__body {
+				padding-bottom: var(--space-6);
+				scroll-padding-block: var(--space-8);
+			}
+
+			.tree {
+				margin: 0;
+				padding: 0;
+				list-style: none;
+			}
+			.tree > li {
+				display: block;
+			}
+			/* Tree rows are 32px strips. Depth moves the icon in 12px steps; the
+   figure column stays on the rail's right edge for every row, so change
+   counts line up down the whole tree. No guides and no chevrons: the
+   folder icon carries open or closed. */
+			.node {
+				padding-left: calc(var(--space-4) + var(--depth) * var(--space-3));
+			}
+			.node .strip__name {
+				font-family: var(--font-mono);
+				font-variant-ligatures: none;
+				font-size: var(--size-12);
+				color: var(--text);
+			}
+			.node--dir .strip__name {
+				font-weight: 500;
+			}
+			.strip.node--dir[aria-expanded='true'] > svg.icon,
+			[aria-expanded='true'] > .node--dir > svg.icon {
+				color: var(--text);
+			}
+			.node--ignored .strip__name,
+			.strip.node--ignored > svg.icon {
+				color: var(--text-disabled);
+			}
+			.node__figs {
+				display: flex;
+				gap: var(--space-2);
+			}
+			.node__changed {
+				color: var(--text);
+			}
+			.node__dot {
+				width: 6px;
+				height: 6px;
+				border-radius: 50%;
+				background: var(--text);
+				margin-right: 2px;
+			}
+			.workspace:not(:has(#show-hidden:checked)) .tree [data-hidden],
+			.workspace:not(:has(#show-ignored:checked)) .tree [data-ignored] {
+				display: none;
+			}
+			.tree [data-filtered] {
+				display: none !important;
+			}
+			.no-match {
+				display: none;
+			}
+			.no-match[data-show] {
+				display: block;
+			}
+
+			@media (max-width: 1199.98px) {
+				.file-dir {
+					display: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<i id="file" class="state-anchor" aria-hidden="true"></i>
+		<i id="external" class="state-anchor" aria-hidden="true"></i>
+		<i id="empty" class="state-anchor" aria-hidden="true"></i>
+
+		<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+			<symbol id="i-search" viewBox="0 0 16 16">
+				<circle cx="7" cy="7" r="4.25" />
+				<path d="m10.25 10.25 3 3" />
+			</symbol>
+			<symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9" /></symbol>
+			<symbol id="i-chev" viewBox="0 0 16 16"><path d="M4.5 6.5 8 10l3.5-3.5" /></symbol>
+			<symbol id="i-prompt" viewBox="0 0 16 16"><path d="m5 4.5 3.5 3.5L5 11.5" /></symbol>
+			<symbol id="i-file" viewBox="0 0 16 16">
+				<path d="M4.5 2.5h4.25L11.5 5.25v8.25h-7z" />
+				<path d="M8.5 2.5v3h3" />
+			</symbol>
+			<symbol id="i-term" viewBox="0 0 16 16">
+				<rect x="2.25" y="3" width="11.5" height="10" rx="1.5" />
+				<path d="m5 6.5 2 1.5-2 1.5M8.5 10h2.5" />
+			</symbol>
+			<symbol id="i-pen" viewBox="0 0 16 16">
+				<path d="m3 13 .75-2.75L10.5 3.5l2 2-6.75 6.75z" />
+				<path d="m9.25 4.75 2 2" />
+			</symbol>
+			<symbol id="i-find" viewBox="0 0 16 16">
+				<path d="M3 4h10M3 8h6M3 12h4" />
+				<circle cx="11.5" cy="11" r="1.75" />
+				<path d="m12.75 12.25 1 1" />
+			</symbol>
+			<symbol id="i-stop" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1" /></symbol>
+			<symbol id="i-export" viewBox="0 0 16 16"><path d="M8 2.5v7.5M5 5.25 8 2.5l3 2.75M3 9.5v4h10v-4" /></symbol>
+			<symbol id="i-send" viewBox="0 0 16 16"><path d="M3 8h9.5M8.5 4l4 4-4 4" /></symbol>
+			<symbol id="i-branch" viewBox="0 0 16 16">
+				<circle cx="5" cy="3.75" r="1.25" />
+				<circle cx="5" cy="12.25" r="1.25" />
+				<circle cx="11" cy="5.5" r="1.25" />
+				<path d="M5 5v6M11 6.75c0 2.75-6 2-6 4.25" />
+			</symbol>
+			<symbol id="i-panel" viewBox="0 0 16 16">
+				<rect x="2.25" y="3" width="11.5" height="10" rx="1.5" />
+				<path d="M10 3v10" />
+			</symbol>
+			<symbol id="i-close" viewBox="0 0 16 16"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7" /></symbol>
+			<symbol id="i-check" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7" /></symbol>
+			<symbol id="i-shield" viewBox="0 0 16 16">
+				<path d="M8 2.25 13 4v4c0 3-2.25 5-5 5.75C5.25 13 3 11 3 8V4z" />
+			</symbol>
+			<symbol id="i-open" viewBox="0 0 16 16"><path d="M9 3h4v4M13 3 7.5 8.5M11 9.5V13H3V5h3.5" /></symbol>
+			<symbol id="i-commit" viewBox="0 0 16 16">
+				<circle cx="8" cy="8" r="2.25" />
+				<path d="M2.5 8h3.25M10.25 8h3.25" />
+			</symbol>
+			<symbol id="i-back" viewBox="0 0 16 16"><path d="M12.5 8h-9M7.5 4l-4 4 4 4" /></symbol>
+			<symbol id="i-folder" viewBox="0 0 16 16">
+				<path
+					d="M2.5 4.25c0-.4.35-.75.75-.75h3l1.5 1.5h5c.4 0 .75.35.75.75v6.5c0 .4-.35.75-.75.75h-9.5a.75.75 0 0 1-.75-.75z" />
+			</symbol>
+			<symbol id="i-folder-open" viewBox="0 0 16 16">
+				<path d="M2.5 12V4.25c0-.4.35-.75.75-.75h3l1.5 1.5h4.5c.4 0 .75.35.75.75V7" />
+				<path d="M2.5 12.5 4.25 7.5h10l-1.75 5z" />
+			</symbol>
+			<symbol id="i-tree" viewBox="0 0 16 16">
+				<path d="M3 3.5h4M5 3.5v8.5h3M5 8h3" />
+				<rect x="9" y="6.5" width="4.5" height="3" rx=".75" />
+				<rect x="9" y="10.5" width="4.5" height="3" rx=".75" />
+			</symbol>
+			<symbol id="i-warn" viewBox="0 0 16 16">
+				<path d="M8 2.75 14 13.25H2z" />
+				<path d="M8 6.75v3M8 11.5v.01" />
+			</symbol>
+			<symbol id="i-comment" viewBox="0 0 16 16"><path d="M2.75 3.25h10.5v7.5H7.5l-3 2.5v-2.5H2.75z" /></symbol>
+			<symbol id="i-undo" viewBox="0 0 16 16">
+				<path d="M5.5 3.5 2.75 6.25 5.5 9" />
+				<path d="M3 6.25h6.25a3.25 3.25 0 0 1 0 6.5H6.5" />
+			</symbol>
+			<symbol id="i-minus" viewBox="0 0 16 16"><path d="M3.5 8h9" /></symbol>
+		</svg>
+
+		<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+			<symbol id="v-sessions" viewBox="0 0 16 16">
+				<path d="M6.5 4h7M6.5 8h7M6.5 12h7" />
+				<circle cx="3.25" cy="4" r="1" />
+				<circle cx="3.25" cy="8" r="1" />
+				<circle cx="3.25" cy="12" r="1" />
+			</symbol>
+			<symbol id="v-files" viewBox="0 0 16 16">
+				<path d="M4.5 2.5h4.25L11.5 5.25v8.25h-7z" />
+				<path d="M8.5 2.5v3h3" />
+			</symbol>
+			<symbol id="v-review" viewBox="0 0 16 16">
+				<rect x="2.25" y="2.25" width="11.5" height="11.5" rx="1.5" />
+				<path d="M8 4.75v3.5M6.25 6.5h3.5M6.25 10.75h3.5" />
+			</symbol>
+			<symbol id="v-terminal" viewBox="0 0 16 16">
+				<rect x="2.25" y="3" width="11.5" height="10" rx="1.5" />
+				<path d="m5 6.5 2 1.5-2 1.5M8.5 10h2.5" />
+			</symbol>
+			<symbol id="v-resources" viewBox="0 0 16 16">
+				<path d="M8 2.25 13.25 5v6L8 13.75 2.75 11V5z" />
+				<path d="M2.75 5 8 7.75 13.25 5M8 7.75v6" />
+			</symbol>
+			<symbol id="v-settings" viewBox="0 0 16 16">
+				<path d="M2.75 5h5.5M11.75 5h1.5M2.75 11h1.5M7.75 11h5.5" />
+				<circle cx="10" cy="5" r="1.75" />
+				<circle cx="6" cy="11" r="1.75" />
+			</symbol>
+		</svg>
+
+		<div class="shell">
+			<nav class="bay" aria-label="Sessions">
+				<div class="bay__top">
+					<label class="field">
+						<svg class="icon"><use href="#i-search" /></svg>
+						<input class="field__input" type="search" placeholder="Filter sessions" aria-label="Filter sessions" />
+						<kbd><span>/</span></kbd>
+					</label>
+					<button class="btn btn--collapse" type="button" aria-label="New session">
+						<svg class="icon"><use href="#i-plus" /></svg><span>New</span>
+					</button>
+				</div>
+				<div class="bay__scroll">
+					<section aria-labelledby="h-needs">
+						<h2 class="bay-heading bay-heading--attention">
+							<span class="section-label" id="h-needs">Needs you</span><span class="bay-heading__count">4</span>
+						</h2>
+						<ul class="bay__list bay__list--attention">
+							<li>
+								<a class="strip" href="shell-session.html" data-state="waiting" aria-current="true">
+									<span class="mark mark--waiting" role="img" aria-label="Waiting"></span>
+									<span class="strip__line"
+										><span class="strip__name">Sandbox Pi sessions</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-62</span>
+									<span></span>
+									<span class="strip__state tone-waiting">Allow write to crates/server/src/sessions.rs?</span>
+									<span class="strip__figure mono">4m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--waiting" role="img" aria-label="Waiting"></span>
+									<span class="strip__line"
+										><span class="strip__name">Resource scope picker</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-288</span>
+									<span></span>
+									<span class="strip__state tone-waiting">Run pnpm install in packages/ui?</span>
+									<span class="strip__figure mono">9m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--failed" role="img" aria-label="Failed"></span>
+									<span class="strip__line"
+										><span class="strip__name">Terminal relay PTY</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-50</span>
+									<span></span>
+									<span class="strip__state tone-failed">Failed: srt exited with status 1</span>
+									<span class="strip__figure mono">6m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--unresponsive" role="img" aria-label="Not responding"></span>
+									<span class="strip__line"
+										><span class="strip__name">Pi RPC timeout</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-282</span>
+									<span></span>
+									<span class="strip__state tone-unresponsive">Not responding for 1m</span>
+									<span class="strip__figure mono">1m</span>
+								</a>
+							</li>
+						</ul>
+					</section>
+
+					<section aria-labelledby="h-running">
+						<h2 class="bay-heading">
+							<span class="section-label" id="h-running">Running</span><span class="bay-heading__count">4</span>
+						</h2>
+						<ul class="bay__list">
+							<li>
+								<a class="strip" href="shell-session.html#running" data-state="running">
+									<span class="mark mark--running" role="img" aria-label="Running"></span>
+									<span class="strip__line"
+										><span class="strip__name">Audit log shutdown drain</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-63</span>
+									<span></span>
+									<span class="strip__state mono">cargo test -p pau-core audit</span>
+									<span class="strip__figure mono">12m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--running" role="img" aria-label="Running"></span>
+									<span class="strip__line"
+										><span class="strip__name">Design audit</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau</span>
+									<span></span>
+									<span class="strip__state">Reading dev/design/system.md</span>
+									<span class="strip__figure mono">31m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html" data-session="pau-290">
+									<span class="mark mark--running" role="img" aria-label="Running"></span>
+									<span class="strip__line"
+										><span class="strip__name">Diff gutter numbers</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-290</span>
+									<span></span>
+									<span class="strip__state">Editing packages/ui/src/diff/DiffGutter.svelte</span>
+									<span class="strip__figure mono">7m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--starting" role="img" aria-label="Starting"></span>
+									<span class="strip__line"
+										><span class="strip__name">Model list filter</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-291</span>
+									<span></span>
+									<span class="strip__state">Starting Claude Code</span>
+									<span class="strip__figure mono">8s</span>
+								</a>
+							</li>
+						</ul>
+					</section>
+
+					<section aria-labelledby="h-settled">
+						<h2 class="bay-heading">
+							<span class="section-label" id="h-settled">Settled</span><span class="bay-heading__count">6</span>
+						</h2>
+						<ul class="bay__list">
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--idle" role="img" aria-label="Idle"></span>
+									<span class="strip__line"
+										><span class="strip__name">Theme contrast pass</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-286</span>
+									<span></span>
+									<span class="strip__state">Idle</span>
+									<span class="strip__figure mono">40m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--idle" role="img" aria-label="Idle"></span>
+									<span class="strip__line"
+										><span class="strip__name">Token test flake</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-275</span>
+									<span></span>
+									<span class="strip__state">Idle</span>
+									<span class="strip__figure mono">2h</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--idle" role="img" aria-label="Idle"></span>
+									<span class="strip__line"
+										><span class="strip__name">Website changelog feed</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">thndrs</span>
+									<span></span>
+									<span class="strip__state">Idle</span>
+									<span class="strip__figure mono">3h</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--stopped" role="img" aria-label="Stopped"></span>
+									<span class="strip__line"
+										><span class="strip__name">Migration guard</span><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-279</span>
+									<span></span>
+									<span class="strip__state">Stopped</span>
+									<span class="strip__figure mono">5h</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--stopped" role="img" aria-label="Stopped"></span>
+									<span class="strip__line"
+										><span class="strip__name">Rewrite README</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">thndrs</span>
+									<span></span>
+									<span class="strip__state">Stopped</span>
+									<span class="strip__figure mono">1d</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--stopped" role="img" aria-label="Stopped"></span>
+									<span class="strip__line"
+										><span class="strip__name">Zellij smoke run</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau</span>
+									<span></span>
+									<span class="strip__state">Stopped</span>
+									<span class="strip__figure mono">1d</span>
+								</a>
+							</li>
+						</ul>
+					</section>
+				</div>
+				<ul class="views" aria-label="Views">
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="shell-session.html"
+							aria-label="Sessions"
+							aria-describedby="tip-sessions"
+							><svg class="icon"><use href="#v-sessions" /></svg
+							><span class="views__tip" role="tooltip" id="tip-sessions">Sessions</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="files.html"
+							aria-current="page"
+							aria-label="Files"
+							aria-describedby="tip-files"
+							><svg class="icon"><use href="#v-files" /></svg
+							><span class="views__tip" role="tooltip" id="tip-files">Files</span></a
+						>
+					</li>
+					<li>
+						<a class="btn btn--quiet btn--icon" href="review.html" aria-label="Review" aria-describedby="tip-review"
+							><svg class="icon"><use href="#v-review" /></svg
+							><span class="views__tip" role="tooltip" id="tip-review">Review</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="terminal.html"
+							aria-label="Terminal"
+							aria-describedby="tip-terminal"
+							><svg class="icon"><use href="#v-terminal" /></svg
+							><span class="views__tip" role="tooltip" id="tip-terminal">Terminal</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="resources.html"
+							aria-label="Pi resources"
+							aria-describedby="tip-resources"
+							><svg class="icon"><use href="#v-resources" /></svg
+							><span class="views__tip" role="tooltip" id="tip-resources">Pi resources</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="settings.html"
+							aria-label="Settings"
+							aria-describedby="tip-settings"
+							><svg class="icon"><use href="#v-settings" /></svg
+							><span class="views__tip" role="tooltip" id="tip-settings"
+								>Settings<kbd><span>⌘,</span></kbd></span
+							></a
+						>
+					</li>
+				</ul>
+			</nav>
+
+			<main class="main">
+				<header class="page-header page-header--back">
+					<a
+						class="btn btn--quiet btn--icon"
+						href="shell-session.html"
+						aria-label="Back to session"
+						title="Back to session"
+						><svg class="icon"><use href="#i-back" /></svg
+					></a>
+					<h1 class="header-title when-file">sessions.rs</h1>
+					<span class="file-dir mono when-file">crates/server/src</span>
+					<span class="state when-file"
+						><span class="mark mark--dirty" aria-hidden="true"></span><span>Unsaved</span></span
+					>
+					<h1 class="header-title when-empty">Files</h1>
+					<span class="header-spacer"></span>
+					<div class="header-actions">
+						<button class="btn btn--quiet btn--collapse when-file" type="button" aria-label="Open in Zed">
+							<svg class="icon"><use href="#i-open" /></svg><span>Open in Zed</span>
+						</button>
+						<input
+							class="workspace-switch visually-hidden"
+							type="checkbox"
+							id="ws-open"
+							aria-label="Show files"
+							aria-controls="workspace" />
+						<label class="btn btn--quiet btn--icon workspace-toggle" for="ws-open" title="Files"
+							><svg class="icon"><use href="#i-tree" /></svg
+						></label>
+						<span class="header-rule when-file" aria-hidden="true"></span>
+						<button class="btn btn--primary when-file" type="button">
+							<span>Save</span><kbd><span>⌘S</span></kbd>
+						</button>
+					</div>
+				</header>
+
+				<div class="notice-slot when-external" role="status">
+					<div class="notice notice--warning">
+						<svg class="icon"><use href="#i-warn" /></svg>
+						<div>
+							<p class="notice__title">sessions.rs changed on disk</p>
+							<p class="notice__body">
+								Pi wrote to this file 12s ago, while your edits were unsaved. Keep mine saves your version over Pi's.
+								Reload drops your edits.
+							</p>
+						</div>
+						<div class="notice__actions">
+							<button class="btn" type="button"><span>Keep mine</span></button>
+							<button class="btn" type="button"><span>Reload</span></button>
+						</div>
+					</div>
+				</div>
+
+				<div class="file-session when-file">
+					<span class="mark mark--waiting when-not-external" role="img" aria-label="Waiting"></span>
+					<span class="mark mark--running when-external" role="img" aria-label="Running"></span>
+					<span class="file-session__name cap">Sandbox Pi sessions</span>
+					<span class="strip__agent">Pi</span>
+					<span class="file-session__what cap tone-waiting when-not-external">waits to write this file</span>
+					<span class="file-session__what cap when-external">wrote this file 12s ago</span>
+					<span class="header-spacer"></span>
+					<span class="figs mono" aria-label="Pi's changes to this file"
+						><span class="diff-add">+48</span><span class="diff-del">−6</span></span
+					>
+					<a class="btn btn--quiet when-not-external" href="shell-session.html"><span>Answer in session</span></a>
+					<a class="btn btn--quiet when-external" href="review.html#file-sessions-rs"><span>Review changes</span></a>
+				</div>
+
+				<div
+					class="editor when-file"
+					tabindex="0"
+					role="textbox"
+					aria-multiline="true"
+					aria-label="crates/server/src/sessions.rs, unsaved">
+					<div class="code">
+						<div class="ln">
+							<i>188</i
+							><span
+								><span class="s-com"
+									>/// Starts agent processes for a workspace and reports each one as a session.</span
+								></span
+							>
+						</div>
+						<div class="ln">
+							<i>189</i><span><span class="s-com">///</span></span>
+						</div>
+						<div class="ln">
+							<i>190</i
+							><span
+								><span class="s-com"
+									>/// A launch either returns a running session or a [`StartError`] that names</span
+								></span
+							>
+						</div>
+						<div class="ln">
+							<i>191</i
+							><span
+								><span class="s-com"
+									>/// why it failed. It never returns a session whose extension is not ready.</span
+								></span
+							>
+						</div>
+						<div class="ln">
+							<i>192</i
+							><span
+								><span class="s-kw">pub</span> <span class="s-kw">struct</span>
+								<span class="s-ty">SessionLauncher</span> {</span
+							>
+						</div>
+						<div class="ln">
+							<i>193</i><span> sandbox: <span class="s-ty">Arc</span>&lt;<span class="s-ty">Sandbox</span>&gt;,</span>
+						</div>
+						<div class="ln">
+							<i>194</i><span> agents: <span class="s-ty">AgentRegistry</span>,</span>
+						</div>
+						<div class="ln">
+							<i>195</i
+							><span>
+								events: broadcast::<span class="s-ty">Sender</span>&lt;<span class="s-ty">SessionEvent</span>&gt;,</span
+							>
+						</div>
+						<div class="ln"><i>196</i><span>}</span></div>
+						<div class="ln"><i>197</i><span> </span></div>
+						<div class="ln">
+							<i>198</i><span><span class="s-kw">impl</span> <span class="s-ty">SessionLauncher</span> {</span>
+						</div>
+						<div class="ln">
+							<i>199</i
+							><span>
+								<span class="s-kw">pub</span> <span class="s-kw">fn</span> <span class="s-fn">new</span>(sandbox:
+								<span class="s-ty">Arc</span>&lt;<span class="s-ty">Sandbox</span>&gt;, agents:
+								<span class="s-ty">AgentRegistry</span>) -&gt; <span class="s-kw">Self</span> {</span
+							>
+						</div>
+						<div class="ln">
+							<i>200</i
+							><span>
+								<span class="s-kw">let</span> (events, _) = broadcast::<span class="s-fn">channel</span>(<span
+									class="s-const"
+									>EVENT_CAPACITY</span
+								>);</span
+							>
+						</div>
+						<div class="ln">
+							<i>201</i><span> <span class="s-kw">Self</span> { sandbox, agents, events }</span>
+						</div>
+						<div class="ln"><i>202</i><span> }</span></div>
+						<div class="ln"><i>203</i><span> </span></div>
+						<div class="ln">
+							<i>204</i
+							><span>
+								<span class="s-com">/// Spawns the agent inside the workspace sandbox and waits for its</span></span
+							>
+						</div>
+						<div class="ln">
+							<i>205</i
+							><span>
+								<span class="s-com">/// extension to report ready. A session that misses the wait is killed</span></span
+							>
+						</div>
+						<div class="ln">
+							<i>206</i
+							><span>
+								<span class="s-com"
+									>/// and reported as failed, so the bay never shows a session that cannot</span
+								></span
+							>
+						</div>
+						<div class="ln">
+							<i>207</i><span> <span class="s-com">/// take a prompt.</span></span>
+						</div>
+						<div class="ln">
+							<i>208</i
+							><span>
+								<span class="s-kw">pub</span> <span class="s-kw">async</span> <span class="s-kw">fn</span>
+								<span class="s-fn">start</span>(&amp;<span class="s-kw">self</span>, request:
+								<span class="s-ty">StartRequest</span>) -&gt; <span class="s-ty">Result</span>&lt;<span class="s-ty"
+									>Session</span
+								>, <span class="s-ty">StartError</span>&gt; {</span
+							>
+						</div>
+						<div class="ln">
+							<i>209</i
+							><span>
+								<span class="s-kw">let</span> agent = <span class="s-kw">self</span>.agents.<span class="s-fn">get</span
+								>(&amp;request.agent).<span class="s-fn">ok_or</span>(<span class="s-ty">StartError</span>::<span
+									class="s-ty"
+									>UnknownAgent</span
+								>)?;</span
+							>
+						</div>
+						<div class="ln">
+							<i>210</i
+							><span>
+								<span class="s-kw">let</span> command = agent.<span class="s-fn">launch_command</span
+								>(&amp;request.workspace)?;</span
+							>
+						</div>
+						<div class="ln"><i>211</i><span> </span></div>
+						<div class="ln">
+							<i>212</i
+							><span>
+								tracing::<span class="s-mac">info!</span>(agent = %request.agent, workspace = %request.workspace,
+								<span class="s-str">"starting session"</span>);</span
+							>
+						</div>
+						<div class="ln">
+							<i>213</i
+							><span>
+								<span class="s-kw">let</span> child = <span class="s-kw">self</span>.sandbox.<span class="s-fn"
+									>spawn</span
+								>(command)?;</span
+							>
+						</div>
+						<div class="ln ln--edited ln--current">
+							<i>214</i
+							><span>
+								<span class="s-kw">let</span> ready = <span class="s-fn">timeout</span>(request.ready_timeout.<span
+									class="s-fn"
+									>unwrap_or</span
+								>(<span class="s-const">READY_TIMEOUT</span>)<span class="caret" aria-hidden="true"></span>, child.<span
+									class="s-fn"
+									>wait_ready</span
+								>());</span
+							>
+						</div>
+						<div class="ln">
+							<i>215</i><span> <span class="s-kw">match</span> ready.<span class="s-kw">await</span> {</span>
+						</div>
+						<div class="ln">
+							<i>216</i
+							><span>
+								<span class="s-ty">Ok</span>(<span class="s-ty">Ok</span>(())) =&gt; <span class="s-ty">Ok</span>(<span
+									class="s-ty"
+									>Session</span
+								>::<span class="s-fn">running</span>(child)),</span
+							>
+						</div>
+						<div class="ln">
+							<i>217</i
+							><span>
+								<span class="s-ty">Ok</span>(<span class="s-ty">Err</span>(err)) =&gt;
+								<span class="s-ty">Err</span>(<span class="s-ty">StartError</span>::<span class="s-ty">Extension</span
+								>(err)),</span
+							>
+						</div>
+						<div class="ln">
+							<i>218</i><span> <span class="s-ty">Err</span>(_) =&gt; {</span>
+						</div>
+						<div class="ln">
+							<i>219</i><span> child.<span class="s-fn">kill</span>().<span class="s-kw">await</span>?;</span>
+						</div>
+						<div class="ln">
+							<i>220</i
+							><span>
+								<span class="s-kw">self</span>.events.<span class="s-fn">send</span>(<span class="s-ty"
+									>SessionEvent</span
+								>::<span class="s-fn">failed</span>(&amp;request,
+								<span class="s-str">"extension never reported ready"</span>)).<span class="s-fn">ok</span>();</span
+							>
+						</div>
+						<div class="ln">
+							<i>221</i
+							><span>
+								<span class="s-ty">Err</span>(<span class="s-ty">StartError</span>::<span class="s-ty">NotReady</span
+								>(<span class="s-const">READY_TIMEOUT</span>))</span
+							>
+						</div>
+						<div class="ln"><i>222</i><span> }</span></div>
+						<div class="ln"><i>223</i><span> }</span></div>
+						<div class="ln"><i>224</i><span> }</span></div>
+						<div class="ln"><i>225</i><span> </span></div>
+						<div class="ln">
+							<i>226</i
+							><span>
+								<span class="s-com">/// Resumes a native session by id. Pi and Claude Code keep their own</span></span
+							>
+						</div>
+						<div class="ln">
+							<i>227</i><span> <span class="s-com">/// session files; Pau only passes the id through.</span></span>
+						</div>
+						<div class="ln">
+							<i>228</i
+							><span>
+								<span class="s-kw">pub</span> <span class="s-kw">async</span> <span class="s-kw">fn</span>
+								<span class="s-fn">resume</span>(&amp;<span class="s-kw">self</span>, id: &amp;<span class="s-ty"
+									>NativeSessionId</span
+								>, workspace: &amp;<span class="s-ty">Path</span>) -&gt; <span class="s-ty">Result</span>&lt;<span
+									class="s-ty"
+									>Session</span
+								>, <span class="s-ty">StartError</span>&gt; {</span
+							>
+						</div>
+						<div class="ln">
+							<i>229</i
+							><span>
+								<span class="s-kw">let</span> uuid = <span class="s-ty">Uuid</span>::<span class="s-fn">parse_str</span
+								>(id.<span class="s-fn">as_str</span>()).<span class="s-fn">map_err</span>(|_|
+								<span class="s-ty">StartError</span>::<span class="s-ty">InvalidSessionId</span>)?;</span
+							>
+						</div>
+						<div class="ln">
+							<i>230</i
+							><span>
+								<span class="s-kw">let</span> request = <span class="s-ty">StartRequest</span>::<span class="s-fn"
+									>resume</span
+								>(uuid, workspace);</span
+							>
+						</div>
+						<div class="ln">
+							<i>231</i
+							><span>
+								<span class="s-kw">self</span>.<span class="s-fn">start</span>(request).<span class="s-kw"
+									>await</span
+								></span
+							>
+						</div>
+						<div class="ln"><i>232</i><span> }</span></div>
+						<div class="ln"><i>233</i><span> </span></div>
+						<div class="ln">
+							<i>234</i
+							><span>
+								<span class="s-kw">pub</span> <span class="s-kw">fn</span>
+								<span class="s-fn">subscribe</span>(&amp;<span class="s-kw">self</span>) -&gt; broadcast::<span
+									class="s-ty"
+									>Receiver</span
+								>&lt;<span class="s-ty">SessionEvent</span>&gt; {</span
+							>
+						</div>
+						<div class="ln">
+							<i>235</i><span> <span class="s-kw">self</span>.events.<span class="s-fn">subscribe</span>()</span>
+						</div>
+						<div class="ln"><i>236</i><span> }</span></div>
+						<div class="ln"><i>237</i><span>}</span></div>
+						<div class="ln"><i>238</i><span> </span></div>
+						<div class="ln">
+							<i>239</i
+							><span
+								><span class="s-attr">#[</span><span class="s-fn">derive</span>(<span class="s-ty">Debug</span>,
+								thiserror::<span class="s-ty">Error</span>)]</span
+							>
+						</div>
+						<div class="ln">
+							<i>240</i
+							><span
+								><span class="s-kw">pub</span> <span class="s-kw">enum</span>
+								<span class="s-ty">StartError</span> {</span
+							>
+						</div>
+						<div class="ln">
+							<i>241</i
+							><span>
+								<span class="s-attr">#[</span><span class="s-fn">error</span>(<span class="s-str"
+									>"no agent is registered under that name"</span
+								>)]</span
+							>
+						</div>
+						<div class="ln">
+							<i>242</i><span> <span class="s-ty">UnknownAgent</span>,</span>
+						</div>
+						<div class="ln">
+							<i>243</i
+							><span>
+								<span class="s-attr">#[</span><span class="s-fn">error</span>(<span class="s-str"
+									>"the session id is not a UUID"</span
+								>)]</span
+							>
+						</div>
+						<div class="ln">
+							<i>244</i><span> <span class="s-ty">InvalidSessionId</span>,</span>
+						</div>
+						<div class="ln">
+							<i>245</i
+							><span>
+								<span class="s-attr">#[</span><span class="s-fn">error</span>(<span class="s-str"
+									>"the sandbox refused the launch: {0}"</span
+								>)]</span
+							>
+						</div>
+						<div class="ln">
+							<i>246</i
+							><span>
+								<span class="s-ty">Sandbox</span>(<span class="s-attr">#[</span>from]
+								<span class="s-ty">SandboxError</span>),</span
+							>
+						</div>
+						<div class="ln">
+							<i>247</i
+							><span>
+								<span class="s-attr">#[</span><span class="s-fn">error</span>(<span class="s-str"
+									>"the extension failed before it was ready: {0}"</span
+								>)]</span
+							>
+						</div>
+						<div class="ln">
+							<i>248</i><span> <span class="s-ty">Extension</span>(<span class="s-ty">ExtensionError</span>),</span>
+						</div>
+						<div class="ln">
+							<i>249</i
+							><span>
+								<span class="s-attr">#[</span><span class="s-fn">error</span>(<span class="s-str"
+									>"the extension did not report ready within {0:?}"</span
+								>)]</span
+							>
+						</div>
+						<div class="ln">
+							<i>250</i><span> <span class="s-ty">NotReady</span>(<span class="s-ty">Duration</span>),</span>
+						</div>
+						<div class="ln">
+							<i>251</i><span> <span class="s-attr">#[</span><span class="s-fn">error</span>(transparent)]</span>
+						</div>
+						<div class="ln">
+							<i>252</i
+							><span>
+								<span class="s-ty">Io</span>(<span class="s-attr">#[</span>from] std::io::<span class="s-ty">Error</span
+								>),</span
+							>
+						</div>
+						<div class="ln"><i>253</i><span>}</span></div>
+					</div>
+				</div>
+				<div class="status-bar mono when-file">
+					<span>Ln 214, Col 58</span>
+					<span class="header-spacer"></span>
+					<span>Last saved 6m ago</span>
+				</div>
+
+				<section class="empty when-empty" aria-labelledby="empty-title">
+					<h2 class="role-heading" id="empty-title">This folder is empty</h2>
+					<p>
+						<span class="mono">~/Projects/scratch</span> has no files yet. Files appear here as soon as they exist on
+						disk, whether you create them or an agent does.
+					</p>
+					<div class="empty__actions">
+						<button class="btn btn--primary" type="button">
+							<svg class="icon"><use href="#i-plus" /></svg><span>Start a session here</span>
+						</button>
+						<button class="btn" type="button"><span>New file</span></button>
+					</div>
+				</section>
+			</main>
+
+			<label class="scrim" for="ws-open" aria-hidden="true"></label>
+
+			<aside class="workspace files-rail" id="workspace" aria-label="Files">
+				<div class="workspace__head">
+					<h2 class="pane-title mono when-file">pau-worktrees/pau-62</h2>
+					<h2 class="pane-title mono when-empty">~/Projects/scratch</h2>
+					<span class="header-spacer"></span>
+					<label class="btn btn--quiet btn--icon workspace__close" for="ws-open" title="Close files"
+						><svg class="icon"><use href="#i-close" /></svg
+					></label>
+				</div>
+				<div class="rail-tools">
+					<label class="field">
+						<svg class="icon"><use href="#i-search" /></svg>
+						<input
+							class="field__input"
+							id="tree-filter"
+							type="search"
+							placeholder="Filter files"
+							aria-label="Filter files" />
+						<kbd><span>⌘P</span></kbd>
+					</label>
+					<label class="toggle"
+						><input class="check" type="checkbox" id="show-hidden" /><span>Show hidden files</span></label
+					>
+					<label class="toggle"
+						><input class="check" type="checkbox" id="show-ignored" /><span>Show ignored files</span></label
+					>
+				</div>
+				<div class="workspace__body" id="tree-scroll">
+					<div class="when-file">
+						<h3 class="bay-heading">
+							<span class="section-label">Files</span><span class="bay-heading__count">4 changed</span>
+						</h3>
+						<ul class="tree" role="tree" aria-label="Files in pau-worktrees/pau-62">
+							<li role="treeitem" aria-level="1" aria-expanded="false" data-hidden data-ignored>
+								<a
+									class="strip strip--row node node--dir node--ignored"
+									style="--depth: 0"
+									href="#"
+									title=".direnv"
+									aria-label=".direnv"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">.direnv</span
+									><span class="strip__figure mono">2</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="1" aria-expanded="false" data-hidden>
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 0"
+									href="#"
+									title=".github"
+									aria-label=".github"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">.github</span
+									><span class="strip__figure mono">9</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="1" aria-expanded="false" data-hidden>
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 0"
+									href="#"
+									title=".pi"
+									aria-label=".pi"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">.pi</span
+									><span class="strip__figure mono">1</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="1" aria-expanded="false" data-hidden data-ignored>
+								<a
+									class="strip strip--row node node--dir node--ignored"
+									style="--depth: 0"
+									href="#"
+									title=".sandbox"
+									aria-label=".sandbox"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">.sandbox</span
+									><span class="strip__figure mono">1</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="1" aria-expanded="false" data-hidden>
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 0"
+									href="#"
+									title=".zed"
+									aria-label=".zed"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">.zed</span
+									><span class="strip__figure mono">1</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="1" aria-expanded="true">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 0"
+									href="#"
+									title="apps"
+									aria-label="apps"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder-open" /></svg><span class="strip__name">apps</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="2" aria-expanded="true">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 1"
+									href="#"
+									title="apps/desktop"
+									aria-label="apps/desktop"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder-open" /></svg><span class="strip__name">desktop</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="false" data-hidden data-ignored>
+								<a
+									class="strip strip--row node node--dir node--ignored"
+									style="--depth: 2"
+									href="#"
+									title="apps/desktop/.svelte-kit"
+									aria-label="apps/desktop/.svelte-kit"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">.svelte-kit</span
+									><span class="strip__figure mono">7</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="false" data-hidden data-ignored>
+								<a
+									class="strip strip--row node node--dir node--ignored"
+									style="--depth: 2"
+									href="#"
+									title="apps/desktop/.vitest-attachments"
+									aria-label="apps/desktop/.vitest-attachments"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">.vitest-attachments</span
+									><span class="strip__figure mono">1</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="false" data-ignored>
+								<a
+									class="strip strip--row node node--dir node--ignored"
+									style="--depth: 2"
+									href="#"
+									title="apps/desktop/build"
+									aria-label="apps/desktop/build"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">build</span
+									><span class="strip__figure mono">2</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="false" data-ignored>
+								<a
+									class="strip strip--row node node--dir node--ignored"
+									style="--depth: 2"
+									href="#"
+									title="apps/desktop/node_modules"
+									aria-label="apps/desktop/node_modules"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">node_modules</span
+									><span class="strip__figure mono">16</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 2"
+									href="#"
+									title="apps/desktop/scripts"
+									aria-label="apps/desktop/scripts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">scripts</span
+									><span class="strip__figure mono">3</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="true">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 2"
+									href="#"
+									title="apps/desktop/src"
+									aria-label="apps/desktop/src"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder-open" /></svg><span class="strip__name">src</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 3"
+									href="#"
+									title="apps/desktop/src/lib"
+									aria-label="apps/desktop/src/lib"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">lib</span
+									><span class="strip__figure mono">44</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="4" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 3"
+									href="#"
+									title="apps/desktop/src/routes"
+									aria-label="apps/desktop/src/routes"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">routes</span
+									><span class="strip__figure mono">6</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node"
+									style="--depth: 3"
+									href="#"
+									title="apps/desktop/src/app.html"
+									aria-label="apps/desktop/src/app.html"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">app.html</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node"
+									style="--depth: 3"
+									href="#"
+									title="apps/desktop/src/hooks.test.ts"
+									aria-label="apps/desktop/src/hooks.test.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">hooks.test.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node"
+									style="--depth: 3"
+									href="#"
+									title="apps/desktop/src/hooks.ts"
+									aria-label="apps/desktop/src/hooks.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">hooks.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 2"
+									href="#"
+									title="apps/desktop/src-tauri"
+									aria-label="apps/desktop/src-tauri"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">src-tauri</span
+									><span class="strip__figure mono">9</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="3">
+								<a
+									class="strip strip--row node"
+									style="--depth: 2"
+									href="#"
+									title="apps/desktop/package.json"
+									aria-label="apps/desktop/package.json"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">package.json</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3">
+								<a
+									class="strip strip--row node"
+									style="--depth: 2"
+									href="#"
+									title="apps/desktop/svelte.config.js"
+									aria-label="apps/desktop/svelte.config.js"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">svelte.config.js</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3">
+								<a
+									class="strip strip--row node"
+									style="--depth: 2"
+									href="#"
+									title="apps/desktop/tsconfig.json"
+									aria-label="apps/desktop/tsconfig.json"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">tsconfig.json</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3">
+								<a
+									class="strip strip--row node"
+									style="--depth: 2"
+									href="#"
+									title="apps/desktop/vite.config.ts"
+									aria-label="apps/desktop/vite.config.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">vite.config.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="2" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 1"
+									href="#"
+									title="apps/web"
+									aria-label="apps/web"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">web</span
+									><span class="strip__figure mono">7</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="2" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 1"
+									href="#"
+									title="apps/website"
+									aria-label="apps/website"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">website</span
+									><span class="strip__figure mono">10</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="1" aria-expanded="true">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 0"
+									href="#"
+									title="crates"
+									aria-label="crates"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder-open" /></svg><span class="strip__name">crates</span
+									><span class="strip__figure node__dot" role="img" aria-label="Contains changes"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="2" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 1"
+									href="#"
+									title="crates/agent"
+									aria-label="crates/agent"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">agent</span
+									><span class="strip__figure mono">3</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="2" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 1"
+									href="#"
+									title="crates/cli"
+									aria-label="crates/cli"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">cli</span
+									><span class="strip__figure mono">2</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="2" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 1"
+									href="#"
+									title="crates/core"
+									aria-label="crates/core"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">core</span
+									><span class="strip__figure mono">3</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="2" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 1"
+									href="#"
+									title="crates/pi"
+									aria-label="crates/pi"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">pi</span
+									><span class="strip__figure mono">3</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="2" aria-expanded="true">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 1"
+									href="#"
+									title="crates/server"
+									aria-label="crates/server"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder-open" /></svg><span class="strip__name">server</span
+									><span class="strip__figure node__dot" role="img" aria-label="Contains changes"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="true">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 2"
+									href="#"
+									title="crates/server/src"
+									aria-label="crates/server/src"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder-open" /></svg><span class="strip__name">src</span
+									><span class="strip__figure node__dot" role="img" aria-label="Contains changes"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4" aria-expanded="true">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 3"
+									href="#"
+									title="crates/server/src/sessions"
+									aria-label="crates/server/src/sessions"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder-open" /></svg><span class="strip__name">sessions</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 4"
+									href="#"
+									title="crates/server/src/sessions/claude"
+									aria-label="crates/server/src/sessions/claude"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">claude</span
+									><span class="strip__figure mono">1</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="5" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 4"
+									href="#"
+									title="crates/server/src/sessions/readiness"
+									aria-label="crates/server/src/sessions/readiness"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">readiness</span
+									><span class="strip__figure mono">1</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="5" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 4"
+									href="#"
+									title="crates/server/src/sessions/resources"
+									aria-label="crates/server/src/sessions/resources"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">resources</span
+									><span class="strip__figure mono">1</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="crates/server/src/sessions/claude.rs"
+									aria-label="crates/server/src/sessions/claude.rs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">claude.rs</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="crates/server/src/sessions/readiness.rs"
+									aria-label="crates/server/src/sessions/readiness.rs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">readiness.rs</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="crates/server/src/sessions/resources.rs"
+									aria-label="crates/server/src/sessions/resources.rs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">resources.rs</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="crates/server/src/sessions/tests.rs"
+									aria-label="crates/server/src/sessions/tests.rs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">tests.rs</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node"
+									style="--depth: 3"
+									href="#"
+									title="crates/server/src/build_info.rs"
+									aria-label="crates/server/src/build_info.rs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">build_info.rs</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node"
+									style="--depth: 3"
+									href="#"
+									title="crates/server/src/lib.rs"
+									aria-label="crates/server/src/lib.rs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">lib.rs</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node"
+									style="--depth: 3"
+									href="#"
+									title="crates/server/src/main.rs"
+									aria-label="crates/server/src/main.rs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">main.rs</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node node--changed"
+									style="--depth: 3"
+									href="#"
+									title="crates/server/src/sandbox.rs"
+									aria-label="crates/server/src/sandbox.rs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">sandbox.rs</span
+									><span class="strip__figure mono node__figs"
+										><span class="diff-add">+121</span><span class="diff-del">−9</span></span
+									></a
+								>
+							</li>
+							<li role="treeitem" aria-level="4" aria-selected="true">
+								<a
+									class="strip strip--row node node--changed"
+									style="--depth: 3"
+									href="#"
+									aria-current="true"
+									title="crates/server/src/sessions.rs"
+									aria-label="crates/server/src/sessions.rs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">sessions.rs</span
+									><span class="strip__figure mono node__figs"
+										><span class="diff-add">+48</span><span class="diff-del">−6</span></span
+									></a
+								>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node"
+									style="--depth: 3"
+									href="#"
+									title="crates/server/src/terminals.rs"
+									aria-label="crates/server/src/terminals.rs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">terminals.rs</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node"
+									style="--depth: 3"
+									href="#"
+									title="crates/server/src/watches.rs"
+									aria-label="crates/server/src/watches.rs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">watches.rs</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="true">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 2"
+									href="#"
+									title="crates/server/tests"
+									aria-label="crates/server/tests"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder-open" /></svg><span class="strip__name">tests</span
+									><span class="strip__figure node__dot" role="img" aria-label="Contains changes"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node node--changed"
+									style="--depth: 3"
+									href="#"
+									title="crates/server/tests/sessions.rs"
+									aria-label="crates/server/tests/sessions.rs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">sessions.rs</span
+									><span class="strip__figure mono node__figs"
+										><span class="diff-add">+38</span><span class="diff-del">−0</span></span
+									></a
+								>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node"
+									style="--depth: 3"
+									href="#"
+									title="crates/server/tests/token_input.rs"
+									aria-label="crates/server/tests/token_input.rs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">token_input.rs</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3">
+								<a
+									class="strip strip--row node"
+									style="--depth: 2"
+									href="#"
+									title="crates/server/build.rs"
+									aria-label="crates/server/build.rs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">build.rs</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3">
+								<a
+									class="strip strip--row node"
+									style="--depth: 2"
+									href="#"
+									title="crates/server/Cargo.toml"
+									aria-label="crates/server/Cargo.toml"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">Cargo.toml</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="2" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 1"
+									href="#"
+									title="crates/term"
+									aria-label="crates/term"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">term</span
+									><span class="strip__figure mono">4</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="1" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 0"
+									href="#"
+									title="dev"
+									aria-label="dev"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">dev</span
+									><span class="strip__figure mono">5</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="1" aria-expanded="true">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 0"
+									href="#"
+									title="docs"
+									aria-label="docs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder-open" /></svg><span class="strip__name">docs</span
+									><span class="strip__figure node__dot" role="img" aria-label="Contains changes"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="2">
+								<a
+									class="strip strip--row node"
+									style="--depth: 1"
+									href="#"
+									title="docs/sandbox.md"
+									aria-label="docs/sandbox.md"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">sandbox.md</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="2">
+								<a
+									class="strip strip--row node node--changed"
+									style="--depth: 1"
+									href="#"
+									title="docs/sessions.md"
+									aria-label="docs/sessions.md"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">sessions.md</span
+									><span class="strip__figure mono node__figs"
+										><span class="diff-add">+5</span><span class="diff-del">−16</span></span
+									></a
+								>
+							</li>
+							<li role="treeitem" aria-level="2">
+								<a
+									class="strip strip--row node"
+									style="--depth: 1"
+									href="#"
+									title="docs/workspaces.md"
+									aria-label="docs/workspaces.md"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">workspaces.md</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1" aria-expanded="false" data-ignored>
+								<a
+									class="strip strip--row node node--dir node--ignored"
+									style="--depth: 0"
+									href="#"
+									title="node_modules"
+									aria-label="node_modules"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">node_modules</span
+									><span class="strip__figure mono">16</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="1" aria-expanded="true">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 0"
+									href="#"
+									title="packages"
+									aria-label="packages"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder-open" /></svg><span class="strip__name">packages</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="2" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 1"
+									href="#"
+									title="packages/claude-bridge"
+									aria-label="packages/claude-bridge"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">claude-bridge</span
+									><span class="strip__figure mono">10</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="2" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 1"
+									href="#"
+									title="packages/pi-permissions"
+									aria-label="packages/pi-permissions"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">pi-permissions</span
+									><span class="strip__figure mono">11</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="2" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 1"
+									href="#"
+									title="packages/protocol"
+									aria-label="packages/protocol"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">protocol</span
+									><span class="strip__figure mono">5</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="2" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 1"
+									href="#"
+									title="packages/sandbox"
+									aria-label="packages/sandbox"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">sandbox</span
+									><span class="strip__figure mono">6</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="2" aria-expanded="true">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 1"
+									href="#"
+									title="packages/ui"
+									aria-label="packages/ui"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder-open" /></svg><span class="strip__name">ui</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="false" data-hidden>
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 2"
+									href="#"
+									title="packages/ui/.storybook"
+									aria-label="packages/ui/.storybook"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">.storybook</span
+									><span class="strip__figure mono">3</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="false" data-hidden data-ignored>
+								<a
+									class="strip strip--row node node--dir node--ignored"
+									style="--depth: 2"
+									href="#"
+									title="packages/ui/.vitest-attachments"
+									aria-label="packages/ui/.vitest-attachments"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">.vitest-attachments</span
+									><span class="strip__figure mono">11</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 2"
+									href="#"
+									title="packages/ui/licenses"
+									aria-label="packages/ui/licenses"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">licenses</span
+									><span class="strip__figure mono">1</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="false" data-ignored>
+								<a
+									class="strip strip--row node node--dir node--ignored"
+									style="--depth: 2"
+									href="#"
+									title="packages/ui/node_modules"
+									aria-label="packages/ui/node_modules"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">node_modules</span
+									><span class="strip__figure mono">26</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 2"
+									href="#"
+									title="packages/ui/scripts"
+									aria-label="packages/ui/scripts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">scripts</span
+									><span class="strip__figure mono">1</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="true">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 2"
+									href="#"
+									title="packages/ui/src"
+									aria-label="packages/ui/src"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder-open" /></svg><span class="strip__name">src</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 3"
+									href="#"
+									title="packages/ui/src/assets"
+									aria-label="packages/ui/src/assets"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">assets</span
+									><span class="strip__figure mono">2</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="4" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 3"
+									href="#"
+									title="packages/ui/src/fixtures"
+									aria-label="packages/ui/src/fixtures"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">fixtures</span
+									><span class="strip__figure mono">20</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="4" aria-expanded="true">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 3"
+									href="#"
+									title="packages/ui/src/lib"
+									aria-label="packages/ui/src/lib"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder-open" /></svg><span class="strip__name">lib</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/types"
+									aria-label="packages/ui/src/lib/types"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">types</span
+									><span class="strip__figure mono">10</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/AgentReadinessNotice.svelte"
+									aria-label="packages/ui/src/lib/AgentReadinessNotice.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg
+									><span class="strip__name">AgentReadinessNotice.svelte</span><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/anchored-placement.ts"
+									aria-label="packages/ui/src/lib/anchored-placement.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">anchored-placement.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/ApplicationShell.svelte"
+									aria-label="packages/ui/src/lib/ApplicationShell.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">ApplicationShell.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/builtin-commands.ts"
+									aria-label="packages/ui/src/lib/builtin-commands.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">builtin-commands.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/busy-indicator.svelte.ts"
+									aria-label="packages/ui/src/lib/busy-indicator.svelte.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg
+									><span class="strip__name">busy-indicator.svelte.ts</span><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/CapabilityCard.svelte"
+									aria-label="packages/ui/src/lib/CapabilityCard.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">CapabilityCard.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/clipboard.ts"
+									aria-label="packages/ui/src/lib/clipboard.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">clipboard.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/code-spans.ts"
+									aria-label="packages/ui/src/lib/code-spans.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">code-spans.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/command-completion.ts"
+									aria-label="packages/ui/src/lib/command-completion.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">command-completion.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/command-palette.ts"
+									aria-label="packages/ui/src/lib/command-palette.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">command-palette.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/CommandCompletion.svelte"
+									aria-label="packages/ui/src/lib/CommandCompletion.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg
+									><span class="strip__name">CommandCompletion.svelte</span><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/CommandPalette.svelte"
+									aria-label="packages/ui/src/lib/CommandPalette.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">CommandPalette.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/composer-history.ts"
+									aria-label="packages/ui/src/lib/composer-history.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">composer-history.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/composer-images.ts"
+									aria-label="packages/ui/src/lib/composer-images.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">composer-images.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/composer-keys.ts"
+									aria-label="packages/ui/src/lib/composer-keys.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">composer-keys.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/context-menu.ts"
+									aria-label="packages/ui/src/lib/context-menu.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">context-menu.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/context-usage.ts"
+									aria-label="packages/ui/src/lib/context-usage.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">context-usage.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/ContextMenu.svelte"
+									aria-label="packages/ui/src/lib/ContextMenu.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">ContextMenu.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/ContextMeter.svelte"
+									aria-label="packages/ui/src/lib/ContextMeter.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">ContextMeter.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/CopyButton.svelte"
+									aria-label="packages/ui/src/lib/CopyButton.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">CopyButton.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/DiagnosticsView.svelte"
+									aria-label="packages/ui/src/lib/DiagnosticsView.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">DiagnosticsView.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/DiffReview.svelte"
+									aria-label="packages/ui/src/lib/DiffReview.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">DiffReview.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/dismissal.ts"
+									aria-label="packages/ui/src/lib/dismissal.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">dismissal.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/editor-folding.ts"
+									aria-label="packages/ui/src/lib/editor-folding.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">editor-folding.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/EmptyState.svelte"
+									aria-label="packages/ui/src/lib/EmptyState.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">EmptyState.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/ExtensionUi.svelte"
+									aria-label="packages/ui/src/lib/ExtensionUi.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">ExtensionUi.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/external-links.ts"
+									aria-label="packages/ui/src/lib/external-links.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">external-links.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/file-mention.ts"
+									aria-label="packages/ui/src/lib/file-mention.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">file-mention.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/FileEditor.svelte"
+									aria-label="packages/ui/src/lib/FileEditor.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">FileEditor.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/focus-return.ts"
+									aria-label="packages/ui/src/lib/focus-return.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">focus-return.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/Icon.svelte"
+									aria-label="packages/ui/src/lib/Icon.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">Icon.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/KeyboardShortcutList.svelte"
+									aria-label="packages/ui/src/lib/KeyboardShortcutList.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg
+									><span class="strip__name">KeyboardShortcutList.svelte</span><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/KeyboardShortcuts.svelte"
+									aria-label="packages/ui/src/lib/KeyboardShortcuts.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg
+									><span class="strip__name">KeyboardShortcuts.svelte</span><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/keymap.svelte.ts"
+									aria-label="packages/ui/src/lib/keymap.svelte.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">keymap.svelte.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/LaunchSplash.svelte"
+									aria-label="packages/ui/src/lib/LaunchSplash.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">LaunchSplash.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/Markdown.svelte"
+									aria-label="packages/ui/src/lib/Markdown.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">Markdown.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/markdown.ts"
+									aria-label="packages/ui/src/lib/markdown.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">markdown.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/MarkdownBlock.svelte"
+									aria-label="packages/ui/src/lib/MarkdownBlock.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">MarkdownBlock.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/McpConfigurationView.svelte"
+									aria-label="packages/ui/src/lib/McpConfigurationView.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg
+									><span class="strip__name">McpConfigurationView.svelte</span><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/MentionCompletion.svelte"
+									aria-label="packages/ui/src/lib/MentionCompletion.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg
+									><span class="strip__name">MentionCompletion.svelte</span><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/MetaText.svelte"
+									aria-label="packages/ui/src/lib/MetaText.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">MetaText.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/ModelPicker.svelte"
+									aria-label="packages/ui/src/lib/ModelPicker.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">ModelPicker.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/PaneResizer.svelte"
+									aria-label="packages/ui/src/lib/PaneResizer.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">PaneResizer.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/pending-prompts.ts"
+									aria-label="packages/ui/src/lib/pending-prompts.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">pending-prompts.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/ProcessesView.svelte"
+									aria-label="packages/ui/src/lib/ProcessesView.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">ProcessesView.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/relative-time.ts"
+									aria-label="packages/ui/src/lib/relative-time.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">relative-time.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/resource-browser.ts"
+									aria-label="packages/ui/src/lib/resource-browser.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">resource-browser.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/resource-format.ts"
+									aria-label="packages/ui/src/lib/resource-format.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">resource-format.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/ResourceBrowser.svelte"
+									aria-label="packages/ui/src/lib/ResourceBrowser.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">ResourceBrowser.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/SandboxSettingsView.svelte"
+									aria-label="packages/ui/src/lib/SandboxSettingsView.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg
+									><span class="strip__name">SandboxSettingsView.svelte</span><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/Select.svelte"
+									aria-label="packages/ui/src/lib/Select.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">Select.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/session-tree.ts"
+									aria-label="packages/ui/src/lib/session-tree.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">session-tree.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/SessionPicker.svelte"
+									aria-label="packages/ui/src/lib/SessionPicker.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">SessionPicker.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/SessionResourceSummary.svelte"
+									aria-label="packages/ui/src/lib/SessionResourceSummary.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg
+									><span class="strip__name">SessionResourceSummary.svelte</span><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/SessionStatusLine.svelte"
+									aria-label="packages/ui/src/lib/SessionStatusLine.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg
+									><span class="strip__name">SessionStatusLine.svelte</span><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/SessionStatusMark.svelte"
+									aria-label="packages/ui/src/lib/SessionStatusMark.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg
+									><span class="strip__name">SessionStatusMark.svelte</span><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/SessionTree.svelte"
+									aria-label="packages/ui/src/lib/SessionTree.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">SessionTree.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/SessionView.svelte"
+									aria-label="packages/ui/src/lib/SessionView.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">SessionView.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/SettingsView.svelte"
+									aria-label="packages/ui/src/lib/SettingsView.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">SettingsView.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/StateChip.svelte"
+									aria-label="packages/ui/src/lib/StateChip.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">StateChip.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/terminal-links.ts"
+									aria-label="packages/ui/src/lib/terminal-links.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">terminal-links.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/TerminalPanel.svelte"
+									aria-label="packages/ui/src/lib/TerminalPanel.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">TerminalPanel.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/TerminalSurface.svelte"
+									aria-label="packages/ui/src/lib/TerminalSurface.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">TerminalSurface.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/TerminalView.svelte"
+									aria-label="packages/ui/src/lib/TerminalView.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">TerminalView.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/ThinkingLevelPicker.svelte"
+									aria-label="packages/ui/src/lib/ThinkingLevelPicker.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg
+									><span class="strip__name">ThinkingLevelPicker.svelte</span><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/tool-call-format.ts"
+									aria-label="packages/ui/src/lib/tool-call-format.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">tool-call-format.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/ToolCallGroup.svelte"
+									aria-label="packages/ui/src/lib/ToolCallGroup.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">ToolCallGroup.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/ToolCallView.svelte"
+									aria-label="packages/ui/src/lib/ToolCallView.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">ToolCallView.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/ToolOutput.svelte"
+									aria-label="packages/ui/src/lib/ToolOutput.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">ToolOutput.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/transcript-announcements.ts"
+									aria-label="packages/ui/src/lib/transcript-announcements.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg
+									><span class="strip__name">transcript-announcements.ts</span><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/transcript-disclosure.ts"
+									aria-label="packages/ui/src/lib/transcript-disclosure.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg
+									><span class="strip__name">transcript-disclosure.ts</span><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/transcript-follow.ts"
+									aria-label="packages/ui/src/lib/transcript-follow.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">transcript-follow.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/TranscriptSearch.svelte"
+									aria-label="packages/ui/src/lib/TranscriptSearch.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">TranscriptSearch.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/ViewHeader.svelte"
+									aria-label="packages/ui/src/lib/ViewHeader.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">ViewHeader.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/lib/WorkspaceFiles.svelte"
+									aria-label="packages/ui/src/lib/WorkspaceFiles.svelte"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">WorkspaceFiles.svelte</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 3"
+									href="#"
+									title="packages/ui/src/stories"
+									aria-label="packages/ui/src/stories"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">stories</span
+									><span class="strip__figure mono">45</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="4" aria-expanded="true">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 3"
+									href="#"
+									title="packages/ui/src/styles"
+									aria-label="packages/ui/src/styles"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder-open" /></svg><span class="strip__name">styles</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/styles/buttons.css"
+									aria-label="packages/ui/src/styles/buttons.css"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">buttons.css</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/styles/choices.css"
+									aria-label="packages/ui/src/styles/choices.css"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">choices.css</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/styles/disclosure.css"
+									aria-label="packages/ui/src/styles/disclosure.css"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">disclosure.css</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/styles/fonts.css"
+									aria-label="packages/ui/src/styles/fonts.css"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">fonts.css</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/styles/icons.css"
+									aria-label="packages/ui/src/styles/icons.css"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">icons.css</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/styles/notice.css"
+									aria-label="packages/ui/src/styles/notice.css"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">notice.css</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/styles/section-label.css"
+									aria-label="packages/ui/src/styles/section-label.css"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">section-label.css</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/styles/states.css"
+									aria-label="packages/ui/src/styles/states.css"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">states.css</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/styles/tokens.css"
+									aria-label="packages/ui/src/styles/tokens.css"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">tokens.css</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/styles/view-title.css"
+									aria-label="packages/ui/src/styles/view-title.css"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">view-title.css</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="5">
+								<a
+									class="strip strip--row node"
+									style="--depth: 4"
+									href="#"
+									title="packages/ui/src/styles/visually-hidden.css"
+									aria-label="packages/ui/src/styles/visually-hidden.css"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">visually-hidden.css</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 3"
+									href="#"
+									title="packages/ui/src/tests"
+									aria-label="packages/ui/src/tests"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">tests</span
+									><span class="strip__figure mono">86</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node"
+									style="--depth: 3"
+									href="#"
+									title="packages/ui/src/app.d.ts"
+									aria-label="packages/ui/src/app.d.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">app.d.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node"
+									style="--depth: 3"
+									href="#"
+									title="packages/ui/src/icons.ts"
+									aria-label="packages/ui/src/icons.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">icons.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node"
+									style="--depth: 3"
+									href="#"
+									title="packages/ui/src/index.ts"
+									aria-label="packages/ui/src/index.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">index.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node"
+									style="--depth: 3"
+									href="#"
+									title="packages/ui/src/motion.ts"
+									aria-label="packages/ui/src/motion.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">motion.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="4">
+								<a
+									class="strip strip--row node"
+									style="--depth: 3"
+									href="#"
+									title="packages/ui/src/theme.ts"
+									aria-label="packages/ui/src/theme.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">theme.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3" aria-expanded="false" data-ignored>
+								<a
+									class="strip strip--row node node--dir node--ignored"
+									style="--depth: 2"
+									href="#"
+									title="packages/ui/storybook-static"
+									aria-label="packages/ui/storybook-static"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">storybook-static</span
+									><span class="strip__figure mono">15</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="3">
+								<a
+									class="strip strip--row node"
+									style="--depth: 2"
+									href="#"
+									title="packages/ui/package.json"
+									aria-label="packages/ui/package.json"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">package.json</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3">
+								<a
+									class="strip strip--row node"
+									style="--depth: 2"
+									href="#"
+									title="packages/ui/THIRD_PARTY_NOTICES.md"
+									aria-label="packages/ui/THIRD_PARTY_NOTICES.md"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">THIRD_PARTY_NOTICES.md</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3">
+								<a
+									class="strip strip--row node"
+									style="--depth: 2"
+									href="#"
+									title="packages/ui/tsconfig.json"
+									aria-label="packages/ui/tsconfig.json"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">tsconfig.json</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3">
+								<a
+									class="strip strip--row node"
+									style="--depth: 2"
+									href="#"
+									title="packages/ui/uno.config.ts"
+									aria-label="packages/ui/uno.config.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">uno.config.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3">
+								<a
+									class="strip strip--row node"
+									style="--depth: 2"
+									href="#"
+									title="packages/ui/vite.config.ts"
+									aria-label="packages/ui/vite.config.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">vite.config.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="3">
+								<a
+									class="strip strip--row node"
+									style="--depth: 2"
+									href="#"
+									title="packages/ui/vitest.config.ts"
+									aria-label="packages/ui/vitest.config.ts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">vitest.config.ts</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1" aria-expanded="false">
+								<a
+									class="strip strip--row node node--dir"
+									style="--depth: 0"
+									href="#"
+									title="scripts"
+									aria-label="scripts"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">scripts</span
+									><span class="strip__figure mono">1</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="1" aria-expanded="false" data-ignored>
+								<a
+									class="strip strip--row node node--dir node--ignored"
+									style="--depth: 0"
+									href="#"
+									title="target"
+									aria-label="target"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-folder" /></svg><span class="strip__name">target</span
+									><span class="strip__figure mono">3</span></a
+								>
+							</li>
+							<li role="treeitem" aria-level="1" data-hidden>
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title=".env.example"
+									aria-label=".env.example"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">.env.example</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1" data-hidden>
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title=".envrc"
+									aria-label=".envrc"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">.envrc</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1" data-hidden>
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title=".gitignore"
+									aria-label=".gitignore"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">.gitignore</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1" data-hidden>
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title=".prettierignore"
+									aria-label=".prettierignore"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">.prettierignore</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="AGENTS.md"
+									aria-label="AGENTS.md"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">AGENTS.md</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="Cargo.lock"
+									aria-label="Cargo.lock"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">Cargo.lock</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="Cargo.toml"
+									aria-label="Cargo.toml"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">Cargo.toml</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="CHANGELOG.md"
+									aria-label="CHANGELOG.md"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">CHANGELOG.md</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="CLAUDE.md"
+									aria-label="CLAUDE.md"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">CLAUDE.md</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="eslint.config.mjs"
+									aria-label="eslint.config.mjs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">eslint.config.mjs</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="flake.lock"
+									aria-label="flake.lock"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">flake.lock</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="flake.nix"
+									aria-label="flake.nix"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">flake.nix</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="LICENSE-APACHE"
+									aria-label="LICENSE-APACHE"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">LICENSE-APACHE</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="LICENSE-MIT"
+									aria-label="LICENSE-MIT"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">LICENSE-MIT</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="package.json"
+									aria-label="package.json"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">package.json</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="pnpm-lock.yaml"
+									aria-label="pnpm-lock.yaml"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">pnpm-lock.yaml</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="pnpm-workspace.yaml"
+									aria-label="pnpm-workspace.yaml"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">pnpm-workspace.yaml</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="prettier.config.mjs"
+									aria-label="prettier.config.mjs"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">prettier.config.mjs</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="README.md"
+									aria-label="README.md"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">README.md</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+							<li role="treeitem" aria-level="1">
+								<a
+									class="strip strip--row node"
+									style="--depth: 0"
+									href="#"
+									title="tsconfig.json"
+									aria-label="tsconfig.json"
+									tabindex="-1"
+									><svg class="icon"><use href="#i-file" /></svg><span class="strip__name">tsconfig.json</span
+									><span class="strip__figure"></span
+								></a>
+							</li>
+						</ul>
+						<p class="rail-note no-match" id="no-match">No file names match <code id="no-match-q"></code>.</p>
+					</div>
+					<div class="when-empty" style="flex-direction: column">
+						<h3 class="bay-heading">
+							<span class="section-label">Files</span><span class="bay-heading__count">0</span>
+						</h3>
+						<p class="rail-note">No files yet.</p>
+					</div>
+				</div>
+			</aside>
+		</div>
+
+		<script>
+			// Wireframe behaviour only.
+			const strips = () => [...document.querySelectorAll('.bay .strip')];
+			const syncBay = () => {
+				strips().forEach((s, i) => s.toggleAttribute('aria-current', false));
+				if (location.hash !== '#empty') strips()[0].setAttribute('aria-current', 'true');
+			};
+			addEventListener('hashchange', syncBay);
+			syncBay();
+
+			// Keep the open file in view, as the app does when a file opens.
+			// The rail opens with the open file's top-level folder at the top, so the
+			// whole path to the file is in view.
+			const current = document.querySelector('.tree [aria-current="true"]');
+			if (current) {
+				const scroller = document.getElementById('tree-scroll');
+				const top = document.querySelector(
+					'.tree [aria-label="' + current.getAttribute('aria-label').split('/')[0] + '"]'
+				);
+				scroller.scrollTop = top.offsetTop - scroller.offsetTop;
+			}
+
+			// Filter by name or path; ancestors of a match stay visible.
+			const filter = document.getElementById('tree-filter');
+			const rows = [...document.querySelectorAll('.tree > li')];
+			filter.addEventListener('input', () => {
+				const q = filter.value.trim().toLowerCase();
+				const keep = new Set();
+				rows.forEach((li) => {
+					const path = li.firstElementChild.getAttribute('aria-label');
+					if (!q || path.toLowerCase().includes(q)) {
+						keep.add(path);
+						path.split('/').reduce((acc, part) => {
+							const p = acc ? acc + '/' + part : part;
+							keep.add(p);
+							return p;
+						}, '');
+					}
+				});
+				rows.forEach((li) =>
+					li.toggleAttribute('data-filtered', !keep.has(li.firstElementChild.getAttribute('aria-label')))
+				);
+				const none = q && keep.size === 0;
+				document.getElementById('no-match').toggleAttribute('data-show', !!none);
+				document.getElementById('no-match-q').textContent = filter.value;
+			});
+
+			// Arrow keys move through visible tree rows.
+			const tree = document.querySelector('.tree');
+			tree.addEventListener('keydown', (event) => {
+				if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+				const visible = [...tree.querySelectorAll('.strip')].filter((a) => a.offsetParent);
+				const next = visible[visible.indexOf(event.target) + (event.key === 'ArrowDown' ? 1 : -1)];
+				if (next) {
+					event.preventDefault();
+					next.focus();
+				}
+			});
+			if (current) current.setAttribute('tabindex', '0');
+
+			const workspaceSwitch = document.getElementById('ws-open');
+			document.addEventListener('keydown', (event) => {
+				if (event.key === 'Escape' && workspaceSwitch.checked) {
+					workspaceSwitch.checked = false;
+					workspaceSwitch.focus();
+				}
+			});
+		</script>
+	</body>
+</html>

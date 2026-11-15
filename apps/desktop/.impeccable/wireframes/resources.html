@@ -1,0 +1,1619 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Pau resources</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link rel="stylesheet" href="pau.css" />
+		<style>
+			/* Pi resources surface. Everything shared lives in pau.css.
+
+   States: default selects the writing skill. #confirm: the developer turned
+   writing off and Pau shows the file change before applying it. #mcp: the
+   github MCP server failed. #empty: a filter that matches nothing. Below
+   1200px the detail replaces the list: #confirm and #mcp show it there. */
+
+			:root:not(:has(#confirm:target)) .when-confirm,
+			:root:has(#confirm:target) .when-not-confirm,
+			:root:not(:has(#mcp:target)) .when-mcp,
+			:root:has(#mcp:target) .when-not-mcp,
+			:root:not(:has(#empty:target)) .when-empty,
+			:root:has(#empty:target) .when-not-empty {
+				display: none;
+			}
+
+			/* Selection follows the state. */
+			:root:has(#mcp:target) .res[data-id='writing'],
+			:root:has(#empty:target) .res[data-id='writing'] {
+				background: none;
+				box-shadow: none;
+			}
+			:root:has(#mcp:target) .res[data-id='writing'] > svg.icon {
+				color: var(--text-muted);
+			}
+			:root:has(#mcp:target) .res[data-id='github'] {
+				background: var(--selected);
+				box-shadow: inset 0 0 0 1px var(--line-control);
+			}
+
+			.res-body {
+				display: grid;
+				grid-template-columns: var(--section-nav-width) minmax(0, 1fr) 400px;
+				flex: 1;
+				min-height: 0;
+			}
+
+			/* ------------------------------------------------------------ the list */
+
+			.res-list {
+				display: flex;
+				flex-direction: column;
+				min-width: 0;
+				min-height: 0;
+				border-right: 1px solid var(--line);
+			}
+			.res-list__tools {
+				display: flex;
+				align-items: center;
+				gap: var(--space-2);
+				height: var(--strip-height);
+				padding: 0 var(--space-4);
+				border-bottom: 1px solid var(--line);
+				flex: none;
+			}
+			.res-list__tools .field {
+				flex: 1;
+			}
+			.res-list__tools .narrow-only {
+				display: none;
+			}
+			.res-list__scroll {
+				flex: 1;
+				min-height: 0;
+				overflow-y: auto;
+				padding-bottom: var(--space-4);
+			}
+			.res-list ul {
+				margin: 0;
+				padding: 0;
+				list-style: none;
+			}
+			.res-list .empty {
+				padding: var(--space-6) var(--space-4);
+			}
+
+			/* A resource is an icon strip: name and source, scope on the right;
+   description below, and one state in words at the end. */
+			.res .strip__state {
+				color: var(--text-muted);
+			}
+			.res .chip {
+				justify-self: end;
+			}
+			.res .strip__figure.tone-on {
+				color: var(--text);
+			}
+
+			/* ------------------------------------------------------------ detail */
+
+			.detail {
+				min-width: 0;
+				min-height: 0;
+				overflow-y: auto;
+				background: var(--bay);
+			}
+			.detail__inner {
+				display: grid;
+				gap: var(--space-5);
+				padding: var(--space-5) var(--space-4) var(--space-6);
+			}
+			.detail__back {
+				justify-self: start;
+				margin: 0 0 calc(var(--space-2) * -1) calc(var(--space-2) * -1);
+			}
+			.detail__head {
+				display: flex;
+				align-items: center;
+				gap: var(--space-3);
+				min-width: 0;
+			}
+			.detail__head > svg.icon {
+				color: var(--text-muted);
+			}
+			.detail__title {
+				margin: 0;
+				min-width: 0;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+				font-size: var(--size-16);
+				line-height: var(--leading-prose);
+				font-weight: 600;
+				text-box: trim-both cap alphabetic;
+				padding-block: 6px;
+				margin-block: -6px;
+			}
+			.detail__head .state {
+				margin-left: auto;
+			}
+			.detail__lede {
+				margin: calc(var(--space-3) * -1) 0 0 calc(16px + var(--space-3));
+				color: var(--text-muted);
+			}
+			.detail .facts {
+				--facts-label: 104px;
+			}
+			.facts .row-line {
+				display: flex;
+				align-items: center;
+				gap: var(--space-2);
+				min-height: 20px;
+			}
+			.facts .row-line .chip {
+				flex: none;
+			}
+			.detail__rule {
+				height: 1px;
+				margin: 0;
+				border: 0;
+				background: var(--line);
+			}
+			.detail__actions {
+				display: flex;
+				flex-wrap: wrap;
+				gap: var(--space-2);
+			}
+			.detail__actions .btn--danger {
+				margin-left: auto;
+			}
+
+			.log-tail {
+				margin: 0;
+				padding: var(--space-2) var(--space-3);
+				border: 1px solid var(--line);
+				border-radius: var(--radius-control);
+				background: var(--ground);
+				color: var(--text-muted);
+				font-size: var(--size-12);
+				line-height: var(--leading-ui);
+				white-space: pre-wrap;
+				overflow-wrap: anywhere;
+			}
+			.log-tail b {
+				font-weight: 400;
+				color: var(--danger);
+			}
+			.detail-section {
+				display: grid;
+				gap: var(--space-2);
+			}
+
+			.detail-empty {
+				display: grid;
+				gap: var(--space-2);
+				padding: var(--space-6) var(--space-4);
+				color: var(--text-muted);
+			}
+			.detail-empty p {
+				margin: 0;
+				max-width: 30ch;
+			}
+
+			/* ------------------------------------------------------------ narrow */
+
+			@media (max-width: 1199.98px) {
+				/* Kinds and scopes move into the list's tool row as selects, and the
+	   detail replaces the list when a state opens it, with Back first. */
+				.res-body {
+					grid-template-columns: minmax(0, 1fr);
+				}
+				.res-body > .section-nav {
+					display: none;
+				}
+				.res-list {
+					border-right: 0;
+				}
+				.res-list__tools .narrow-only {
+					display: block;
+				}
+				.res-list__tools .select {
+					width: 152px;
+					flex: none;
+				}
+				.detail {
+					display: none;
+				}
+				:root:has(#confirm:target, #mcp:target) .res-list {
+					display: none;
+				}
+				:root:has(#confirm:target, #mcp:target) .detail {
+					display: block;
+				}
+				.page-header .header-where {
+					display: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<i id="confirm" class="state-anchor" aria-hidden="true"></i>
+		<i id="mcp" class="state-anchor" aria-hidden="true"></i>
+		<i id="empty" class="state-anchor" aria-hidden="true"></i>
+
+		<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+			<symbol id="i-search" viewBox="0 0 16 16">
+				<circle cx="7" cy="7" r="4.25" />
+				<path d="m10.25 10.25 3 3" />
+			</symbol>
+			<symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9" /></symbol>
+			<symbol id="i-chev" viewBox="0 0 16 16"><path d="M4.5 6.5 8 10l3.5-3.5" /></symbol>
+			<symbol id="i-file" viewBox="0 0 16 16">
+				<path d="M4.5 2.5h4.25L11.5 5.25v8.25h-7z" />
+				<path d="M8.5 2.5v3h3" />
+			</symbol>
+			<symbol id="i-folder" viewBox="0 0 16 16"><path d="M2.5 4.5v8h11V6h-5.5L6.5 4.5z" /></symbol>
+			<symbol id="i-branch" viewBox="0 0 16 16">
+				<circle cx="5" cy="3.75" r="1.25" />
+				<circle cx="5" cy="12.25" r="1.25" />
+				<circle cx="11" cy="5.5" r="1.25" />
+				<path d="M5 5v6M11 6.75c0 2.75-6 2-6 4.25" />
+			</symbol>
+			<symbol id="i-user" viewBox="0 0 16 16">
+				<circle cx="8" cy="5.5" r="2.5" />
+				<path d="M3.5 13c.5-2.5 2.25-3.75 4.5-3.75s4 1.25 4.5 3.75" />
+			</symbol>
+			<symbol id="i-all" viewBox="0 0 16 16">
+				<rect x="3" y="3" width="4" height="4" rx=".75" />
+				<rect x="9" y="3" width="4" height="4" rx=".75" />
+				<rect x="3" y="9" width="4" height="4" rx=".75" />
+				<rect x="9" y="9" width="4" height="4" rx=".75" />
+			</symbol>
+			<symbol id="i-skill" viewBox="0 0 16 16">
+				<path d="M8 2.5c.5 2.75 2.75 5 5.5 5.5-2.75.5-5 2.75-5.5 5.5-.5-2.75-2.75-5-5.5-5.5 2.75-.5 5-2.75 5.5-5.5z" />
+			</symbol>
+			<symbol id="i-ext" viewBox="0 0 16 16">
+				<path d="M3 5.5h2.75a1.5 1.5 0 1 1 3 0h2.75v2.75a1.5 1.5 0 1 1 0 3V13H3z" />
+			</symbol>
+			<symbol id="i-pkg" viewBox="0 0 16 16">
+				<path d="M8 2.5 13 5v6l-5 2.5L3 11V5z" />
+				<path d="m3 5 5 2.5L13 5M8 7.5v6" />
+			</symbol>
+			<symbol id="i-tpl" viewBox="0 0 16 16">
+				<path
+					d="M6 3c-1.25 0-1.75.75-1.75 1.75v1.5C4.25 7.25 3.75 8 2.75 8c1 0 1.5.75 1.5 1.75v1.5C4.25 12.25 4.75 13 6 13M10 3c1.25 0 1.75.75 1.75 1.75v1.5c0 1 .5 1.75 1.5 1.75-1 0-1.5.75-1.5 1.75v1.5c0 1-.5 1.75-1.75 1.75" />
+			</symbol>
+			<symbol id="i-mcp" viewBox="0 0 16 16">
+				<path d="M6 2.5v3M10 2.5v3M4.5 5.5h7V8a3.5 3.5 0 0 1-7 0zM8 11.5v2" />
+			</symbol>
+			<symbol id="i-back" viewBox="0 0 16 16"><path d="M13 8H3.5M7.5 4l-4 4 4 4" /></symbol>
+			<symbol id="i-open" viewBox="0 0 16 16"><path d="M9 3h4v4M13 3 7.5 8.5M11 9.5V13H3V5h3.5" /></symbol>
+			<symbol id="i-alert" viewBox="0 0 16 16">
+				<circle cx="8" cy="8" r="5.75" />
+				<path d="M8 5v3.5M8 11h.01" />
+			</symbol>
+			<symbol id="i-restart" viewBox="0 0 16 16">
+				<path d="M3 8a5 5 0 1 0 1.6-3.7" />
+				<path d="M3 2.75V5.5h2.75" />
+			</symbol>
+			<symbol id="i-pen" viewBox="0 0 16 16">
+				<path d="m3 13 .75-2.75L10.5 3.5l2 2-6.75 6.75z" />
+				<path d="m9.25 4.75 2 2" />
+			</symbol>
+			<symbol id="i-trash" viewBox="0 0 16 16"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.5 8.5h6l.5-8.5" /></symbol>
+			<symbol id="i-reload" viewBox="0 0 16 16">
+				<path d="M13 8a5 5 0 1 1-1.6-3.7" />
+				<path d="M13 2.75V5.5h-2.75" />
+			</symbol>
+			<symbol id="i-close" viewBox="0 0 16 16"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7" /></symbol>
+			<symbol id="i-term" viewBox="0 0 16 16">
+				<rect x="2.25" y="3" width="11.5" height="10" rx="1.5" />
+				<path d="m5 6.5 2 1.5-2 1.5M8.5 10h2.5" />
+			</symbol>
+			<symbol id="i-stop" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1" /></symbol>
+			<symbol id="i-export" viewBox="0 0 16 16"><path d="M8 2.5v7.5M5 5.25 8 2.5l3 2.75M3 9.5v4h10v-4" /></symbol>
+			<symbol id="i-panel" viewBox="0 0 16 16">
+				<rect x="2.25" y="3" width="11.5" height="10" rx="1.5" />
+				<path d="M10 3v10" />
+			</symbol>
+		</svg>
+
+		<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+			<symbol id="v-sessions" viewBox="0 0 16 16">
+				<path d="M6.5 4h7M6.5 8h7M6.5 12h7" />
+				<circle cx="3.25" cy="4" r="1" />
+				<circle cx="3.25" cy="8" r="1" />
+				<circle cx="3.25" cy="12" r="1" />
+			</symbol>
+			<symbol id="v-files" viewBox="0 0 16 16">
+				<path d="M4.5 2.5h4.25L11.5 5.25v8.25h-7z" />
+				<path d="M8.5 2.5v3h3" />
+			</symbol>
+			<symbol id="v-review" viewBox="0 0 16 16">
+				<rect x="2.25" y="2.25" width="11.5" height="11.5" rx="1.5" />
+				<path d="M8 4.75v3.5M6.25 6.5h3.5M6.25 10.75h3.5" />
+			</symbol>
+			<symbol id="v-terminal" viewBox="0 0 16 16">
+				<rect x="2.25" y="3" width="11.5" height="10" rx="1.5" />
+				<path d="m5 6.5 2 1.5-2 1.5M8.5 10h2.5" />
+			</symbol>
+			<symbol id="v-resources" viewBox="0 0 16 16">
+				<path d="M8 2.25 13.25 5v6L8 13.75 2.75 11V5z" />
+				<path d="M2.75 5 8 7.75 13.25 5M8 7.75v6" />
+			</symbol>
+			<symbol id="v-settings" viewBox="0 0 16 16">
+				<path d="M2.75 5h5.5M11.75 5h1.5M2.75 11h1.5M7.75 11h5.5" />
+				<circle cx="10" cy="5" r="1.75" />
+				<circle cx="6" cy="11" r="1.75" />
+			</symbol>
+		</svg>
+
+		<div class="shell shell--no-workspace">
+			<nav class="bay" aria-label="Sessions">
+				<div class="bay__top">
+					<label class="field">
+						<svg class="icon"><use href="#i-search" /></svg>
+						<input class="field__input" type="search" placeholder="Filter sessions" aria-label="Filter sessions" />
+						<kbd><span>/</span></kbd>
+					</label>
+					<button class="btn btn--collapse" type="button" aria-label="New session">
+						<svg class="icon"><use href="#i-plus" /></svg><span>New</span>
+					</button>
+				</div>
+				<div class="bay__scroll">
+					<section aria-labelledby="h-needs">
+						<h2 class="bay-heading bay-heading--attention">
+							<span class="section-label" id="h-needs">Needs you</span><span class="bay-heading__count">4</span>
+						</h2>
+						<ul class="bay__list bay__list--attention">
+							<li>
+								<a class="strip" href="shell-session.html" data-state="waiting" aria-current="true">
+									<span class="mark mark--waiting" role="img" aria-label="Waiting"></span>
+									<span class="strip__line"
+										><span class="strip__name">Sandbox Pi sessions</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-62</span>
+									<span></span>
+									<span class="strip__state tone-waiting">Allow write to crates/server/src/sessions.rs?</span>
+									<span class="strip__figure mono">4m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--waiting" role="img" aria-label="Waiting"></span>
+									<span class="strip__line"
+										><span class="strip__name">Resource scope picker</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-288</span>
+									<span></span>
+									<span class="strip__state tone-waiting">Run pnpm install in packages/ui?</span>
+									<span class="strip__figure mono">9m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--failed" role="img" aria-label="Failed"></span>
+									<span class="strip__line"
+										><span class="strip__name">Terminal relay PTY</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-50</span>
+									<span></span>
+									<span class="strip__state tone-failed">Failed: srt exited with status 1</span>
+									<span class="strip__figure mono">6m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--unresponsive" role="img" aria-label="Not responding"></span>
+									<span class="strip__line"
+										><span class="strip__name">Pi RPC timeout</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-282</span>
+									<span></span>
+									<span class="strip__state tone-unresponsive">Not responding for 1m</span>
+									<span class="strip__figure mono">1m</span>
+								</a>
+							</li>
+						</ul>
+					</section>
+
+					<section aria-labelledby="h-running">
+						<h2 class="bay-heading">
+							<span class="section-label" id="h-running">Running</span><span class="bay-heading__count">4</span>
+						</h2>
+						<ul class="bay__list">
+							<li>
+								<a class="strip" href="shell-session.html#running" data-state="running">
+									<span class="mark mark--running" role="img" aria-label="Running"></span>
+									<span class="strip__line"
+										><span class="strip__name">Audit log shutdown drain</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-63</span>
+									<span></span>
+									<span class="strip__state mono">cargo test -p pau-core audit</span>
+									<span class="strip__figure mono">12m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--running" role="img" aria-label="Running"></span>
+									<span class="strip__line"
+										><span class="strip__name">Design audit</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau</span>
+									<span></span>
+									<span class="strip__state">Reading dev/design/system.md</span>
+									<span class="strip__figure mono">31m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html" data-session="pau-290">
+									<span class="mark mark--running" role="img" aria-label="Running"></span>
+									<span class="strip__line"
+										><span class="strip__name">Diff gutter numbers</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-290</span>
+									<span></span>
+									<span class="strip__state">Editing packages/ui/src/diff/DiffGutter.svelte</span>
+									<span class="strip__figure mono">7m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip" href="shell-session.html">
+									<span class="mark mark--starting" role="img" aria-label="Starting"></span>
+									<span class="strip__line"
+										><span class="strip__name">Model list filter</span
+										><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-291</span>
+									<span></span>
+									<span class="strip__state">Starting Claude Code</span>
+									<span class="strip__figure mono">8s</span>
+								</a>
+							</li>
+						</ul>
+					</section>
+
+					<section aria-labelledby="h-settled">
+						<h2 class="bay-heading">
+							<span class="section-label" id="h-settled">Settled</span><span class="bay-heading__count">6</span>
+						</h2>
+						<ul class="bay__list">
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--idle" role="img" aria-label="Idle"></span>
+									<span class="strip__line"
+										><span class="strip__name">Theme contrast pass</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-286</span>
+									<span></span>
+									<span class="strip__state">Idle</span>
+									<span class="strip__figure mono">40m</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--idle" role="img" aria-label="Idle"></span>
+									<span class="strip__line"
+										><span class="strip__name">Token test flake</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau-275</span>
+									<span></span>
+									<span class="strip__state">Idle</span>
+									<span class="strip__figure mono">2h</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--idle" role="img" aria-label="Idle"></span>
+									<span class="strip__line"
+										><span class="strip__name">Website changelog feed</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">thndrs</span>
+									<span></span>
+									<span class="strip__state">Idle</span>
+									<span class="strip__figure mono">3h</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--stopped" role="img" aria-label="Stopped"></span>
+									<span class="strip__line"
+										><span class="strip__name">Migration guard</span><span class="strip__agent">Claude Code</span></span
+									>
+									<span class="strip__meta mono">pau-279</span>
+									<span></span>
+									<span class="strip__state">Stopped</span>
+									<span class="strip__figure mono">5h</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--stopped" role="img" aria-label="Stopped"></span>
+									<span class="strip__line"
+										><span class="strip__name">Rewrite README</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">thndrs</span>
+									<span></span>
+									<span class="strip__state">Stopped</span>
+									<span class="strip__figure mono">1d</span>
+								</a>
+							</li>
+							<li>
+								<a class="strip strip--settled" href="shell-session.html">
+									<span class="mark mark--stopped" role="img" aria-label="Stopped"></span>
+									<span class="strip__line"
+										><span class="strip__name">Zellij smoke run</span><span class="strip__agent">Pi</span></span
+									>
+									<span class="strip__meta mono">pau</span>
+									<span></span>
+									<span class="strip__state">Stopped</span>
+									<span class="strip__figure mono">1d</span>
+								</a>
+							</li>
+						</ul>
+					</section>
+				</div>
+				<ul class="views" aria-label="Views">
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="shell-session.html"
+							aria-label="Sessions"
+							aria-describedby="tip-sessions"
+							><svg class="icon"><use href="#v-sessions" /></svg
+							><span class="views__tip" role="tooltip" id="tip-sessions">Sessions</span></a
+						>
+					</li>
+					<li>
+						<a class="btn btn--quiet btn--icon" href="files.html" aria-label="Files" aria-describedby="tip-files"
+							><svg class="icon"><use href="#v-files" /></svg
+							><span class="views__tip" role="tooltip" id="tip-files">Files</span></a
+						>
+					</li>
+					<li>
+						<a class="btn btn--quiet btn--icon" href="review.html" aria-label="Review" aria-describedby="tip-review"
+							><svg class="icon"><use href="#v-review" /></svg
+							><span class="views__tip" role="tooltip" id="tip-review">Review</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="terminal.html"
+							aria-label="Terminal"
+							aria-describedby="tip-terminal"
+							><svg class="icon"><use href="#v-terminal" /></svg
+							><span class="views__tip" role="tooltip" id="tip-terminal">Terminal</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="resources.html"
+							aria-current="page"
+							aria-label="Pi resources"
+							aria-describedby="tip-resources"
+							><svg class="icon"><use href="#v-resources" /></svg
+							><span class="views__tip" role="tooltip" id="tip-resources">Pi resources</span></a
+						>
+					</li>
+					<li>
+						<a
+							class="btn btn--quiet btn--icon"
+							href="settings.html"
+							aria-label="Settings"
+							aria-describedby="tip-settings"
+							><svg class="icon"><use href="#v-settings" /></svg
+							><span class="views__tip" role="tooltip" id="tip-settings"
+								>Settings<kbd><span>⌘,</span></kbd></span
+							></a
+						>
+					</li>
+				</ul>
+			</nav>
+
+			<main class="main">
+				<header class="page-header">
+					<h1 class="header-title">Pi resources</h1>
+					<span class="header-where mono"
+						><svg class="icon"><use href="#i-folder" /></svg><span class="cap">pau-worktrees/pau-62</span></span
+					>
+					<span class="header-spacer"></span>
+					<div class="header-actions">
+						<button
+							class="btn btn--quiet btn--collapse"
+							type="button"
+							aria-label="Reload resources"
+							title="Read every resource file again">
+							<svg class="icon"><use href="#i-reload" /></svg><span>Reload</span>
+						</button>
+						<button class="btn btn--collapse" type="button" aria-label="Install package">
+							<svg class="icon"><use href="#i-plus" /></svg><span>Install package</span>
+						</button>
+					</div>
+				</header>
+
+				<div class="res-body">
+					<nav class="section-nav" aria-label="Resource kinds">
+						<h2 class="bay-heading"><span class="section-label">Kind</span></h2>
+						<ul>
+							<li>
+								<a class="strip strip--row" href="#" aria-current="true"
+									><svg class="icon"><use href="#i-all" /></svg
+									><span class="strip__line"><span class="strip__name">All resources</span></span
+									><span class="count when-not-empty">31</span><span class="count when-empty">0</span></a
+								>
+							</li>
+							<li>
+								<a class="strip strip--row" href="#"
+									><svg class="icon"><use href="#i-skill" /></svg
+									><span class="strip__line"><span class="strip__name">Skills</span></span
+									><span class="count when-not-empty">9</span><span class="count when-empty">0</span></a
+								>
+							</li>
+							<li>
+								<a class="strip strip--row" href="#"
+									><svg class="icon"><use href="#i-ext" /></svg
+									><span class="strip__line"><span class="strip__name">Extensions</span></span
+									><span class="count when-not-empty">6</span><span class="count when-empty">0</span></a
+								>
+							</li>
+							<li>
+								<a class="strip strip--row" href="#"
+									><svg class="icon"><use href="#i-pkg" /></svg
+									><span class="strip__line"><span class="strip__name">Packages</span></span
+									><span class="count when-not-empty">5</span><span class="count when-empty">0</span></a
+								>
+							</li>
+							<li>
+								<a class="strip strip--row" href="#"
+									><svg class="icon"><use href="#i-tpl" /></svg
+									><span class="strip__line"><span class="strip__name">Prompt templates</span></span
+									><span class="count when-not-empty">6</span><span class="count when-empty">0</span></a
+								>
+							</li>
+							<li>
+								<a class="strip strip--row" href="#"
+									><svg class="icon"><use href="#i-mcp" /></svg
+									><span class="strip__line"><span class="strip__name">MCP servers</span></span
+									><span class="count when-not-empty">5</span><span class="count when-empty">0</span></a
+								>
+							</li>
+						</ul>
+						<h2 class="bay-heading"><span class="section-label">Scope</span></h2>
+						<ul>
+							<li>
+								<a class="strip strip--row" href="#" aria-current="true"
+									><svg class="icon"><use href="#i-all" /></svg
+									><span class="strip__line"><span class="strip__name">All scopes</span></span
+									><span class="count when-not-empty">31</span><span class="count when-empty">0</span></a
+								>
+							</li>
+							<li>
+								<a class="strip strip--row" href="#"
+									><svg class="icon"><use href="#i-user" /></svg
+									><span class="strip__line"><span class="strip__name">User</span></span
+									><span class="count when-not-empty">16</span><span class="count when-empty">0</span></a
+								>
+							</li>
+							<li>
+								<a class="strip strip--row" href="#"
+									><svg class="icon"><use href="#i-folder" /></svg
+									><span class="strip__line"><span class="strip__name">Workspace</span></span
+									><span class="count when-not-empty">4</span><span class="count when-empty">0</span></a
+								>
+							</li>
+							<li>
+								<a class="strip strip--row" href="#"
+									><svg class="icon"><use href="#i-branch" /></svg
+									><span class="strip__line"><span class="strip__name">Project</span></span
+									><span class="count when-not-empty">11</span><span class="count when-empty">0</span></a
+								>
+							</li>
+						</ul>
+					</nav>
+
+					<section class="res-list" aria-label="Resources">
+						<div class="res-list__tools">
+							<label class="field when-not-empty">
+								<svg class="icon"><use href="#i-search" /></svg>
+								<input
+									class="field__input"
+									type="search"
+									placeholder="Filter by name or description"
+									aria-label="Filter resources" />
+							</label>
+							<label class="field when-empty">
+								<svg class="icon"><use href="#i-search" /></svg>
+								<input class="field__input" type="search" value="kubernetes" aria-label="Filter resources" />
+							</label>
+							<a class="btn btn--quiet btn--icon when-empty" href="#" aria-label="Clear filter" title="Clear filter"
+								><svg class="icon"><use href="#i-close" /></svg
+							></a>
+							<select class="select narrow-only" aria-label="Kind">
+								<option>All kinds (31)</option>
+								<option>Skills (9)</option>
+								<option>Extensions (6)</option>
+								<option>Packages (5)</option>
+								<option>Prompt templates (6)</option>
+								<option>MCP servers (5)</option>
+							</select>
+							<select class="select narrow-only" aria-label="Scope">
+								<option>All scopes</option>
+								<option>User</option>
+								<option>Workspace</option>
+								<option>Project</option>
+							</select>
+						</div>
+						<div class="res-list__scroll">
+							<div class="when-not-empty">
+								<section aria-labelledby="h-skills">
+									<h2 class="bay-heading">
+										<span class="section-label" id="h-skills">Skills</span><span class="bay-heading__count">9</span>
+									</h2>
+									<ul role="listbox" aria-labelledby="h-skills">
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="writing"
+												role="option"
+												aria-selected="true"
+												tabindex="0">
+												<svg class="icon"><use href="#i-skill" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">writing</span><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">Write, revise and deslop prose in a direct voice</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="rust-review"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-skill" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">rust-review</span><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-branch" /></svg><span>project</span></span
+												>
+												<span></span>
+												<span class="strip__state"
+													>Review Rust changes for panics, unsafe blocks and missing tests</span
+												>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="svelte-runes"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-skill" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">svelte-runes</span><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-branch" /></svg><span>project</span></span
+												>
+												<span></span>
+												<span class="strip__state">Svelte 5 runes, snippets and events for packages/ui</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="fab-implement"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-skill" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">fab-implement</span><span class="strip__agent">git</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-branch" /></svg><span>project</span></span
+												>
+												<span></span>
+												<span class="strip__state">Work one task end to end on its own branch</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="fab-review"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-skill" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">fab-review</span><span class="strip__agent">git</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-branch" /></svg><span>project</span></span
+												>
+												<span></span>
+												<span class="strip__state">Review a pull request or branch and report findings</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="tauri-release"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-skill" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">tauri-release</span><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-branch" /></svg><span>project</span></span
+												>
+												<span></span>
+												<span class="strip__state">Build, sign and notarize a tagged desktop release</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="playwright-webkit"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-skill" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">playwright-webkit</span
+													><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-folder" /></svg><span>workspace</span></span
+												>
+												<span></span>
+												<span class="strip__state">Run the critical browser flows in WebKit</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="git-worktrees"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-skill" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">git-worktrees</span><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">Create and clean up worktrees beside the repository</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="pdf"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-skill" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">pdf</span><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">Read, split and fill PDF files. The project defines pdf too</span>
+												<span class="strip__figure tone-warning">Duplicate</span>
+											</a>
+										</li>
+									</ul>
+								</section>
+								<section aria-labelledby="h-extensions">
+									<h2 class="bay-heading">
+										<span class="section-label" id="h-extensions">Extensions</span
+										><span class="bay-heading__count">6</span>
+									</h2>
+									<ul role="listbox" aria-labelledby="h-extensions">
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="claude-bridge"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-ext" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">claude-bridge</span><span class="strip__agent">npm</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">Runs Claude Code sessions through Pi RPC</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="pi-mcp-adapter"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-ext" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">pi-mcp-adapter</span><span class="strip__agent">npm</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">Connects MCP servers to Pi sessions</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="permission-gate"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-ext" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">permission-gate</span><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-branch" /></svg><span>project</span></span
+												>
+												<span></span>
+												<span class="strip__state">Asks before any write outside the workspace</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="sandbox-ready"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-ext" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">sandbox-ready</span><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-folder" /></svg><span>workspace</span></span
+												>
+												<span></span>
+												<span class="strip__state">Reports ready once the sandbox wrapper starts Pi</span>
+												<span class="strip__figure tone-failed">Invalid</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="todo-tracker"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-ext" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">todo-tracker</span><span class="strip__agent">npm</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">Keeps a task list beside the transcript</span>
+												<span class="strip__figure">Off</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="notify"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-ext" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">notify</span><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">Sends a desktop notification when a turn ends</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+									</ul>
+								</section>
+								<section aria-labelledby="h-packages">
+									<h2 class="bay-heading">
+										<span class="section-label" id="h-packages">Packages</span><span class="bay-heading__count">5</span>
+									</h2>
+									<ul role="listbox" aria-labelledby="h-packages">
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="@stormlightlabs/pi-claude-bridge"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-pkg" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">@stormlightlabs/pi-claude-bridge</span
+													><span class="strip__agent">npm</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">The Claude Code bridge and its prompt templates</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="pi-subagents"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-pkg" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">pi-subagents</span><span class="strip__agent">npm</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">Delegates work to child Pi sessions</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="pi-web-access"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-pkg" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">pi-web-access</span><span class="strip__agent">git</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">Fetch and search tools for Pi</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="fab-skills"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-pkg" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">fab-skills</span><span class="strip__agent">git</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-branch" /></svg><span>project</span></span
+												>
+												<span></span>
+												<span class="strip__state">The fab workflow skills for this repository</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="pi-themes"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-pkg" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">pi-themes</span><span class="strip__agent">npm</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">Extra Pi terminal themes</span>
+												<span class="strip__figure tone-failed">Not installed</span>
+											</a>
+										</li>
+									</ul>
+								</section>
+								<section aria-labelledby="h-prompt">
+									<h2 class="bay-heading">
+										<span class="section-label" id="h-prompt">Prompt templates</span
+										><span class="bay-heading__count">6</span>
+									</h2>
+									<ul role="listbox" aria-labelledby="h-prompt">
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="review-diff"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-tpl" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">review-diff</span><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">Review the staged diff before a commit</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="write-pr"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-tpl" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">write-pr</span><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-branch" /></svg><span>project</span></span
+												>
+												<span></span>
+												<span class="strip__state">Draft a pull request title and body</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="triage"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-tpl" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">triage</span><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">Sort a bug report into cause, scope and next step</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="explain-failure"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-tpl" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">explain-failure</span><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-branch" /></svg><span>project</span></span
+												>
+												<span></span>
+												<span class="strip__state">Explain a failing CI job from its log</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="release-notes"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-tpl" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">release-notes</span><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-branch" /></svg><span>project</span></span
+												>
+												<span></span>
+												<span class="strip__state">Summarize merged pull requests since the last tag</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="handoff"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-tpl" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">handoff</span><span class="strip__agent">local</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-folder" /></svg><span>workspace</span></span
+												>
+												<span></span>
+												<span class="strip__state">Record where unfinished work stands</span>
+												<span class="strip__figure">Loads</span>
+											</a>
+										</li>
+									</ul>
+								</section>
+								<section aria-labelledby="h-mcp">
+									<h2 class="bay-heading">
+										<span class="section-label" id="h-mcp">MCP servers</span><span class="bay-heading__count">5</span>
+									</h2>
+									<ul role="listbox" aria-labelledby="h-mcp">
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#mcp"
+												data-id="github"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-mcp" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">github</span><span class="strip__agent">stdio</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">Issues, pull requests and Actions runs</span>
+												<span class="strip__figure tone-failed">Failed</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="playwright"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-mcp" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">playwright</span><span class="strip__agent">stdio</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-branch" /></svg><span>project</span></span
+												>
+												<span></span>
+												<span class="strip__state">Drive a browser for interface checks</span>
+												<span class="strip__figure tone-on">Connected</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="context7"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-mcp" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">context7</span><span class="strip__agent">http</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">Current documentation for libraries</span>
+												<span class="strip__figure tone-on">Connected</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="sqlite"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-mcp" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">sqlite</span><span class="strip__agent">stdio</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-folder" /></svg><span>workspace</span></span
+												>
+												<span></span>
+												<span class="strip__state">Query the development database</span>
+												<span class="strip__figure">Not connected</span>
+											</a>
+										</li>
+										<li>
+											<a
+												class="strip strip--icon res"
+												href="#"
+												data-id="sentry"
+												role="option"
+												aria-selected="false"
+												tabindex="-1">
+												<svg class="icon"><use href="#i-mcp" /></svg>
+												<span class="strip__line"
+													><span class="strip__name">sentry</span><span class="strip__agent">http</span></span
+												>
+												<span class="chip"
+													><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+												>
+												<span></span>
+												<span class="strip__state">Error reports for the website</span>
+												<span class="strip__figure tone-warning">Needs sign-in</span>
+											</a>
+										</li>
+									</ul>
+								</section>
+							</div>
+							<div class="empty when-empty" role="status">
+								<h3 class="role-heading">No resources match “kubernetes”</h3>
+								<p>The filter checks names and descriptions across every kind and scope.</p>
+								<div class="empty__actions">
+									<a class="btn" href="#"
+										><svg class="icon"><use href="#i-close" /></svg><span>Clear filter</span></a
+									>
+									<button class="btn btn--quiet" type="button">
+										<svg class="icon"><use href="#i-plus" /></svg><span>Install a package</span>
+									</button>
+								</div>
+							</div>
+						</div>
+					</section>
+
+					<aside class="detail" aria-label="Resource detail">
+						<!-- The writing skill (default and #confirm). -->
+						<div class="detail__inner when-not-mcp when-not-empty">
+							<a class="btn btn--quiet back-narrow detail__back" href="#"
+								><svg class="icon"><use href="#i-back" /></svg><span>Back to resources</span></a
+							>
+							<div class="detail__head">
+								<svg class="icon"><use href="#i-skill" /></svg>
+								<h2 class="detail__title">writing</h2>
+								<span class="state tone-quiet when-not-confirm"><span>Loads</span></span>
+								<span class="state tone-quiet when-confirm"><span>Change not applied</span></span>
+							</div>
+							<p class="detail__lede">Write, revise and deslop prose in a direct voice.</p>
+
+							<dl class="facts">
+								<dt>Scope</dt>
+								<dd>
+									<span class="row-line"
+										><span class="chip"
+											><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+										><span>Every workspace</span></span
+									>
+								</dd>
+								<dt>File</dt>
+								<dd>
+									<span class="mono"
+										><span class="seg">~</span>/<wbr /><span class="seg">.pi</span>/<wbr /><span class="seg">agent</span
+										>/<wbr /><span class="seg">skills</span>/<wbr /><span class="seg">writing</span>/<wbr /><span
+											class="seg"
+											>SKILL.md</span
+										></span
+									>
+								</dd>
+								<dt>Source</dt>
+								<dd>Local file</dd>
+								<dt>Used by</dt>
+								<dd>Pi and Claude Code through the bridge</dd>
+								<dt>Trust</dt>
+								<dd>Trusted. Your own resources need no trust decision.</dd>
+							</dl>
+
+							<hr class="detail__rule" />
+
+							<div class="choice">
+								<label class="toggle">
+									<input
+										class="switch when-not-confirm"
+										type="checkbox"
+										role="switch"
+										checked
+										aria-describedby="sw-hint" />
+									<input class="switch when-confirm" type="checkbox" role="switch" aria-describedby="sw-hint" />
+									<span class="choice__label"><span class="cap">Load in new Pi sessions</span></span>
+								</label>
+								<p class="choice__desc" id="sw-hint">Running sessions keep their skills until they restart.</p>
+							</div>
+
+							<div class="ask when-confirm" role="region" aria-labelledby="confirm-title">
+								<div class="ask__head">
+									<span class="mark mark--waiting" aria-hidden="true"></span>
+									<p class="ask__title" id="confirm-title">Pau will change <code>~/.pi/agent/settings.json</code></p>
+								</div>
+								<p class="ask__body">
+									writing stops loading in new Pi sessions in every workspace. The skill file stays where it is.
+								</p>
+								<div class="diff-box">
+									<div class="diff-box__head">
+										<span>settings.json</span><span><span class="diff-add">+1</span></span>
+									</div>
+									<pre
+										class="diff diff--single"><span><i>14</i><b> </b>  "disabledSkills": [</span><span><i>15</i><b> </b>    "pdf",</span><span class="add"><i>16</i><b>+</b>    "writing"</span><span><i>17</i><b> </b>  ],</span></pre>
+								</div>
+								<div class="ask__actions">
+									<a class="btn btn--primary" href="#"><span>Apply change</span></a>
+									<a class="btn" href="#"><span>Cancel</span></a>
+									<a class="btn btn--quiet ask__aside" href="files.html"
+										><svg class="icon"><use href="#i-open" /></svg><span>Open file</span></a
+									>
+								</div>
+							</div>
+
+							<div class="detail__actions when-not-confirm">
+								<a class="btn" href="files.html"
+									><svg class="icon"><use href="#i-file" /></svg><span>Open in Files</span></a
+								>
+								<button class="btn btn--quiet" type="button">
+									<svg class="icon"><use href="#i-folder" /></svg><span>Show in Finder</span>
+								</button>
+							</div>
+						</div>
+
+						<!-- The github MCP server (#mcp). -->
+						<div class="detail__inner when-mcp">
+							<a class="btn btn--quiet back-narrow detail__back" href="#"
+								><svg class="icon"><use href="#i-back" /></svg><span>Back to resources</span></a
+							>
+							<div class="detail__head">
+								<svg class="icon"><use href="#i-mcp" /></svg>
+								<h2 class="detail__title">github</h2>
+								<span class="state tone-failed"
+									><span class="mark mark--failed" aria-hidden="true"></span><span>Failed</span></span
+								>
+							</div>
+							<p class="detail__lede">Issues, pull requests and Actions runs.</p>
+
+							<div class="notice notice--danger" role="alert">
+								<svg class="icon"><use href="#i-alert" /></svg>
+								<div>
+									<p class="notice__title">The server exited before it connected</p>
+									<p class="notice__body">
+										Exit status 1 after 0.4s. Set <code class="mono">GITHUB_PERSONAL_ACCESS_TOKEN</code> in the server's
+										environment, then try again.
+									</p>
+								</div>
+							</div>
+
+							<div class="detail__actions">
+								<button class="btn" type="button">
+									<svg class="icon"><use href="#i-restart" /></svg><span>Try again</span>
+								</button>
+								<button class="btn" type="button">
+									<svg class="icon"><use href="#i-pen" /></svg><span>Edit server</span>
+								</button>
+								<button class="btn btn--danger" type="button">
+									<svg class="icon"><use href="#i-trash" /></svg><span>Remove</span>
+								</button>
+							</div>
+
+							<div class="detail-section">
+								<p class="section-label">Last output</p>
+								<pre
+									class="log-tail mono">npm warn exec The following package was not found and will be installed: @modelcontextprotocol/server-github@2025.4.8
+<b>Error: GITHUB_PERSONAL_ACCESS_TOKEN environment variable is not set</b>
+    at Object.&lt;anonymous&gt; (dist/index.js:24:11)</pre>
+							</div>
+
+							<dl class="facts">
+								<dt>Scope</dt>
+								<dd>
+									<span class="row-line"
+										><span class="chip"
+											><svg class="icon"><use href="#i-user" /></svg><span>user</span></span
+										><span>Every workspace</span></span
+									>
+								</dd>
+								<dt>File</dt>
+								<dd>
+									<span class="mono"
+										><span class="seg">~</span>/<wbr /><span class="seg">.pi</span>/<wbr /><span class="seg">agent</span
+										>/<wbr /><span class="seg">mcp.json</span></span
+									>
+								</dd>
+								<dt>Command</dt>
+								<dd>
+									<span class="mono"
+										><span class="seg">npx</span> <span class="seg">-y</span>
+										<span class="seg">@modelcontextprotocol</span>/<wbr /><span class="seg">server-github</span></span
+									>
+								</dd>
+								<dt>Transport</dt>
+								<dd>stdio, started when a session first calls it</dd>
+								<dt>Tools</dt>
+								<dd class="tone-quiet">Available after the first connection.</dd>
+							</dl>
+
+							<hr class="detail__rule" />
+
+							<div class="choice">
+								<label class="toggle">
+									<input class="switch" type="checkbox" role="switch" checked aria-describedby="sw-hint-mcp" />
+									<span class="choice__label"><span class="cap">Connect in new Pi sessions</span></span>
+								</label>
+								<p class="choice__desc" id="sw-hint-mcp">
+									Turning it off changes <span class="mono">~/.pi/agent/mcp.json</span>. Pau shows the change first.
+								</p>
+							</div>
+						</div>
+
+						<!-- Nothing to select (#empty). -->
+						<div class="detail-empty when-empty">
+							<p>Choose a resource to see its file, its scope and what it can do.</p>
+						</div>
+					</aside>
+				</div>
+			</main>
+		</div>
+	</body>
+</html>

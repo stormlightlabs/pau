@@ -5,6 +5,7 @@ use std::{
     fmt, fs, io,
     net::SocketAddr,
     path::{Path, PathBuf},
+    pin::Pin,
     sync::{Arc, Mutex},
     time::{Duration, SystemTime},
 };
@@ -23,7 +24,7 @@ use axum::{
 use pau_core::{
     HealthResponse, ServerEvent, ServerEventKind, ServerSnapshot, ServerStreamMessage,
     VersionResponse,
-    audit::{AuditLog, AuditOperation},
+    audit::{AUDIT_CLOSE_LIMIT, AuditLog, AuditOperation},
     diagnostics::{
         DiagnosticBundle, DiagnosticLevel, DiagnosticRecordInput, Diagnostics, TransportDiagnostic,
     },
@@ -1462,24 +1463,46 @@ impl ServerHandle {
         }
     }
 
-    /// Stops the server, its sessions and its terminals, and waits for the
-    /// listener task.
+    /// Stops the server, its sessions and its terminals, and stores the final
+    /// audit records, all within [`SHUTDOWN_LIMIT`].
     ///
     /// Callers must await this before the Tokio runtime ends, so the final
-    /// audit records reach the database. Writing them waits at most
-    /// [`pau_core::audit::AUDIT_CLOSE_LIMIT`].
+    /// audit records reach the database. A step that does not finish in its
+    /// share of the limit is abandoned and logged, and an abandoned listener
+    /// returns a [`io::ErrorKind::TimedOut`] error.
     pub async fn shutdown(mut self) -> io::Result<()> {
         self.request_shutdown();
-        let result = self
+        let task = self
             .task
             .take()
-            .expect("server task is present until shutdown")
-            .await
-            .map_err(io::Error::other)
-            .and_then(|result| result);
-        self.sessions.stop_all().await;
-        self.terminals.stop_all(&self.audit).await;
-        self.audit.close().await;
+            .expect("server task is present until shutdown");
+        let mut listener = None;
+        stop_within_limit(
+            vec![
+                ShutdownStep {
+                    name: "listener",
+                    work: Box::pin(async {
+                        listener = Some(task.await.map_err(io::Error::other).and_then(|r| r));
+                    }),
+                },
+                ShutdownStep {
+                    name: "sessions",
+                    work: Box::pin(self.sessions.stop_all()),
+                },
+                ShutdownStep {
+                    name: "terminals",
+                    work: Box::pin(self.terminals.stop_all(&self.audit)),
+                },
+            ],
+            &self.audit,
+        )
+        .await;
+        let result = listener.unwrap_or_else(|| {
+            Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "the listener did not stop before the shutdown limit",
+            ))
+        });
         self.diagnostics.record(DiagnosticRecordInput {
             timestamp: diagnostic_timestamp(),
             component: "pau-server".to_owned(),
@@ -1498,6 +1521,55 @@ impl ServerHandle {
         });
         result
     }
+}
+
+/// Longest time [`ServerHandle::shutdown`] takes, from the shutdown request
+/// to the last stored audit record.
+///
+/// Quitting the app waits for shutdown, so a session or terminal that will
+/// not stop must not hold the app open. The audit drain keeps
+/// [`AUDIT_CLOSE_LIMIT`] of this for itself, and the steps before it share
+/// the rest.
+pub const SHUTDOWN_LIMIT: Duration = Duration::from_secs(10);
+
+/// One shutdown step that runs before the audit drain.
+struct ShutdownStep<'a> {
+    /// Names the step in the log when it does not finish.
+    name: &'static str,
+    work: Pin<Box<dyn Future<Output = ()> + Send + 'a>>,
+}
+
+/// Runs `steps` in order, then writes the records queued on `audit`, and
+/// returns within [`SHUTDOWN_LIMIT`].
+///
+/// The steps must finish before the limit minus [`AUDIT_CLOSE_LIMIT`], so the
+/// drain keeps its share however slow they are. A step still running at
+/// that point is dropped, and the later steps do not start. Returns the
+/// names of the steps that did not finish, which it also logs.
+async fn stop_within_limit(steps: Vec<ShutdownStep<'_>>, audit: &AuditLog) -> Vec<&'static str> {
+    let steps_deadline = tokio::time::Instant::now() + (SHUTDOWN_LIMIT - AUDIT_CLOSE_LIMIT);
+    let mut unfinished = Vec::new();
+    for step in steps {
+        if !unfinished.is_empty()
+            || tokio::time::timeout_at(steps_deadline, step.work)
+                .await
+                .is_err()
+        {
+            unfinished.push(step.name);
+        }
+    }
+    if !audit.close().await {
+        unfinished.push("audit");
+    }
+    if !unfinished.is_empty() {
+        tracing::warn!(
+            event = "server.shutdown_incomplete",
+            limit_ms = SHUTDOWN_LIMIT.as_millis(),
+            unfinished = %unfinished.join(", "),
+            "Pau quit before every shutdown step finished"
+        );
+    }
+    unfinished
 }
 
 impl Drop for ServerHandle {
@@ -1750,7 +1822,8 @@ pub(crate) mod tests {
 
     use axum::body::{Body, to_bytes};
     use pau_core::{
-        audit::AuditRecord,
+        audit::{AuditActor, AuditEntry, AuditRecord, AuditResult},
+        diagnostics::Redactor,
         workspace::{FileSearchMatch, NameSearchResult},
     };
     use tempfile::tempdir;
@@ -2614,6 +2687,61 @@ pub(crate) mod tests {
                 ),
             ]
         );
+    }
+
+    /// A session that never stops must not hold up exit or cost the records
+    /// queued before it.
+    #[tokio::test(start_paused = true)]
+    async fn shutdown_quits_at_the_limit_and_keeps_queued_records() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("pau.sqlite3");
+        let database = Database::open(&path).await.unwrap();
+        let audit = AuditLog::new(database.audit(), Redactor::default());
+        for exit_code in 0..3 {
+            audit.record(AuditEntry {
+                exit_code: Some(exit_code),
+                ..AuditEntry::new(
+                    AuditActor::Pau,
+                    AuditOperation::SessionStop,
+                    AuditResult::Succeeded,
+                )
+            });
+        }
+        // The writer's SQLite thread runs on the real clock, which the paused
+        // clock would skip past, so let it take the records first.
+        assert_eq!(audit.list().await.unwrap().len(), 3);
+
+        let started = tokio::time::Instant::now();
+        let unfinished = stop_within_limit(
+            vec![
+                ShutdownStep {
+                    name: "listener",
+                    work: Box::pin(async {}),
+                },
+                ShutdownStep {
+                    name: "sessions",
+                    work: Box::pin(std::future::pending()),
+                },
+                ShutdownStep {
+                    name: "terminals",
+                    work: Box::pin(async {}),
+                },
+            ],
+            &audit,
+        )
+        .await;
+
+        assert_eq!(started.elapsed(), SHUTDOWN_LIMIT - AUDIT_CLOSE_LIMIT);
+        assert_eq!(unfinished, ["sessions", "terminals"]);
+        let exit_codes: Vec<_> = database
+            .audit()
+            .list()
+            .await
+            .unwrap()
+            .iter()
+            .map(|record| record.entry.exit_code.unwrap())
+            .collect();
+        assert_eq!(exit_codes, [0, 1, 2]);
     }
 
     /// Polls a request once, so its handler runs to its first wait, and drops

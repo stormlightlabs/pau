@@ -370,8 +370,8 @@ impl PauLauncher {
     }
 
     /// Shuts a started backend down and waits until its sessions and
-    /// terminals have stopped and its audit records are stored. Does nothing
-    /// before it starts.
+    /// terminals have stopped and its audit records are stored, or until
+    /// [`pau_server::SHUTDOWN_LIMIT`] passes. Does nothing before it starts.
     ///
     /// The app awaits this before its async runtime ends, which would
     /// otherwise cancel the backend's tasks with records still queued.

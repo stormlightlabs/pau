@@ -113,18 +113,21 @@ fn main() {
                 .build(),
         )
         .manage(StartupState::new())
-        .manage(PauLauncher::new(
-            None,
-            ServerOptions {
-                diagnostics,
-                terminal_relay: std::env::current_exe().ok(),
-                ..ServerOptions::default()
-            },
-        ))
         .invoke_handler(tauri::generate_handler![startup_progress])
         .menu(menu::build)
         .on_menu_event(menu::handle_event)
-        .setup(|app| {
+        .setup(move |app| {
+            // A release build loads the sandbox extension from the app's
+            // resources, the only copy left once the app is installed.
+            app.manage(PauLauncher::new(
+                None,
+                ServerOptions {
+                    diagnostics,
+                    terminal_relay: std::env::current_exe().ok(),
+                    resource_directory: app.path().resource_dir().ok(),
+                    ..ServerOptions::default()
+                },
+            ));
             let (width, height) = window_size(app);
             let window = WebviewWindowBuilder::new(app, MAIN_WINDOW, WebviewUrl::default())
                 .title("Pau")
@@ -156,8 +159,9 @@ fn main() {
         .expect("failed to build the Pau desktop application");
 
     application.run(|app, event| {
-        if matches!(event, RunEvent::Exit) {
-            tauri::async_runtime::block_on(app.state::<PauLauncher>().shutdown());
+        // Setup manages the launcher, so it is absent only when setup never ran.
+        if let (RunEvent::Exit, Some(launcher)) = (event, app.try_state::<PauLauncher>()) {
+            tauri::async_runtime::block_on(launcher.shutdown());
         }
     });
 }

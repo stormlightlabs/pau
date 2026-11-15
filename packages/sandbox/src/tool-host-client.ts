@@ -8,7 +8,7 @@ import { SandboxManager } from '@anthropic-ai/sandbox-runtime';
 import { getAgentDir, type AgentToolResult } from '@earendil-works/pi-coding-agent';
 import type { SandboxedMcpServer } from '@stormlightlabs/pau-protocol';
 import { registerCredentialSubstitution } from './credential-proxy.ts';
-import { SandboxUnavailableError, spawnSandboxed, startSandbox } from './launcher.ts';
+import { SandboxUnavailableError, shellQuote, spawnSandboxed, startSandbox } from './launcher.ts';
 import type { SandboxPolicy } from './policy.ts';
 import { configurePreloadEnvironment, type PreloadDenial } from './preload.ts';
 import { SeatbeltDenialLog } from './seatbelt.ts';
@@ -29,11 +29,25 @@ function resolveSearchTool(name: string, searchPath: string): string | undefined
 }
 
 /**
+ * Shell command that runs `script` with this Node binary. Both paths are
+ * quoted because the installed app and its Node binary may sit under a
+ * directory whose name holds spaces or quotes.
+ */
+function nodeCommand(script: string): string {
+	return `exec ${shellQuote(process.execPath)} ${shellQuote(script)}`;
+}
+
+/** Shell command that starts the tool host from this package's sources. */
+export function toolHostCommand(): string {
+	return nodeCommand(fileURLToPath(new URL('tool-host.ts', import.meta.url)));
+}
+
+/**
  * Give the tool host its own Pi agent directory. It keeps the host away from
  * Pi's settings and credential store and puts the ripgrep wrapper where Pi
  * looks first.
  */
-function prepareAgentDir(tempDir: string, searchPath: string): Record<string, string> {
+export function prepareAgentDir(tempDir: string, searchPath: string): Record<string, string> {
 	const agentDir = path.join(tempDir, 'pi-agent');
 	const bin = path.join(agentDir, 'bin');
 	mkdirSync(bin, { recursive: true });
@@ -44,7 +58,7 @@ function prepareAgentDir(tempDir: string, searchPath: string): Record<string, st
 		writeFileSync(
 			path.join(bin, 'rg'),
 			`#!/bin/sh
-exec ${process.execPath} ${wrapper} "$@"
+${nodeCommand(wrapper)} "$@"
 `,
 			{ mode: 0o755 }
 		);
@@ -90,11 +104,10 @@ export class ToolHostClient {
 			throw new SandboxUnavailableError([error instanceof Error ? error.message : String(error)]);
 		}
 		await startSandbox(policy.runtimeConfig, env, policy.workspace);
-		const script = fileURLToPath(new URL('tool-host.ts', import.meta.url));
 		const commandId = 'pau-tool-host';
 		const seatbeltDenials = new SeatbeltDenialLog(commandId);
 		try {
-			const child = await spawnSandboxed(`exec ${process.execPath} ${script}`, {
+			const child = await spawnSandboxed(toolHostCommand(), {
 				env,
 				cwd: policy.workspace,
 				commandId,

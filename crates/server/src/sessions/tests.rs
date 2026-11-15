@@ -285,7 +285,17 @@ struct Fixture {
 impl Fixture {
     /// Serves the API with the fake Pi, or with `executable` in its place.
     async fn new(executable: Option<&str>) -> Self {
+        Self::with_extension(executable, |_| SandboxExtension::checkout()).await
+    }
+
+    /// Serves the API with sandboxed sessions loading the extension that
+    /// `extension` picks given the fixture's directory.
+    async fn with_extension(
+        executable: Option<&str>,
+        extension: impl FnOnce(&Path) -> SandboxExtension,
+    ) -> Self {
         let directory = tempfile::tempdir().unwrap();
+        let extension = extension(directory.path());
         let pi = directory.path().join("fake pi");
         fs::write(&pi, FAKE_PI).unwrap();
         fs::set_permissions(&pi, fs::Permissions::from_mode(0o755)).unwrap();
@@ -334,6 +344,7 @@ impl Fixture {
                 // sandbox, so no host configuration reaches the tests.
                 sandbox: Some(SandboxApi {
                     home: directory.path().to_path_buf(),
+                    extension,
                     ..SandboxApi::new(
                         database.sandbox_selection(),
                         directory.path().join("sandbox"),
@@ -1451,6 +1462,83 @@ async fn sandboxed_tools_read_the_extension_runtime_but_not_its_checkout() {
             !allowed.iter().any(|root| secret.starts_with(root)),
             "{} is readable through {allowed:?}",
             secret.display()
+        );
+    }
+}
+
+#[test]
+fn development_builds_load_the_extension_from_the_checkout() {
+    let resources = Path::new("/Applications/Pau Dev.app/Contents/Resources");
+    let checkout = SandboxExtension::checkout();
+    assert_eq!(
+        SandboxExtension::locate(Channel::Dev, Some(resources)),
+        checkout
+    );
+    assert_eq!(SandboxExtension::locate(Channel::Dev, None), checkout);
+    // A release server without an app, such as the browser development
+    // server, has only the checkout.
+    assert_eq!(SandboxExtension::locate(Channel::Release, None), checkout);
+    assert_eq!(
+        checkout.entry(),
+        Path::new(SANDBOX_PACKAGE).join("src/pi-extension.ts")
+    );
+    assert!(checkout.entry().is_file());
+}
+
+#[tokio::test]
+async fn release_builds_load_the_extension_bundled_in_the_app_resources() {
+    let fixture = Fixture::with_extension(None, |directory| {
+        let resources = directory.join("Pau.app/Contents/Resources");
+        let package = resources.join("sandbox");
+        fs::create_dir_all(package.join("src")).unwrap();
+        fs::create_dir_all(package.join("node_modules/@anthropic-ai/sandbox-runtime")).unwrap();
+        fs::write(package.join("src/pi-extension.ts"), "").unwrap();
+        // Everything else in the bundle stays unreadable to tools.
+        fs::write(resources.join("icon.icns"), "").unwrap();
+        SandboxExtension::locate(Channel::Release, Some(&resources))
+    })
+    .await;
+    fixture
+        .select_sandbox(json!({"home_read_deny": true}))
+        .await;
+    let (status, session) = fixture.start(None).await;
+    assert_eq!(status, StatusCode::CREATED, "{session}");
+
+    let resources =
+        fs::canonicalize(fixture._directory.path().join("Pau.app/Contents/Resources")).unwrap();
+    let package = resources.join("sandbox");
+    let arguments = fs::read_to_string(fixture.workspace_root.join("args.txt")).unwrap();
+    assert!(
+        arguments.contains(&format!(
+            "--extension {}",
+            fixture
+                ._directory
+                .path()
+                .join("Pau.app/Contents/Resources/sandbox/src/pi-extension.ts")
+                .display()
+        )),
+        "{arguments}"
+    );
+
+    let policy_file = fs::read_to_string(fixture.workspace_root.join("policy-file.txt")).unwrap();
+    let policy: Value = serde_json::from_slice(&fs::read(policy_file).unwrap()).unwrap();
+    let allowed: Vec<PathBuf> = policy["runtimeConfig"]["filesystem"]["allowRead"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|path| PathBuf::from(path.as_str().unwrap()))
+        .collect();
+    assert!(allowed.contains(&package), "{allowed:?}");
+    let checkout = fs::canonicalize(SANDBOX_PACKAGE).unwrap();
+    for hidden in [
+        resources.join("icon.icns"),
+        fs::canonicalize(checkout.join("../../node_modules")).unwrap(),
+        checkout,
+    ] {
+        assert!(
+            !allowed.iter().any(|root| hidden.starts_with(root)),
+            "{} is readable through {allowed:?}",
+            hidden.display()
         );
     }
 }

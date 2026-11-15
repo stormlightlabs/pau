@@ -1,10 +1,13 @@
 // Runs the Tauri CLI with the bundle identity that matches the build channel.
 //
-// Release builds use tauri.conf.json. Everything else, including `tauri dev`,
-// layers tauri.dev.conf.json on top so it never shares an identifier or data
-// directory with an installed release. The Rust build script applies the same
-// rule to the compiled version, so the two agree: PAU_BUILD_CHANNEL forces a
-// channel, otherwise HEAD must be exactly at the tag v<workspace version>.
+// Release builds layer tauri.release.conf.json on tauri.conf.json. It stages
+// the sandbox extension and bundles it as a resource, which plain Cargo builds
+// of the app do not need. Everything else, including `tauri dev`, layers
+// tauri.dev.conf.json instead, so it never shares an identifier or data
+// directory with an installed release and loads the sandbox extension from
+// the checkout. The Rust build script applies the same rule to the compiled
+// version, so the two agree: PAU_BUILD_CHANNEL forces a channel, otherwise
+// HEAD must be exactly at the tag v<workspace version>.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
@@ -35,7 +38,8 @@ function isRelease() {
 }
 
 const release = isRelease();
-const tauriArgs = [command, ...(release ? [] : ['--config', 'src-tauri/tauri.dev.conf.json']), ...args];
+const channelConfig = release ? 'src-tauri/tauri.release.conf.json' : 'src-tauri/tauri.dev.conf.json';
+const tauriArgs = [command, '--config', channelConfig, ...args];
 const result = spawnSync('tauri', tauriArgs, {
 	stdio: 'inherit',
 	shell: process.platform === 'win32',

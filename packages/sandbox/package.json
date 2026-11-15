@@ -8,7 +8,7 @@
 	"scripts": {
 		"build": "cargo build -p pau-sandbox-denial-preload",
 		"check": "tsc -p tsconfig.json",
-		"test": "node --test src/credential-broker.test.ts src/credential-proxy.test.ts src/denials.test.ts src/mcp-relay.test.ts src/pi-extension.test.ts src/preload.test.ts src/seatbelt.test.ts",
+		"test": "node --test src/credential-broker.test.ts src/credential-proxy.test.ts src/denials.test.ts src/mcp-relay.test.ts src/pi-extension.test.ts src/preload.test.ts src/seatbelt.test.ts src/tool-host-client.test.ts",
 		"test:boundary": "cargo build -p pau-sandbox-denial-preload && node src/boundary.ts",
 		"test:seatbelt": "node src/seatbelt-smoke.ts",
 		"test:pi": "cargo build -p pau-sandbox-denial-preload && node src/pi-smoke.ts"
@@ -20,10 +20,10 @@
 		"@anthropic-ai/sandbox-runtime": "0.0.77",
 		"@earendil-works/pi-ai": "1.0.0",
 		"@earendil-works/pi-coding-agent": "1.0.0",
-		"@stormlightlabs/pau-protocol": "workspace:*",
 		"typebox": "1.3.27"
 	},
 	"devDependencies": {
+		"@stormlightlabs/pau-protocol": "workspace:*",
 		"@types/node": "24.13.6",
 		"typescript": "7.0.2"
 	}

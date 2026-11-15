@@ -63,7 +63,7 @@ mod watches;
 
 use audit::PendingAudit;
 use build_info::Channel;
-use sessions::SessionApi;
+use sessions::{SandboxExtension, SessionApi};
 use starts::StartGate;
 use watches::{WatchLease, WorkspaceWatches};
 
@@ -185,6 +185,8 @@ struct SandboxApi {
     /// Sandboxes running in each workspace, shared by terminals and Pi
     /// sessions.
     placeholders: PlaceholderUsers,
+    /// Where sandboxed Pi sessions load the sandbox extension from.
+    extension: SandboxExtension,
 }
 
 impl SandboxApi {
@@ -198,11 +200,17 @@ impl SandboxApi {
             sessions,
             terminal_relay: None,
             placeholders: PlaceholderUsers::default(),
+            extension: SandboxExtension::checkout(),
         }
     }
 
     fn with_terminal_relay(mut self, relay: Option<PathBuf>) -> Self {
         self.terminal_relay = relay;
+        self
+    }
+
+    fn with_extension(mut self, extension: SandboxExtension) -> Self {
+        self.extension = extension;
         self
     }
 
@@ -1710,6 +1718,11 @@ pub struct ServerOptions {
     /// executable after it called [`pau_term::relay::run_if_requested`].
     /// `None` makes sandboxed terminals unavailable.
     pub terminal_relay: Option<PathBuf>,
+    /// The desktop app's resource directory. A release build loads the
+    /// sandbox extension bundled there. Development builds, and a release
+    /// build given `None`, load it from the checkout the server was built
+    /// from.
+    pub resource_directory: Option<PathBuf>,
 }
 
 /// Starts the shared API with a new per-launch token.
@@ -1821,7 +1834,11 @@ pub async fn start_with_database(
         state_directory()?.join("sandbox"),
         path.clone(),
     )
-    .with_terminal_relay(options.terminal_relay);
+    .with_terminal_relay(options.terminal_relay)
+    .with_extension(SandboxExtension::locate(
+        build_channel(),
+        options.resource_directory.as_deref(),
+    ));
     let processes = database.processes();
     let diagnostics = default_diagnostics();
     diagnostics.register_sensitive_value(token.expose());

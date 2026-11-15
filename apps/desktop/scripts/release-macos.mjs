@@ -28,6 +28,12 @@ const notarizationCredentials = [
 	['APPLE_API_KEY', 'APPLE_API_ISSUER', 'APPLE_API_KEY_PATH'],
 	['APPLE_ID', 'APPLE_PASSWORD', 'APPLE_TEAM_ID']
 ];
+/** The sandbox extension and the packages it imports when Pi loads it. */
+const sandboxEntries = [
+	'src/pi-extension.ts',
+	'node_modules/@anthropic-ai/sandbox-runtime/package.json',
+	'node_modules/@earendil-works/pi-coding-agent/package.json'
+];
 const appleVariables = ['APPLE_SIGNING_IDENTITY', 'APPLE_CERTIFICATE', ...notarizationCredentials.flat()];
 
 function run(command, args, options = {}) {
@@ -90,6 +96,13 @@ function verifyBundle(bundle, version) {
 	const bundleIdentifier = bundleValue(bundle, 'CFBundleIdentifier');
 	if (bundleIdentifier !== identifier) {
 		throw new Error(`${bundle} has the bundle identifier ${bundleIdentifier}, not ${identifier}.`);
+	}
+	// The installed app has no checkout to load the sandbox extension from, so
+	// the extension and every package it imports at startup must be bundled.
+	const sandbox = path.join(bundle, 'Contents/Resources/sandbox');
+	const missing = sandboxEntries.filter((entry) => !existsSync(path.join(sandbox, entry)));
+	if (missing.length > 0) {
+		throw new Error(`${bundle} is missing ${missing.join(', ')} in Contents/Resources/sandbox.`);
 	}
 }
 

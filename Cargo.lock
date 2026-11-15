@@ -2992,6 +2992,7 @@ dependencies = [
  "pau-agent",
  "pau-core",
  "pau-server",
+ "pau-term",
  "serde",
  "serde_json",
  "tauri",
@@ -3072,6 +3073,7 @@ dependencies = [
  "portable-pty",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tracing-subscriber",
 ]

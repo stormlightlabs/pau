@@ -18,7 +18,9 @@ use std::{
 
 use pau_core::terminal::{TerminalSignal, TerminalSize, TerminalStatus};
 use portable_pty::{CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{Mutex as AsyncMutex, mpsc, watch};
+
+use crate::relay::{self, RelayFrame};
 
 /// Largest chunk the reader thread forwards at once.
 const READ_CHUNK_BYTES: usize = 8 * 1024;
@@ -46,6 +48,13 @@ pub struct TerminalCommand {
     pub environment: Vec<(OsString, OsString)>,
     /// Initial dimensions.
     pub size: TerminalSize,
+    /// Whether the program is a `pau-term` relay, or a launcher such as
+    /// sandbox-runtime's `srt` that runs one with its standard streams.
+    ///
+    /// A relay child receives only `environment`, not the backend
+    /// environment. Its PTY runs in raw mode, and input, resizes, and signals
+    /// reach it as frames that [`crate::relay`] describes.
+    pub relay: bool,
 }
 
 impl TerminalCommand {
@@ -63,6 +72,7 @@ impl TerminalCommand {
             cwd: cwd.into(),
             environment: Vec::new(),
             size,
+            relay: false,
         }
     }
 }
@@ -155,6 +165,10 @@ pub struct Terminal {
     /// The child is a session leader, so this is also its process group ID.
     process_id: u32,
     size: Mutex<TerminalSize>,
+    /// Held for a whole resize, so concurrent resizes leave the relay with
+    /// the size the terminal last recorded.
+    resizing: AsyncMutex<()>,
+    relay: bool,
     exit: TerminalExit,
 }
 
@@ -174,15 +188,30 @@ impl Terminal {
     /// output stream.
     ///
     /// The child inherits the backend environment with the command's
-    /// variables added and `TERM` set to `xterm-256color`.
+    /// variables added and `TERM` set to `xterm-256color`. A relay child
+    /// receives only the command's variables and `TERM`.
     pub fn spawn(command: TerminalCommand) -> Result<(Self, TerminalOutput), TerminalError> {
         let size = pty_size(command.size)?;
         let pair = NativePtySystem::default()
             .openpty(size)
             .map_err(|error| TerminalError::Spawn(error.to_string()))?;
+        if command.relay {
+            // Raw mode must be in place before the first frame is written,
+            // or the line discipline would echo frames and turn their bytes
+            // into signals for the launcher. Termios settings belong to the
+            // PTY pair, so setting them on the master applies to the child.
+            let fd = pair
+                .master
+                .as_raw_fd()
+                .ok_or_else(|| TerminalError::Spawn("the PTY has no file descriptor".to_owned()))?;
+            relay::set_raw_mode(fd);
+        }
         let mut builder = CommandBuilder::new(&command.program);
         builder.args(&command.args);
         builder.cwd(&command.cwd);
+        if command.relay {
+            builder.env_clear();
+        }
         for (name, value) in &command.environment {
             builder.env(name, value);
         }
@@ -238,6 +267,8 @@ impl Terminal {
                 input: input_sender,
                 process_id,
                 size: Mutex::new(command.size),
+                resizing: AsyncMutex::new(()),
+                relay: command.relay,
                 exit: TerminalExit(status_receiver),
             },
             TerminalOutput(output_receiver),
@@ -273,6 +304,15 @@ impl Terminal {
         if bytes.is_empty() {
             return Ok(());
         }
+        let bytes = if self.relay {
+            relay::encode_input(&bytes)
+        } else {
+            bytes
+        };
+        self.send(bytes).await
+    }
+
+    async fn send(&self, bytes: Vec<u8>) -> Result<(), TerminalError> {
         self.input
             .send(bytes)
             .await
@@ -280,29 +320,38 @@ impl Terminal {
     }
 
     /// Applies new dimensions. The kernel sends `SIGWINCH` to the foreground
-    /// process group.
-    pub fn resize(&self, size: TerminalSize) -> Result<(), TerminalError> {
+    /// process group. A relay also receives the size as a frame and applies
+    /// it to its own PTY.
+    pub async fn resize(&self, size: TerminalSize) -> Result<(), TerminalError> {
         let pty_size = pty_size(size)?;
-        // Hold the size lock across the call so concurrent resizes leave the
-        // recorded size equal to the size the PTY last received.
-        let mut current = self.size.lock().expect("terminal size lock poisoned");
-        self.master
-            .lock()
-            .expect("terminal master lock poisoned")
-            .resize(pty_size)
-            .map_err(|error| TerminalError::Io(io::Error::other(error.to_string())))?;
-        *current = size;
+        let _resizing = self.resizing.lock().await;
+        {
+            let mut current = self.size.lock().expect("terminal size lock poisoned");
+            self.master
+                .lock()
+                .expect("terminal master lock poisoned")
+                .resize(pty_size)
+                .map_err(|error| TerminalError::Io(io::Error::other(error.to_string())))?;
+            *current = size;
+        }
+        if self.relay {
+            self.send(relay::encode(&RelayFrame::Resize(size))).await?;
+        }
         Ok(())
     }
 
     /// Sends `signal` to the terminal's foreground process group, as a
-    /// keyboard-generated signal would be delivered.
+    /// keyboard-generated signal would be delivered. A relay receives the
+    /// signal as a frame and delivers it to its own PTY's foreground group.
     ///
     /// Does nothing once the child has exited, so a reused process ID cannot
     /// receive the signal.
-    pub fn signal(&self, signal: TerminalSignal) -> Result<(), TerminalError> {
+    pub async fn signal(&self, signal: TerminalSignal) -> Result<(), TerminalError> {
         if !self.is_running() {
             return Ok(());
+        }
+        if self.relay {
+            return self.send(relay::encode(&RelayFrame::Signal(signal))).await;
         }
         let group = self.foreground_group().unwrap_or(self.process_id as i32);
         kill_group(group, signal_number(signal))
@@ -313,12 +362,20 @@ impl Terminal {
     /// Sends `SIGHUP` and `SIGCONT` to the shell's process group and the
     /// foreground process group, as a closed terminal window would. If the
     /// child has not exited after `grace`, sends `SIGKILL` to both groups.
+    ///
+    /// A relay instead receives a hangup frame and stops its own session.
+    /// Signals to the launcher's group would kill the launcher before the
+    /// relay could clean up, so they follow only after `grace`.
     pub async fn close(&self, grace: Duration) -> TerminalStatus {
         if !self.is_running() {
             return self.status();
         }
-        self.signal_session(libc::SIGHUP);
-        self.signal_session(libc::SIGCONT);
+        if self.relay {
+            let _ = self.send(relay::encode(&RelayFrame::Hangup)).await;
+        } else {
+            self.signal_session(libc::SIGHUP);
+            self.signal_session(libc::SIGCONT);
+        }
         let mut exit = self.exit();
         if let Ok(status) = tokio::time::timeout(grace, exit.wait()).await {
             return status;

@@ -6,6 +6,8 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::sandbox::SandboxProfileName;
+
 /// Character-cell dimensions of a terminal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct TerminalSize {
@@ -65,6 +67,9 @@ pub struct TerminalInfo {
     pub size: TerminalSize,
     /// Running or exit state.
     pub status: TerminalStatus,
+    /// Sandbox profile the shell runs under, or `None` when it runs with the
+    /// operator's normal access.
+    pub sandbox: Option<SandboxProfileName>,
 }
 
 /// Request body that opens a terminal in a workspace.
@@ -76,6 +81,11 @@ pub struct CreateTerminalRequest {
     pub command: Option<Vec<String>>,
     /// Initial dimensions.
     pub size: TerminalSize,
+    /// Runs the shell under the workspace's sandbox profile, the one new
+    /// sessions use. The request fails when the workspace has no profile or
+    /// the sandbox cannot start; it never falls back to an unsandboxed shell.
+    #[serde(default)]
+    pub sandboxed: bool,
 }
 
 /// Request body that sends a signal to a terminal.

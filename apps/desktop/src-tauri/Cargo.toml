@@ -12,6 +12,7 @@ tauri-build = { version = "2.5.6", features = [] }
 [dependencies]
 pau-core = { path = "../../../crates/core" }
 pau-server = { path = "../../../crates/server" }
+pau-term = { path = "../../../crates/term" }
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2.11.5", features = [] }

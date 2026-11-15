@@ -19,6 +19,7 @@ mod network;
 mod placeholders;
 mod policy;
 mod selection;
+mod terminal;
 
 use std::{fmt, io};
 
@@ -35,6 +36,7 @@ pub use selection::{
     SandboxPreviewRequest, SandboxProfileName, SandboxSelection, SandboxSelectionState,
     SandboxSettings, WorkspaceSandbox, validate_selection,
 };
+pub use terminal::{TerminalSandboxInput, TerminalSandboxLaunch, prepare_terminal_sandbox};
 
 /// Current version of the policy file read by `packages/sandbox`.
 pub const SANDBOX_POLICY_VERSION: u32 = 3;

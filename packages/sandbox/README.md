@@ -111,10 +111,21 @@ pnpm --filter @stormlightlabs/pau-sandbox test:pi
 network, socket, environment, subprocess, placeholder, cleanup, terminal, and
 startup-failure cases against each profile. It also checks live network
 changes and pinned executables. Descendant teardown and Bubblewrap placeholder
-checks run only on Linux. The macOS PTY check remains skipped until the
-sandboxed terminal relay exists. `test:seatbelt` runs on macOS and checks denied
+checks run only on Linux. `test:seatbelt` runs on macOS and checks denied
 file and direct TCP access from a sandboxed process and its descendants.
 `test:pi` starts Pi in RPC mode with a scripted model and checks every built-in
 tool through the sandbox, including streaming, abort, timeout, truncation,
 tool host crashes, grant changes during a session, a contained stdio MCP
 server, and per-call approval.
+
+Sandboxed terminals start sandbox-runtime's `srt` command with a policy from
+the same resolver, and `srt` runs the `pau-term` relay inside the sandbox. Their
+checks live in Rust. After `pnpm install`, this runs a shell under the real
+sandbox and checks its PTY, resizes, file and network limits, environment,
+background jobs, and keystroke injection:
+
+```sh
+cargo test -p pau-term --test sandboxed -- --nocapture
+```
+
+The test skips when it cannot find `srt`. Set `PAU_SRT` to use another copy.

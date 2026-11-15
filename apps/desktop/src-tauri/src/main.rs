@@ -90,6 +90,8 @@ async fn run_startup(app: AppHandle) {
 }
 
 fn main() {
+    // A sandboxed terminal starts this executable as its relay.
+    pau_term::relay::run_if_requested();
     tracing_subscriber::fmt().json().init();
     let diagnostics = std::env::args().any(|argument| argument == "--diagnostics");
 
@@ -115,6 +117,7 @@ fn main() {
             None,
             ServerOptions {
                 diagnostics,
+                terminal_relay: std::env::current_exe().ok(),
                 ..ServerOptions::default()
             },
         ))

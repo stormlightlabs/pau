@@ -2,6 +2,7 @@
 
 mod modes;
 mod pty;
+pub mod relay;
 mod scrollback;
 
 pub use pau_core::terminal::{TerminalSignal, TerminalSize, TerminalStatus};

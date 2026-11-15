@@ -8,7 +8,8 @@
 //! A stream that attaches first receives the terminal's scrollback.
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
     sync::{
         Arc, Mutex, Weak,
         atomic::{AtomicU64, Ordering},
@@ -27,6 +28,10 @@ use axum::{
 };
 use pau_core::{
     ServerEventKind,
+    sandbox::{
+        SandboxError, SandboxLaunchInput, SandboxProfileName, TerminalSandboxInput,
+        prepare_terminal_sandbox, remove_placeholders,
+    },
     terminal::{
         CreateTerminalRequest, TerminalClientMessage, TerminalInfo, TerminalServerMessage,
         TerminalSignalRequest, TerminalSize,
@@ -36,7 +41,10 @@ use pau_core::{
 use pau_term::{AttachedOutput, Terminal, TerminalCommand, TerminalError, TerminalScrollback};
 use uuid::Uuid;
 
-use super::{ApiError, ApiErrorBody, ApiState, EventHub, diagnostic_timestamp, workspace_service};
+use super::{
+    ApiError, ApiErrorBody, ApiState, EventHub, diagnostic_timestamp, sandbox_api,
+    workspace_service,
+};
 
 /// Time a closing terminal has to exit after `SIGHUP` before `SIGKILL`.
 const CLOSE_GRACE: Duration = Duration::from_secs(3);
@@ -73,6 +81,7 @@ struct ManagedTerminal {
     opened: u64,
     workspace_id: String,
     command: Vec<String>,
+    sandbox: Option<SandboxProfileName>,
     terminal: Terminal,
     scrollback: TerminalScrollback,
 }
@@ -85,6 +94,7 @@ impl ManagedTerminal {
             command: self.command.clone(),
             size: self.terminal.size(),
             status: self.terminal.status(),
+            sandbox: self.sandbox,
         }
     }
 }
@@ -119,6 +129,19 @@ impl From<WorkspaceError> for TerminalApiError {
     }
 }
 
+impl From<SandboxError> for TerminalApiError {
+    fn from(error: SandboxError) -> Self {
+        match error {
+            SandboxError::UnsupportedPlatform(_) | SandboxError::Executable(_) => {
+                Self::Api(ApiError::SandboxUnavailable(error.to_string()))
+            }
+            SandboxError::Invalid(_) | SandboxError::Io(_) => {
+                Self::Api(ApiError::InvalidSandbox(error.to_string()))
+            }
+        }
+    }
+}
+
 impl From<TerminalError> for TerminalApiError {
     fn from(error: TerminalError) -> Self {
         match error {
@@ -150,46 +173,128 @@ impl IntoResponse for TerminalApiError {
     }
 }
 
+/// Files a sandboxed terminal leaves behind, removed when its process exits.
+struct SandboxLeftovers {
+    session_directory: PathBuf,
+    placeholders: Vec<PathBuf>,
+}
+
 /// Opens a terminal in a workspace root and starts streaming its output.
+///
+/// A sandboxed request runs the shell under the workspace's sandbox profile
+/// through `srt` and the `pau-term` relay. It fails rather than open an
+/// unsandboxed shell when the workspace has no profile or the sandbox cannot
+/// start.
 pub(crate) async fn create_terminal(
     State(state): State<ApiState>,
     Json(request): Json<CreateTerminalRequest>,
 ) -> Result<(StatusCode, Json<TerminalInfo>), TerminalApiError> {
     let workspaces = workspace_service(&state)?;
     let root = workspaces.root(&request.workspace_id).await?;
-    let mut command = match request.command {
-        None => TerminalCommand::shell(root, request.size),
-        Some(command) => {
-            let mut parts = command.into_iter();
-            let program = parts
-                .next()
-                .filter(|program| !program.is_empty())
-                .ok_or_else(|| TerminalApiError::Invalid("command must name a program".into()))?;
-            TerminalCommand {
-                program,
-                args: parts.collect(),
-                cwd: root,
-                environment: Vec::new(),
-                size: request.size,
-            }
+    let id = Uuid::new_v4().to_string();
+    let shell = TerminalCommand::shell(&root, request.size);
+    let argv = match request.command {
+        None => std::iter::once(shell.program.clone()).collect::<Vec<_>>(),
+        Some(command) => command,
+    };
+    let Some(program) = argv.first().filter(|program| !program.is_empty()) else {
+        return Err(TerminalApiError::Invalid(
+            "command must name a program".into(),
+        ));
+    };
+    let mut leftovers = None;
+    let mut sandbox = None;
+    let command = if request.sandboxed {
+        let api = sandbox_api(&state)?;
+        let selection = api
+            .selections
+            .get(&request.workspace_id, None)
+            .await
+            .map_err(|error| ApiError::from(WorkspaceError::from(error)))?
+            .workspace_default;
+        let settings = selection.settings().ok_or_else(|| {
+            TerminalApiError::Invalid(
+                "This workspace has no sandbox profile. Choose one in its sandbox settings \
+                 first."
+                    .into(),
+            )
+        })?;
+        if let Some(reason) = api.terminal_unavailable() {
+            return Err(ApiError::SandboxUnavailable(reason).into());
+        }
+        let executables = api
+            .executables
+            .as_ref()
+            .map_err(|error| ApiError::SandboxUnavailable(error.clone()))?;
+        let relay = [
+            api.terminal_relay
+                .as_ref()
+                .map(|relay| relay.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            pau_term::relay::RELAY_ARGUMENT.to_owned(),
+        ];
+        let session_directory = api.sessions.join(format!("terminal-{id}"));
+        let launch = prepare_terminal_sandbox(&TerminalSandboxInput {
+            launch: SandboxLaunchInput {
+                adapter: pau_core::sandbox::SandboxAdapter::Terminal,
+                settings,
+                workspace: &root,
+                home: &api.home,
+                session_directory: &session_directory,
+                executables,
+                runtime_roots: &[],
+                tool_path: &api.tool_path,
+                credential_environment: &BTreeMap::new(),
+            },
+            relay: &relay,
+            command: &argv,
+            shell: &shell.program,
+        })?;
+        sandbox = Some(settings.profile);
+        leftovers = Some(SandboxLeftovers {
+            session_directory,
+            placeholders: launch.placeholders,
+        });
+        TerminalCommand {
+            program: launch.program,
+            args: launch.args,
+            cwd: root,
+            environment: launch.environment,
+            size: request.size,
+            relay: true,
+        }
+    } else {
+        TerminalCommand {
+            program: program.clone(),
+            args: argv[1..].to_vec(),
+            cwd: root,
+            environment: workspaces.process_environment(),
+            size: request.size,
+            relay: false,
         }
     };
-    command.environment = workspaces.process_environment();
-    let argv = std::iter::once(command.program.clone())
-        .chain(command.args.iter().cloned())
-        .collect();
     // Spawning forks and waits for exec to report success, so keep it off
     // the runtime worker.
-    let (terminal, output) = tokio::task::spawn_blocking(move || Terminal::spawn(command))
+    let spawned = tokio::task::spawn_blocking(move || Terminal::spawn(command))
         .await
-        .map_err(|error| TerminalApiError::Failed(error.to_string()))??;
+        .map_err(|error| TerminalApiError::Failed(error.to_string()))?;
+    let (terminal, output) = match spawned {
+        Ok(spawned) => spawned,
+        Err(error) => {
+            if let Some(leftovers) = leftovers {
+                leftovers.remove();
+            }
+            return Err(error.into());
+        }
+    };
 
     let mut exit = terminal.exit();
     let managed = Arc::new(ManagedTerminal {
-        id: Uuid::new_v4().to_string(),
+        id,
         opened: OPENED.fetch_add(1, Ordering::Relaxed),
         workspace_id: request.workspace_id,
         command: argv,
+        sandbox,
         terminal,
         scrollback: TerminalScrollback::follow(output),
     });
@@ -204,6 +309,9 @@ pub(crate) async fn create_terminal(
     let events = state.events.clone();
     tokio::spawn(async move {
         exit.wait().await;
+        if let Some(leftovers) = leftovers {
+            let _ = tokio::task::spawn_blocking(move || leftovers.remove()).await;
+        }
         if let Some(managed) = weak.upgrade() {
             publish(&events, &managed.info());
         }
@@ -212,6 +320,15 @@ pub(crate) async fn create_terminal(
     let info = managed.info();
     publish(&state.events, &info);
     Ok((StatusCode::CREATED, Json(info)))
+}
+
+impl SandboxLeftovers {
+    /// Removes placeholders the runtime left and the terminal's policy and
+    /// temporary directory.
+    fn remove(self) {
+        remove_placeholders(&self.placeholders);
+        let _ = std::fs::remove_dir_all(&self.session_directory);
+    }
 }
 
 /// Lists live terminals, oldest first.
@@ -243,7 +360,7 @@ pub(crate) async fn resize_terminal(
     Json(size): Json<TerminalSize>,
 ) -> Result<Json<TerminalInfo>, TerminalApiError> {
     let managed = state.terminals.get(&terminal_id)?;
-    managed.terminal.resize(size)?;
+    managed.terminal.resize(size).await?;
     Ok(Json(managed.info()))
 }
 
@@ -257,7 +374,8 @@ pub(crate) async fn signal_terminal(
         .terminals
         .get(&terminal_id)?
         .terminal
-        .signal(request.signal)?;
+        .signal(request.signal)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -312,10 +430,10 @@ async fn serve_stream(mut socket: WebSocket, managed: Arc<ManagedTerminal>) {
                 Some(Ok(Message::Text(text))) => {
                     match serde_json::from_str(&text) {
                         Ok(TerminalClientMessage::Resize { size }) => {
-                            let _ = managed.terminal.resize(size);
+                            let _ = managed.terminal.resize(size).await;
                         }
                         Ok(TerminalClientMessage::Signal { signal }) => {
-                            let _ = managed.terminal.signal(signal);
+                            let _ = managed.terminal.signal(signal).await;
                         }
                         Err(_) => {}
                     }
@@ -364,7 +482,7 @@ async fn send_exited(socket: &mut WebSocket, managed: &ManagedTerminal) -> Resul
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, net::SocketAddr};
+    use std::{fs, net::SocketAddr, path::PathBuf};
 
     use axum::{
         Router,
@@ -798,6 +916,168 @@ mod tests {
             assert_eq!(status, expected, "{response}");
             assert_eq!(response["code"], code);
         }
+    }
+
+    /// Starts a router with sandbox selections whose `srt` is a fake that
+    /// records its arguments and environment and exits.
+    async fn sandbox_fixture(relay: bool) -> (TempDir, Router, String, PathBuf) {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("project");
+        let bin = directory.path().join("bin");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&bin).unwrap();
+        let srt = bin.join("srt");
+        fs::write(
+            &srt,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{0}/args'\nenv > '{0}/env'\n",
+                directory.path().display()
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&srt, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+        let database = Database::open(":memory:").await.unwrap();
+        let workspaces = WorkspaceService::new(database.workspaces());
+        let workspace = workspaces.open(&root, None).await.unwrap();
+        let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        )))
+        .unwrap();
+        let sandbox = crate::SandboxApi::new(
+            database.sandbox_selection(),
+            directory.path().join("sandbox"),
+            path,
+        )
+        // The fake also stands in for the relay executable, which only has
+        // to exist for the profile to count as available.
+        .with_terminal_relay(relay.then(|| srt.clone()));
+        let app = router_with_services(
+            ApiToken::configured(TOKEN).unwrap(),
+            EventHub::default(),
+            Some(workspaces),
+            default_diagnostics(),
+            None,
+            Some(sandbox),
+            None,
+        );
+        let sessions = directory.path().join("sandbox");
+        (directory, app, workspace.id, sessions)
+    }
+
+    async fn request(
+        app: &Router,
+        method: &str,
+        path: &str,
+        body: Option<serde_json::Value>,
+    ) -> (StatusCode, serde_json::Value) {
+        let request = Request::builder()
+            .method(method)
+            .uri(path)
+            .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(body.map_or_else(Body::empty, |body| Body::from(body.to_string())))
+            .unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        let status = response.status();
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        (status, serde_json::from_slice(&bytes).unwrap_or_default())
+    }
+
+    #[tokio::test]
+    async fn opens_sandboxed_terminals_only_under_the_workspace_profile() {
+        let (directory, app, workspace_id, sessions) = sandbox_fixture(true).await;
+        let create = serde_json::json!({
+            "workspace_id": workspace_id,
+            "size": {"cols": 80, "rows": 24},
+            "sandboxed": true,
+        });
+
+        let (status, body) = request(&app, "POST", "/api/terminals", Some(create.clone())).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+        assert_eq!(body["code"], "invalid_terminal");
+
+        let sandbox_path = format!("/api/workspaces/{workspace_id}/sandbox");
+        let selection = serde_json::json!({"mode": "sandboxed", "settings": {
+            "profile": "workspace-write",
+        }});
+        let (status, stored) = request(&app, "PUT", &sandbox_path, Some(selection)).await;
+        if status == StatusCode::SERVICE_UNAVAILABLE {
+            // No sandbox runs on this host, so a sandboxed terminal must not
+            // start either.
+            let (status, body) = request(&app, "POST", "/api/terminals", Some(create)).await;
+            assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+            return;
+        }
+        assert_eq!(status, StatusCode::OK, "{stored}");
+        assert_eq!(stored["terminal_unavailable"], serde_json::Value::Null);
+
+        let (status, body) = request(&app, "POST", "/api/terminals", Some(create)).await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+        let info: TerminalInfo = serde_json::from_value(body).unwrap();
+        assert_eq!(info.sandbox, Some(SandboxProfileName::WorkspaceWrite));
+        let shell = TerminalCommand::shell("/", TerminalSize { cols: 1, rows: 1 }).program;
+        assert_eq!(info.command, std::slice::from_ref(&shell));
+
+        let session = sessions.join(format!("terminal-{}", info.id));
+        timeout(STEP_LIMIT, async {
+            loop {
+                let (_, body) =
+                    request(&app, "GET", &format!("/api/terminals/{}", info.id), None).await;
+                if body["status"]["state"] == "exited" && !session.exists() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("the terminal did not exit and clean up");
+
+        let args = fs::read_to_string(directory.path().join("args")).unwrap();
+        let args: Vec<_> = args.lines().collect();
+        assert_eq!(args[0], "--settings");
+        assert!(args[1].starts_with(&*session.to_string_lossy()), "{args:?}");
+        assert_eq!(args[2], "-c");
+        assert!(
+            args[3].ends_with(&format!("'--pau-term-relay' '{shell}'")),
+            "{args:?}"
+        );
+        let environment = fs::read_to_string(directory.path().join("env")).unwrap();
+        assert!(environment.contains("PAU_SANDBOX=1"), "{environment}");
+        assert!(environment.contains("TERM=xterm-256color"), "{environment}");
+        assert!(!environment.contains("CARGO_MANIFEST_DIR"), "{environment}");
+    }
+
+    #[tokio::test]
+    async fn reports_sandboxed_terminals_unavailable_without_a_relay() {
+        let (_directory, app, workspace_id, _) = sandbox_fixture(false).await;
+        let sandbox_path = format!("/api/workspaces/{workspace_id}/sandbox");
+        let selection = serde_json::json!({"mode": "sandboxed", "settings": {
+            "profile": "read-only",
+        }});
+        let (status, stored) = request(&app, "PUT", &sandbox_path, Some(selection)).await;
+        if status == StatusCode::OK {
+            assert!(
+                stored["terminal_unavailable"]
+                    .as_str()
+                    .is_some_and(|reason| reason.contains("relay")),
+                "{stored}"
+            );
+        }
+        let (status, body) = request(
+            &app,
+            "POST",
+            "/api/terminals",
+            Some(serde_json::json!({
+                "workspace_id": workspace_id,
+                "size": {"cols": 80, "rows": 24},
+                "sandboxed": true,
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+        assert_eq!(body["code"], "sandbox_unavailable");
+        let (_, terminals) = request(&app, "GET", "/api/terminals", None).await;
+        assert_eq!(terminals, serde_json::json!([]));
     }
 
     #[test]

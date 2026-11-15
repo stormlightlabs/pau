@@ -249,7 +249,15 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
     validate_selection(&SandboxSelection::Sandboxed {
         settings: settings.clone(),
     })?;
-    for reference in &settings.credential_references {
+    // srt has no credential broker, so a terminal receives neither the real
+    // values nor sentinels. The effective profile names the gap.
+    let credential_references: &[SandboxCredentialReference] =
+        if input.adapter == SandboxAdapter::Terminal {
+            &[]
+        } else {
+            &settings.credential_references
+        };
+    for reference in credential_references {
         let Some(value) = input.credential_environment.get(&reference.source) else {
             return Err(SandboxError::Invalid(format!(
                 "credential source {} is missing from Pau's host environment",
@@ -360,13 +368,17 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
         },
         "ripgrep": { "command": input.executables.ripgrep.path },
     });
-    if !settings.credential_references.is_empty() {
+    if !credential_references.is_empty() {
         // Credential substitution is enabled only on sandbox-runtime's
         // certificate-verifying TLS termination path. The TypeScript host
         // registers Pau's existing per-session sentinels after the proxy
         // starts; no real value enters this serializable configuration.
         runtime_config["network"]["tlsTerminate"] = json!({});
         runtime_config["credentials"] = json!({});
+    }
+    if input.adapter == SandboxAdapter::Terminal {
+        // Lets the relay open its own PTY under Seatbelt. Bubblewrap ignores it.
+        runtime_config["allowPty"] = json!(true);
     }
     if let (Some(bubblewrap), Some(socat)) =
         (&input.executables.bubblewrap, &input.executables.socat)
@@ -380,10 +392,18 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
         ("LANG".to_owned(), "C.UTF-8".to_owned()),
         ("PATH".to_owned(), input.tool_path.to_owned()),
         ("PAU_SANDBOX".to_owned(), "1".to_owned()),
-        ("TERM".to_owned(), "dumb".to_owned()),
+        (
+            "TERM".to_owned(),
+            if input.adapter == SandboxAdapter::Terminal {
+                "xterm-256color"
+            } else {
+                "dumb"
+            }
+            .to_owned(),
+        ),
         ("TMPDIR".to_owned(), path_string(&temp_dir)),
     ]);
-    for reference in &settings.credential_references {
+    for reference in credential_references {
         // The broker receives the real value through its private startup pipe.
         // Sandboxed workers receive only this unguessable per-session value.
         environment.insert(
@@ -413,7 +433,7 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
         platform: std::env::consts::OS.to_owned(),
         mechanism: mechanism(input.executables),
         verified: input.executables.platform == SandboxPlatform::Linux,
-        executables: input.executables.listed(),
+        executables: input.executables.listed(input.adapter),
         profile: settings.profile,
         readable: SandboxReadAccess {
             home_denied: settings.home_read_deny,
@@ -429,16 +449,21 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
         },
         credentials: SandboxCredentialAccess {
             denied: strings(&credentials),
-            references: settings.credential_references.clone(),
-            brokered: settings
-                .credential_references
+            references: credential_references.to_vec(),
+            brokered: credential_references
                 .iter()
                 .map(|reference| reference.source.clone())
                 .collect(),
         },
         environment: environment.keys().cloned().collect(),
         limits: vec![
-            "Descendants stop when the tool host exits".to_owned(),
+            match input.adapter {
+                SandboxAdapter::Terminal => {
+                    "Processes stop when the shell exits or the terminal closes"
+                }
+                _ => "Descendants stop when the tool host exits",
+            }
+            .to_owned(),
             "Core dumps are disabled".to_owned(),
             "No CPU, memory, or process-count cap".to_owned(),
         ],
@@ -446,7 +471,11 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
         unsandboxed_tools: settings.unsandboxed_tools.clone(),
         disabled_tools,
         placeholders: strings(&placeholders),
-        known_gaps: known_gaps(input.adapter, input.executables.platform),
+        known_gaps: known_gaps(
+            input.adapter,
+            input.executables.platform,
+            !settings.credential_references.is_empty(),
+        ),
     };
     let policy = SandboxPolicyFile {
         version: SANDBOX_POLICY_VERSION,
@@ -456,7 +485,7 @@ pub fn resolve_sandbox(input: &SandboxLaunchInput<'_>) -> Result<ResolvedSandbox
         environment,
         no_proxy: proxy_exclusions(&settings.grants.domains),
         unsandboxed_tools: settings.unsandboxed_tools.clone(),
-        credential_references: settings.credential_references.clone(),
+        credential_references: credential_references.to_vec(),
         mcp_servers: Vec::new(),
         mcp_config: None,
         placeholders: strings(&placeholders),
@@ -587,6 +616,10 @@ fn adapter_tools(adapter: SandboxAdapter) -> (Vec<String>, Vec<String>) {
                 "Claude MCP servers".to_owned(),
             ],
         ),
+        SandboxAdapter::Terminal => (
+            vec!["The shell and every process it starts".to_owned()],
+            Vec::new(),
+        ),
     }
 }
 
@@ -600,7 +633,11 @@ fn mechanism(executables: &SandboxExecutables) -> String {
     }
 }
 
-fn known_gaps(adapter: SandboxAdapter, platform: SandboxPlatform) -> Vec<String> {
+fn known_gaps(
+    adapter: SandboxAdapter,
+    platform: SandboxPlatform,
+    has_credential_references: bool,
+) -> Vec<String> {
     let mut gaps = Vec::new();
     match platform {
         SandboxPlatform::Linux => gaps.push(
@@ -627,6 +664,26 @@ fn known_gaps(adapter: SandboxAdapter, platform: SandboxPlatform) -> Vec<String>
              the operating-system sandbox"
                 .to_owned(),
         ),
+        SandboxAdapter::Terminal => {
+            gaps.push(
+                "Shell history and other files outside the writable roots cannot be saved"
+                    .to_owned(),
+            );
+            if platform == SandboxPlatform::MacOs {
+                gaps.push(
+                    "A process that starts its own session keeps running after the terminal \
+                     closes"
+                        .to_owned(),
+                );
+            }
+            if has_credential_references {
+                gaps.push(
+                    "Credential brokerage is unavailable in terminals, so brokered variables \
+                     are not set"
+                        .to_owned(),
+                );
+            }
+        }
     }
     gaps
 }

@@ -40,6 +40,7 @@ struct Options {
 }
 
 fn main() -> io::Result<()> {
+    pau_term::relay::run_if_requested();
     let options = parse_options(env::args().skip(1))?;
     // The environment changes only here, before the runtime starts any thread.
     // Taking the exported token first leaves the variable unset, so `.env`
@@ -178,6 +179,7 @@ async fn serve(token: String, diagnostics: bool) -> io::Result<()> {
         ApiToken::configured(token)?,
         ServerOptions {
             diagnostics,
+            terminal_relay: env::current_exe().ok(),
             ..ServerOptions::default()
         },
     )

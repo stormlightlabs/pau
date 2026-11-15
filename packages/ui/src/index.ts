@@ -76,6 +76,7 @@ export type {
 	TerminalConnectionEvents,
 	TerminalExit,
 	TerminalFileLinks,
+	TerminalSandboxChoice,
 	TerminalSource,
 	TerminalTab
 } from './lib/types/terminal';

@@ -20,6 +20,7 @@ fn sh(script: &str) -> (Terminal, TerminalOutput) {
         cwd: std::env::temp_dir(),
         environment: Vec::new(),
         size: SIZE,
+        relay: false,
     })
     .unwrap()
 }
@@ -84,19 +85,20 @@ async fn applies_the_last_of_many_rapid_resizes() {
                 cols: 40 + step % 100,
                 rows: 10 + step % 50,
             })
+            .await
             .unwrap();
     }
     let last = TerminalSize {
         cols: 132,
         rows: 43,
     };
-    terminal.resize(last).unwrap();
+    terminal.resize(last).await.unwrap();
     terminal.write("\r").await.unwrap();
 
     read_until(&mut output, "43 132").await;
     assert_eq!(terminal.size(), last);
     assert!(matches!(
-        terminal.resize(TerminalSize { cols: 0, rows: 10 }),
+        terminal.resize(TerminalSize { cols: 0, rows: 10 }).await,
         Err(TerminalError::InvalidSize)
     ));
     assert_eq!(terminal.size(), last);
@@ -119,7 +121,7 @@ async fn reports_output_and_status_after_process_exit() {
     );
     assert_eq!(terminal.status(), status);
     // Signals after exit must not reach a process that reused the ID.
-    terminal.signal(TerminalSignal::Kill).unwrap();
+    terminal.signal(TerminalSignal::Kill).await.unwrap();
 }
 
 #[tokio::test]
@@ -142,7 +144,7 @@ async fn interrupts_the_foreground_process_group() {
         sh("trap 'echo caught; exit 7' INT; echo ready; while :; do sleep 1; done");
 
     read_until(&mut output, "ready").await;
-    terminal.signal(TerminalSignal::Interrupt).unwrap();
+    terminal.signal(TerminalSignal::Interrupt).await.unwrap();
     read_until(&mut output, "caught").await;
 
     assert_eq!(
@@ -236,6 +238,7 @@ fn rejects_empty_dimensions_and_missing_programs() {
         cwd: std::env::temp_dir(),
         environment: Vec::new(),
         size: SIZE,
+        relay: false,
     });
     assert!(matches!(missing, Err(TerminalError::Spawn(_))));
 }

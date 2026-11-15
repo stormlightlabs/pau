@@ -156,6 +156,9 @@ struct SandboxApi {
     home: PathBuf,
     /// Parent of per-session sandbox directories.
     sessions: PathBuf,
+    /// Executable that runs the sandboxed terminal relay, from
+    /// [`ServerOptions::terminal_relay`].
+    terminal_relay: Option<PathBuf>,
 }
 
 impl SandboxApi {
@@ -167,6 +170,27 @@ impl SandboxApi {
             tool_path: path.to_string_lossy().into_owned(),
             home: dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")),
             sessions,
+            terminal_relay: None,
+        }
+    }
+
+    fn with_terminal_relay(mut self, relay: Option<PathBuf>) -> Self {
+        self.terminal_relay = relay;
+        self
+    }
+
+    /// Why a sandboxed terminal cannot start, when that is the case.
+    fn terminal_unavailable(&self) -> Option<String> {
+        let executables = match &self.executables {
+            Ok(executables) => executables,
+            Err(error) => return Some(error.clone()),
+        };
+        if let Err(error) = executables.srt() {
+            return Some(error.to_string());
+        }
+        match &self.terminal_relay {
+            Some(relay) if relay.is_file() => None,
+            _ => Some("This build of Pau cannot start the terminal relay".to_owned()),
         }
     }
 }
@@ -1139,6 +1163,7 @@ async fn workspace_sandbox(
     Ok(WorkspaceSandbox {
         selection,
         unavailable: sandbox.executables.as_ref().err().cloned(),
+        terminal_unavailable: sandbox.terminal_unavailable(),
     })
 }
 
@@ -1432,6 +1457,11 @@ pub struct ServerOptions {
     /// The desktop app passes its login shell `PATH` here instead of
     /// changing its own environment, which its other threads may be reading.
     pub path: Option<OsString>,
+    /// Executable that runs the sandboxed terminal relay when its first
+    /// argument is [`pau_term::relay::RELAY_ARGUMENT`], usually the running
+    /// executable after it called [`pau_term::relay::run_if_requested`].
+    /// `None` makes sandboxed terminals unavailable.
+    pub terminal_relay: Option<PathBuf>,
 }
 
 /// Starts the shared API with a new per-launch token.
@@ -1542,7 +1572,8 @@ pub async fn start_with_database(
         database.sandbox_selection(),
         state_directory()?.join("sandbox"),
         path.clone(),
-    );
+    )
+    .with_terminal_relay(options.terminal_relay);
     let processes = database.processes();
     let diagnostics = default_diagnostics();
     diagnostics.register_sensitive_value(token.expose());

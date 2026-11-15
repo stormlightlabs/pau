@@ -1,4 +1,4 @@
-import type { TerminalExit, TerminalSource, TerminalTab } from '../lib/types/terminal';
+import type { TerminalExit, TerminalSandboxChoice, TerminalSource, TerminalTab } from '../lib/types/terminal';
 
 /** Options for the in-memory terminal used by stories and component tests. */
 export type TerminalFixtureOptions = {
@@ -12,6 +12,10 @@ export type TerminalFixtureOptions = {
 	running?: number;
 	/** Rejects listing the running terminals with this message. */
 	listError?: string;
+	/** The workspace's sandbox profile for new terminals. Without it, the source offers none. */
+	sandbox?: TerminalSandboxChoice;
+	/** Rejects sandboxed terminals with this message, as when the relay cannot start. */
+	sandboxError?: string;
 };
 
 /** An in-memory terminal source and the input and sizes it received. */
@@ -41,9 +45,11 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 	const printers = new Map<string, (text: string) => void>();
 	const connected = new Set<string>();
 	let created = 0;
-	const openTerminal = (): TerminalTab => {
+	const sandbox = options.sandbox;
+	const openTerminal = (profile?: TerminalTab['sandbox']): TerminalTab => {
 		created += 1;
-		const tab = { id: `fixture-${created}`, title: created === 1 ? 'zsh' : `zsh ${created}` };
+		const tab: TerminalTab = { id: `fixture-${created}`, title: created === 1 ? 'zsh' : `zsh ${created}` };
+		if (profile) tab.sandbox = profile;
 		open.push(tab);
 		return tab;
 	};
@@ -54,10 +60,15 @@ export function createTerminalFixture(options: TerminalFixtureOptions = {}): Ter
 			if (options.listError) throw new Error(options.listError);
 			return [...open];
 		},
-		create: async () => {
+		create: async (request) => {
 			if (options.createError) throw new Error(options.createError);
-			return openTerminal();
+			if (!request?.sandboxed) return openTerminal();
+			if (options.sandboxError) throw new Error(options.sandboxError);
+			const profile = options.sandbox?.profile;
+			if (!profile || options.sandbox?.unavailable) throw new Error('No sandbox profile is available.');
+			return openTerminal(profile);
 		},
+		...(sandbox && { sandbox: async () => sandbox }),
 		connect: (id, events) => {
 			let line = '';
 			let exited = false;

@@ -683,7 +683,7 @@ workspace_default: SandboxSelection,
  */
 session_override: SandboxSelection | null, };
 
-export type SandboxAdapter = "pi" | "claude";
+export type SandboxAdapter = "pi" | "claude" | "terminal";
 
 export type SandboxExecutable = {
 /**
@@ -901,7 +901,12 @@ selection: SandboxSelection,
 /**
  * Why no sandbox can start on this host, when that is the case.
  */
-unavailable: string | null, };
+unavailable: string | null,
+/**
+ * Why a sandboxed terminal cannot start on this host, when that is the
+ * case. Set whenever `unavailable` is.
+ */
+terminal_unavailable: string | null, };
 
 export type SandboxPreviewRequest = {
 /**
@@ -1875,7 +1880,12 @@ size: TerminalSize,
 /**
  * Running or exit state.
  */
-status: TerminalStatus, };
+status: TerminalStatus,
+/**
+ * Sandbox profile the shell runs under, or `None` when it runs with the
+ * operator's normal access.
+ */
+sandbox: SandboxProfileName | null, };
 
 export type CreateTerminalRequest = {
 /**
@@ -1889,7 +1899,13 @@ command: Array<string> | null,
 /**
  * Initial dimensions.
  */
-size: TerminalSize, };
+size: TerminalSize,
+/**
+ * Runs the shell under the workspace's sandbox profile, the one new
+ * sessions use. The request fails when the workspace has no profile or
+ * the sandbox cannot start; it never falls back to an unsandboxed shell.
+ */
+sandboxed: boolean, };
 
 export type TerminalSignalRequest = {
 /**

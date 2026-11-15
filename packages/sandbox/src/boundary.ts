@@ -551,7 +551,10 @@ async function checkTerminalProfile(): Promise<void> {
 	const env = policy.environment;
 	await startSandbox(policy.runtimeConfig, env, workspace);
 	if (process.platform === 'darwin') {
-		skip('terminal: shell runs on a PTY', 'the sandboxed terminal relay is not implemented yet');
+		skip(
+			'terminal: shell runs on a PTY',
+			'Seatbelt terminals run through the relay: cargo test -p pau-term --test sandboxed'
+		);
 	} else {
 		const wrapped = await SandboxManager.wrapWithSandbox(
 			`export TMPDIR=${tempDir}; bash -i -c 'tty; echo job-control=$(set -o | grep monitor)' 2>&1`,

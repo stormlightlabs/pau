@@ -56,12 +56,14 @@ use tracing::instrument::WithSubscriber;
 mod audit;
 mod build_info;
 mod sessions;
+mod starts;
 mod terminals;
 mod watches;
 
 use audit::PendingAudit;
 use build_info::Channel;
 use sessions::SessionApi;
+use starts::StartGate;
 use watches::{WatchLease, WorkspaceWatches};
 
 /// Version returned by every Pau backend implementation: the workspace version
@@ -148,6 +150,7 @@ struct ApiState {
     audit: AuditLog,
     terminals: terminals::TerminalRegistry,
     watches: WorkspaceWatches,
+    starts: StartGate,
 }
 
 /// The backends a router serves. A route whose backend is absent answers
@@ -160,6 +163,8 @@ struct ApiServices {
     sessions: Option<SessionApi>,
     audit: AuditLog,
     terminals: terminals::TerminalRegistry,
+    /// Refuses process starts once shutdown begins.
+    starts: StartGate,
 }
 
 /// Sandbox selections and the host facts needed to describe a profile.
@@ -621,6 +626,7 @@ fn router_with_services(
             audit: services.audit,
             terminals: services.terminals,
             watches: WorkspaceWatches::default(),
+            starts: services.starts,
         })
 }
 
@@ -844,6 +850,8 @@ enum ApiError {
     /// The audit log could not be read or exported, with the status to send.
     Audit(StatusCode, String),
     ServiceUnavailable,
+    /// Shutdown has begun, so nothing new may start. See [`StartGate`].
+    ShuttingDown,
     /// The selection names an invalid grant, root, or tool.
     InvalidSandbox(String),
     /// No sandbox can start on this host.
@@ -921,6 +929,11 @@ impl ApiError {
                 (StatusCode::UNPROCESSABLE_ENTITY, code, message.clone())
             }
             Self::Session(error) => sessions::error_response(error),
+            Self::ShuttingDown => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "shutting_down",
+                "Pau is shutting down, so it cannot start anything new.".to_owned(),
+            ),
             Self::ServiceUnavailable => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "workspace_service_unavailable",
@@ -1414,6 +1427,7 @@ pub struct ServerHandle {
     sessions: SessionApi,
     terminals: terminals::TerminalRegistry,
     audit: AuditLog,
+    starts: StartGate,
     shutdown: Option<oneshot::Sender<()>>,
     task: Option<JoinHandle<io::Result<()>>>,
 }
@@ -1448,7 +1462,11 @@ impl ServerHandle {
     }
 
     /// Starts graceful shutdown without waiting for the listener task.
+    ///
+    /// From this call on, session and terminal starts are refused. See
+    /// [`StartGate`].
     pub fn request_shutdown(&mut self) {
+        self.starts.close();
         if let Some(shutdown) = self.shutdown.take() {
             self.diagnostics.record(DiagnosticRecordInput {
                 timestamp: diagnostic_timestamp(),
@@ -1467,10 +1485,13 @@ impl ServerHandle {
     /// audit records, all within [`SHUTDOWN_LIMIT`].
     ///
     /// Callers must await this before the Tokio runtime ends, so the final
-    /// audit records reach the database. The listener gets
-    /// [`LISTENER_STOP_LIMIT`] to finish open requests and is then aborted,
-    /// which returns a [`io::ErrorKind::TimedOut`] error. Sessions and
-    /// terminals then stop at the same time. Any still running
+    /// audit records reach the database. Starts are refused from the first
+    /// step. The listener gets [`LISTENER_STOP_LIMIT`] to finish open
+    /// requests and is then aborted, which returns a
+    /// [`io::ErrorKind::TimedOut`] error. Aborting it does not end the
+    /// requests already running, so the stops wait for the starts still in
+    /// flight, as [`StartGate`] describes. Sessions and terminals then stop
+    /// at the same time. Any still running
     /// [`KILL_GRACE`] before the drain's share begins are killed with their
     /// process groups, so nothing Pau started outlives it.
     pub async fn shutdown(mut self) -> io::Result<()> {
@@ -1500,11 +1521,17 @@ impl ServerHandle {
             vec![
                 ShutdownStep {
                     name: "sessions",
-                    work: Box::pin(self.sessions.stop_all(kill_at)),
+                    work: Box::pin(async {
+                        self.starts.settled(kill_at).await;
+                        self.sessions.stop_all(kill_at).await;
+                    }),
                 },
                 ShutdownStep {
                     name: "terminals",
-                    work: Box::pin(self.terminals.stop_all(&self.audit, kill_at)),
+                    work: Box::pin(async {
+                        self.starts.settled(kill_at).await;
+                        self.terminals.stop_all(&self.audit, kill_at).await;
+                    }),
                 },
             ],
             started,
@@ -1768,6 +1795,8 @@ pub async fn start_with_database(
     let server_settings = settings.clone();
     let server_audit = audit.clone();
     let server_terminals = terminals.clone();
+    let starts = StartGate::default();
+    let server_starts = starts.clone();
     let dispatch = tracing::dispatcher::get_default(Clone::clone);
     let task = tokio::spawn(
         async move {
@@ -1784,6 +1813,7 @@ pub async fn start_with_database(
                         sessions: Some(server_sessions),
                         audit: server_audit,
                         terminals: server_terminals,
+                        starts: server_starts,
                     },
                 ),
             )
@@ -1818,6 +1848,7 @@ pub async fn start_with_database(
         sessions,
         terminals,
         audit,
+        starts,
         shutdown: Some(shutdown),
         task: Some(task),
     })

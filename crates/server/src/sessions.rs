@@ -1063,7 +1063,9 @@ pub(crate) async fn list_native_sessions(
 ///
 /// An unknown agent is `400 unknown_agent`. A missing or unsupported Pi is
 /// `503 pi_unavailable`, and any other agent that cannot start is
-/// `503 agent_unavailable`, each with discovery's corrective message.
+/// `503 agent_unavailable`, each with discovery's corrective message. Once
+/// shutdown begins, a start is `503 shutting_down`, as [`crate::StartGate`]
+/// describes.
 pub(crate) async fn start_session(
     State(state): State<ApiState>,
     Json(request): Json<StartSessionRequest>,
@@ -1079,7 +1081,7 @@ pub(crate) async fn start_session(
                 .unwrap_or_else(|| AgentKind::Pi.id().to_owned()),
         ),
     );
-    let result = start_agent_session(&state, request).await;
+    let result = state.starts.run(start_agent_session(&state, request)).await;
     if let Ok((_, Json(session))) = &result {
         audit.session(session.id.clone());
     }

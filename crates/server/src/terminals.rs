@@ -220,6 +220,9 @@ impl IntoResponse for TerminalApiError {
 }
 
 /// Opens a terminal in a workspace root and starts streaming its output.
+///
+/// Once shutdown begins, an open is `503 shutting_down`, as
+/// [`crate::StartGate`] describes.
 pub(crate) async fn create_terminal(
     State(state): State<ApiState>,
     Json(request): Json<CreateTerminalRequest>,
@@ -230,7 +233,7 @@ pub(crate) async fn create_terminal(
         Some(request.workspace_id.clone()),
         None,
     );
-    let result = open_terminal(&state, request).await;
+    let result = state.starts.run(open_terminal(&state, request)).await;
     if let Ok((_, Json(info))) = &result {
         audit.target(info.id.clone());
     }

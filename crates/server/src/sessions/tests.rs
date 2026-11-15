@@ -19,8 +19,8 @@ use tower::ServiceExt;
 
 use super::*;
 use crate::{
-    ApiServices, ApiToken, EventSubscription, SandboxApi, ServerHandle, default_diagnostics,
-    router_with_services, terminals::TerminalRegistry,
+    ApiServices, ApiToken, EventSubscription, SandboxApi, ServerHandle, StartGate,
+    default_diagnostics, router_with_services, terminals::TerminalRegistry,
 };
 
 const TOKEN: &str = "0123456789abcdef0123456789abcdef";
@@ -244,6 +244,7 @@ struct Fixture {
     audit: AuditLog,
     sessions: SessionApi,
     terminals: TerminalRegistry,
+    starts: StartGate,
     app: Router,
 }
 
@@ -276,6 +277,7 @@ impl Fixture {
             audit.clone(),
         );
         let terminals = TerminalRegistry::default();
+        let starts = StartGate::default();
         let app = router_with_services(
             ApiToken::configured(TOKEN).unwrap(),
             events.clone(),
@@ -290,6 +292,7 @@ impl Fixture {
                 sessions: Some(sessions.clone()),
                 audit: audit.clone(),
                 terminals: terminals.clone(),
+                starts: starts.clone(),
                 ..ApiServices::default()
             },
         );
@@ -302,6 +305,7 @@ impl Fixture {
             audit,
             sessions,
             terminals,
+            starts,
             app,
         }
     }
@@ -2015,6 +2019,7 @@ async fn shutdown_kills_sessions_and_terminals_that_ignore_signals() {
         sessions: fixture.sessions.clone(),
         terminals: fixture.terminals.clone(),
         audit: fixture.audit.clone(),
+        starts: fixture.starts.clone(),
         shutdown: None,
         task: Some(tokio::spawn(async { Ok(()) })),
     };
@@ -2037,4 +2042,81 @@ async fn shutdown_kills_sessions_and_terminals_that_ignore_signals() {
     assert_eq!(stops.len(), 2, "{stops:?}");
     assert!(stops.contains(&pau_core::audit::AuditOperation::SessionStop));
     assert!(stops.contains(&pau_core::audit::AuditOperation::TerminalStop));
+}
+
+/// A start request still in flight when shutdown begins must not leave a
+/// process behind. Aborting the listener does not end the request's task,
+/// so the stops wait for the start to register its Pi and then stop it.
+/// Starts that arrive once shutdown has begun are refused.
+#[tokio::test]
+async fn shutdown_refuses_new_starts_and_stops_the_ones_in_flight() {
+    let fixture = Fixture::new(Some("held pi")).await;
+    let directory = fixture.workspace_root.parent().unwrap();
+    // Pi answers nothing until the test releases it, which holds the start
+    // request between launching Pi and registering it.
+    fs::write(
+        directory.join("held pi"),
+        "#!/bin/sh\n\
+         [ \"$1\" = --version ] && exec \"$(dirname \"$0\")/fake pi\" \"$@\"\n\
+         echo $$ > \"$PWD/pi.pid\"\n\
+         while [ ! -f \"$PWD/release\" ]; do sleep 0.05; done\n\
+         exec \"$(dirname \"$0\")/fake pi\" \"$@\"\n",
+    )
+    .unwrap();
+    fs::set_permissions(directory.join("held pi"), fs::Permissions::from_mode(0o755)).unwrap();
+    let held = tokio::spawn(fixture.app.clone().oneshot(fixture.request(
+        "POST",
+        "/api/sessions",
+        Some(json!({"workspace_id": fixture.workspace_id})),
+    )));
+    let pi = read_when_written(&fixture.workspace_root.join("pi.pid")).await;
+
+    let mut server = ServerHandle {
+        address: (std::net::Ipv4Addr::LOCALHOST, 0).into(),
+        token: ApiToken::configured(TOKEN).unwrap(),
+        events: fixture.events.clone(),
+        diagnostics: default_diagnostics(),
+        sessions: fixture.sessions.clone(),
+        terminals: fixture.terminals.clone(),
+        audit: fixture.audit.clone(),
+        starts: fixture.starts.clone(),
+        shutdown: None,
+        task: Some(tokio::spawn(async { Ok(()) })),
+    };
+    server.request_shutdown();
+    let (status, body) = fixture
+        .call(
+            "POST",
+            "/api/terminals",
+            Some(json!({
+                "workspace_id": fixture.workspace_id,
+                "command": ["/bin/sh", "-c", "sleep 600"],
+                "size": {"cols": 80, "rows": 24},
+            })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+    assert_eq!(body["code"], "shutting_down");
+    let (status, body) = fixture.start(None).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+    assert_eq!(body["code"], "shutting_down");
+
+    let stopping = tokio::spawn(server.shutdown());
+    fs::write(fixture.workspace_root.join("release"), "").unwrap();
+    stopping.await.unwrap().unwrap();
+
+    assert!(!group_exists(&pi), "the held start's Pi outlived shutdown");
+    assert_eq!(held.await.unwrap().unwrap().status(), StatusCode::CREATED);
+    assert!(fixture.sessions.registry.active_ids().await.is_empty());
+    let stops: Vec<_> = fixture
+        .database
+        .audit()
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|record| record.entry.actor == pau_core::audit::AuditActor::Pau)
+        .map(|record| record.entry.operation)
+        .collect();
+    assert_eq!(stops, [pau_core::audit::AuditOperation::SessionStop]);
 }

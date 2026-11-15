@@ -12,6 +12,11 @@ policy from the Technical plan. Both live in the project's issue tracker.
 values, and `apps/desktop/.impeccable/wireframes/` holds a static wireframe of
 each surface. Where either disagrees with this document, this document wins.
 
+This document describes the target design. Until the implementation work
+lands, the desktop app still ships the previous layout, with the product rail,
+the inspector and an 800px minimum window width. Code that disagrees with a
+rule here may predate it.
+
 ## Surface mode
 
 The product uses **Operate** mode. Task completion, state, scanability, and
@@ -118,11 +123,13 @@ shrink, and extension statuses wrap to a second row.
 
 ## Spatial system
 
-All spacing comes from the 8px grid. The scale uses 4, 8, 12, 16, 24, and
-32px steps, named `space/1` to `space/6`, where 4 and 12px are half steps for
-control insets. Items inside a group sit 8px apart, and distinct blocks in the
-transcript sit 24px apart. A value off the grid needs a measured reason, such
-as the 6px descender padding in the cap-centring rule.
+All spacing comes from the 8px grid. The scale uses 4, 8, 12, 16, 24, 32, 40,
+48, and 64px steps, named `space/1` to `space/9`, where 4 and 12px are half
+steps for control insets. The 40px step sets the height of section headings and
+bars, 48px pads empty states, and 64px sets the composer input's minimum height
+and the fade over collapsed tool output. Items inside a group sit 8px apart, and
+distinct blocks in the transcript sit 24px apart. A value off the grid needs a
+measured reason, such as the 6px descender padding in the cap-centring rule.
 
 The spacing, type, radius, border, row, and column values have slash-separated
 token names. `packages/ui/src/styles/tokens.css` records them as CSS custom

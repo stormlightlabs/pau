@@ -44,7 +44,7 @@
 	--text-on-accent: #07140d;
 
 	--line: #293044;
-	--line-control: #6b7089;
+	--line-control: #777d95;
 	--line-strong: #8b91a8;
 
 	--accent: #38ef9d;
@@ -55,8 +55,8 @@
 	--info: #43c7e8;
 	--purple: #a48cf2;
 
-	--accent-wash: color-mix(in srgb, var(--accent) 10%, var(--raised));
-	--danger-wash: color-mix(in srgb, var(--danger) 14%, transparent);
+	--hover: color-mix(in srgb, var(--text) 5%, transparent);
+	--press: color-mix(in srgb, var(--text) 8%, transparent);
 	--selection-text: color-mix(in srgb, var(--focus) 32%, transparent);
 
 	/* Syntax roles for code views, derived from the palette. */
@@ -79,7 +79,8 @@
 	--ansi-cyan: #04d1f9;
 	--term-cursor: var(--accent);
 
-	/* 8px construction grid. 4 and 12 are half steps for control insets. */
+	/* 8px construction grid, as dev/design/system.md names it. 4 and 12 are
+	   half steps for control insets. */
 	--space-1: 4px;
 	--space-2: 8px;
 	--space-3: 12px;
@@ -338,13 +339,15 @@ kbd > span {
 	}
 }
 
+/* Reduced motion drops movement and keeps fades: only colour and opacity
+   transitions run, at their own durations. */
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,
 	*::after {
 		animation-duration: 1ms !important;
 		animation-iteration-count: 1 !important;
-		transition-duration: 1ms !important;
+		transition-property: opacity, color, background-color, border-color, visibility !important;
 	}
 }
 
@@ -432,7 +435,9 @@ kbd > span {
 	animation: mark-spin 900ms linear infinite;
 }
 .mark--starting {
-	border: 1.5px dashed var(--info);
+	/* A dashed ring: four arcs, drawn the same in every engine. */
+	background: repeating-conic-gradient(var(--info) 0 45deg, transparent 0 90deg);
+	mask: radial-gradient(circle, transparent 2.5px, #000 2.75px);
 }
 .mark--idle {
 	border: 1.5px solid var(--line-control);
@@ -555,13 +560,6 @@ kbd {
 		border-color var(--duration-quick) var(--ease-out),
 		color var(--duration-quick) var(--ease-out);
 }
-.btn:hover:not(:disabled, [aria-disabled='true']) {
-	background: var(--selected);
-	border-color: var(--line-strong);
-}
-.btn:active:not(:disabled, [aria-disabled='true']) {
-	background: var(--bay);
-}
 /* A disabled button drops to muted text and ignores hover and press. A
    disabled secondary fades its outline, so in a row of unavailable actions
    the primary still ranks first. */
@@ -586,15 +584,6 @@ kbd {
 	color: var(--text-on-accent);
 	font-weight: 600;
 }
-/* Hover moves the accent a quarter toward the text colour, press nearly half. */
-.btn--primary:hover:not(:disabled, [aria-disabled='true']) {
-	background: color-mix(in srgb, var(--accent) 75%, var(--text));
-	border-color: color-mix(in srgb, var(--accent) 75%, var(--text));
-}
-.btn--primary:active:not(:disabled, [aria-disabled='true']) {
-	background: color-mix(in srgb, var(--accent) 55%, var(--text));
-	border-color: color-mix(in srgb, var(--accent) 55%, var(--text));
-}
 /* A disabled primary drops the accent for the raised surface and muted
    text, so it never reads as enabled. */
 .btn--primary:disabled,
@@ -610,11 +599,6 @@ kbd {
 	border-color: transparent;
 	color: var(--text-muted);
 }
-.btn--quiet:hover:not(:disabled, [aria-disabled='true']) {
-	background: var(--raised);
-	border-color: transparent;
-	color: var(--text);
-}
 /* A quiet button rests in muted text, so a disabled one fades it further. */
 .btn--quiet:disabled,
 .btn--quiet[aria-disabled='true'] {
@@ -627,10 +611,36 @@ kbd {
 	border-color: color-mix(in srgb, var(--danger) 60%, var(--bay));
 	color: var(--danger);
 }
-.btn--danger:hover:not(:disabled, [aria-disabled='true']) {
-	background: var(--danger-wash);
-	border-color: var(--danger);
-	color: color-mix(in srgb, var(--danger) 80%, white);
+/* Hover and press change colour only. Default, quiet and danger buttons lay
+   a 5% text tint over their own fill and strengthen the border on hover, and
+   an 8% tint on press. The primary moves its accent toward the text colour,
+   a quarter on hover and nearly half on press. Hover applies only where a
+   pointer can hover, so a tap never leaves a button looking hovered. */
+@media (hover: hover) {
+	.btn:hover:not(:disabled, [aria-disabled='true']) {
+		background-image: linear-gradient(var(--hover), var(--hover));
+		border-color: var(--line-strong);
+	}
+	.btn--quiet:hover:not(:disabled, [aria-disabled='true']) {
+		border-color: var(--line-control);
+		color: var(--text);
+	}
+	.btn--danger:hover:not(:disabled, [aria-disabled='true']) {
+		border-color: var(--danger);
+	}
+	.btn--primary:hover:not(:disabled, [aria-disabled='true']) {
+		background-color: color-mix(in srgb, var(--accent) 75%, var(--text));
+		background-image: none;
+		border-color: color-mix(in srgb, var(--accent) 75%, var(--text));
+	}
+}
+.btn:active:not(:disabled, [aria-disabled='true']) {
+	background-image: linear-gradient(var(--press), var(--press));
+}
+.btn--primary:active:not(:disabled, [aria-disabled='true']) {
+	background-color: color-mix(in srgb, var(--accent) 55%, var(--text));
+	background-image: none;
+	border-color: color-mix(in srgb, var(--accent) 55%, var(--text));
 }
 
 .btn--icon {
@@ -741,47 +751,24 @@ details[open] > .picker {
 /* ------------------------------------------- checkbox, radio and switch */
 
 .check {
-	appearance: none;
-	display: inline-grid;
-	place-content: center;
-	width: 16px;
-	height: 16px;
-	margin: 0;
+	/* Checkboxes and radios stay native. The input is one em square, takes
+	   the row's font, and centres on its label's capitals. It fills with the
+	   text colour, because green stays reserved for what needs the
+	   developer. */
 	flex: none;
-	border: 1px solid var(--line-control);
-	border-radius: var(--radius-control);
-	background: var(--ground);
+	width: 1em;
+	height: 1em;
+	margin: 0;
+	font: inherit;
+	accent-color: var(--text);
 	cursor: pointer;
 }
-.check:hover {
-	border-color: var(--line-strong);
-}
-.check::after {
-	content: '';
-	width: 10px;
-	height: 10px;
-	clip-path: polygon(14% 50%, 0 64%, 38% 100%, 100% 22%, 86% 8%, 38% 72%);
-	background: var(--ground);
-	transform: scale(0);
-	transition: transform var(--duration-quick) var(--ease-out);
-}
-.check:checked {
-	background: var(--text);
-	border-color: var(--text);
-}
-.check:checked::after {
-	transform: scale(1);
-}
-.check[type='radio'] {
-	border-radius: 50%;
-}
-.check[type='radio']::after {
-	width: 6px;
-	height: 6px;
-	clip-path: circle(50%);
+/* A disabled input mutes its whole row. */
+.toggle:has(> .check:disabled) {
+	color: var(--text-muted);
+	cursor: not-allowed;
 }
 .check:disabled {
-	border-style: dashed;
 	cursor: not-allowed;
 }
 
@@ -1736,7 +1723,7 @@ a.tool__target:hover {
 	font-size: var(--size-12);
 	line-height: var(--leading-ui);
 	white-space: pre;
-	mask-image: linear-gradient(to bottom, transparent 0, #000 64px);
+	mask-image: linear-gradient(to bottom, transparent 0, #000 var(--space-9));
 }
 .tool-output__body > code {
 	display: block;
@@ -1842,10 +1829,6 @@ a.tool__target:hover {
 }
 .ask__actions .role-meta {
 	text-box: trim-both cap alphabetic;
-}
-/* On the green wash, control borders step up to keep 3:1. */
-.ask .btn:not(.btn--primary, .btn--quiet) {
-	border-color: var(--line-strong);
 }
 
 /* -------------------------------------------------------------- diff */
@@ -2294,7 +2277,7 @@ a.tool__target:hover {
 .composer__input {
 	display: block;
 	width: 100%;
-	min-height: 64px;
+	min-height: var(--space-9);
 	padding: var(--space-3) var(--space-3) var(--space-1);
 	border: 0;
 	background: none;
@@ -2719,6 +2702,19 @@ a.tool__target:hover {
 	.workspace__close,
 	.workspace-toggle {
 		display: inline-flex;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.workspace {
+			transform: none;
+			opacity: 0;
+			transition:
+				opacity var(--duration-move) var(--ease-out),
+				visibility 0s linear var(--duration-move);
+		}
+		.shell:has(.workspace-switch:checked) .workspace {
+			opacity: 1;
+			transition: opacity var(--duration-move) var(--ease-out);
+		}
 	}
 	.shell:has(.workspace-switch:checked) .scrim {
 		display: block;

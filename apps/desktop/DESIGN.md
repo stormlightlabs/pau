@@ -12,7 +12,7 @@ colors:
   text-disabled: '#7d849c'
   text-on-accent: '#07140d'
   line: '#293044'
-  line-control: '#6b7089'
+  line-control: '#777d95'
   line-strong: '#8b91a8'
   accent: '#38ef9d'
   focus: '#04d1f9'
@@ -85,8 +85,6 @@ components:
     rounded: '{rounded.control}'
     padding: '0 12px'
     height: '32px'
-  button-hover:
-    backgroundColor: '{colors.selected}'
   button-primary:
     backgroundColor: '{colors.accent}'
     textColor: '{colors.text-on-accent}'
@@ -102,7 +100,6 @@ components:
     padding: '0 12px'
     height: '32px'
   button-quiet-hover:
-    backgroundColor: '{colors.raised}'
     textColor: '{colors.text}'
   button-danger:
     textColor: '{colors.danger}'
@@ -184,6 +181,10 @@ components:
 
 ## Overview
 
+This file describes the target design. Until the implementation work lands,
+the desktop app still ships the previous layout, with the product rail, the
+inspector and an 800px minimum window width.
+
 **Creative North Star: "The Strip Bay"**
 
 Every session is a strip in a bay, racked by what it needs from you. The
@@ -258,8 +259,10 @@ colours confined to marks and state lines.
   (`text-disabled`): primary text, secondary text and disabled labels.
 - **Pane Rule** (`line`): rules between panes and rows.
 - **Control Edge** (`line-control`) and **Strong Edge** (`line-strong`):
-  control borders at 3:1 or better on every surface, and their hover and
-  on-green step.
+  control borders and their hover step. Control Edge keeps 3:1 or better on
+  every surface a control sits on: 4.48 on ground, 4.21 on the bay, 3.74 on
+  raised, 3.21 on selected, 3.27 on the request card and 3.01 on a pressed
+  button.
 
 Syntax roles and the terminal's ANSI set derive from the same palette and are
 listed in the sidecar. The values above are Eldritch, which leads the dark
@@ -352,7 +355,7 @@ apart. Distinct blocks in the transcript sit 24px apart.
 - **Narrow, 900px to 1199px:** the bay narrows to 288px and hides the agent
   name on strips. The workspace column becomes an overlay that slides in from
   the right over a scrim, opened from the header and closed by the scrim or
-  Escape. Section rails become tab strips. Buttons marked collapsible drop to
+  Escape. Section rails become tab rows. Buttons marked collapsible drop to
   their icon. An open terminal dock takes the whole main surface.
 - **Below 900px:** not a supported layout. The shell holds a 900px minimum.
 
@@ -466,15 +469,19 @@ session's permission request and a resource's change preview share it.
 ### Buttons
 
 - **Shape:** 3px corner, 32px tall, 12px side padding, 14px label at 500.
-- **Default:** raised surface, `line-control` border. Hover moves to selected
-  with `line-strong`, press to the bay tone.
+- **Default:** raised surface, `line-control` border. Hover lays a 5% text
+  tint over the fill and strengthens the border to `line-strong`. Press lays
+  an 8% tint. Hover applies only under `(hover: hover)`, so a tap never leaves
+  a button looking hovered.
 - **Primary:** green fill, Green Ink label at 600. One per surface. Hover
   moves the green a quarter toward the text colour, press nearly half.
   Disabled drops to raised with Mist and no accent, so it never reads as
   enabled.
-- **Quiet:** no border at rest, Mist label, raised on hover.
+- **Quiet:** no border at rest, Mist label. Hover tints it, draws the
+  `line-control` border and turns the label to text colour.
 - **Danger:** Rose label and a 60% Rose border, kept apart from the other
-  actions after a header rule. Stop is the example.
+  actions after a header rule. Stop is the example. Hover tints it and draws
+  the full Rose border.
 - **Icon:** 32px square with an accessible name.
 - **Disabled:** Mist label and no hover or press. A disabled default button
   fades its border to half, and a disabled quiet button fades its Mist label
@@ -487,7 +494,9 @@ session's permission request and a resource's change preview share it.
   ring, 2px outside the field. Invalid turns the border Rose.
 - **Select and picker:** 32px. Pickers are borderless 14px Mist triggers that
   lift to raised on hover and when open.
-- **Check:** 16px square, 3px corner, fills with text colour when checked.
+- **Check and radio:** native inputs, one em square, filled with text colour
+  when checked and centred on the label's capitals. A disabled input mutes
+  its row.
 
 ### Navigation
 
@@ -497,7 +506,7 @@ session's permission request and a resource's change preview share it.
   workspace stays disabled at half-strength icon, and its tooltip gives the
   reason.
 - **Tabs:** 32px compact tabs with the selected treatment. Vertical section
-  rails become horizontal tab strips below 1200px.
+  rails become horizontal tab rows below 1200px.
 
 ### Settings
 

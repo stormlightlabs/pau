@@ -175,16 +175,6 @@ test('shows a load failure with a retry', async () => {
 	await expect.element(page.getByRole('button', { name: /Claude Haiku 4.5/ })).toBeVisible();
 });
 
-test('stays closed and explains why when the agent cannot switch models', async () => {
-	const load = vi.fn(async () => modelFixtures.populated);
-	await renderPicker({ load, onSelect: vi.fn(), supported: false, fallbackLabel: 'Sonnet' });
-
-	const trigger = page.getByRole('button', { name: 'Model: Sonnet' });
-	await expect.element(trigger).toBeDisabled();
-	await expect.element(trigger).toHaveAccessibleDescription(/does not support switching models/);
-	expect(load).not.toHaveBeenCalled();
-});
-
 test('the session header offers the picker only while the session is idle', async () => {
 	const props = { onLoadModels: async () => modelFixtures.populated, onSelectModel: vi.fn() };
 

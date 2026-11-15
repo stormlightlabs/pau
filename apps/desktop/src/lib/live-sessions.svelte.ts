@@ -209,9 +209,10 @@ function workspaceName(workspace: Workspace): string {
 	return workspace.name ?? workspace.path.split(/[\\/]/).findLast(Boolean) ?? workspace.path;
 }
 
-function sessionTitle(transcript: PiTranscript): string {
+/** Titles a session by its first prompt, or by its agent before the first prompt. */
+function sessionTitle(transcript: PiTranscript, agent: string): string {
 	const prompt = transcript.entries.find((entry) => entry.kind === 'message' && entry.role === 'user');
-	if (!prompt || prompt.kind !== 'message') return 'New Pi session';
+	if (!prompt || prompt.kind !== 'message') return `New ${agent} session`;
 	const line = prompt.body.trim().split('\n', 1)[0] ?? '';
 	return line.length > TITLE_LENGTH ? `${line.slice(0, TITLE_LENGTH - 1)}…` : line;
 }
@@ -595,12 +596,13 @@ export class LiveSessions {
 	#viewModel(session: AgentSession): SessionViewModel {
 		const transcript = this.#transcripts[session.id] ?? emptyPiTranscript;
 		const extensionUi = this.#extensionUi[session.id] ?? emptyExtensionUi;
+		const agent = agentLabel(session.agent);
 		return {
 			id: session.id,
 			workspaceId: session.workspace_id,
 			savedSessionId: session.native_session_id ?? undefined,
-			title: this.#pendingNames[session.id] ?? session.name ?? sessionTitle(transcript),
-			agent: agentLabel(session.agent),
+			title: this.#pendingNames[session.id] ?? session.name ?? sessionTitle(transcript, agent),
+			agent,
 			status: session.status,
 			error: failureMessage(session),
 			unseen: this.#unseen.has(session.id),

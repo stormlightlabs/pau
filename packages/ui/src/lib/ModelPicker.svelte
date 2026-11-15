@@ -14,8 +14,6 @@
 		load: () => Promise<ModelOption[]>;
 		/** Selects a model. A rejection shows its message and keeps the list open. */
 		onSelect: (model: ModelOption) => void | Promise<void>;
-		/** Whether the agent can switch models at all. */
-		supported?: boolean;
 		/** Explains why the picker is read-only right now, such as during a run. */
 		unavailableReason?: string;
 		/** Receives each fetched model list, so neighbours can read the current model. */
@@ -24,7 +22,7 @@
 		fallbackLabel?: string;
 	};
 
-	let { load, onSelect, supported = true, unavailableReason, fallbackLabel, onLoaded }: Props = $props();
+	let { load, onSelect, unavailableReason, fallbackLabel, onLoaded }: Props = $props();
 
 	/** Longest list before it scrolls, matching the `max-height` in the styles. */
 	const listCapRem = 18;
@@ -48,10 +46,7 @@
 
 	const current = $derived(models?.find((model) => model.current));
 	const label = $derived(current ? modelLabel(current) : (fallbackLabel ?? 'Model'));
-	const disabled = $derived(!supported || unavailableReason !== undefined);
-	const explanation = $derived(
-		supported ? unavailableReason : 'This agent does not support switching models in a session.'
-	);
+	const disabled = $derived(unavailableReason !== undefined);
 
 	function modelLabel(model: ModelOption): string {
 		return model.name || model.id;
@@ -105,7 +100,7 @@
 
 	// The picker mounts for each session, so one load per mount refreshes the list on open.
 	$effect(() => {
-		if (supported) void fetchModels();
+		void fetchModels();
 	});
 
 	$effect(() => {
@@ -171,14 +166,14 @@
 		aria-label={`Model: ${label}`}
 		aria-haspopup="true"
 		aria-expanded={open}
-		aria-describedby={explanation ? 'model-picker-note' : undefined}
-		title={explanation}
+		aria-describedby={unavailableReason ? 'model-picker-note' : undefined}
+		title={unavailableReason}
 		{disabled}
 		onclick={toggle}>
 		<span class="model-picker__value">{pendingId ? 'Switching…' : label}</span>
 		<Icon name="chevronDown" class="model-picker__chevron" size="0.75rem" />
 	</button>
-	{#if explanation}<span id="model-picker-note" class="pau-visually-hidden">{explanation}</span>{/if}
+	{#if unavailableReason}<span id="model-picker-note" class="pau-visually-hidden">{unavailableReason}</span>{/if}
 
 	{#if open}
 		<div

@@ -187,7 +187,8 @@ export const ClaudeSession: Story = {
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
 		await expect(canvas.getByRole('textbox', { name: 'Prompt' })).toBeEnabled();
-		await expect(canvas.getByRole('button', { name: /^Model:/ })).toBeDisabled();
+		await expect(canvas.queryByRole('button', { name: /^Model/ })).toBeNull();
+		await expect(canvas.queryByRole('combobox', { name: 'Thinking level' })).toBeNull();
 		await expect(canvas.queryByRole('button', { name: 'Compact' })).toBeNull();
 	}
 };

@@ -28,8 +28,8 @@ test('offers an idle Claude Code session only the controls it supports', async (
 	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeEnabled();
 	await expect.element(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
 	await expect.element(page.getByRole('button', { name: 'Compact' })).not.toBeInTheDocument();
-	await expect.element(page.getByRole('button', { name: /^Model:/ })).toBeDisabled();
-	await expect.element(page.getByRole('button', { name: /Thinking/ })).not.toBeInTheDocument();
+	await expect.element(page.getByRole('button', { name: /^Model/ })).not.toBeInTheDocument();
+	await expect.element(page.getByRole('combobox', { name: 'Thinking level' })).not.toBeInTheDocument();
 
 	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 	await userEvent.click(page.getByRole('button', { name: /Review the adapter/ }), { button: 'right' });

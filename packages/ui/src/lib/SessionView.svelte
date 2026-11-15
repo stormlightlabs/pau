@@ -2973,21 +2973,22 @@
 									{/if}
 									{#if onLoadModels && onSelectModel}
 										{#key activeSession.id}
-											<ModelPicker
-												bind:this={modelPicker}
-												load={() => onLoadModels(activeSession.id)}
-												onSelect={(model) => onSelectModel(activeSession.id, model)}
-												supported={activeSession.capabilities.modelSelection ?? false}
-												unavailableReason={modelUnavailableReason(activeSession, disconnected)}
-												fallbackLabel={activeSession.model}
-												onLoaded={(models) =>
-													(currentModelReasoning = models.find((model) => model.current)?.reasoning)} />
-											{#if onSelectThinkingLevel}
+											<!-- Each control shows only when the agent can change it in a session. -->
+											{#if activeSession.capabilities.modelSelection}
+												<ModelPicker
+													bind:this={modelPicker}
+													load={() => onLoadModels(activeSession.id)}
+													onSelect={(model) => onSelectModel(activeSession.id, model)}
+													unavailableReason={modelUnavailableReason(activeSession, disconnected)}
+													fallbackLabel={activeSession.model}
+													onLoaded={(models) =>
+														(currentModelReasoning = models.find((model) => model.current)?.reasoning)} />
+											{/if}
+											{#if onSelectThinkingLevel && activeSession.capabilities.thinkingLevel}
 												<ThinkingLevelPicker
 													bind:this={thinkingPicker}
 													level={activeSession.thinkingLevel}
 													onSelect={(level) => onSelectThinkingLevel(activeSession.id, level)}
-													supported={activeSession.capabilities.thinkingLevel ?? false}
 													reasoning={offersThinking(activeSession)}
 													levels={activeSession.thinkingLevels}
 													unavailableReason={thinkingUnavailableReason(activeSession, disconnected)} />

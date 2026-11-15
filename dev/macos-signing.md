@@ -102,7 +102,9 @@ APPLE_API_KEY_PATH=/Users/<you>/.private-keys/AuthKey_<KEY_ID>.p8
 On a Mac without the identity in its keychain, such as a CI runner, also set
 `APPLE_CERTIFICATE` to the base64 of the `.p12` export and
 `APPLE_CERTIFICATE_PASSWORD` to its password. The build imports it into a
-temporary keychain and deletes that keychain when signing ends.
+temporary keychain and adds that keychain to your keychain search list, since
+`codesign` finds no identity outside it. When signing ends, fails or is
+interrupted, the build deletes the keychain and restores the search list.
 
 ## 4. Build and install a release
 

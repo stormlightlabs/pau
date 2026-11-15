@@ -38,9 +38,11 @@ const MAX_BATCH_DELAY: Duration = Duration::from_secs(2);
 /// the update as truncated and clients reload everything they show.
 const MAX_PATHS: usize = 500;
 /// How often a workspace is rescanned once the system refuses more watches.
+/// Each rescan also retries the missing watches.
 const RESCAN_INTERVAL: Duration = Duration::from_secs(5);
-/// Most workspace entries one rescan compares, so a huge tree costs a bounded
-/// walk. Changes past this many entries go unreported until a watch sees them.
+/// Most entries one rescan compares in the workspace, and again in Git's
+/// folders, so a huge tree costs a bounded walk. Changes past this many
+/// entries reach clients only through the watches the system did grant.
 const MAX_RESCAN_ENTRIES: usize = 20_000;
 /// Whether each shown folder gets its own non-recursive watch. inotify and
 /// kqueue spend one watch per folder, and a recursive watch would spend them
@@ -90,9 +92,10 @@ impl WorkspaceWatcher {
     /// Starts watching `root`, which must be canonical, and calls `on_change`
     /// with each batch of changes from a background thread.
     ///
-    /// A watch the system refuses, such as one past Linux's
-    /// `max_user_watches`, does not fail the start: the workspace is then
-    /// also rescanned every few seconds.
+    /// A watch the system refuses does not fail the start. Past Linux's
+    /// `max_user_watches`, the workspace is also rescanned every few seconds
+    /// until the missing watches can be added. A folder refused for another
+    /// reason, such as permissions, is left unwatched.
     pub fn start(
         root: &Path,
         on_change: impl FnMut(WorkspaceFileChanges) + Send + 'static,
@@ -137,6 +140,12 @@ fn watch_error(error: notify::Error) -> WorkspaceError {
 }
 
 /// Where a workspace keeps the Git state that counts as a branch change.
+///
+/// The `.git` file, `commondir`, and `.git/refs` can all be symlinks or name
+/// any folder, such as `/` or the home folder. Only a real folder holding a
+/// `HEAD` file counts as a Git directory, and only a `refs` folder that is
+/// not a symlink is watched, so neither the watches nor the rescan walk can
+/// leave Git's own folders.
 #[derive(Clone)]
 struct GitDirs {
     /// The worktree's own Git directory: `.git`, or the folder a linked
@@ -154,7 +163,8 @@ impl GitDirs {
         let own = linked_git_dir(root).unwrap_or_else(|| root.join(".git"));
         let common = fs::read_to_string(own.join("commondir"))
             .ok()
-            .and_then(|common| fs::canonicalize(own.join(common.trim())).ok());
+            .and_then(|common| fs::canonicalize(own.join(common.trim())).ok())
+            .filter(|common| looks_like_git_dir(common));
         Self { own, common }
     }
 
@@ -165,11 +175,11 @@ impl GitDirs {
         [Some(&self.own), self.common.as_ref()]
             .into_iter()
             .flatten()
+            .filter(|dir| looks_like_git_dir(dir))
             .flat_map(|dir| {
-                [
-                    (dir.clone(), RecursiveMode::NonRecursive),
-                    (dir.join("refs"), RecursiveMode::Recursive),
-                ]
+                let refs = dir.join("refs");
+                let refs = is_real_dir(&refs).then_some((refs, RecursiveMode::Recursive));
+                std::iter::once((dir.clone(), RecursiveMode::NonRecursive)).chain(refs)
             })
             .collect()
     }
@@ -195,7 +205,20 @@ impl GitDirs {
 fn linked_git_dir(root: &Path) -> Option<PathBuf> {
     let pointer = fs::read_to_string(root.join(".git")).ok()?;
     let target = pointer.strip_prefix("gitdir:")?.trim();
-    fs::canonicalize(root.join(target)).ok()
+    fs::canonicalize(root.join(target))
+        .ok()
+        .filter(|dir| looks_like_git_dir(dir))
+}
+
+/// Whether `path` is a folder itself rather than a symlink to one.
+fn is_real_dir(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_dir())
+}
+
+/// Whether `dir` is a real folder with a `HEAD` file, as every Git directory
+/// has.
+fn looks_like_git_dir(dir: &Path) -> bool {
+    is_real_dir(dir) && dir.join("HEAD").is_file()
 }
 
 /// The watches one workspace holds and the filter for their events. The
@@ -208,9 +231,16 @@ struct Tracker<W> {
     /// Workspace folders with a non-recursive watch of their own. Empty when
     /// one recursive watch covers the root.
     folders: BTreeSet<PathBuf>,
-    /// Set once the system refuses a watch. From then on no new folder is
-    /// watched and the workspace is rescanned on a timer.
+    /// The other watches: Git's folders, and the recursive watch on the root
+    /// when folders have no watches of their own.
+    others: BTreeSet<PathBuf>,
+    /// Set while the system refuses watches for its limit. The workspace is
+    /// then rescanned on a timer, and each rescan retries the missing
+    /// watches until they all succeed.
     rescan: Option<Rescan>,
+    /// Whether a folder refused for a reason other than the limit has been
+    /// logged, so a workspace full of them logs once.
+    logged_skip: bool,
 }
 
 /// The last rescan's view of the workspace.
@@ -222,71 +252,133 @@ struct Rescan {
 /// Modification time and size, enough to tell that an entry changed.
 type Fingerprint = (Option<SystemTime>, u64);
 
+/// What became of one watch request.
+#[derive(PartialEq, Eq)]
+enum Watched {
+    Added,
+    /// The folder is gone, or the system refused it for a reason of its own,
+    /// such as permissions. Other folders can still be watched.
+    Skipped,
+    /// The system is out of watches, so later requests would fail too.
+    Limited,
+}
+
 impl<W: Watcher> Tracker<W> {
     fn start(watcher: W, root: &Path, per_folder: bool) -> Self {
         let git = GitDirs::find(root);
         let mut tracker = Self {
             watcher,
-            filter: ChangeFilter::new(root.to_path_buf(), git.clone()),
+            filter: ChangeFilter::new(root.to_path_buf(), git),
             per_folder,
             folders: BTreeSet::new(),
+            others: BTreeSet::new(),
             rescan: None,
+            logged_skip: false,
         };
-        if per_folder {
-            tracker.add_tree(root);
-        } else {
-            tracker.watch(root, RecursiveMode::Recursive);
-        }
-        for (folder, mode) in git.folders() {
+        tracker.add_watches();
+        tracker
+    }
+
+    /// Adds every watch the workspace needs that it does not hold yet, Git's
+    /// folders first, and returns whether the system granted them all.
+    fn add_watches(&mut self) -> bool {
+        let root = self.filter.root.clone();
+        for (folder, mode) in self.filter.git.folders() {
             // A recursive watch on the root already covers its `.git`.
-            if (per_folder || !folder.starts_with(root)) && folder.is_dir() {
-                tracker.watch(&folder, mode);
+            if (self.per_folder || !folder.starts_with(&root)) && !self.watch_other(&folder, mode) {
+                return false;
             }
         }
-        tracker
+        if self.per_folder {
+            self.add_tree(&root, None)
+        } else {
+            self.watch_other(&root, RecursiveMode::Recursive)
+        }
+    }
+
+    /// Adds a watch kept in `others`, and returns false when the system is
+    /// out of watches.
+    fn watch_other(&mut self, path: &Path, mode: RecursiveMode) -> bool {
+        if self.others.contains(path) {
+            return true;
+        }
+        match self.watch(path, mode) {
+            Watched::Added => {
+                self.others.insert(path.to_path_buf());
+                true
+            }
+            Watched::Skipped => true,
+            Watched::Limited => false,
+        }
     }
 
     /// Applies one event: keeps folder watches current, then records what
     /// the event changed.
     fn handle(&mut self, batch: &mut Batch, event: notify::Result<Event>) {
         if let Ok(event) = &event {
-            self.follow(event);
+            self.follow(event, batch);
         }
         batch.add(&mut self.filter, event);
     }
 
-    /// Adds a watch, or starts rescanning when the system refuses one. A
-    /// folder that is gone by the time it is watched is skipped.
-    fn watch(&mut self, path: &Path, mode: RecursiveMode) -> bool {
-        match self.watcher.watch(path, mode) {
-            Ok(()) => true,
-            Err(_) if !path.exists() => false,
-            Err(error) => {
-                self.degrade(&error);
-                false
-            }
+    /// Asks the system for a watch. Running out of watches starts rescans,
+    /// and any other refusal skips the folder.
+    fn watch(&mut self, path: &Path, mode: RecursiveMode) -> Watched {
+        let error = match self.watcher.watch(path, mode) {
+            Ok(()) => return Watched::Added,
+            Err(_) if !path.exists() => return Watched::Skipped,
+            Err(error) => error,
+        };
+        let limited = match &error.kind {
+            notify::ErrorKind::MaxFilesWatch => true,
+            notify::ErrorKind::Io(io) => io.kind() == std::io::ErrorKind::StorageFull,
+            _ => false,
+        };
+        if limited {
+            self.degrade(&error);
+            return Watched::Limited;
         }
+        if !self.logged_skip {
+            self.logged_skip = true;
+            tracing::warn!(
+                event = "workspace.watch_skipped",
+                path = %path.display(),
+                %error,
+                "the system refused a file watch; changes in that folder go unreported"
+            );
+        }
+        Watched::Skipped
     }
 
     /// Watches `folder` and every shown folder below it that is not watched
-    /// yet. The walk follows the file tree's rules, so ignored trees, Git's
-    /// folder, and symlinked folders get no watches.
-    fn add_tree(&mut self, folder: &Path) {
+    /// yet, and returns false when the system runs out of watches. The walk
+    /// follows the file tree's rules, so ignored trees, Git's folder, and
+    /// symlinked folders get no watches.
+    ///
+    /// With a `batch`, every shown entry the walk finds is recorded as
+    /// changed. Each folder is watched before the walk reads it, so a file
+    /// written into a new folder is either seen here or by its watch.
+    fn add_tree(&mut self, folder: &Path, mut batch: Option<&mut Batch>) -> bool {
         let walk = walker(folder, SHOWN, None)
             .filter_entry(|entry| !is_git_dir(entry.file_name()))
             .build();
         for entry in walk.flatten() {
-            if self.rescan.is_some() {
-                return;
-            }
             let path = entry.path();
-            if entry.file_type().is_some_and(|kind| kind.is_dir())
-                && !self.folders.contains(path)
-                && self.watch(path, RecursiveMode::NonRecursive)
-            {
-                self.folders.insert(path.to_path_buf());
+            if let Some(batch) = batch.as_deref_mut() {
+                batch.add_path(&mut self.filter, path);
+            }
+            if !entry.file_type().is_some_and(|kind| kind.is_dir()) || self.folders.contains(path) {
+                continue;
+            }
+            match self.watch(path, RecursiveMode::NonRecursive) {
+                Watched::Added => {
+                    self.folders.insert(path.to_path_buf());
+                }
+                Watched::Skipped => {}
+                Watched::Limited => return false,
             }
         }
+        true
     }
 
     /// Drops the watches on `folder` and every folder below it.
@@ -304,14 +396,15 @@ impl<W: Watcher> Tracker<W> {
         }
     }
 
-    /// Keeps one watch per shown folder as folders appear, move, and go.
-    fn follow(&mut self, event: &Event) {
+    /// Keeps one watch per shown folder as folders appear, move, and go, and
+    /// records what a new folder already holds.
+    fn follow(&mut self, event: &Event, batch: &mut Batch) {
         if !self.per_folder {
             return;
         }
         if event.need_rescan() {
             let root = self.filter.root.clone();
-            self.add_tree(&root);
+            self.add_tree(&root, None);
             return;
         }
         let moved = matches!(
@@ -325,7 +418,7 @@ impl<W: Watcher> Tracker<W> {
             if is_ignore_file(path) {
                 // A changed ignore file can show folders it used to hide.
                 if let Some(parent) = path.parent().filter(|_| parent_watched) {
-                    self.add_tree(parent);
+                    self.add_tree(parent, None);
                 }
                 continue;
             }
@@ -338,17 +431,16 @@ impl<W: Watcher> Tracker<W> {
             if self.folders.contains(path) {
                 self.remove_tree(path);
             }
-            let is_dir = fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_dir());
-            if is_dir
+            if is_real_dir(path)
                 && parent_watched
                 && matches!(self.filter.classify(path), Some(Change::Path(_)))
             {
-                self.add_tree(path);
+                self.add_tree(path, Some(batch));
             }
         }
     }
 
-    /// Switches to rescanning after the system refuses a watch, and logs it
+    /// Starts rescanning after the system runs out of watches, and logs it
     /// once.
     fn degrade(&mut self, error: &notify::Error) {
         if self.rescan.is_some() {
@@ -357,7 +449,7 @@ impl<W: Watcher> Tracker<W> {
         tracing::warn!(
             event = "workspace.watch_limit",
             %error,
-            "the system refused a file watch; rescanning the workspace instead"
+            "the system is out of file watches; rescanning the workspace instead"
         );
         self.rescan = Some(Rescan {
             due: Instant::now() + RESCAN_INTERVAL,
@@ -370,18 +462,13 @@ impl<W: Watcher> Tracker<W> {
     }
 
     /// Compares the workspace with the last rescan, when one is due, and
-    /// records every entry that appeared, changed, or went.
+    /// records every entry that appeared, changed, or went. Then retries the
+    /// missing watches, and stops rescanning once they all succeed.
     fn rescan(&mut self, batch: &mut Batch) {
-        if self.rescan_due().is_none_or(|due| Instant::now() < due) {
-            return;
-        }
-        let seen = self.snapshot();
-        let Some(previous) = self.rescan.replace(Rescan {
-            due: Instant::now() + RESCAN_INTERVAL,
-            seen: HashMap::new(),
-        }) else {
+        let Some(previous) = self.rescan.take_if(|rescan| Instant::now() >= rescan.due) else {
             return;
         };
+        let seen = self.snapshot();
         let changed = seen
             .iter()
             .filter(|(path, fingerprint)| previous.seen.get(*path) != Some(fingerprint))
@@ -395,13 +482,22 @@ impl<W: Watcher> Tracker<W> {
         for path in changed {
             batch.add_path(&mut self.filter, path);
         }
-        if let Some(rescan) = &mut self.rescan {
-            rescan.seen = seen;
+        // Restored before the retry, so a refused watch does not log again.
+        self.rescan = Some(Rescan {
+            due: Instant::now() + RESCAN_INTERVAL,
+            seen,
+        });
+        if self.add_watches() {
+            self.rescan = None;
+            tracing::info!(
+                event = "workspace.watch_resumed",
+                "file watches are available again; rescans stopped"
+            );
         }
     }
 
-    /// Fingerprints up to [`MAX_RESCAN_ENTRIES`] shown entries and every
-    /// entry of the Git folders that hold branch state.
+    /// Fingerprints up to [`MAX_RESCAN_ENTRIES`] shown entries, and as many
+    /// entries of the Git folders that hold branch state.
     fn snapshot(&self) -> HashMap<PathBuf, Fingerprint> {
         let tree = walker(&self.filter.root, SHOWN, None)
             .filter_entry(|entry| !is_git_dir(entry.file_name()))
@@ -418,7 +514,8 @@ impl<W: Watcher> Tracker<W> {
                     .follow_links(false)
                     .max_depth((mode == RecursiveMode::NonRecursive).then_some(1))
                     .build()
-            });
+            })
+            .take(MAX_RESCAN_ENTRIES);
         tree.chain(git)
             .flatten()
             .filter_map(|entry| {
@@ -905,12 +1002,14 @@ mod tests {
         );
     }
 
-    /// Records watches instead of asking the system, and refuses any past
-    /// `limit` as Linux does past `max_user_watches`.
+    /// Records watches instead of asking the system. Refuses any past
+    /// `limit` as Linux does past `max_user_watches`, and any `denied` path
+    /// as it does a folder the user cannot read.
     #[derive(Default)]
     struct FakeWatcher {
         watched: BTreeSet<PathBuf>,
         limit: Option<usize>,
+        denied: BTreeSet<PathBuf>,
     }
 
     impl Watcher for FakeWatcher {
@@ -919,6 +1018,11 @@ mod tests {
         }
 
         fn watch(&mut self, path: &Path, _: RecursiveMode) -> notify::Result<()> {
+            if self.denied.contains(path) {
+                return Err(notify::Error::io(std::io::Error::from(
+                    std::io::ErrorKind::PermissionDenied,
+                )));
+            }
             if self.limit.is_some_and(|limit| self.watched.len() >= limit) {
                 return Err(notify::Error::new(notify::ErrorKind::MaxFilesWatch));
             }
@@ -951,6 +1055,7 @@ mod tests {
             fs::create_dir_all(root.join(format!("node_modules/pkg-{index}/lib"))).unwrap();
         }
         fs::create_dir_all(root.join(".git/refs/heads")).unwrap();
+        fs::write(root.join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
 
         let tracker = tracked(&root, None);
 
@@ -1005,7 +1110,150 @@ mod tests {
                 .iter()
                 .all(|path| !path.starts_with(root.join("src/new")))
         );
-        assert_eq!(batch.finish().unwrap().paths, ["src/new"]);
+        assert_eq!(batch.finish().unwrap().paths, ["src/new", "src/new/inner"]);
+    }
+
+    #[test]
+    fn reports_files_written_into_a_new_folder() {
+        let (_directory, root, _watcher, receiver) = watched();
+
+        // Written at once, before the watcher can add the folder's watch.
+        fs::create_dir(root.join("src/fresh")).unwrap();
+        fs::write(root.join("src/fresh/first.rs"), "// first\n").unwrap();
+        wait_for_path(&receiver, "src/fresh/first.rs");
+
+        // Written once the folder's own watch is in place.
+        fs::write(root.join("src/fresh/second.rs"), "// second\n").unwrap();
+        wait_for_path(&receiver, "src/fresh/second.rs");
+    }
+
+    #[test]
+    fn reports_what_a_new_folder_held_before_its_watch() {
+        let (_directory, root, _watcher, _receiver) = watched();
+        let mut tracker = tracked(&root, None);
+        let mut batch = Batch::default();
+
+        fs::create_dir_all(root.join("src/new/inner")).unwrap();
+        fs::write(root.join("src/new/inner/early.rs"), "// early\n").unwrap();
+        let created =
+            Event::new(EventKind::Create(CreateKind::Folder)).add_path(root.join("src/new"));
+        tracker.handle(&mut batch, Ok(created));
+
+        assert_eq!(
+            batch.finish().unwrap().paths,
+            ["src/new", "src/new/inner", "src/new/inner/early.rs"]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn never_watches_git_folders_that_lead_outside_git() {
+        let directory = tempfile::tempdir().unwrap();
+        let base = fs::canonicalize(directory.path()).unwrap();
+        let outside = base.join("outside");
+        for index in 0..50 {
+            fs::create_dir_all(outside.join(format!("folder-{index}/refs"))).unwrap();
+        }
+        // `.git/refs` is a symlink to a large folder.
+        let repository = base.join("repo");
+        fs::create_dir_all(repository.join(".git")).unwrap();
+        fs::write(repository.join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+        std::os::unix::fs::symlink(&outside, repository.join(".git/refs")).unwrap();
+        // A linked worktree's `commondir` names a large folder that is not a
+        // Git directory, though it has a `refs` folder.
+        let linked_git_dir = repository.join(".git/worktrees/worktree");
+        let worktree = base.join("worktree");
+        fs::create_dir_all(&linked_git_dir).unwrap();
+        fs::create_dir(&worktree).unwrap();
+        fs::create_dir(outside.join("refs")).unwrap();
+        fs::write(linked_git_dir.join("HEAD"), "ref: refs/heads/topic\n").unwrap();
+        fs::write(
+            linked_git_dir.join("commondir"),
+            outside.display().to_string(),
+        )
+        .unwrap();
+        fs::write(
+            worktree.join(".git"),
+            format!("gitdir: {}\n", linked_git_dir.display()),
+        )
+        .unwrap();
+
+        let refs = repository.join(".git/refs");
+        for root in [&repository, &worktree] {
+            let tracker = tracked(root, None);
+            assert!(tracker.filter.git.common.is_none());
+            let watched = &tracker.watcher.watched;
+            assert!(
+                watched
+                    .iter()
+                    .all(|path| !path.starts_with(&outside) && !path.starts_with(&refs)),
+                "watched outside Git: {watched:?}"
+            );
+            // The rescan sees the `refs` link itself but not through it.
+            let seen = tracker.snapshot();
+            assert!(
+                seen.keys().all(|path| !path.starts_with(&outside)
+                    && (path == &refs || !path.starts_with(&refs))),
+                "rescanned outside Git: {:?}",
+                seen.keys()
+            );
+        }
+    }
+
+    #[test]
+    fn skips_a_refused_folder_and_watches_the_rest() {
+        let (_directory, root, _watcher, _receiver) = watched();
+        fs::create_dir(root.join("private")).unwrap();
+        let watcher = FakeWatcher {
+            denied: BTreeSet::from([root.join("private")]),
+            ..FakeWatcher::default()
+        };
+        let mut tracker = Tracker::start(watcher, &root, true);
+
+        assert!(tracker.rescan.is_none(), "a refused folder started rescans");
+        assert_eq!(
+            tracker.folders,
+            BTreeSet::from([root.clone(), root.join("src")]),
+        );
+        fs::create_dir(root.join("src/later")).unwrap();
+        let created =
+            Event::new(EventKind::Create(CreateKind::Folder)).add_path(root.join("src/later"));
+        tracker.handle(&mut Batch::default(), Ok(created));
+        assert!(tracker.folders.contains(&root.join("src/later")));
+    }
+
+    #[test]
+    fn returns_to_watches_once_the_system_grants_them() {
+        let (_directory, root, _watcher, _receiver) = watched();
+        let mut tracker = tracked(&root, Some(1));
+        assert!(tracker.rescan.is_some());
+
+        // A new folder is watched while rescans run, when the system can.
+        tracker.watcher.limit = Some(2);
+        fs::create_dir(root.join("later")).unwrap();
+        let created =
+            Event::new(EventKind::Create(CreateKind::Folder)).add_path(root.join("later"));
+        tracker.handle(&mut Batch::default(), Ok(created));
+        assert!(tracker.folders.contains(&root.join("later")));
+        assert!(tracker.rescan.is_some());
+
+        // A due rescan that still hits the limit keeps rescanning.
+        if let Some(rescan) = &mut tracker.rescan {
+            rescan.due = Instant::now();
+        }
+        tracker.rescan(&mut Batch::default());
+        assert!(tracker.rescan.is_some());
+
+        tracker.watcher.limit = None;
+        if let Some(rescan) = &mut tracker.rescan {
+            rescan.due = Instant::now();
+        }
+        tracker.rescan(&mut Batch::default());
+        assert!(tracker.rescan.is_none(), "rescans did not stop");
+        assert_eq!(
+            tracker.folders,
+            BTreeSet::from([root.clone(), root.join("later"), root.join("src")]),
+        );
     }
 
     #[test]
@@ -1046,6 +1294,7 @@ mod tests {
         let linked_git_dir = common.join("worktrees/worktree");
         let worktree = base.join("worktree");
         fs::create_dir_all(common.join("refs/heads")).unwrap();
+        fs::write(common.join("HEAD"), "ref: refs/heads/main\n").unwrap();
         fs::create_dir_all(&linked_git_dir).unwrap();
         fs::create_dir(&worktree).unwrap();
         fs::write(linked_git_dir.join("HEAD"), "ref: refs/heads/topic\n").unwrap();

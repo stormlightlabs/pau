@@ -52,7 +52,8 @@ pub(crate) static FIXTURE_PATH: LazyLock<String> = LazyLock::new(|| {
 
 /// A Pi RPC stand-in. It records every command in the workspace, answers the
 /// controls the session API sends, and exits with status 3 without answering
-/// a prompt whose text is `exit`. Shell commands other than `echo hi` and
+/// a prompt whose text is `exit`. After a prompt whose text is `hang`, it
+/// reads every command and answers none. Shell commands other than `echo hi` and
 /// `sleep 60`, which runs until `abort_bash`, fail. A resumed session answers `get_messages`
 /// with the messages of its file, after a summary once it has compacted, and
 /// renders that file into `export_html`'s output path. A new session, which
@@ -70,6 +71,7 @@ level=medium
 native=native
 while IFS= read -r command; do
     printf '%s\n' "$command" >> "$PWD/commands.jsonl"
+    [ -n "$hung" ] && continue
     id=$(printf '%s' "$command" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
     case "$command" in
         *'"type":"get_state"'*)
@@ -81,6 +83,7 @@ while IFS= read -r command; do
             printf '{"id":"%s","type":"response","command":"get_available_thinking_levels","success":true,"data":{"levels":%s}}\n' "$id" "$levels"
             ;;
         *'"message":"exit"'*) exit 3 ;;
+        *'"message":"hang"'*) hung=1 ;;
         *'"message":"dialogs"'*)
             printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
             printf '{"type":"extension_ui_request","id":"ui-select","method":"select","title":"Pick","options":["a","b"]}\n'
@@ -894,12 +897,64 @@ async fn reports_a_session_that_exits_during_a_request() {
     panic!("the exited session stayed listed");
 }
 
+#[tokio::test]
+async fn marks_a_session_whose_pi_stops_answering() {
+    let fixture = Fixture::new(None).await;
+    let mut stream = fixture.events.subscribe(None);
+    let (_, session) = fixture.start(None).await;
+    let id = session["id"].as_str().unwrap().to_owned();
+    let base = format!("/api/sessions/{id}");
+    let prompt = format!("{base}/prompt");
+
+    // The paused clock skips the 30 seconds of silence and the 30 seconds the
+    // unanswered check waits.
+    tokio::time::pause();
+    let (status, error) = fixture
+        .call("POST", &prompt, Some(json!({"message": "hang"})))
+        .await;
+    tokio::time::resume();
+    assert_eq!(status, StatusCode::GATEWAY_TIMEOUT);
+    assert_eq!(error["code"], "agent_not_responding");
+    let message = "Pi is not responding: it did not answer a check within 30s during `prompt`";
+    assert_eq!(error["message"], message);
+
+    let marked = next_event(&mut stream, session_changed("not_responding")).await;
+    assert_eq!(marked.session_id.as_deref(), Some(id.as_str()));
+    assert_eq!(
+        fixture.call("GET", "/api/sessions", None).await.1[0]["status"],
+        "not_responding"
+    );
+    assert_eq!(
+        fixture.call("GET", &base, None).await.1["status"],
+        "not_responding"
+    );
+
+    // Later commands fail at once instead of waiting on Pi again.
+    let sent = fixture.commands().len();
+    let (status, again) = fixture
+        .call("POST", &prompt, Some(json!({"message": "hello"})))
+        .await;
+    assert_eq!(status, StatusCode::GATEWAY_TIMEOUT);
+    assert_eq!(again["code"], "agent_not_responding");
+    assert_eq!(again["message"], message);
+    assert_eq!(fixture.commands().len(), sent);
+
+    let (status, _) = fixture.call("DELETE", &base, None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    next_event(&mut stream, session_changed("stopped")).await;
+    assert_eq!(
+        fixture.call("GET", &base, None).await.0,
+        StatusCode::NOT_FOUND
+    );
+}
+
 #[test]
 fn reports_a_session_that_stops_answering() {
     let error =
         PiSessionRegistryError::Session(PiSessionError::Process(PiProcessError::NotResponding {
             command: "get_state".to_owned(),
             limit: Duration::from_secs(30),
+            during_check: false,
         }));
 
     let (status, code, message) = error_response(&error);

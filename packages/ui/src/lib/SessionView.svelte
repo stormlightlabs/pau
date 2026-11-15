@@ -842,6 +842,7 @@
 			idle: 'Ready',
 			running: 'Running',
 			waiting: 'Needs you',
+			not_responding: 'Not responding',
 			stopping: 'Stopping',
 			stopped: 'Stopped',
 			failed: 'Failed'
@@ -856,6 +857,9 @@
 	): string | undefined {
 		if (!session) return undefined;
 		if (['starting', 'stopping', 'stopped', 'failed'].includes(session.status)) return '';
+		if (session.status === 'not_responding') {
+			return `${session.agent} stopped responding. Stop this session and start a new one.`;
+		}
 		if (offline) return 'Pau is reconnecting to the backend. You can send prompts again once it reconnects.';
 		// During a run, steering and follow-ups still queue behind the compaction.
 		if (compactingNow && session.status !== 'running') {
@@ -1272,7 +1276,8 @@
 		}
 		items.push({ id: 'copy-id', label: 'Copy session ID', separatorBefore: true });
 		if (session.capabilities.stop) {
-			const reason = disconnected ? offline : live ? undefined : ended;
+			const stoppable = live || session.status === 'not_responding';
+			const reason = disconnected ? offline : stoppable ? undefined : ended;
 			items.push({ id: 'stop', label: 'Stop', separatorBefore: true, disabled: reason !== undefined, reason });
 		}
 		items.push({
@@ -2629,7 +2634,7 @@
 							Export
 						</button>
 					{/if}
-					{#if activeSession.capabilities.stop && liveStatuses.has(activeSession.status)}
+					{#if activeSession.capabilities.stop && (liveStatuses.has(activeSession.status) || activeSession.status === 'not_responding')}
 						<button
 							type="button"
 							class="pau-button pau-button--quiet"

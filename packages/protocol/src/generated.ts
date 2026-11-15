@@ -913,7 +913,7 @@ adapter: SandboxAdapter,
  */
 selection: SandboxSelection, };
 
-export type SessionStatus = "starting" | "idle" | "running" | "waiting" | "stopping" | "stopped" | "failed";
+export type SessionStatus = "starting" | "idle" | "running" | "waiting" | "not_responding" | "stopping" | "stopped" | "failed";
 
 export type SessionCapabilities = {
 /**

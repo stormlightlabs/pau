@@ -296,6 +296,13 @@ impl PiSession {
         *self.status.lock().await
     }
 
+    /// Whether Pi stopped answering commands. Such a session reports
+    /// [`AgentSessionStatus::NotResponding`] from here on, and every command
+    /// fails with [`PiProcessError::NotResponding`].
+    pub fn not_responding(&self) -> bool {
+        self.process.not_responding().is_some()
+    }
+
     /// Subscribes to the native process event, diagnostic, and exit stream.
     pub fn subscribe(&self) -> broadcast::Receiver<PiProcessOutput> {
         self.process.subscribe()
@@ -468,7 +475,7 @@ impl PiSession {
         self.require_capability(control)?;
         let status = self.status.lock().await;
         if *status != AgentSessionStatus::Idle {
-            return Err(invalid_state(
+            return Err(self.invalid_state(
                 control,
                 *status,
                 "wait for the session to become idle",
@@ -567,13 +574,13 @@ impl PiSession {
                 },
             }),
             (AgentSessionStatus::Running, None) => {
-                return Err(invalid_state(
+                return Err(self.invalid_state(
                     control,
                     *status,
                     "choose the steer or follow-up queue",
                 ));
             }
-            _ => return Err(not_ready(control, *status)),
+            _ => return Err(self.not_ready(control, *status)),
         };
         PiImage::attach(&mut command, images);
         let (position, response) = self.command_at(control, command).await?;
@@ -657,7 +664,7 @@ impl PiSession {
         self.require_capability(control)?;
         let mut status = self.status.lock().await;
         if *status != AgentSessionStatus::Running {
-            return Err(invalid_state(
+            return Err(self.invalid_state(
                 control,
                 *status,
                 "only a running session can be interrupted",
@@ -679,7 +686,7 @@ impl PiSession {
         self.require_capability(control)?;
         let status = self.status.lock().await;
         if *status != AgentSessionStatus::Idle {
-            return Err(invalid_state(
+            return Err(self.invalid_state(
                 control,
                 *status,
                 "wait for the session to become idle",
@@ -706,7 +713,7 @@ impl PiSession {
         self.require_capability(control)?;
         let status = self.status.lock().await;
         if *status != AgentSessionStatus::Idle {
-            return Err(invalid_state(
+            return Err(self.invalid_state(
                 control,
                 *status,
                 "wait for the session to become idle",
@@ -736,7 +743,7 @@ impl PiSession {
         {
             let mut status = self.status.lock().await;
             if *status != AgentSessionStatus::Idle {
-                return Err(not_ready(control, *status));
+                return Err(self.not_ready(control, *status));
             }
             *status = AgentSessionStatus::Running;
         }
@@ -798,7 +805,7 @@ impl PiSession {
         self.require_capability(control)?;
         let status = self.status.lock().await;
         if *status != AgentSessionStatus::Idle {
-            return Err(invalid_state(
+            return Err(self.invalid_state(
                 control,
                 *status,
                 "wait for the session to become idle",
@@ -912,7 +919,7 @@ impl PiSession {
         self.require_capability(control)?;
         let mut status = self.status.lock().await;
         if *status != AgentSessionStatus::Idle {
-            return Err(not_ready(control, *status));
+            return Err(self.not_ready(control, *status));
         }
         let response = self
             .command(control, json!({"type": "get_messages"}))
@@ -953,7 +960,7 @@ impl PiSession {
         self.require_capability(control)?;
         let status = self.status.lock().await;
         if *status != AgentSessionStatus::Running {
-            return Err(invalid_state(
+            return Err(self.invalid_state(
                 control,
                 *status,
                 "only a running session can have a pending retry",
@@ -1045,9 +1052,10 @@ impl PiSession {
             AgentSessionStatus::Starting
             | AgentSessionStatus::Idle
             | AgentSessionStatus::Running
-            | AgentSessionStatus::Waiting => {}
+            | AgentSessionStatus::Waiting
+            | AgentSessionStatus::NotResponding => {}
             _ => {
-                return Err(invalid_state(
+                return Err(self.invalid_state(
                     control,
                     *status,
                     "the session is already stopping or stopped",
@@ -1077,7 +1085,7 @@ impl PiSession {
         self.require_capability(control)?;
         let status = self.status.lock().await;
         if *status != AgentSessionStatus::Running {
-            return Err(invalid_state(
+            return Err(self.invalid_state(
                 control,
                 *status,
                 "this queue accepts messages only during an active run",
@@ -1124,9 +1132,12 @@ impl PiSession {
 
     /// Sets the status that a command response at `position` established, so
     /// that lifecycle events Pi wrote before that response no longer apply.
-    /// `status` must be the guard of `self.status`.
+    /// `status` must be the guard of `self.status`. A session whose Pi
+    /// stopped answering stays [`AgentSessionStatus::NotResponding`].
     fn set_status(&self, status: &mut AgentSessionStatus, next: AgentSessionStatus, position: u64) {
-        *status = next;
+        if self.process.not_responding().is_none() {
+            *status = next;
+        }
         self.status_position.fetch_max(position, Ordering::Relaxed);
     }
 }
@@ -1325,20 +1336,33 @@ fn failed_turn_prompt(messages: &[Value]) -> Result<String, String> {
     Ok(text)
 }
 
-fn invalid_state(
-    control: AgentControl,
-    status: AgentSessionStatus,
-    reason: &'static str,
-) -> PiSessionError {
-    PiSessionError::Control(AgentControlError::InvalidState {
-        control,
-        status,
-        reason,
-    })
-}
+impl PiSession {
+    /// Rejects `control` in `status`. A live session whose Pi stopped
+    /// answering gets [`PiProcessError::NotResponding`] instead, so every
+    /// control fails the same way however its state check runs.
+    fn invalid_state(
+        &self,
+        control: AgentControl,
+        status: AgentSessionStatus,
+        reason: &'static str,
+    ) -> PiSessionError {
+        let ended = matches!(
+            status,
+            AgentSessionStatus::Stopping | AgentSessionStatus::Stopped | AgentSessionStatus::Failed
+        );
+        if !ended && let Some(error) = self.process.not_responding() {
+            return error.into();
+        }
+        PiSessionError::Control(AgentControlError::InvalidState {
+            control,
+            status,
+            reason,
+        })
+    }
 
-fn not_ready(control: AgentControl, status: AgentSessionStatus) -> PiSessionError {
-    invalid_state(control, status, "wait for the session to become idle")
+    fn not_ready(&self, control: AgentControl, status: AgentSessionStatus) -> PiSessionError {
+        self.invalid_state(control, status, "wait for the session to become idle")
+    }
 }
 
 fn queue_from_value(value: &Value) -> Option<AgentMessageQueue> {
@@ -1396,7 +1420,8 @@ fn observe_lifecycle(
                     if position > status_position.load(Ordering::Relaxed)
                         && !matches!(
                             *current,
-                            AgentSessionStatus::Stopping
+                            AgentSessionStatus::NotResponding
+                                | AgentSessionStatus::Stopping
                                 | AgentSessionStatus::Stopped
                                 | AgentSessionStatus::Failed
                         )
@@ -1414,6 +1439,17 @@ fn observe_lifecycle(
                             AgentSessionStatus::Failed
                         };
                         break;
+                    }
+                    Ok(PiProcessOutput::NotResponding) => {
+                        let mut current = status.lock().await;
+                        if !matches!(
+                            *current,
+                            AgentSessionStatus::Stopping
+                                | AgentSessionStatus::Stopped
+                                | AgentSessionStatus::Failed
+                        ) {
+                            *current = AgentSessionStatus::NotResponding;
+                        }
                     }
                     Ok(PiProcessOutput::Event(_) | PiProcessOutput::Diagnostic(_))
                     | Err(broadcast::error::RecvError::Lagged(_)) => {}

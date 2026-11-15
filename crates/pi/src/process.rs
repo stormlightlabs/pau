@@ -143,6 +143,9 @@ pub enum PiProcessOutput {
     Diagnostic(PiDiagnostic),
     /// The child process exited.
     Exit(PiProcessExit),
+    /// Pi stopped answering commands, as [`PiProcessError::NotResponding`]
+    /// describes. Sent once, when the first command fails this way.
+    NotResponding,
 }
 
 /// A Pi process or RPC transport failure.
@@ -157,15 +160,22 @@ pub enum PiProcessError {
     /// Pi exited before returning this command's response.
     Exited(PiProcessExit),
     /// Pi did not read or answer a command within `limit`, as
-    /// [`PiReplyTimeouts`] describes. For a long-running command, `limit` is
-    /// the time Pi had to answer the check that it still responds. When Pi
-    /// did not read the whole command, Pau closes Pi's input, because a later
-    /// record would be joined to the partial one.
+    /// [`PiReplyTimeouts`] describes. When Pi did not read the whole command,
+    /// Pau closes Pi's input, because a later record would be joined to the
+    /// partial one.
+    ///
+    /// Pau then treats Pi as stuck: every later command and record fails at
+    /// once with this same error, naming the command that first went
+    /// unanswered. Only shutdown still reaches the process.
     NotResponding {
-        /// The `type` of the command that failed.
+        /// The `type` of the command that went unanswered.
         command: String,
-        /// How long Pau waited for Pi.
+        /// How long Pau waited for an answer.
         limit: Duration,
+        /// Whether the unanswered record was the check Pau sent during a
+        /// long-running `command`, rather than `command` itself, whose own
+        /// wait had no limit.
+        during_check: bool,
     },
     /// Pi did not exit after the final kill deadline.
     KillTimeout,
@@ -182,9 +192,21 @@ impl fmt::Display for PiProcessError {
             }
             Self::Write(error) => write!(formatter, "could not write Pi RPC command: {error}"),
             Self::Exited(exit) => write!(formatter, "Pi exited before responding: {exit:?}"),
-            Self::NotResponding { command, limit } => write!(
+            Self::NotResponding {
+                command,
+                limit,
+                during_check: false,
+            } => write!(
                 formatter,
                 "Pi is not responding: it did not answer `{command}` within {limit:?}"
+            ),
+            Self::NotResponding {
+                command,
+                limit,
+                during_check: true,
+            } => write!(
+                formatter,
+                "Pi is not responding: it did not answer a check within {limit:?} during `{command}`"
             ),
             Self::KillTimeout => formatter.write_str("Pi did not exit after the kill deadline"),
             Self::Signal(error) => write!(formatter, "could not signal Pi: {error}"),
@@ -224,6 +246,9 @@ pub struct PiProcess {
     process_id: u32,
     shutdown_timeouts: PiShutdownTimeouts,
     reply_timeouts: PiReplyTimeouts,
+    /// The command that Pi first left unanswered, and whether its check went
+    /// unanswered, once Pau has given up on Pi.
+    not_responding: std::sync::OnceLock<(String, bool)>,
     shutdown_requested: Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -309,6 +334,7 @@ impl PiProcess {
             process_id,
             shutdown_timeouts: options.shutdown_timeouts,
             reply_timeouts: options.reply_timeouts,
+            not_responding: std::sync::OnceLock::new(),
             shutdown_requested,
         })
     }
@@ -399,12 +425,36 @@ impl PiProcess {
             }
             None => {
                 self.pending.lock().await.remove(&id);
-                Err(PiProcessError::NotResponding {
-                    command: command_type,
-                    limit: self.reply_timeouts.reply,
-                })
+                let during_check = LONG_RUNNING_COMMANDS.contains(&command_type.as_str());
+                Err(self.give_up(&command_type, during_check))
             }
         }
+    }
+
+    /// Records that Pi left `command` unanswered, announces it once on the
+    /// output stream, and returns the error every later command gets.
+    fn give_up(&self, command: &str, during_check: bool) -> PiProcessError {
+        if self
+            .not_responding
+            .set((command.to_owned(), during_check))
+            .is_ok()
+        {
+            let _ = self.output.send(PiProcessOutput::NotResponding);
+        }
+        self.not_responding()
+            .expect("the first unanswered command was just recorded")
+    }
+
+    /// Returns the [`PiProcessError::NotResponding`] error once Pi has left a
+    /// command unanswered.
+    pub(crate) fn not_responding(&self) -> Option<PiProcessError> {
+        self.not_responding
+            .get()
+            .map(|(command, during_check)| PiProcessError::NotResponding {
+                command: command.clone(),
+                limit: self.reply_timeouts.reply,
+                during_check: *during_check,
+            })
     }
 
     /// Registers `command` under `id` and writes it to Pi, returning its
@@ -418,6 +468,9 @@ impl PiProcess {
         let (command_type, mut command) = record_object(command)?;
         if let Some(exit) = self.exit.borrow().clone() {
             return Err(PiProcessError::Exited(exit));
+        }
+        if let Some(error) = self.not_responding() {
+            return Err(error);
         }
 
         command.insert("id".to_owned(), Value::String(id.clone()));
@@ -467,10 +520,7 @@ impl PiProcess {
         encoded: &[u8],
         deadline: Instant,
     ) -> Result<(), PiProcessError> {
-        let not_responding = || PiProcessError::NotResponding {
-            command: command_type.to_owned(),
-            limit: self.reply_timeouts.reply,
-        };
+        let not_responding = || self.give_up(command_type, false);
         let mut stdin = tokio::time::timeout_at(deadline, self.stdin.lock())
             .await
             .map_err(|_| not_responding())?;
@@ -498,6 +548,9 @@ impl PiProcess {
         let (record_type, record) = record_object(record)?;
         if let Some(exit) = self.exit.borrow().clone() {
             return Err(PiProcessError::Exited(exit));
+        }
+        if let Some(error) = self.not_responding() {
+            return Err(error);
         }
         let deadline = Instant::now() + self.reply_timeouts.reply;
         self.write_record(&record_type, &encode_record(record), deadline)
@@ -810,7 +863,7 @@ cat >/dev/null
             {
                 PiProcessOutput::Event(event) => events.push(event),
                 PiProcessOutput::Diagnostic(diagnostic) => diagnostics.push(diagnostic),
-                PiProcessOutput::Exit(exit) => panic!("Pi exited early: {exit:?}"),
+                other => panic!("unexpected output: {other:?}"),
             }
         }
 
@@ -860,6 +913,7 @@ cat >/dev/null
     async fn fails_a_command_that_pi_reads_but_never_answers() {
         let fixture = FakePi::new(SILENT_PI);
         let process = fixture.start(PiShutdownTimeouts::default());
+        let mut output = process.subscribe();
         let started = Instant::now();
 
         let error = process
@@ -868,11 +922,20 @@ cat >/dev/null
             .unwrap_err();
 
         assert_eq!(started.elapsed(), Duration::from_secs(30));
-        assert_eq!(
-            error.to_string(),
-            "Pi is not responding: it did not answer `get_state` within 30s"
-        );
+        let message = "Pi is not responding: it did not answer `get_state` within 30s";
+        assert_eq!(error.to_string(), message);
         assert!(process.pending.lock().await.is_empty());
+        assert_eq!(output.recv().await.unwrap(), PiProcessOutput::NotResponding);
+
+        // Pau has given up on this Pi, so later commands and records fail at
+        // once with the first error and announce nothing new.
+        let later = Instant::now();
+        let command = process.command(json!({"type": "prompt"})).await;
+        let record = process.send_record(json!({"type": "extension_ui_response"}));
+        assert_eq!(command.unwrap_err().to_string(), message);
+        assert_eq!(record.await.unwrap_err().to_string(), message);
+        assert_eq!(later.elapsed(), Duration::ZERO);
+        assert!(output.try_recv().is_err());
     }
 
     #[tokio::test(start_paused = true)]
@@ -894,13 +957,56 @@ cat >/dev/null
             (Duration::from_secs(60)..=Duration::from_secs(90)).contains(&elapsed),
             "waited {elapsed:?}"
         );
-        assert!(matches!(
-            error,
-            PiProcessError::NotResponding { ref command, .. } if command == "bash"
-        ));
+        assert_eq!(
+            error.to_string(),
+            "Pi is not responding: it did not answer a check within 30s during `bash`"
+        );
         // `bash` took the first ID and the check the second.
         assert_eq!(process.next_command_id(), "pau-3");
         assert!(process.pending.lock().await.is_empty());
+    }
+
+    /// Streams events for well past the silence limit while ignoring every
+    /// `get_state` check, then answers `prompt`. The records it writes must
+    /// keep the command alive; without them the first check fails it.
+    #[tokio::test]
+    async fn keeps_a_command_alive_while_pi_writes_events() {
+        let fixture = FakePi::new(
+            r#"read -r command
+i=0
+while [ "$i" -lt 30 ]; do
+  printf '{"type":"message_update"}\n'
+  sleep 0.1
+  i=$((i + 1))
+done
+printf '{"id":"pau-1","type":"response","command":"prompt","success":true}\n'
+cat >/dev/null
+"#,
+        );
+        // Without the events, the command would fail after the silence and
+        // the check's wait, two seconds, well before Pi answers at three.
+        let silence = Duration::from_secs(1);
+        let process = fixture.start_with(
+            PiShutdownTimeouts::default(),
+            PiReplyTimeouts {
+                reply: silence,
+                silence,
+            },
+        );
+        let started = Instant::now();
+
+        let response = process
+            .command(json!({"type": "prompt", "message": "hi"}))
+            .await
+            .unwrap();
+
+        assert_eq!(response["command"], "prompt");
+        assert!(
+            started.elapsed() > silence * 2,
+            "Pi streamed for too short a time"
+        );
+        assert!(process.not_responding().is_none());
+        process.shutdown().await.unwrap();
     }
 
     /// Runs [`wait_while_alive`] against an in-memory Pi whose `script` gets
@@ -1075,13 +1181,21 @@ while :; do :; done
         }
 
         fn start(&self, shutdown_timeouts: PiShutdownTimeouts) -> PiProcess {
+            self.start_with(shutdown_timeouts, PiReplyTimeouts::default())
+        }
+
+        fn start_with(
+            &self,
+            shutdown_timeouts: PiShutdownTimeouts,
+            reply_timeouts: PiReplyTimeouts,
+        ) -> PiProcess {
             PiProcess::start(StartPiProcessOptions {
                 executable_path: self.executable.clone(),
                 working_directory: self.root.path().to_path_buf(),
                 arguments: Vec::new(),
                 environment: Vec::new(),
                 shutdown_timeouts,
-                reply_timeouts: PiReplyTimeouts::default(),
+                reply_timeouts,
             })
             .unwrap()
         }

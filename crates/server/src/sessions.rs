@@ -285,6 +285,14 @@ impl SessionApi {
         ))
     }
 
+    /// Whether the live Pi session `id` stopped answering commands.
+    async fn not_responding(&self, id: &str) -> bool {
+        self.registry
+            .get(id)
+            .await
+            .is_some_and(|session| session.not_responding())
+    }
+
     /// Returns a live Pi session. A Claude session with this ID is refused as
     /// an unsupported control, since only Pi offers the routes that call this.
     async fn live(&self, id: &str) -> Result<(SessionRecord, Arc<PiSession>), ApiError> {
@@ -601,9 +609,20 @@ impl SessionApi {
                     if reports_usage(&event) {
                         self.publish_usage(tagged.workspace_id, tagged.session_id.clone());
                     }
-                    if let Some(status) = lifecycle_status(&event) {
+                    // A stuck Pi keeps its not-responding status whatever
+                    // late events it writes.
+                    if let Some(status) = lifecycle_status(&event)
+                        && !self.not_responding(&tagged.session_id).await
+                    {
                         self.publish(&describe(&tagged.session_id, &record, status));
                     }
+                }
+                PiProcessOutput::NotResponding => {
+                    self.publish(&describe(
+                        &tagged.session_id,
+                        &record,
+                        SessionStatus::NotResponding,
+                    ));
                 }
                 // Stderr can contain anything Pi or its extensions print,
                 // including secrets, so it stays out of the event stream.
@@ -701,6 +720,7 @@ fn session_status(status: AgentSessionStatus) -> SessionStatus {
         AgentSessionStatus::Idle => SessionStatus::Idle,
         AgentSessionStatus::Running => SessionStatus::Running,
         AgentSessionStatus::Waiting => SessionStatus::Waiting,
+        AgentSessionStatus::NotResponding => SessionStatus::NotResponding,
         AgentSessionStatus::Stopping => SessionStatus::Stopping,
         AgentSessionStatus::Stopped => SessionStatus::Stopped,
         AgentSessionStatus::Failed => SessionStatus::Failed,

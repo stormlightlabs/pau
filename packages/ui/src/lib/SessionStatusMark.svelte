@@ -35,6 +35,9 @@
 		<circle cx="6" cy="6" r="4" stroke-dasharray="2 2" />
 	{:else if status === 'waiting'}
 		<path d="M6 1.5 10.5 6 6 10.5 1.5 6Z" fill="currentColor" />
+	{:else if status === 'not_responding'}
+		<circle cx="6" cy="6" r="4" />
+		<path d="M6 3.75v2.5M6 8.25v0" />
 	{:else if status === 'stopping'}
 		<rect x="2.5" y="2.5" width="7" height="7" rx="1" stroke-dasharray="2 2" />
 	{:else if status === 'stopped'}
@@ -66,6 +69,7 @@
 		color: var(--pau-warning);
 	}
 
+	.session-status-mark--not_responding,
 	.session-status-mark--failed {
 		color: var(--pau-danger);
 	}

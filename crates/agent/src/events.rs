@@ -9,6 +9,9 @@ pub enum AgentSessionStatus {
     Running,
     /// The agent is waiting for operator input.
     Waiting,
+    /// The process still runs but stopped answering commands. Every later
+    /// command fails at once; stopping the session still works.
+    NotResponding,
     /// The process is shutting down.
     Stopping,
     /// The process has stopped.

@@ -9,6 +9,7 @@ const states = [
 	['idle', 'Ready'],
 	['running', 'Running'],
 	['waiting', 'Needs you'],
+	['not_responding', 'Not responding'],
 	['stopping', 'Stopping'],
 	['stopped', 'Stopped'],
 	['failed', 'Failed']

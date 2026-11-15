@@ -14,6 +14,7 @@ const fullCapabilities = {
 	compaction: true,
 	rename: true,
 	cloneSession: true,
+	exportTranscript: true,
 	shellCommands: true
 } satisfies SessionCapabilities;
 

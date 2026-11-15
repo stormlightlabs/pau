@@ -1,7 +1,7 @@
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import { openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 import { expect, test, vi } from 'vitest';
@@ -11,7 +11,7 @@ import { createDesktopNativeCapabilities, MENU_ACTION_EVENT } from './native-cap
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
 vi.mock('@tauri-apps/api/webview', () => ({ getCurrentWebview: vi.fn() }));
 vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: vi.fn() }));
-vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
+vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn(), save: vi.fn() }));
 vi.mock('@tauri-apps/plugin-notification', () => ({
 	isPermissionGranted: vi.fn(),
 	requestPermission: vi.fn(),
@@ -42,6 +42,26 @@ test('picks one folder with the native dialog and treats cancel as no choice', a
 
 	vi.mocked(open).mockResolvedValueOnce(null);
 	await expect(capabilities.pickFolder?.()).resolves.toBeUndefined();
+});
+
+test('asks where to save a file and treats cancel as no choice', async () => {
+	const capabilities = createDesktopNativeCapabilities({ __TAURI_INTERNALS__: {} });
+	const request = {
+		title: 'Export transcript',
+		fileName: 'Login fix.html',
+		fileType: { name: 'Web page', extensions: ['html'] }
+	};
+
+	vi.mocked(save).mockResolvedValueOnce('/Users/operator/Login fix.html');
+	await expect(capabilities.pickSaveFile?.(request)).resolves.toBe('/Users/operator/Login fix.html');
+	expect(save).toHaveBeenCalledWith({
+		title: 'Export transcript',
+		defaultPath: 'Login fix.html',
+		filters: [{ name: 'Web page', extensions: ['html'] }]
+	});
+
+	vi.mocked(save).mockResolvedValueOnce(null);
+	await expect(capabilities.pickSaveFile?.(request)).resolves.toBeUndefined();
 });
 
 test('reveals a path in the file manager', async () => {

@@ -40,6 +40,7 @@ pub const CLAUDE_BRIDGE_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     retry: false,
     rename: false,
     clone_session: false,
+    export_transcript: false,
     shell_commands: false,
     stop: true,
 };

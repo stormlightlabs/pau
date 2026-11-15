@@ -781,6 +781,30 @@ export const CompactRejected: Story = {
 		await expect(canvas.getByRole('button', { name: 'Compact' })).toBeEnabled();
 	}
 };
+export const TranscriptExported: Story = {
+	args: { workspaces: sessionFixtures.idle, initialSessionId: 'session-idle' },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(canvas.getByRole('button', { name: /^Export$/ }));
+		await expect(await canvas.findByText(/Transcript saved to/)).toHaveTextContent(
+			'Transcript saved to /Users/operator/Documents/Fix diff gutter.html'
+		);
+	}
+};
+export const TranscriptExportFailed: Story = {
+	args: {
+		workspaces: sessionFixtures.idle,
+		initialSessionId: 'session-idle',
+		exportFailure:
+			'Pau could not save the transcript there: Permission denied (os error 13). Choose another file and try again.'
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await userEvent.click(canvas.getByRole('button', { name: /^Export$/ }));
+		await expect(await canvas.findByRole('alert')).toHaveTextContent('Permission denied');
+		await expect(canvas.getByRole('button', { name: /^Export$/ })).toBeEnabled();
+	}
+};
 export const Compacted: Story = {
 	args: { workspaces: sessionFixtures.compacted, initialSessionId: 'session-idle' },
 	play: async ({ canvasElement }) => {

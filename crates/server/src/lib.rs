@@ -518,6 +518,10 @@ fn router_with_services(
             post(sessions::clone_session),
         )
         .route(
+            "/api/sessions/{session_id}/export",
+            post(sessions::export_session),
+        )
+        .route(
             "/api/sessions/{session_id}/retry",
             post(sessions::retry_session).delete(sessions::abort_session_retry),
         )
@@ -877,10 +881,7 @@ impl IntoResponse for ApiError {
                 (StatusCode::INTERNAL_SERVER_ERROR, "preferences_error", message)
             }
             Self::InvalidImage(code, message) => (StatusCode::UNPROCESSABLE_ENTITY, code, message),
-            Self::Session(error) => {
-                let (status, code) = sessions::error_status(&error);
-                (status, code, error.to_string())
-            }
+            Self::Session(error) => sessions::error_response(&error),
             Self::ServiceUnavailable => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "workspace_service_unavailable",

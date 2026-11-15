@@ -94,6 +94,7 @@ export type {
 	SessionPromptRequest,
 	SessionQueue,
 	SessionRenameRequest,
+	SessionExportRequest,
 	SessionStatus,
 	SessionThinkingLevel,
 	SessionThinkingLevelRequest,

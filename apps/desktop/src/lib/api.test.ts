@@ -4,6 +4,7 @@ import {
 	apiConnection,
 	DESKTOP_CONNECTION_GLOBAL,
 	exportDiagnostics,
+	exportSessionTranscript,
 	getAgentReadiness,
 	getBackendVersion,
 	getDiagnostics,
@@ -205,6 +206,31 @@ test('runs and stops session shell commands', async () => {
 		method: 'DELETE',
 		headers: { Authorization: `Bearer ${TOKEN}` },
 		body: undefined
+	});
+});
+
+test('exports a session transcript and reports a refused destination', async () => {
+	launchDesktop();
+	const fetcher = vi
+		.fn<typeof fetch>()
+		.mockResolvedValueOnce(new Response(null, { status: 204 }))
+		.mockResolvedValueOnce(
+			Response.json(
+				{ code: 'invalid_destination', message: 'the folder for the transcript does not exist' },
+				{ status: 400 }
+			)
+		);
+
+	await exportSessionTranscript('session 1', '/Users/operator/Login fix.html', fetcher);
+	expect(fetcher).toHaveBeenCalledWith('http://127.0.0.1:43127/api/sessions/session%201/export', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+		body: JSON.stringify({ destination: '/Users/operator/Login fix.html' })
+	});
+
+	await expect(exportSessionTranscript('session 1', '/missing/a.html', fetcher)).rejects.toMatchObject({
+		status: 400,
+		code: 'invalid_destination'
 	});
 });
 

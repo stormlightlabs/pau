@@ -41,6 +41,8 @@ export type SessionCapabilities = {
 	rename?: boolean;
 	/** Whether the agent can clone the session into a new saved session. Absent means it cannot. */
 	cloneSession?: boolean;
+	/** Whether the agent can save its conversation to a file. Absent means it cannot. */
+	exportTranscript?: boolean;
 	/** Whether the agent can run shell commands from the composer and stop them. Absent means it cannot. */
 	shellCommands?: boolean;
 };

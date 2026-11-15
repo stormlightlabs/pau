@@ -134,6 +134,27 @@
 		}
 	}
 
+	/**
+	 * Asks where to save a session's transcript with the system save dialog,
+	 * then saves it there. Resolves to the chosen path, or `undefined` when
+	 * the operator cancels. The suggested name is the session title without
+	 * the characters file systems refuse.
+	 */
+	async function exportTranscript(sessionId: string): Promise<string | undefined> {
+		const title = workspaces
+			.flatMap((workspace) => workspace.sessions)
+			.find((session) => session.id === sessionId)?.title;
+		const name = title?.replace(/[\\/:*?"<>|\p{Cc}]+/gu, ' ').trim() || 'Pi session';
+		const destination = await native?.pickSaveFile?.({
+			title: 'Export transcript',
+			fileName: `${name}.html`,
+			fileType: { name: 'Web page', extensions: ['html'] }
+		});
+		if (!destination) return undefined;
+		await sessions.exportTranscript(sessionId, destination);
+		return destination;
+	}
+
 	/** Absent in the browser development server, which has no native notifications. */
 	const attention = getContext<SessionAttention | undefined>(sessionAttentionContext);
 
@@ -341,6 +362,7 @@
 	onBranchFromMessage={(sessionId, entryId) => sessions.branchFromMessage(sessionId, entryId)}
 	onRenameSession={(sessionId, name) => sessions.rename(sessionId, name)}
 	onCloneSession={(sessionId) => sessions.clone(sessionId)}
+	onExportTranscript={native?.pickSaveFile && exportTranscript}
 	onLoadCommands={(sessionId) => sessions.listCommands(sessionId)}
 	onSearchFiles={(workspaceId, query, signal) => searchFileMentions(workspaceId, query, signal, fetcher)}
 	onLoadModels={(sessionId) => sessions.listModels(sessionId)}

@@ -8,12 +8,15 @@
  * truncation behavior, denial reports for failed calls, a tool host crash, an
  * operator `!` command, grants applied to a running session, a contained stdio MCP server, an unreviewed
  * extension tool, per-call approval for a tool enabled outside the sandbox,
+ * the readiness record Pau waits for, a profile that hides the real home
+ * directory, Pi's built-in MCP servers staying stopped in a sandboxed session,
  * and failing closed when the sandbox cannot start.
  */
 import { spawn } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
@@ -43,20 +46,28 @@ function report(ok: boolean, label: string, detail = ''): void {
 	if (!ok) failures.push(label);
 }
 
+/**
+ * The directories the tool host reads to start, as Pau grants them: Node,
+ * this package, and the checkout's `node_modules`, never the checkout.
+ */
+const checkout = fileURLToPath(new URL('../../..', import.meta.url));
+const runtimeRoots = [path.dirname(process.execPath), source('..'), path.join(checkout, 'node_modules')];
+
 /** Write the session policy with Pau's resolver and return the policy file. */
 function writePolicy(
 	settings: SandboxSettings,
 	mcpServers: SandboxedMcpServer[] = [],
-	env: NodeJS.ProcessEnv = process.env
+	env: NodeJS.ProcessEnv = process.env,
+	policyHome = home
 ): string {
 	return resolvePolicy(
 		{
 			adapter: 'pi',
 			settings,
 			workspace,
-			home,
+			home: policyHome,
 			sessionDirectory: session,
-			runtimeRoots: [path.dirname(process.execPath), fileURLToPath(new URL('../../..', import.meta.url))],
+			runtimeRoots,
 			toolPath: searchPath,
 			mcpServers
 		},
@@ -223,12 +234,20 @@ type RunOptions = {
 	confirmations?: boolean[];
 	/** Abort the agent when the tool call with this index starts. */
 	abortAt?: number;
+	/** Start Pi without the sandbox extension, as an unsandboxed session. */
+	unsandboxed?: boolean;
+	/** Trust the workspace's `.pi` files, which Pi otherwise ignores. */
+	approve?: boolean;
+	/** More extensions to load after the sandbox extension. */
+	extensions?: string[];
 };
 
 /** One Pi RPC process running a scripted prompt through the sandbox extension. */
 type PiRun = {
 	ends: ToolEnd[];
 	dialogs: string[];
+	/** Texts of the extension's `pau.sandbox` readiness records, in order. */
+	readiness: string[];
 	stderr: () => string;
 	command: (id: string, body: Record<string, unknown>) => Promise<Record<string, unknown>>;
 	close: () => Promise<void>;
@@ -242,15 +261,15 @@ async function runPi(steps: SmokeStep[], options: RunOptions): Promise<PiRun> {
 			'--mode',
 			'rpc',
 			'--no-session',
-			'--no-approve',
+			options.approve ? '--approve' : '--no-approve',
 			'--provider',
 			'pau-faux',
 			'--model',
 			'scripted',
 			'--extension',
 			source('smoke-extensions.ts'),
-			'--extension',
-			source('pi-extension.ts')
+			...(options.unsandboxed ? [] : ['--extension', source('pi-extension.ts')]),
+			...(options.extensions ?? []).flatMap((extension) => ['--extension', extension])
 		],
 		{
 			cwd: workspace,
@@ -272,6 +291,7 @@ async function runPi(steps: SmokeStep[], options: RunOptions): Promise<PiRun> {
 	const ends: ToolEnd[] = [];
 	const updates = new Map<string, number>();
 	const dialogs: string[] = [];
+	const readiness: string[] = [];
 	const confirmations = [...(options.confirmations ?? [])];
 	const responses = new Map<string, (data: Record<string, unknown>) => void>();
 	const settled = Promise.withResolvers<void>();
@@ -284,6 +304,7 @@ async function runPi(steps: SmokeStep[], options: RunOptions): Promise<PiRun> {
 	const run: PiRun = {
 		ends,
 		dialogs,
+		readiness,
 		stderr: () => stderr,
 		command,
 		close: async () => {
@@ -311,6 +332,9 @@ async function runPi(steps: SmokeStep[], options: RunOptions): Promise<PiRun> {
 		} else if (event.type === 'extension_ui_request' && event.method === 'confirm' && event.id) {
 			dialogs.push(String((event as { title?: string }).title ?? ''));
 			write({ type: 'extension_ui_response', id: event.id, confirmed: confirmations.shift() ?? false });
+		} else if (event.type === 'extension_ui_request' && event.method === 'setStatus') {
+			const status = event as { statusKey?: string; statusText?: string };
+			if (status.statusKey === 'pau.sandbox') readiness.push(status.statusText ?? '');
 		} else if (event.type === 'agent_settled') {
 			settled.resolve();
 		} else if (event.type === 'response' && event.id) {
@@ -347,6 +371,11 @@ const main = await runPi(
 	{ policyFile: writePolicy(workspaceWrite) }
 );
 reportChecks(main, checks, '');
+report(
+	main.readiness[0] === JSON.stringify({ state: 'ready' }),
+	'the extension reports that the tool host started',
+	main.readiness.join(' | ') || 'no report'
+);
 const operator = await main.command('operator-bash', {
 	type: 'bash',
 	command: `printenv ANTHROPIC_API_KEY; touch ${path.join(outside, 'operator.txt')} 2>&1; echo operator-ok`
@@ -382,7 +411,8 @@ const mcpServer: SandboxedMcpServer = {
 	command: process.execPath,
 	args: [source('probe.ts'), 'mcp-server', path.join(home, '.ssh/id_ed25519'), path.join(outside, 'mcp.txt')],
 	cwd: workspace,
-	env: {}
+	env: {},
+	variables: []
 };
 const withTool = sandboxSettings('workspace-write', { unsandboxed_tools: ['host_probe'] });
 const approvedMarker = path.join(outside, 'approved.txt');
@@ -450,6 +480,105 @@ report(
 await live.close();
 if (failures.length > 0) console.log(`\nPi stderr:\n${live.stderr().trim()}`);
 
+// A profile that hides the real home directory still starts the tool host
+// from the granted runtime, and the checkout around it stays unreadable.
+const checkoutFile = path.join(checkout, 'package.json');
+const hidden = await runPi(
+	[
+		{ tool: 'read', args: { path: checkoutFile } },
+		{ tool: 'read', args: { path: 'README.md' } }
+	],
+	{
+		policyFile: writePolicy(sandboxSettings('workspace-write', { home_read_deny: true }), [], process.env, os.homedir())
+	}
+);
+report(
+	hidden.readiness[0] === JSON.stringify({ state: 'ready' }),
+	'the tool host starts when the home directory is hidden',
+	hidden.readiness.join(' | ') || 'no report'
+);
+const [checkoutRead, workspaceRead] = hidden.ends;
+report(
+	checkoutRead?.isError === true && !checkoutRead.text.includes('"name"'),
+	'read: the checkout around the sandbox package is hidden',
+	checkoutRead?.text.slice(0, 100) ?? 'no result'
+);
+report(
+	workspaceRead?.isError === false && workspaceRead.text.includes('workspace readme'),
+	'read: the workspace stays readable when the home directory is hidden',
+	workspaceRead?.text.slice(0, 100) ?? 'no result'
+);
+await hidden.close();
+if (failures.length > 0) console.log(`\nPi stderr:\n${hidden.stderr().trim()}`);
+
+// Pi's built-in MCP support would start these servers in the Pi process,
+// outside the sandbox, so a sandboxed session must not start them. Direct
+// exposure makes the first prompt wait until Pi has started its servers.
+const builtInMcp = (marker: string): string =>
+	JSON.stringify({
+		mcpServers: {
+			[path.basename(marker, '.txt')]: {
+				command: '/bin/sh',
+				args: ['-c', `echo started > ${marker}`],
+				exposure: 'direct'
+			}
+		}
+	});
+const mcpFiles = {
+	[path.join(home, '.pi/agent/mcp.json')]: path.join(outside, 'global-mcp.txt'),
+	[path.join(workspace, '.pi/mcp.json')]: path.join(outside, 'project-mcp.txt')
+};
+const mcpMarkers = Object.values(mcpFiles);
+for (const [file, marker] of Object.entries(mcpFiles)) writeFileSync(file, builtInMcp(marker));
+const startedServers = (): string[] =>
+	mcpMarkers.filter((marker) => existsSync(marker)).map((marker) => path.basename(marker));
+const sandboxedMcp = await runPi([], { policyFile: writePolicy(workspaceWrite), approve: true });
+report(
+	startedServers().length === 0,
+	"Pi's built-in MCP servers do not start in a sandboxed session",
+	startedServers().join(', ')
+);
+await sandboxedMcp.close();
+const unsandboxedMcp = await runPi([], { policyFile: writePolicy(workspaceWrite), approve: true, unsandboxed: true });
+report(
+	startedServers().length === mcpMarkers.length,
+	"Pi's built-in MCP servers start in an unsandboxed session",
+	startedServers().join(', ') || 'none started'
+);
+await unsandboxedMcp.close();
+if (failures.length > 0) console.log(`\nPi stderr:\n${sandboxedMcp.stderr().trim()}`);
+for (const marker of mcpMarkers) rmSync(marker, { force: true });
+
+// With pi-mcp-adapter loaded, Pau gives it a session MCP configuration and
+// the adapter owns `/mcp`, so the sandbox extension must not register a
+// second one. The stand-in adapter registers only the command.
+const adapter = path.join(fixture.root, 'pi-mcp-adapter/index.ts');
+mkdirSync(path.dirname(adapter));
+writeFileSync(
+	adapter,
+	"export default (pi) => pi.registerCommand('mcp', { description: 'adapter', handler: async () => {} });\n"
+);
+const adapterPolicy = writePolicy(workspaceWrite);
+const policy = JSON.parse(readFileSync(adapterPolicy, 'utf8')) as Record<string, unknown>;
+writeFileSync(adapterPolicy, JSON.stringify({ ...policy, mcpConfig: path.join(session, 'host/mcp.json') }));
+const withAdapter = await runPi([], { policyFile: adapterPolicy, approve: true, extensions: [adapter] });
+const listed = (await withAdapter.command('commands', { type: 'get_commands' })) as {
+	commands?: { name: string; sourceInfo?: { path?: string } }[];
+};
+const mcpCommands = (listed.commands ?? []).filter((command) => command.name.startsWith('mcp'));
+report(
+	startedServers().length === 0 &&
+		mcpCommands.length === 1 &&
+		mcpCommands[0]?.name === 'mcp' &&
+		mcpCommands[0].sourceInfo?.path === adapter,
+	'pi-mcp-adapter keeps `/mcp` and the built-in MCP servers stay stopped',
+	mcpCommands.map((command) => `${command.name} ${command.sourceInfo?.path ?? ''}`).join(', ') ||
+		startedServers().join(', ')
+);
+await withAdapter.close();
+if (failures.length > 0) console.log(`\nPi stderr:\n${withAdapter.stderr().trim()}`);
+for (const file of [...Object.keys(mcpFiles), ...mcpMarkers]) rmSync(file, { force: true });
+
 // When Bubblewrap cannot run, tool calls fail instead of running in the Pi
 // process. The fake bwrap reports a version, so Pau's resolver pins it.
 if (process.platform === 'linux') {
@@ -468,6 +597,13 @@ if (process.platform === 'linux') {
 		end?.isError === true && end.text.includes('Sandbox unavailable') && !existsSync(unavailable),
 		'tool calls fail closed when the sandbox cannot start',
 		end?.text.slice(0, 100) ?? 'no result'
+	);
+	const [readiness] = failed.readiness;
+	const parsed = JSON.parse(readiness ?? '{}') as { state?: string; message?: string };
+	report(
+		parsed.state === 'unavailable' && parsed.message?.includes('permission denied') === true,
+		'the extension reports why the sandbox cannot start',
+		readiness ?? 'no report'
 	);
 	await failed.close();
 }

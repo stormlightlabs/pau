@@ -68,6 +68,81 @@ async fn interleaves_sessions_and_stops_only_the_selected_process() {
 }
 
 #[tokio::test]
+async fn a_start_subscription_keeps_its_session_output_through_other_sessions_traffic() {
+    let fixture = FakePi::new();
+    let database = Database::open(fixture.root.path().join("pau.sqlite3"))
+        .await
+        .unwrap();
+    register_workspaces(&database, &fixture).await;
+    let registry = PiSessionRegistry::new(database.processes());
+    let (alpha, mut own) = registry
+        .start_subscribed(fixture.request("alpha"))
+        .await
+        .unwrap();
+    let beta = registry.start(fixture.request("beta")).await.unwrap();
+    let mut shared = registry.subscribe();
+    let mut watch = registry.subscribe();
+
+    // Alpha writes its record, then beta writes more output than a
+    // subscription holds before anyone reads either.
+    alpha.prompt("mark", Vec::new(), None).await.unwrap();
+    read_until(&mut watch, "alpha", "mark").await;
+    beta.prompt("flood", Vec::new(), None).await.unwrap();
+    read_until(&mut watch, "beta", "flood-299").await;
+
+    let labels = |outputs: Vec<PiProcessOutput>| -> Vec<String> {
+        outputs
+            .into_iter()
+            .filter_map(|output| match output {
+                PiProcessOutput::Event(event) => event["label"].as_str().map(str::to_owned),
+                _ => None,
+            })
+            .collect()
+    };
+    let mut lagged = false;
+    let from_shared = std::iter::from_fn(|| {
+        loop {
+            match shared.try_recv() {
+                Ok(tagged) => return Some(tagged.output),
+                Err(tokio::sync::broadcast::error::TryRecvError::Lagged(_)) => lagged = true,
+                Err(_) => return None,
+            }
+        }
+    })
+    .collect();
+    // The shared subscription lagged and lost alpha's record.
+    assert!(!labels(from_shared).contains(&"mark".to_owned()));
+    assert!(lagged);
+    let from_own = std::iter::from_fn(|| own.try_recv().ok()).collect();
+    assert_eq!(labels(from_own), ["mark"]);
+}
+
+/// Reads the shared output until session `id` sends the event labelled
+/// `label`, skipping past any lag.
+async fn read_until(
+    output: &mut tokio::sync::broadcast::Receiver<pau_pi::PiSessionOutput>,
+    id: &str,
+    label: &str,
+) {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            match output.recv().await {
+                Ok(tagged)
+                    if tagged.session_id == id
+                        && matches!(&tagged.output, PiProcessOutput::Event(event) if event["label"] == label) =>
+                {
+                    return;
+                }
+                Ok(_) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                Err(error) => panic!("{error}"),
+            }
+        }
+    })
+    .await
+    .expect("the event never arrived");
+}
+
+#[tokio::test]
 async fn rediscovers_native_records_after_registry_restart() {
     let fixture = FakePi::new();
     let database_path = fixture.root.path().join("pau.sqlite3");
@@ -217,6 +292,18 @@ while IFS= read -r command; do
     case "$command" in
         *'"type":"get_state"'*)
             printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"sessionId":"native-%s","sessionFile":"%s/session.jsonl"}}\n' "$id" "$name" "$PWD"
+            ;;
+        *'"message":"mark"'*)
+            printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
+            printf '{"type":"fixture_event","label":"mark"}\n'
+            ;;
+        *'"message":"flood"'*)
+            printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"
+            i=0
+            while [ "$i" -lt 300 ]; do
+                printf '{"type":"fixture_event","label":"flood-%s"}\n' "$i"
+                i=$((i + 1))
+            done
             ;;
         *'"type":"prompt"'*)
             printf '{"id":"%s","type":"response","command":"prompt","success":true}\n' "$id"

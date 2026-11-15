@@ -169,13 +169,27 @@ pub struct SandboxedMcpServer {
     pub socket: String,
     /// Executable started by the tool host.
     pub command: String,
-    /// Arguments after interpolation.
+    /// Arguments as configured.
     pub args: Vec<String>,
-    /// Working directory.
+    /// Working directory as configured, relative to the workspace, or the
+    /// workspace.
     pub cwd: String,
     /// Variables the server configuration sets. They are added to the tool
     /// environment for this server only.
+    ///
+    /// The command, arguments, working directory, and these values keep
+    /// their `~/`, `${NAME}`, and `$env:NAME` references. The Pi extension
+    /// expands them from its own environment when it starts the server, so
+    /// the values a reference names never reach the policy file.
     pub env: BTreeMap<String, String>,
+    /// Variables those references may name. `None` lets them name any of
+    /// Pau's variables, for a server that only user-scope files, which the
+    /// operator wrote, define. Otherwise a project or package file shapes
+    /// the server, and only the credential reference sources the profile
+    /// grants are listed: a cloned repository must not pull other secrets
+    /// into a server that sandboxed tools can read. A reference to any other
+    /// name fails the server's start.
+    pub variables: Option<Vec<String>>,
 }
 
 /// Readable filesystem scope.
@@ -625,6 +639,8 @@ fn adapter_tools(adapter: SandboxAdapter) -> (Vec<String>, Vec<String>) {
                 .collect(),
             vec![
                 "Tools from other Pi extensions".to_owned(),
+                "Servers from Pi's built-in MCP support, which does not run in sandboxed sessions yet"
+                    .to_owned(),
                 "Remote MCP servers outside the granted domains".to_owned(),
             ],
         ),
@@ -1189,6 +1205,12 @@ mod tests {
                 .disabled_tools
                 .iter()
                 .any(|tool| tool.contains("other Pi extensions"))
+        );
+        assert!(
+            effective
+                .disabled_tools
+                .iter()
+                .any(|tool| tool.contains("Pi's built-in MCP support"))
         );
         assert!(effective.mechanism.contains("Bubblewrap 0.12.0"));
         assert_eq!(effective.executables.len(), 3);

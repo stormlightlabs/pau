@@ -166,6 +166,23 @@ impl PiSessionRegistry {
         &self,
         request: StartRegisteredPiSession,
     ) -> Result<Arc<PiSession>, PiSessionRegistryError> {
+        self.start_subscribed(request)
+            .await
+            .map(|(session, _)| session)
+    }
+
+    /// Starts a session like [`Self::start`] and also returns a subscription
+    /// to that session's own output, taken before Pi receives its first
+    /// command.
+    ///
+    /// A caller waiting for one record from a new session reads this instead
+    /// of [`Self::subscribe`]: other sessions' output never fills it, so their
+    /// traffic cannot make it lag past the record.
+    pub async fn start_subscribed(
+        &self,
+        request: StartRegisteredPiSession,
+    ) -> Result<(Arc<PiSession>, broadcast::Receiver<PiProcessOutput>), PiSessionRegistryError>
+    {
         if request.id.is_empty() {
             return Err(PiSessionRegistryError::InvalidId);
         }
@@ -186,7 +203,8 @@ impl PiSessionRegistry {
     async fn start_reserved(
         &self,
         request: &StartRegisteredPiSession,
-    ) -> Result<Arc<PiSession>, PiSessionRegistryError> {
+    ) -> Result<(Arc<PiSession>, broadcast::Receiver<PiProcessOutput>), PiSessionRegistryError>
+    {
         if !request.sandbox_placeholders.is_empty() {
             self.remove_leftover_placeholders().await?;
         }
@@ -200,6 +218,7 @@ impl PiSessionRegistry {
                 .map_err(PiSessionRegistryError::from)?,
         );
         let native_output = session.subscribe();
+        let own_output = session.subscribe();
         let native = match session.native_session().await {
             Ok(native) => native,
             Err(error) => {
@@ -243,7 +262,7 @@ impl PiSessionRegistry {
             request.id.clone(),
             request.workspace_id.clone(),
         );
-        Ok(session)
+        Ok((session, own_output))
     }
 
     /// Returns a live session without changing its lifecycle.

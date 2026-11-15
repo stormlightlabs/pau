@@ -20,6 +20,7 @@ import {
 	type ExtensionContext
 } from '@earendil-works/pi-coding-agent';
 import { explainFailure } from './denials.ts';
+import { SandboxUnavailableError } from './launcher.ts';
 import { startMcpRelays } from './mcp-relay.ts';
 import type { PreloadDenial } from './preload.ts';
 import { SandboxSession } from './sandbox-session.ts';
@@ -40,6 +41,44 @@ const definitions = {
  * with a session MCP configuration that lists contained servers alone.
  */
 const MCP_ADAPTER_SOURCE = /[/\\]pi-mcp-adapter[/\\]/;
+
+/**
+ * Why MCP servers may be running in the Pi process, outside the sandbox, or
+ * `null`.
+ *
+ * Without a session MCP configuration, Pau found no MCP adapter, and this
+ * extension registers the only `/mcp` command, which keeps Pi's built-in MCP
+ * support off. Any MCP tool, or a second `/mcp` command, then comes from an
+ * adapter Pau missed, whose servers start in the Pi process. The session
+ * must fail instead of running them.
+ */
+export function unsandboxedMcp(
+	policy: { mcpConfig: string | null },
+	tools: Array<{ name: string; sourceInfo: { path: string } }>,
+	commands: Array<{ name: string }>
+): string | null {
+	if (policy.mcpConfig !== null) return null;
+	const mcpTools = tools
+		.filter(
+			(tool) => tool.name === 'mcp' || tool.name.startsWith('mcp__') || MCP_ADAPTER_SOURCE.test(tool.sourceInfo.path)
+		)
+		.map((tool) => tool.name);
+	if (mcpTools.length > 0) {
+		return `an extension Pau did not recognize as an MCP adapter registered MCP tools (${mcpTools.join(', ')}), and its servers would run outside the sandbox`;
+	}
+	if (commands.filter((command) => /^mcp(:\d+)?$/.test(command.name)).length > 1) {
+		return 'an extension Pau did not recognize as an MCP adapter registered /mcp, and its servers would run outside the sandbox';
+	}
+	return null;
+}
+
+/**
+ * Status key of the record that tells Pau whether the tool host started. Its
+ * text is `{"state":"ready"}` or `{"state":"unavailable","message":…}`. Pau
+ * waits for it before a sandboxed session counts as started and never shows
+ * it.
+ */
+const READINESS_STATUS_KEY = 'pau.sandbox';
 
 export default function pauSandbox(pi: ExtensionAPI): void {
 	const policyFile = process.env.PAU_SANDBOX_POLICY_FILE;
@@ -108,9 +147,43 @@ export default function pauSandbox(pi: ExtensionAPI): void {
 		});
 	}
 
+	// Pi's built-in MCP support starts the servers in its `mcp.json` files in
+	// the Pi process, outside the sandbox. Pi leaves that built-in extension
+	// out when another extension registers `/mcp`, and has no flag to turn it
+	// off. pi-mcp-adapter registers `/mcp` itself whenever Pau gives it a
+	// session MCP configuration, and a second `/mcp` would rename both.
+	if (session.policy.mcpConfig === null) {
+		pi.registerCommand('mcp', {
+			description: 'MCP servers are unavailable while the Pau sandbox is active',
+			async handler(_args, ctx) {
+				ctx.ui.notify("Pi's built-in MCP support does not run in sandboxed sessions yet.", 'warning');
+			}
+		});
+	}
+
 	pi.on('user_bash', () => ({
 		operations: { exec: (command, _cwd, options) => session.run((client) => client.executeBash(command, options)) }
 	}));
+
+	const reportReadiness = async (ctx: ExtensionContext): Promise<void> => {
+		let state: Record<string, string> = { state: 'ready' };
+		try {
+			await session.connect();
+			// Checked after the tool host starts, which gives an adapter's
+			// eager servers time to register their tools.
+			const reason = unsandboxedMcp(session.policy, pi.getAllTools(), pi.getCommands());
+			if (reason !== null) state = { state: 'unavailable', message: reason };
+		} catch (error) {
+			const message =
+				error instanceof SandboxUnavailableError
+					? error.reasons.join('; ')
+					: error instanceof Error
+						? error.message
+						: String(error);
+			state = { state: 'unavailable', message };
+		}
+		ctx.ui.setStatus(READINESS_STATUS_KEY, JSON.stringify(state));
+	};
 
 	pi.on('session_start', (_event, ctx) => {
 		context = ctx;
@@ -122,6 +195,9 @@ export default function pauSandbox(pi: ExtensionAPI): void {
 		if (disabled.length > 0) {
 			process.stderr.write(`[pau-sandbox] disabled unreviewed tools: ${disabled.join(', ')}\n`);
 		}
+		// Start the tool host now, so a sandbox that cannot start fails the
+		// session start instead of the first tool call. Pi does not wait for it.
+		void reportReadiness(ctx);
 	});
 
 	// A second guard for tools that another extension activates later, and the

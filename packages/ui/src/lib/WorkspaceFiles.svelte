@@ -589,14 +589,14 @@
 						type="checkbox"
 						checked={includeHidden}
 						onchange={(event) => setVisibility('hidden', event.currentTarget.checked)} />
-					Show hidden files
+					<span>Show hidden files</span>
 				</label>
 				<label class="pau-choice">
 					<input
 						type="checkbox"
 						checked={includeIgnored}
 						onchange={(event) => setVisibility('ignored', event.currentTarget.checked)} />
-					Show ignored files
+					<span>Show ignored files</span>
 				</label>
 			</fieldset>
 

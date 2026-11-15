@@ -142,7 +142,7 @@
 
 	<fieldset class="sandbox__section">
 		<legend>Mode</legend>
-		<label class="sandbox__choice pau-choice">
+		<label class="sandbox__choice pau-choice pau-choice--multiline">
 			<input
 				type="radio"
 				name="sandbox-mode"
@@ -153,7 +153,7 @@
 				<small>Agent tools run with your normal access to files, network, and credentials.</small>
 			</span>
 		</label>
-		<label class="sandbox__choice pau-choice">
+		<label class="sandbox__choice pau-choice pau-choice--multiline">
 			<input
 				type="radio"
 				name="sandbox-mode"
@@ -179,7 +179,7 @@
 		<fieldset class="sandbox__section">
 			<legend>Profile</legend>
 			{#each profiles as profile (profile.value)}
-				<label class="sandbox__choice pau-choice">
+				<label class="sandbox__choice pau-choice pau-choice--multiline">
 					<input
 						type="radio"
 						name="sandbox-profile"
@@ -217,7 +217,7 @@
 					value={settings.unsandboxedTools.join('\n')}
 					onchange={(event) => setSettings({ unsandboxedTools: lines(event.currentTarget.value) })}></textarea>
 			</label>
-			<label class="sandbox__check pau-choice">
+			<label class="sandbox__check pau-choice pau-choice--multiline">
 				<input
 					type="checkbox"
 					checked={settings.homeReadDeny}
@@ -231,7 +231,7 @@
 					</small>
 				</span>
 			</label>
-			<label class="sandbox__check pau-choice">
+			<label class="sandbox__check pau-choice pau-choice--multiline">
 				<input
 					type="checkbox"
 					checked={settings.grants.unixSockets}
@@ -242,7 +242,7 @@
 						>Linux cannot limit sockets by path, so this allows every socket, including Docker and SSH agents.</small>
 				</span>
 			</label>
-			<label class="sandbox__check pau-choice">
+			<label class="sandbox__check pau-choice pau-choice--multiline">
 				<input
 					type="checkbox"
 					checked={settings.shareClaudeTemp}
@@ -554,14 +554,8 @@
 	.sandbox__choice,
 	.sandbox__check {
 		display: flex;
-		align-items: flex-start;
 		min-height: var(--pau-size-row-lg);
 		font-size: var(--pau-type-md);
-	}
-
-	.sandbox__choice input,
-	.sandbox__check input {
-		margin-top: var(--pau-space-1);
 	}
 
 	.sandbox__choice strong,

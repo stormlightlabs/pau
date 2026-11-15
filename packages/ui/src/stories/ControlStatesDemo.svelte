@@ -32,6 +32,11 @@
 			<button type="button" class="pau-button pau-button--danger" data-control="danger" disabled>Stop session</button>
 		</div>
 		<div class="control-states__row">
+			<button type="button" class="pau-button pau-button--secondary"
+				><Icon name="chevronDown" size={14} /><span>Jump to latest</span></button>
+			<button type="button" class="pau-button pau-button--secondary"><span>Interrupt</span><kbd>Ctrl+C</kbd></button>
+		</div>
+		<div class="control-states__row">
 			<button
 				type="button"
 				class="control-states__icon pau-utility-button"
@@ -112,10 +117,10 @@
 		<h2 id="control-states-content" class="pau-section-label">Choices, disclosures, and links</h2>
 		<div class="control-states__row">
 			<label class="control-states__choice pau-choice" data-control="choice">
-				<input type="radio" name={`${id}-motion`} checked /> System
+				<input type="radio" name={`${id}-motion`} checked /><span>System</span>
 			</label>
 			<label class="control-states__choice pau-choice" data-control="choice">
-				<input type="radio" name={`${id}-motion`} disabled /> Full
+				<input type="radio" name={`${id}-motion`} disabled /><span>Full</span>
 			</label>
 		</div>
 		<details class="pau-disclosure">

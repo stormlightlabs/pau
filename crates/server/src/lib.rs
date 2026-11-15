@@ -23,6 +23,7 @@ use axum::{
 use pau_core::{
     HealthResponse, ServerEvent, ServerEventKind, ServerSnapshot, ServerStreamMessage,
     VersionResponse,
+    audit::{AuditLog, AuditOperation},
     diagnostics::{
         DiagnosticBundle, DiagnosticLevel, DiagnosticRecordInput, Diagnostics, TransportDiagnostic,
     },
@@ -51,11 +52,13 @@ use tokio::{
 use tower_http::cors::CorsLayer;
 use tracing::instrument::WithSubscriber;
 
+mod audit;
 mod build_info;
 mod sessions;
 mod terminals;
 mod watches;
 
+use audit::PendingAudit;
 use build_info::Channel;
 use sessions::SessionApi;
 use watches::{WatchLease, WorkspaceWatches};
@@ -141,8 +144,20 @@ struct ApiState {
     settings: Option<ApplicationSettingsRepository>,
     sandbox: Option<SandboxApi>,
     sessions: Option<SessionApi>,
+    audit: AuditLog,
     terminals: terminals::TerminalRegistry,
     watches: WorkspaceWatches,
+}
+
+/// The backends a router serves. A route whose backend is absent answers
+/// `503`, and the default audit log keeps nothing.
+#[derive(Default)]
+struct ApiServices {
+    workspaces: Option<WorkspaceService>,
+    settings: Option<ApplicationSettingsRepository>,
+    sandbox: Option<SandboxApi>,
+    sessions: Option<SessionApi>,
+    audit: AuditLog,
 }
 
 /// Sandbox selections and the host facts needed to describe a profile.
@@ -389,38 +404,30 @@ struct EventSubscription {
 
 /// Builds the authenticated API used by desktop and browser clients.
 pub fn router(token: ApiToken) -> Router {
-    let diagnostics = default_diagnostics();
     router_with_services(
         token,
         EventHub::default(),
-        None,
-        diagnostics,
-        None,
-        None,
-        None,
+        default_diagnostics(),
+        ApiServices::default(),
     )
 }
 
 /// Builds the API around an event hub supplied by the application owner.
 pub fn router_with_events(token: ApiToken, events: EventHub) -> Router {
-    let diagnostics = default_diagnostics();
-    router_with_services(token, events, None, diagnostics, None, None, None)
+    router_with_services(token, events, default_diagnostics(), ApiServices::default())
 }
 
 /// Builds the API with an explicit diagnostics collector.
 pub fn router_with_diagnostics(token: ApiToken, diagnostics: Diagnostics) -> Router {
     let events = EventHub::default().with_diagnostics(diagnostics.clone());
-    router_with_services(token, events, None, diagnostics, None, None, None)
+    router_with_services(token, events, diagnostics, ApiServices::default())
 }
 
 fn router_with_services(
     token: ApiToken,
     events: EventHub,
-    workspaces: Option<WorkspaceService>,
     diagnostics: Diagnostics,
-    settings: Option<ApplicationSettingsRepository>,
-    sandbox: Option<SandboxApi>,
-    sessions: Option<SessionApi>,
+    services: ApiServices,
 ) -> Router {
     diagnostics.register_sensitive_value(token.expose());
     Router::new()
@@ -438,6 +445,8 @@ fn router_with_services(
             post(start_payload_tracing),
         )
         .route("/api/diagnostics/export", post(export_diagnostics))
+        .route("/api/audit", get(audit::list_audit))
+        .route("/api/audit/export", post(audit::export_audit))
         .route("/api/workspaces", get(list_workspaces).post(open_workspace))
         .route("/api/workspaces/{workspace_id}/files", get(list_files))
         .route(
@@ -602,11 +611,12 @@ fn router_with_services(
         .layer(CorsLayer::permissive())
         .with_state(ApiState {
             events,
-            workspaces,
+            workspaces: services.workspaces,
             diagnostics,
-            settings,
-            sandbox,
-            sessions,
+            settings: services.settings,
+            sandbox: services.sandbox,
+            sessions: services.sessions,
+            audit: services.audit,
             terminals: terminals::TerminalRegistry::default(),
             watches: WorkspaceWatches::default(),
         })
@@ -786,6 +796,21 @@ async fn export_diagnostics(
     State(state): State<ApiState>,
     Json(request): Json<DiagnosticExportRequest>,
 ) -> Result<Json<DiagnosticExportResponse>, ApiError> {
+    let audit = PendingAudit::operator(
+        &state.audit,
+        AuditOperation::FileExport,
+        None,
+        audit::export_target(&request.destination),
+    );
+    let result = export_reviewed_diagnostics(&state, request);
+    audit.finish(&result);
+    result
+}
+
+fn export_reviewed_diagnostics(
+    state: &ApiState,
+    request: DiagnosticExportRequest,
+) -> Result<Json<DiagnosticExportResponse>, ApiError> {
     if let Err(error) = state.diagnostics.export_reviewed(
         request.destination,
         request.reviewed_revision,
@@ -814,6 +839,8 @@ struct ApiErrorBody {
 enum ApiError {
     Workspace(Box<WorkspaceError>),
     Diagnostics(String),
+    /// The audit log could not be read or exported, with the status to send.
+    Audit(StatusCode, String),
     ServiceUnavailable,
     /// The selection names an invalid grant, root, or tool.
     InvalidSandbox(String),
@@ -840,18 +867,26 @@ enum ApiError {
     Preferences(String),
 }
 
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        let (status, code, message) = match self {
-            Self::Diagnostics(message) => (StatusCode::BAD_REQUEST, "diagnostics_error", message),
-            Self::InvalidSandbox(message) => (StatusCode::BAD_REQUEST, "invalid_sandbox", message),
+impl ApiError {
+    /// The response status, stable error code, and message.
+    fn parts(&self) -> (StatusCode, &'static str, String) {
+        match self {
+            Self::Diagnostics(message) => (
+                StatusCode::BAD_REQUEST,
+                "diagnostics_error",
+                message.clone(),
+            ),
+            Self::Audit(status, message) => (*status, "audit_error", message.clone()),
+            Self::InvalidSandbox(message) => {
+                (StatusCode::BAD_REQUEST, "invalid_sandbox", message.clone())
+            }
             Self::SandboxUnavailable(message) => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "sandbox_unavailable",
-                message,
+                message.clone(),
             ),
             Self::PiUnavailable(message) => {
-                (StatusCode::SERVICE_UNAVAILABLE, "pi_unavailable", message)
+                (StatusCode::SERVICE_UNAVAILABLE, "pi_unavailable", message.clone())
             }
             Self::SandboxedSessionUnsupported => (
                 StatusCode::NOT_IMPLEMENTED,
@@ -870,18 +905,20 @@ impl IntoResponse for ApiError {
                 (status, code, error.to_string())
             }
             Self::ExtensionRequest(status, code, message) | Self::Agent(status, code, message) => {
-                (status, code, message)
+                (*status, code, message.clone())
             }
             Self::InvalidPreferences(message) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "invalid_preferences",
-                message,
+                message.clone(),
             ),
             Self::Preferences(message) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "preferences_error", message)
+                (StatusCode::INTERNAL_SERVER_ERROR, "preferences_error", message.clone())
             }
-            Self::InvalidImage(code, message) => (StatusCode::UNPROCESSABLE_ENTITY, code, message),
-            Self::Session(error) => sessions::error_response(&error),
+            Self::InvalidImage(code, message) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, code, message.clone())
+            }
+            Self::Session(error) => sessions::error_response(error),
             Self::ServiceUnavailable => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "workspace_service_unavailable",
@@ -922,7 +959,13 @@ impl IntoResponse for ApiError {
                 };
                 (status, code, error.to_string())
             }
-        };
+        }
+    }
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        let (status, code, message) = self.parts();
         (status, Json(ApiErrorBody { code, message })).into_response()
     }
 }
@@ -1036,17 +1079,26 @@ async fn write_file(
     AxumPath(workspace_id): AxumPath<String>,
     Json(request): Json<WriteFileRequest>,
 ) -> Result<Json<FileContent>, ApiError> {
-    let service = workspace_service(&state)?;
-    service
-        .write(
-            &workspace_id,
-            &request.path,
-            &request.content,
-            request.expected_revision.as_deref(),
-        )
-        .await
-        .map(Json)
-        .map_err(ApiError::from)
+    let audit = PendingAudit::operator(
+        &state.audit,
+        AuditOperation::FileWrite,
+        Some(workspace_id.clone()),
+        Some(request.path.clone()),
+    );
+    let result = async {
+        let written = workspace_service(&state)?
+            .write(
+                &workspace_id,
+                &request.path,
+                &request.content,
+                request.expected_revision.as_deref(),
+            )
+            .await?;
+        Ok(Json(written))
+    }
+    .await;
+    audit.finish(&result);
+    result
 }
 
 #[derive(Deserialize)]
@@ -1156,14 +1208,37 @@ async fn update_workspace_sandbox(
     AxumPath(workspace_id): AxumPath<String>,
     Json(selection): Json<SandboxSelection>,
 ) -> Result<Json<WorkspaceSandbox>, ApiError> {
+    let profile = match selection.settings() {
+        None => "unsandboxed".to_owned(),
+        Some(settings) => serde_json::to_value(settings.profile)
+            .ok()
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .unwrap_or_default(),
+    };
+    let audit = PendingAudit::operator(
+        &state.audit,
+        AuditOperation::SandboxUpdate,
+        Some(workspace_id.clone()),
+        Some(profile),
+    );
+    let result = store_workspace_sandbox(&state, &workspace_id, selection).await;
+    audit.finish(&result);
+    result
+}
+
+async fn store_workspace_sandbox(
+    state: &ApiState,
+    workspace_id: &str,
+    selection: SandboxSelection,
+) -> Result<Json<WorkspaceSandbox>, ApiError> {
     validate_selection(&selection).map_err(|error| ApiError::InvalidSandbox(error.to_string()))?;
-    let root = workspace_service(&state)?.root(&workspace_id).await?;
-    let sandbox = sandbox_api(&state)?;
+    let root = workspace_service(state)?.root(workspace_id).await?;
+    let sandbox = sandbox_api(state)?;
     if selection.settings().is_some() {
         describe(
             sandbox,
             &root,
-            &workspace_id,
+            workspace_id,
             &SandboxPreviewRequest {
                 adapter: pau_core::sandbox::SandboxAdapter::Pi,
                 selection: selection.clone(),
@@ -1172,10 +1247,10 @@ async fn update_workspace_sandbox(
     }
     sandbox
         .selections
-        .set_workspace_default(&workspace_id, &selection, &diagnostic_timestamp())
+        .set_workspace_default(workspace_id, &selection, &diagnostic_timestamp())
         .await
         .map_err(|error| ApiError::from(WorkspaceError::from(error)))?;
-    workspace_sandbox(&state, &workspace_id).await.map(Json)
+    workspace_sandbox(state, workspace_id).await.map(Json)
 }
 
 /// Describes the profile a selection would enforce, before anything runs.
@@ -1547,6 +1622,7 @@ pub async fn start_with_database(
     let diagnostics = default_diagnostics();
     diagnostics.register_sensitive_value(token.expose());
     diagnostics.set_enabled(options.diagnostics || persisted_diagnostics);
+    let audit = AuditLog::new(database.audit(), diagnostics.redactor());
 
     let listener = TcpListener::bind(address).await?;
     let address = listener.local_addr()?;
@@ -1560,6 +1636,7 @@ pub async fn start_with_database(
             ..pau_pi::DiscoverPiOptions::default()
         },
         events.clone(),
+        audit.clone(),
     );
     let server_sessions = sessions.clone();
     let server_events = events.clone();
@@ -1573,11 +1650,14 @@ pub async fn start_with_database(
                 router_with_services(
                     server_token,
                     server_events,
-                    Some(workspaces),
                     server_diagnostics,
-                    Some(server_settings),
-                    Some(sandbox),
-                    Some(server_sessions),
+                    ApiServices {
+                        workspaces: Some(workspaces),
+                        settings: Some(server_settings),
+                        sandbox: Some(sandbox),
+                        sessions: Some(server_sessions),
+                        audit,
+                    },
                 ),
             )
             .with_graceful_shutdown(async move {
@@ -1643,7 +1723,7 @@ fn database_path() -> io::Result<PathBuf> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::{
         fs,
         net::Ipv4Addr,
@@ -1652,7 +1732,10 @@ mod tests {
     };
 
     use axum::body::{Body, to_bytes};
-    use pau_core::workspace::{FileSearchMatch, NameSearchResult};
+    use pau_core::{
+        audit::AuditRecord,
+        workspace::{FileSearchMatch, NameSearchResult},
+    };
     use tempfile::tempdir;
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
@@ -1667,9 +1750,9 @@ mod tests {
     const TEST_TOKEN: &str = "0123456789abcdef0123456789abcdef";
 
     #[derive(Clone, Default)]
-    struct LogBuffer(Arc<Mutex<Vec<u8>>>);
+    pub(crate) struct LogBuffer(Arc<Mutex<Vec<u8>>>);
 
-    struct LogWriter(Arc<Mutex<Vec<u8>>>);
+    pub(crate) struct LogWriter(Arc<Mutex<Vec<u8>>>);
 
     impl io::Write for LogWriter {
         fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
@@ -1691,7 +1774,7 @@ mod tests {
     }
 
     impl LogBuffer {
-        fn contents(&self) -> String {
+        pub(crate) fn contents(&self) -> String {
             String::from_utf8(self.0.lock().unwrap().clone()).unwrap()
         }
     }
@@ -1974,11 +2057,11 @@ mod tests {
         let app = router_with_services(
             test_token(),
             events.clone(),
-            None,
             default_diagnostics(),
-            Some(database.settings()),
-            None,
-            None,
+            ApiServices {
+                settings: Some(database.settings()),
+                ..ApiServices::default()
+            },
         );
         let call = |method: &str, body: Option<serde_json::Value>| {
             let request = Request::builder()
@@ -2047,11 +2130,12 @@ mod tests {
         let app = router_with_services(
             test_token(),
             EventHub::default(),
-            Some(workspaces),
             default_diagnostics(),
-            None,
-            Some(sandbox),
-            None,
+            ApiServices {
+                workspaces: Some(workspaces),
+                sandbox: Some(sandbox),
+                ..ApiServices::default()
+            },
         );
         let call = |method: &str, path: &str, body: Option<serde_json::Value>| {
             let builder = Request::builder()
@@ -2147,11 +2231,11 @@ mod tests {
         let app = router_with_services(
             test_token(),
             EventHub::default(),
-            Some(WorkspaceService::new(database.workspaces())),
             default_diagnostics(),
-            None,
-            None,
-            None,
+            ApiServices {
+                workspaces: Some(WorkspaceService::new(database.workspaces())),
+                ..ApiServices::default()
+            },
         );
         let authorization = format!("Bearer {TEST_TOKEN}");
         let open = Request::builder()
@@ -2415,6 +2499,381 @@ mod tests {
                 .await
                 .unwrap()
                 .is_err()
+        );
+    }
+
+    /// Polls a request once, so its handler runs to its first wait, and drops
+    /// it there, as the server does when a client disconnects.
+    pub(crate) fn abandon(app: &Router, request: Request) {
+        let mut response = std::pin::pin!(app.clone().oneshot(request));
+        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+        assert!(
+            response.as_mut().poll(&mut context).is_pending(),
+            "the request finished before it could be abandoned"
+        );
+    }
+
+    fn api_request(method: &str, uri: &str, body: serde_json::Value) -> Request {
+        Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(header::AUTHORIZATION, format!("Bearer {TEST_TOKEN}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap()
+    }
+
+    async fn send(app: &Router, request: Request) -> (StatusCode, serde_json::Value) {
+        let response = app.clone().oneshot(request).await.unwrap();
+        let status = response.status();
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        (status, serde_json::from_slice(&bytes).unwrap_or_default())
+    }
+
+    /// Each record as `(operation, result, target, reason)`.
+    fn summaries(records: &[AuditRecord]) -> Vec<(String, String, Option<String>, Option<String>)> {
+        let label = |value: serde_json::Value| value.as_str().unwrap().to_owned();
+        records
+            .iter()
+            .map(|record| {
+                (
+                    label(serde_json::to_value(record.entry.operation).unwrap()),
+                    label(serde_json::to_value(record.entry.result).unwrap()),
+                    record.entry.target.clone(),
+                    record.entry.reason.clone(),
+                )
+            })
+            .collect()
+    }
+
+    fn summary(
+        operation: &str,
+        result: &str,
+        target: Option<&str>,
+        reason: Option<&str>,
+    ) -> (String, String, Option<String>, Option<String>) {
+        (
+            operation.to_owned(),
+            result.to_owned(),
+            target.map(str::to_owned),
+            reason.map(str::to_owned),
+        )
+    }
+
+    /// A workspace holding `a.txt` and a `folder`, served with an audit log.
+    async fn audited_workspace(
+        sandbox_path: &str,
+    ) -> (tempfile::TempDir, String, AuditLog, Router) {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("project");
+        fs::create_dir_all(root.join("folder")).unwrap();
+        fs::write(root.join("a.txt"), "one").unwrap();
+        let database = Database::open(":memory:").await.unwrap();
+        let workspaces = WorkspaceService::new(database.workspaces());
+        let workspace = workspaces.open(&root, None).await.unwrap();
+        let diagnostics = default_diagnostics();
+        let audit = AuditLog::new(database.audit(), diagnostics.redactor());
+        let sandbox = SandboxApi::new(
+            database.sandbox_selection(),
+            directory.path().join("sandbox"),
+            sandbox_path.into(),
+        );
+        let app = router_with_services(
+            test_token(),
+            EventHub::default(),
+            diagnostics,
+            ApiServices {
+                workspaces: Some(workspaces),
+                sandbox: Some(sandbox),
+                audit: audit.clone(),
+                ..ApiServices::default()
+            },
+        );
+        (directory, workspace.id, audit, app)
+    }
+
+    /// Writes files the ways a client can, and returns each response's
+    /// status and error code.
+    async fn write_files(app: &Router, workspace_id: &str) -> Vec<(StatusCode, serde_json::Value)> {
+        let uri = format!("/api/workspaces/{workspace_id}/file");
+        let read = Request::builder()
+            .uri(format!("{uri}?path=a.txt"))
+            .header(header::AUTHORIZATION, format!("Bearer {TEST_TOKEN}"))
+            .body(Body::empty())
+            .unwrap();
+        let one = send(app, read).await.1["revision"].clone();
+        let writes = [
+            serde_json::json!({"path": "a.txt", "content": "two", "expected_revision": one}),
+            serde_json::json!({"path": ".env", "content": "KEY=value"}),
+            serde_json::json!({"path": "../outside.txt", "content": "x"}),
+            serde_json::json!({"path": "a.txt", "content": "three", "expected_revision": "stale"}),
+            serde_json::json!({"path": "folder", "content": "x"}),
+        ];
+        let mut results = Vec::new();
+        for write in writes {
+            let (status, body) = send(app, api_request("PUT", &uri, write)).await;
+            results.push((status, body["code"].clone()));
+        }
+        results
+    }
+
+    #[tokio::test]
+    async fn records_file_writes_without_changing_their_results() {
+        let (_directory, workspace_id, audit, app) = audited_workspace("").await;
+        let results = write_files(&app, &workspace_id).await;
+
+        let records = audit.list().await.unwrap();
+        assert_eq!(
+            summaries(&records),
+            [
+                summary("file_write", "succeeded", Some("a.txt"), None),
+                summary(
+                    "file_write",
+                    "denied",
+                    Some("[REDACTED]"),
+                    Some("sensitive_path")
+                ),
+                summary(
+                    "file_write",
+                    "denied",
+                    Some("../outside.txt"),
+                    Some("invalid_path")
+                ),
+                summary("file_write", "denied", Some("a.txt"), Some("file_changed")),
+                summary(
+                    "file_write",
+                    "failed",
+                    Some("folder"),
+                    Some("internal_error")
+                ),
+            ]
+        );
+        assert!(records.iter().all(|record| {
+            record.entry.workspace_id.as_deref() == Some(workspace_id.as_str())
+                && record.entry.actor == pau_core::audit::AuditActor::Operator
+        }));
+
+        // The same requests without an audit log get the same answers.
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("project");
+        fs::create_dir_all(root.join("folder")).unwrap();
+        fs::write(root.join("a.txt"), "one").unwrap();
+        let database = Database::open(":memory:").await.unwrap();
+        let workspaces = WorkspaceService::new(database.workspaces());
+        let workspace = workspaces.open(&root, None).await.unwrap();
+        let unaudited = router_with_services(
+            test_token(),
+            EventHub::default(),
+            default_diagnostics(),
+            ApiServices {
+                workspaces: Some(workspaces),
+                ..ApiServices::default()
+            },
+        );
+        assert_eq!(write_files(&unaudited, &workspace.id).await, results);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn records_concurrent_and_cancelled_file_writes() {
+        let (directory, workspace_id, audit, app) = audited_workspace("").await;
+        let uri = format!("/api/workspaces/{workspace_id}/file");
+        abandon(
+            &app,
+            api_request(
+                "PUT",
+                &uri,
+                serde_json::json!({"path": "cancelled.txt", "content": "x"}),
+            ),
+        );
+        let writes: Vec<_> = (0..4)
+            .map(|index| {
+                let request = api_request(
+                    "PUT",
+                    &uri,
+                    serde_json::json!({"path": format!("new-{index}.txt"), "content": "x"}),
+                );
+                let app = app.clone();
+                tokio::spawn(async move { send(&app, request).await.0 })
+            })
+            .collect();
+        for write in writes {
+            assert_eq!(write.await.unwrap(), StatusCode::OK);
+        }
+
+        let records = audit.list().await.unwrap();
+        assert_eq!(
+            summaries(&records[..1]),
+            [summary(
+                "file_write",
+                "cancelled",
+                Some("cancelled.txt"),
+                None
+            )]
+        );
+        let mut written: Vec<_> = summaries(&records[1..]);
+        written.sort();
+        assert_eq!(
+            written,
+            (0..4)
+                .map(|index| summary(
+                    "file_write",
+                    "succeeded",
+                    Some(&format!("new-{index}.txt")),
+                    None
+                ))
+                .collect::<Vec<_>>()
+        );
+        assert!(!directory.path().join("project/cancelled.txt").exists());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn records_sandbox_setting_changes() {
+        let (_directory, workspace_id, audit, app) = audited_workspace("").await;
+        let uri = format!("/api/workspaces/{workspace_id}/sandbox");
+        let sandboxed = |domain: &str| {
+            serde_json::json!({"mode": "sandboxed", "settings": {
+                "profile": "workspace-write",
+                "grants": {"domains": [domain], "writable_roots": [], "unix_sockets": false}
+            }})
+        };
+        abandon(
+            &app,
+            api_request("PUT", &uri, serde_json::json!({"mode": "unsandboxed"})),
+        );
+        let (status, _) = send(&app, api_request("PUT", &uri, sandboxed("https://bad/"))).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        // The test server resolves no containment executables.
+        let (status, _) = send(&app, api_request("PUT", &uri, sandboxed("example.com"))).await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        let (status, _) = send(
+            &app,
+            api_request(
+                "PUT",
+                "/api/workspaces/missing/sandbox",
+                serde_json::json!({"mode": "unsandboxed"}),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        let updates: Vec<_> = (0..4)
+            .map(|_| {
+                let request = api_request("PUT", &uri, serde_json::json!({"mode": "unsandboxed"}));
+                let app = app.clone();
+                tokio::spawn(async move { send(&app, request).await.0 })
+            })
+            .collect();
+        for update in updates {
+            assert_eq!(update.await.unwrap(), StatusCode::OK);
+        }
+
+        let records = audit.list().await.unwrap();
+        let unsandboxed = summary("sandbox_update", "succeeded", Some("unsandboxed"), None);
+        assert_eq!(
+            summaries(&records),
+            [
+                summary("sandbox_update", "cancelled", Some("unsandboxed"), None),
+                summary(
+                    "sandbox_update",
+                    "denied",
+                    Some("workspace-write"),
+                    Some("invalid_sandbox")
+                ),
+                summary(
+                    "sandbox_update",
+                    "failed",
+                    Some("workspace-write"),
+                    Some("sandbox_unavailable")
+                ),
+                summary(
+                    "sandbox_update",
+                    "denied",
+                    Some("unsandboxed"),
+                    Some("not_found")
+                ),
+                unsandboxed.clone(),
+                unsandboxed.clone(),
+                unsandboxed.clone(),
+                unsandboxed,
+            ]
+        );
+        assert_eq!(records[3].entry.workspace_id.as_deref(), Some("missing"));
+        assert!(
+            records
+                .iter()
+                .all(|record| record.entry.session_id.is_none())
+        );
+    }
+
+    #[tokio::test]
+    async fn exports_the_audit_log_to_a_new_file() {
+        let (directory, workspace_id, audit, app) = audited_workspace("").await;
+        let secret_path = format!("{TEST_TOKEN}.txt");
+        let (status, _) = send(
+            &app,
+            api_request(
+                "PUT",
+                &format!("/api/workspaces/{workspace_id}/file"),
+                serde_json::json!({"path": secret_path, "content": "content-secret"}),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let destination = directory.path().join("audit.json");
+        let export = |destination: serde_json::Value| {
+            api_request(
+                "POST",
+                "/api/audit/export",
+                serde_json::json!({ "destination": destination }),
+            )
+        };
+
+        assert_eq!(
+            send(&app, export(destination.to_str().unwrap().into()))
+                .await
+                .0,
+            StatusCode::NO_CONTENT
+        );
+        assert_eq!(
+            send(&app, export(destination.to_str().unwrap().into()))
+                .await
+                .0,
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            send(&app, export("audit.json".into())).await.0,
+            StatusCode::BAD_REQUEST
+        );
+
+        let exported = fs::read_to_string(&destination).unwrap();
+        assert!(!exported.contains(TEST_TOKEN), "{exported}");
+        assert!(!exported.contains("content-secret"), "{exported}");
+        let exported: Vec<AuditRecord> = serde_json::from_str(&exported).unwrap();
+        assert_eq!(
+            summaries(&exported),
+            [summary(
+                "file_write",
+                "succeeded",
+                Some("[REDACTED].txt"),
+                None
+            )]
+        );
+        assert_eq!(
+            summaries(&audit.list().await.unwrap()[1..]),
+            [
+                summary("file_export", "succeeded", Some("audit.json"), None),
+                summary(
+                    "file_export",
+                    "denied",
+                    Some("audit.json"),
+                    Some("audit_error")
+                ),
+                summary(
+                    "file_export",
+                    "denied",
+                    Some("audit.json"),
+                    Some("audit_error")
+                ),
+            ]
         );
     }
 

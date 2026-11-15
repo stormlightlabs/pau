@@ -102,6 +102,7 @@ use pau_agent::{
     AgentCapabilities, AgentControl, AgentControlError, AgentKind, AgentMessageQueue,
     AgentSessionStatus, ClaudeSession, DiscoverClaudeOptions, PromptQueueChoice, ThinkingLevel,
 };
+use pau_core::audit::{AuditActor, AuditEntry, AuditLog, AuditOperation, AuditResult};
 use pau_core::readiness::AgentReadinessReport;
 use pau_core::{
     ServerEventKind,
@@ -134,7 +135,11 @@ use serde_json::Value;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::sync::broadcast;
 
-use crate::{ApiError, ApiState, EventHub, diagnostic_timestamp, workspace_service};
+use crate::{
+    ApiError, ApiState, EventHub,
+    audit::{PendingAudit, export_target},
+    diagnostic_timestamp, workspace_service,
+};
 
 /// Matches a search returns when the request sets no limit.
 const DEFAULT_SEARCH_MATCHES: usize = 50;
@@ -187,6 +192,8 @@ pub(crate) struct SessionApi {
     /// Current extension UI per live session. See the module documentation.
     extension_ui: Arc<Mutex<HashMap<String, SessionExtensionUi>>>,
     events: EventHub,
+    /// Records process starts and stops. See the `audit` module.
+    audit: AuditLog,
     /// The last agent readiness report and when it was made. See `readiness`.
     readiness: Arc<tokio::sync::Mutex<Option<(std::time::Instant, AgentReadinessReport)>>>,
 }
@@ -198,7 +205,8 @@ impl std::fmt::Debug for SessionApi {
 }
 
 impl SessionApi {
-    /// Creates the service and starts forwarding registry output to `events`.
+    /// Creates the service, starts forwarding registry output to `events`,
+    /// and records process starts and stops in `audit`.
     ///
     /// Claude discovery searches the same `PATH` as `discovery`, and every
     /// agent process receives it.
@@ -208,6 +216,7 @@ impl SessionApi {
         registry: PiSessionRegistry,
         discovery: DiscoverPiOptions,
         events: EventHub,
+        audit: AuditLog,
     ) -> Self {
         let api = Self {
             registry: Arc::new(registry),
@@ -220,6 +229,7 @@ impl SessionApi {
             records: Arc::default(),
             extension_ui: Arc::default(),
             events,
+            audit,
             readiness: Arc::default(),
         };
         tokio::spawn(api.clone().forward(api.registry.subscribe()));
@@ -238,7 +248,15 @@ impl SessionApi {
     pub(crate) async fn stop_all(&self) {
         self.stop_all_claude().await;
         for id in self.registry.active_ids().await {
-            if let Err(error) = self.registry.stop(&id, diagnostic_timestamp()).await {
+            let record = self.record(&id);
+            let stopped = self.registry.stop(&id, diagnostic_timestamp()).await;
+            self.audit.record(shutdown_stop(
+                record,
+                &id,
+                stopped.as_ref().ok().copied().flatten(),
+                stopped.is_ok(),
+            ));
+            if let Err(error) = stopped {
                 tracing::warn!(
                     event = "session.stop_failed",
                     session_id = %id,
@@ -621,6 +639,9 @@ impl SessionApi {
                     let status = if exit.requested {
                         SessionStatus::Stopped
                     } else {
+                        // A requested stop is recorded by whoever asked.
+                        self.audit
+                            .record(unrequested_stop(&tagged.session_id, &record, exit.code));
                         SessionStatus::Failed
                     };
                     let mut session = describe(&tagged.session_id, &record, status);
@@ -630,6 +651,45 @@ impl SessionApi {
                 }
             }
         }
+    }
+}
+
+/// The record of a session process that exited without being asked to.
+fn unrequested_stop(id: &str, record: &SessionRecord, exit_code: Option<i32>) -> AuditEntry {
+    AuditEntry {
+        workspace_id: Some(record.workspace_id.clone()),
+        session_id: Some(id.to_owned()),
+        target: Some(record.agent.id().to_owned()),
+        exit_code,
+        ..AuditEntry::new(
+            AuditActor::Process,
+            AuditOperation::SessionStop,
+            AuditResult::Failed,
+        )
+    }
+}
+
+/// The record of a session Pau stopped while shutting down.
+fn shutdown_stop(
+    record: Option<SessionRecord>,
+    id: &str,
+    exit_code: Option<i32>,
+    stopped: bool,
+) -> AuditEntry {
+    AuditEntry {
+        workspace_id: record.as_ref().map(|record| record.workspace_id.clone()),
+        session_id: Some(id.to_owned()),
+        target: record.map(|record| record.agent.id().to_owned()),
+        exit_code,
+        ..AuditEntry::new(
+            AuditActor::Pau,
+            AuditOperation::SessionStop,
+            if stopped {
+                AuditResult::Succeeded
+            } else {
+                AuditResult::Failed
+            },
+        )
     }
 }
 
@@ -986,12 +1046,35 @@ pub(crate) async fn start_session(
     State(state): State<ApiState>,
     Json(request): Json<StartSessionRequest>,
 ) -> Result<(StatusCode, Json<AgentSession>), ApiError> {
-    let api = session_api(&state)?;
+    let mut audit = PendingAudit::operator(
+        &state.audit,
+        AuditOperation::SessionStart,
+        Some(request.workspace_id.clone()),
+        Some(
+            request
+                .agent
+                .clone()
+                .unwrap_or_else(|| AgentKind::Pi.id().to_owned()),
+        ),
+    );
+    let result = start_agent_session(&state, request).await;
+    if let Ok((_, Json(session))) = &result {
+        audit.session(session.id.clone());
+    }
+    audit.finish(&result);
+    result
+}
+
+async fn start_agent_session(
+    state: &ApiState,
+    request: StartSessionRequest,
+) -> Result<(StatusCode, Json<AgentSession>), ApiError> {
+    let api = session_api(state)?;
     let agent = match request.agent.as_deref() {
         None => AgentKind::Pi,
         Some(id) => AgentKind::from_id(id).ok_or_else(|| unknown_agent(id))?,
     };
-    let root = workspace_service(&state)?
+    let root = workspace_service(state)?
         .root(&request.workspace_id)
         .await?;
     // Sandboxed launches are not wired to the desktop yet. Refusing keeps a
@@ -1108,16 +1191,32 @@ pub(crate) async fn stop_session(
     State(state): State<ApiState>,
     AxumPath(session_id): AxumPath<String>,
 ) -> Result<StatusCode, ApiError> {
-    let api = session_api(&state)?;
-    if let Some(session) = api.claude_session(&session_id) {
-        session.stop().await.map_err(claude::session_error)?;
-        return Ok(StatusCode::NO_CONTENT);
+    let mut audit = PendingAudit::operator(&state.audit, AuditOperation::SessionStop, None, None);
+    audit.session(session_id.clone());
+    let stopped = async {
+        let api = session_api(&state)?;
+        if let Some(record) = api.record(&session_id) {
+            audit.workspace(record.workspace_id);
+            audit.target(record.agent.id());
+        }
+        if let Some(session) = api.claude_session(&session_id) {
+            return session
+                .stop()
+                .await
+                .map(|exit| exit.code)
+                .map_err(claude::session_error);
+        }
+        api.live(&session_id).await?;
+        Ok(api
+            .registry
+            .stop(&session_id, diagnostic_timestamp())
+            .await?)
     }
-    api.live(&session_id).await?;
-    api.registry
-        .stop(&session_id, diagnostic_timestamp())
-        .await?;
-    Ok(StatusCode::NO_CONTENT)
+    .await;
+    let exit_code = stopped.as_ref().ok().copied().flatten();
+    let result = stopped.map(|_| StatusCode::NO_CONTENT);
+    audit.finish_with_exit(&result, exit_code);
+    result
 }
 
 /// Largest decoded size of one prompt image.
@@ -1389,9 +1488,23 @@ pub(crate) async fn export_session(
     AxumPath(session_id): AxumPath<String>,
     Json(request): Json<SessionExportRequest>,
 ) -> Result<StatusCode, ApiError> {
-    let (_, session) = session_api(&state)?.live(&session_id).await?;
-    session.export_html(request.destination.into()).await?;
-    Ok(StatusCode::NO_CONTENT)
+    let destination = std::path::PathBuf::from(request.destination);
+    let mut audit = PendingAudit::operator(
+        &state.audit,
+        AuditOperation::FileExport,
+        None,
+        export_target(&destination),
+    );
+    audit.session(session_id.clone());
+    let result = async {
+        let (record, session) = session_api(&state)?.live(&session_id).await?;
+        audit.workspace(record.workspace_id);
+        session.export_html(destination).await?;
+        Ok(StatusCode::NO_CONTENT)
+    }
+    .await;
+    audit.finish(&result);
+    result
 }
 
 /// Sets the session's display name and publishes the updated session.

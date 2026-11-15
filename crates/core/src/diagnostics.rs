@@ -8,7 +8,7 @@ use std::{
     fs,
     io::{self, Write},
     path::Path,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
     time::{Duration, SystemTime},
 };
 
@@ -18,7 +18,7 @@ use ts_rs::TS;
 
 const DEFAULT_RECORD_CAPACITY: usize = 1_024;
 const MAX_PAYLOAD_TRACE_DURATION: Duration = Duration::from_secs(15 * 60);
-const REDACTED: &str = "[REDACTED]";
+pub(crate) const REDACTED: &str = "[REDACTED]";
 
 /// Severity threshold for diagnostic records.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
@@ -156,6 +156,44 @@ pub struct DiagnosticBundle {
     pub revision: u64,
 }
 
+/// Removes secrets from free text before it is retained anywhere.
+///
+/// It replaces every registered value, such as the API token, with
+/// `[REDACTED]`, and replaces the whole value when it looks like an absolute
+/// path or a URL, which can name a user or carry credentials. Values are cut to
+/// 256 bytes first. Clones share one set of registered values.
+#[derive(Clone, Debug, Default)]
+pub struct Redactor(Arc<RwLock<HashSet<String>>>);
+
+impl Redactor {
+    /// Registers a value that every later [`Redactor::redact`] removes.
+    pub fn register(&self, value: impl Into<String>) {
+        let value = value.into();
+        if value.is_empty() {
+            return;
+        }
+        self.0
+            .write()
+            .expect("redactor lock poisoned")
+            .insert(value);
+    }
+
+    /// Returns `value` with registered values, paths, and URLs removed.
+    pub fn redact(&self, value: impl Into<String>) -> String {
+        let mut value = value.into();
+        value.truncate(value.floor_char_boundary(256));
+        for sensitive in self.0.read().expect("redactor lock poisoned").iter() {
+            if value.contains(sensitive.as_str()) {
+                value = value.replace(sensitive.as_str(), REDACTED);
+            }
+        }
+        if value.contains("://") || value.starts_with('/') || value.starts_with('~') {
+            return REDACTED.to_owned();
+        }
+        value
+    }
+}
+
 #[derive(Debug)]
 struct DiagnosticState {
     settings: DiagnosticSettings,
@@ -164,7 +202,6 @@ struct DiagnosticState {
     revision: u64,
     adapters: BTreeMap<String, AdapterDiagnostic>,
     transports: BTreeMap<String, TransportDiagnostic>,
-    sensitive_values: HashSet<String>,
     trace_deadline: Option<SystemTime>,
 }
 
@@ -175,6 +212,7 @@ pub struct Diagnostics {
     backend_version: String,
     dependencies: BTreeMap<String, String>,
     capacity: usize,
+    redactor: Redactor,
     state: Arc<Mutex<DiagnosticState>>,
 }
 
@@ -206,6 +244,7 @@ impl Diagnostics {
             backend_version: backend_version.into(),
             dependencies,
             capacity,
+            redactor: Redactor::default(),
             state: Arc::new(Mutex::new(DiagnosticState {
                 settings: DiagnosticSettings::default(),
                 records: VecDeque::with_capacity(capacity),
@@ -213,7 +252,6 @@ impl Diagnostics {
                 revision: 0,
                 adapters: BTreeMap::new(),
                 transports: BTreeMap::new(),
-                sensitive_values: HashSet::new(),
                 trace_deadline: None,
             })),
         }
@@ -240,15 +278,13 @@ impl Diagnostics {
 
     /// Registers a value that must be removed before any later record enters the ring.
     pub fn register_sensitive_value(&self, value: impl Into<String>) {
-        let value = value.into();
-        if value.is_empty() {
-            return;
-        }
-        self.state
-            .lock()
-            .expect("diagnostics lock poisoned")
-            .sensitive_values
-            .insert(value);
+        self.redactor.register(value);
+    }
+
+    /// The redactor these diagnostics apply, shared with other stores that
+    /// must remove the same values.
+    pub fn redactor(&self) -> Redactor {
+        self.redactor.clone()
     }
 
     /// Starts temporary payload-shape tracing for at most fifteen minutes.
@@ -285,7 +321,7 @@ impl Diagnostics {
         if !state.settings.enabled || input.level < state.settings.min_level {
             return;
         }
-        let record = sanitize_record(input, &state.sensitive_values, false);
+        let record = sanitize_record(input, &self.redactor, false);
         push_record(&mut state, self.capacity, record);
     }
 
@@ -305,7 +341,7 @@ impl Diagnostics {
         metadata.insert("payload_shape".to_owned(), payload_shape(payload));
         input.level = DiagnosticLevel::Debug;
         input.metadata = metadata;
-        let record = sanitize_record(input, &state.sensitive_values, true);
+        let record = sanitize_record(input, &self.redactor, true);
         push_record(&mut state, self.capacity, record);
     }
 
@@ -316,9 +352,7 @@ impl Diagnostics {
             return;
         }
         adapter.name = identifier(adapter.name);
-        adapter.version = adapter
-            .version
-            .map(|value| scrub_value(value, &state.sensitive_values));
+        adapter.version = adapter.version.map(|value| self.redactor.redact(value));
         adapter.handshake = identifier(adapter.handshake);
         adapter.capabilities = adapter.capabilities.into_iter().map(identifier).collect();
         adapter.capabilities.sort();
@@ -400,17 +434,17 @@ fn expire_trace(state: &mut DiagnosticState, now: SystemTime) {
 
 fn sanitize_record(
     input: DiagnosticRecordInput,
-    sensitive_values: &HashSet<String>,
+    redactor: &Redactor,
     payload_trace: bool,
 ) -> DiagnosticRecord {
     let metadata = input
         .metadata
         .into_iter()
         .filter(|(key, _)| safe_metadata_key(key))
-        .map(|(key, value)| (key, scrub_value(value, sensitive_values)))
+        .map(|(key, value)| (key, redactor.redact(value)))
         .collect();
     DiagnosticRecord {
-        timestamp: scrub_value(input.timestamp, sensitive_values),
+        timestamp: redactor.redact(input.timestamp),
         component: identifier(input.component),
         level: input.level,
         operation: identifier(input.operation),
@@ -460,19 +494,6 @@ fn identifier(value: String) -> String {
     } else {
         filtered
     }
-}
-
-fn scrub_value(mut value: String, sensitive_values: &HashSet<String>) -> String {
-    value.truncate(value.floor_char_boundary(256));
-    for sensitive in sensitive_values {
-        if value.contains(sensitive) {
-            value = value.replace(sensitive, REDACTED);
-        }
-    }
-    if value.contains("://") || value.starts_with('/') || value.starts_with('~') {
-        return REDACTED.to_owned();
-    }
-    value
 }
 
 fn payload_shape(value: &Value) -> String {

@@ -26,7 +26,7 @@ use pau_pi::PiSessionError;
 use serde_json::json;
 use tokio::sync::broadcast;
 
-use super::{SessionApi, SessionRecord, describe, session_status};
+use super::{SessionApi, SessionRecord, describe, session_status, shutdown_stop, unrequested_stop};
 use crate::{ApiError, diagnostic_timestamp};
 
 #[cfg(all(test, unix))]
@@ -65,7 +65,15 @@ impl SessionApi {
             let Some(session) = self.claude_session(&id) else {
                 continue;
             };
-            if let Err(error) = session.stop().await {
+            let record = self.record(&id);
+            let stopped = session.stop().await;
+            self.audit.record(shutdown_stop(
+                record,
+                &id,
+                stopped.as_ref().ok().and_then(|exit| exit.code),
+                stopped.is_ok(),
+            ));
+            if let Err(error) = stopped {
                 tracing::warn!(
                     event = "session.stop_failed",
                     session_id = %id,
@@ -232,6 +240,8 @@ impl SessionApi {
                     let status = if exit.requested {
                         SessionStatus::Stopped
                     } else {
+                        // A requested stop is recorded by whoever asked.
+                        self.audit.record(unrequested_stop(&id, &record, exit.code));
                         SessionStatus::Failed
                     };
                     let mut session = describe(&id, &record, status);

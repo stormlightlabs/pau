@@ -47,10 +47,12 @@ const HOME_CREDENTIAL_PATHS: &[&str] = &[
 ///
 /// Seatbelt allows reads outside the denied paths, and the operator's other
 /// terminals are `/dev/ttys*` devices the operator owns, so without this deny
-/// a sandboxed process could read their keystrokes. `/dev/tty`, the process's
+/// a sandboxed process could read their keystrokes. Serial devices come in
+/// pairs, `/dev/tty.*` and `/dev/cu.*`, and some, such as
+/// `/dev/cu.debug-console`, are open to every user. `/dev/tty`, the process's
 /// own controlling terminal, stays open. Bubblewrap gives each sandbox its own
 /// `/dev`, so Linux needs no deny.
-const MACOS_TERMINAL_DEVICES: &[&str] = &["/dev/tty?*", "/dev/pty*"];
+const MACOS_TERMINAL_DEVICES: &[&str] = &["/dev/tty?*", "/dev/pty*", "/dev/cu.*"];
 
 /// Workspace files that commonly hold local secrets. `.env.example` and other
 /// samples stay readable.
@@ -822,7 +824,7 @@ mod tests {
             // allowPty would reopen every /dev/ttys* device after the deny.
             assert_eq!(config.get("allowPty"), None, "{adapter:?}");
             let deny_read = array(&config["filesystem"]["denyRead"]);
-            for device in ["/dev/tty?*", "/dev/pty*"] {
+            for device in ["/dev/tty?*", "/dev/pty*", "/dev/cu.*"] {
                 assert!(deny_read.contains(&device.to_owned()), "{adapter:?}");
             }
             assert!(!deny_read.contains(&"/dev/tty".to_owned()));

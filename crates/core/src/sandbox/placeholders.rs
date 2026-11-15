@@ -1,8 +1,10 @@
 //! Placeholders that sandbox-runtime creates for absent protected paths.
 
 use std::{
+    collections::{BTreeSet, HashMap},
     fs,
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 
 /// Files that sandbox-runtime 0.0.77 denies for writes in the current
@@ -99,6 +101,81 @@ pub fn remove_placeholders(paths: &[PathBuf]) -> Vec<PathBuf> {
         })
         .cloned()
         .collect()
+}
+
+/// Counts the sandboxes running in each workspace, so their placeholders
+/// outlive every sandbox that relies on them.
+///
+/// A placeholder belongs to the workspace, not to the sandbox that created
+/// it. A sandbox that starts while another's placeholder exists predicts no
+/// placeholder there, yet on Linux its deny rule is a mount on that path.
+/// Unlinking a mount point detaches the mount in every namespace, so removing
+/// the placeholder while that sandbox runs would lift its deny. Pau therefore
+/// removes a workspace's placeholders only when its last sandbox exits.
+///
+/// Clones share the count. One instance must cover every kind of sandboxed
+/// process in a workspace, terminals and agent sessions alike.
+#[derive(Clone, Debug, Default)]
+pub struct PlaceholderUsers(Arc<Mutex<HashMap<String, WorkspacePlaceholders>>>);
+
+#[derive(Debug, Default)]
+struct WorkspacePlaceholders {
+    users: usize,
+    placeholders: BTreeSet<PathBuf>,
+}
+
+impl PlaceholderUsers {
+    /// Records a sandbox about to start in `workspace_id` that may create
+    /// `placeholders`. Dropping the returned lease records its exit.
+    pub fn enter(&self, workspace_id: &str, placeholders: &[PathBuf]) -> PlaceholderLease {
+        let mut workspaces = self.0.lock().expect("placeholder users lock poisoned");
+        let workspace = workspaces.entry(workspace_id.to_owned()).or_default();
+        workspace.users += 1;
+        workspace.placeholders.extend(placeholders.iter().cloned());
+        PlaceholderLease {
+            users: self.clone(),
+            workspace_id: workspace_id.to_owned(),
+        }
+    }
+
+    /// Whether a sandbox is running in `workspace_id`.
+    pub fn in_use(&self, workspace_id: &str) -> bool {
+        self.0
+            .lock()
+            .expect("placeholder users lock poisoned")
+            .contains_key(workspace_id)
+    }
+
+    fn leave(&self, workspace_id: &str) {
+        let mut workspaces = self.0.lock().expect("placeholder users lock poisoned");
+        let Some(workspace) = workspaces.get_mut(workspace_id) else {
+            return;
+        };
+        workspace.users -= 1;
+        if workspace.users == 0 {
+            let workspace = workspaces
+                .remove(workspace_id)
+                .expect("the workspace entry exists");
+            // Removed under the lock, so a sandbox entering now cannot
+            // predict a placeholder that is about to disappear.
+            remove_placeholders(&workspace.placeholders.into_iter().collect::<Vec<_>>());
+        }
+    }
+}
+
+/// One running sandbox counted by [`PlaceholderUsers`]. Dropping it records
+/// that the sandbox has exited, and the last lease in a workspace removes the
+/// placeholders recorded there.
+#[derive(Debug)]
+pub struct PlaceholderLease {
+    users: PlaceholderUsers,
+    workspace_id: String,
+}
+
+impl Drop for PlaceholderLease {
+    fn drop(&mut self) {
+        self.users.leave(&self.workspace_id);
+    }
 }
 
 #[cfg(test)]

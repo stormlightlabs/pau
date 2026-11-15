@@ -234,26 +234,87 @@ echo done
     assert_gone(job, "the background job").await;
 }
 
+/// Injects keystrokes with `TIOCSTI` from inside the sandbox, into the
+/// shell's own terminal and into a terminal the test owns outside it.
+///
+/// The probe must run: a missing `python3` or any error other than a refused
+/// `ioctl` or `open` fails the test. Injection into the shell's own terminal
+/// may succeed, and must then reach only the sandboxed shell. On Linux that
+/// terminal is the relay's PTY inside the sandbox, and kernels that disable
+/// `TIOCSTI` for unprivileged processes refuse it. On macOS it is Pau's PTY,
+/// whose only reader is the sandboxed shell, and Seatbelt may refuse it. The
+/// outside terminal must receive nothing. CI runs this test on Linux only;
+/// the macOS path runs where a developer has `srt` installed.
 #[tokio::test]
 async fn keystrokes_injected_in_the_sandbox_reach_only_the_sandboxed_shell() {
-    let script = r#"
+    let (leader, follower) = open_pty();
+    // SAFETY: `follower` is an open terminal descriptor.
+    let other = unsafe { std::ffi::CStr::from_ptr(libc::ttyname(follower)) }
+        .to_string_lossy()
+        .into_owned();
+    let probe = r#"
+import errno, fcntl, os, sys, termios
+# The probe passes through shell quoting, so it spells out no escapes.
+NEWLINE = bytes([10])
+def inject(fd, text):
+    for byte in text:
+        fcntl.ioctl(fd, termios.TIOCSTI, bytes([byte]))
+def name(error):
+    return errno.errorcode.get(error.errno, str(error.errno))
+try:
+    inject(0, b"echo INJECTED-$((1 + 1))" + NEWLINE)
+    print("own=injected")
+except OSError as error:
+    print("own=refused:" + name(error))
+try:
+    fd = os.open(sys.argv[1], os.O_RDWR | os.O_NOCTTY)
+except OSError as error:
+    print("other=closed:" + name(error))
+else:
+    try:
+        inject(fd, b"OUTSIDE" + NEWLINE)
+        print("other=injected")
+    except OSError as error:
+        print("other=refused:" + name(error))
+print("probe=ran")
+"#;
+    let Some(mut fixture) = start(|_| {
+        format!(
+            r#"
 for fd in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19; do
   if [ -t "$fd" ]; then echo "fd-tty=$(tty <&"$fd")"; fi
 done
-if python3 -c 'import fcntl, termios
-for byte in b"echo INJECTED-$((1 + 1))\n":
-    fcntl.ioctl(0, termios.TIOCSTI, bytes([byte]))' 2>/dev/null; then
-  read -r injected; eval "$injected"
-else
-  echo tiocsti=unavailable
-fi
+result=$(python3 -c '{probe}' '{other}' 2>&1)
+echo "$result"
+case "$result" in *own=injected*) read -r injected; eval "$injected" ;; esac
 echo done
-"#;
-    let Some(mut fixture) = start(|_| script.into()) else {
+"#
+        )
+    }) else {
+        // SAFETY: both descriptors are open and closed only here.
+        unsafe {
+            libc::close(leader);
+            libc::close(follower);
+        }
         return;
     };
     let pau_tty = pty_name(fixture.terminal.process_id());
     let seen = read_until(&mut fixture.output, "done").await;
+    exit_status(&fixture.terminal).await;
+    // Injected bytes would wait in the outside terminal's input queue.
+    // SAFETY: `follower` is open, and the buffer is valid for its length.
+    let mut queued = [0u8; 64];
+    let read = unsafe {
+        libc::fcntl(follower, libc::F_SETFL, libc::O_NONBLOCK);
+        libc::read(follower, queued.as_mut_ptr().cast(), queued.len())
+    };
+    // SAFETY: both descriptors are open and closed only here.
+    unsafe {
+        libc::close(leader);
+        libc::close(follower);
+    }
+
+    assert!(seen.contains("probe=ran"), "the probe failed: {seen:?}");
     let names: Vec<_> = seen
         .lines()
         .filter_map(|line| line.trim().strip_prefix("fd-tty="))
@@ -265,13 +326,35 @@ echo done
             "the sandboxed shell holds Pau's PTY {pau_tty}: {seen:?}"
         );
     }
-    if seen.contains("tiocsti=unavailable") {
-        // Seatbelt refuses TIOCSTI outright, which is stronger still.
-        eprintln!("injection refused: the sandbox does not allow TIOCSTI");
-    } else {
+    if seen.contains("own=injected") {
         assert!(seen.contains("INJECTED-2"), "{seen:?}");
+    } else {
+        assert!(seen.contains("own=refused:"), "{seen:?}");
     }
-    exit_status(&fixture.terminal).await;
+    assert!(!seen.contains("other=injected"), "{seen:?}");
+    assert!(
+        read <= 0,
+        "the outside terminal received {:?}",
+        String::from_utf8_lossy(&queued[..read as usize])
+    );
+}
+
+/// Opens a PTY pair that stands for one of the operator's other terminals.
+fn open_pty() -> (i32, i32) {
+    let (mut leader, mut follower) = (0, 0);
+    // SAFETY: both out-pointers are valid, and the name, settings, and size
+    // pointers may be null.
+    let opened = unsafe {
+        libc::openpty(
+            &mut leader,
+            &mut follower,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    assert_eq!(opened, 0, "openpty failed");
+    (leader, follower)
 }
 
 /// Waits until `pid` no longer exists, or fails after [`STEP_LIMIT`].
@@ -291,19 +374,7 @@ async fn assert_gone(pid: i32, what: &str) {
 async fn cannot_open_other_terminals() {
     // Another terminal, such as one of the operator's, with typed input
     // waiting to be read.
-    let (mut leader, mut follower) = (0, 0);
-    // SAFETY: both out-pointers are valid, and the name, settings, and size
-    // pointers may be null.
-    let opened = unsafe {
-        libc::openpty(
-            &mut leader,
-            &mut follower,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-        )
-    };
-    assert_eq!(opened, 0, "openpty failed");
+    let (leader, follower) = open_pty();
     // SAFETY: `follower` is an open terminal descriptor.
     let other = unsafe { std::ffi::CStr::from_ptr(libc::ttyname(follower)) }
         .to_string_lossy()
@@ -360,6 +431,35 @@ async fn stops_nohup_jobs_when_the_shell_or_its_parent_goes() {
         .expect("job pid");
     exit_status(&fixture.terminal).await;
     assert_gone(job, "the nohup job").await;
+}
+
+#[tokio::test]
+async fn stops_a_chain_that_forks_and_exits() {
+    // Each process forks and exits at once, so no process ID lasts long
+    // enough to be listed and then killed. Every 16th writes its process ID
+    // to `beat` in the workspace, which shows whether any still runs.
+    let Some(mut fixture) = start(|_| {
+        "perl -e '$SIG{HUP}=q(IGNORE); \
+         while(1){exit if fork; ++$n % 16 or open(my $f, q(>), q(beat)) and print $f $$}' & \
+         echo ready; read _; exit 0"
+            .into()
+    }) else {
+        return;
+    };
+    let beat = fixture.workspace.join("beat");
+    read_until(&mut fixture.output, "ready").await;
+    assert!(beating(&beat).await, "the chain did not start");
+    fixture.terminal.write("\r").await.unwrap();
+    exit_status(&fixture.terminal).await;
+
+    assert!(!beating(&beat).await, "the chain outlived the terminal");
+}
+
+/// Whether some process rewrites `beat` within a short wait.
+async fn beating(beat: &Path) -> bool {
+    let first = fs::read(beat).ok();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    fs::read(beat).ok() != first
 }
 
 /// Records the resident memory of one terminal's `srt` process. Run with

@@ -32,8 +32,9 @@ use pau_core::{
     },
     preferences::{UiPreferences, UiPreferencesStore},
     sandbox::{
-        EffectiveSandbox, SandboxExecutables, SandboxLaunchInput, SandboxPreviewRequest,
-        SandboxSelection, WorkspaceSandbox, resolve_sandbox, validate_selection,
+        EffectiveSandbox, PlaceholderUsers, SandboxExecutables, SandboxLaunchInput,
+        SandboxPreviewRequest, SandboxSelection, WorkspaceSandbox, resolve_sandbox,
+        validate_selection,
     },
     workspace::{
         FileContent, FileEntry, GitDiff, GitStatus, SearchOptions, TraversalOptions,
@@ -159,6 +160,9 @@ struct SandboxApi {
     /// Executable that runs the sandboxed terminal relay, from
     /// [`ServerOptions::terminal_relay`].
     terminal_relay: Option<PathBuf>,
+    /// Sandboxes running in each workspace, shared by terminals and Pi
+    /// sessions.
+    placeholders: PlaceholderUsers,
 }
 
 impl SandboxApi {
@@ -171,6 +175,7 @@ impl SandboxApi {
             home: dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")),
             sessions,
             terminal_relay: None,
+            placeholders: PlaceholderUsers::default(),
         }
     }
 
@@ -1595,7 +1600,8 @@ pub async fn start_with_database(
     let server_token = token.clone();
     let events = EventHub::default().with_diagnostics(diagnostics.clone());
     let sessions = SessionApi::new(
-        pau_pi::PiSessionRegistry::new(processes),
+        pau_pi::PiSessionRegistry::new(processes)
+            .with_placeholder_users(sandbox.placeholders.clone()),
         pau_pi::DiscoverPiOptions {
             path,
             ..pau_pi::DiscoverPiOptions::default()

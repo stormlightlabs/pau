@@ -30,7 +30,7 @@ use std::{
 use pau_core::terminal::{TerminalSignal, TerminalSize};
 use portable_pty::{CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
 
-use crate::session::{session_processes, signal_session};
+use crate::session::{kill_leftovers, session_processes, signal_session};
 
 /// First argument that makes an executable run as the relay. The remaining
 /// arguments are the shell program and its arguments.
@@ -286,7 +286,7 @@ fn run(program: &OsStr, args: &[OsString]) -> io::Result<i32> {
     if !session_processes(session).is_empty() {
         thread::sleep(Duration::from_millis(100));
     }
-    signal_session(session, &[libc::SIGKILL]);
+    kill_leftovers(session);
     let _ = output_ended.recv_timeout(DRAIN_LIMIT);
     drop(saved);
     Ok(code)

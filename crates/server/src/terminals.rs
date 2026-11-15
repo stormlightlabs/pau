@@ -29,8 +29,8 @@ use axum::{
 use pau_core::{
     ServerEventKind,
     sandbox::{
-        SandboxError, SandboxLaunchInput, SandboxProfileName, TerminalSandboxInput,
-        prepare_terminal_sandbox, remove_placeholders,
+        PlaceholderLease, SandboxError, SandboxLaunchInput, SandboxProfileName,
+        TerminalSandboxInput, prepare_terminal_sandbox,
     },
     terminal::{
         CreateTerminalRequest, TerminalClientMessage, TerminalInfo, TerminalServerMessage,
@@ -178,7 +178,9 @@ impl IntoResponse for TerminalApiError {
 /// Files a sandboxed terminal leaves behind, removed when its process exits.
 struct SandboxLeftovers {
     session_directory: PathBuf,
-    placeholders: Vec<PathBuf>,
+    /// Counts the terminal among the workspace's sandboxes, so its
+    /// placeholders stay while another sandbox there still relies on them.
+    placeholders: PlaceholderLease,
 }
 
 /// Opens a terminal in a workspace root and starts streaming its output.
@@ -255,7 +257,9 @@ pub(crate) async fn create_terminal(
         sandbox = Some(settings.profile);
         leftovers = Some(SandboxLeftovers {
             session_directory,
-            placeholders: launch.placeholders,
+            placeholders: api
+                .placeholders
+                .enter(&request.workspace_id, &launch.placeholders),
         });
         TerminalCommand {
             program: launch.program,
@@ -329,10 +333,11 @@ pub(crate) async fn create_terminal(
 }
 
 impl SandboxLeftovers {
-    /// Removes placeholders the runtime left and the terminal's policy and
-    /// temporary directory.
+    /// Removes the terminal's policy and temporary directory, and the
+    /// placeholders the runtime left when no other sandbox in the workspace
+    /// still runs.
     fn remove(self) {
-        remove_placeholders(&self.placeholders);
+        drop(self.placeholders);
         let _ = std::fs::remove_dir_all(&self.session_directory);
     }
 }
@@ -936,7 +941,8 @@ mod tests {
         fs::write(
             &srt,
             format!(
-                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{0}/args'\nenv > '{0}/env'\n",
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{0}/args'\nenv > '{0}/env'\n\
+                 if [ -e '{0}/hold' ]; then exec sleep 600; fi\n",
                 directory.path().display()
             ),
         )
@@ -1054,6 +1060,67 @@ mod tests {
         assert!(environment.contains("PAU_SANDBOX=1"), "{environment}");
         assert!(environment.contains("TERM=xterm-256color"), "{environment}");
         assert!(!environment.contains("CARGO_MANIFEST_DIR"), "{environment}");
+    }
+
+    #[tokio::test]
+    async fn keeps_placeholders_while_another_sandbox_in_the_workspace_runs() {
+        let (directory, app, workspace_id, sessions) = sandbox_fixture(true).await;
+        let sandbox_path = format!("/api/workspaces/{workspace_id}/sandbox");
+        let selection = serde_json::json!({"mode": "sandboxed", "settings": {
+            "profile": "workspace-write",
+        }});
+        let (status, _) = request(&app, "PUT", &sandbox_path, Some(selection)).await;
+        if status == StatusCode::SERVICE_UNAVAILABLE {
+            return;
+        }
+        // The fake `srt` keeps running until its terminal closes.
+        fs::write(directory.path().join("hold"), "").unwrap();
+        let create = serde_json::json!({
+            "workspace_id": workspace_id,
+            "size": {"cols": 80, "rows": 24},
+            "sandboxed": true,
+        });
+        let open = || async {
+            let (status, body) =
+                request(&app, "POST", "/api/terminals", Some(create.clone())).await;
+            assert_eq!(status, StatusCode::CREATED, "{body}");
+            serde_json::from_value::<TerminalInfo>(body).unwrap().id
+        };
+        let close = |id: String| {
+            let app = app.clone();
+            let session = sessions.join(format!("terminal-{id}"));
+            async move {
+                let (status, body) =
+                    request(&app, "DELETE", &format!("/api/terminals/{id}"), None).await;
+                assert_eq!(status, StatusCode::OK, "{body}");
+                timeout(STEP_LIMIT, async {
+                    while session.exists() {
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                })
+                .await
+                .expect("the terminal did not clean up");
+            }
+        };
+
+        // The first sandbox predicts `.mcp.json` and the runtime creates it.
+        // The second starts while it exists, so it predicts none there, yet
+        // its own deny rule relies on the same path.
+        let first = open().await;
+        let placeholder = directory.path().join("project/.mcp.json");
+        fs::write(&placeholder, "").unwrap();
+        let second = open().await;
+
+        close(first).await;
+        assert!(
+            placeholder.exists(),
+            "a running sandbox lost its placeholder"
+        );
+        close(second).await;
+        assert!(
+            !placeholder.exists(),
+            "the last sandbox left its placeholder"
+        );
     }
 
     #[tokio::test]

@@ -25,7 +25,7 @@ use std::{fmt, io};
 
 pub use claude::{ClaudeSandboxLaunch, claude_settings, prepare_claude_sandbox};
 pub use executables::{SandboxExecutable, SandboxExecutables};
-pub use placeholders::{is_placeholder, remove_placeholders};
+pub use placeholders::{PlaceholderLease, PlaceholderUsers, is_placeholder, remove_placeholders};
 pub use policy::{
     EffectiveSandbox, ResolvedSandbox, SandboxCredentialAccess, SandboxLaunchInput,
     SandboxNetworkAccess, SandboxPolicyFile, SandboxReadAccess, SandboxedMcpServer,

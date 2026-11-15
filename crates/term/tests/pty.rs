@@ -264,6 +264,50 @@ async fn a_sandboxed_terminal_kills_jobs_left_in_its_session() {
     assert_gone(job, "the sandboxed shell's nohup job").await;
 }
 
+#[tokio::test]
+async fn a_sandboxed_terminal_stops_a_chain_that_forks_and_exits() {
+    let directory = tempfile::tempdir().unwrap();
+    let beat = directory.path().join("beat");
+    let (terminal, mut output) = sh_in(
+        TerminalMode::Sandboxed,
+        &format!("{} & echo ready; read _; exit 0", fork_chain(&beat)),
+    );
+    read_until(&mut output, "ready").await;
+    assert!(beating(&beat).await, "the chain did not start");
+    terminal.write("\r").await.unwrap();
+    timeout(STEP_LIMIT, terminal.exit().wait()).await.unwrap();
+
+    assert!(!beating(&beat).await, "the chain outlived the terminal");
+    let left = std::process::Command::new("pgrep")
+        .args(["-s", &terminal.process_id().to_string()])
+        .output()
+        .unwrap();
+    assert!(
+        left.stdout.is_empty(),
+        "processes left in the session: {}",
+        String::from_utf8_lossy(&left.stdout)
+    );
+}
+
+/// A shell command for a chain of processes that each fork and exit at once,
+/// so no process ID lasts long enough to be listed and then killed. Every
+/// 16th process writes its process ID to `beat`, because a fast chain also
+/// outruns tools such as `pgrep -f` that read each process after listing it.
+fn fork_chain(beat: &std::path::Path) -> String {
+    format!(
+        "perl -e '$SIG{{HUP}}=q(IGNORE); \
+         while(1){{exit if fork; ++$n % 16 or open(my $f, q(>), $ARGV[0]) and print $f $$}}' '{}'",
+        beat.display()
+    )
+}
+
+/// Whether some process rewrites `beat` within a short wait.
+async fn beating(beat: &std::path::Path) -> bool {
+    let first = std::fs::read(beat).ok();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    std::fs::read(beat).ok() != first
+}
+
 #[test]
 fn rejects_empty_dimensions_and_missing_programs() {
     let empty = Terminal::spawn(TerminalCommand {

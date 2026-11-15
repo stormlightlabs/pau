@@ -10,9 +10,12 @@ use pau_agent::{
 use serde_json::{Value, json};
 use std::error::Error;
 use std::fmt;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::sync::{Mutex, broadcast, mpsc};
+use std::time::Duration;
+use tokio::sync::{Mutex, broadcast, mpsc, oneshot};
 
 /// Controls supported by the verified Pi RPC protocol.
 pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
@@ -30,6 +33,7 @@ pub const PI_RPC_CAPABILITIES: AgentCapabilities = AgentCapabilities {
     retry: true,
     rename: true,
     clone_session: true,
+    export_transcript: true,
     shell_commands: true,
     stop: true,
 };
@@ -43,6 +47,9 @@ pub enum PiSessionError {
     NativeSession(String),
     /// The RPC process failed while handling the operation.
     Process(PiProcessError),
+    /// A transcript export could not write its destination. An unusable
+    /// destination is [`std::io::ErrorKind::InvalidInput`].
+    Export(std::io::Error),
 }
 
 impl fmt::Display for PiSessionError {
@@ -51,6 +58,7 @@ impl fmt::Display for PiSessionError {
             Self::Control(error) => error.fmt(formatter),
             Self::NativeSession(message) => formatter.write_str(message),
             Self::Process(error) => error.fmt(formatter),
+            Self::Export(error) => error.fmt(formatter),
         }
     }
 }
@@ -61,6 +69,7 @@ impl Error for PiSessionError {
             Self::Control(error) => Some(error),
             Self::NativeSession(_) => None,
             Self::Process(error) => Some(error),
+            Self::Export(error) => Some(error),
         }
     }
 }
@@ -117,6 +126,12 @@ pub struct PiCommand {
 
 /// The most prompts [`PiSession::input_history`] returns.
 pub const PI_INPUT_HISTORY_LIMIT: usize = 100;
+
+/// How long [`PiSession::export_html`] waits for Pi to render a transcript.
+///
+/// Pi's RPC commands have no timeout of their own, and a long session can take
+/// Pi several seconds to render, so this leaves wide room.
+const EXPORT_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// How full the model's context window is.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -803,6 +818,83 @@ impl PiSession {
         self.native_session().await
     }
 
+    /// Writes Pi's HTML export of the session to `destination`, replacing a
+    /// file already there.
+    ///
+    /// Pi renders the export with its `export_html` command, the same page as
+    /// its `/export` command and `pi --export`, so the file opens in a browser
+    /// with no Pau involved. The file is readable only by its owner, because a
+    /// transcript can hold secrets from the conversation.
+    ///
+    /// The export takes two steps, and both are needed. Pi opens its output
+    /// path by name and follows symlinks, so it renders into a new owner-only
+    /// directory that no one else can write to. Pau then opens Pi's file
+    /// without following symlinks and copies it into a new owner-only
+    /// temporary file beside `destination`, which is synced and renamed into
+    /// place. Letting Pi write beside `destination` would let anyone who can
+    /// write to that folder swap Pi's file for a symlink and receive the
+    /// transcript. Pi never opens `destination`, so a symlink there is
+    /// replaced rather than followed, and a failed export leaves any existing
+    /// file untouched.
+    ///
+    /// A spawned task owns both temporary paths and removes them only after
+    /// Pi answers, so dropping this future cannot leave Pi writing a file
+    /// that no one cleans up. The caller waits at most two minutes;
+    /// a caller that stopped waiting gets no file, and the task still holds
+    /// the directory until Pi answers or exits.
+    ///
+    /// `destination` must be an absolute path whose parent directory exists.
+    pub async fn export_html(&self, destination: PathBuf) -> Result<(), PiSessionError> {
+        let control = AgentControl::ExportTranscript;
+        self.require_capability(control)?;
+        let directory = export_directory(&destination).map_err(PiSessionError::Export)?;
+        let mut staging = tempfile::Builder::new();
+        staging.prefix("pau-transcript-");
+        // `tempfile` creates a directory with the umask's mode, so ask for
+        // owner-only explicitly.
+        #[cfg(unix)]
+        staging.permissions(std::os::unix::fs::PermissionsExt::from_mode(0o700));
+        let staging = staging.tempdir().map_err(PiSessionError::Export)?;
+        let rendered = staging.path().join("transcript.html");
+        let process = Arc::clone(&self.process);
+        let (result_sender, result) = oneshot::channel();
+        tokio::spawn(async move {
+            let response = process
+                .command_at(
+                    process.next_command_id(),
+                    json!({"type": "export_html", "outputPath": rendered.to_string_lossy()}),
+                )
+                .await;
+            if result_sender.is_closed() {
+                return;
+            }
+            let outcome = match response {
+                Err(error) => Err(error.into()),
+                Ok((_, response)) => match command_response(control, response) {
+                    Err(error) => Err(error),
+                    Ok(_) => tokio::task::spawn_blocking(move || {
+                        copy_export(&rendered, &directory, &destination)
+                    })
+                    .await
+                    .unwrap_or_else(|error| Err(io::Error::other(error)))
+                    .map_err(PiSessionError::Export),
+                },
+            };
+            drop(staging);
+            let _ = result_sender.send(outcome);
+        });
+        match tokio::time::timeout(EXPORT_TIMEOUT, result).await {
+            Ok(Ok(outcome)) => outcome,
+            Ok(Err(_)) => Err(PiSessionError::Export(io::Error::other(
+                "the export stopped before Pi answered",
+            ))),
+            Err(_) => Err(PiSessionError::Export(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "Pi did not finish the export in time",
+            ))),
+        }
+    }
+
     /// Sends the last user prompt again as a new message after the assistant
     /// turn failed.
     ///
@@ -1036,6 +1128,49 @@ impl PiSession {
         *status = next;
         self.status_position.fetch_max(position, Ordering::Relaxed);
     }
+}
+
+/// Returns the directory a transcript export writes into, or why
+/// `destination` cannot be a transcript file.
+fn export_directory(destination: &Path) -> io::Result<PathBuf> {
+    let invalid = |message: &str| io::Error::new(io::ErrorKind::InvalidInput, message.to_owned());
+    if !destination.is_absolute() {
+        return Err(invalid("choose a full path for the transcript"));
+    }
+    if destination.file_name().is_none() {
+        return Err(invalid("choose a file name for the transcript"));
+    }
+    if std::fs::symlink_metadata(destination).is_ok_and(|metadata| metadata.is_dir()) {
+        return Err(invalid("a folder has that name"));
+    }
+    match destination.parent() {
+        Some(parent) if parent.is_dir() => Ok(parent.to_owned()),
+        _ => Err(invalid("the folder for the transcript does not exist")),
+    }
+}
+
+/// Copies Pi's rendered export at `rendered` into `destination`.
+///
+/// `rendered` is opened without following a symlink. The copy goes into a new
+/// temporary file in `directory`, which `tempfile` creates owner-only. The
+/// file is synced and renamed over `destination`, so a reader never sees a
+/// partial transcript and a symlink at `destination` is replaced. The
+/// temporary file is removed on failure.
+fn copy_export(rendered: &Path, directory: &Path, destination: &Path) -> io::Result<()> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::custom_flags(&mut options, libc::O_NOFOLLOW);
+    let mut source = options.open(rendered)?;
+    let mut copy = tempfile::Builder::new()
+        .prefix(".pau-transcript-")
+        .suffix(".html")
+        .tempfile_in(directory)?;
+    io::copy(&mut source, copy.as_file_mut())?;
+    copy.as_file().sync_all()?;
+    copy.persist(destination)
+        .map(drop)
+        .map_err(|error| error.error)
 }
 
 /// Returns a successful command response, or Pi's rejection as an error.

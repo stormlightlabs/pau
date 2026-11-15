@@ -177,4 +177,43 @@ mod tests {
         assert!(!is_on_display(frame, &[BUILT_IN]));
         assert!(!is_on_display(frame, &[]));
     }
+
+    /// While the window is maximized, the plugin records the display's corner
+    /// in `x` and `y`, keeps the unmaximized size, and moves the earlier
+    /// position to `prev_x` and `prev_y`. Its display check uses `x` and `y`.
+    const SAVED_MAXIMIZED: &str = r#"{
+      "main": {
+        "width": 1440,
+        "height": 900,
+        "x": 3024,
+        "y": 0,
+        "prev_x": 3600,
+        "prev_y": 300,
+        "maximized": true,
+        "visible": true,
+        "decorated": true,
+        "fullscreen": false
+      }
+    }"#;
+
+    #[test]
+    fn restores_a_maximized_window_only_on_its_display() {
+        let frame = saved_frame(SAVED_MAXIMIZED, "main").unwrap();
+        assert_eq!(
+            frame,
+            Frame {
+                x: 3024,
+                y: 0,
+                width: 1440,
+                height: 900
+            }
+        );
+        assert!(is_on_display(frame, &[BUILT_IN, EXTERNAL]));
+        assert!(!is_on_display(frame, &[BUILT_IN]));
+    }
+
+    #[test]
+    fn leaves_visibility_to_the_shell() {
+        assert!(!FLAGS.contains(StateFlags::VISIBLE));
+    }
 }

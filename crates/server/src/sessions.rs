@@ -78,6 +78,14 @@
 //! while it answers, so that message may arrive in both; clients key messages
 //! by their native identity to apply it once. At most
 //! [`MAX_SESSION_MESSAGES`] of the newest messages return.
+//!
+//! `POST /api/sessions/{id}/export` saves the whole conversation as Pi's HTML
+//! export, the page Pi's own `/export` command writes, to the absolute path in
+//! a [`SessionExportRequest`]. See [`PiSession::export_html`] for how the file is
+//! written. An unusable destination is `400 invalid_destination`. A folder Pau
+//! may not write is `403 permission_denied`, a read-only disk `403 read_only`,
+//! and a full disk `507 storage_full`. Any other failed write is
+//! `500 export_failed`.
 
 use std::{
     collections::HashMap,
@@ -106,20 +114,20 @@ use pau_core::{
         SessionAutoCompactionRequest, SessionAutoRetryRequest, SessionBranchRequest,
         SessionBranchResult, SessionCapabilities, SessionCloneResult, SessionCommand,
         SessionCommandSource, SessionCompactRequest, SessionCompactionResult, SessionContextUsage,
-        SessionExtensionUi, SessionImage, SessionMessageQueue, SessionMessageRequest,
-        SessionMessages, SessionModel, SessionModelSelection, SessionPromptRequest, SessionQueue,
-        SessionRenameRequest, SessionSearchMatch, SessionSearchResult, SessionShellRequest,
-        SessionShellResult, SessionStatus, SessionThinkingLevel, SessionThinkingLevelRequest,
-        SessionTokenUsage, SessionTree, SessionTreeEntry, SessionUsage, StartSessionRequest,
+        SessionExportRequest, SessionExtensionUi, SessionImage, SessionMessageQueue,
+        SessionMessageRequest, SessionMessages, SessionModel, SessionModelSelection,
+        SessionPromptRequest, SessionQueue, SessionRenameRequest, SessionSearchMatch,
+        SessionSearchResult, SessionShellRequest, SessionShellResult, SessionStatus,
+        SessionThinkingLevel, SessionThinkingLevelRequest, SessionTokenUsage, SessionTree,
+        SessionTreeEntry, SessionUsage, StartSessionRequest,
     },
 };
 use pau_pi::{
     DiscoverPiOptions, PiCommand, PiCommandSource, PiExtensionUiRequest, PiExtensionUiResponse,
     PiExtensionWidgetPlacement, PiImage, PiKeybindingSource, PiModel, PiProcessError,
     PiProcessOutput, PiSession, PiSessionError, PiSessionOutput, PiSessionRegistry,
-    PiSessionRegistryError, PiSessionUsage, PiShutdownTimeouts, StartPiProcessOptions,
-    StartRegisteredPiSession, discover_pi, find_pi_session_file, list_pi_session_files,
-    pi_configuration_paths, read_pi_keybindings,
+    PiSessionRegistryError, PiSessionUsage, StartRegisteredPiSession, discover_pi,
+    find_pi_session_file, list_pi_session_files, pi_configuration_paths, read_pi_keybindings,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -192,6 +200,9 @@ impl std::fmt::Debug for SessionApi {
 impl SessionApi {
     /// Creates the service and starts forwarding registry output to `events`.
     ///
+    /// Claude discovery searches the same `PATH` as `discovery`, and every
+    /// agent process receives it.
+    ///
     /// Must be called inside a Tokio runtime.
     pub(crate) fn new(
         registry: PiSessionRegistry,
@@ -200,8 +211,11 @@ impl SessionApi {
     ) -> Self {
         let api = Self {
             registry: Arc::new(registry),
+            claude_discovery: DiscoverClaudeOptions {
+                path: discovery.path.clone(),
+                ..DiscoverClaudeOptions::default()
+            },
             discovery,
-            claude_discovery: DiscoverClaudeOptions::default(),
             claude: Arc::default(),
             records: Arc::default(),
             extension_ui: Arc::default(),
@@ -213,7 +227,7 @@ impl SessionApi {
     }
 
     /// Replaces the Claude discovery settings, which otherwise search the
-    /// server's `PATH`.
+    /// Pi discovery `PATH`.
     #[cfg(test)]
     pub(crate) fn with_claude_discovery(mut self, discovery: DiscoverClaudeOptions) -> Self {
         self.claude_discovery = discovery;
@@ -709,6 +723,7 @@ fn session_capabilities(capabilities: AgentCapabilities) -> SessionCapabilities 
         retry: capabilities.retry,
         rename: capabilities.rename,
         clone_session: capabilities.clone_session,
+        export_transcript: capabilities.export_transcript,
         shell_commands: capabilities.shell_commands,
         stop: capabilities.stop,
     }
@@ -768,15 +783,53 @@ fn thinking_level(level: SessionThinkingLevel) -> ThinkingLevel {
     }
 }
 
-/// HTTP status and stable code for a session failure.
+/// HTTP status, stable code and message for a session failure.
 ///
 /// Controls distinguish three caller-visible cases: the agent cannot perform
 /// the control at all (`unsupported_control`), the session is in the wrong
 /// state (`invalid_session_state`), and the agent refused the request
 /// (`control_rejected`). A process that exits before it answers is
 /// `session_exited`.
-pub(crate) fn error_status(error: &PiSessionRegistryError) -> (StatusCode, &'static str) {
-    match error {
+///
+/// A failed transcript write gets fixed text rather than the I/O error's,
+/// which can name the temporary file and its folder.
+pub(crate) fn error_response(error: &PiSessionRegistryError) -> (StatusCode, &'static str, String) {
+    if let PiSessionRegistryError::Session(PiSessionError::Export(error)) = error {
+        let (status, code, message) = match error.kind() {
+            std::io::ErrorKind::InvalidInput => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    "invalid_destination",
+                    error.to_string(),
+                );
+            }
+            std::io::ErrorKind::PermissionDenied => (
+                StatusCode::FORBIDDEN,
+                "permission_denied",
+                "Pau may not write to that folder",
+            ),
+            std::io::ErrorKind::ReadOnlyFilesystem => {
+                (StatusCode::FORBIDDEN, "read_only", "the disk is read-only")
+            }
+            std::io::ErrorKind::StorageFull => (
+                StatusCode::INSUFFICIENT_STORAGE,
+                "storage_full",
+                "the disk is full",
+            ),
+            std::io::ErrorKind::TimedOut => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "export_failed",
+                "Pi did not finish the export in time",
+            ),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "export_failed",
+                "the file could not be written",
+            ),
+        };
+        return (status, code, message.to_owned());
+    }
+    let (status, code) = match error {
         PiSessionRegistryError::InvalidId => (StatusCode::BAD_REQUEST, "invalid_session_id"),
         PiSessionRegistryError::AlreadyExists(_) => (StatusCode::CONFLICT, "session_exists"),
         PiSessionRegistryError::NotFound(_) => (StatusCode::NOT_FOUND, "not_found"),
@@ -800,9 +853,12 @@ pub(crate) fn error_status(error: &PiSessionRegistryError) -> (StatusCode, &'sta
             PiSessionError::Process(PiProcessError::Start(_)) => {
                 (StatusCode::SERVICE_UNAVAILABLE, "pi_unavailable")
             }
-            PiSessionError::Process(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
+            PiSessionError::Process(_) | PiSessionError::Export(_) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
+            }
         },
-    }
+    };
+    (status, code, error.to_string())
 }
 
 fn session_api(state: &ApiState) -> Result<&SessionApi, ApiError> {
@@ -996,13 +1052,7 @@ pub(crate) async fn start_session(
             id: id.clone(),
             workspace_id: request.workspace_id,
             started_at: record.started_at.clone(),
-            process: StartPiProcessOptions {
-                executable_path: pi.executable_path,
-                working_directory: root,
-                arguments,
-                environment: Vec::new(),
-                shutdown_timeouts: PiShutdownTimeouts::default(),
-            },
+            process: pi.process_options(root, arguments),
             sandbox_placeholders: Vec::new(),
         })
         .await;
@@ -1330,6 +1380,18 @@ pub(crate) async fn get_session_messages(
         messages,
         truncated: excess > 0,
     }))
+}
+
+/// Saves the whole conversation to the requested file in Pi's HTML export
+/// format. See the module documentation.
+pub(crate) async fn export_session(
+    State(state): State<ApiState>,
+    AxumPath(session_id): AxumPath<String>,
+    Json(request): Json<SessionExportRequest>,
+) -> Result<StatusCode, ApiError> {
+    let (_, session) = session_api(&state)?.live(&session_id).await?;
+    session.export_html(request.destination.into()).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Sets the session's display name and publishes the updated session.

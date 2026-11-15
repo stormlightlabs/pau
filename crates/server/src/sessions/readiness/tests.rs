@@ -36,7 +36,7 @@ async fn api(directory: &TempDir, executable_path: PathBuf) -> SessionApi {
         pau_pi::PiSessionRegistry::new(database.processes()),
         DiscoverPiOptions {
             executable_path: Some(executable_path),
-            path: Default::default(),
+            path: crate::sessions::tests::FIXTURE_PATH.as_str().into(),
             home_directory: Some(directory.path().to_path_buf()),
             agent_directory: None,
             session_directory: None,

@@ -97,6 +97,7 @@ done
         executable_path: launcher,
         working_directory: temporary.path().to_path_buf(),
         arguments: Vec::<OsString>::new(),
+        environment: Vec::new(),
         shutdown_timeouts: ClaudeBridgeShutdownTimeouts {
             protocol: Duration::from_secs(2),
             interrupt: Duration::from_secs(1),
@@ -159,6 +160,7 @@ exit 1
         executable_path: launcher,
         working_directory: temporary.path().to_path_buf(),
         arguments: Vec::<OsString>::new(),
+        environment: Vec::new(),
         shutdown_timeouts: ClaudeBridgeShutdownTimeouts::default(),
     })
     .await

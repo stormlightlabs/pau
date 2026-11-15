@@ -1,7 +1,7 @@
 //! Workspace registration and root-confined file operations.
 
 use std::{
-    ffi::OsStr,
+    ffi::{OsStr, OsString},
     fmt, fs, io,
     path::{Component, Path, PathBuf},
     sync::{
@@ -255,6 +255,9 @@ pub struct GitDiff {
 pub struct WorkspaceService {
     workspaces: WorkspaceRepository,
     processes: Option<ProcessMetadataRepository>,
+    /// The `PATH` for processes started in a workspace, or `None` to let
+    /// them inherit Pau's own.
+    path: Option<OsString>,
 }
 
 impl WorkspaceService {
@@ -263,6 +266,7 @@ impl WorkspaceService {
         Self {
             workspaces,
             processes: None,
+            path: None,
         }
     }
 
@@ -270,6 +274,55 @@ impl WorkspaceService {
     pub fn with_processes(mut self, processes: ProcessMetadataRepository) -> Self {
         self.processes = Some(processes);
         self
+    }
+
+    /// Gives every process started in a workspace `path` as its `PATH`, so
+    /// Git's hooks and filters and terminal commands find the same tools.
+    pub fn with_path(mut self, path: OsString) -> Self {
+        self.path = Some(path);
+        self
+    }
+
+    /// Variables added to Pau's environment for a process started in a
+    /// workspace: Git here, and terminals in the server.
+    pub fn process_environment(&self) -> Vec<(OsString, OsString)> {
+        self.path
+            .iter()
+            .map(|path| ("PATH".into(), path.clone()))
+            .collect()
+    }
+
+    /// Starts a Git command in `root` that never takes optional locks, so a
+    /// read does not race the person's own Git use.
+    fn git(&self, root: &Path) -> Command {
+        let mut command = Command::new("git");
+        command
+            .current_dir(root)
+            .envs(self.process_environment())
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .arg("--no-optional-locks");
+        command
+    }
+
+    async fn git_head_file(
+        &self,
+        root: &Path,
+        relative_path: &str,
+    ) -> Result<Vec<u8>, WorkspaceError> {
+        let object = format!("HEAD:{relative_path}");
+        let output = self
+            .git(root)
+            .args(["show", "--no-textconv", &object])
+            .output()
+            .await
+            .map_err(|error| WorkspaceError::Git(error.to_string()))?;
+        if output.status.success() {
+            Ok(output.stdout)
+        } else {
+            Err(WorkspaceError::Git(
+                String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+            ))
+        }
     }
 
     /// Canonicalizes and remembers a directory or Git worktree.
@@ -445,11 +498,9 @@ impl WorkspaceService {
     /// Reads branch and changed-file state without updating the Git index.
     pub async fn git_status(&self, workspace_id: &str) -> Result<GitStatus, WorkspaceError> {
         let root = self.root(workspace_id).await?;
-        let output = Command::new("git")
-            .current_dir(&root)
-            .env("GIT_OPTIONAL_LOCKS", "0")
+        let output = self
+            .git(&root)
             .args([
-                "--no-optional-locks",
                 "status",
                 "--porcelain=v2",
                 "--branch",
@@ -506,7 +557,7 @@ impl WorkspaceService {
         let old_bytes = if is_added {
             Vec::new()
         } else {
-            git_head_file(&root, old_path).await?
+            self.git_head_file(&root, old_path).await?
         };
         let new_bytes = worktree_file(&root, relative_path)?;
         let too_large =
@@ -674,7 +725,7 @@ fn is_hidden(hidden: &[String], relative: &str) -> bool {
 
 /// Whether a path component names Git's folder. Compared without case, since
 /// a case-insensitive volume opens `.GIT` as `.git`.
-fn is_git_dir(name: &OsStr) -> bool {
+pub(crate) fn is_git_dir(name: &OsStr) -> bool {
     name.to_str()
         .is_some_and(|name| name.eq_ignore_ascii_case(GIT_DIR))
 }
@@ -828,24 +879,6 @@ fn name_rank(name: &str, needle: &str) -> Option<u8> {
         .then_some(2)
 }
 
-async fn git_head_file(root: &Path, relative_path: &str) -> Result<Vec<u8>, WorkspaceError> {
-    let object = format!("HEAD:{relative_path}");
-    let output = Command::new("git")
-        .current_dir(root)
-        .env("GIT_OPTIONAL_LOCKS", "0")
-        .args(["--no-optional-locks", "show", "--no-textconv", &object])
-        .output()
-        .await
-        .map_err(|error| WorkspaceError::Git(error.to_string()))?;
-    if output.status.success() {
-        Ok(output.stdout)
-    } else {
-        Err(WorkspaceError::Git(
-            String::from_utf8_lossy(&output.stderr).trim().to_owned(),
-        ))
-    }
-}
-
 fn worktree_file(root: &Path, relative_path: &str) -> Result<Vec<u8>, WorkspaceError> {
     let relative = validate_relative(relative_path)?;
     let path = root.join(relative);
@@ -857,7 +890,13 @@ fn worktree_file(root: &Path, relative_path: &str) -> Result<Vec<u8>, WorkspaceE
     directory.read(relative).map_err(WorkspaceError::from)
 }
 
-fn walker(path: &Path, options: TraversalOptions, max_depth: Option<usize>) -> WalkBuilder {
+/// Walks `path` the way the file tree lists it: symlinks are not followed,
+/// and ignore files apply unless `options` asks for ignored paths.
+pub(crate) fn walker(
+    path: &Path,
+    options: TraversalOptions,
+    max_depth: Option<usize>,
+) -> WalkBuilder {
     let mut builder = WalkBuilder::new(path);
     builder
         .follow_links(false)

@@ -283,8 +283,13 @@ bodies, the calls inside a tool group, and the text of a Markdown list item,
 whose bullet, number, or task checkbox sits on the left edge. A left rule,
 such as the user message bar or a tool row's line, counts toward the inset, so
 the text does not move with the rule's width. Calls inside a group sit under
-the group's rule with no further indent. Thinking, tool rows, tool groups,
-and compaction markers share one disclosure treatment from `disclosure.css`: a
+the group's rule with no further indent. Images sent with a prompt sit under
+its text on the same inset, as the same square thumbnails the composer shows.
+An image too large or damaged to show leaves a short muted line under the
+prompt. An older image dropped to keep the transcript's images within its
+memory budget leaves a dashed placeholder the size of a thumbnail, so the
+content above the reader does not move. Thinking, tool rows, tool groups, and
+compaction markers share one disclosure treatment from `disclosure.css`: a
 right chevron centered in the inset that turns down while the entry is open,
 muted summary text that turns to normal text on hover, and no native marker. A
 failed tool row colors its chevron with the danger role.

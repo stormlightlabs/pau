@@ -3,18 +3,23 @@
 //! An app opened from Finder, the Dock, or Spotlight inherits launchd's minimal
 //! `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`), not the one the operator's shell
 //! builds. Pi, Node.js, and the tools agents and terminals run then look
-//! missing even though they work in a terminal. Startup asks the login shell
-//! for its `PATH` once and puts it ahead of the inherited entries.
+//! missing even though they work in a terminal. The first startup step asks
+//! the login shell for its `PATH` once and puts it ahead of the inherited
+//! entries, and the backend gives the result to every child process.
 
 use std::{
     env,
     ffi::{OsStr, OsString},
     io::Read,
+    os::unix::process::CommandExt,
     path::PathBuf,
     process::{Command, Stdio},
+    sync::mpsc::{self, RecvTimeoutError},
     thread,
     time::{Duration, Instant},
 };
+
+use pau_agent::signal_process_group;
 
 const MARKER: &str = "__PAU_LOGIN_PATH__";
 /// An interactive shell can stall on prompts or slow plugins. Startup gives up
@@ -24,59 +29,81 @@ pub const TIMEOUT: Duration = Duration::from_secs(3);
 /// Why the login shell `PATH` could not be read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoginPathError {
-    /// The shell did not finish within the timeout and was stopped.
+    /// The shell printed no `PATH` within the timeout and was stopped.
     TimedOut,
     /// The shell could not start, or printed no marked value.
     Unavailable,
 }
 
-/// Runs the operator's login shell, from `SHELL` or `/bin/zsh`, and returns
-/// its `PATH`. See [`shell_path`].
-pub fn login_shell_path() -> Result<OsString, LoginPathError> {
-    let shell = env::var_os("SHELL").unwrap_or_else(|| OsString::from("/bin/zsh"));
-    shell_path(&shell, TIMEOUT)
-}
-
-/// Runs `shell` and returns its `PATH`, stopping the shell after `timeout`.
+/// Runs `shell` and returns its `PATH`, giving up after `timeout`.
 ///
 /// The shell runs as a login and interactive shell so both profile and rc
 /// files apply, which is where version managers and Homebrew usually extend
 /// `PATH`. Markers separate the value from anything the rc files print.
+///
+/// The timeout covers reading the value, not only the shell's exit: a
+/// background job that the rc files start inherits stdout and can hold it open
+/// long after the shell exits. The shell leads its own process group, so when
+/// time runs out the shell and everything it started are killed together.
 pub fn shell_path(shell: &OsStr, timeout: Duration) -> Result<OsString, LoginPathError> {
+    let deadline = Instant::now() + timeout;
     let mut child = Command::new(shell)
         .args(["-l", "-i", "-c"])
         .arg(format!("printf '{MARKER}%s{MARKER}' \"$PATH\""))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
+        .process_group(0)
         .spawn()
         .map_err(|_| LoginPathError::Unavailable)?;
-    let started = Instant::now();
+    let mut stdout = child.stdout.take().ok_or(LoginPathError::Unavailable)?;
+    let (sender, receiver) = mpsc::channel();
+    // The reader stops at the closing marker. A job that keeps the pipe open
+    // without printing one leaves this thread blocked until the job exits.
+    thread::spawn(move || {
+        let _ = sender.send(read_marked_path(&mut stdout));
+    });
+    let path = match receiver.recv_timeout(timeout) {
+        Ok(path) => path.ok_or(LoginPathError::Unavailable),
+        Err(RecvTimeoutError::Timeout) => Err(LoginPathError::TimedOut),
+        Err(RecvTimeoutError::Disconnected) => Err(LoginPathError::Unavailable),
+    };
+    // Let the shell finish within the deadline, then stop its whole group.
+    // The group is signalled only while the unreaped shell keeps its ID.
     loop {
         match child.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) if started.elapsed() < timeout => thread::sleep(Duration::from_millis(20)),
-            waited => {
-                let _ = child.kill();
+            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(20)),
+            Ok(None) => {
+                let _ = signal_process_group(child.id(), libc::SIGKILL);
                 let _ = child.wait();
-                return Err(if waited.is_ok() {
-                    LoginPathError::TimedOut
-                } else {
-                    LoginPathError::Unavailable
-                });
+                break;
             }
+            _ => break,
         }
     }
-    let mut output = String::new();
-    child
-        .stdout
-        .take()
-        .ok_or(LoginPathError::Unavailable)?
-        .read_to_string(&mut output)
-        .map_err(|_| LoginPathError::Unavailable)?;
-    marked_path(&output)
-        .map(OsString::from)
-        .ok_or(LoginPathError::Unavailable)
+    path.map(OsString::from)
+}
+
+/// Reads the shell's output until the closing marker or the end of output and
+/// returns the marked value.
+fn read_marked_path(output: &mut impl Read) -> Option<String> {
+    let mut buffer = Vec::new();
+    let mut chunk = [0; 4096];
+    loop {
+        let read = match output.read(&mut chunk) {
+            Ok(0) | Err(_) => break,
+            Ok(read) => read,
+        };
+        buffer.extend_from_slice(&chunk[..read]);
+        // A chunk can end inside a multibyte character; the next read completes it.
+        if let Some(path) = std::str::from_utf8(&buffer).ok().and_then(marked_path) {
+            return Some(path.to_owned());
+        }
+    }
+    std::str::from_utf8(&buffer)
+        .ok()
+        .and_then(marked_path)
+        .map(str::to_owned)
 }
 
 /// Extracts the value between the first pair of markers.
@@ -105,6 +132,7 @@ mod tests {
         fs,
         os::unix::fs::PermissionsExt,
         path::{Path, PathBuf},
+        thread,
         time::{Duration, Instant},
     };
 
@@ -118,16 +146,79 @@ mod tests {
         path
     }
 
+    /// Polls until `pid` no longer exists, failing after two seconds.
+    fn assert_gone(pid: i32) {
+        for _ in 0..100 {
+            // SAFETY: signal 0 only checks that the process exists.
+            if unsafe { libc::kill(pid, 0) } == -1 {
+                return;
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+        panic!("process {pid} is still running");
+    }
+
+    fn recorded_pid(path: &Path) -> i32 {
+        fs::read_to_string(path).unwrap().trim().parse().unwrap()
+    }
+
     #[test]
-    fn stops_a_slow_login_shell_at_the_timeout() {
+    fn stops_a_slow_login_shell_and_its_children_at_the_timeout() {
         let directory = tempfile::tempdir().unwrap();
-        let shell = fake_shell(directory.path(), "slow", "sleep 10");
+        let record = directory.path().join("child");
+        let shell = fake_shell(
+            directory.path(),
+            "slow",
+            &format!("sleep 600 &\necho $! > '{}'\nwait", record.display()),
+        );
         let started = Instant::now();
 
-        let result = shell_path(shell.as_os_str(), Duration::from_millis(200));
+        let result = shell_path(shell.as_os_str(), Duration::from_millis(1500));
 
         assert_eq!(result, Err(LoginPathError::TimedOut));
-        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(started.elapsed() < Duration::from_secs(4));
+        assert_gone(recorded_pid(&record));
+    }
+
+    #[test]
+    fn reads_the_path_while_a_background_job_holds_the_output_open() {
+        let directory = tempfile::tempdir().unwrap();
+        let record = directory.path().join("job");
+        let shell = fake_shell(
+            directory.path(),
+            "daemon",
+            &format!(
+                "sleep 600 &\necho $! > '{}'\nprintf '{MARKER}/opt/bin{MARKER}'",
+                record.display()
+            ),
+        );
+        let started = Instant::now();
+
+        let result = shell_path(shell.as_os_str(), Duration::from_secs(5));
+
+        assert_eq!(result, Ok("/opt/bin".into()));
+        assert!(started.elapsed() < Duration::from_secs(4));
+        // SAFETY: the PID belongs to the job this test started.
+        unsafe { libc::kill(recorded_pid(&record), libc::SIGKILL) };
+    }
+
+    #[test]
+    fn times_out_when_a_background_job_holds_the_output_open_without_a_path() {
+        let directory = tempfile::tempdir().unwrap();
+        let record = directory.path().join("job");
+        let shell = fake_shell(
+            directory.path(),
+            "mute",
+            &format!("sleep 600 &\necho $! > '{}'", record.display()),
+        );
+        let started = Instant::now();
+
+        let result = shell_path(shell.as_os_str(), Duration::from_millis(1500));
+
+        assert_eq!(result, Err(LoginPathError::TimedOut));
+        assert!(started.elapsed() < Duration::from_secs(4));
+        // SAFETY: the PID belongs to the job this test started.
+        unsafe { libc::kill(recorded_pid(&record), libc::SIGKILL) };
     }
 
     #[test]

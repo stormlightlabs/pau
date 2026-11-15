@@ -7,6 +7,7 @@
 
 use std::{
     error::Error,
+    ffi::OsString,
     fmt,
     io::{self, Read, Write},
     path::PathBuf,
@@ -30,7 +31,8 @@ const OUTPUT_CHANNEL_CHUNKS: usize = 64;
 /// Input writes buffered before [`Terminal::write`] waits for the child.
 const INPUT_CHANNEL_WRITES: usize = 64;
 
-/// Program, arguments, directory, and size used to start a terminal.
+/// Program, arguments, directory, environment, and size used to start a
+/// terminal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TerminalCommand {
     /// Executable to run on the PTY.
@@ -39,6 +41,9 @@ pub struct TerminalCommand {
     pub args: Vec<String>,
     /// Working directory of the child.
     pub cwd: PathBuf,
+    /// Variables added to the backend environment for the child. A `PATH`
+    /// here also decides where a bare program name is found.
+    pub environment: Vec<(OsString, OsString)>,
     /// Initial dimensions.
     pub size: TerminalSize,
 }
@@ -56,6 +61,7 @@ impl TerminalCommand {
                 .unwrap_or_else(|| "/bin/sh".to_owned()),
             args: Vec::new(),
             cwd: cwd.into(),
+            environment: Vec::new(),
             size,
         }
     }
@@ -167,8 +173,8 @@ impl Terminal {
     /// Opens a PTY, starts `command` on it, and returns the terminal and its
     /// output stream.
     ///
-    /// The child inherits the backend environment with `TERM` set to
-    /// `xterm-256color`.
+    /// The child inherits the backend environment with the command's
+    /// variables added and `TERM` set to `xterm-256color`.
     pub fn spawn(command: TerminalCommand) -> Result<(Self, TerminalOutput), TerminalError> {
         let size = pty_size(command.size)?;
         let pair = NativePtySystem::default()
@@ -177,6 +183,9 @@ impl Terminal {
         let mut builder = CommandBuilder::new(&command.program);
         builder.args(&command.args);
         builder.cwd(&command.cwd);
+        for (name, value) in &command.environment {
+            builder.env(name, value);
+        }
         builder.env("TERM", "xterm-256color");
         let mut child = pair
             .slave

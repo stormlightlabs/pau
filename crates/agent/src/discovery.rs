@@ -34,7 +34,8 @@ pub struct DiscoverClaudeOptions {
     pub executable_path: Option<PathBuf>,
     /// An exact bridge host executable. When set, `PATH` is not searched for it.
     pub bridge_path: Option<PathBuf>,
-    /// The path list searched for executables that have no exact path.
+    /// The path list searched for executables that have no exact path, and the
+    /// `PATH` the version probe and the bridge host run with.
     pub path: OsString,
 }
 
@@ -57,6 +58,8 @@ pub struct ClaudeDiscovery {
     pub version: Version,
     /// The configured or `PATH`-resolved `pau-claude-bridge` executable.
     pub bridge_path: PathBuf,
+    /// The `PATH` discovery searched, which the bridge host also receives.
+    pub path: OsString,
 }
 
 impl ClaudeDiscovery {
@@ -85,6 +88,7 @@ impl ClaudeDiscovery {
             executable_path: self.bridge_path.clone(),
             working_directory,
             arguments,
+            environment: vec![("PATH".into(), self.path.clone())],
             shutdown_timeouts: ClaudeBridgeShutdownTimeouts::default(),
         }
     }
@@ -192,7 +196,7 @@ pub fn discover_claude(
         }
     };
 
-    let output = read_version(&executable_path).map_err(|reason| {
+    let output = read_version(&executable_path, &options.path).map_err(|reason| {
         failure(
             ClaudeDiscoveryErrorCode::VersionCommandFailed,
             format!(
@@ -261,6 +265,7 @@ pub fn discover_claude(
         executable_path,
         version,
         bridge_path,
+        path: options.path.clone(),
     })
 }
 
@@ -334,10 +339,11 @@ fn is_executable_file(metadata: &fs::Metadata) -> bool {
 /// that inherited standard output can hold it open after `claude` exits, so
 /// the deadline bounds the wait, not the end of output. The process is killed
 /// when it is still running at the deadline.
-fn read_version(executable_path: &Path) -> Result<String, String> {
+fn read_version(executable_path: &Path, path: &OsStr) -> Result<String, String> {
     let mut child = spawn_retrying_busy(|| {
         Command::new(executable_path)
             .arg("--version")
+            .env("PATH", path)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())

@@ -1,0 +1,3 @@
+{"type":"session","version":3,"id":"transcript-fixture","timestamp":"2026-01-02T03:04:05.000Z","cwd":"/work/pau"}
+{"type":"message","id":"a1","parentId":null,"timestamp":"2026-01-02T03:05:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Fix the login bug"}]}}
+{"type":"message","id":"b2","parentId":"a1","timestamp":"2026-01-02T03:06:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"The token check now runs before the redirect."}]}}

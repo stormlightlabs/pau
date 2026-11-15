@@ -52,6 +52,7 @@ const idleSession: AgentSession = {
 		retry: true,
 		rename: true,
 		clone_session: true,
+		export_transcript: true,
 		shell_commands: true,
 		stop: true
 	}
@@ -636,6 +637,57 @@ test('reloads earlier turns and applies only newer output on top', async () => {
 	await expect.poll(() => transcript.getByText('Gutter fixed.').all()).toHaveLength(2);
 });
 
+/** A 1×1 PNG as base64, the form Pi stores prompt images in. */
+const pixel = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+const promptWithImage = [
+	{ type: 'text', text: 'Describe this.' },
+	{ type: 'image', mimeType: 'image/png', data: pixel }
+];
+
+test('shows a compaction marker and prompt images from saved history', async () => {
+	const messages = [
+		{ role: 'compactionSummary', summary: 'Fixed the gutter.', tokensBefore: 9000, timestamp: 1 },
+		{ role: 'user', content: promptWithImage, timestamp: 2 }
+	];
+	const { props } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'GET /api/sessions/session-1/messages': () => json({ sequence: 0, messages, truncated: false })
+	});
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+
+	const transcript = page.getByLabelText('Transcript');
+	const marker = transcript.getByRole('group', { name: 'Compacted context' });
+	await expect.element(marker.getByText('Context compacted', { exact: true })).toBeVisible();
+	await expect.element(marker.getByText('9,000 tokens before')).toBeVisible();
+	await expect.element(transcript.getByText('Describe this.')).toBeVisible();
+	await expect
+		.element(transcript.getByRole('img', { name: 'Image 1 of 1' }))
+		.toHaveAttribute('src', `data:image/png;base64,${pixel}`);
+});
+
+test('shows a compaction marker and prompt images from live events', async () => {
+	const { props, sockets } = setup({ 'GET /api/sessions': () => json([idleSession]) });
+	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
+	sockets[0]?.open();
+
+	sockets[0]?.receive(output({ type: 'compaction_start', reason: 'threshold' }));
+	sockets[0]?.receive(
+		output({
+			type: 'compaction_end',
+			reason: 'threshold',
+			result: { summary: 'Fixed the gutter.', firstKeptEntryId: 'e1', tokensBefore: 9000 }
+		})
+	);
+	sockets[0]?.receive(output({ type: 'message_start', message: { role: 'user', content: promptWithImage } }));
+
+	const transcript = page.getByLabelText('Transcript');
+	const marker = transcript.getByRole('group', { name: 'Compacted context' });
+	await expect.element(marker.getByText('Context compacted automatically')).toBeVisible();
+	await expect
+		.element(transcript.getByRole('img', { name: 'Image 1 of 1' }))
+		.toHaveAttribute('src', `data:image/png;base64,${pixel}`);
+});
+
 test('selects the live session that already runs a saved session instead of resuming it', async () => {
 	const start = vi.fn(() => json(idleSession, 201));
 	const changes: string[] = [];
@@ -784,14 +836,16 @@ test.each([
 	await expect.element(page.getByRole('alert')).toHaveTextContent(expected);
 });
 
-test('disables the picker when the session cannot select models', async () => {
+test('hides only the model picker when the session can change thinking but not models', async () => {
+	const capabilities = { ...idleSession.capabilities, model_selection: false, thinking_level: true };
 	const { props } = setup({
-		'GET /api/sessions': () =>
-			json([{ ...idleSession, capabilities: { ...idleSession.capabilities, model_selection: false } }])
+		'GET /api/sessions': () => json([{ ...idleSession, thinking_level: 'low', capabilities }])
 	});
 	await render(SessionRoute, { ...props, initialSessionId: 'session-1' });
 
-	await expect.element(page.getByRole('button', { name: /^Model:/ })).toBeDisabled();
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeEnabled();
+	await expect.element(page.getByRole('combobox', { name: 'Thinking level' })).toHaveTextContent('Low');
+	await expect.element(page.getByRole('button', { name: /^Model/ })).not.toBeInTheDocument();
 });
 
 test('loads session commands for completion and sends the chosen command as a prompt', async () => {
@@ -1113,6 +1167,47 @@ test('clones a session from the rail', async () => {
 	await expect.poll(() => clone.mock.calls.length).toBe(1);
 });
 
+test('exports a transcript to the file the save dialog returns', async () => {
+	const exported = vi.fn<Route>(() => new Response(null, { status: 204 }));
+	const { props, sockets } = setup({
+		'GET /api/sessions': () => json([idleSession]),
+		'POST /api/sessions/session-1/export': exported
+	});
+	const pickSaveFile = vi
+		.fn()
+		.mockResolvedValueOnce(undefined)
+		.mockResolvedValueOnce('/home/me/New Pi session.html')
+		.mockResolvedValueOnce('/home/me/locked/transcript.html');
+	await render(SessionRoute, { props, context: new Map([[desktopNativeCapabilitiesContext, { pickSaveFile }]]) });
+	sockets[0]?.open();
+	const exportButton = page.getByRole('button', { name: 'Export', exact: true });
+
+	// Cancelling the dialog saves nothing.
+	await userEvent.click(exportButton);
+	await expect.poll(() => pickSaveFile.mock.calls.length).toBe(1);
+	expect(pickSaveFile).toHaveBeenCalledWith({
+		title: 'Export transcript',
+		fileName: 'New Pi session.html',
+		fileType: { name: 'Web page', extensions: ['html'] }
+	});
+	expect(exported).not.toHaveBeenCalled();
+
+	await userEvent.click(exportButton);
+	await expect
+		.element(page.getByRole('status').filter({ hasText: 'Transcript saved' }))
+		.toHaveTextContent('Transcript saved to /home/me/New Pi session.html');
+	expect(JSON.parse(String(exported.mock.calls[0]?.[0]?.body))).toEqual({
+		destination: '/home/me/New Pi session.html'
+	});
+
+	exported.mockImplementationOnce(() =>
+		json({ code: 'permission_denied', message: 'Permission denied (os error 13)' }, 403)
+	);
+	await userEvent.click(exportButton);
+	await expect.element(page.getByRole('alert')).toHaveTextContent("Pau can't write to that folder. Choose another.");
+	await expect.element(page.getByText('Transcript saved')).not.toBeInTheDocument();
+});
+
 test('branches from a user message in the transcript', async () => {
 	const branch = vi.fn(() => json({ text: 'Add a test.', cancelled: false }));
 	const { props, sockets } = setup({
@@ -1402,6 +1497,7 @@ test('starts a Claude Code session and streams its reply', async () => {
 			retry: false,
 			rename: false,
 			clone_session: false,
+			export_transcript: false,
 			shell_commands: false
 		}
 	};
@@ -1418,6 +1514,10 @@ test('starts a Claude Code session and streams its reply', async () => {
 	expect(JSON.parse(String((start.mock.calls[0] as unknown as [RequestInit])[0].body))).toMatchObject({
 		agent: 'claude'
 	});
+
+	await expect.element(page.getByRole('heading', { name: 'New Claude Code session' })).toBeVisible();
+	await expect.element(page.getByRole('button', { name: /^Model/ })).not.toBeInTheDocument();
+	await expect.element(page.getByRole('combobox', { name: 'Thinking level' })).not.toBeInTheDocument();
 
 	sockets[0]?.receive(output({ sequence: 0, event: 'text.delta', payload: { text: 'Reading the bridge.' } }));
 	await expect.element(page.getByText('Reading the bridge.')).toBeVisible();

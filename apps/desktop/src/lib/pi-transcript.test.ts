@@ -53,13 +53,7 @@ test('builds a transcript from history, with tool outcomes and a compaction summ
 	const summary = { role: 'compactionSummary', summary: 'Fixed the gutter.', tokensBefore: 9000, timestamp: 0 };
 
 	expect(piTranscriptFromMessages([summary, user, reply, result, { role: 'custom' }]).entries).toEqual([
-		{
-			id: 'compactionSummary-0:0',
-			kind: 'message',
-			role: 'assistant',
-			label: 'Earlier conversation, summarized',
-			body: 'Fixed the gutter.'
-		},
+		{ id: 'compactionSummary-0:0', kind: 'compaction', summary: 'Fixed the gutter.', tokensBefore: 9000 },
 		{ id: 'user-1:0', kind: 'message', role: 'user', body: 'Read the README' },
 		{ id: 'assistant-2:0', kind: 'message', role: 'assistant', body: 'Reading it.' },
 		{
@@ -72,6 +66,129 @@ test('builds a transcript from history, with tool outcomes and a compaction summ
 			call: { tool: 'read', path: 'README.md' }
 		}
 	]);
+});
+
+/** The header of a PNG `size` pixels square, as base64. A test pads it to the length it needs. */
+const pngHeader = (size: 1 | 5000 | 10_000) =>
+	({
+		1: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB',
+		5000: 'iVBORw0KGgoAAAANSUhEUgAAE4gAABOI',
+		10_000: 'iVBORw0KGgoAAAANSUhEUgAAJxAAACcQ'
+	})[size];
+
+const image = (data: string, mimeType = 'image/png') => ({ type: 'image', mimeType, data });
+
+const entry = (content: unknown[]) => piTranscriptFromMessages([{ role: 'user', content, timestamp: 1 }]).entries[0];
+
+const pixel = image(pngHeader(1));
+
+/** An image at the 5 MiB limit: 6,990,508 characters of base64. */
+const largestImage = image(pngHeader(1).padEnd(6_990_508, 'A'));
+
+test('shows the images sent with a user prompt and counts damaged or unsupported ones', () => {
+	const content = [
+		{ type: 'text', text: 'Describe this.' },
+		pixel,
+		image(pngHeader(1), 'image/svg+xml'),
+		image(pngHeader(1), 'image/jpg'),
+		image('https://example.com/a.png'),
+		image(`${pngHeader(1)}\nAAAA`),
+		image('AAAAA'),
+		image('AAAAAAAA')
+	];
+	const expected = [
+		{
+			id: 'user-1:0',
+			kind: 'message',
+			role: 'user',
+			body: 'Describe this.',
+			images: [{ mimeType: 'image/png', data: pngHeader(1) }],
+			hiddenImages: { unreadable: 6 }
+		}
+	];
+
+	expect(piTranscriptFromMessages([{ role: 'user', content, timestamp: 1 }]).entries).toEqual(expected);
+	expect(reduce([{ type: 'message_start', message: { role: 'user', content, timestamp: 1 } }]).entries).toEqual(
+		expected
+	);
+	expect(entry([pixel])).toEqual({ ...expected[0], body: '', hiddenImages: undefined });
+});
+
+test('keeps the turn of a prompt that holds only a damaged image', () => {
+	const prompt = { role: 'user', content: [image(`${pngHeader(1)}\n`)], timestamp: 1 };
+	const reply = { role: 'assistant', content: [{ type: 'text', text: 'I cannot read it.' }], timestamp: 2 };
+
+	expect(piTranscriptFromMessages([prompt, reply]).entries).toMatchObject([
+		{ role: 'user', body: '', hiddenImages: { unreadable: 1 } },
+		{ role: 'assistant', body: 'I cannot read it.' }
+	]);
+});
+
+test('counts an image past the size, message or pixel limit as too large', () => {
+	const limit = largestImage.data;
+
+	expect(entry([image(limit)])).toMatchObject({ images: [{ data: limit }] });
+	expect(entry([image(`${limit}A`)])).toEqual({
+		id: 'user-1:0',
+		kind: 'message',
+		role: 'user',
+		body: '',
+		hiddenImages: { tooLarge: 1 }
+	});
+	// Two images at the limit fill a 10 MiB request; a third does not fit.
+	const full = entry([image(limit), image(limit), pixel]);
+	expect(full).toMatchObject({ hiddenImages: { tooLarge: 1 } });
+	expect(full.kind === 'message' && full.images?.length).toBe(2);
+	// 5000 pixels square is at the 25-megapixel cap; 10,000 is past it.
+	const atCap = image(pngHeader(5000));
+	const pastCap = image(pngHeader(10_000));
+	expect(entry([atCap, pastCap])).toMatchObject({ images: [{ data: pngHeader(5000) }], hiddenImages: { tooLarge: 1 } });
+});
+
+const fullRequest = (timestamp: number) => ({ role: 'user', content: [largestImage, largestImage], timestamp });
+
+/** Shown and older image counts of each user message: the slots its thumbnail row holds. */
+const imageSlots = (state: PiTranscript) =>
+	state.entries.map((entry) =>
+		entry.kind === 'message' ? [entry.images?.length ?? 0, entry.hiddenImages?.older ?? 0] : []
+	);
+
+test('keeps the newest images within the transcript budget and counts older ones apart from too large ones', () => {
+	// Each message carries a full 10 MiB request; the transcript keeps four.
+	const messages = Array.from({ length: 6 }, (_, index) => fullRequest(index + 1));
+	const transcript = piTranscriptFromMessages(messages);
+
+	expect(imageSlots(transcript)).toEqual([
+		[0, 2],
+		[0, 2],
+		[2, 0],
+		[2, 0],
+		[2, 0],
+		[2, 0]
+	]);
+	expect(transcript.entries[0]).toMatchObject({ hiddenImages: { older: 2 } });
+	expect(transcript.entries[0]).not.toMatchObject({ hiddenImages: { tooLarge: expect.anything() } });
+});
+
+test('a new image prompt keeps the thumbnail slots of earlier messages', () => {
+	const before = piTranscriptFromMessages([1, 2, 3, 4].map((timestamp) => fullRequest(timestamp)));
+	const after = reducePiEvent(before, { type: 'message_end', message: fullRequest(5) });
+
+	// The oldest message trades its images for placeholders of the same count.
+	expect(imageSlots(before)).toEqual([
+		[2, 0],
+		[2, 0],
+		[2, 0],
+		[2, 0]
+	]);
+	expect(imageSlots(after)).toEqual([
+		[0, 2],
+		[2, 0],
+		[2, 0],
+		[2, 0],
+		[2, 0]
+	]);
+	expect(after.entries.slice(1, 4)).toEqual(before.entries.slice(1));
 });
 
 test('applies a replayed message from history once, without partial text', () => {

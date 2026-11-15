@@ -28,6 +28,7 @@
 		startFailure,
 		retryFailure,
 		compactFailure,
+		exportFailure,
 		history = [],
 		clearedQueue = { steering: [], followUp: [] },
 		commands = [],
@@ -61,6 +62,8 @@
 		retryFailure?: string;
 		/** When set, compacting fails with this message. */
 		compactFailure?: string;
+		/** When set, exporting the transcript fails with this message. */
+		exportFailure?: string;
 		/** Earlier prompts the composer can recall, newest first. */
 		history?: string[];
 		/** Slash commands the composer can complete. */
@@ -259,6 +262,11 @@
 	}}
 	onCloneSession={(sessionId) => {
 		lastAction = `${sessionId}: clone`;
+	}}
+	onExportTranscript={async (sessionId) => {
+		lastAction = `${sessionId}: export transcript`;
+		if (exportFailure) throw new Error(exportFailure);
+		return '/Users/operator/Documents/Fix diff gutter.html';
 	}}
 	onBranchFromMessage={async (sessionId, entryId) => {
 		lastAction = `${sessionId}: branch from ${entryId}`;

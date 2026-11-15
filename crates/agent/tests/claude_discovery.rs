@@ -25,7 +25,16 @@ fn on_path(directory: &Path) -> DiscoverClaudeOptions {
 #[test]
 fn finds_claude_and_the_bridge_on_path_and_builds_the_launch() {
     let directory = tempfile::tempdir().unwrap();
-    let claude = write_script(directory.path(), "claude", "echo '2.1.281 (Claude Code)'");
+    // The version prints only under the searched PATH, which the probe must
+    // receive in place of the test's own.
+    let claude = write_script(
+        directory.path(),
+        "claude",
+        &format!(
+            "[ \"$PATH\" = '{}' ] && echo '2.1.281 (Claude Code)'",
+            directory.path().display()
+        ),
+    );
     let bridge = write_script(directory.path(), "pau-claude-bridge", "exit 0");
 
     let discovery = discover_claude(&on_path(directory.path())).unwrap();
@@ -45,6 +54,10 @@ fn finds_claude_and_the_bridge_on_path_and_builds_the_launch() {
         "native-1".into(),
     ];
     assert_eq!(launch.arguments, arguments);
+    assert_eq!(
+        launch.environment,
+        [("PATH".into(), OsString::from(directory.path()))]
+    );
 }
 
 #[test]

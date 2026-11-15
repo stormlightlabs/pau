@@ -2979,6 +2979,7 @@ dependencies = [
  "time",
  "tokio",
  "tokio-rusqlite",
+ "tracing",
  "ts-rs",
  "uuid",
 ]
@@ -2987,6 +2988,8 @@ dependencies = [
 name = "pau-desktop"
 version = "0.8.7"
 dependencies = [
+ "libc",
+ "pau-agent",
  "pau-core",
  "pau-server",
  "serde",

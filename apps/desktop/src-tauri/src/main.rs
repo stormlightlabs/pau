@@ -67,7 +67,8 @@ fn show_failure_dialog(app: &AppHandle, reason: String) {
         .show(move |_| handle.exit(1));
 }
 
-/// Runs the startup steps after the window opens.
+/// Runs the startup steps after the window opens, starting with the login
+/// shell `PATH`, so a slow shell profile delays only the steps that need it.
 ///
 /// When a required step fails and no page has attached within
 /// [`PAGE_TIMEOUT`], the window probably cannot show the failure, so the
@@ -88,41 +89,8 @@ async fn run_startup(app: AppHandle) {
     }
 }
 
-/// Reads the login shell `PATH` and puts it ahead of the inherited one.
-///
-/// This must run before any other thread starts. Changing the environment
-/// while another thread may read it is undefined behavior, and once Tauri
-/// starts, its runtime and WebKit threads read the environment at any time.
-/// So this step runs before the window opens, bounded by
-/// [`login_path::TIMEOUT`], and progress reports its result as already known.
-#[cfg(target_os = "macos")]
-fn load_login_path() -> Result<(), login_path::LoginPathError> {
-    let login = login_path::login_shell_path()?;
-    if let Some(merged) =
-        login_path::merge_paths(&login, &std::env::var_os("PATH").unwrap_or_default())
-    {
-        // SAFETY: nothing has started another thread yet, so no other code can
-        // read the environment while it changes.
-        unsafe { std::env::set_var("PATH", merged) };
-    }
-    Ok(())
-}
-
 fn main() {
-    #[cfg(target_os = "macos")]
-    let login_path = load_login_path();
     tracing_subscriber::fmt().json().init();
-    #[cfg(target_os = "macos")]
-    if let Err(error) = login_path {
-        tracing::warn!(
-            ?error,
-            "could not read the login shell PATH; keeping the inherited PATH"
-        );
-    }
-    #[cfg(target_os = "macos")]
-    let login_step = startup::login_path_outcome(login_path);
-    #[cfg(not(target_os = "macos"))]
-    let login_step = Ok(());
     let diagnostics = std::env::args().any(|argument| argument == "--diagnostics");
 
     let application = tauri::Builder::default()
@@ -142,8 +110,14 @@ fn main() {
                 .skip_initial_state(MAIN_WINDOW)
                 .build(),
         )
-        .manage(StartupState::new(login_step))
-        .manage(PauLauncher::new(None, ServerOptions { diagnostics }))
+        .manage(StartupState::new())
+        .manage(PauLauncher::new(
+            None,
+            ServerOptions {
+                diagnostics,
+                ..ServerOptions::default()
+            },
+        ))
         .invoke_handler(tauri::generate_handler![startup_progress])
         .menu(menu::build)
         .on_menu_event(menu::handle_event)

@@ -1,4 +1,4 @@
-use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, time::Duration};
+use std::{env, fs, os::unix::fs::PermissionsExt, path::PathBuf, sync::LazyLock, time::Duration};
 
 use axum::{
     Router,
@@ -19,15 +19,49 @@ use crate::{ApiToken, EventSubscription, SandboxApi, default_diagnostics, router
 
 const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 
+/// The `PATH` agent fixtures run with: the directories that hold the tools
+/// the fake agents call, found on the test's own `PATH` so the fixtures also
+/// run where those tools live outside `/usr/bin` and `/bin`, as on NixOS. No
+/// real Pi or Claude Code may sit beside them, or a test could start one by
+/// mistake.
+pub(crate) static FIXTURE_PATH: LazyLock<String> = LazyLock::new(|| {
+    let search = env::var_os("PATH").unwrap_or_default();
+    let mut directories: Vec<PathBuf> = Vec::new();
+    for tool in ["sed", "cat", "rm"] {
+        let directory = env::split_paths(&search)
+            .find(|directory| directory.join(tool).is_file())
+            .unwrap_or_else(|| panic!("agent fixtures need `{tool}` on the test's PATH"));
+        if !directories.contains(&directory) {
+            directories.push(directory);
+        }
+    }
+    for directory in &directories {
+        for agent in ["pi", "claude"] {
+            assert!(
+                !directory.join(agent).exists(),
+                "agent fixtures cannot use {} on PATH: it holds a real `{agent}`",
+                directory.display()
+            );
+        }
+    }
+    env::join_paths(directories)
+        .expect("tool directories form a PATH")
+        .into_string()
+        .expect("tool directories are UTF-8")
+});
+
 /// A Pi RPC stand-in. It records every command in the workspace, answers the
 /// controls the session API sends, and exits with status 3 without answering
 /// a prompt whose text is `exit`. Shell commands other than `echo hi` and
 /// `sleep 60`, which runs until `abort_bash`, fail. A resumed session answers `get_messages`
-/// with the messages of its file, after a summary once it has compacted.
+/// with the messages of its file, after a summary once it has compacted, and
+/// renders that file into `export_html`'s output path. A new session, which
+/// has no file, fails the export.
 const FAKE_PI: &str = r#"#!/bin/sh
 if [ "$1" = '--version' ]; then echo 1.0.0; exit 0; fi
 [ "$1" = '--mode' ] && [ "$2" = 'rpc' ] || exit 64
 printf '%s\n' "$*" > "$PWD/args.txt"
+printf '%s' "$PATH" > "$PWD/path.txt"
 current=model-one
 session_file=
 [ "$3" = '--session' ] && session_file=$4
@@ -153,6 +187,15 @@ while IFS= read -r command; do
             fi
             printf '{"id":"%s","type":"response","command":"get_messages","success":true,"data":{"messages":[%s%s]}}\n' "$id" "$summary" "$messages"
             ;;
+        *'"type":"export_html"'*)
+            output=$(printf '%s' "$command" | sed -n 's/.*"outputPath":"\([^"]*\)".*/\1/p')
+            if [ -n "$session_file" ]; then
+                { printf '<!DOCTYPE html>\n<script type="application/json">'; cat "$session_file"; printf '</script>\n'; } > "$output"
+                printf '{"id":"%s","type":"response","command":"export_html","success":true,"data":{"path":"%s"}}\n' "$id" "$output"
+            else
+                printf '{"id":"%s","type":"response","command":"export_html","success":false,"error":"Nothing to export"}\n' "$id"
+            fi
+            ;;
         *'"type":"set_auto_retry"'*)
             printf '{"id":"%s","type":"response","command":"set_auto_retry","success":true}\n' "$id"
             ;;
@@ -212,7 +255,7 @@ impl Fixture {
             PiSessionRegistry::new(database.processes()),
             DiscoverPiOptions {
                 executable_path: Some(executable.map_or(pi, |name| directory.path().join(name))),
-                path: Default::default(),
+                path: FIXTURE_PATH.as_str().into(),
                 home_directory: Some(directory.path().to_path_buf()),
                 agent_directory: None,
                 session_directory: None,
@@ -229,6 +272,7 @@ impl Fixture {
             Some(SandboxApi::new(
                 database.sandbox_selection(),
                 directory.path().join("sandbox"),
+                std::env::var_os("PATH").unwrap_or_default(),
             )),
             Some(sessions),
         );
@@ -674,6 +718,21 @@ async fn reports_usage_on_request_and_after_assistant_messages() {
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(missing["code"], "not_found");
+}
+
+/// Pi runs with the discovery `PATH`. A fake Pi that cannot find `sed` never
+/// answers, so a time limit turns a wrong `PATH` into a failure, not a hang.
+#[tokio::test]
+async fn starts_pi_with_the_discovery_path() {
+    let fixture = Fixture::new(None).await;
+
+    let (status, session) = tokio::time::timeout(Duration::from_secs(10), fixture.start(None))
+        .await
+        .expect("the session did not start within 10 seconds");
+
+    assert_eq!(status, StatusCode::CREATED, "{session}");
+    let path = fs::read_to_string(fixture.workspace_root.join("path.txt")).unwrap();
+    assert_eq!(path, *FIXTURE_PATH);
 }
 
 #[tokio::test]
@@ -1136,6 +1195,94 @@ async fn returns_the_conversation_of_a_resumed_and_compacted_session() {
         (status, error["code"].as_str()),
         (StatusCode::NOT_FOUND, Some("not_found"))
     );
+}
+
+#[tokio::test]
+async fn exports_the_transcript_of_a_resumed_session_to_the_chosen_file() {
+    let fixture = Fixture::new(None).await;
+    let file = [
+        native_header(&fixture, "resumed", None),
+        r#"{"type":"message","message":{"role":"user","content":"Fix the login bug"}}"#.to_owned(),
+    ]
+    .join("\n");
+    write_native_session(&fixture, "2026_resumed.jsonl", &file);
+    let (_, started) = fixture
+        .call(
+            "POST",
+            "/api/sessions",
+            Some(json!({"workspace_id": fixture.workspace_id, "native_session_id": "resumed"})),
+        )
+        .await;
+    assert_eq!(started["capabilities"]["export_transcript"], true);
+    let export = format!("/api/sessions/{}/export", started["id"].as_str().unwrap());
+    let saved = tempfile::tempdir().unwrap();
+    let destination = saved.path().join("login fix.html");
+
+    let (status, _) = fixture
+        .call(
+            "POST",
+            &export,
+            Some(json!({"destination": destination.to_str().unwrap()})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let html = fs::read_to_string(&destination).unwrap();
+    assert!(html.starts_with("<!DOCTYPE html>"));
+    assert!(html.contains("Fix the login bug"));
+
+    let (status, error) = fixture
+        .call(
+            "POST",
+            &export,
+            Some(json!({"destination": "relative.html"})),
+        )
+        .await;
+    assert_eq!(
+        (status, error["code"].as_str()),
+        (StatusCode::BAD_REQUEST, Some("invalid_destination"))
+    );
+
+    let locked = saved.path().join("locked");
+    fs::create_dir(&locked).unwrap();
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o500)).unwrap();
+    let (status, error) = fixture
+        .call(
+            "POST",
+            &export,
+            Some(json!({"destination": locked.join("a.html").to_str().unwrap()})),
+        )
+        .await;
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o700)).unwrap();
+    assert_eq!(
+        (status, error["code"].as_str()),
+        (StatusCode::FORBIDDEN, Some("permission_denied"))
+    );
+    // The I/O error names the temporary file's folder; the response must not.
+    let body = error.to_string();
+    assert!(!body.contains(saved.path().to_str().unwrap()), "{body}");
+    assert!(!body.contains(".pau-transcript-"), "{body}");
+    assert_eq!(error["message"], "Pau may not write to that folder");
+
+    // A new session has no file, so the fake Pi refuses to export it.
+    let (_, fresh) = fixture.start(None).await;
+    let (status, error) = fixture
+        .call(
+            "POST",
+            &format!("/api/sessions/{}/export", fresh["id"].as_str().unwrap()),
+            Some(json!({"destination": saved.path().join("fresh.html").to_str().unwrap()})),
+        )
+        .await;
+    assert_eq!(
+        (status, error["code"].as_str()),
+        (StatusCode::UNPROCESSABLE_ENTITY, Some("control_rejected"))
+    );
+    assert!(
+        error["message"]
+            .as_str()
+            .unwrap()
+            .contains("Nothing to export")
+    );
+    assert!(!saved.path().join("fresh.html").exists());
 }
 
 fn session_field(field: &'static str, value: &'static str) -> impl FnMut(&ServerEvent) -> bool {

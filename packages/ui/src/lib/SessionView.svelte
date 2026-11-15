@@ -248,6 +248,13 @@
 		 * context menu offers Clone. A rejection shows its message in the rail.
 		 */
 		onCloneSession?: (sessionId: string) => void | Promise<void>;
+		/**
+		 * Saves a session's whole conversation to a file the operator chooses.
+		 * With it and the `exportTranscript` capability, the session header
+		 * offers Export. Resolves to the saved file's path, or `undefined` when
+		 * the operator cancels. A rejection shows its message in the notices.
+		 */
+		onExportTranscript?: (sessionId: string) => Promise<string | undefined>;
 		/** Opens a terminal in a workspace. With it, the workspace's context menu offers Open terminal. */
 		onOpenTerminal?: (workspaceId: string) => void;
 		/**
@@ -365,6 +372,7 @@
 		onBranchFromMessage,
 		onRenameSession,
 		onCloneSession,
+		onExportTranscript,
 		onOpenTerminal,
 		agentReadiness,
 		claudeReadiness,
@@ -560,6 +568,13 @@
 	let startingWorkspaceId = $state<string>();
 	let startFailure = $state<{ workspaceId: string; workspaceName: string; agent: SessionAgent; message: string }>();
 	let controlError = $state<string>();
+	/**
+	 * Sessions whose transcript export is in flight, so Export cannot run twice
+	 * for one session while another session's export finishes on its own.
+	 */
+	const exportingSessionIds = new SvelteSet<string>();
+	/** Where the last transcript export saved its file, until another action replaces the notice. */
+	let exportedTranscript = $state<{ sessionId: string; path: string }>();
 	/** The ended session whose restart is in flight, so its button cannot start it twice. */
 	let restartingSessionId = $state<string>();
 	let restartError = $state<string>();
@@ -964,6 +979,11 @@
 			: `${before} → about ${tokenFormat.format(entry.tokensAfter)} tokens`;
 	}
 
+	/** Names the prompt images not shown for one reason, such as `2 images not shown: too large`. */
+	function hiddenImagesLabel(count: number, reason: string): string {
+		return `${count === 1 ? 'Image' : `${count} images`} not shown: ${reason}`;
+	}
+
 	async function compact(): Promise<void> {
 		if (!onCompact || !activeSession || compacting) return;
 		const sessionId = activeSession.id;
@@ -1103,6 +1123,22 @@
 		}
 	}
 
+	/** Asks the app where to save the active session's transcript and reports the outcome. */
+	async function exportTranscript(session: SessionViewModel): Promise<void> {
+		if (!onExportTranscript) return;
+		controlError = undefined;
+		exportedTranscript = undefined;
+		exportingSessionIds.add(session.id);
+		try {
+			const path = await onExportTranscript(session.id);
+			if (path) exportedTranscript = { sessionId: session.id, path };
+		} catch (cause) {
+			controlError = cause instanceof Error ? cause.message : 'Pau could not export the transcript. Try again.';
+		} finally {
+			exportingSessionIds.delete(session.id);
+		}
+	}
+
 	/**
 	 * Resumes a saved session and returns why it failed, if it did. Only the
 	 * operator's click calls this, because resuming starts the agent.
@@ -1179,6 +1215,7 @@
 		closeOpenForm();
 		startFailure = undefined;
 		controlError = undefined;
+		exportedTranscript = undefined;
 		restartError = undefined;
 		queueError = undefined;
 		error = undefined;
@@ -2580,6 +2617,18 @@
 							{/if}
 						</div>
 					{/if}
+					{#if onExportTranscript && activeSession.capabilities.exportTranscript && liveStatuses.has(activeSession.status)}
+						{@const exporting = exportingSessionIds.has(activeSession.id)}
+						<button
+							type="button"
+							class="pau-button pau-button--quiet"
+							aria-busy={exporting}
+							disabled={disconnected || exporting}
+							title={disconnected ? 'Pau is reconnecting to the backend.' : 'Save the conversation as a web page'}
+							onclick={() => void exportTranscript(activeSession)}>
+							Export
+						</button>
+					{/if}
 					{#if activeSession.capabilities.stop && liveStatuses.has(activeSession.status)}
 						<button
 							type="button"
@@ -2612,6 +2661,9 @@
 				{#if controlError}<p class="session-view__notice session-view__notice--failed" role="alert">
 						{controlError}
 					</p>{/if}
+				{#if exportedTranscript?.sessionId === activeSession.id}
+					<p class="session-view__notice" role="status">Transcript saved to {exportedTranscript.path}</p>
+				{/if}
 
 				{#if activeSession.status === 'starting'}
 					<p class="session-view__notice" role="status">Starting the agent process…</p>
@@ -2698,15 +2750,43 @@
 										}
 									}}>
 									<h2><MetaText text={entry.label ?? (entry.role === 'user' ? 'You' : activeSession.agent)} /></h2>
-									<CopyButton
-										class="session-message__copy"
-										text={entry.body}
-										label={entry.role === 'user' ? 'Copy your message' : 'Copy reply'}
-										onResult={announceCopy} />
+									{#if entry.body}
+										<CopyButton
+											class="session-message__copy"
+											text={entry.body}
+											label={entry.role === 'user' ? 'Copy your message' : 'Copy reply'}
+											onResult={announceCopy} />
+									{/if}
 									{#if entry.role === 'assistant'}
 										<Markdown text={entry.body} />
-									{:else}
+									{:else if entry.body}
 										<p>{entry.body}</p>
+									{/if}
+									{#if entry.images?.length || entry.hiddenImages?.older}
+										<ul class="session-images session-message__images" aria-label="Attached images">
+											{#each entry.images ?? [] as image, index (index)}
+												<li>
+													<img
+														src={`data:${image.mimeType};base64,${image.data}`}
+														alt={`Image ${index + 1} of ${entry.images?.length}`}
+														decoding="async"
+														loading="lazy" />
+												</li>
+											{/each}
+											{#each { length: entry.hiddenImages?.older ?? 0 }, index (index)}
+												<li class="session-images__older">Older image not shown</li>
+											{/each}
+										</ul>
+									{/if}
+									{#if entry.hiddenImages?.tooLarge}
+										<p class="session-message__hidden-images">
+											{hiddenImagesLabel(entry.hiddenImages.tooLarge, 'too large')}
+										</p>
+									{/if}
+									{#if entry.hiddenImages?.unreadable}
+										<p class="session-message__hidden-images">
+											{hiddenImagesLabel(entry.hiddenImages.unreadable, 'damaged or unsupported')}
+										</p>
 									{/if}
 									{#if canRetry && entry.id === retryableEntryId}
 										<button
@@ -2751,7 +2831,7 @@
 									data-found={entry.id === foundEntryKey || undefined}>
 									<summary>
 										<Icon name="chevronRight" class="pau-disclosure__chevron" size={14} />
-										<span>Context compacted{entry.reason === 'manual' ? '' : ' automatically'}</span>
+										<span>Context compacted{entry.reason && entry.reason !== 'manual' ? ' automatically' : ''}</span>
 										{#if compactionSizes(entry)}<small>{compactionSizes(entry)}</small>{/if}
 									</summary>
 									<p>{entry.summary}</p>
@@ -2888,7 +2968,7 @@
 								void submitPrompt();
 							}}>
 							{#if images.length > 0}
-								<ul class="session-composer__images" aria-label="Attached images">
+								<ul class="session-images session-composer__images" aria-label="Attached images">
 									{#each images as image (image.id)}
 										<li>
 											<img src={image.previewUrl} alt={image.name} />
@@ -2973,21 +3053,22 @@
 									{/if}
 									{#if onLoadModels && onSelectModel}
 										{#key activeSession.id}
-											<ModelPicker
-												bind:this={modelPicker}
-												load={() => onLoadModels(activeSession.id)}
-												onSelect={(model) => onSelectModel(activeSession.id, model)}
-												supported={activeSession.capabilities.modelSelection ?? false}
-												unavailableReason={modelUnavailableReason(activeSession, disconnected)}
-												fallbackLabel={activeSession.model}
-												onLoaded={(models) =>
-													(currentModelReasoning = models.find((model) => model.current)?.reasoning)} />
-											{#if onSelectThinkingLevel}
+											<!-- Each control shows only when the agent can change it in a session. -->
+											{#if activeSession.capabilities.modelSelection}
+												<ModelPicker
+													bind:this={modelPicker}
+													load={() => onLoadModels(activeSession.id)}
+													onSelect={(model) => onSelectModel(activeSession.id, model)}
+													unavailableReason={modelUnavailableReason(activeSession, disconnected)}
+													fallbackLabel={activeSession.model}
+													onLoaded={(models) =>
+														(currentModelReasoning = models.find((model) => model.current)?.reasoning)} />
+											{/if}
+											{#if onSelectThinkingLevel && activeSession.capabilities.thinkingLevel}
 												<ThinkingLevelPicker
 													bind:this={thinkingPicker}
 													level={activeSession.thinkingLevel}
 													onSelect={(level) => onSelectThinkingLevel(activeSession.id, level)}
-													supported={activeSession.capabilities.thinkingLevel ?? false}
 													reasoning={offersThinking(activeSession)}
 													levels={activeSession.thinkingLevels}
 													unavailableReason={thinkingUnavailableReason(activeSession, disconnected)} />
@@ -3888,17 +3969,31 @@
 		color: var(--pau-danger);
 	}
 
-	.session-composer__images {
+	/* Image thumbnails, shared by the composer and the prompts in the transcript. */
+	.session-images {
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--pau-space-2);
 		margin: 0;
-		padding: var(--pau-space-2) var(--pau-space-3);
+		padding: 0;
 		list-style: none;
+	}
+
+	.session-composer__images {
+		padding: var(--pau-space-2) var(--pau-space-3);
 		border-bottom: 1px solid var(--pau-border);
 	}
 
-	.session-composer__images li {
+	.session-message__images {
+		margin-top: var(--pau-space-2);
+	}
+
+	.session-message p.session-message__hidden-images {
+		color: var(--pau-text-muted);
+		font-size: var(--pau-type-sm);
+	}
+
+	.session-images li {
 		display: grid;
 		gap: var(--pau-space-1);
 		justify-items: start;
@@ -3939,12 +4034,26 @@
 		color: var(--pau-danger);
 	}
 
-	.session-composer__images img {
+	.session-images img {
 		width: 4rem;
 		height: 4rem;
 		object-fit: cover;
 		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
+	}
+
+	/* Holds an older image's place at thumbnail size, so dropping it does not move the transcript. */
+	.session-images li.session-images__older {
+		width: 4rem;
+		height: 4rem;
+		place-content: center;
+		justify-items: center;
+		border: 1px dashed var(--pau-border);
+		border-radius: var(--pau-radius-control);
+		color: var(--pau-text-muted);
+		font-size: var(--pau-type-xs);
+		line-height: 1.2;
+		text-align: center;
 	}
 
 	/*

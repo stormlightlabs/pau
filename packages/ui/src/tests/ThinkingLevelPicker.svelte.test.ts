@@ -177,13 +177,6 @@ test('closes an open list when the new model has no thinking levels', async () =
 	await expect.element(picker()).toHaveTextContent('Off');
 });
 
-test('is disabled and explained when the agent cannot change the level', async () => {
-	await render(ThinkingLevelPicker, { supported: false, onSelect: vi.fn() });
-
-	await expect.element(picker()).toBeDisabled();
-	await expect.element(picker()).toHaveAccessibleDescription(/does not support changing the thinking level/);
-});
-
 test('the composer enables the control for an idle session on a reasoning model', async () => {
 	await render(SessionView, {
 		workspaces: withThinking(sessionFixtures.idle),

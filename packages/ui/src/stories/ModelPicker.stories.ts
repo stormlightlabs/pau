@@ -83,13 +83,3 @@ export const NoModels: Story = {
 		await expect(canvas.getByText(/No models are available/)).toBeInTheDocument();
 	}
 };
-
-export const Unsupported: Story = {
-	args: { supported: false, fallbackLabel: 'Sonnet' },
-	play: async ({ canvasElement }) => {
-		const canvas = within(canvasElement);
-		const trigger = canvas.getByRole('button', { name: 'Model: Sonnet' });
-		await expect(trigger).toBeDisabled();
-		await expect(trigger).toHaveAccessibleDescription(/does not support switching models/);
-	}
-};

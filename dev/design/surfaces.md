@@ -73,7 +73,7 @@ and images return to the composer.
 When a session stops or fails, a notice takes the composer's place. It names
 the state, shows the failure reason, and offers Start again, which resumes the
 saved conversation when Pi kept one. An unsent draft returns to the composer
-once the session runs. Compact and Stop stay hidden until then.
+once the session runs. Compact, Export and Stop stay hidden until then.
 
 On launch, Pau returns to the workspace view that was open last. A session
 that is still running opens as it was. A session that ended with the app shows

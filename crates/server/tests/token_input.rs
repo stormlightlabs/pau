@@ -127,12 +127,17 @@ fn started_port(stdout: ChildStdout) -> u16 {
             if fields["event"] == "server.started"
                 && let Some(address) = fields["address"].as_str()
             {
-                let _ = sender.send(address.parse::<SocketAddr>().unwrap().port());
+                let _ = sender.send(address.to_owned());
             }
         }
     });
     match receiver.recv_timeout(DEADLINE) {
-        Ok(port) => port,
+        Ok(address) => address
+            .parse::<SocketAddr>()
+            .unwrap_or_else(|error| {
+                panic!("the server logged an invalid address {address:?}: {error}")
+            })
+            .port(),
         Err(RecvTimeoutError::Timeout) => panic!("the server did not start"),
         Err(RecvTimeoutError::Disconnected) => panic!("the server exited before it started"),
     }

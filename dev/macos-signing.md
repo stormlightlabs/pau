@@ -99,6 +99,11 @@ APPLE_API_KEY_PATH=/Users/<you>/.private-keys/AuthKey_<KEY_ID>.p8
 # APPLE_TEAM_ID=TEAMID1234
 ```
 
+On a Mac without the identity in its keychain, such as a CI runner, also set
+`APPLE_CERTIFICATE` to the base64 of the `.p12` export and
+`APPLE_CERTIFICATE_PASSWORD` to its password. The build imports it into a
+temporary keychain and deletes that keychain when signing ends.
+
 ## 4. Build and install a release
 
 From your checkout, run the install script. It lists recent release tags and

@@ -209,6 +209,11 @@ impl SandboxApi {
         self
     }
 
+    fn with_extension(mut self, extension: SandboxExtension) -> Self {
+        self.extension = extension;
+        self
+    }
+
     /// Why a sandboxed terminal cannot start, when that is the case.
     fn terminal_unavailable(&self) -> Option<String> {
         let executables = match &self.executables {
@@ -1824,15 +1829,16 @@ pub async fn start_with_database(
     let workspaces = WorkspaceService::new(database.workspaces())
         .with_processes(database.processes())
         .with_path(path.clone());
-    let sandbox = SandboxApi {
-        extension: SandboxExtension::locate(build_channel(), options.resource_directory.as_deref()),
-        ..SandboxApi::new(
-            database.sandbox_selection(),
-            state_directory()?.join("sandbox"),
-            path.clone(),
-        )
-        .with_terminal_relay(options.terminal_relay)
-    };
+    let sandbox = SandboxApi::new(
+        database.sandbox_selection(),
+        state_directory()?.join("sandbox"),
+        path.clone(),
+    )
+    .with_terminal_relay(options.terminal_relay)
+    .with_extension(SandboxExtension::locate(
+        build_channel(),
+        options.resource_directory.as_deref(),
+    ));
     let processes = database.processes();
     let diagnostics = default_diagnostics();
     diagnostics.register_sensitive_value(token.expose());

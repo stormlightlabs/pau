@@ -158,12 +158,18 @@ pub struct SandboxedMcpServer {
     pub socket: String,
     /// Executable started by the tool host.
     pub command: String,
-    /// Arguments after interpolation.
+    /// Arguments as configured.
     pub args: Vec<String>,
-    /// Working directory.
+    /// Working directory as configured, relative to the workspace, or the
+    /// workspace.
     pub cwd: String,
     /// Variables the server configuration sets. They are added to the tool
     /// environment for this server only.
+    ///
+    /// The command, arguments, working directory, and these values keep
+    /// their `~/`, `${NAME}`, and `$env:NAME` references. The Pi extension
+    /// expands them from its own environment when it starts the server, so
+    /// the values a reference names never reach the policy file.
     pub env: BTreeMap<String, String>,
 }
 

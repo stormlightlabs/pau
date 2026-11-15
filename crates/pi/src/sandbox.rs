@@ -59,7 +59,9 @@ pub struct PreparePiSandbox<'a> {
     /// `PATH` inside the sandbox.
     pub tool_path: &'a str,
     /// Host variables selected for configured credential references. Values
-    /// never enter Pi's environment or the sandbox policy.
+    /// are checked but never copied into Pi's arguments, the variables Pau
+    /// adds for Pi, or the sandbox policy. Pi inherits them from Pau, and the
+    /// extension's credential proxy reads them there.
     pub credential_environment: &'a BTreeMap<String, String>,
     /// Effective Pi MCP servers, when pi-mcp-adapter is active for Pi.
     pub mcp_servers: Option<&'a [DiscoveredMcpServer]>,
@@ -182,26 +184,25 @@ fn session_mcp(
             }
             entry.insert("socket".into(), json!(socket_text));
             entries.insert(server.name.clone(), Value::Object(entry));
+            // Commands, arguments, the working directory and variables keep
+            // their `${NAME}` references. The extension expands them when it
+            // starts the server, so their values never reach the policy file.
             contained.push(SandboxedMcpServer {
                 name: server.name.clone(),
                 socket: socket_text,
-                command: expand(command),
-                args: strings(definition.get("args"))
-                    .iter()
-                    .map(|arg| expand(arg))
-                    .collect(),
+                command: command.to_owned(),
+                args: strings(definition.get("args")),
                 cwd: definition
                     .get("cwd")
                     .and_then(Value::as_str)
-                    .map(|cwd| resolve_cwd(&expand(cwd), workspace))
-                    .unwrap_or_else(|| workspace.to_string_lossy().into_owned()),
+                    .map_or_else(|| workspace.to_string_lossy().into_owned(), str::to_owned),
                 env: definition
                     .get("env")
                     .and_then(Value::as_object)
                     .map(|env| {
                         env.iter()
                             .filter_map(|(name, value)| {
-                                value.as_str().map(|value| (name.clone(), expand(value)))
+                                value.as_str().map(|value| (name.clone(), value.to_owned()))
                             })
                             .collect()
                     })
@@ -243,50 +244,6 @@ fn strings(value: Option<&Value>) -> Vec<String> {
         .flatten()
         .filter_map(|value| value.as_str().map(str::to_owned))
         .collect()
-}
-
-fn resolve_cwd(cwd: &str, workspace: &Path) -> String {
-    workspace.join(cwd).to_string_lossy().into_owned()
-}
-
-/// Expands `~/`, `${NAME}`, and `$env:NAME` the way pi-mcp-adapter does for
-/// stdio servers. Variables come from Pau's environment. An unset variable
-/// expands to nothing.
-fn expand(value: &str) -> String {
-    let value = match value.strip_prefix("~/") {
-        Some(rest) => {
-            std::env::var("HOME").map_or_else(|_| value.to_owned(), |home| format!("{home}/{rest}"))
-        }
-        None => value.to_owned(),
-    };
-    let mut output = String::new();
-    let mut rest = value.as_str();
-    while let Some(index) = rest.find('$') {
-        output.push_str(&rest[..index]);
-        let tail = &rest[index..];
-        let (name, consumed) = if let Some(braced) = tail.strip_prefix("${") {
-            match braced.find('}') {
-                Some(end) => (&braced[..end], end + 3),
-                None => ("", 0),
-            }
-        } else if let Some(named) = tail.strip_prefix("$env:") {
-            let end = named
-                .find(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
-                .unwrap_or(named.len());
-            (&named[..end], end + 5)
-        } else {
-            ("", 0)
-        };
-        if consumed == 0 || name.is_empty() {
-            output.push('$');
-            rest = &tail[1..];
-        } else {
-            output.push_str(&std::env::var(name).unwrap_or_default());
-            rest = &tail[consumed..];
-        }
-    }
-    output.push_str(rest);
-    output
 }
 
 fn url_host(url: &str) -> Option<&str> {
@@ -331,12 +288,15 @@ mod tests {
 
     #[test]
     fn contains_stdio_servers_and_granted_remote_servers() {
+        // A set variable shows that its value stays out of the policy.
+        // SAFETY: no other test reads this variable.
+        unsafe { std::env::set_var("PAU_TEST_MCP_TOKEN", "mcp-secret-value") };
         let host = Path::new("/state/session/host");
         let workspace = Path::new("/work");
         let servers = [
             server(
                 "files",
-                json!({"command": "files-mcp", "args": ["--root", "."], "cwd": "tools", "env": {"MODE": "ro"}, "lifecycle": "lazy"}),
+                json!({"command": "files-mcp", "args": ["--root", "."], "cwd": "tools", "env": {"MODE": "ro", "TOKEN": "${PAU_TEST_MCP_TOKEN}"}, "lifecycle": "lazy"}),
             ),
             server(
                 "docs",
@@ -366,8 +326,11 @@ mod tests {
                 socket: "/state/session/host/mcp-0.sock".into(),
                 command: "files-mcp".into(),
                 args: vec!["--root".into(), ".".into()],
-                cwd: "/work/tools".into(),
-                env: BTreeMap::from([("MODE".into(), "ro".into())]),
+                cwd: "tools".into(),
+                env: BTreeMap::from([
+                    ("MODE".into(), "ro".into()),
+                    ("TOKEN".into(), "${PAU_TEST_MCP_TOKEN}".into()),
+                ]),
             }]
         );
         assert_eq!(session.disabled.len(), 2);
@@ -405,16 +368,5 @@ mod tests {
         );
         assert_eq!(url_host("http://[::1]:9000/mcp"), Some("::1"));
         assert_eq!(url_host("not a url"), None);
-    }
-
-    #[test]
-    fn expands_variables_like_the_adapter() {
-        // SAFETY: tests in this module do not read these variables
-        // concurrently.
-        unsafe { std::env::set_var("PAU_TEST_MCP_TOKEN", "value") };
-        assert_eq!(expand("a-${PAU_TEST_MCP_TOKEN}-b"), "a-value-b");
-        assert_eq!(expand("$env:PAU_TEST_MCP_TOKEN/x"), "value/x");
-        assert_eq!(expand("${PAU_TEST_MCP_UNSET}"), "");
-        assert_eq!(expand("cost $5"), "cost $5");
     }
 }

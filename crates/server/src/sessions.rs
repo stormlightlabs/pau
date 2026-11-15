@@ -91,6 +91,7 @@ use std::{
     collections::HashMap,
     ffi::OsStr,
     fs,
+    os::unix::fs::DirBuilderExt,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::Duration,
@@ -129,10 +130,10 @@ use pau_core::{
 };
 use pau_pi::{
     DiscoverPiMcpOptions, DiscoverPiOptions, PiCommand, PiCommandSource, PiExtensionUiRequest,
-    PiExtensionUiResponse, PiExtensionWidgetPlacement, PiImage, PiKeybindingSource, PiModel,
-    PiProcessError, PiProcessOutput, PiSandboxLaunch, PiSession, PiSessionError, PiSessionOutput,
-    PiSessionRegistry, PiSessionRegistryError, PiSessionUsage, PreparePiSandbox,
-    StartRegisteredPiSession, discover_pi, discover_pi_mcp, find_pi_session_file,
+    PiExtensionUiResponse, PiExtensionWidgetPlacement, PiImage, PiKeybindingSource,
+    PiMcpAdapterState, PiModel, PiProcessError, PiProcessOutput, PiSandboxLaunch, PiSession,
+    PiSessionError, PiSessionOutput, PiSessionRegistry, PiSessionRegistryError, PiSessionUsage,
+    PreparePiSandbox, StartRegisteredPiSession, discover_pi, discover_pi_mcp, find_pi_session_file,
     list_pi_session_files, pi_configuration_paths, prepare_pi_sandbox, read_pi_keybindings,
 };
 use serde::Deserialize;
@@ -147,7 +148,8 @@ use crate::{
 
 /// The `packages/sandbox` directory of the checkout this server was built
 /// from. Sandboxed Pi sessions load its extension, and its tool host reads
-/// the checkout's `node_modules`.
+/// this package and the checkout's `node_modules`, the package's only
+/// read grants in the checkout.
 const SANDBOX_PACKAGE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../packages/sandbox");
 
 /// Status key under which the sandbox extension reports whether a session's
@@ -213,8 +215,6 @@ pub(crate) struct SessionApi {
     events: EventHub,
     /// The last agent readiness report and when it was made. See `readiness`.
     readiness: Arc<tokio::sync::Mutex<Option<(std::time::Instant, AgentReadinessReport)>>>,
-    /// How long a sandboxed start waits for the sandbox extension's report.
-    sandbox_start_timeout: Duration,
 }
 
 impl std::fmt::Debug for SessionApi {
@@ -247,17 +247,9 @@ impl SessionApi {
             extension_ui: Arc::default(),
             events,
             readiness: Arc::default(),
-            sandbox_start_timeout: SANDBOX_START_TIMEOUT,
         };
         tokio::spawn(api.clone().forward(api.registry.subscribe()));
         api
-    }
-
-    /// Shortens the wait for the sandbox extension's report.
-    #[cfg(test)]
-    pub(crate) fn with_sandbox_start_timeout(mut self, timeout: Duration) -> Self {
-        self.sandbox_start_timeout = timeout;
-        self
     }
 
     /// Forgets a session whose start failed, stops its process if it runs,
@@ -1098,88 +1090,136 @@ pub(crate) async fn start_session(
         .map_err(|error| ApiError::PiUnavailable(error.to_string()))?
         .map_err(|error| ApiError::PiUnavailable(error.to_string()))?;
 
-    let id = uuid::Uuid::new_v4().to_string();
-    let mut process = pi.process_options(root.clone(), arguments);
-    let mut sandbox_placeholders = Vec::new();
-    let mut sandbox_directory = None;
-    if let Some((sandbox, settings)) = sandbox {
-        // A short name keeps MCP relay sockets inside the Unix socket path
-        // limit.
-        let directory = sandbox.sessions.join(&id[..8]);
-        let prepare = PiSandboxRequest {
-            sandbox,
-            settings,
-            workspace: root,
-            directory: directory.clone(),
-            agent_directory: pi.configuration.agent_directory.clone(),
+    // The launch runs in its own task, so a client that cancels the request
+    // cannot leave a started session behind whose sandbox nobody confirmed.
+    // The task confirms the sandbox, or stops Pi and discards the session.
+    let api = api.clone();
+    tokio::spawn(async move {
+        let id = uuid::Uuid::new_v4().to_string();
+        let mut process = pi.process_options(root.clone(), arguments);
+        let mut sandbox_placeholders = Vec::new();
+        let mut sandbox_directory = None;
+        if let Some((sandbox, settings)) = sandbox {
+            let prepare = PiSandboxRequest {
+                sandbox,
+                settings,
+                workspace: root,
+                id: id.clone(),
+                agent_directory: pi.configuration.agent_directory.clone(),
+            };
+            // The directory guard removes the directory when preparing fails
+            // or panics.
+            let (directory, launch) = tokio::task::spawn_blocking(move || prepare.prepare())
+                .await
+                .map_err(|error| ApiError::SandboxUnavailable(error.to_string()))??;
+            launch.apply(&mut process);
+            sandbox_placeholders = launch.placeholders;
+            sandbox_directory = Some(directory.keep());
+        }
+        let record = SessionRecord {
+            agent: AgentKind::Pi,
+            workspace_id: request.workspace_id.clone(),
+            started_at: diagnostic_timestamp(),
+            capabilities: pau_pi::PI_RPC_CAPABILITIES,
+            native: Arc::default(),
+            sandbox_directory,
         };
-        let launch = tokio::task::spawn_blocking(move || prepare.prepare())
-            .await
-            .map_err(|error| ApiError::SandboxUnavailable(error.to_string()))?;
-        let launch = match launch {
-            Ok(launch) => launch,
+        api.records
+            .lock()
+            .expect("session records lock poisoned")
+            .insert(id.clone(), record.clone());
+        // Subscribe before Pi starts, so the sandbox report cannot be missed.
+        let mut output = api.registry.subscribe();
+        let started = api
+            .registry
+            .start(StartRegisteredPiSession {
+                id: id.clone(),
+                workspace_id: request.workspace_id,
+                started_at: record.started_at.clone(),
+                process,
+                sandbox_placeholders,
+            })
+            .await;
+        let session = match started {
+            Ok(session) => session,
             Err(error) => {
-                remove_sandbox_directory(&directory);
-                return Err(error);
+                api.discard(&id).await;
+                return Err(error.into());
             }
         };
-        launch.apply(&mut process);
-        sandbox_placeholders = launch.placeholders;
-        sandbox_directory = Some(directory);
-    }
-    let record = SessionRecord {
-        agent: AgentKind::Pi,
-        workspace_id: request.workspace_id.clone(),
-        started_at: diagnostic_timestamp(),
-        capabilities: pau_pi::PI_RPC_CAPABILITIES,
-        native: Arc::default(),
-        sandbox_directory,
-    };
-    api.records
-        .lock()
-        .expect("session records lock poisoned")
-        .insert(id.clone(), record.clone());
-    // Subscribe before Pi starts, so the sandbox report cannot be missed.
-    let mut output = api.registry.subscribe();
-    let started = api
-        .registry
-        .start(StartRegisteredPiSession {
-            id: id.clone(),
-            workspace_id: request.workspace_id,
-            started_at: record.started_at.clone(),
-            process,
-            sandbox_placeholders,
-        })
-        .await;
-    let session = match started {
-        Ok(session) => session,
-        Err(error) => {
+        if record.sandbox_directory.is_some()
+            && let Err(reason) = sandbox_started(&mut output, &id).await
+        {
+            api.discard(&id).await;
+            return Err(ApiError::SandboxUnavailable(format!(
+                "The sandbox could not start: {}.",
+                reason.trim_end_matches('.')
+            )));
+        }
+        drop(output);
+        if let Some(SessionModelSelection { provider, model_id }) = request.model
+            && let Err(error) = session.select_model(provider, model_id).await
+        {
             api.discard(&id).await;
             return Err(error.into());
         }
-    };
-    if record.sandbox_directory.is_some()
-        && let Err(reason) = sandbox_started(&mut output, &id, api.sandbox_start_timeout).await
-    {
-        api.discard(&id).await;
-        return Err(ApiError::SandboxUnavailable(format!(
-            "The sandbox could not start: {}.",
-            reason.trim_end_matches('.')
-        )));
-    }
-    drop(output);
-    if let Some(SessionModelSelection { provider, model_id }) = request.model
-        && let Err(error) = session.select_model(provider, model_id).await
-    {
-        api.discard(&id).await;
-        return Err(error.into());
+
+        api.refresh_native(&record, &session).await;
+        api.refresh_thinking_levels(&record, &session).await;
+        let summary = describe(&id, &record, session_status(session.status().await));
+        api.publish(&summary);
+        Ok((StatusCode::CREATED, Json(summary)))
+    })
+    .await
+    .map_err(|error| ApiError::PiUnavailable(error.to_string()))?
+}
+
+/// A new per-session sandbox directory, removed when the guard drops unless
+/// [`SessionDirectory::keep`] hands it to the session record.
+struct SessionDirectory(Option<PathBuf>);
+
+impl SessionDirectory {
+    /// Creates the directory for session `id` under `parent`, readable only
+    /// by the current user.
+    ///
+    /// The name is a prefix of `id`, short so MCP relay sockets fit the Unix
+    /// socket path limit. Creation is exclusive: when another session holds
+    /// the name, a longer prefix is tried, so a session never reuses, and
+    /// later removes, another session's directory.
+    fn create(parent: &Path, id: &str) -> std::io::Result<Self> {
+        fs::create_dir_all(parent)?;
+        let mut length = 8.min(id.len());
+        loop {
+            let path = parent.join(&id[..length]);
+            match fs::DirBuilder::new().mode(0o700).create(&path) {
+                Ok(()) => return Ok(Self(Some(path))),
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::AlreadyExists && length < id.len() =>
+                {
+                    length = (length + 4).min(id.len());
+                }
+                Err(error) => return Err(error),
+            }
+        }
     }
 
-    api.refresh_native(&record, &session).await;
-    api.refresh_thinking_levels(&record, &session).await;
-    let summary = describe(&id, &record, session_status(session.status().await));
-    api.publish(&summary);
-    Ok((StatusCode::CREATED, Json(summary)))
+    fn path(&self) -> &Path {
+        self.0.as_deref().expect("directory is kept only once")
+    }
+
+    /// Keeps the directory and returns its path. The session record now owns
+    /// its removal.
+    fn keep(mut self) -> PathBuf {
+        self.0.take().expect("directory is kept only once")
+    }
+}
+
+impl Drop for SessionDirectory {
+    fn drop(&mut self) {
+        if let Some(path) = &self.0 {
+            remove_sandbox_directory(path);
+        }
+    }
 }
 
 /// One sandboxed Pi launch to prepare.
@@ -1187,16 +1227,17 @@ struct PiSandboxRequest {
     sandbox: SandboxApi,
     settings: SandboxSettings,
     workspace: PathBuf,
-    /// Pau-owned directory for the session's policy and temporary files.
-    directory: PathBuf,
+    /// Session ID, which names the session's sandbox directory.
+    id: String,
     /// Pi's agent directory, whose settings say whether pi-mcp-adapter runs.
     agent_directory: PathBuf,
 }
 
 impl PiSandboxRequest {
-    /// Resolves the policy and writes the policy file and session MCP
-    /// configuration. Blocks on the filesystem.
-    fn prepare(self) -> Result<PiSandboxLaunch, ApiError> {
+    /// Creates the session's directory, then resolves the policy and writes
+    /// the policy file and session MCP configuration into it. Blocks on the
+    /// filesystem.
+    fn prepare(self) -> Result<(SessionDirectory, PiSandboxLaunch), ApiError> {
         let executables = self
             .sandbox
             .executables
@@ -1212,12 +1253,14 @@ impl PiSandboxRequest {
         }
         // The tool host runs Pi's `node` on the extension's sources and their
         // dependencies, which a profile that hides the home directory must
-        // still let it read.
-        let mut runtime_roots = vec![package.join("../..")];
+        // still let it read. Only those directories are granted, never the
+        // checkout around them, which can hold secrets such as `.env`.
+        let mut runtime_roots = vec![package.to_path_buf(), package.join("../../node_modules")];
         runtime_roots.extend(node_directory(OsStr::new(&self.sandbox.tool_path)));
+        runtime_roots.extend(denial_preload_library());
         // pi-mcp-adapter would start every server in the Pi process, outside
         // the sandbox, unless Pi gets a session configuration of contained
-        // servers.
+        // servers in exclusive mode.
         let mcp = discover_pi_mcp(&DiscoverPiMcpOptions {
             home_directory: self.sandbox.home.clone(),
             agent_directory: self.agent_directory,
@@ -1228,14 +1271,22 @@ impl PiSandboxRequest {
                 "Pau could not read Pi's MCP configuration, so it cannot keep MCP servers inside the sandbox: {error}"
             ))
         })?;
-        let mcp_servers = mcp
-            .native_configuration_active
-            .then_some(mcp.configuration.servers);
-        prepare_pi_sandbox(&PreparePiSandbox {
+        // Whenever Pi loads the adapter, from a settings package or not, it
+        // gets the session configuration, empty when no server is contained.
+        // Without the adapter, Pi rejects the configuration's flag and exits.
+        let adapter_loads = mcp.adapter.state == PiMcpAdapterState::Ready || mcp.adapter_extension;
+        let mcp_servers = adapter_loads.then_some(mcp.configuration.servers);
+        let directory =
+            SessionDirectory::create(&self.sandbox.sessions, &self.id).map_err(|error| {
+                ApiError::SandboxUnavailable(format!(
+                    "Pau could not create the session's sandbox directory: {error}"
+                ))
+            })?;
+        let launch = prepare_pi_sandbox(&PreparePiSandbox {
             settings: &self.settings,
             workspace: &self.workspace,
             home: &self.sandbox.home,
-            session_directory: &self.directory,
+            session_directory: directory.path(),
             executables,
             extension: &extension,
             runtime_roots: &runtime_roots,
@@ -1246,8 +1297,32 @@ impl PiSandboxRequest {
         .map_err(|error| match error {
             SandboxError::Invalid(message) => ApiError::InvalidSandbox(message),
             other => ApiError::SandboxUnavailable(other.to_string()),
-        })
+        })?;
+        Ok((directory, launch))
     }
+}
+
+/// On Linux, the denial preload library the tool host loads into each tool,
+/// found the way the sandbox package finds it: `PAU_SANDBOX_DENIAL_PRELOAD`,
+/// or the checkout's build for `PAU_SANDBOX_PRELOAD_PROFILE`.
+fn denial_preload_library() -> Option<PathBuf> {
+    if !cfg!(target_os = "linux") {
+        return None;
+    }
+    std::env::var_os("PAU_SANDBOX_DENIAL_PRELOAD")
+        .map(PathBuf::from)
+        .or_else(|| {
+            let profile = match std::env::var("PAU_SANDBOX_PRELOAD_PROFILE").as_deref() {
+                Ok("release") => "release",
+                _ => "debug",
+            };
+            Some(
+                Path::new(SANDBOX_PACKAGE)
+                    .join("../../target")
+                    .join(profile)
+                    .join("libpau_sandbox_denial_preload.so"),
+            )
+        })
 }
 
 /// The directory of the first `node` on `path`, after following links.
@@ -1290,7 +1365,6 @@ fn sandbox_status(event: &Value) -> Option<&str> {
 async fn sandbox_started(
     output: &mut broadcast::Receiver<PiSessionOutput>,
     id: &str,
-    timeout: Duration,
 ) -> Result<(), String> {
     let report = async {
         loop {
@@ -1324,10 +1398,10 @@ async fn sandbox_started(
             }
         }
     };
-    tokio::time::timeout(timeout, report).await.unwrap_or_else(|_| {
+    tokio::time::timeout(SANDBOX_START_TIMEOUT, report).await.unwrap_or_else(|_| {
         Err(format!(
             "Pi did not confirm the sandbox within {} seconds. Check that Pi can load Pau's sandbox extension.",
-            timeout.as_secs()
+            SANDBOX_START_TIMEOUT.as_secs()
         ))
     })
 }

@@ -1674,10 +1674,11 @@ mod tests {
 
     const TEST_TOKEN: &str = "0123456789abcdef0123456789abcdef";
 
+    /// Collects formatted log output for assertions.
     #[derive(Clone, Default)]
-    struct LogBuffer(Arc<Mutex<Vec<u8>>>);
+    pub(crate) struct LogBuffer(Arc<Mutex<Vec<u8>>>);
 
-    struct LogWriter(Arc<Mutex<Vec<u8>>>);
+    pub(crate) struct LogWriter(Arc<Mutex<Vec<u8>>>);
 
     impl io::Write for LogWriter {
         fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
@@ -1699,7 +1700,7 @@ mod tests {
     }
 
     impl LogBuffer {
-        fn contents(&self) -> String {
+        pub(crate) fn contents(&self) -> String {
             String::from_utf8(self.0.lock().unwrap().clone()).unwrap()
         }
     }

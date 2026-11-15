@@ -173,6 +173,11 @@ pub struct PiMcpDiscovery {
     /// Whether Pi's already configured adapter remains active independently of
     /// Pau-managed enablement.
     pub native_configuration_active: bool,
+    /// Whether Pi also loads pi-mcp-adapter outside its settings packages: from
+    /// an extension directory, such as `~/.pi/agent/extensions/`, or a path
+    /// in a settings `extensions` list. Such a copy reads MCP configuration
+    /// like a package does, but Pau cannot report its version.
+    pub adapter_extension: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -269,6 +274,60 @@ pub fn discover_pi_mcp(
         configuration,
         adapter,
         native_configuration_active,
+        adapter_extension: adapter_extension(options, &user_settings, &project_settings),
+    })
+}
+
+/// Whether an extension Pi loads outside its settings packages is
+/// pi-mcp-adapter: an entry of the user or project extension directory, or a
+/// path a settings file lists under `extensions`, relative to that file.
+fn adapter_extension(
+    options: &DiscoverPiMcpOptions,
+    user_settings: &Path,
+    project_settings: &Path,
+) -> bool {
+    let mut candidates = Vec::new();
+    for directory in [
+        options.agent_directory.join("extensions"),
+        options.workspace.join(".pi/extensions"),
+    ] {
+        if let Ok(entries) = fs::read_dir(directory) {
+            candidates.extend(entries.flatten().map(|entry| entry.path()));
+        }
+    }
+    for settings_path in [user_settings, project_settings] {
+        let Ok(Some(settings)) = read_jsonc_optional(settings_path) else {
+            continue;
+        };
+        let base = settings_path.parent().unwrap_or_else(|| Path::new("."));
+        let entries = settings.get("extensions").and_then(Value::as_array);
+        candidates.extend(
+            entries
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(|entry| match entry.strip_prefix("~/") {
+                    Some(rest) => options.home_directory.join(rest),
+                    None => base.join(entry),
+                }),
+        );
+    }
+    candidates.iter().any(|candidate| {
+        let resolved = fs::canonicalize(candidate).unwrap_or_else(|_| candidate.clone());
+        [candidate, &resolved].into_iter().any(|path| {
+            // The entry itself, or the directory of an entry file such as
+            // `pi-mcp-adapter/index.ts`.
+            path.iter()
+                .rev()
+                .take(2)
+                .any(|name| name == "pi-mcp-adapter")
+                || read_jsonc_optional(&path.join("package.json"))
+                    .ok()
+                    .flatten()
+                    .is_some_and(|manifest| {
+                        manifest.get("name").and_then(Value::as_str) == Some("pi-mcp-adapter")
+                    })
+        })
     })
 }
 
@@ -889,6 +948,37 @@ mod tests {
         assert_eq!(docs.definition["args"][0], "root");
         assert!(!docs.disabled);
         assert_eq!(docs.sources.len(), 4);
+    }
+
+    #[test]
+    fn finds_an_adapter_outside_settings_packages() {
+        let (_directory, options) = fixture("2.37.0", None);
+        fs::write(
+            options.agent_directory.join("settings.json"),
+            "{\"packages\":[]}",
+        )
+        .unwrap();
+        assert!(!discover_pi_mcp(&options).unwrap().adapter_extension);
+
+        // A checkout under another name in the user extension directory.
+        let copy = options.agent_directory.join("extensions/mcp");
+        fs::create_dir_all(&copy).unwrap();
+        fs::write(copy.join("package.json"), "{\"name\":\"pi-mcp-adapter\"}").unwrap();
+        let discovery = discover_pi_mcp(&options).unwrap();
+        assert!(discovery.adapter_extension);
+        assert_eq!(discovery.adapter.state, PiMcpAdapterState::Absent);
+        fs::remove_dir_all(&copy).unwrap();
+
+        // A path in the project's settings `extensions` list.
+        let listed = options.workspace.join("vendor/pi-mcp-adapter/index.ts");
+        fs::create_dir_all(listed.parent().unwrap()).unwrap();
+        fs::write(&listed, "").unwrap();
+        fs::write(
+            options.workspace.join(".pi/settings.json"),
+            "{\"extensions\":[\"../vendor/pi-mcp-adapter/index.ts\"]}",
+        )
+        .unwrap();
+        assert!(discover_pi_mcp(&options).unwrap().adapter_extension);
     }
 
     #[test]

@@ -8,13 +8,14 @@
  * truncation behavior, denial reports for failed calls, a tool host crash, an
  * operator `!` command, grants applied to a running session, a contained stdio MCP server, an unreviewed
  * extension tool, per-call approval for a tool enabled outside the sandbox,
- * the readiness record Pau waits for, and failing closed when the sandbox
- * cannot start.
+ * the readiness record Pau waits for, a profile that hides the real home
+ * directory, and failing closed when the sandbox cannot start.
  */
 import { spawn } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
@@ -44,20 +45,28 @@ function report(ok: boolean, label: string, detail = ''): void {
 	if (!ok) failures.push(label);
 }
 
+/**
+ * The directories the tool host reads to start, as Pau grants them: Node,
+ * this package, and the checkout's `node_modules`, never the checkout.
+ */
+const checkout = fileURLToPath(new URL('../../..', import.meta.url));
+const runtimeRoots = [path.dirname(process.execPath), source('..'), path.join(checkout, 'node_modules')];
+
 /** Write the session policy with Pau's resolver and return the policy file. */
 function writePolicy(
 	settings: SandboxSettings,
 	mcpServers: SandboxedMcpServer[] = [],
-	env: NodeJS.ProcessEnv = process.env
+	env: NodeJS.ProcessEnv = process.env,
+	policyHome = home
 ): string {
 	return resolvePolicy(
 		{
 			adapter: 'pi',
 			settings,
 			workspace,
-			home,
+			home: policyHome,
 			sessionDirectory: session,
-			runtimeRoots: [path.dirname(process.execPath), fileURLToPath(new URL('../../..', import.meta.url))],
+			runtimeRoots,
 			toolPath: searchPath,
 			mcpServers
 		},
@@ -462,6 +471,37 @@ report(
 );
 await live.close();
 if (failures.length > 0) console.log(`\nPi stderr:\n${live.stderr().trim()}`);
+
+// A profile that hides the real home directory still starts the tool host
+// from the granted runtime, and the checkout around it stays unreadable.
+const checkoutFile = path.join(checkout, 'package.json');
+const hidden = await runPi(
+	[
+		{ tool: 'read', args: { path: checkoutFile } },
+		{ tool: 'read', args: { path: 'README.md' } }
+	],
+	{
+		policyFile: writePolicy(sandboxSettings('workspace-write', { home_read_deny: true }), [], process.env, os.homedir())
+	}
+);
+report(
+	hidden.readiness[0] === JSON.stringify({ state: 'ready' }),
+	'the tool host starts when the home directory is hidden',
+	hidden.readiness.join(' | ') || 'no report'
+);
+const [checkoutRead, workspaceRead] = hidden.ends;
+report(
+	checkoutRead?.isError === true && !checkoutRead.text.includes('"name"'),
+	'read: the checkout around the sandbox package is hidden',
+	checkoutRead?.text.slice(0, 100) ?? 'no result'
+);
+report(
+	workspaceRead?.isError === false && workspaceRead.text.includes('workspace readme'),
+	'read: the workspace stays readable when the home directory is hidden',
+	workspaceRead?.text.slice(0, 100) ?? 'no result'
+);
+await hidden.close();
+if (failures.length > 0) console.log(`\nPi stderr:\n${hidden.stderr().trim()}`);
 
 // When Bubblewrap cannot run, tool calls fail instead of running in the Pi
 // process. The fake bwrap reports a version, so Pau's resolver pins it.

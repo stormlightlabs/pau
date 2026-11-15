@@ -5,6 +5,7 @@ use std::{
     fmt, fs, io,
     net::SocketAddr,
     path::{Path, PathBuf},
+    pin::Pin,
     sync::{Arc, Mutex},
     time::{Duration, SystemTime},
 };
@@ -23,6 +24,7 @@ use axum::{
 use pau_core::{
     HealthResponse, ServerEvent, ServerEventKind, ServerSnapshot, ServerStreamMessage,
     VersionResponse,
+    audit::{AUDIT_CLOSE_LIMIT, AuditLog, AuditOperation},
     diagnostics::{
         DiagnosticBundle, DiagnosticLevel, DiagnosticRecordInput, Diagnostics, TransportDiagnostic,
     },
@@ -51,13 +53,17 @@ use tokio::{
 use tower_http::cors::CorsLayer;
 use tracing::instrument::WithSubscriber;
 
+mod audit;
 mod build_info;
 mod sessions;
+mod starts;
 mod terminals;
 mod watches;
 
+use audit::PendingAudit;
 use build_info::Channel;
 use sessions::SessionApi;
+use starts::StartGate;
 use watches::{WatchLease, WorkspaceWatches};
 
 /// Version returned by every Pau backend implementation: the workspace version
@@ -141,8 +147,24 @@ struct ApiState {
     settings: Option<ApplicationSettingsRepository>,
     sandbox: Option<SandboxApi>,
     sessions: Option<SessionApi>,
+    audit: AuditLog,
     terminals: terminals::TerminalRegistry,
     watches: WorkspaceWatches,
+    starts: StartGate,
+}
+
+/// The backends a router serves. A route whose backend is absent answers
+/// `503`, and the default audit log keeps nothing.
+#[derive(Default)]
+struct ApiServices {
+    workspaces: Option<WorkspaceService>,
+    settings: Option<ApplicationSettingsRepository>,
+    sandbox: Option<SandboxApi>,
+    sessions: Option<SessionApi>,
+    audit: AuditLog,
+    terminals: terminals::TerminalRegistry,
+    /// Refuses process starts once shutdown begins.
+    starts: StartGate,
 }
 
 /// Sandbox selections and the host facts needed to describe a profile.
@@ -389,38 +411,30 @@ struct EventSubscription {
 
 /// Builds the authenticated API used by desktop and browser clients.
 pub fn router(token: ApiToken) -> Router {
-    let diagnostics = default_diagnostics();
     router_with_services(
         token,
         EventHub::default(),
-        None,
-        diagnostics,
-        None,
-        None,
-        None,
+        default_diagnostics(),
+        ApiServices::default(),
     )
 }
 
 /// Builds the API around an event hub supplied by the application owner.
 pub fn router_with_events(token: ApiToken, events: EventHub) -> Router {
-    let diagnostics = default_diagnostics();
-    router_with_services(token, events, None, diagnostics, None, None, None)
+    router_with_services(token, events, default_diagnostics(), ApiServices::default())
 }
 
 /// Builds the API with an explicit diagnostics collector.
 pub fn router_with_diagnostics(token: ApiToken, diagnostics: Diagnostics) -> Router {
     let events = EventHub::default().with_diagnostics(diagnostics.clone());
-    router_with_services(token, events, None, diagnostics, None, None, None)
+    router_with_services(token, events, diagnostics, ApiServices::default())
 }
 
 fn router_with_services(
     token: ApiToken,
     events: EventHub,
-    workspaces: Option<WorkspaceService>,
     diagnostics: Diagnostics,
-    settings: Option<ApplicationSettingsRepository>,
-    sandbox: Option<SandboxApi>,
-    sessions: Option<SessionApi>,
+    services: ApiServices,
 ) -> Router {
     diagnostics.register_sensitive_value(token.expose());
     Router::new()
@@ -438,6 +452,8 @@ fn router_with_services(
             post(start_payload_tracing),
         )
         .route("/api/diagnostics/export", post(export_diagnostics))
+        .route("/api/audit", get(audit::list_audit))
+        .route("/api/audit/export", post(audit::export_audit))
         .route("/api/workspaces", get(list_workspaces).post(open_workspace))
         .route("/api/workspaces/{workspace_id}/files", get(list_files))
         .route(
@@ -602,13 +618,15 @@ fn router_with_services(
         .layer(CorsLayer::permissive())
         .with_state(ApiState {
             events,
-            workspaces,
+            workspaces: services.workspaces,
             diagnostics,
-            settings,
-            sandbox,
-            sessions,
-            terminals: terminals::TerminalRegistry::default(),
+            settings: services.settings,
+            sandbox: services.sandbox,
+            sessions: services.sessions,
+            audit: services.audit,
+            terminals: services.terminals,
             watches: WorkspaceWatches::default(),
+            starts: services.starts,
         })
 }
 
@@ -786,6 +804,21 @@ async fn export_diagnostics(
     State(state): State<ApiState>,
     Json(request): Json<DiagnosticExportRequest>,
 ) -> Result<Json<DiagnosticExportResponse>, ApiError> {
+    let audit = PendingAudit::operator(
+        &state.audit,
+        AuditOperation::FileExport,
+        None,
+        audit::export_target(&request.destination),
+    );
+    let result = export_reviewed_diagnostics(&state, request);
+    audit.finish(&result);
+    result
+}
+
+fn export_reviewed_diagnostics(
+    state: &ApiState,
+    request: DiagnosticExportRequest,
+) -> Result<Json<DiagnosticExportResponse>, ApiError> {
     if let Err(error) = state.diagnostics.export_reviewed(
         request.destination,
         request.reviewed_revision,
@@ -814,7 +847,11 @@ struct ApiErrorBody {
 enum ApiError {
     Workspace(Box<WorkspaceError>),
     Diagnostics(String),
+    /// The audit log could not be read or exported, with the status to send.
+    Audit(StatusCode, String),
     ServiceUnavailable,
+    /// Shutdown has begun, so nothing new may start. See [`StartGate`].
+    ShuttingDown,
     /// The selection names an invalid grant, root, or tool.
     InvalidSandbox(String),
     /// No sandbox can start on this host.
@@ -840,18 +877,26 @@ enum ApiError {
     Preferences(String),
 }
 
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        let (status, code, message) = match self {
-            Self::Diagnostics(message) => (StatusCode::BAD_REQUEST, "diagnostics_error", message),
-            Self::InvalidSandbox(message) => (StatusCode::BAD_REQUEST, "invalid_sandbox", message),
+impl ApiError {
+    /// The response status, stable error code, and message.
+    fn parts(&self) -> (StatusCode, &'static str, String) {
+        match self {
+            Self::Diagnostics(message) => (
+                StatusCode::BAD_REQUEST,
+                "diagnostics_error",
+                message.clone(),
+            ),
+            Self::Audit(status, message) => (*status, "audit_error", message.clone()),
+            Self::InvalidSandbox(message) => {
+                (StatusCode::BAD_REQUEST, "invalid_sandbox", message.clone())
+            }
             Self::SandboxUnavailable(message) => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "sandbox_unavailable",
-                message,
+                message.clone(),
             ),
             Self::PiUnavailable(message) => {
-                (StatusCode::SERVICE_UNAVAILABLE, "pi_unavailable", message)
+                (StatusCode::SERVICE_UNAVAILABLE, "pi_unavailable", message.clone())
             }
             Self::SandboxedSessionUnsupported => (
                 StatusCode::NOT_IMPLEMENTED,
@@ -870,18 +915,25 @@ impl IntoResponse for ApiError {
                 (status, code, error.to_string())
             }
             Self::ExtensionRequest(status, code, message) | Self::Agent(status, code, message) => {
-                (status, code, message)
+                (*status, code, message.clone())
             }
             Self::InvalidPreferences(message) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "invalid_preferences",
-                message,
+                message.clone(),
             ),
             Self::Preferences(message) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "preferences_error", message)
+                (StatusCode::INTERNAL_SERVER_ERROR, "preferences_error", message.clone())
             }
-            Self::InvalidImage(code, message) => (StatusCode::UNPROCESSABLE_ENTITY, code, message),
-            Self::Session(error) => sessions::error_response(&error),
+            Self::InvalidImage(code, message) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, code, message.clone())
+            }
+            Self::Session(error) => sessions::error_response(error),
+            Self::ShuttingDown => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "shutting_down",
+                "Pau is shutting down, so it cannot start anything new.".to_owned(),
+            ),
             Self::ServiceUnavailable => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "workspace_service_unavailable",
@@ -922,7 +974,13 @@ impl IntoResponse for ApiError {
                 };
                 (status, code, error.to_string())
             }
-        };
+        }
+    }
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        let (status, code, message) = self.parts();
         (status, Json(ApiErrorBody { code, message })).into_response()
     }
 }
@@ -1036,17 +1094,26 @@ async fn write_file(
     AxumPath(workspace_id): AxumPath<String>,
     Json(request): Json<WriteFileRequest>,
 ) -> Result<Json<FileContent>, ApiError> {
-    let service = workspace_service(&state)?;
-    service
-        .write(
-            &workspace_id,
-            &request.path,
-            &request.content,
-            request.expected_revision.as_deref(),
-        )
-        .await
-        .map(Json)
-        .map_err(ApiError::from)
+    let audit = PendingAudit::operator(
+        &state.audit,
+        AuditOperation::FileWrite,
+        Some(workspace_id.clone()),
+        Some(request.path.clone()),
+    );
+    let result = async {
+        let written = workspace_service(&state)?
+            .write(
+                &workspace_id,
+                &request.path,
+                &request.content,
+                request.expected_revision.as_deref(),
+            )
+            .await?;
+        Ok(Json(written))
+    }
+    .await;
+    audit.finish(&result);
+    result
 }
 
 #[derive(Deserialize)]
@@ -1156,14 +1223,37 @@ async fn update_workspace_sandbox(
     AxumPath(workspace_id): AxumPath<String>,
     Json(selection): Json<SandboxSelection>,
 ) -> Result<Json<WorkspaceSandbox>, ApiError> {
+    let profile = match selection.settings() {
+        None => "unsandboxed".to_owned(),
+        Some(settings) => serde_json::to_value(settings.profile)
+            .ok()
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .unwrap_or_default(),
+    };
+    let audit = PendingAudit::operator(
+        &state.audit,
+        AuditOperation::SandboxUpdate,
+        Some(workspace_id.clone()),
+        Some(profile),
+    );
+    let result = store_workspace_sandbox(&state, &workspace_id, selection).await;
+    audit.finish(&result);
+    result
+}
+
+async fn store_workspace_sandbox(
+    state: &ApiState,
+    workspace_id: &str,
+    selection: SandboxSelection,
+) -> Result<Json<WorkspaceSandbox>, ApiError> {
     validate_selection(&selection).map_err(|error| ApiError::InvalidSandbox(error.to_string()))?;
-    let root = workspace_service(&state)?.root(&workspace_id).await?;
-    let sandbox = sandbox_api(&state)?;
+    let root = workspace_service(state)?.root(workspace_id).await?;
+    let sandbox = sandbox_api(state)?;
     if selection.settings().is_some() {
         describe(
             sandbox,
             &root,
-            &workspace_id,
+            workspace_id,
             &SandboxPreviewRequest {
                 adapter: pau_core::sandbox::SandboxAdapter::Pi,
                 selection: selection.clone(),
@@ -1172,10 +1262,10 @@ async fn update_workspace_sandbox(
     }
     sandbox
         .selections
-        .set_workspace_default(&workspace_id, &selection, &diagnostic_timestamp())
+        .set_workspace_default(workspace_id, &selection, &diagnostic_timestamp())
         .await
         .map_err(|error| ApiError::from(WorkspaceError::from(error)))?;
-    workspace_sandbox(&state, &workspace_id).await.map(Json)
+    workspace_sandbox(state, workspace_id).await.map(Json)
 }
 
 /// Describes the profile a selection would enforce, before anything runs.
@@ -1335,6 +1425,9 @@ pub struct ServerHandle {
     events: EventHub,
     diagnostics: Diagnostics,
     sessions: SessionApi,
+    terminals: terminals::TerminalRegistry,
+    audit: AuditLog,
+    starts: StartGate,
     shutdown: Option<oneshot::Sender<()>>,
     task: Option<JoinHandle<io::Result<()>>>,
 }
@@ -1369,7 +1462,11 @@ impl ServerHandle {
     }
 
     /// Starts graceful shutdown without waiting for the listener task.
+    ///
+    /// From this call on, session and terminal starts are refused. See
+    /// [`StartGate`].
     pub fn request_shutdown(&mut self) {
+        self.starts.close();
         if let Some(shutdown) = self.shutdown.take() {
             self.diagnostics.record(DiagnosticRecordInput {
                 timestamp: diagnostic_timestamp(),
@@ -1384,16 +1481,63 @@ impl ServerHandle {
         }
     }
 
-    /// Stops the server and waits for its listener task.
+    /// Stops the server, its sessions and its terminals, and stores the final
+    /// audit records, all within [`SHUTDOWN_LIMIT`].
+    ///
+    /// Callers must await this before the Tokio runtime ends, so the final
+    /// audit records reach the database. Starts are refused from the first
+    /// step. The listener gets [`LISTENER_STOP_LIMIT`] to finish open
+    /// requests and is then aborted, which returns a
+    /// [`io::ErrorKind::TimedOut`] error. Aborting it does not end the
+    /// requests already running, so the stops wait for the starts still in
+    /// flight, as [`StartGate`] describes. Sessions and terminals then stop
+    /// at the same time. Any still running
+    /// [`KILL_GRACE`] before the drain's share begins are killed with their
+    /// process groups, so nothing Pau started outlives it.
     pub async fn shutdown(mut self) -> io::Result<()> {
+        let started = tokio::time::Instant::now();
         self.request_shutdown();
-        let result = self
+        let mut task = self
             .task
             .take()
-            .expect("server task is present until shutdown")
-            .await
-            .map_err(io::Error::other)?;
-        self.sessions.stop_all().await;
+            .expect("server task is present until shutdown");
+        let result = match tokio::time::timeout(LISTENER_STOP_LIMIT, &mut task).await {
+            Ok(joined) => joined.map_err(io::Error::other).and_then(|result| result),
+            Err(_) => {
+                task.abort();
+                tracing::warn!(
+                    event = "server.listener_aborted",
+                    limit_ms = LISTENER_STOP_LIMIT.as_millis(),
+                    "open requests kept the listener running, so shutdown aborted it"
+                );
+                Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "open requests kept the listener running past its limit",
+                ))
+            }
+        };
+        let kill_at = started + SHUTDOWN_LIMIT - AUDIT_CLOSE_LIMIT - KILL_GRACE;
+        stop_within_limit(
+            vec![
+                ShutdownStep {
+                    name: "sessions",
+                    work: Box::pin(async {
+                        self.starts.settled(kill_at).await;
+                        self.sessions.stop_all(kill_at).await;
+                    }),
+                },
+                ShutdownStep {
+                    name: "terminals",
+                    work: Box::pin(async {
+                        self.starts.settled(kill_at).await;
+                        self.terminals.stop_all(&self.audit, kill_at).await;
+                    }),
+                },
+            ],
+            started,
+            &self.audit,
+        )
+        .await;
         self.diagnostics.record(DiagnosticRecordInput {
             timestamp: diagnostic_timestamp(),
             component: "pau-server".to_owned(),
@@ -1411,6 +1555,87 @@ impl ServerHandle {
             )]),
         });
         result
+    }
+}
+
+/// Longest time [`ServerHandle::shutdown`] takes, from the shutdown request
+/// to the last stored audit record.
+///
+/// Quitting the app waits for shutdown, so a session or terminal that will
+/// not stop must not hold the app open. The audit drain keeps
+/// [`AUDIT_CLOSE_LIMIT`] of this for itself, and the steps before it share
+/// the rest.
+pub const SHUTDOWN_LIMIT: Duration = Duration::from_secs(10);
+
+/// Longest time shutdown waits for open requests before it aborts the
+/// listener, so a client that stalls mid-request cannot use up the time the
+/// session and terminal stops need.
+const LISTENER_STOP_LIMIT: Duration = Duration::from_secs(1);
+
+/// Time shutdown leaves between killing the sessions and terminals still
+/// running and the start of the audit drain, for the killed processes to be
+/// reaped and their stops recorded.
+const KILL_GRACE: Duration = Duration::from_secs(1);
+
+/// One shutdown step that runs before the audit drain.
+struct ShutdownStep<'a> {
+    /// Names the step in the log when it does not finish.
+    name: &'static str,
+    work: Pin<Box<dyn Future<Output = ()> + Send + 'a>>,
+}
+
+/// Runs `steps` at the same time, then writes the records queued on `audit`,
+/// and returns within [`SHUTDOWN_LIMIT`] of `started`.
+///
+/// The steps must finish before the limit minus [`AUDIT_CLOSE_LIMIT`], so the
+/// drain keeps its share however slow they are. A step still running at
+/// that point is dropped. Returns the names of the steps that did not
+/// finish, which it also logs.
+async fn stop_within_limit(
+    steps: Vec<ShutdownStep<'_>>,
+    started: tokio::time::Instant,
+    audit: &AuditLog,
+) -> Vec<&'static str> {
+    let mut running = steps;
+    let all = std::future::poll_fn(|context| {
+        running.retain_mut(|step| step.work.as_mut().poll(context).is_pending());
+        if running.is_empty() {
+            std::task::Poll::Ready(())
+        } else {
+            std::task::Poll::Pending
+        }
+    });
+    let _ = tokio::time::timeout_at(started + (SHUTDOWN_LIMIT - AUDIT_CLOSE_LIMIT), all).await;
+    let mut unfinished: Vec<_> = running.iter().map(|step| step.name).collect();
+    if !audit.close().await {
+        unfinished.push("audit");
+    }
+    if !unfinished.is_empty() {
+        tracing::warn!(
+            event = "server.shutdown_incomplete",
+            limit_ms = SHUTDOWN_LIMIT.as_millis(),
+            unfinished = %unfinished.join(", "),
+            "Pau quit before every shutdown step finished"
+        );
+    }
+    unfinished
+}
+
+/// Runs `stop` and, when it is still running at `kill_at`, calls `kill` and
+/// keeps waiting, so the stop ends with the killed process's exit and its
+/// caller still records it.
+pub(crate) async fn stop_or_kill<T>(
+    stop: impl Future<Output = T>,
+    kill_at: tokio::time::Instant,
+    kill: impl FnOnce(),
+) -> T {
+    let mut stop = std::pin::pin!(stop);
+    tokio::select! {
+        output = &mut stop => output,
+        () = tokio::time::sleep_until(kill_at) => {
+            kill();
+            stop.await
+        }
     }
 }
 
@@ -1547,6 +1772,7 @@ pub async fn start_with_database(
     let diagnostics = default_diagnostics();
     diagnostics.register_sensitive_value(token.expose());
     diagnostics.set_enabled(options.diagnostics || persisted_diagnostics);
+    let audit = AuditLog::new(database.audit(), diagnostics.redactor());
 
     let listener = TcpListener::bind(address).await?;
     let address = listener.local_addr()?;
@@ -1560,11 +1786,17 @@ pub async fn start_with_database(
             ..pau_pi::DiscoverPiOptions::default()
         },
         events.clone(),
+        audit.clone(),
     );
+    let terminals = terminals::TerminalRegistry::default();
     let server_sessions = sessions.clone();
     let server_events = events.clone();
     let server_diagnostics = diagnostics.clone();
     let server_settings = settings.clone();
+    let server_audit = audit.clone();
+    let server_terminals = terminals.clone();
+    let starts = StartGate::default();
+    let server_starts = starts.clone();
     let dispatch = tracing::dispatcher::get_default(Clone::clone);
     let task = tokio::spawn(
         async move {
@@ -1573,11 +1805,16 @@ pub async fn start_with_database(
                 router_with_services(
                     server_token,
                     server_events,
-                    Some(workspaces),
                     server_diagnostics,
-                    Some(server_settings),
-                    Some(sandbox),
-                    Some(server_sessions),
+                    ApiServices {
+                        workspaces: Some(workspaces),
+                        settings: Some(server_settings),
+                        sandbox: Some(sandbox),
+                        sessions: Some(server_sessions),
+                        audit: server_audit,
+                        terminals: server_terminals,
+                        starts: server_starts,
+                    },
                 ),
             )
             .with_graceful_shutdown(async move {
@@ -1609,6 +1846,9 @@ pub async fn start_with_database(
         events,
         diagnostics,
         sessions,
+        terminals,
+        audit,
+        starts,
         shutdown: Some(shutdown),
         task: Some(task),
     })
@@ -1643,7 +1883,7 @@ fn database_path() -> io::Result<PathBuf> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::{
         fs,
         net::Ipv4Addr,
@@ -1652,7 +1892,11 @@ mod tests {
     };
 
     use axum::body::{Body, to_bytes};
-    use pau_core::workspace::{FileSearchMatch, NameSearchResult};
+    use pau_core::{
+        audit::{AuditActor, AuditEntry, AuditRecord, AuditResult},
+        diagnostics::Redactor,
+        workspace::{FileSearchMatch, NameSearchResult},
+    };
     use tempfile::tempdir;
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
@@ -1667,9 +1911,9 @@ mod tests {
     const TEST_TOKEN: &str = "0123456789abcdef0123456789abcdef";
 
     #[derive(Clone, Default)]
-    struct LogBuffer(Arc<Mutex<Vec<u8>>>);
+    pub(crate) struct LogBuffer(Arc<Mutex<Vec<u8>>>);
 
-    struct LogWriter(Arc<Mutex<Vec<u8>>>);
+    pub(crate) struct LogWriter(Arc<Mutex<Vec<u8>>>);
 
     impl io::Write for LogWriter {
         fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
@@ -1691,7 +1935,7 @@ mod tests {
     }
 
     impl LogBuffer {
-        fn contents(&self) -> String {
+        pub(crate) fn contents(&self) -> String {
             String::from_utf8(self.0.lock().unwrap().clone()).unwrap()
         }
     }
@@ -1974,11 +2218,11 @@ mod tests {
         let app = router_with_services(
             test_token(),
             events.clone(),
-            None,
             default_diagnostics(),
-            Some(database.settings()),
-            None,
-            None,
+            ApiServices {
+                settings: Some(database.settings()),
+                ..ApiServices::default()
+            },
         );
         let call = |method: &str, body: Option<serde_json::Value>| {
             let request = Request::builder()
@@ -2047,11 +2291,12 @@ mod tests {
         let app = router_with_services(
             test_token(),
             EventHub::default(),
-            Some(workspaces),
             default_diagnostics(),
-            None,
-            Some(sandbox),
-            None,
+            ApiServices {
+                workspaces: Some(workspaces),
+                sandbox: Some(sandbox),
+                ..ApiServices::default()
+            },
         );
         let call = |method: &str, path: &str, body: Option<serde_json::Value>| {
             let builder = Request::builder()
@@ -2147,11 +2392,11 @@ mod tests {
         let app = router_with_services(
             test_token(),
             EventHub::default(),
-            Some(WorkspaceService::new(database.workspaces())),
             default_diagnostics(),
-            None,
-            None,
-            None,
+            ApiServices {
+                workspaces: Some(WorkspaceService::new(database.workspaces())),
+                ..ApiServices::default()
+            },
         );
         let authorization = format!("Bearer {TEST_TOKEN}");
         let open = Request::builder()
@@ -2415,6 +2660,605 @@ mod tests {
                 .await
                 .unwrap()
                 .is_err()
+        );
+    }
+
+    /// A client that stops halfway through a request must not keep the
+    /// listener open long enough to cost the stops that follow it.
+    #[tokio::test]
+    async fn shutdown_aborts_a_listener_held_by_a_stalled_request() {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("project");
+        fs::create_dir(&root).unwrap();
+        let ServerDatabase(database) = open_database_at(Path::new(":memory:")).await.unwrap();
+        let server = start_with_database(
+            (Ipv4Addr::LOCALHOST, 0).into(),
+            test_token(),
+            ServerOptions::default(),
+            ServerDatabase(database.clone()),
+        )
+        .await
+        .unwrap();
+        let address = server.local_addr();
+        let workspace = json_body(
+            &response(
+                address,
+                &post("/api/workspaces", &serde_json::json!({ "path": root })),
+                true,
+            )
+            .await,
+        );
+        response(
+            address,
+            &post(
+                "/api/terminals",
+                &serde_json::json!({
+                    "workspace_id": workspace["id"],
+                    "command": ["/bin/sh", "-c", "sleep 30"],
+                    "size": {"cols": 80, "rows": 24},
+                }),
+            ),
+            true,
+        )
+        .await;
+        // The client asks to continue, so the server's reply shows the
+        // handler is waiting on the body, which never comes in full.
+        let mut stalled = TcpStream::connect(address).await.unwrap();
+        stalled
+            .write_all(
+                format!(
+                    "POST /api/terminals HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {TEST_TOKEN}\r\nContent-Type: application/json\r\nContent-Length: 100\r\nExpect: 100-continue\r\n\r\n"
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let mut reply = [0_u8; 25];
+        stalled.read_exact(&mut reply).await.unwrap();
+        assert!(reply.starts_with(b"HTTP/1.1 100 Continue"));
+        stalled.write_all(b"{\"workspace_id\":").await.unwrap();
+
+        let started = tokio::time::Instant::now();
+        let error = server.shutdown().await.unwrap_err();
+
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+        assert!(started.elapsed() < SHUTDOWN_LIMIT - AUDIT_CLOSE_LIMIT);
+        let operations: Vec<_> = database
+            .audit()
+            .list()
+            .await
+            .unwrap()
+            .iter()
+            .map(|record| record.entry.operation)
+            .collect();
+        assert_eq!(
+            operations,
+            [AuditOperation::TerminalStart, AuditOperation::TerminalStop]
+        );
+        drop(stalled);
+    }
+
+    /// A request for `path` with a JSON `body` and the test token.
+    fn post(path: &str, body: &serde_json::Value) -> String {
+        let body = body.to_string();
+        format!(
+            "POST {path} HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer {TEST_TOKEN}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        )
+    }
+
+    /// The JSON body of a response read to its end.
+    fn json_body(response: &str) -> serde_json::Value {
+        let (_, body) = response.split_once("\r\n\r\n").unwrap();
+        serde_json::from_str(body).unwrap()
+    }
+
+    /// The server binary drops its runtime as soon as shutdown returns, which
+    /// cancels every task still running, so shutdown must have stored its own
+    /// records by then.
+    #[test]
+    fn shutdown_stores_its_stops_before_the_runtime_ends() {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("project");
+        fs::create_dir(&root).unwrap();
+        let database_path = directory.path().join("pau.sqlite3");
+
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let terminal_id = runtime.block_on(async {
+            let database = open_database_at(&database_path).await.unwrap();
+            let server = start_with_database(
+                (Ipv4Addr::LOCALHOST, 0).into(),
+                test_token(),
+                ServerOptions::default(),
+                database,
+            )
+            .await
+            .unwrap();
+            let address = server.local_addr();
+            let workspace = json_body(
+                &response(
+                    address,
+                    &post("/api/workspaces", &serde_json::json!({ "path": root })),
+                    true,
+                )
+                .await,
+            );
+            let terminal = json_body(
+                &response(
+                    address,
+                    &post(
+                        "/api/terminals",
+                        &serde_json::json!({
+                            "workspace_id": workspace["id"],
+                            "command": ["/bin/sh", "-c", "sleep 30"],
+                            "size": {"cols": 80, "rows": 24},
+                        }),
+                    ),
+                    true,
+                )
+                .await,
+            );
+            server.shutdown().await.unwrap();
+            terminal["id"].as_str().unwrap().to_owned()
+        });
+        drop(runtime);
+
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let records = runtime.block_on(async {
+            let database = Database::open(&database_path).await.unwrap();
+            database.audit().list().await.unwrap()
+        });
+        let summary: Vec<_> = records
+            .iter()
+            .map(|record| {
+                (
+                    record.entry.actor,
+                    record.entry.operation,
+                    record.entry.target.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            summary,
+            [
+                (
+                    pau_core::audit::AuditActor::Operator,
+                    AuditOperation::TerminalStart,
+                    Some(terminal_id.as_str())
+                ),
+                (
+                    pau_core::audit::AuditActor::Pau,
+                    AuditOperation::TerminalStop,
+                    Some(terminal_id.as_str())
+                ),
+            ]
+        );
+    }
+
+    /// A session that never stops must not hold up exit or cost the records
+    /// queued before it.
+    #[tokio::test(start_paused = true)]
+    async fn shutdown_quits_at_the_limit_and_keeps_queued_records() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("pau.sqlite3");
+        let database = Database::open(&path).await.unwrap();
+        let audit = AuditLog::new(database.audit(), Redactor::default());
+        for exit_code in 0..3 {
+            audit.record(AuditEntry {
+                exit_code: Some(exit_code),
+                ..AuditEntry::new(
+                    AuditActor::Pau,
+                    AuditOperation::SessionStop,
+                    AuditResult::Succeeded,
+                )
+            });
+        }
+        // The writer's SQLite thread runs on the real clock, which the paused
+        // clock would skip past, so let it take the records first.
+        assert_eq!(audit.list().await.unwrap().len(), 3);
+
+        let started = tokio::time::Instant::now();
+        let unfinished = stop_within_limit(
+            vec![
+                ShutdownStep {
+                    name: "sessions",
+                    work: Box::pin(std::future::pending()),
+                },
+                ShutdownStep {
+                    name: "terminals",
+                    work: Box::pin(async {}),
+                },
+            ],
+            started,
+            &audit,
+        )
+        .await;
+
+        assert_eq!(started.elapsed(), SHUTDOWN_LIMIT - AUDIT_CLOSE_LIMIT);
+        assert_eq!(unfinished, ["sessions"]);
+        let exit_codes: Vec<_> = database
+            .audit()
+            .list()
+            .await
+            .unwrap()
+            .iter()
+            .map(|record| record.entry.exit_code.unwrap())
+            .collect();
+        assert_eq!(exit_codes, [0, 1, 2]);
+    }
+
+    /// Polls a request once, so its handler runs to its first wait, and drops
+    /// it there, as the server does when a client disconnects.
+    pub(crate) fn abandon(app: &Router, request: Request) {
+        let mut response = std::pin::pin!(app.clone().oneshot(request));
+        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+        assert!(
+            response.as_mut().poll(&mut context).is_pending(),
+            "the request finished before it could be abandoned"
+        );
+    }
+
+    fn api_request(method: &str, uri: &str, body: serde_json::Value) -> Request {
+        Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(header::AUTHORIZATION, format!("Bearer {TEST_TOKEN}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap()
+    }
+
+    async fn send(app: &Router, request: Request) -> (StatusCode, serde_json::Value) {
+        let response = app.clone().oneshot(request).await.unwrap();
+        let status = response.status();
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        (status, serde_json::from_slice(&bytes).unwrap_or_default())
+    }
+
+    /// Each record as `(operation, result, target, reason)`.
+    fn summaries(records: &[AuditRecord]) -> Vec<(String, String, Option<String>, Option<String>)> {
+        let label = |value: serde_json::Value| value.as_str().unwrap().to_owned();
+        records
+            .iter()
+            .map(|record| {
+                (
+                    label(serde_json::to_value(record.entry.operation).unwrap()),
+                    label(serde_json::to_value(record.entry.result).unwrap()),
+                    record.entry.target.clone(),
+                    record.entry.reason.clone(),
+                )
+            })
+            .collect()
+    }
+
+    fn summary(
+        operation: &str,
+        result: &str,
+        target: Option<&str>,
+        reason: Option<&str>,
+    ) -> (String, String, Option<String>, Option<String>) {
+        (
+            operation.to_owned(),
+            result.to_owned(),
+            target.map(str::to_owned),
+            reason.map(str::to_owned),
+        )
+    }
+
+    /// A workspace holding `a.txt` and a `folder`, served with an audit log.
+    async fn audited_workspace(
+        sandbox_path: &str,
+    ) -> (tempfile::TempDir, String, AuditLog, Router) {
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("project");
+        fs::create_dir_all(root.join("folder")).unwrap();
+        fs::write(root.join("a.txt"), "one").unwrap();
+        let database = Database::open(":memory:").await.unwrap();
+        let workspaces = WorkspaceService::new(database.workspaces());
+        let workspace = workspaces.open(&root, None).await.unwrap();
+        let diagnostics = default_diagnostics();
+        let audit = AuditLog::new(database.audit(), diagnostics.redactor());
+        let sandbox = SandboxApi::new(
+            database.sandbox_selection(),
+            directory.path().join("sandbox"),
+            sandbox_path.into(),
+        );
+        let app = router_with_services(
+            test_token(),
+            EventHub::default(),
+            diagnostics,
+            ApiServices {
+                workspaces: Some(workspaces),
+                sandbox: Some(sandbox),
+                audit: audit.clone(),
+                ..ApiServices::default()
+            },
+        );
+        (directory, workspace.id, audit, app)
+    }
+
+    /// Writes files the ways a client can, and returns each response's
+    /// status and error code.
+    async fn write_files(app: &Router, workspace_id: &str) -> Vec<(StatusCode, serde_json::Value)> {
+        let uri = format!("/api/workspaces/{workspace_id}/file");
+        let read = Request::builder()
+            .uri(format!("{uri}?path=a.txt"))
+            .header(header::AUTHORIZATION, format!("Bearer {TEST_TOKEN}"))
+            .body(Body::empty())
+            .unwrap();
+        let one = send(app, read).await.1["revision"].clone();
+        let writes = [
+            serde_json::json!({"path": "a.txt", "content": "two", "expected_revision": one}),
+            serde_json::json!({"path": ".env", "content": "KEY=value"}),
+            serde_json::json!({"path": "../outside.txt", "content": "x"}),
+            serde_json::json!({"path": "a.txt", "content": "three", "expected_revision": "stale"}),
+            serde_json::json!({"path": "folder", "content": "x"}),
+        ];
+        let mut results = Vec::new();
+        for write in writes {
+            let (status, body) = send(app, api_request("PUT", &uri, write)).await;
+            results.push((status, body["code"].clone()));
+        }
+        results
+    }
+
+    #[tokio::test]
+    async fn records_file_writes_without_changing_their_results() {
+        let (_directory, workspace_id, audit, app) = audited_workspace("").await;
+        let results = write_files(&app, &workspace_id).await;
+
+        let records = audit.list().await.unwrap();
+        assert_eq!(
+            summaries(&records),
+            [
+                summary("file_write", "succeeded", Some("a.txt"), None),
+                summary(
+                    "file_write",
+                    "denied",
+                    Some("[REDACTED]"),
+                    Some("sensitive_path")
+                ),
+                summary(
+                    "file_write",
+                    "denied",
+                    Some("../outside.txt"),
+                    Some("invalid_path")
+                ),
+                summary("file_write", "denied", Some("a.txt"), Some("file_changed")),
+                summary(
+                    "file_write",
+                    "failed",
+                    Some("folder"),
+                    Some("internal_error")
+                ),
+            ]
+        );
+        assert!(records.iter().all(|record| {
+            record.entry.workspace_id.as_deref() == Some(workspace_id.as_str())
+                && record.entry.actor == pau_core::audit::AuditActor::Operator
+        }));
+
+        // The same requests without an audit log get the same answers.
+        let directory = tempdir().unwrap();
+        let root = directory.path().join("project");
+        fs::create_dir_all(root.join("folder")).unwrap();
+        fs::write(root.join("a.txt"), "one").unwrap();
+        let database = Database::open(":memory:").await.unwrap();
+        let workspaces = WorkspaceService::new(database.workspaces());
+        let workspace = workspaces.open(&root, None).await.unwrap();
+        let unaudited = router_with_services(
+            test_token(),
+            EventHub::default(),
+            default_diagnostics(),
+            ApiServices {
+                workspaces: Some(workspaces),
+                ..ApiServices::default()
+            },
+        );
+        assert_eq!(write_files(&unaudited, &workspace.id).await, results);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn records_concurrent_and_cancelled_file_writes() {
+        let (directory, workspace_id, audit, app) = audited_workspace("").await;
+        let uri = format!("/api/workspaces/{workspace_id}/file");
+        abandon(
+            &app,
+            api_request(
+                "PUT",
+                &uri,
+                serde_json::json!({"path": "cancelled.txt", "content": "x"}),
+            ),
+        );
+        let writes: Vec<_> = (0..4)
+            .map(|index| {
+                let request = api_request(
+                    "PUT",
+                    &uri,
+                    serde_json::json!({"path": format!("new-{index}.txt"), "content": "x"}),
+                );
+                let app = app.clone();
+                tokio::spawn(async move { send(&app, request).await.0 })
+            })
+            .collect();
+        for write in writes {
+            assert_eq!(write.await.unwrap(), StatusCode::OK);
+        }
+
+        let records = audit.list().await.unwrap();
+        assert_eq!(
+            summaries(&records[..1]),
+            [summary(
+                "file_write",
+                "cancelled",
+                Some("cancelled.txt"),
+                None
+            )]
+        );
+        let mut written: Vec<_> = summaries(&records[1..]);
+        written.sort();
+        assert_eq!(
+            written,
+            (0..4)
+                .map(|index| summary(
+                    "file_write",
+                    "succeeded",
+                    Some(&format!("new-{index}.txt")),
+                    None
+                ))
+                .collect::<Vec<_>>()
+        );
+        assert!(!directory.path().join("project/cancelled.txt").exists());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn records_sandbox_setting_changes() {
+        let (_directory, workspace_id, audit, app) = audited_workspace("").await;
+        let uri = format!("/api/workspaces/{workspace_id}/sandbox");
+        let sandboxed = |domain: &str| {
+            serde_json::json!({"mode": "sandboxed", "settings": {
+                "profile": "workspace-write",
+                "grants": {"domains": [domain], "writable_roots": [], "unix_sockets": false}
+            }})
+        };
+        abandon(
+            &app,
+            api_request("PUT", &uri, serde_json::json!({"mode": "unsandboxed"})),
+        );
+        let (status, _) = send(&app, api_request("PUT", &uri, sandboxed("https://bad/"))).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        // The test server resolves no containment executables.
+        let (status, _) = send(&app, api_request("PUT", &uri, sandboxed("example.com"))).await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        let (status, _) = send(
+            &app,
+            api_request(
+                "PUT",
+                "/api/workspaces/missing/sandbox",
+                serde_json::json!({"mode": "unsandboxed"}),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        let updates: Vec<_> = (0..4)
+            .map(|_| {
+                let request = api_request("PUT", &uri, serde_json::json!({"mode": "unsandboxed"}));
+                let app = app.clone();
+                tokio::spawn(async move { send(&app, request).await.0 })
+            })
+            .collect();
+        for update in updates {
+            assert_eq!(update.await.unwrap(), StatusCode::OK);
+        }
+
+        let records = audit.list().await.unwrap();
+        let unsandboxed = summary("sandbox_update", "succeeded", Some("unsandboxed"), None);
+        assert_eq!(
+            summaries(&records),
+            [
+                summary("sandbox_update", "cancelled", Some("unsandboxed"), None),
+                summary(
+                    "sandbox_update",
+                    "denied",
+                    Some("workspace-write"),
+                    Some("invalid_sandbox")
+                ),
+                summary(
+                    "sandbox_update",
+                    "failed",
+                    Some("workspace-write"),
+                    Some("sandbox_unavailable")
+                ),
+                summary(
+                    "sandbox_update",
+                    "denied",
+                    Some("unsandboxed"),
+                    Some("not_found")
+                ),
+                unsandboxed.clone(),
+                unsandboxed.clone(),
+                unsandboxed.clone(),
+                unsandboxed,
+            ]
+        );
+        assert_eq!(records[3].entry.workspace_id.as_deref(), Some("missing"));
+        assert!(
+            records
+                .iter()
+                .all(|record| record.entry.session_id.is_none())
+        );
+    }
+
+    #[tokio::test]
+    async fn exports_the_audit_log_to_a_new_file() {
+        let (directory, workspace_id, audit, app) = audited_workspace("").await;
+        let secret_path = format!("{TEST_TOKEN}.txt");
+        let (status, _) = send(
+            &app,
+            api_request(
+                "PUT",
+                &format!("/api/workspaces/{workspace_id}/file"),
+                serde_json::json!({"path": secret_path, "content": "content-secret"}),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let destination = directory.path().join("audit.json");
+        let export = |destination: serde_json::Value| {
+            api_request(
+                "POST",
+                "/api/audit/export",
+                serde_json::json!({ "destination": destination }),
+            )
+        };
+
+        assert_eq!(
+            send(&app, export(destination.to_str().unwrap().into()))
+                .await
+                .0,
+            StatusCode::NO_CONTENT
+        );
+        assert_eq!(
+            send(&app, export(destination.to_str().unwrap().into()))
+                .await
+                .0,
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            send(&app, export("audit.json".into())).await.0,
+            StatusCode::BAD_REQUEST
+        );
+
+        let exported = fs::read_to_string(&destination).unwrap();
+        assert!(!exported.contains(TEST_TOKEN), "{exported}");
+        assert!(!exported.contains("content-secret"), "{exported}");
+        let exported: Vec<AuditRecord> = serde_json::from_str(&exported).unwrap();
+        assert_eq!(
+            summaries(&exported),
+            [summary(
+                "file_write",
+                "succeeded",
+                Some("[REDACTED].txt"),
+                None
+            )]
+        );
+        assert_eq!(
+            summaries(&audit.list().await.unwrap()[1..]),
+            [
+                summary("file_export", "succeeded", Some("audit.json"), None),
+                summary(
+                    "file_export",
+                    "denied",
+                    Some("audit.json"),
+                    Some("audit_error")
+                ),
+                summary(
+                    "file_export",
+                    "denied",
+                    Some("audit.json"),
+                    Some("audit_error")
+                ),
+            ]
         );
     }
 

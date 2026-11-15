@@ -11,7 +11,10 @@ use serde_json::{Value, json};
 use tempfile::TempDir;
 use tower::ServiceExt;
 
-use crate::{ApiToken, EventHub, default_diagnostics, router_with_services, sessions::SessionApi};
+use crate::{
+    ApiServices, ApiToken, EventHub, default_diagnostics, router_with_services,
+    sessions::SessionApi,
+};
 
 const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 
@@ -47,15 +50,17 @@ impl Fixture {
                 working_directory: root.clone(),
             },
             events.clone(),
+            Default::default(),
         );
         let app = router_with_services(
             ApiToken::configured(TOKEN).unwrap(),
             events,
-            Some(workspaces),
             default_diagnostics(),
-            None,
-            None,
-            Some(sessions),
+            ApiServices {
+                workspaces: Some(workspaces),
+                sessions: Some(sessions),
+                ..ApiServices::default()
+            },
         );
         Self {
             _directory: directory,

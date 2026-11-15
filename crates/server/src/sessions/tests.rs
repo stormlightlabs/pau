@@ -7,7 +7,10 @@ use axum::{
     http::{StatusCode, header},
 };
 use pau_core::{
-    ServerEvent, ServerStreamMessage, persistence::Database, sandbox::SandboxSelection,
+    ServerEvent, ServerStreamMessage,
+    audit::{AuditLog, AuditRecord},
+    persistence::Database,
+    sandbox::SandboxSelection,
     workspace::WorkspaceService,
 };
 use serde_json::{Value, json};
@@ -15,7 +18,10 @@ use tempfile::TempDir;
 use tower::ServiceExt;
 
 use super::*;
-use crate::{ApiToken, EventSubscription, SandboxApi, default_diagnostics, router_with_services};
+use crate::{
+    ApiServices, ApiToken, EventSubscription, SandboxApi, ServerHandle, StartGate,
+    default_diagnostics, router_with_services, terminals::TerminalRegistry,
+};
 
 const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 
@@ -250,6 +256,10 @@ struct Fixture {
     workspace_id: String,
     database: Database,
     events: EventHub,
+    audit: AuditLog,
+    sessions: SessionApi,
+    terminals: TerminalRegistry,
+    starts: StartGate,
     app: Router,
 }
 
@@ -266,6 +276,8 @@ impl Fixture {
         let workspaces = WorkspaceService::new(database.workspaces());
         let workspace = workspaces.open(&workspace_root, None).await.unwrap();
         let events = EventHub::default();
+        let diagnostics = default_diagnostics();
+        let audit = AuditLog::new(database.audit(), diagnostics.redactor());
         let sessions = SessionApi::new(
             PiSessionRegistry::new(database.processes()),
             DiscoverPiOptions {
@@ -277,19 +289,27 @@ impl Fixture {
                 working_directory: directory.path().to_path_buf(),
             },
             events.clone(),
+            audit.clone(),
         );
+        let terminals = TerminalRegistry::default();
+        let starts = StartGate::default();
         let app = router_with_services(
             ApiToken::configured(TOKEN).unwrap(),
             events.clone(),
-            Some(workspaces),
-            default_diagnostics(),
-            None,
-            Some(SandboxApi::new(
-                database.sandbox_selection(),
-                directory.path().join("sandbox"),
-                std::env::var_os("PATH").unwrap_or_default(),
-            )),
-            Some(sessions),
+            diagnostics,
+            ApiServices {
+                workspaces: Some(workspaces),
+                sandbox: Some(SandboxApi::new(
+                    database.sandbox_selection(),
+                    directory.path().join("sandbox"),
+                    std::env::var_os("PATH").unwrap_or_default(),
+                )),
+                sessions: Some(sessions.clone()),
+                audit: audit.clone(),
+                terminals: terminals.clone(),
+                starts: starts.clone(),
+                ..ApiServices::default()
+            },
         );
         Self {
             _directory: directory,
@@ -297,18 +317,45 @@ impl Fixture {
             workspace_id: workspace.id,
             database,
             events,
+            audit,
+            sessions,
+            terminals,
+            starts,
             app,
         }
     }
 
-    async fn call(&self, method: &str, path: &str, body: Option<Value>) -> (StatusCode, Value) {
-        let request = Request::builder()
+    fn request(&self, method: &str, path: &str, body: Option<Value>) -> Request<Body> {
+        Request::builder()
             .method(method)
             .uri(path)
             .header(header::AUTHORIZATION, format!("Bearer {TOKEN}"))
             .header(header::CONTENT_TYPE, "application/json")
             .body(body.map_or_else(Body::empty, |body| Body::from(body.to_string())))
-            .unwrap();
+            .unwrap()
+    }
+
+    /// The audit records as `(actor, operation, result, reason)` labels.
+    async fn audit_labels(&self) -> Vec<(String, String, String, Option<String>)> {
+        let (status, records) = self.call("GET", "/api/audit", None).await;
+        assert_eq!(status, StatusCode::OK, "{records}");
+        records
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|record| {
+                (
+                    record["actor"].as_str().unwrap().to_owned(),
+                    record["operation"].as_str().unwrap().to_owned(),
+                    record["result"].as_str().unwrap().to_owned(),
+                    record["reason"].as_str().map(str::to_owned),
+                )
+            })
+            .collect()
+    }
+
+    async fn call(&self, method: &str, path: &str, body: Option<Value>) -> (StatusCode, Value) {
+        let request = self.request(method, path, body);
         let response = self.app.clone().oneshot(request).await.unwrap();
         let status = response.status();
         let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
@@ -1664,4 +1711,507 @@ async fn searches_the_persisted_conversation() {
     let (status, blank) = fixture.call("GET", &format!("{base}/search"), None).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(blank["matches"], json!([]));
+}
+
+fn label(
+    actor: &str,
+    operation: &str,
+    result: &str,
+    reason: Option<&str>,
+) -> (String, String, String, Option<String>) {
+    (
+        actor.to_owned(),
+        operation.to_owned(),
+        result.to_owned(),
+        reason.map(str::to_owned),
+    )
+}
+
+#[tokio::test]
+async fn records_session_starts_and_stops_with_their_results() {
+    let fixture = Fixture::new(None).await;
+    let mut stream = fixture.events.subscribe(None);
+
+    let (status, session) = fixture.start(None).await;
+    assert_eq!(status, StatusCode::CREATED, "{session}");
+    let stopped = session["id"].as_str().unwrap().to_owned();
+    let (status, _) = fixture
+        .call("DELETE", &format!("/api/sessions/{stopped}"), None)
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = fixture.call("DELETE", "/api/sessions/unknown", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = fixture
+        .call(
+            "POST",
+            "/api/sessions",
+            Some(json!({"workspace_id": fixture.workspace_id, "agent": "nope"})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (_, session) = fixture.start(None).await;
+    let exited = session["id"].as_str().unwrap().to_owned();
+    fixture
+        .call(
+            "POST",
+            &format!("/api/sessions/{exited}/prompt"),
+            Some(json!({"message": "exit"})),
+        )
+        .await;
+    next_event(&mut stream, session_changed("failed")).await;
+
+    assert_eq!(
+        fixture.audit_labels().await,
+        [
+            label("operator", "session_start", "succeeded", None),
+            label("operator", "session_stop", "succeeded", None),
+            label("operator", "session_stop", "denied", Some("not_found")),
+            label("operator", "session_start", "denied", Some("unknown_agent")),
+            label("operator", "session_start", "succeeded", None),
+            label("process", "session_stop", "failed", None),
+        ]
+    );
+    let records = fixture.audit.list().await.unwrap();
+    let sessions: Vec<_> = records
+        .iter()
+        .map(|record| record.entry.session_id.as_deref())
+        .collect();
+    assert_eq!(
+        sessions,
+        [
+            Some(stopped.as_str()),
+            Some(stopped.as_str()),
+            Some("unknown"),
+            None,
+            Some(exited.as_str()),
+            Some(exited.as_str()),
+        ]
+    );
+    for index in [0, 1, 4, 5] {
+        assert_eq!(
+            records[index].entry.workspace_id.as_deref(),
+            Some(fixture.workspace_id.as_str())
+        );
+        assert_eq!(records[index].entry.target.as_deref(), Some("pi"));
+    }
+    assert_eq!(records[3].entry.target.as_deref(), Some("nope"));
+    assert_eq!(records[5].entry.exit_code, Some(3));
+}
+
+#[tokio::test]
+async fn records_failed_refused_and_cancelled_starts() {
+    let missing = Fixture::new(Some("missing")).await;
+    let (status, _) = missing.start(None).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        missing.audit_labels().await,
+        [label(
+            "operator",
+            "session_start",
+            "failed",
+            Some("pi_unavailable")
+        )]
+    );
+
+    let fixture = Fixture::new(None).await;
+    crate::tests::abandon(
+        &fixture.app,
+        fixture.request(
+            "POST",
+            "/api/sessions",
+            Some(json!({"workspace_id": fixture.workspace_id})),
+        ),
+    );
+    let sandboxed: SandboxSelection = serde_json::from_value(json!({
+        "mode": "sandboxed",
+        "settings": {"profile": "workspace-write"},
+    }))
+    .unwrap();
+    fixture
+        .database
+        .sandbox_selection()
+        .set_workspace_default(&fixture.workspace_id, &sandboxed, &diagnostic_timestamp())
+        .await
+        .unwrap();
+    let (status, _) = fixture.start(None).await;
+    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+
+    assert_eq!(
+        fixture.audit_labels().await,
+        [
+            label("operator", "session_start", "cancelled", None),
+            label(
+                "operator",
+                "session_start",
+                "denied",
+                Some("sandboxed_session_unsupported")
+            ),
+        ]
+    );
+    assert_eq!(
+        fixture.call("GET", "/api/sessions", None).await.1,
+        json!([])
+    );
+    assert!(
+        fixture.commands().is_empty(),
+        "a cancelled start launched Pi"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn records_concurrent_starts_and_stops() {
+    let fixture = Fixture::new(None).await;
+    let send_all = |requests: Vec<Request<Body>>| {
+        let handles: Vec<_> = requests
+            .into_iter()
+            .map(|request| {
+                let app = fixture.app.clone();
+                tokio::spawn(async move {
+                    let response = app.oneshot(request).await.unwrap();
+                    let status = response.status();
+                    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+                    (
+                        status,
+                        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+                    )
+                })
+            })
+            .collect();
+        async move {
+            let mut responses = Vec::new();
+            for handle in handles {
+                responses.push(handle.await.unwrap());
+            }
+            responses
+        }
+    };
+    let start = json!({"workspace_id": fixture.workspace_id});
+    let started = send_all(
+        (0..4)
+            .map(|_| fixture.request("POST", "/api/sessions", Some(start.clone())))
+            .collect(),
+    )
+    .await;
+    let mut ids: Vec<String> = started
+        .iter()
+        .map(|(status, session)| {
+            assert_eq!(*status, StatusCode::CREATED, "{session}");
+            session["id"].as_str().unwrap().to_owned()
+        })
+        .collect();
+    let stopped = send_all(
+        ids.iter()
+            .map(|id| fixture.request("DELETE", &format!("/api/sessions/{id}"), None))
+            .collect(),
+    )
+    .await;
+    assert!(
+        stopped
+            .iter()
+            .all(|(status, _)| *status == StatusCode::NO_CONTENT)
+    );
+
+    let records: Vec<AuditRecord> = fixture.audit.list().await.unwrap();
+    ids.sort();
+    for operation in ["session_start", "session_stop"] {
+        let mut recorded: Vec<String> = records
+            .iter()
+            .filter(|record| {
+                serde_json::to_value(record.entry.operation).unwrap() == operation
+                    && record.entry.result == pau_core::audit::AuditResult::Succeeded
+            })
+            .map(|record| record.entry.session_id.clone().unwrap())
+            .collect();
+        recorded.sort();
+        assert_eq!(recorded, ids, "{operation}");
+    }
+    assert_eq!(records.len(), 8);
+}
+
+#[tokio::test]
+async fn keeps_seeded_values_out_of_audit_records_events_logs_and_exports() {
+    // The API token is the registered secret. The other value stands for
+    // content, process arguments, and sandbox grants, which records never hold.
+    const UNRECORDED: &str = "unrecorded-secret-4c1d";
+    let logs = crate::tests::LogBuffer::default();
+    let subscriber = tracing_subscriber::fmt()
+        .json()
+        .with_ansi(false)
+        .with_max_level(tracing::Level::TRACE)
+        .with_writer(logs.clone())
+        .finish();
+    let _default = tracing::subscriber::set_default(subscriber);
+    // See `diagnostics_do_not_contain_tokens_or_supplied_secrets`.
+    let _second_subscriber = tracing::Dispatch::new(tracing::subscriber::NoSubscriber::new());
+    let fixture = Fixture::new(None).await;
+    fs::create_dir(fixture.workspace_root.join("notes")).unwrap();
+    let workspace = &fixture.workspace_id;
+
+    let file = format!("/api/workspaces/{workspace}/file");
+    let writes = [
+        json!({"path": format!("notes/{TOKEN}.md"), "content": UNRECORDED}),
+        json!({"path": ".env", "content": UNRECORDED}),
+        json!({"path": format!("/home/{UNRECORDED}/notes.md"), "content": UNRECORDED}),
+    ];
+    for write in writes {
+        fixture.call("PUT", &file, Some(write)).await;
+    }
+    fixture
+        .call(
+            "PUT",
+            &format!("/api/workspaces/{TOKEN}/file"),
+            Some(json!({"path": "a.md", "content": UNRECORDED})),
+        )
+        .await;
+    fixture
+        .call(
+            "POST",
+            "/api/sessions",
+            Some(json!({"workspace_id": workspace, "native_session_id": UNRECORDED})),
+        )
+        .await;
+    fixture
+        .call(
+            "PUT",
+            &format!("/api/workspaces/{workspace}/sandbox"),
+            Some(json!({"mode": "sandboxed", "settings": {
+                "profile": "workspace-write",
+                "grants": {
+                    "domains": [format!("{UNRECORDED}.example.com")],
+                    "writable_roots": [format!("/home/{UNRECORDED}")],
+                    "unix_sockets": false
+                },
+                "credential_references": [{
+                    "source": "UNRECORDED_TOKEN",
+                    "destinations": [format!("{UNRECORDED}.example.com")],
+                    "shape": "whole-value"
+                }]
+            }})),
+        )
+        .await;
+    let export = fixture
+        ._directory
+        .path()
+        .join(format!("{TOKEN}-audit.json"));
+    let (status, _) = fixture
+        .call(
+            "POST",
+            "/api/audit/export",
+            Some(json!({"destination": export})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (status, records) = fixture.call("GET", "/api/audit", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let targets: Vec<_> = records
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|record| record["target"].clone())
+        .collect();
+    assert_eq!(
+        targets,
+        [
+            json!("notes/[REDACTED].md"),
+            json!("[REDACTED]"),
+            json!("[REDACTED]"),
+            json!("a.md"),
+            json!("pi"),
+            json!("workspace-write"),
+            json!("[REDACTED]-audit.json"),
+        ]
+    );
+    assert_eq!(records[3]["workspace_id"], "[REDACTED]");
+    let stored = serde_json::to_string(&fixture.audit.list().await.unwrap()).unwrap();
+    let exported = fs::read_to_string(&export).unwrap();
+    let events = serde_json::to_string(&fixture.events.subscribe(Some(0)).initial).unwrap();
+    let logs = logs.contents();
+    for (place, text) in [
+        ("storage", stored),
+        ("API response", records.to_string()),
+        ("export", exported),
+        ("events", events),
+        ("logs", logs),
+    ] {
+        assert!(
+            !text.contains(TOKEN),
+            "the API token reached the {place}: {text}"
+        );
+        assert!(
+            !text.contains(UNRECORDED),
+            "a seeded value reached the {place}: {text}"
+        );
+    }
+}
+
+/// Whether any process is left in the group that `leader` led.
+fn group_exists(leader: &str) -> bool {
+    let group: libc::pid_t = leader.trim().parse().unwrap();
+    // SAFETY: signal 0 only checks that the group exists.
+    unsafe { libc::killpg(group, 0) == 0 }
+}
+
+/// Waits for `path`, which a fake process writes once it is ready.
+async fn read_when_written(path: &std::path::Path) -> String {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            match fs::read_to_string(path) {
+                Ok(text) if text.ends_with('\n') => return text,
+                _ => tokio::time::sleep(Duration::from_millis(20)).await,
+            }
+        }
+    })
+    .await
+    .unwrap()
+}
+
+/// A Pi that ignores every stop signal but `SIGKILL`, and a terminal job
+/// that does the same, must still be gone when shutdown returns, with
+/// their stops recorded. Pi's staged stop alone takes longer than
+/// shutdown leaves for it.
+#[tokio::test]
+async fn shutdown_kills_sessions_and_terminals_that_ignore_signals() {
+    let fixture = Fixture::new(Some("stubborn pi")).await;
+    let directory = fixture.workspace_root.parent().unwrap();
+    fs::write(
+        directory.join("stubborn pi"),
+        "#!/bin/sh\n\
+         [ \"$1\" = --version ] && exec \"$(dirname \"$0\")/fake pi\" \"$@\"\n\
+         trap '' INT TERM HUP\n\
+         echo $$ > \"$PWD/pi.pid\"\n\
+         \"$(dirname \"$0\")/fake pi\" \"$@\"\n\
+         exec sleep 600\n",
+    )
+    .unwrap();
+    fs::set_permissions(
+        directory.join("stubborn pi"),
+        fs::Permissions::from_mode(0o755),
+    )
+    .unwrap();
+    let (status, session) = fixture.start(None).await;
+    assert_eq!(status, StatusCode::CREATED, "{session}");
+    let (status, terminal) = fixture
+        .call(
+            "POST",
+            "/api/terminals",
+            Some(json!({
+                "workspace_id": fixture.workspace_id,
+                "command": ["/bin/sh", "-c", "trap '' INT TERM HUP; echo $$ > job.pid; exec sleep 600"],
+                "size": {"cols": 80, "rows": 24},
+            })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "{terminal}");
+    let pi = read_when_written(&fixture.workspace_root.join("pi.pid")).await;
+    let job = read_when_written(&fixture.workspace_root.join("job.pid")).await;
+
+    let server = ServerHandle {
+        address: (std::net::Ipv4Addr::LOCALHOST, 0).into(),
+        token: ApiToken::configured(TOKEN).unwrap(),
+        events: fixture.events.clone(),
+        diagnostics: default_diagnostics(),
+        sessions: fixture.sessions.clone(),
+        terminals: fixture.terminals.clone(),
+        audit: fixture.audit.clone(),
+        starts: fixture.starts.clone(),
+        shutdown: None,
+        task: Some(tokio::spawn(async { Ok(()) })),
+    };
+    let started = std::time::Instant::now();
+    server.shutdown().await.unwrap();
+
+    assert!(started.elapsed() < crate::SHUTDOWN_LIMIT);
+    assert!(!group_exists(&pi), "Pi outlived shutdown");
+    assert!(!group_exists(&job), "the terminal job outlived shutdown");
+    let stops: Vec<_> = fixture
+        .database
+        .audit()
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|record| record.entry.actor == pau_core::audit::AuditActor::Pau)
+        .map(|record| record.entry.operation)
+        .collect();
+    assert_eq!(stops.len(), 2, "{stops:?}");
+    assert!(stops.contains(&pau_core::audit::AuditOperation::SessionStop));
+    assert!(stops.contains(&pau_core::audit::AuditOperation::TerminalStop));
+}
+
+/// A start request still in flight when shutdown begins must not leave a
+/// process behind. Aborting the listener does not end the request's task,
+/// so the stops wait for the start to register its Pi and then stop it.
+/// Starts that arrive once shutdown has begun are refused.
+#[tokio::test]
+async fn shutdown_refuses_new_starts_and_stops_the_ones_in_flight() {
+    let fixture = Fixture::new(Some("held pi")).await;
+    let directory = fixture.workspace_root.parent().unwrap();
+    // Pi answers nothing until the test releases it, which holds the start
+    // request between launching Pi and registering it.
+    fs::write(
+        directory.join("held pi"),
+        "#!/bin/sh\n\
+         [ \"$1\" = --version ] && exec \"$(dirname \"$0\")/fake pi\" \"$@\"\n\
+         echo $$ > \"$PWD/pi.pid\"\n\
+         while [ ! -f \"$PWD/release\" ]; do sleep 0.05; done\n\
+         exec \"$(dirname \"$0\")/fake pi\" \"$@\"\n",
+    )
+    .unwrap();
+    fs::set_permissions(directory.join("held pi"), fs::Permissions::from_mode(0o755)).unwrap();
+    let held = tokio::spawn(fixture.app.clone().oneshot(fixture.request(
+        "POST",
+        "/api/sessions",
+        Some(json!({"workspace_id": fixture.workspace_id})),
+    )));
+    let pi = read_when_written(&fixture.workspace_root.join("pi.pid")).await;
+
+    let mut server = ServerHandle {
+        address: (std::net::Ipv4Addr::LOCALHOST, 0).into(),
+        token: ApiToken::configured(TOKEN).unwrap(),
+        events: fixture.events.clone(),
+        diagnostics: default_diagnostics(),
+        sessions: fixture.sessions.clone(),
+        terminals: fixture.terminals.clone(),
+        audit: fixture.audit.clone(),
+        starts: fixture.starts.clone(),
+        shutdown: None,
+        task: Some(tokio::spawn(async { Ok(()) })),
+    };
+    server.request_shutdown();
+    let (status, body) = fixture
+        .call(
+            "POST",
+            "/api/terminals",
+            Some(json!({
+                "workspace_id": fixture.workspace_id,
+                "command": ["/bin/sh", "-c", "sleep 600"],
+                "size": {"cols": 80, "rows": 24},
+            })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+    assert_eq!(body["code"], "shutting_down");
+    let (status, body) = fixture.start(None).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+    assert_eq!(body["code"], "shutting_down");
+
+    let stopping = tokio::spawn(server.shutdown());
+    fs::write(fixture.workspace_root.join("release"), "").unwrap();
+    stopping.await.unwrap().unwrap();
+
+    assert!(!group_exists(&pi), "the held start's Pi outlived shutdown");
+    assert_eq!(held.await.unwrap().unwrap().status(), StatusCode::CREATED);
+    assert!(fixture.sessions.registry.active_ids().await.is_empty());
+    let stops: Vec<_> = fixture
+        .database
+        .audit()
+        .list()
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|record| record.entry.actor == pau_core::audit::AuditActor::Pau)
+        .map(|record| record.entry.operation)
+        .collect();
+    assert_eq!(stops, [pau_core::audit::AuditOperation::SessionStop]);
 }

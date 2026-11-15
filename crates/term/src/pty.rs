@@ -327,6 +327,16 @@ impl Terminal {
         exit.wait().await
     }
 
+    /// Sends `SIGKILL` to the shell's process group and the foreground
+    /// process group now, without waiting. A [`close`](Self::close) in
+    /// progress then returns with the child's exit. Does nothing once the
+    /// child has exited.
+    pub fn kill(&self) {
+        if self.is_running() {
+            self.signal_session(libc::SIGKILL);
+        }
+    }
+
     fn is_running(&self) -> bool {
         matches!(self.status(), TerminalStatus::Running)
     }
@@ -352,9 +362,7 @@ impl Terminal {
 
 impl Drop for Terminal {
     fn drop(&mut self) {
-        if self.is_running() {
-            self.signal_session(libc::SIGKILL);
-        }
+        self.kill();
     }
 }
 

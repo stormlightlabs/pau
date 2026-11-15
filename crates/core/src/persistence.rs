@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use tokio_rusqlite::{Connection, OptionalExtension, params, rusqlite};
 use ts_rs::TS;
 
+use crate::audit::{AuditEntry, AuditRecord};
 use crate::resource_monitor::ProcessResourceSummary;
 use crate::sandbox::{SandboxSelection, SandboxSelectionState};
 
@@ -19,6 +20,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0003_mcp_enablement.sql"),
     include_str!("../migrations/0004_process_resource_summaries.sql"),
     include_str!("../migrations/0005_sandbox.sql"),
+    include_str!("../migrations/0006_audit_log.sql"),
 ];
 
 /// Result returned by persistence operations.
@@ -124,6 +126,11 @@ impl Database {
             })?;
 
         Ok(Self { connection })
+    }
+
+    /// Returns the store for audit records.
+    pub fn audit(&self) -> AuditRepository {
+        AuditRepository::new(self.connection.clone())
     }
 
     /// Returns a repository for remembered workspaces.
@@ -809,6 +816,106 @@ fn process_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProcessMetadata
         sandbox_placeholders: serde_json::from_str(&row.get::<_, String>(7)?).map_err(|error| {
             rusqlite::Error::FromSqlConversionFailure(7, rusqlite::types::Type::Text, error.into())
         })?,
+    })
+}
+
+/// Storage for audit records. Records are written already redacted; see
+/// [`crate::audit::AuditLog`], the only writer.
+#[derive(Clone)]
+pub struct AuditRepository {
+    connection: Connection,
+}
+
+impl AuditRepository {
+    fn new(connection: Connection) -> Self {
+        Self { connection }
+    }
+
+    /// Appends one record, then drops the oldest records beyond the newest
+    /// `retention`.
+    pub async fn insert(
+        &self,
+        recorded_at: String,
+        entry: AuditEntry,
+        retention: usize,
+    ) -> Result<()> {
+        self.connection
+            .call(move |connection| {
+                let transaction = connection.transaction()?;
+                transaction.execute(
+                    "INSERT INTO audit_records (
+                       recorded_at, workspace_id, session_id, actor, operation,
+                       result, target, reason, exit_code
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    params![
+                        recorded_at,
+                        entry.workspace_id,
+                        entry.session_id,
+                        audit_label(&entry.actor),
+                        audit_label(&entry.operation),
+                        audit_label(&entry.result),
+                        entry.target,
+                        entry.reason,
+                        entry.exit_code,
+                    ],
+                )?;
+                let newest = transaction.last_insert_rowid();
+                transaction.execute(
+                    "DELETE FROM audit_records WHERE sequence <= ?1",
+                    [newest.saturating_sub(retention as i64)],
+                )?;
+                transaction.commit()?;
+                Ok(())
+            })
+            .await
+    }
+
+    /// Lists the retained records, oldest first.
+    pub async fn list(&self) -> Result<Vec<AuditRecord>> {
+        self.connection
+            .call(|connection| {
+                let mut statement = connection.prepare(
+                    "SELECT sequence, recorded_at, workspace_id, session_id, actor,
+                            operation, result, target, reason, exit_code
+                     FROM audit_records ORDER BY sequence",
+                )?;
+                statement
+                    .query_map([], |row| {
+                        Ok(AuditRecord {
+                            sequence: row.get::<_, i64>(0)? as u64,
+                            recorded_at: row.get(1)?,
+                            entry: AuditEntry {
+                                workspace_id: row.get(2)?,
+                                session_id: row.get(3)?,
+                                actor: parse_audit_label(row, 4)?,
+                                operation: parse_audit_label(row, 5)?,
+                                result: parse_audit_label(row, 6)?,
+                                target: row.get(7)?,
+                                reason: row.get(8)?,
+                                exit_code: row.get(9)?,
+                            },
+                        })
+                    })?
+                    .collect()
+            })
+            .await
+    }
+}
+
+/// The serialized name of an audit enum value, as stored and as clients see it.
+fn audit_label(value: &impl Serialize) -> String {
+    match serde_json::to_value(value) {
+        Ok(serde_json::Value::String(label)) => label,
+        _ => unreachable!("audit enums serialize as strings"),
+    }
+}
+
+fn parse_audit_label<T: for<'de> Deserialize<'de>>(
+    row: &rusqlite::Row<'_>,
+    index: usize,
+) -> rusqlite::Result<T> {
+    serde_json::from_value(serde_json::Value::String(row.get(index)?)).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(index, rusqlite::types::Type::Text, error.into())
     })
 }
 

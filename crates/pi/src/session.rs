@@ -1084,6 +1084,12 @@ impl PiSession {
         }
     }
 
+    /// Kills the Pi process and its children now, without waiting. A
+    /// [`stop`](Self::stop) in progress then returns with Pi's exit.
+    pub fn kill(&self) {
+        self.process.kill();
+    }
+
     async fn running_message_control(
         &self,
         control: AgentControl,

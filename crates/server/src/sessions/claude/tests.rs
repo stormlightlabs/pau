@@ -7,7 +7,12 @@ use axum::{
     http::{StatusCode, header},
 };
 use pau_agent::DiscoverClaudeOptions;
-use pau_core::{ServerEvent, persistence::Database, workspace::WorkspaceService};
+use pau_core::{
+    ServerEvent,
+    audit::{AuditLog, AuditOperation, AuditResult},
+    persistence::Database,
+    workspace::WorkspaceService,
+};
 use pau_pi::{DiscoverPiOptions, PiSessionRegistry};
 use serde_json::{Value, json};
 use tempfile::TempDir;
@@ -15,7 +20,8 @@ use tower::ServiceExt;
 
 use super::super::SessionApi;
 use crate::{
-    ApiToken, EventHub, EventSubscription, SandboxApi, default_diagnostics, router_with_services,
+    ApiServices, ApiToken, EventHub, EventSubscription, SandboxApi, default_diagnostics,
+    router_with_services,
 };
 use pau_core::ServerEventKind;
 
@@ -73,6 +79,7 @@ struct Fixture {
     workspace_root: PathBuf,
     workspace_id: String,
     events: EventHub,
+    audit: AuditLog,
     app: Router,
 }
 
@@ -93,6 +100,7 @@ impl Fixture {
         let workspaces = WorkspaceService::new(database.workspaces());
         let workspace = workspaces.open(&workspace_root, None).await.unwrap();
         let events = EventHub::default();
+        let audit = AuditLog::new(database.audit(), Default::default());
         let sessions = SessionApi::new(
             PiSessionRegistry::new(database.processes()),
             DiscoverPiOptions {
@@ -104,6 +112,7 @@ impl Fixture {
                 working_directory: directory.path().to_path_buf(),
             },
             events.clone(),
+            audit.clone(),
         )
         .with_claude_discovery(DiscoverClaudeOptions {
             executable_path: installed.then_some(claude),
@@ -113,21 +122,25 @@ impl Fixture {
         let app = router_with_services(
             ApiToken::configured(TOKEN).unwrap(),
             events.clone(),
-            Some(workspaces),
             default_diagnostics(),
-            None,
-            Some(SandboxApi::new(
-                database.sandbox_selection(),
-                directory.path().join("sandbox"),
-                std::env::var_os("PATH").unwrap_or_default(),
-            )),
-            Some(sessions),
+            ApiServices {
+                workspaces: Some(workspaces),
+                sandbox: Some(SandboxApi::new(
+                    database.sandbox_selection(),
+                    directory.path().join("sandbox"),
+                    std::env::var_os("PATH").unwrap_or_default(),
+                )),
+                sessions: Some(sessions),
+                audit: audit.clone(),
+                ..ApiServices::default()
+            },
         );
         Self {
             _directory: directory,
             workspace_root,
             workspace_id: workspace.id,
             events,
+            audit,
             app,
         }
     }
@@ -247,6 +260,36 @@ async fn starts_prompts_streams_and_stops_a_claude_session() {
     assert_eq!(
         fixture.call("GET", "/api/sessions", None).await.1,
         json!([])
+    );
+
+    let records = fixture.audit.list().await.unwrap();
+    let recorded: Vec<_> = records
+        .iter()
+        .map(|record| {
+            (
+                record.entry.operation,
+                record.entry.result,
+                record.entry.session_id.as_deref(),
+                record.entry.target.as_deref(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        recorded,
+        [
+            (
+                AuditOperation::SessionStart,
+                AuditResult::Succeeded,
+                Some(id.as_str()),
+                Some("claude")
+            ),
+            (
+                AuditOperation::SessionStop,
+                AuditResult::Succeeded,
+                Some(id.as_str()),
+                Some("claude")
+            ),
+        ]
     );
 }
 

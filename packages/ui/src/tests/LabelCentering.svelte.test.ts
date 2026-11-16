@@ -59,6 +59,25 @@ function capCenter(element: Element): number {
 	return baseline - context.measureText('H').actualBoundingBoxAscent / 2;
 }
 
+/**
+ * The metrics an engine reports for an element's font, for failure messages:
+ * the font box ascent and descent and the cap height from canvas text
+ * metrics, and how many faces of the family have loaded. The overrides in
+ * `fonts.css` set the ascent and descent, so these show whether a platform
+ * applied them and how it rounded them.
+ */
+function fontReport(element: Element): string {
+	const style = getComputedStyle(element);
+	const context = document.createElement('canvas').getContext('2d')!;
+	context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+	const metrics = context.measureText('H');
+	const family = style.fontFamily.split(',', 1)[0]!.replaceAll(/['"]/g, '').trim();
+	const loaded = [...document.fonts].filter(
+		(face) => face.family.replaceAll(/['"]/g, '') === family && face.status === 'loaded'
+	);
+	return `${style.fontWeight} ${style.fontSize} ${family}: ascent ${metrics.fontBoundingBoxAscent.toFixed(3)}, descent ${metrics.fontBoundingBoxDescent.toFixed(3)}, cap ${metrics.actualBoundingBoxAscent.toFixed(3)}, ${loaded.length} faces loaded`;
+}
+
 const middle = (element: Element) => {
 	const box = element.getBoundingClientRect();
 	return box.top + box.height / 2;
@@ -119,10 +138,15 @@ async function renderControls(font: UiFontName) {
 /** How far each label's cap center sits from its button's or input's center. */
 function offsets(buttons: Element[], choices: Element[]) {
 	return [
-		...buttons.map((button) => ({ name: button.textContent!, offset: capCenter(button) - middle(button) })),
+		...buttons.map((button) => ({
+			name: button.textContent!,
+			offset: capCenter(button) - middle(button),
+			font: `${button.getBoundingClientRect().height}px tall, display ${getComputedStyle(button).display}, ${fontReport(firstText(button).parentElement!)}`
+		})),
 		...choices.map((choice) => ({
 			name: choice.textContent!,
-			offset: capCenter(choice) - middle(choice.querySelector('input')!)
+			offset: capCenter(choice) - middle(choice.querySelector('input')!),
+			font: fontReport(firstText(choice).parentElement!)
 		}))
 	];
 }
@@ -156,8 +180,8 @@ test.each(Object.keys(UI_FONTS) as UiFontName[])(
 		const { buttons, choices } = await renderControls(font);
 		expect(CSS.supports('text-box: trim-both cap alphabetic')).toBe(true);
 
-		for (const { name, offset } of offsets(buttons, choices)) {
-			expect(Math.abs(offset), name).toBeLessThanOrEqual(precision);
+		for (const { name, offset, font } of offsets(buttons, choices)) {
+			expect(Math.abs(offset), `${name} at ${offset.toFixed(3)}px, ${font}`).toBeLessThanOrEqual(precision);
 		}
 		const spacing = itemSpacing();
 		expect(spacing.icon).toBeCloseTo(remPx() / 2, 0);
@@ -179,8 +203,8 @@ test.each(Object.keys(UI_FONTS) as UiFontName[])(
 		dropTextBoxSupport();
 		expect(removed.length).toBeGreaterThanOrEqual(2);
 
-		for (const { name, offset } of offsets(buttons, choices)) {
-			expect(Math.abs(offset), name).toBeLessThanOrEqual(1);
+		for (const { name, offset, font } of offsets(buttons, choices)) {
+			expect(Math.abs(offset), `${name} at ${offset.toFixed(3)}px, ${font}`).toBeLessThanOrEqual(1);
 		}
 		const fallback = itemSpacing();
 		expect(fallback.icon).toBeCloseTo(trimmed.icon, 0);
@@ -311,7 +335,10 @@ test.each(Object.keys(UI_FONTS) as UiFontName[])(
 		for (const group of groups) {
 			const [reference, ...items] = group.items;
 			for (const item of items) {
-				expect(Math.abs(item.center - reference!.center), `${group.name}: ${item.name}`).toBeLessThanOrEqual(precision);
+				const offset = item.center - reference!.center;
+				expect(Math.abs(offset), `${group.name}: ${item.name} at ${offset.toFixed(3)}px`).toBeLessThanOrEqual(
+					precision
+				);
 			}
 		}
 	}
@@ -360,6 +387,8 @@ async function captureFrame() {
  * with flat tops and a flat baseline make that profile a plateau with
  * partial rows at its edges, so its weighted mean row is the cap center to a
  * fraction of a device pixel.
+ * It also returns where the strong ink starts and ends, for failure
+ * messages.
  */
 function inkOffset({ pixels, scale }: Awaited<ReturnType<typeof captureFrame>>, input: HTMLInputElement) {
 	const field = (input.closest('.pau-field') ?? input).getBoundingClientRect();
@@ -394,7 +423,13 @@ function inkOffset({ pixels, scale }: Awaited<ReturnType<typeof captureFrame>>, 
 		weight += share;
 		moment += share * (top + row + 0.5);
 	}
-	return moment / weight / scale - (field.top + field.height / 2);
+	const rows = profile
+		.map((value, row) => ({ value, y: (top + row) / scale - field.top }))
+		.filter(({ value }) => value > peak / 2);
+	return {
+		offset: moment / weight / scale - (field.top + field.height / 2),
+		ink: `ink rows ${rows[0]!.y.toFixed(2)} to ${(rows.at(-1)!.y + 1 / scale).toFixed(2)} of ${field.height}px`
+	};
 }
 
 /** The text every field shows while its ink is measured: capitals with flat tops and baselines. */
@@ -421,8 +456,13 @@ for (const mode of ['value', 'placeholder'] as const) {
 				const frame = await captureFrame();
 				expect(frame.scale).toBe(devicePixelRatio);
 				for (const input of inputs) {
-					const offset = inkOffset(frame, input);
-					expect.soft(Math.abs(offset), `${input.ariaLabel} at ${zoom * 100}%`).toBeLessThanOrEqual(precision);
+					const { offset, ink } = inkOffset(frame, input);
+					expect
+						.soft(
+							Math.abs(offset),
+							`${input.ariaLabel} at ${zoom * 100}%: ${offset.toFixed(3)}px, ${ink}, ${fontReport(input)}`
+						)
+						.toBeLessThanOrEqual(precision);
 				}
 			}
 		}

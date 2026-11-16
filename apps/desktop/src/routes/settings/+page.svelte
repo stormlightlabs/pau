@@ -41,7 +41,6 @@
 <svelte:head><title>Settings · Pau</title></svelte:head>
 
 <ApplicationShell
-	workspaceName="Settings"
 	contextLabel="Sections"
 	productItems={productNavigation(page.route.id, workspaceId)}
 	contextItems={sectionItems}

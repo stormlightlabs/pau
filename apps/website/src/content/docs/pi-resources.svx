@@ -10,9 +10,9 @@ The Resources view lists what Pi finds for a workspace: skills, prompt
 templates, extensions, themes, and packages. Pau reads Pi's folders and
 settings files to build the list. It does not start Pi or change any file.
 
-Open it from **Resources** in the product rail, or go to
-`/workspaces/{workspace_id}/resources/skills`. The rail beside the list has
-one view per kind with a count.
+Open it from **Pi resources** in the row of views at the foot of the session
+bay, or go to `/workspaces/{workspace_id}/resources/skills`. The column beside
+the list has one view per kind with a count.
 
 ## What each row shows
 

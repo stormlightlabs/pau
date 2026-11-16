@@ -5,7 +5,6 @@ import { commandFixtures } from '../fixtures/commands';
 import { agentReadinessFixtures, claudeReadinessFixtures } from '../fixtures/launch';
 import { fileMentionFixtures } from '../fixtures/file-mentions';
 import { modelFixtures } from '../fixtures/models';
-import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
 import { savedSessionFixtures } from '../fixtures/saved-sessions';
 import { sessionFixtures } from '../fixtures/sessions';
 import { toolCallFixtures } from '../fixtures/tool-calls';
@@ -48,7 +47,7 @@ export const FirstRun: Story = {
 		const canvas = within(canvasElement);
 		await expect(canvas.getByRole('heading', { name: 'Open a folder to start working' })).toBeInTheDocument();
 		await expect(canvas.getByText('No workspaces yet')).toBeInTheDocument();
-		await expect(canvas.getByRole('button', { name: 'Open workspace…' })).toBeEnabled();
+		await expect(canvas.getByRole('button', { name: 'More ways to start a session' })).toBeEnabled();
 	}
 };
 export const OpenWorkspace: Story = {
@@ -58,7 +57,7 @@ export const OpenWorkspace: Story = {
 		await userEvent.type(canvas.getByRole('textbox', { name: 'Folder path' }), '/Users/operator/projects/pau');
 		await userEvent.click(canvas.getByRole('button', { name: 'Open' }));
 		await expect(await canvas.findByRole('heading', { name: 'pau is open' })).toBeInTheDocument();
-		await expect(canvas.getByRole('button', { name: 'New session in pau' })).toBeEnabled();
+		await expect(canvas.getByRole('button', { name: 'New' })).toBeEnabled();
 	}
 };
 export const OpenWorkspaceWithPicker: Story = {
@@ -106,8 +105,8 @@ export const WorkspaceWithoutSessions: Story = {
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
 		await expect(canvas.getByText('No sessions yet')).toBeInTheDocument();
-		await expect(canvas.getByRole('button', { name: 'New session in ankify' })).toBeEnabled();
-		await expect(canvas.getByRole('button', { name: 'Saved sessions in ankify' })).toBeEnabled();
+		await expect(canvas.getByRole('button', { name: 'New' })).toBeEnabled();
+		await expect(canvas.getByRole('button', { name: 'More ways to start a session' })).toBeEnabled();
 	}
 };
 export const RestoredStoppedSession: Story = {
@@ -144,13 +143,10 @@ export const SavedSessionPicker: Story = {
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await userEvent.click(canvas.getByRole('button', { name: 'Saved sessions in ankify' }));
+		await userEvent.click(canvas.getByRole('button', { name: 'More ways to start a session' }));
+		await userEvent.click(canvas.getByRole('menuitem', { name: 'Saved sessions…' }));
 		await expect(await canvas.findByRole('heading', { name: 'Sessions in ankify' })).toBeInTheDocument();
 		await expect(await canvas.findByText(/^Start a new session to begin\./)).toBeInTheDocument();
-		await expect(canvas.getByRole('button', { name: 'Saved sessions in ankify' })).toHaveAttribute(
-			'aria-pressed',
-			'true'
-		);
 	}
 };
 export const FailedStart: Story = {
@@ -161,7 +157,7 @@ export const FailedStart: Story = {
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await userEvent.click(canvas.getByRole('button', { name: 'New session in Pau' }));
+		await userEvent.click(canvas.getByRole('button', { name: 'New' }));
 		await expect(canvas.getByRole('heading', { name: 'Could not start a session in Pau' })).toBeInTheDocument();
 		await expect(canvas.getByRole('button', { name: 'Try again' })).toBeEnabled();
 	}
@@ -202,7 +198,8 @@ export const ClaudeNotReady: Story = {
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await userEvent.click(canvas.getByRole('button', { name: 'Open workspace…' }));
+		await userEvent.click(canvas.getByRole('button', { name: 'More ways to start a session' }));
+		await userEvent.click(canvas.getByRole('menuitem', { name: 'Open workspace…' }));
 		await expect(await canvas.findByRole('button', { name: 'Start Claude Code session' })).toBeDisabled();
 		await expect(canvas.getByRole('region', { name: 'Claude Code is not ready' })).toBeVisible();
 	}
@@ -215,8 +212,7 @@ export const ClaudeFailedStart: Story = {
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await userEvent.click(canvas.getByRole('heading', { name: 'Pau' }));
-		await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+		await userEvent.click(canvas.getByRole('button', { name: 'More ways to start a session' }));
 		await userEvent.click(await canvas.findByRole('menuitem', { name: 'New Claude Code session' }));
 		await expect(await canvas.findByRole('alert')).toHaveTextContent('Claude Code 2.0.1 is unsupported');
 	}
@@ -405,22 +401,6 @@ export const FileMentionWithSlashCompletion: Story = {
 		await expect(await canvas.findByRole('listbox', { name: 'Files' })).toBeInTheDocument();
 		await userEvent.keyboard('{Enter}');
 		await expect(prompt).toHaveValue('/review @README.md ');
-	}
-};
-export const ResourcePressure: Story = {
-	args: {
-		workspaces: sessionFixtures.running,
-		initialSessionId: 'session-running',
-		resourceSnapshot: {
-			...resourceMonitoringFixtures.active[2]!,
-			sessionId: 'session-running',
-			label: 'Run session registry tests'
-		}
-	},
-	play: async ({ canvasElement }) => {
-		const canvas = within(canvasElement);
-		await userEvent.click(canvas.getByRole('button', { name: 'Stop session' }));
-		await expect(canvas.getByText('session-running: stop')).toBeInTheDocument();
 	}
 };
 export const Waiting: Story = { args: { workspaces: sessionFixtures.waiting, initialSessionId: 'session-waiting' } };
@@ -686,7 +666,7 @@ export const WorkspaceMenu: Story = {
 	args: { workspaces: sessionFixtures.idleWithPath, initialSessionId: 'session-idle' },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await userEvent.pointer({ keys: '[MouseRight]', target: canvas.getByRole('heading', { name: 'Pau' }) });
+		await userEvent.click(canvas.getByRole('button', { name: 'Pau actions' }));
 		const menu = canvas.getByRole('menu', { name: 'Pau actions' });
 		await expect(within(menu).getByRole('menuitem', { name: 'Remove workspace' })).toHaveAccessibleDescription(
 			'Coming soon'

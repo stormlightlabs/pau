@@ -203,7 +203,7 @@
 		align-items: center;
 		gap: var(--pau-space-2);
 		min-height: var(--pau-size-target-touch);
-		padding: var(--pau-space-2) var(--shell-inset, var(--pau-space-4));
+		padding: var(--pau-space-2) var(--pau-shell-inset, var(--pau-space-4));
 		border-bottom: 1px solid var(--pau-border);
 		background: var(--pau-surface);
 	}
@@ -240,13 +240,13 @@
 	.diff-review__controls label {
 		display: flex;
 		align-items: center;
-		min-height: var(--pau-size-row-sm);
+		min-height: var(--pau-size-row-md);
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
 	}
 
 	.diff-review button {
-		min-height: var(--pau-size-row-sm);
+		min-height: var(--pau-size-row-md);
 		padding: var(--pau-space-1) var(--pau-space-2);
 		color: var(--pau-text);
 		background-color: var(--pau-surface-raised);

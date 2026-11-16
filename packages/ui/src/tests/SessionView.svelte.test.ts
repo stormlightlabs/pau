@@ -50,18 +50,17 @@ test('offers Resume for a restored session and explains a failed resume', async 
 	await expect.element(page.getByRole('alert')).toHaveTextContent('Pi could not open the session file.');
 });
 
-/** The top bar's breadcrumb text, which names the open workspace. */
+/** The workspace column's title, which names the open workspace. */
 function identity(): string | null | undefined {
-	return document.querySelector('.app-shell__identity')?.textContent;
+	return document.querySelector('.session-workspace__title')?.textContent;
 }
 
-test('lists a restored session in the rail and names its workspace in the top bar', async () => {
+test('lists a restored session in Settled and names its workspace in the workspace column', async () => {
 	const onOpenRestoredSession = vi.fn();
 	const workspaces = [{ id: 'ankify', name: 'ankify', sessions: [] }, ...sessionFixtures.idle];
 	const restoredSession = { workspaceId: 'ankify', id: 'native-3', title: 'Review the sandbox policy' };
 	const view = await render(SessionView, { workspaces, restoredSession, onOpenRestoredSession });
 
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 	const row = page.getByRole('button', { name: /Review the sandbox policy/ });
 	await expect.element(row).toHaveAttribute('aria-current', 'page');
 	await expect.element(row).toHaveTextContent('Stopped');
@@ -82,7 +81,9 @@ function savedList(...titles: string[]): SavedSessionList {
 
 /** The titles of the rail's recent saved-session rows, in order. */
 function recentTitles(): (string | null)[] {
-	return [...document.querySelectorAll('.session-rail__saved .session-rail__name')].map((name) => name.textContent);
+	return [...document.querySelectorAll('.session-bay__strip[data-bay-key^="saved:"] .pau-strip__name')].map(
+		(name) => name.textContent
+	);
 }
 
 test('lists the newest saved sessions under the live ones and resumes one', async () => {
@@ -96,7 +97,6 @@ test('lists the newest saved sessions under the live ones and resumes one', asyn
 		onResumeSession
 	});
 
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 	// The live session's saved conversation shows once, as the live row.
 	await vi.waitFor(() => expect(recentTitles()).toEqual(['Wire the picker', 'Draft notes', 'Tidy the rail styles']));
 
@@ -114,9 +114,8 @@ test('leaves out saved sessions that are live or restored', async () => {
 		onResumeSession: vi.fn()
 	});
 
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 	await vi.waitFor(() => expect(recentTitles()).toEqual(['Wire the picker']));
-	const names = [...document.querySelectorAll('.session-rail__name')].map((name) => name.textContent);
+	const names = [...document.querySelectorAll('.session-bay__strip .pau-strip__name')].map((name) => name.textContent);
 	expect(names).toEqual(['Review the sandbox policy', 'Wire the picker']);
 });
 
@@ -128,7 +127,6 @@ test('shows nothing extra for a workspace without saved sessions', async () => {
 		onResumeSession: vi.fn()
 	});
 
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 	await expect.element(page.getByText('No sessions yet')).toBeVisible();
 	expect(onLoadSavedSessions).toHaveBeenCalledWith('ankify');
 	expect(recentTitles()).toEqual([]);
@@ -145,8 +143,7 @@ test('explains a failed saved-session load and tries again', async () => {
 		onResumeSession: vi.fn()
 	});
 
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await expect.element(page.getByText('Saved sessions did not load.')).toBeVisible();
+	await expect.element(page.getByText('Saved sessions in ankify did not load.')).toBeVisible();
 	await expect.element(page.getByText('No sessions yet')).not.toBeInTheDocument();
 
 	// The retry keeps the shared button layout that centers its label, not the rail row's.
@@ -164,7 +161,7 @@ test('explains a failed saved-session load and tries again', async () => {
 	await userEvent.click(page.getByRole('button', { name: 'Try again' }));
 
 	await vi.waitFor(() => expect(recentTitles()).toEqual(['Wire the picker']));
-	await expect.element(page.getByText('Saved sessions did not load.')).not.toBeInTheDocument();
+	await expect.element(page.getByText('Saved sessions in ankify did not load.')).not.toBeInTheDocument();
 });
 
 test('reports a failed resume from the rail', async () => {
@@ -176,7 +173,6 @@ test('reports a failed resume from the rail', async () => {
 		}
 	});
 
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 	await userEvent.click(page.getByRole('button', { name: /Wire the picker/ }));
 	await expect.element(page.getByRole('alert')).toHaveTextContent('Pi could not open the session file.');
 });
@@ -214,16 +210,18 @@ test('sends a prompt and interrupts a running session from the keyboard', async 
 
 test('switches concurrent sessions with the keyboard', async () => {
 	await render(SessionViewDemo, { workspaces: sessionFixtures.concurrent, initialSessionId: 'diff-gutter' });
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 	const active = page.getByRole('button', { name: /Fix diff gutter/ });
 
 	await userEvent.click(active);
+	const strips = [...document.querySelectorAll<HTMLElement>('.session-bay__strip')];
+	const next = strips[strips.indexOf(active.element() as HTMLElement) + 1]!;
 	await userEvent.keyboard('{ArrowDown}');
+	expect(document.activeElement).toBe(next);
+	await userEvent.keyboard('{Enter}');
 
-	await expect.element(page.getByRole('heading', { name: 'Review session registry' })).toBeVisible();
-	await expect
-		.element(page.getByRole('button', { name: /Review session registry/ }))
-		.toHaveAttribute('aria-current', 'page');
+	const title = next.querySelector('.pau-strip__name')!.textContent!;
+	await expect.element(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
+	expect(next.getAttribute('aria-current')).toBe('page');
 });
 
 test('shows file, network, and unexplained sandbox denials in their owning session', async () => {
@@ -237,7 +235,6 @@ test('shows file, network, and unexplained sandbox denials in their owning sessi
 	await expect.element(page.getByText('api.example.com:443')).toBeVisible();
 	await expect.element(page.getByText('Sandbox may have blocked this call')).toBeVisible();
 
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 	await userEvent.click(page.getByRole('button', { name: /Session without denials/ }));
 	await expect.element(page.getByLabelText('Sandbox denial').first()).not.toBeInTheDocument();
 });
@@ -331,7 +328,7 @@ test('toggles every tool row with Ctrl+O and keeps a row the operator opened', a
 function loadingIndicators() {
 	return [
 		page.getByRole('heading', { name: 'Loading sessions…' }).query(),
-		page.getByText('Loading…', { exact: true }).query()
+		document.querySelector('.session-bay__empty[role="status"]')
 	];
 }
 
@@ -382,12 +379,10 @@ test('explains a failed start and retries it', async () => {
 		.mockRejectedValueOnce(new Error('Pau could not find a working Pi installation.'))
 		.mockResolvedValueOnce(undefined);
 	await render(SessionView, { workspaces: sessionFixtures.workspaceWithoutSessions, onStartSession });
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 
-	await userEvent.click(page.getByRole('button', { name: 'New session in Pau' }));
+	await userEvent.click(page.getByRole('button', { name: 'New', exact: true }));
 	await expect.element(page.getByRole('alert')).toHaveTextContent('Pau could not find a working Pi installation.');
 
-	await userEvent.click(page.getByRole('button', { name: 'Close navigation' }));
 	await userEvent.click(page.getByRole('button', { name: 'Try again' }));
 	expect(onStartSession).toHaveBeenNthCalledWith(2, 'pau', 'pi');
 	await expect.element(page.getByRole('heading', { name: 'No session selected' })).toBeVisible();
@@ -800,9 +795,7 @@ test('asks for a folder on first run and opens it from a typed path', async () =
 	await userEvent.click(page.getByRole('button', { name: 'Open', exact: true }));
 
 	await expect.element(page.getByRole('heading', { name: 'pau is open' })).toBeVisible();
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await expect.element(page.getByRole('button', { name: 'New session in pau' })).toBeEnabled();
-	await userEvent.click(page.getByRole('button', { name: 'Close navigation' }));
+	await expect.element(page.getByRole('button', { name: 'New', exact: true })).toBeEnabled();
 	await userEvent.click(page.getByRole('button', { name: 'Start session', exact: true }));
 	await expect.element(page.getByText('workspace-pau: start session')).toBeVisible();
 });
@@ -847,18 +840,14 @@ test('explains a folder that cannot open and keeps the path for correction', asy
 test('selects an already open workspace instead of adding it again', async () => {
 	await render(SessionViewDemo, { workspaces: sessionFixtures.running, openable: true });
 
-	const rail = page.getByRole('navigation', { name: 'Workspaces and sessions' });
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await userEvent.click(rail.getByRole('button', { name: 'Open workspace…' }));
-	await userEvent.click(page.getByRole('button', { name: 'Close navigation' }));
+	await userEvent.click(page.getByRole('button', { name: 'More ways to start a session' }));
+	await userEvent.click(page.getByRole('menuitem', { name: 'Open workspace…' }));
 	await userEvent.fill(page.getByRole('textbox', { name: 'Folder path' }), '/Users/operator/Pau');
 	await userEvent.click(page.getByRole('button', { name: 'Open', exact: true }));
 
 	await expect.element(page.getByRole('heading', { name: 'Fix diff gutter', level: 1 })).toBeVisible();
-	// The closed overlay rail is hidden from the accessibility tree, so open it again to read it.
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await expect.element(rail.getByRole('heading', { name: 'Pau' })).toBeVisible();
-	expect(document.querySelectorAll('.session-rail section')).toHaveLength(1);
+	expect(document.querySelectorAll('.session-bay__strip')).toHaveLength(1);
+	expect(document.querySelector('.session-workspace__title')?.textContent?.trim()).toBe('Pau');
 });
 
 test('marks the supplied Sessions destination when a session needs attention', async () => {
@@ -874,7 +863,9 @@ test('marks the supplied Sessions destination when a session needs attention', a
 	const sessions = page.getByRole('link', { name: 'Sessions' });
 	await expect.element(sessions).toHaveAttribute('href', '/');
 	await expect.element(sessions.getByLabelText('Needs attention')).toBeInTheDocument();
-	await expect.element(page.getByRole('button', { name: 'Settings' })).toHaveAccessibleDescription('Coming soon');
+	await expect
+		.element(page.getByRole('button', { name: 'Settings' }))
+		.toHaveAccessibleDescription('Settings Coming soon');
 });
 
 test('runs session shortcuts from the app key map', async () => {

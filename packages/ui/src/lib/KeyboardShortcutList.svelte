@@ -123,7 +123,7 @@
 		gap: var(--pau-space-3);
 		min-height: var(--pau-size-row-md);
 		padding-block: var(--pau-space-1);
-		border-bottom: var(--pau-border-thin) solid var(--pau-border);
+		border-bottom: 1px solid var(--pau-border);
 	}
 
 	.keyboard-shortcuts__label {

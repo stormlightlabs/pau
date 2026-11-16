@@ -66,7 +66,8 @@ Pi extensions may add string widgets around the composer. A status line under
 the composer shows what Pi's terminal footer shows and the composer does not:
 the working directory, branch, token and cache totals, session cost, and
 extension status text.
-Their selection, confirmation, input, and editor requests use a focused dialog.
+A permission request renders as the request card. Other selection,
+confirmation, input, and editor requests from extensions use a focused dialog.
 Notifications do not block the transcript.
 
 Sending clears the composer at once. The prompt shows at the end of the

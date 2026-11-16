@@ -80,7 +80,7 @@ const preview = {
 		layout: 'centered',
 		viewport: {
 			options: {
-				narrow: { name: 'Narrow', styles: { width: '360px', height: '800px' } },
+				narrow: { name: 'Narrow', styles: { width: '1000px', height: '800px' } },
 				wide: { name: 'Wide', styles: { width: '1440px', height: '900px' } }
 			}
 		}

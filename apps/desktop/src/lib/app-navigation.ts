@@ -6,7 +6,7 @@ import type { ShellNavItem } from '@stormlightlabs/pau-ui';
 /** Explains workspace views while no workspace is open. */
 export const NO_WORKSPACE_REASON = 'Open a workspace first';
 
-/** Route IDs that belong to each product rail item. */
+/** Route IDs that belong to each view. */
 const SECTION_ROUTES: Record<string, string> = {
 	'/': 'sessions',
 	'/workspaces/[workspaceId]/sessions/[sessionId]': 'sessions',
@@ -20,12 +20,14 @@ const SECTION_ROUTES: Record<string, string> = {
 };
 
 /**
- * Builds the product rail for the desktop app.
+ * Builds the view row for the desktop app: Sessions, Files, Review,
+ * Terminal, Pi resources and Settings. Agent sandbox and Diagnostics are
+ * listed in the command palette only, since Settings links to them.
  *
  * Workspace views link to `workspaceId`, the workspace the operator is working
- * in, and are disabled while there is none. Items whose views do not yet read
- * live backend data have no destination, so the rail shows them as coming
- * soon instead of opening sample content.
+ * in, and are disabled while there is none. Views that do not yet read live
+ * backend data have no destination, so the row shows them as coming soon
+ * instead of opening sample content.
  *
  * @param routeId The current SvelteKit route ID, which marks the active item.
  */
@@ -35,14 +37,21 @@ export function productNavigation(routeId: string | null, workspaceId: string | 
 		workspaceId === undefined ? undefined : `/workspaces/${encodeURIComponent(workspaceId)}/${view}`;
 	const unavailable = workspaceId === undefined ? NO_WORKSPACE_REASON : undefined;
 	const items: ShellNavItem[] = [
-		{ id: 'sessions', label: 'Sessions', icon: 'agents', href: '/' },
-		{ id: 'files', label: 'Files', icon: 'files', href: workspacePath('editor'), unavailable },
+		{ id: 'sessions', label: 'Sessions', icon: 'sessions', href: '/' },
+		{ id: 'files', label: 'Files', icon: 'file', href: workspacePath('editor'), unavailable },
+		{ id: 'review', label: 'Review', icon: 'review' },
 		{ id: 'terminal', label: 'Terminal', icon: 'terminal', href: workspacePath('terminal'), unavailable },
-		{ id: 'processes', label: 'Processes', icon: 'processes' },
-		{ id: 'sandbox', label: 'Agent sandbox', icon: 'sandbox', href: workspacePath('sandbox'), unavailable },
-		{ id: 'resources', label: 'Resources', icon: 'resources', href: workspacePath('resources'), unavailable },
-		{ id: 'settings', label: 'Settings', icon: 'settings', href: '/settings' },
-		{ id: 'diagnostics', label: 'Diagnostics', icon: 'diagnostics', href: '/diagnostics' }
+		{ id: 'resources', label: 'Pi resources', icon: 'resources', href: workspacePath('resources'), unavailable },
+		{ id: 'settings', label: 'Settings', icon: 'settings', href: '/settings', action: 'app.settings' },
+		{
+			id: 'sandbox',
+			label: 'Agent sandbox',
+			icon: 'sandbox',
+			href: workspacePath('sandbox'),
+			unavailable,
+			paletteOnly: true
+		},
+		{ id: 'diagnostics', label: 'Diagnostics', icon: 'diagnostics', href: '/diagnostics', paletteOnly: true }
 	];
 	return items.map((item) => (item.id === active ? { ...item, active: true } : item));
 }

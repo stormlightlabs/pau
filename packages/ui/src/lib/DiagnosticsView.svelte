@@ -4,7 +4,7 @@
 	import '../styles/tokens.css';
 	import StateChip from './StateChip.svelte';
 	import Select, { type SelectOption } from './Select.svelte';
-	import ViewHeader from './ViewHeader.svelte';
+	import PageHeader from './PageHeader.svelte';
 	import type { DiagnosticBundleView, DiagnosticLevel } from './types/diagnostics';
 
 	let {
@@ -41,13 +41,13 @@
 </script>
 
 <section class="diagnostics-view" aria-labelledby="diagnostics-title">
-	<ViewHeader eyebrow="Support and troubleshooting" title="Diagnostics" titleId="diagnostics-title">
+	<PageHeader title="Diagnostics" titleId="diagnostics-title">
 		{#snippet meta()}
 			<StateChip on={bundle.settings.enabled}>
 				{bundle.settings.enabled ? 'Diagnostics mode on' : 'Diagnostics mode off'}
 			</StateChip>
 		{/snippet}
-	</ViewHeader>
+	</PageHeader>
 
 	<section class="diagnostics-view__settings" aria-labelledby="diagnostic-settings-title">
 		<div>
@@ -226,6 +226,8 @@
 <style>
 	/* Empty states start on the same inset as the header and section rows. */
 	.diagnostics-view {
+		/* The page header's title starts where the sections' text starts. */
+		--pau-page-header-inset: var(--pau-space-3);
 		--empty-state-inset: var(--pau-space-3);
 		container-type: inline-size;
 		min-width: 0;

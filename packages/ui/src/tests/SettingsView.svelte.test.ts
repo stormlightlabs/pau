@@ -171,14 +171,10 @@ test.each([1440, 900])('starts the title, section headings, and setting names on
 	expect(left(page.getByText('No settings yet.').first().element())).toBe(title);
 });
 
-test('closes the narrow section menu and moves focus to the chosen section', async () => {
-	await page.viewport(360, 800);
+test('moves focus to the chosen section from the section list in a narrow window', async () => {
+	await page.viewport(1000, 800);
 	await render(SettingsViewDemo);
-	const toggle = page.getByRole('button', { name: 'Open navigation' });
 
-	await userEvent.click(toggle);
 	await userEvent.click(page.getByRole('complementary', { name: 'Sections' }).getByRole('link', { name: 'Shell' }));
-
-	await expect.element(toggle).toHaveAttribute('aria-expanded', 'false');
 	await expect.element(page.getByRole('region', { name: 'Shell' })).toHaveFocus();
 });

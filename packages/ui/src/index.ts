@@ -13,6 +13,8 @@ export { COMPOSER_ATTRIBUTE, createFocusReturn, returnFocus, type FocusReturn } 
 export { isImageType, maxImageBytes, maxRequestImageBytes, type PromptImage } from './lib/composer-images';
 export type { EditorFileContent, FileEditorSource } from './lib/types/file-editor';
 export { default as Icon, type IconProps } from './lib/Icon.svelte';
+export { default as PageHeader } from './lib/PageHeader.svelte';
+export { default as RequestCard } from './lib/RequestCard.svelte';
 export { default as KeyboardShortcuts } from './lib/KeyboardShortcuts.svelte';
 export { default as LaunchSplash } from './lib/LaunchSplash.svelte';
 export type {
@@ -155,6 +157,7 @@ export type {
 	SessionSearchOutcome,
 	SessionTreeSnapshot,
 	SessionWorkspace,
+	WorkspaceTerminal,
 	TranscriptCompaction,
 	TranscriptEntry,
 	HiddenImages,

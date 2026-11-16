@@ -32,11 +32,3 @@ export const RunFromKeyboard: Story = {
 		await expect(within(canvasElement).getByLabelText('Last action')).toHaveTextContent('New session');
 	}
 };
-
-export const PointerOpen: Story = {
-	play: async ({ canvasElement }) => {
-		await userEvent.click(within(canvasElement).getByRole('button', { name: /Search or run a command/ }));
-		const palette = await within(canvasElement.ownerDocument.body).findByRole('dialog', { name: 'Command palette' });
-		await waitFor(() => expect(palette).toBeVisible());
-	}
-};

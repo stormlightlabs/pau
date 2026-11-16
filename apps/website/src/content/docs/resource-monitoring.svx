@@ -8,8 +8,7 @@ order: 3
 
 Pau samples each process tree that it starts, including agent sessions, terminals,
 external editors, and supported stdio MCP servers. Open a workspace's
-**Processes** view to compare the trees. Open a session inspector for a compact
-summary of that session.
+**Processes** view to compare the trees.
 
 The views keep model context, token counts, and cost separate from machine
 resources.

@@ -132,7 +132,7 @@ test('shell controls and the pane resizer use the token ring', async () => {
 	);
 	await expectTokenRing(visible!);
 
-	const separator = page.getByRole('separator', { name: 'Resize workspaces' }).element() as HTMLElement;
+	const separator = page.getByRole('separator', { name: 'Resize the session bay' }).element() as HTMLElement;
 	await focusByKeyboard(separator);
 	const line = getComputedStyle(separator, '::after');
 	expect(line.backgroundColor).toBe(token('--pau-focus'));

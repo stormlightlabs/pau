@@ -46,13 +46,10 @@ export const YieldsToPiBinding: Story = {
 
 		await userEvent.click(canvas.getByRole('button', { name: 'Show keyboard shortcuts' }));
 		const dialog = within(canvasElement.ownerDocument.body).getByRole('dialog', { name: 'Keyboard shortcuts' });
-		await expect(dialog).toHaveTextContent('Your Pi key bindings take precedence. 2 shortcuts give way to them.');
+		await expect(dialog).toHaveTextContent('Your Pi key bindings take precedence. One shortcut gives way to them.');
 		const newSession = within(dialog).getByText('New session').closest('li');
 		await expect(newSession).toHaveTextContent('Pi uses Ctrl+N to show only named sessions');
 		await expect(newSession).toHaveTextContent('No shortcut');
-		const rail = within(dialog).getByText('Toggle the session rail').closest('li');
-		await expect(rail).toHaveTextContent('Pi uses Ctrl+B to move the cursor left while you type');
-		await expect(rail).toHaveTextContent('Ctrl+B');
 	}
 };
 

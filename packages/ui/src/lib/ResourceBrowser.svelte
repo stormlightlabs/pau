@@ -20,10 +20,9 @@
 	} from './resource-browser';
 	import Select, { type SelectOption } from './Select.svelte';
 	import type { ResourceEntry, ResourceIndex, ResourceKind, ResourceScope, ResourceTrust } from './types/resources';
-	import ViewHeader from './ViewHeader.svelte';
+	import PageHeader from './PageHeader.svelte';
 
 	type Props = {
-		workspaceName: string;
 		/** The view: which kind of resource the list shows. */
 		kind: ResourceKind;
 		/** Where each view's rail item links. */
@@ -42,7 +41,6 @@
 	};
 
 	let {
-		workspaceName,
 		kind,
 		kindHref,
 		index,
@@ -80,8 +78,8 @@
 		...(Object.entries(TRUST_LABELS) as [ResourceTrust, string][]).map(([value, label]) => ({ value, label }))
 	];
 
-	/** Below the shell's docking width the detail replaces the list instead of filling the inspector. */
-	const narrow = new MediaQuery('max-width: 74rem');
+	/** Below the shell's docking width the detail replaces the list instead of filling the workspace column. */
+	const narrow = new MediaQuery('max-width: 1199.98px');
 
 	let filter = $state<ResourceFilter>({ ...NO_RESOURCE_FILTER });
 	let selectedId = $state<string>();
@@ -269,8 +267,8 @@
 {/snippet}
 
 <ApplicationShell
-	{workspaceName}
 	contextLabel="Resources"
+	workspaceLabel="Details"
 	{productItems}
 	{contextItems}
 	{disconnected}
@@ -278,12 +276,12 @@
 	{uiFont}
 	{paneWidths}
 	onResize={onPaneResize}
-	inspector={selected && !narrow.current ? inspectorDetail : undefined}>
+	workspace={selected && !narrow.current ? inspectorDetail : undefined}>
 	<section class="resources" aria-labelledby="resources-title">
 		{#if opened}
 			{@render detail(opened)}
 		{:else}
-			<ViewHeader eyebrow={workspaceName} title={label} titleId="resources-title">
+			<PageHeader title={label} titleId="resources-title">
 				{#snippet meta()}
 					{#if index}
 						<span class="resources__count" aria-live="polite">
@@ -292,7 +290,7 @@
 						</span>
 					{/if}
 				{/snippet}
-			</ViewHeader>
+			</PageHeader>
 
 			{#if error}
 				<EmptyState title="Resources couldn't be loaded" role="alert">
@@ -426,6 +424,8 @@
 	 * header's `space/3` inset.
 	 */
 	.resources {
+		/* The page header's title starts where the sections' text starts. */
+		--pau-page-header-inset: var(--pau-space-3);
 		--row-name-line: 1.25rem;
 		--row-meta-line: 1.125rem;
 		container-type: inline-size;

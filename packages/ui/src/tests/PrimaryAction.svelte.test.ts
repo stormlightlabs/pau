@@ -47,7 +47,7 @@ type Setup = { args?: Record<string, unknown>; act?: () => Promise<void> };
 /** The desktop app picks folders with the system dialog, so first-run stories get a folder picker. */
 const desktopPicker: Setup = { args: { pickedFolder: null } };
 
-const failStart: Setup = { act: () => userEvent.click(page.getByRole('button', { name: 'New session in Pau' })) };
+const failStart: Setup = { act: () => userEvent.click(page.getByRole('button', { name: 'New', exact: true })) };
 
 /** Send prompt stays disabled, and so drops the accent, until there is a draft. */
 const draftPrompt: Setup = {

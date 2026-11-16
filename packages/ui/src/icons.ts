@@ -1,6 +1,10 @@
 /** Iconify classes selected for Pau product concepts. */
 export const ICONS = {
 	agents: 'i-tabler-stack-2',
+	sessions: 'i-tabler-list-details',
+	review: 'i-tabler-file-diff',
+	stop: 'i-tabler-player-stop',
+	export: 'i-tabler-file-export',
 	close: 'i-tabler-x',
 	copy: 'i-tabler-copy',
 	paste: 'i-tabler-clipboard',

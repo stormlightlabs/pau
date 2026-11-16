@@ -14,7 +14,7 @@ const meta = {
 	title: 'Workspaces/Resource browser',
 	component: ResourceBrowser,
 	parameters: { layout: 'fullscreen' },
-	args: { workspaceName: 'pau', kind: 'skill', kindHref: (kind) => `#${kind}s`, index: resourceIndex }
+	args: { kind: 'skill', kindHref: (kind) => `#${kind}s`, index: resourceIndex }
 } satisfies Meta<typeof ResourceBrowser>;
 
 export default meta;

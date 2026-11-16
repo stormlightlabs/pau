@@ -12,7 +12,8 @@ export default defineConfig(({ mode }) => {
 
 	return {
 		plugins: [sveltekit()],
-		server: { proxy: { '/api': { target: 'http://127.0.0.1:3001', headers, ws: true } } },
+		// Tauri's `devUrl` names this port, so a busy port fails instead of moving.
+		server: { port: 1420, strictPort: true, proxy: { '/api': { target: 'http://127.0.0.1:3001', headers, ws: true } } },
 		test: {
 			projects: [
 				{
@@ -29,7 +30,13 @@ export default defineConfig(({ mode }) => {
 						name: 'browser',
 						include: ['src/**/*.svelte.test.ts'],
 						setupFiles: ['vitest-browser-svelte'],
-						browser: { enabled: true, headless: true, provider: playwright(), instances: [{ browser: 'chromium' }] }
+						browser: {
+							enabled: true,
+							headless: true,
+							provider: playwright(),
+							// The window opens at 1440×900 and never narrows below 900px.
+							instances: [{ browser: 'chromium', viewport: { width: 1440, height: 900 } }]
+						}
 					}
 				},
 				{
@@ -43,7 +50,7 @@ export default defineConfig(({ mode }) => {
 							enabled: true,
 							headless: true,
 							provider: playwright({ contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }),
-							instances: [{ browser: 'chromium' }]
+							instances: [{ browser: 'chromium', viewport: { width: 1440, height: 900 } }]
 						}
 					}
 				}

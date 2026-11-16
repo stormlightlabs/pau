@@ -2,63 +2,76 @@ import { page, userEvent } from 'vitest/browser';
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
-import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
 import { sessionFixtures } from '../fixtures/sessions';
 import ApplicationShell from '../lib/ApplicationShell.svelte';
 import SessionView from '../lib/SessionView.svelte';
 import ApplicationShellDemo from '../stories/ApplicationShellDemo.svelte';
-import KeyboardShortcutsDemo from '../stories/KeyboardShortcutsDemo.svelte';
 import { THEMES, UI_FONTS, type ThemeName, type UiFontName } from '../theme';
 
-test('toggles contextual and inspector rails', async () => {
+const views = () => page.getByRole('navigation', { name: 'Views' });
+
+test('docks the workspace column in a wide window and the key map hides it', async () => {
+	await page.viewport(1440, 900);
 	await render(ApplicationShellDemo);
 
-	const navigationToggle = page.getByRole('button', { name: 'Open navigation' });
-	const inspector = page.getByRole('complementary', { name: 'Inspector' });
+	const column = page.getByRole('complementary', { name: 'Checks' });
+	await expect.element(column).toBeVisible();
+	expect(page.getByRole('button', { name: 'Show checks' }).elements()).toHaveLength(0);
 
-	await userEvent.click(page.getByRole('button', { name: 'Show inspector' }));
-	await userEvent.click(inspector.getByRole('button', { name: 'Close inspector' }));
-	await expect.element(page.getByRole('button', { name: 'Show inspector' })).toHaveAttribute('aria-expanded', 'false');
-	await expect.element(inspector).not.toBeInTheDocument();
-
-	await userEvent.click(navigationToggle);
-	await expect.element(navigationToggle).toHaveAttribute('aria-expanded', 'true');
+	await userEvent.keyboard('{Meta>}{Alt>}b{/Alt}{/Meta}');
+	await expect.element(column).not.toBeInTheDocument();
 });
 
-test('keeps a session inspector closed below the docking width until the operator opens it', async () => {
-	await page.viewport(900, 900);
-	await render(SessionView, {
-		workspaces: sessionFixtures.running,
-		activeSessionId: 'session-running',
-		resourceSnapshot: { ...resourceMonitoringFixtures.active[2]!, sessionId: 'session-running' }
-	});
+test('opens the workspace overlay below 1200px and returns focus when it closes', async () => {
+	await page.viewport(1000, 800);
+	await render(ApplicationShellDemo);
 
-	const inspector = page.getByRole('complementary', { name: 'Inspector' });
+	const overlay = page.getByRole('complementary', { name: 'Checks' });
+	await expect.element(overlay).not.toBeInTheDocument();
+
+	const toggle = page.getByRole('button', { name: 'Show checks' });
+	await userEvent.click(toggle);
+	await expect.element(overlay).toHaveFocus();
+	await expect.element(toggle).toHaveAttribute('aria-expanded', 'true');
+
+	await userEvent.keyboard('{Escape}');
+	await expect.element(overlay).not.toBeInTheDocument();
+	await expect.element(toggle).toHaveFocus();
+
+	await userEvent.click(toggle);
+	await userEvent.click(overlay.getByRole('button', { name: 'Close checks' }));
+	await expect.element(overlay).not.toBeInTheDocument();
+	await expect.element(toggle).toHaveFocus();
+});
+
+test('closes the overlay from the scrim and docks the column when the window widens', async () => {
+	await page.viewport(1000, 800);
+	await render(ApplicationShellDemo);
+
+	await userEvent.click(page.getByRole('button', { name: 'Show checks' }));
+	document.querySelector<HTMLButtonElement>('.app-shell__scrim')?.click();
+	await expect.element(page.getByRole('complementary', { name: 'Checks' })).not.toBeInTheDocument();
+
+	await page.viewport(1440, 900);
+	await expect.element(page.getByRole('complementary', { name: 'Checks' })).toBeVisible();
+});
+
+test('keeps a session overlay closed below 1200px until the operator opens it', async () => {
+	await page.viewport(1000, 900);
+	await render(SessionView, { workspaces: sessionFixtures.running, activeSessionId: 'session-running' });
+
 	await expect.element(page.getByRole('region', { name: 'Transcript' })).toBeVisible();
-	await expect.element(inspector).not.toBeInTheDocument();
-	expect(document.querySelector('.app-shell__backdrop')).toBeNull();
+	await expect.element(page.getByRole('complementary', { name: 'Workspace' })).not.toBeInTheDocument();
+	expect(document.querySelector('.app-shell__scrim')).toBeNull();
 
-	await userEvent.click(page.getByRole('button', { name: 'Show inspector' }));
-	await expect.element(inspector).toBeVisible();
-
-	await page.viewport(1440, 900);
-	await expect.element(inspector).toBeVisible();
+	await userEvent.click(page.getByRole('button', { name: 'Show workspace' }));
+	await expect.element(page.getByRole('complementary', { name: 'Workspace' })).toBeVisible();
 });
 
-test('sizes context rail rows like the other rail rows', async () => {
-	await page.viewport(1440, 900);
-	await render(ApplicationShellDemo);
-
-	const rows = [...document.querySelectorAll<HTMLElement>('.app-shell__context-rail a')];
-	expect(rows.length).toBeGreaterThan(0);
-	for (const row of rows) expect(row.getBoundingClientRect().height).toBe(32);
-});
-
-test('starts every label in a rail on one edge when only some items have a status', async () => {
+test('starts every label in a left column on one edge when only some items have a status', async () => {
 	await page.viewport(1440, 900);
 	await render(ApplicationShell, {
-		workspaceName: 'pau',
-		contextLabel: 'Sessions',
+		contextLabel: 'Sections',
 		productItems: [],
 		contextItems: [
 			{ id: 'running', label: 'Running', href: '#running', status: 'Live' },
@@ -67,70 +80,64 @@ test('starts every label in a rail on one edge when only some items have a statu
 		]
 	});
 
-	const rail = page.getByRole('complementary', { name: 'Sessions' });
+	const column = page.getByRole('complementary', { name: 'Sections' });
 	const edges = ['Running', 'Plain', 'Waiting'].map(
-		(name) => rail.getByText(name, { exact: true }).element().getBoundingClientRect().left
+		(name) => column.getByText(name, { exact: true }).element().getBoundingClientRect().left
 	);
 	expect(new Set(edges).size).toBe(1);
 });
 
-test.each([
-	[1440, 32],
-	[900, 24],
-	[600, 16]
-])('keeps main content padding on the spacing scale at %ipx', async (width, padding) => {
-	await page.viewport(width, 900);
+test('puts six views in the view row, links them, and marks the current one', async () => {
 	await render(ApplicationShellDemo);
 
-	const style = getComputedStyle(page.getByRole('region', { name: 'Main surface content' }).element());
-	expect(style.paddingLeft).toBe(`${padding}px`);
-	expect(style.paddingTop).toBe(`${padding}px`);
+	await expect.element(views()).toBeVisible();
+	expect(views().getByRole('listitem').elements()).toHaveLength(6);
+	const sessions = views().getByRole('link', { name: 'Sessions' });
+	await expect.element(sessions).toHaveAttribute('href', '#sessions');
+	await expect.element(sessions).toHaveAttribute('aria-current', 'page');
+	await expect.element(views().getByRole('link', { name: 'Files' })).not.toHaveAttribute('aria-current');
+	expect(views().getByRole('link', { name: 'Diagnostics' }).elements()).toHaveLength(0);
 });
 
-test('puts the panel toggles and disconnected status in the top bar', async () => {
-	await page.viewport(1440, 900);
-	await render(ApplicationShellDemo, { disconnected: true });
-
-	const topBar = page.getByRole('banner');
-	await expect.element(topBar.getByRole('button', { name: 'Hide navigation' })).toBeVisible();
-	await expect.element(topBar.getByRole('button', { name: 'Hide inspector' })).toBeVisible();
-	await expect.element(topBar.getByRole('status')).toHaveTextContent('Disconnected');
-	await expect.element(topBar.getByRole('button', { name: 'Search or run a command' })).toHaveTextContent('⌘K');
-});
-
-test('starts the task surface directly below the top bar', async () => {
-	await page.viewport(1440, 900);
+test('names each view and its shortcut in a tooltip on keyboard focus', async () => {
 	await render(ApplicationShellDemo);
 
-	const bar = page.getByRole('banner').element().getBoundingClientRect();
-	const content = page.getByRole('region', { name: 'Main surface content' }).element().getBoundingClientRect();
-	expect(content.top).toBe(bar.bottom);
+	const settings = views().getByRole('link', { name: 'Settings' });
+	await expect.element(settings).toHaveAccessibleDescription('Settings ⌘,');
+	const tip = document.getElementById('view-settings-tip')!;
+	expect(getComputedStyle(tip).display).toBe('none');
+
+	views().getByRole('link', { name: 'Pi resources' }).element().focus();
+	await userEvent.tab();
+	await expect.element(settings).toHaveFocus();
+	expect(getComputedStyle(tip).display).not.toBe('none');
 });
 
-test('hides and shows the rail column from the top bar in a wide window', async () => {
-	await page.viewport(1440, 900);
+test('disables views that cannot open and gives the reason in the tooltip', async () => {
 	await render(ApplicationShellDemo);
 
-	const rail = page.getByRole('complementary', { name: 'Workspaces' });
-	await userEvent.click(page.getByRole('button', { name: 'Hide navigation' }));
-	await expect.element(rail).not.toBeInTheDocument();
+	const review = views().getByRole('button', { name: 'Review' });
+	await expect.element(review).toHaveAttribute('aria-disabled', 'true');
+	await expect.element(review).toHaveAccessibleDescription('Review Coming soon');
 
-	const show = page.getByRole('button', { name: 'Show navigation' });
-	await expect.element(show).toHaveAttribute('aria-expanded', 'false');
-	await userEvent.click(show);
-	await expect.element(rail).toBeVisible();
+	const terminal = views().getByRole('button', { name: 'Terminal' });
+	await expect.element(terminal).toHaveAccessibleDescription('Terminal Open a workspace first');
 });
 
-test('names each panel shortcut in the toggle tooltip', async () => {
-	await page.viewport(1440, 900);
-	await render(KeyboardShortcutsDemo, { platform: 'mac' });
+test('shows the backend connection only while it is down', async () => {
+	const { rerender } = await render(ApplicationShellDemo);
+	expect(views().getByRole('status').elements()).toHaveLength(0);
 
-	await expect
-		.element(page.getByRole('button', { name: 'Hide navigation' }))
-		.toHaveAttribute('title', 'Hide navigation (⌘B)');
-	await expect
-		.element(page.getByRole('button', { name: 'Hide inspector' }))
-		.toHaveAttribute('title', 'Hide inspector (⌥⌘B)');
+	await rerender({ disconnected: true });
+	await expect.element(views().getByRole('status')).toHaveTextContent('Disconnected');
+});
+
+test('opens the command palette from its shortcut, with no field of its own', async () => {
+	await render(ApplicationShellDemo);
+
+	expect(page.getByRole('button', { name: 'Search or run a command' }).elements()).toHaveLength(0);
+	await userEvent.keyboard('{Meta>}k{/Meta}');
+	await expect.element(page.getByRole('dialog')).toBeVisible();
 });
 
 test.each(Object.keys(THEMES) as ThemeName[])('renders the %s theme contract', async (theme) => {
@@ -145,47 +152,4 @@ test.each(Object.keys(UI_FONTS) as UiFontName[])('renders the %s UI font', async
 	const shell = document.querySelector<HTMLElement>('.app-shell');
 	expect(shell?.dataset.uiFont).toBe(uiFont);
 	expect(shell?.style.getPropertyValue('--pau-font-ui')).toContain(UI_FONTS[uiFont].family);
-});
-
-test('keeps command and named rail controls in keyboard order', async () => {
-	await render(ApplicationShellDemo);
-
-	const commandButton = page.getByRole('button', { name: 'Search or run a command' });
-	commandButton.element().focus();
-	await expect.element(commandButton).toHaveFocus();
-	await userEvent.tab();
-	await expect.element(page.getByRole('link', { name: 'Sessions' })).toHaveFocus();
-
-	await expect.element(page.getByRole('link', { name: 'Files' })).toBeInTheDocument();
-	await expect.element(page.getByRole('button', { name: 'Hide inspector' })).toBeInTheDocument();
-});
-
-test('links rail destinations and marks the current one', async () => {
-	await render(ApplicationShellDemo);
-
-	const sessions = page.getByRole('link', { name: 'Sessions' });
-	await expect.element(sessions).toHaveAttribute('href', '#sessions');
-	await expect.element(sessions).toHaveAttribute('aria-current', 'page');
-	await expect.element(page.getByRole('link', { name: 'Files' })).toHaveAttribute('href', '#files');
-	await expect.element(page.getByRole('link', { name: 'Files' })).not.toHaveAttribute('aria-current');
-});
-
-test('disables destinations that cannot open and explains why', async () => {
-	await render(ApplicationShellDemo);
-
-	const settings = page.getByRole('button', { name: 'Settings' });
-	await expect.element(settings).toHaveAttribute('aria-disabled', 'true');
-	await expect.element(settings).toHaveAccessibleDescription('Coming soon');
-	await expect.element(settings).toHaveAttribute('title', 'Settings: Coming soon');
-	await expect.element(page.getByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
-
-	const terminal = page.getByRole('button', { name: 'Terminal' });
-	await expect.element(terminal).toHaveAccessibleDescription('Open a workspace first');
-});
-
-test('shows the Pau mark beside the product name', async () => {
-	await render(ApplicationShellDemo);
-
-	expect(document.querySelector('.app-shell__identity svg.app-shell__mark')).not.toBeNull();
-	expect(document.querySelector('.app-shell__identity')?.textContent).not.toContain('π');
 });

@@ -346,6 +346,7 @@
 	pickFolder={native?.pickFolder}
 	revealPath={native?.revealPath}
 	{onOpenTerminal}
+	onOpenFile={onOpenFile && ((workspaceId, path) => onOpenFile(workspaceId, path))}
 	agentReadiness={agentReadiness?.()}
 	{claudeReadiness}
 	onCheckClaude={() => checkClaude(true)}

@@ -88,29 +88,6 @@ export const Unsupported: Story = {
 };
 
 /** Pau's permission request arrives as a JSON title and renders as tool, command, and directory rows. */
-export const Permission: Story = {
-	args: {
-		state: withDialog({
-			id: 'permission',
-			kind: 'select',
-			title: JSON.stringify({
-				pau: 'permission',
-				tool: 'bash',
-				command: 'pnpm --filter @stormlightlabs/pau-desktop exec vitest run --project unit --project browser',
-				cwd: '/home/me/projects/pau/apps/desktop'
-			}),
-			options: ['Allow once', 'Deny']
-		})
-	},
-	play: async ({ canvasElement }) => {
-		const body = within(canvasElement.ownerDocument.body);
-		const dialog = body.getByRole('dialog', { name: 'Permission request' });
-		await expect(within(dialog).getByText('Working directory')).toBeVisible();
-		await expect(within(dialog).getByText('/home/me/projects/pau/apps/desktop')).toBeVisible();
-		await expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth);
-	}
-};
-
 /** Structured titles that are not permission requests show a trimmed code block. */
 export const LongTitle: Story = {
 	args: {

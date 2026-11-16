@@ -26,7 +26,7 @@ function rail(statuses: SessionViewModel['status'][], unseen = true): SessionWor
 	];
 }
 
-const markers = () => [...document.querySelectorAll<HTMLElement>('.session-rail__marker')];
+const markers = () => [...document.querySelectorAll<HTMLElement>('.session-bay__marker')];
 
 test.each([
 	['waiting', 'waiting', 'Waiting for your input'],
@@ -57,7 +57,6 @@ test('opening a marked session reports the selection that clears it', async () =
 	const onSelectSession = vi.fn();
 	const view = await render(SessionView, { workspaces: rail(['failed']), activeSessionId: 'viewed', onSelectSession });
 
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 	await userEvent.click(page.getByRole('button', { name: /Session failed/ }));
 	expect(onSelectSession).toHaveBeenCalledWith('s-failed');
 

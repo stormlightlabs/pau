@@ -1,4 +1,11 @@
-import type { AgentSession, ServerEvent, Workspace } from '@stormlightlabs/pau-protocol';
+import type {
+	AgentSession,
+	GitStatus,
+	SandboxSelection,
+	ServerEvent,
+	TerminalInfo,
+	Workspace
+} from '@stormlightlabs/pau-protocol';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import type {
 	ExtensionUiResponse,
@@ -15,7 +22,8 @@ import type {
 	SessionUsage,
 	SessionViewModel,
 	SessionWorkspace,
-	ThinkingLevel
+	ThinkingLevel,
+	WorkspaceTerminal
 } from '@stormlightlabs/pau-ui';
 import { agentLabel } from '@stormlightlabs/pau-ui';
 
@@ -35,11 +43,13 @@ import {
 	getSessionQueue,
 	getSessionUsage,
 	getWorkspaceGitStatus,
+	getWorkspaceSandbox,
 	interruptSession,
 	listNativeSessions,
 	listSessionCommands,
 	listSessionModels,
 	listSessions,
+	listTerminals,
 	listWorkspaces,
 	openWorkspace,
 	promptSession,
@@ -300,11 +310,16 @@ export class LiveSessions {
 	#compactionEstimates = $state<Record<string, Record<string, number>>>({});
 	#usages = $state<Record<string, SessionUsage>>({});
 	/**
-	 * Current branch by workspace, for the session status line. The store reads
-	 * it on load and reconnect, and after each run settles, since the agent may
-	 * have switched branches during the run.
+	 * Git status by workspace, for the status line's branch and the workspace
+	 * column's changes. The store reads it on load and reconnect, and after
+	 * each run settles, since the agent may have changed files or switched
+	 * branches during the run.
 	 */
-	#branches = $state<Record<string, string>>({});
+	#git = $state<Record<string, GitStatus>>({});
+	/** Each workspace's default sandbox for new sessions, from the API and `sandbox_changed` events. */
+	#sandboxes = $state<Record<string, SandboxSelection>>({});
+	/** Terminals the backend keeps open, read again whenever one opens, exits or closes. */
+	#terminals = $state<TerminalInfo[]>([]);
 	/** Names sent to Pi that it has not confirmed yet, by session. The rail shows them meanwhile. */
 	#pendingNames = $state<Record<string, string>>({});
 	/** The session the operator is looking at. Changes to it never raise a marker. */
@@ -388,7 +403,8 @@ export class LiveSessions {
 
 	/** Reads the messages, extension UI, and message queue of every live session. */
 	#refresh(): void {
-		for (const workspace of this.#workspaces) void this.#readBranch(workspace.id);
+		for (const workspace of this.#workspaces) this.#readWorkspace(workspace.id);
+		void this.#readTerminals();
 		for (const session of Object.values(this.#sessions)) {
 			if (!isLive(session)) continue;
 			void this.#readHistory(session.id);
@@ -398,14 +414,35 @@ export class LiveSessions {
 		}
 	}
 
-	/** Reads a workspace's branch. A detached HEAD or a folder outside a repository has none. */
-	async #readBranch(workspaceId: string): Promise<void> {
+	/** Reads what the workspace column shows about a workspace: its Git status and its sandbox. */
+	#readWorkspace(workspaceId: string): void {
+		void this.#readGit(workspaceId);
+		void this.#readSandbox(workspaceId);
+	}
+
+	/** Reads a workspace's Git status. A detached HEAD or a folder outside a repository has no branch. */
+	async #readGit(workspaceId: string): Promise<void> {
 		try {
-			const { branch } = await getWorkspaceGitStatus(workspaceId, this.#fetcher);
-			if (branch) this.#branches[workspaceId] = branch;
-			else delete this.#branches[workspaceId];
+			this.#git[workspaceId] = await getWorkspaceGitStatus(workspaceId, this.#fetcher);
 		} catch {
-			// The status line leaves the branch out until a later read succeeds.
+			// The status line and the workspace column keep the last read until a later one succeeds.
+		}
+	}
+
+	async #readSandbox(workspaceId: string): Promise<void> {
+		try {
+			const sandbox = await getWorkspaceSandbox(workspaceId, this.#fetcher);
+			this.#sandboxes[workspaceId] = sandbox.selection;
+		} catch {
+			// The workspace column says the sandbox state is unknown until a later read succeeds.
+		}
+	}
+
+	async #readTerminals(): Promise<void> {
+		try {
+			this.#terminals = await listTerminals(this.#fetcher);
+		} catch {
+			// The workspace column keeps the last list until a later read succeeds.
 		}
 	}
 
@@ -559,15 +596,23 @@ export class LiveSessions {
 		for (const changed of state.events) {
 			if (changed.kind === 'workspace_changed') {
 				const workspace = JSON.parse(changed.payload) as Workspace;
-				if (this.#workspaces.every((known) => known.id !== workspace.id)) void this.#readBranch(workspace.id);
+				if (this.#workspaces.every((known) => known.id !== workspace.id)) this.#readWorkspace(workspace.id);
 				this.#rememberWorkspace(workspace);
+				continue;
+			}
+			if (changed.kind === 'terminal_changed') {
+				void this.#readTerminals();
+				continue;
+			}
+			if (changed.kind === 'sandbox_changed' && changed.workspace_id) {
+				this.#sandboxes[changed.workspace_id] = JSON.parse(changed.payload) as SandboxSelection;
 				continue;
 			}
 			if (changed.kind !== 'session_changed') continue;
 			const session = JSON.parse(changed.payload) as AgentSession;
 			const known = Object.hasOwn(this.#sessions, session.id);
 			const previous = this.#sessions[session.id];
-			if (previous?.status === 'running' && session.status !== 'running') void this.#readBranch(session.workspace_id);
+			if (previous?.status === 'running' && session.status !== 'running') void this.#readGit(session.workspace_id);
 			this.#markUnseen(previous, session);
 			this.#sessions[session.id] = session;
 			if (!known && !this.loading && isLive(session)) void this.#readHistory(session.id);
@@ -705,7 +750,12 @@ export class LiveSessions {
 			id: workspace.id,
 			name: workspaceName(workspace),
 			path: workspace.path,
-			branch: this.#branches[workspace.id]
+			branch: this.#git[workspace.id]?.branch ?? undefined,
+			git: this.#git[workspace.id],
+			sandbox: sandboxSummary(this.#sandboxes[workspace.id]),
+			terminals: this.#terminals
+				.filter((terminal) => terminal.workspace_id === workspace.id)
+				.map((terminal) => workspaceTerminal(terminal))
 		}));
 		const unknown = sessions
 			.map((session) => session.workspace_id)
@@ -1120,4 +1170,23 @@ export class LiveSessions {
 	expire(sessionId: string, requestId: string): void {
 		this.#updateExtensionUi(sessionId, (state) => resolveDialog(state, requestId, 'timed_out'));
 	}
+}
+
+/** One line about the sandbox new sessions start in, such as "Sandbox on, network off". */
+function sandboxSummary(selection: SandboxSelection | undefined): SessionWorkspace['sandbox'] {
+	if (!selection) return undefined;
+	if (selection.mode === 'unsandboxed') return { sandboxed: false, label: 'No sandbox' };
+	const { profile, grants } = selection.settings;
+	const access = profile === 'read-only' ? 'Read-only sandbox' : 'Sandbox on';
+	const domains = grants.domains.length;
+	const network = domains === 0 ? 'network off' : `${domains} ${domains === 1 ? 'domain' : 'domains'} allowed`;
+	return { sandboxed: true, label: `${access}, ${network}` };
+}
+
+/** A terminal as the workspace column lists it: its program and its state. */
+function workspaceTerminal(terminal: TerminalInfo): WorkspaceTerminal {
+	const program = terminal.command[0]?.split('/').at(-1) ?? 'Shell';
+	if (terminal.status.state === 'running') return { id: terminal.id, label: program, status: 'Running' };
+	const code = terminal.status.exit_code;
+	return { id: terminal.id, label: program, status: `Exited ${code}`, failed: code !== 0 };
 }

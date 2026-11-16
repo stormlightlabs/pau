@@ -110,7 +110,6 @@
 <ApplicationShell
 	theme={interfacePreferences.choices.theme}
 	uiFont={interfacePreferences.choices.ui_font}
-	workspaceName="Diagnostics"
 	contextLabel="Diagnostics"
 	productItems={productNavigation(page.route.id, workspaceId)}
 	contextItems={[]}>

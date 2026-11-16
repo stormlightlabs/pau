@@ -17,7 +17,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 
-	import { getWorkspaceSandbox, listWorkspaces, previewSandbox, updateWorkspaceSandbox } from '$lib/api';
+	import { getWorkspaceSandbox, previewSandbox, updateWorkspaceSandbox } from '$lib/api';
 	import { productNavigation } from '$lib/app-navigation';
 	import { interfacePreferences } from '$lib/interface-preferences.svelte';
 	import { effectiveView, selectionView, selectionWire } from '$lib/sandbox-model';
@@ -37,16 +37,9 @@
 	let error = $state<string>();
 	let notice = $state<string>();
 	let saving = $state(false);
-	let workspaceName = $state<string>();
 	let previewTimer: ReturnType<typeof setTimeout> | undefined;
 
 	onMount(() => {
-		void listWorkspaces()
-			.then((workspaces) => {
-				const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
-				workspaceName = workspace?.name || workspace?.path.split(/[\\/]/).at(-1);
-			})
-			.catch(() => {});
 		void getWorkspaceSandbox(workspaceId)
 			.then((stored) => {
 				selection = selectionView(stored.selection);
@@ -105,7 +98,6 @@
 <ApplicationShell
 	theme={interfacePreferences.choices.theme}
 	uiFont={interfacePreferences.choices.ui_font}
-	workspaceName={workspaceName ?? workspaceId}
 	contextLabel="Agent sandbox"
 	productItems={productNavigation(page.route.id, workspaceId)}
 	contextItems={[]}>

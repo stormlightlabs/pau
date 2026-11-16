@@ -47,7 +47,7 @@
 <style>
 	.copy-button {
 		padding: var(--pau-space-1) var(--pau-space-2);
-		border: var(--pau-border-thin) solid var(--pau-border);
+		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
 		background-color: var(--pau-surface-raised);
 		font: inherit;

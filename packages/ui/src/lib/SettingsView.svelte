@@ -35,7 +35,7 @@
 	import { THEMES, UI_FONTS } from '../theme';
 	import KeyboardShortcutList from './KeyboardShortcutList.svelte';
 	import type { KeyPlatform, ResolvedKeyAction } from './keymap.svelte';
-	import ViewHeader from './ViewHeader.svelte';
+	import PageHeader from './PageHeader.svelte';
 
 	type Props = {
 		/** The saved theme. */
@@ -221,7 +221,7 @@
 {/snippet}
 
 <section class="settings-view" aria-labelledby="{id}-title">
-	<ViewHeader eyebrow="Preferences" title="Settings" titleId="{id}-title" />
+	<PageHeader title="Settings" titleId="{id}-title" />
 
 	{#each SETTINGS_SECTIONS as section (section.id)}
 		<!-- Focusable so a section link moves focus here, and Tab continues from the chosen section. -->
@@ -275,6 +275,8 @@
 
 <style>
 	.settings-view {
+		/* The page header's title starts where the sections' text starts. */
+		--pau-page-header-inset: var(--pau-space-3);
 		container-type: inline-size;
 		min-width: 0;
 		max-width: 56rem;

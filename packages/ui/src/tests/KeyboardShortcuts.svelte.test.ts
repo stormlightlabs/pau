@@ -42,36 +42,26 @@ test('opens the shortcut list with Command+/ and closes it with Escape', async (
 	press({ key: '/', code: 'Slash', metaKey: true }, document.body);
 	const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
 	await expect.element(dialog).toBeVisible();
-	await expect.element(dialog.getByText('Toggle the inspector')).toBeVisible();
+	await expect.element(dialog.getByText('Toggle the workspace column')).toBeVisible();
 
 	await userEvent.keyboard('{Escape}');
 	await expect.element(dialog).not.toBeInTheDocument();
 });
 
-test('toggles the session rail and the inspector', async () => {
+test('toggles the workspace column, docked or as the narrow overlay', async () => {
 	await page.viewport(1280, 800);
 	await render(KeyboardShortcutsDemo, { platform: 'mac' });
-	const rail = page.getByRole('complementary', { name: 'Workspaces' });
-	const inspector = page.getByRole('complementary', { name: 'Inspector' });
-
-	press({ key: 'b', code: 'KeyB', metaKey: true }, document.body);
-	await expect.element(rail).not.toBeInTheDocument();
-	press({ key: 'b', code: 'KeyB', metaKey: true }, document.body);
-	await expect.element(rail).toBeVisible();
+	const column = page.getByRole('complementary', { name: 'Workspace', exact: true });
 
 	press({ key: '∫', code: 'KeyB', metaKey: true, altKey: true }, document.body);
-	await expect.element(inspector).not.toBeInTheDocument();
+	await expect.element(column).not.toBeInTheDocument();
 	press({ key: '∫', code: 'KeyB', metaKey: true, altKey: true }, document.body);
-	await expect.element(inspector).toBeVisible();
-});
+	await expect.element(column).toBeVisible();
 
-test('opens the session rail as an overlay in a narrow window', async () => {
-	await page.viewport(600, 800);
-	await render(KeyboardShortcutsDemo, { platform: 'mac' });
-
-	press({ key: 'b', code: 'KeyB', metaKey: true }, document.body);
-
-	await expect.element(page.getByRole('button', { name: 'Open navigation' })).toHaveAttribute('aria-expanded', 'true');
+	await page.viewport(1000, 800);
+	await expect.element(column).not.toBeInTheDocument();
+	press({ key: '∫', code: 'KeyB', metaKey: true, altKey: true }, document.body);
+	await expect.element(column).toHaveFocus();
 });
 
 test('gives a chord to a conflicting Pi binding', async () => {

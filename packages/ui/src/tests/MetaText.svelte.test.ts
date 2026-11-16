@@ -3,11 +3,9 @@ import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { diagnosticFixtures } from '../fixtures/diagnostics';
-import { sessionFixtures } from '../fixtures/sessions';
 import { toolCallFixtures } from '../fixtures/tool-calls';
 import DiagnosticsView from '../lib/DiagnosticsView.svelte';
 import MetaText from '../lib/MetaText.svelte';
-import SessionView from '../lib/SessionView.svelte';
 import ToolCallViewDemo from '../stories/ToolCallViewDemo.svelte';
 
 /** Separators are hidden elements, never a dot inside the surrounding text. */
@@ -33,17 +31,6 @@ test('renders a label without a separator as plain text', async () => {
 	const { container } = await render(MetaText, { text: 'Pi' });
 
 	expect(separators(container)).toHaveLength(0);
-});
-
-test('renders the session header agent and model with a separator element', async () => {
-	const { container } = await render(SessionView, {
-		workspaces: sessionFixtures.idle,
-		activeSessionId: 'session-idle'
-	});
-
-	const header = container.querySelector(':scope .session-view__header p');
-	expect(header?.textContent).not.toContain(' · ');
-	expect(header ? separators(header) : []).toHaveLength(1);
 });
 
 test('renders a tool call path and range with a separator element', async () => {

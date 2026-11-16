@@ -379,7 +379,7 @@
 
 	.session-tree__probe {
 		position: absolute;
-		height: var(--pau-size-row-sm);
+		height: var(--pau-size-row-md);
 		visibility: hidden;
 	}
 
@@ -404,7 +404,7 @@
 		align-items: center;
 		gap: var(--pau-space-2);
 		box-sizing: border-box;
-		height: var(--pau-size-row-sm);
+		height: var(--pau-size-row-md);
 		padding-inline: calc(var(--pau-space-1) + min(var(--depth), 6) * var(--pau-space-3)) var(--pau-space-2);
 		border-left: 2px solid transparent;
 		font-size: var(--pau-type-sm);

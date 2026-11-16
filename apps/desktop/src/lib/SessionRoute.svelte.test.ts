@@ -91,8 +91,7 @@ function setup(routes: Record<string, Route>) {
 
 /** The test viewport is narrow, so the session rail starts collapsed. */
 async function startFromRail(): Promise<void> {
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await userEvent.click(page.getByRole('button', { name: 'New session in Pau' }));
+	await userEvent.click(page.getByRole('button', { name: 'New', exact: true }));
 }
 
 const counter = { sequence: 0 };
@@ -131,13 +130,13 @@ test('streams a live transcript and sends prompts to the session', async () => {
 	sockets[0]?.receive(
 		output({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'Reading' } })
 	);
-	await expect.element(page.getByRole('heading', { name: 'Fix the gutter' })).toBeVisible();
-	await expect.element(page.getByText('Reading')).toBeVisible();
+	await expect.element(page.getByRole('heading', { name: 'Fix the gutter', level: 1 })).toBeVisible();
+	await expect.element(page.getByLabelText('Transcript').getByText('Reading')).toBeVisible();
 
 	sockets[0]?.receive(
 		output({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Gutter fixed.' }] } })
 	);
-	await expect.element(page.getByText('Gutter fixed.')).toBeVisible();
+	await expect.element(page.getByLabelText('Transcript').getByText('Gutter fixed.')).toBeVisible();
 
 	await userEvent.type(page.getByRole('textbox', { name: 'Prompt' }), 'Add a test.');
 	await userEvent.click(page.getByRole('button', { name: /Send prompt/ }));
@@ -267,8 +266,7 @@ test('shows the disconnected state when the event stream drops', async () => {
 
 	await expect.element(page.getByText('Pau lost its connection to the backend', { exact: false })).toBeVisible();
 	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeDisabled();
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await expect.element(page.getByRole('button', { name: 'New session in Pau' })).toBeDisabled();
+	await expect.element(page.getByRole('button', { name: 'New', exact: true })).toBeDisabled();
 });
 
 test('reports a disconnected backend when the session list cannot load', async () => {
@@ -516,8 +514,8 @@ const savedList = {
 };
 
 async function openSavedSessions(): Promise<void> {
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await userEvent.click(page.getByRole('button', { name: 'Saved sessions in Pau' }));
+	await userEvent.click(page.getByRole('button', { name: 'More ways to start a session' }));
+	await userEvent.click(page.getByRole('menuitem', { name: 'Saved sessions…' }));
 }
 
 test('resumes a saved session from the picker and selects it', async () => {
@@ -544,7 +542,7 @@ test('resumes a saved session from the picker and selects it', async () => {
 	expect(changes).toEqual(['session-1']);
 });
 
-test('resumes a recent saved session from the rail and lists it once', async () => {
+test('resumes a recent saved session from the bay and lists it once', async () => {
 	const start = vi.fn(() => json({ ...idleSession, status: 'starting', native_session_id: 'native-1' }, 201));
 	const changes: string[] = [];
 	const { props } = setup({
@@ -558,7 +556,6 @@ test('resumes a recent saved session from the rail and lists it once', async () 
 		}
 	});
 
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 	await userEvent.click(page.getByRole('button', { name: /Fix the gutter/ }));
 
 	await expect.element(page.getByText('Starting the agent process…')).toBeVisible();
@@ -567,7 +564,7 @@ test('resumes a recent saved session from the rail and lists it once', async () 
 	);
 	expect(changes).toEqual(['session-1']);
 	// The live session takes the saved row's place.
-	expect(document.querySelectorAll('.session-rail__saved')).toHaveLength(0);
+	expect(document.querySelectorAll('.session-bay__strip[data-bay-key^="saved:"]')).toHaveLength(0);
 });
 
 test.each([
@@ -706,7 +703,7 @@ test('selects the live session that already runs a saved session instead of resu
 	});
 
 	await openSavedSessions();
-	await expect.element(page.getByText('Running')).toBeVisible();
+	await expect.element(page.getByRole('main').getByText('Running', { exact: true })).toBeVisible();
 	await userEvent.click(page.getByRole('button', { name: 'Open Fix the gutter' }));
 
 	expect(start).not.toHaveBeenCalled();
@@ -745,6 +742,7 @@ async function openTree(routes: Record<string, Route>): Promise<void> {
 	const { props, sockets } = setup({
 		'GET /api/sessions': () => json([idleSession]),
 		'GET /api/sessions/session-1/tree': () => json(sessionTree),
+		'GET /api/sessions/session-1/commands': () => json([]),
 		...routes
 	});
 	await render(SessionRoute, props);
@@ -758,8 +756,10 @@ async function openTree(routes: Record<string, Route>): Promise<void> {
 		sockets[0]?.receive(output({ type: 'message_start', message: { role, content: text } }));
 		sockets[0]?.receive(output({ type: 'message_end', message: { role, content: [{ type: 'text', text }] } }));
 	}
-	await expect.element(page.getByText('Test added.')).toBeVisible();
-	await userEvent.click(page.getByRole('button', { name: 'Show inspector' }));
+	await expect.element(page.getByLabelText('Transcript').getByText('Test added.')).toBeVisible();
+	// The workspace column shows the tree once `/tree` asks for it.
+	await userEvent.fill(page.getByRole('textbox', { name: 'Prompt' }), '/tree');
+	await userEvent.keyboard('{Escape}{Enter}');
 	await userEvent.click(page.getByRole('tree').getByText('Add a test.'));
 }
 
@@ -1056,7 +1056,7 @@ test('connects to the backend the desktop shell injects', async () => {
 	}
 });
 
-test('opens a folder on first run and points the rail at the new workspace', async () => {
+test('opens a folder on first run and points the view row at the new workspace', async () => {
 	const open = vi.fn(() => json(workspace, 201));
 	const { props } = setup({ 'GET /api/workspaces': () => json([]), 'POST /api/workspaces': open });
 	await render(SessionRoute, { ...props, navigation: (workspaceId) => productNavigation('/', workspaceId) });
@@ -1064,7 +1064,7 @@ test('opens a folder on first run and points the rail at the new workspace', asy
 	await expect.element(page.getByRole('heading', { name: 'Open a folder to start working' })).toBeVisible();
 	await expect
 		.element(page.getByRole('button', { name: 'Terminal' }))
-		.toHaveAccessibleDescription('Open a workspace first');
+		.toHaveAccessibleDescription('Terminal Open a workspace first');
 	await userEvent.fill(page.getByRole('textbox', { name: 'Folder path' }), '/home/me/pau');
 	await userEvent.click(page.getByRole('button', { name: 'Open', exact: true }));
 
@@ -1108,7 +1108,6 @@ const at = (time: string) => Date.parse(time);
 
 /** Opens the context menu of the session's row in the rail. */
 async function openSessionMenu(title: string | RegExp): Promise<void> {
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 	const row = page.getByRole('button', { name: title });
 	await expect.element(row).toBeVisible();
 	(row.element() as HTMLElement).focus();
@@ -1149,7 +1148,6 @@ test('renames a session in the rail and restores the name when Pi rejects it', a
 test('shows the name Pi stored for a session after a reload', async () => {
 	const { props } = setup({ 'GET /api/sessions': () => json([{ ...idleSession, name: 'Release prep' }]) });
 	await render(SessionRoute, props);
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 
 	await expect.element(page.getByRole('button', { name: /Release prep/ })).toBeVisible();
 });
@@ -1363,12 +1361,12 @@ test('shows a stopped session with Resume and starts it only when asked', async 
 	expect(routes.at(-1)).toMatchObject({ view: 'session', session_id: 'session-1' });
 });
 
-/** The top bar's breadcrumb text, which names the open workspace. */
+/** The workspace column's title, which names the open workspace. */
 function identity(): string | null | undefined {
-	return document.querySelector('.app-shell__identity')?.textContent;
+	return document.querySelector('.session-workspace__title')?.textContent;
 }
 
-test('keeps the restored session in the rail and names its workspace in the top bar', async () => {
+test('keeps the restored session in the bay and names its workspace in the workspace column', async () => {
 	const { props } = setup({
 		'GET /api/sessions': () => json([idleSession]),
 		'GET /api/workspaces/pau/pi-sessions': () => json(savedList),
@@ -1382,8 +1380,7 @@ test('keeps the restored session in the rail and names its workspace in the top 
 	await render(SessionRoute, { ...props, restoreLastRoute: true });
 
 	await expect.element(page.getByText('Resume it to load the conversation and continue.')).toBeVisible();
-	expect(identity()).toContain('Pau');
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
+	expect(identity()).toContain('me/pau');
 	const restored = page.getByRole('button', { name: /Fix the gutter/ });
 	await expect.element(restored).toHaveAttribute('aria-current', 'page');
 
@@ -1431,11 +1428,9 @@ test('opens the workspace view that was open last', async () => {
 	await expect.element(page.getByRole('heading', { name: 'Loading sessions…' })).toBeVisible();
 });
 
-/** Opens the workspace menu from its heading in the collapsed rail. */
+/** Opens the New session menu at the top of the bay. */
 async function openWorkspaceMenu(): Promise<void> {
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await userEvent.click(page.getByRole('heading', { name: 'Pau' }));
-	await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+	await userEvent.click(page.getByRole('button', { name: 'More ways to start a session' }));
 }
 
 const claudeMissing = {

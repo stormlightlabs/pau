@@ -181,9 +181,8 @@ components:
 
 ## Overview
 
-This file describes the target design. Until the implementation work lands,
-the desktop app still ships the previous layout, with the product rail and the
-inspector.
+The shell, the bay and the session view ship this design. The other views
+keep their previous composition inside the shell until each moves over.
 
 **Creative North Star: "The Strip Bay"**
 

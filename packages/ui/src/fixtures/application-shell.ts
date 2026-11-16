@@ -3,11 +3,13 @@ import type { ShellNavItem } from '../lib/ApplicationShell.svelte';
 /** Representative navigation used by shell stories and tests. */
 export const shellNavigationFixtures = {
 	productItems: [
-		{ id: 'sessions', label: 'Sessions', icon: 'agents', href: '#sessions', active: true, attention: true },
-		{ id: 'files', label: 'Files', icon: 'files', href: '#files' },
+		{ id: 'sessions', label: 'Sessions', icon: 'sessions', href: '#sessions', active: true, attention: true },
+		{ id: 'files', label: 'Files', icon: 'file', href: '#files' },
+		{ id: 'review', label: 'Review', icon: 'review' },
 		{ id: 'terminal', label: 'Terminal', icon: 'terminal', unavailable: 'Open a workspace first' },
-		{ id: 'resources', label: 'Resources', icon: 'resources' },
-		{ id: 'settings', label: 'Settings', icon: 'settings' }
+		{ id: 'resources', label: 'Pi resources', icon: 'resources', href: '#resources' },
+		{ id: 'settings', label: 'Settings', icon: 'settings', href: '#settings', action: 'app.settings' },
+		{ id: 'diagnostics', label: 'Diagnostics', icon: 'diagnostics', href: '#diagnostics', paletteOnly: true }
 	],
 	contextItems: [
 		{

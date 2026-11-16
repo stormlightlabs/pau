@@ -4,12 +4,9 @@ import { render } from 'vitest-browser-svelte';
 
 import { commandFixtures } from '../fixtures/commands';
 import { fileMentionFixtures } from '../fixtures/file-mentions';
-import { resourceMonitoringFixtures } from '../fixtures/resource-monitoring';
 import { sessionFixtures } from '../fixtures/sessions';
 import SessionView from '../lib/SessionView.svelte';
 import SessionViewDemo from '../stories/SessionViewDemo.svelte';
-
-const snapshot = { ...resourceMonitoringFixtures.active[2]!, sessionId: 'session-running' };
 
 /** Measures the placeholder on one line in the textarea's font. */
 function placeholderWidth(field: HTMLTextAreaElement): number {
@@ -24,16 +21,11 @@ function placeholderWidth(field: HTMLTextAreaElement): number {
 	return width;
 }
 
-test.each([
-	[900, false],
-	[1440, false],
-	[1440, true]
-])('keeps the field full width at %ipx (inspector open: %s)', async (width, inspector) => {
+test.each([900, 1440])('keeps the field full width at %ipx', async (width) => {
 	await page.viewport(width, 900);
 	await render(SessionView, {
 		workspaces: sessionFixtures.queued,
 		activeSessionId: 'session-running',
-		resourceSnapshot: inspector ? snapshot : undefined,
 		onInterrupt: async () => {}
 	});
 	await document.fonts.ready;
@@ -89,8 +81,8 @@ test.each([
 	expect(box.left).toBe(composerBox.left);
 });
 
-test('keeps Send prompt and the delivery mode inside a 360px composer', async () => {
-	await page.viewport(360, 800);
+test('keeps Send prompt and the delivery mode inside the composer at the minimum window width', async () => {
+	await page.viewport(900, 560);
 	await render(SessionView, {
 		workspaces: sessionFixtures.queued,
 		activeSessionId: 'session-running',

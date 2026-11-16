@@ -27,49 +27,55 @@
 </script>
 
 <details class="pau-disclosure tool-group" {open} ontoggle={handleToggle} data-group-id={id}>
-	<summary><Icon name="chevronRight" class="pau-disclosure__chevron" size={14} />{count} tool calls</summary>
+	<summary
+		><Icon name="chevronRight" class="pau-disclosure__chevron" size={14} /><span class="pau-cap"
+			>{count} tool calls</span
+		></summary>
 	<div class="tool-group__calls">
 		{@render children()}
 	</div>
 </details>
 
 <style>
+	/* A group of finished calls is one strip in the rack until it opens. */
 	.tool-group {
+		/* The left border counts toward the inset, so text lands on the transcript's shared edge. */
 		--disclosure-rule: 1px;
-		border-left: var(--disclosure-rule) solid var(--pau-border);
+		background-color: var(--pau-surface);
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-control);
 	}
 
-	/* Matches the compact spacing between consecutive tool call rows. */
-	:global(.tool-call) + .tool-group,
-	:global(.tool-group) + .tool-group {
-		margin-top: calc(-1 * var(--pau-space-5));
+	:global(:is(.tool-call, .tool-group)) + .tool-group {
+		margin-top: calc(-1 * var(--pau-space-5) - 1px);
+		border-top-left-radius: 0;
+		border-top-right-radius: 0;
+	}
+
+	.tool-group:has(+ :global(:is(.tool-call, .tool-group))) {
+		border-bottom-right-radius: 0;
+		border-bottom-left-radius: 0;
 	}
 
 	.tool-group summary {
 		display: flex;
 		align-items: center;
 		min-height: var(--pau-size-row-md);
-		padding-block: var(--pau-space-1);
 		padding-right: var(--pau-space-3);
+		font-size: var(--pau-type-xs);
+		line-height: var(--pau-leading-tight);
 	}
 
-	/*
-	 * The transcript's row gap, so the negative margin that packs consecutive
-	 * tool call rows together works the same inside a group.
-	 */
 	.tool-group__calls {
 		display: grid;
-		gap: var(--pau-space-5);
 	}
 
-	/*
-	 * Grouped calls hang under the group's own rule, so their chevrons and
-	 * labels line up with the group summary instead of stepping inward. They
-	 * keep `--disclosure-rule` because the group's rule still sits to their
-	 * left.
-	 */
-	.tool-group__calls > :global(.tool-call) {
-		border-left: 0;
+	/* Calls inside a group are rows of its rack, under a rule each. */
+	.tool-group .tool-group__calls > :global(.tool-call) {
+		margin: 0;
+		border: 0;
+		border-top: 1px solid var(--pau-border);
+		border-radius: 0;
 	}
 
 	@media (pointer: coarse) {

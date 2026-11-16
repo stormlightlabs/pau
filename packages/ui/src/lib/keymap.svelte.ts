@@ -179,8 +179,13 @@ export const APP_KEY_ACTIONS: readonly KeyAction[] = [
 	},
 	{ id: 'navigate.back', label: 'Go back', group: 'Navigation', keys: ['mod+['] },
 	{ id: 'navigate.forward', label: 'Go forward', group: 'Navigation', keys: ['mod+]'] },
-	{ id: 'panel.context', label: 'Toggle the session rail', group: 'Panels', keys: ['mod+b'], whileTyping: true },
-	{ id: 'panel.inspector', label: 'Toggle the inspector', group: 'Panels', keys: ['mod+alt+b'], whileTyping: true },
+	{
+		id: 'panel.inspector',
+		label: 'Toggle the workspace column',
+		group: 'Panels',
+		keys: ['mod+alt+b'],
+		whileTyping: true
+	},
 	{
 		id: 'panel.dock',
 		label: 'Toggle the terminal dock',

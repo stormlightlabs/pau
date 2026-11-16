@@ -12,9 +12,10 @@ policy from the Technical plan. Both live in the project's issue tracker.
 values, and `apps/desktop/.impeccable/wireframes/` holds a static wireframe of
 each surface. Where either disagrees with this document, this document wins.
 
-This document describes the target design. Until the implementation work
-lands, the desktop app still ships the previous layout, with the product rail
-and the inspector. Code that disagrees with a rule here may predate it.
+The shell, the bay, the view row and the session view follow this document.
+Files, Review, Terminal, Resources and Settings keep their previous
+composition inside the shell until each moves to the Strip Bay. Code that
+disagrees with a rule here may predate it.
 
 ## Surface mode
 
@@ -345,8 +346,11 @@ operator. The session's permission request and a resource's change preview
 share it. It has a 1px accent border and a 6% accent wash over the raised
 surface. Its head holds the waiting mark and the question in the heading role,
 on a 15% accent band. Everything under the head hangs from the question's
-leading edge. Its actions carry key caps, and Allow once is the primary. While
-Pau reconnects, the card stays visible and its actions disable with a reason.
+leading edge. Its actions carry key caps, and Allow once is the primary. The
+keys choose an action while focus is outside a text field. The card never
+takes focus on its own, so a request that arrives mid-sentence never takes
+the operator's typing. While Pau reconnects, the card stays visible and its
+actions disable with a reason.
 
 ### Context menu
 

@@ -279,7 +279,7 @@
 		padding: var(--pau-space-3);
 		overflow-x: auto;
 		overflow-wrap: normal;
-		border: var(--pau-border-thin) solid var(--pau-border);
+		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
 		background: var(--pau-surface);
 		font-family: var(--pau-font-code);
@@ -328,7 +328,7 @@
 	th,
 	td {
 		padding: var(--pau-space-1) var(--pau-space-3);
-		border: var(--pau-border-thin) solid var(--pau-border);
+		border: 1px solid var(--pau-border);
 		text-align: left;
 	}
 
@@ -340,6 +340,6 @@
 	hr {
 		width: 100%;
 		border: 0;
-		border-top: var(--pau-border-thin) solid var(--pau-border);
+		border-top: 1px solid var(--pau-border);
 	}
 </style>

@@ -45,7 +45,10 @@ function textBelowFloor(root: ParentNode = document.body): string[] {
 		const style = getComputedStyle(element);
 		const size = pixels(style.fontSize);
 		if (size >= 12) continue;
-		const label = size === 11 && style.textTransform === 'uppercase' && pixels(style.letterSpacing) > 0;
+		// Uppercase section labels and key caps are the two 11px roles.
+		const label =
+			size === 11 &&
+			((style.textTransform === 'uppercase' && pixels(style.letterSpacing) > 0) || element.closest('kbd') !== null);
 		if (!label) offenders.push(`${element.className || element.tagName}: ${size}px "${element.textContent?.trim()}"`);
 	}
 	return offenders;
@@ -119,7 +122,7 @@ test('the main task heading is 18px semibold and body text is 14px', async () =>
 
 test('every main surface names its task with the same title size', async () => {
 	await render(WorkspaceFilesDemo, { state: 'default' });
-	await render(ProcessesView, { workspaceName: 'Pau', processes: [] });
+	await render(ProcessesView, { processes: [] });
 	await render(DiagnosticsView, { bundle: diagnosticFixtures.active });
 	await render(McpConfigurationView, { configuration: mcpConfigurationFixtures.piConfiguredOff });
 	await render(SandboxSettingsView, { selection: sandboxFixtures.unsandboxed });
@@ -150,7 +153,7 @@ test('every main surface names its task with the same title size', async () => {
 test('a view status chip centers on the title line', async () => {
 	// A view header narrower than 48rem stacks its status under the title.
 	await page.viewport(1440, 900);
-	await render(ProcessesView, { workspaceName: 'Pau', processes: resourceMonitoringFixtures.active });
+	await render(ProcessesView, { processes: resourceMonitoringFixtures.active });
 	await render(DiagnosticsView, { bundle: diagnosticFixtures.active });
 	await render(McpConfigurationView, { configuration: mcpConfigurationFixtures.piConfiguredOff });
 	await render(SandboxSettingsView, { selection: sandboxFixtures.unsandboxed });
@@ -189,7 +192,7 @@ test('no shell, inspector, or tool text renders below 12px', async () => {
 
 test('no Diagnostics, Processes, sandbox, or MCP text renders below 12px', async () => {
 	await render(DiagnosticsView, { bundle: diagnosticFixtures.active });
-	await render(ProcessesView, { workspaceName: 'Pau', processes: resourceMonitoringFixtures.active });
+	await render(ProcessesView, { processes: resourceMonitoringFixtures.active });
 	await render(SandboxSettingsView, { selection: sandboxFixtures.unsandboxed });
 	await render(McpConfigurationView, { configuration: mcpConfigurationFixtures.piConfiguredOff });
 

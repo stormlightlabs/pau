@@ -11,13 +11,15 @@
 	import Icon from './Icon.svelte';
 	import { getKeymap, useKeyActions } from './keymap.svelte';
 	import PaneResizer from './PaneResizer.svelte';
+	import { setWorkspaceColumn } from './workspace-column';
 
 	/**
-	 * One destination in the product or contextual rail.
+	 * One view in the view row, or one row in the left column of a view that
+	 * has no bay yet.
 	 *
-	 * An item without `href` cannot be opened. The rail shows it disabled and
-	 * explains why with `unavailable`, so a view that does not work yet never
-	 * opens as an empty page.
+	 * An item without `href` cannot be opened. The view row shows it disabled
+	 * and explains why with `unavailable`, so a view that does not work yet
+	 * never opens as an empty page.
 	 */
 	export type ShellNavItem = {
 		/** Stable identity for keyed rendering and tests. */
@@ -28,49 +30,68 @@
 		/** Why the item cannot be opened. Defaults to "Coming soon". */
 		unavailable?: string;
 		icon?: IconKind;
+		/** Key map action that opens the view, whose chord the tooltip shows. */
+		action?: string;
 		status?: string;
 		/** Number of entries behind the item, shown after the label without a state dot. */
 		count?: number;
 		attention?: boolean;
 		active?: boolean;
+		/**
+		 * Lists the view only in the command palette, for destinations that
+		 * another view links to, such as Agent sandbox from Settings.
+		 */
+		paletteOnly?: boolean;
 	};
 
 	/**
-	 * Operator-chosen widths of the resizable panes in CSS pixels. `null`
-	 * keeps a pane at its default width.
+	 * Operator-chosen widths of the resizable columns in CSS pixels: the bay
+	 * (`contextRail`) and the workspace column (`inspector`). `null` keeps a
+	 * column at its default width.
 	 */
 	export type ShellPaneWidths = { contextRail: number | null; inspector: number | null };
 
 	type Props = {
-		workspaceName: string;
+		/** Names the left column of a view that has no bay. */
 		contextLabel: string;
+		/** The views in the view row at the foot of the left column. */
 		productItems: ShellNavItem[];
-		contextItems: ShellNavItem[];
+		/** Rows of the left column in a view without a bay or `context`, such as Settings sections. */
+		contextItems?: ShellNavItem[];
 		disconnected?: boolean;
-		/**
-		 * Whether the inspector starts open where it docks beside the main
-		 * surface. Narrower windows keep it closed until the operator opens it,
-		 * because there it would cover the main surface.
-		 */
-		inspectorOpen?: boolean;
 		theme?: ThemeName;
 		uiFont?: UiFontName;
-		/** Saved pane widths to apply. The shell keeps no copy of its own across launches. */
+		/** Saved column widths to apply. The shell keeps no copy of its own across launches. */
 		paneWidths?: ShellPaneWidths;
-		/** Called when a resize ends or a keyboard step lands, with every pane's width. */
+		/** Called when a resize ends or a keyboard step lands, with every column's width. */
 		onResize?: (widths: ShellPaneWidths) => void;
 		/**
 		 * Workspaces and sessions the command palette lists. The palette adds the
-		 * product rail views and the key map's actions itself.
+		 * views and the key map's actions itself.
 		 */
 		paletteEntries?: PaletteEntry[];
 		children?: Snippet;
-		context?: Snippet;
-		inspector?: Snippet;
 		/**
-		 * Terminals docked below the main surface content. With it, the top bar
-		 * offers a toggle and the key map's dock shortcut works. Narrow windows
-		 * give an open dock the whole main surface instead of a strip.
+		 * The strip bay: the whole left column above the view row, from its
+		 * 48px top bar to its scrolling strips. It takes the place of the
+		 * `context` column.
+		 */
+		bay?: Snippet;
+		/** Left column content of a view without a bay, under a heading that names it. */
+		context?: Snippet;
+		/**
+		 * Detail for the open item, such as a session's changes and branch. It
+		 * docks beside the main surface from 1200px and opens as an overlay below.
+		 */
+		workspace?: Snippet;
+		/** Accessible name of the workspace column and the title in its header. */
+		workspaceLabel?: string;
+		/** Header content of the workspace column in place of `workspaceLabel`. */
+		workspaceHeader?: Snippet;
+		/**
+		 * Terminals docked below the main surface content. With it, the key
+		 * map's dock shortcut works. Narrow windows give an open dock the whole
+		 * main surface instead of a strip.
 		 */
 		dock?: Snippet;
 		/** Whether the dock shows. The app owns it, so the dock can stay open across views. */
@@ -84,20 +105,21 @@
 	};
 
 	let {
-		workspaceName,
 		contextLabel,
 		productItems,
-		contextItems,
+		contextItems = [],
 		disconnected = false,
-		inspectorOpen = true,
 		theme = 'eldritch',
 		uiFont = 'overpass',
 		paneWidths = { contextRail: null, inspector: null },
 		onResize,
 		paletteEntries = [],
 		children,
+		bay,
 		context,
-		inspector,
+		workspace,
+		workspaceLabel = 'Workspace',
+		workspaceHeader,
 		dock,
 		dockOpen = false,
 		onDockToggle,
@@ -107,7 +129,6 @@
 
 	const keymap = getKeymap();
 	let paletteOpen = $state(false);
-	let paletteEntrance = $state<'keyboard' | 'pointer'>('keyboard');
 	/** Actions that the palette lists. A range action is reached through its own entries, such as sessions. */
 	const actionEntries = $derived<PaletteEntry[]>(
 		(keymap?.actions ?? [])
@@ -132,76 +153,66 @@
 		}))
 	);
 	const paletteKeys = $derived(keymap?.actions.find((action) => action.id === 'palette.open')?.keys ?? []);
-	const paletteShortcut = $derived(keymap?.shortcut('palette.open'));
 
-	/** Whether the contextual rail shows as an overlay on narrow windows. */
-	let contextOpen = $state(false);
-	/** Whether the operator hid the contextual rail on wide windows. */
-	let contextHidden = $state(false);
-	let hasContext = $derived(Boolean(context) || contextItems.length > 0);
-	/** Whether any rail item has a state to mark. Then every item keeps the dot column, so all labels share one edge. */
+	/** Whether any left column row has a state to mark. Then every row keeps the dot column, so all labels share one edge. */
 	let contextMarked = $derived(contextItems.some((item) => item.status !== undefined || item.attention));
 
-	/** Narrow windows show the contextual rail as an overlay instead of a column. */
-	const narrow = new MediaQuery('max-width: 48rem');
-	/** Below this width the inspector leaves the grid and opens over the main surface; matches the 74rem CSS query. */
-	const inspectorOverlay = new MediaQuery('max-width: 74rem');
-	let inspectorDocked = $derived(!inspectorOverlay.current);
-	/**
-	 * The operator's toggle overrides this until the window crosses the docking
-	 * width or `inspectorOpen` changes. An overlay never opens on its own.
-	 */
-	let inspectorVisible = $derived(inspectorOpen && inspectorDocked);
+	/** Below 1200px the workspace column leaves the grid and opens over the main surface. */
+	const narrow = new MediaQuery('max-width: 1199.98px');
+	/** Whether the operator hid the docked column. Only the key map can, since the column holds detail, not navigation. */
+	let workspaceHidden = $state(false);
+	/** Whether the overlay is open. It never opens on its own, so new detail never covers the main surface. */
+	let overlayOpen = $state(false);
+	let workspaceVisible = $derived(Boolean(workspace) && (narrow.current ? overlayOpen : !workspaceHidden));
 
-	const contextFocus = createFocusReturn();
-	const inspectorFocus = createFocusReturn();
+	const workspaceFocus = createFocusReturn();
 	const dockFocus = createFocusReturn();
+	let workspacePanel = $state<HTMLElement>();
 
-	/** Opens or closes the overlay rail. Closing returns focus to whatever opened it. */
-	function toggleContextOverlay(): void {
-		contextHidden = false;
-		if (contextOpen) closeContext();
+	function toggleWorkspace(): void {
+		if (!workspace) return;
+		if (!narrow.current) {
+			workspaceHidden = !workspaceHidden;
+			return;
+		}
+		if (overlayOpen) closeOverlay();
 		else {
-			contextFocus.capture();
-			contextOpen = true;
+			workspaceFocus.capture();
+			overlayOpen = true;
 		}
 	}
 
-	/** Opens the overlay rail on narrow windows and hides or shows the rail column on wide ones. */
-	function toggleContext(): void {
-		if (narrow.current) toggleContextOverlay();
-		else contextHidden = !contextHidden;
+	function closeOverlay(): void {
+		overlayOpen = false;
+		workspaceFocus.restore();
 	}
 
-	/** Labels a top bar toggle's tooltip with its key map shortcut when it has one. */
-	function withShortcut(label: string, actionId: string): string {
-		const shortcut = keymap?.shortcut(actionId);
-		return shortcut ? `${label} (${shortcut})` : label;
-	}
+	// The overlay takes focus as it opens, so the keyboard lands inside it.
+	$effect(() => {
+		if (!workspacePanel || !overlayOpen || !narrow.current) return;
+		workspacePanel.focus({ preventScroll: true });
+	});
 
-	/** Narrow windows open the rail as an overlay, so the toggle names that action instead of hiding a column. */
-	const contextToggleLabel = $derived(
-		narrow.current ? 'Open navigation' : contextHidden ? 'Show navigation' : 'Hide navigation'
-	);
-	const inspectorToggleLabel = $derived(inspectorVisible ? 'Hide inspector' : 'Show inspector');
+	// Widening the window docks the column, so an open overlay closes without moving focus.
+	$effect(() => {
+		if (!narrow.current) overlayOpen = false;
+	});
 
-	function closeContext(): void {
-		contextOpen = false;
-		contextFocus.restore();
-	}
-
-	function toggleInspector(): void {
-		if (inspectorVisible) closeInspector();
-		else {
-			inspectorFocus.capture();
-			inspectorVisible = true;
-		}
-	}
-
-	function closeInspector(): void {
-		inspectorVisible = false;
-		inspectorFocus.restore();
-	}
+	setWorkspaceColumn({
+		get available() {
+			return Boolean(workspace);
+		},
+		get overlay() {
+			return narrow.current;
+		},
+		get visible() {
+			return workspaceVisible;
+		},
+		get label() {
+			return workspaceLabel;
+		},
+		toggle: toggleWorkspace
+	});
 
 	/** Shows or hides the dock. The terminal takes focus as it opens. */
 	function toggleDock(): void {
@@ -213,40 +224,23 @@
 	 * However the dock closes, from the toggle, its shortcut or a control
 	 * inside it, focus goes back to whatever opened it. A dock that was
 	 * already open when the view mounted has no opener, so focus goes to the
-	 * composer, or to the dock toggle in a view without one.
+	 * composer.
 	 */
 	let dockWasOpen = false;
-	let dockToggle = $state<HTMLButtonElement>();
 	$effect(() => {
 		const open = Boolean(dock && dockOpen);
 		if (dockWasOpen && !open) {
 			dockFocus.restore();
 			if (!document.activeElement || document.activeElement === document.body) returnFocus(null);
-			if (!document.activeElement || document.activeElement === document.body) dockToggle?.focus();
 		}
 		dockWasOpen = open;
 	});
 
-	const dockToggleLabel = $derived(dockOpen ? 'Hide terminal dock' : 'Show terminal dock');
-
-	/** Closes an open overlay rail on Escape. */
-	function closeOnEscape(event: KeyboardEvent, close: () => void): void {
-		if (event.key !== 'Escape' || event.defaultPrevented) return;
-		event.stopPropagation();
-		close();
-	}
-
 	useKeyActions({
 		'palette.open': () => {
-			paletteEntrance = 'keyboard';
 			paletteOpen = !paletteOpen;
 		},
-		'panel.context': () => {
-			if (hasContext) toggleContext();
-		},
-		'panel.inspector': () => {
-			if (inspector) toggleInspector();
-		}
+		'panel.inspector': toggleWorkspace
 	});
 
 	// The dock shortcut exists only while there is a dock to toggle. A shell
@@ -254,6 +248,11 @@
 	$effect(() => {
 		if (dock) return keymap?.register('panel.dock', toggleDock);
 	});
+
+	/** Labels a view's tooltip with the chord of its key map action. */
+	function viewShortcut(item: ShellNavItem): string | undefined {
+		return item.action ? keymap?.shortcut(item.action) : undefined;
+	}
 
 	/** Shortest the dock may be, enough for its tab bar and a few lines. */
 	const MIN_DOCK_HEIGHT = 120;
@@ -273,49 +272,49 @@
 
 	/** Puts the dock back at its kept height after a cancelled drag. */
 	function restoreDockHeight(): void {
-		if (appliedDockHeight === null) mainElement?.style.removeProperty('--shell-dock-height');
-		else mainElement?.style.setProperty('--shell-dock-height', `${appliedDockHeight}px`);
+		if (appliedDockHeight === null) mainElement?.style.removeProperty('--pau-shell-dock-height');
+		else mainElement?.style.setProperty('--pau-shell-dock-height', `${appliedDockHeight}px`);
 	}
 
-	/** Narrowest a resizable pane may be. */
-	const MIN_PANE_WIDTH = 160;
+	/** Narrowest each column may be: the bay keeps its narrow width, and the workspace column its rows. */
+	const MIN_WIDTH = { contextRail: 288, inspector: 240 } as const;
 	/** Width the main surface keeps, matching the `minmax(24rem, 1fr)` grid track. */
 	const MIN_MAIN_WIDTH = 384;
 
 	let shell = $state<HTMLElement>();
 	let shellWidth = $state(0);
-	let railWidth = $state(0);
-	let contextWidth = $state(0);
-	let inspectorWidth = $state(0);
-	let contextDragging = $state(false);
-	let inspectorDragging = $state(false);
+	let bayWidth = $state(0);
+	let workspaceWidth = $state(0);
+	let bayDragging = $state(false);
+	let workspaceDragging = $state(false);
 	/** Widths kept by the latest resize. They stay in effect until `paneWidths` changes. */
 	let kept = $derived<ShellPaneWidths>({ ...paneWidths });
+	let workspaceDocked = $derived(Boolean(workspace) && !narrow.current && !workspaceHidden);
 
-	/** Largest width a pane can take while the main surface keeps its minimum. */
+	/** Largest width a column can take while the main surface keeps its minimum. */
 	function maxPaneWidth(pane: keyof ShellPaneWidths): number {
-		const sibling = pane === 'contextRail' ? (inspectorDocked ? inspectorWidth : 0) : hasContext ? contextWidth : 0;
-		return Math.max(MIN_PANE_WIDTH, shellWidth - railWidth - sibling - MIN_MAIN_WIDTH);
+		const sibling = pane === 'contextRail' ? (workspaceDocked ? workspaceWidth : 0) : bayWidth;
+		return Math.max(MIN_WIDTH[pane], shellWidth - sibling - MIN_MAIN_WIDTH);
 	}
 
 	/**
 	 * Applies a saved width, shrinking it when the window can no longer fit it.
-	 *
-	 * The context rail claims space first and leaves the docked inspector its
-	 * minimum. Neither bound reads a width this function sets, so applying a
-	 * width never changes the width it was measured against.
+	 * The bay claims space first and leaves the docked workspace column its
+	 * minimum. A narrow window keeps the bay at its narrow width, so a wide
+	 * saved bay never squeezes the transcript.
 	 */
 	function appliedWidth(pane: keyof ShellPaneWidths): number | null {
 		const width = kept[pane];
 		if (width === null || shellWidth === 0) return width;
-		const available = shellWidth - railWidth - MIN_MAIN_WIDTH;
+		if (pane === 'contextRail' && narrow.current) return null;
+		const available = shellWidth - MIN_MAIN_WIDTH;
 		if (pane === 'contextRail')
-			return Math.max(MIN_PANE_WIDTH, Math.min(width, available - (inspectorDocked ? MIN_PANE_WIDTH : 0)));
-		const context = hasContext ? (appliedWidth('contextRail') ?? contextWidth) : 0;
-		return Math.max(MIN_PANE_WIDTH, Math.min(width, available - context));
+			return Math.max(MIN_WIDTH.contextRail, Math.min(width, available - (workspaceDocked ? MIN_WIDTH.inspector : 0)));
+		const left = appliedWidth('contextRail') ?? bayWidth;
+		return Math.max(MIN_WIDTH.inspector, Math.min(width, available - left));
 	}
 
-	const widthProperty = { contextRail: '--shell-context-width', inspector: '--shell-inspector-width' } as const;
+	const widthProperty = { contextRail: '--pau-shell-bay-width', inspector: '--pau-shell-workspace-width' } as const;
 
 	let paneProperties = $derived(
 		Object.fromEntries(
@@ -326,12 +325,12 @@
 		)
 	);
 
-	/** Moves a pane's edge for the current frame without re-rendering the shell. */
+	/** Moves a column's edge for the current frame without re-rendering the shell. */
 	function previewWidth(pane: keyof ShellPaneWidths, width: number) {
 		shell?.style.setProperty(widthProperty[pane], `${width}px`);
 	}
 
-	/** Puts the pane back where the last kept width placed it. */
+	/** Puts the column back where the last kept width placed it. */
 	function cancelPreview(pane: keyof ShellPaneWidths) {
 		const width = appliedWidth(pane);
 		if (width === null) shell?.style.removeProperty(widthProperty[pane]);
@@ -353,9 +352,8 @@
 
 <a class="app-shell__skip-link" href="#main-surface">Skip to main surface</a>
 <div
-	class:app-shell--with-inspector={inspectorVisible && inspector}
-	class:app-shell--without-context={!hasContext || contextHidden}
-	class:app-shell--resizing={contextDragging || inspectorDragging}
+	class:app-shell--with-workspace={workspaceDocked}
+	class:app-shell--resizing={bayDragging || workspaceDragging}
 	class:app-shell--resizing-rows={dockDragging}
 	bind:this={shell}
 	bind:offsetWidth={shellWidth}
@@ -363,186 +361,121 @@
 	data-theme={theme}
 	data-ui-font={uiFont}
 	style={shellStyle}>
-	<header class="app-shell__command-bar">
-		<div class="app-shell__identity">
-			<svg class="app-shell__mark" viewBox="0 0 64 64" fill="currentColor" aria-hidden="true">
-				<path d="M9.5 6.5H41A13.5 13.5 0 0 1 41 33.5H23.5V26.5H41A6.5 6.5 0 0 0 41 13.5H9.5Z" />
-				<path d="M23.5 6.5V48A9.5 9.5 0 0 0 33 57.5H38.5V50.5H33A2.5 2.5 0 0 1 30.5 48V6.5Z" />
-			</svg>
-			<strong>Pau</strong>
-			<span>/</span>
-			<span>{workspaceName}</span>
-		</div>
-
-		<!-- A healthy connection stays silent so the bar never implies Pi itself works. -->
-		{#if disconnected}
-			<p class="app-shell__connection" role="status"><span></span>Disconnected</p>
-		{/if}
-
-		<div class="app-shell__panel-toggles">
-			{#if hasContext}
-				<button
-					type="button"
-					class="app-shell__icon-button pau-utility-button"
-					aria-label={contextToggleLabel}
-					aria-expanded={narrow.current ? contextOpen : !contextHidden}
-					title={withShortcut(contextToggleLabel, 'panel.context')}
-					onclick={toggleContext}>
-					<Icon name="sidebar" size={18} />
-				</button>
-			{/if}
-			{#if dock}
-				<button
-					type="button"
-					class="app-shell__icon-button pau-utility-button"
-					aria-label={dockToggleLabel}
-					aria-expanded={dockOpen}
-					aria-controls={dockOpen ? 'shell-dock' : undefined}
-					title={withShortcut(dockToggleLabel, 'panel.dock')}
-					bind:this={dockToggle}
-					onclick={toggleDock}>
-					<Icon name="dock" size={18} />
-				</button>
-			{/if}
-			{#if inspector}
-				<button
-					type="button"
-					class="app-shell__icon-button pau-utility-button"
-					aria-label={inspectorToggleLabel}
-					aria-expanded={inspectorVisible}
-					title={withShortcut(inspectorToggleLabel, 'panel.inspector')}
-					onclick={toggleInspector}>
-					<Icon name="panel" size={18} />
-				</button>
-			{/if}
-		</div>
-
-		<button
-			type="button"
-			class="app-shell__command-input pau-field"
-			aria-haspopup="dialog"
-			onclick={(event) => {
-				// A click from Enter or Space reports no pointer detail and opens at once.
-				paletteEntrance = event.detail > 0 ? 'pointer' : 'keyboard';
-				paletteOpen = true;
-			}}>
-			<span class="app-shell__command-label">
-				<span class="app-shell__search-icon" aria-hidden="true"></span>
-				<span class="app-shell__command-placeholder">Search or run a command</span>
-			</span>
-			{#if paletteShortcut}<kbd>{paletteShortcut}</kbd>{/if}
-		</button>
-	</header>
-
 	<CommandPalette
 		bind:open={paletteOpen}
 		entries={[...actionEntries, ...paletteEntries, ...viewEntries]}
-		entrance={paletteEntrance}
+		entrance="keyboard"
 		toggleKeys={paletteKeys} />
 
-	<nav class="app-shell__product-rail" aria-label="Product" bind:offsetWidth={railWidth}>
-		<ul>
-			{#each productItems as item (item.id)}
-				<li>
-					{#if item.href}
-						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the app owner resolves rail destinations -->
-						<a
-							href={item.href}
-							class="pau-row"
-							class:active={item.active}
-							aria-current={item.active ? 'page' : undefined}
-							aria-label={item.label}
-							title={item.label}>
-							<Icon name={item.icon ?? 'agents'} size={20} />
-							{#if item.attention}<span class="app-shell__attention" role="img" aria-label="Needs attention"></span
-								>{/if}
-						</a>
+	<div id="shell-bay" class="app-shell__bay" bind:offsetWidth={bayWidth}>
+		{#if bay}
+			{@render bay()}
+		{:else}
+			<aside class="app-shell__context" aria-label={contextLabel}>
+				<!-- The aside already carries the name, so the label is not a second heading. -->
+				<div class="app-shell__context-heading pau-bay-heading" aria-hidden="true">
+					<span class="pau-section-label">{contextLabel}</span>
+				</div>
+				<div class="app-shell__context-content">
+					{#if context}
+						{@render context()}
 					{:else}
-						{@const reason = item.unavailable ?? 'Coming soon'}
-						<button
-							type="button"
-							class="app-shell__unavailable pau-row"
-							class:active={item.active}
-							aria-current={item.active ? 'page' : undefined}
-							aria-disabled="true"
-							aria-label={item.label}
-							aria-describedby={`product-${item.id}-unavailable`}
-							title={`${item.label}: ${reason}`}>
-							<Icon name={item.icon ?? 'agents'} size={20} />
-						</button>
-						<span id={`product-${item.id}-unavailable`} class="pau-visually-hidden">{reason}</span>
+						<ul class:app-shell__context-list--marked={contextMarked}>
+							{#each contextItems as item (item.id)}
+								<li>
+									<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the app owner resolves destinations -->
+									<a
+										href={item.href}
+										class="pau-row"
+										class:active={item.active}
+										aria-current={item.active ? 'page' : undefined}>
+										<!-- The dot marks an item's state. An item without one gets an empty cell in a list that shows dots. -->
+										{#if contextMarked}
+											<span
+												class:app-shell__item-dot={item.status !== undefined || item.attention}
+												class:attention={item.attention}></span>
+										{/if}
+										<span class="pau-cap pau-cap--truncate">{item.label}</span>
+										{#if item.status}<small class="pau-cap">{item.status}</small
+											>{:else if item.count !== undefined}<small class="pau-count">{item.count}</small>{/if}
+									</a>
+								</li>
+							{/each}
+						</ul>
 					{/if}
-				</li>
-			{/each}
-		</ul>
-	</nav>
+				</div>
+			</aside>
+		{/if}
 
-	{#if hasContext && !contextHidden}
-		<!-- Escape bubbles from the controls inside the rail -->
-		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-		<aside
-			id="shell-context-rail"
-			class:open={contextOpen}
-			class="app-shell__context-rail"
-			aria-label={contextLabel}
-			onkeydown={(event) => contextOpen && closeOnEscape(event, closeContext)}
-			bind:offsetWidth={contextWidth}>
-			<div class="app-shell__rail-heading pau-section-label">
-				<span>{contextLabel}</span>
-				<button type="button" class="pau-utility-button" aria-label="Close navigation" onclick={closeContext}>
-					<Icon name="close" size={18} />
-				</button>
-			</div>
-			{#if context}
-				<div class="app-shell__context-content">{@render context()}</div>
-			{:else}
-				<ul class:app-shell__context-list--marked={contextMarked}>
-					{#each contextItems as item (item.id)}
-						<li>
-							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the app owner resolves rail destinations -->
+		<nav class="app-shell__views" aria-label="Views">
+			<ul>
+				{#each productItems.filter((candidate) => !candidate.paletteOnly) as item (item.id)}
+					{@const reason = item.href ? undefined : (item.unavailable ?? 'Coming soon')}
+					{@const shortcut = viewShortcut(item)}
+					<li>
+						{#if item.href}
+							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the app owner resolves destinations -->
 							<a
 								href={item.href}
-								class="pau-row"
-								class:active={item.active}
+								class="app-shell__view pau-utility-button"
 								aria-current={item.active ? 'page' : undefined}
-								onclick={() => contextOpen && closeContext()}>
-								<!-- The dot marks an item's state. An item without one, such as a Settings section, gets an empty cell in a rail that shows dots, and no cell otherwise. -->
-								{#if contextMarked}
-									<span
-										class:app-shell__item-dot={item.status !== undefined || item.attention}
-										class:attention={item.attention}></span>
-								{/if}
-								<span>{item.label}</span>
-								{#if item.status}<small>{item.status}</small>{:else if item.count !== undefined}<small
-										>{item.count}</small
+								aria-label={item.label}
+								aria-describedby={`view-${item.id}-tip`}>
+								<Icon name={item.icon ?? 'agents'} size={16} />
+								{#if item.attention}<span class="app-shell__attention" role="img" aria-label="Needs attention"></span
 									>{/if}
 							</a>
-						</li>
-					{/each}
-				</ul>
+						{:else}
+							<button
+								type="button"
+								class="app-shell__view pau-utility-button"
+								aria-current={item.active ? 'page' : undefined}
+								aria-disabled="true"
+								aria-label={item.label}
+								aria-describedby={`view-${item.id}-tip`}>
+								<Icon name={item.icon ?? 'agents'} size={16} />
+							</button>
+						{/if}
+						<span class="app-shell__tip" role="tooltip" id={`view-${item.id}-tip`}>
+							<span class="app-shell__tip-line"
+								><span class="pau-cap">{item.label}</span>{#if shortcut}<kbd class="pau-kbd"
+										><span>{shortcut}</span></kbd
+									>{/if}</span>
+							{#if reason}<span class="app-shell__tip-reason">{reason}</span>{/if}
+						</span>
+					</li>
+				{/each}
+			</ul>
+			<!-- A healthy connection stays silent so the shell never implies Pi itself works. -->
+			{#if disconnected}
+				<p class="app-shell__connection pau-state pau-tone-danger" role="status">
+					<span class="pau-mark pau-mark--failed" aria-hidden="true"></span><span>Disconnected</span>
+				</p>
 			{/if}
-		</aside>
-		<div class="app-shell__resizer app-shell__resizer--context">
-			<PaneResizer
-				label="Resize {contextLabel.toLowerCase()}"
-				controls="shell-context-rail"
-				value={contextWidth}
-				min={MIN_PANE_WIDTH}
-				max={maxPaneWidth('contextRail')}
-				direction={1}
-				bind:dragging={contextDragging}
-				onPreview={(width) => previewWidth('contextRail', width)}
-				onCommit={(width) => keepWidth('contextRail', width)}
-				onCancel={() => cancelPreview('contextRail')} />
-		</div>
-	{/if}
+		</nav>
+	</div>
+	<div class="app-shell__resizer app-shell__resizer--bay">
+		<PaneResizer
+			label="Resize the session bay"
+			controls="shell-bay"
+			value={bayWidth}
+			min={MIN_WIDTH.contextRail}
+			max={maxPaneWidth('contextRail')}
+			direction={1}
+			bind:dragging={bayDragging}
+			onPreview={(width) => previewWidth('contextRail', width)}
+			onCommit={(width) => keepWidth('contextRail', width)}
+			onCancel={() => cancelPreview('contextRail')} />
+	</div>
 
 	<main
 		id="main-surface"
 		class="app-shell__main"
 		class:app-shell__main--docked={dock && dockOpen}
 		tabindex="-1"
-		style:--shell-dock-height={dock && dockOpen && appliedDockHeight !== null ? `${appliedDockHeight}px` : undefined}
+		style:--pau-shell-dock-height={dock && dockOpen && appliedDockHeight !== null
+			? `${appliedDockHeight}px`
+			: undefined}
 		bind:this={mainElement}
 		bind:clientHeight={mainHeight}>
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -560,9 +493,9 @@
 					max={maxDockHeight}
 					direction={-1}
 					bind:dragging={dockDragging}
-					onPreview={(height) => mainElement?.style.setProperty('--shell-dock-height', `${height}px`)}
+					onPreview={(height) => mainElement?.style.setProperty('--pau-shell-dock-height', `${height}px`)}
 					onCommit={(height) => {
-						if (height === null) mainElement?.style.removeProperty('--shell-dock-height');
+						if (height === null) mainElement?.style.removeProperty('--pau-shell-dock-height');
 						onDockResize?.(height);
 					}}
 					onCancel={() => restoreDockHeight()} />
@@ -573,37 +506,63 @@
 		{/if}
 	</main>
 
-	{#if inspector && inspectorVisible}
-		<button type="button" class="app-shell__backdrop" aria-label="Close inspector" onclick={closeInspector}></button>
-		<!-- Escape bubbles from the controls inside the rail -->
+	{#if workspace && workspaceVisible}
+		{#if narrow.current}
+			<button
+				type="button"
+				class="app-shell__scrim"
+				tabindex="-1"
+				aria-label={`Close ${workspaceLabel.toLowerCase()}`}
+				onclick={closeOverlay}></button>
+		{/if}
+		<!-- Escape bubbles from the controls inside the overlay. -->
 		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<aside
-			id="shell-inspector"
-			class="app-shell__inspector"
-			aria-label="Inspector"
-			onkeydown={(event) => !inspectorDocked && closeOnEscape(event, closeInspector)}
-			bind:offsetWidth={inspectorWidth}>
-			<div class="app-shell__rail-heading pau-section-label">
-				<span>Inspector</span>
-				<button type="button" class="pau-utility-button" aria-label="Close inspector" onclick={closeInspector}>
-					<Icon name="close" size={18} />
-				</button>
-			</div>
-			<div class="app-shell__inspector-content">{@render inspector()}</div>
+			id="shell-workspace"
+			class="app-shell__workspace"
+			class:app-shell__workspace--overlay={narrow.current}
+			aria-label={workspaceLabel}
+			tabindex="-1"
+			bind:this={workspacePanel}
+			bind:offsetWidth={workspaceWidth}
+			onkeydown={(event) => {
+				if (!narrow.current || event.key !== 'Escape' || event.defaultPrevented) return;
+				event.stopPropagation();
+				closeOverlay();
+			}}>
+			<header class="app-shell__workspace-head">
+				{#if workspaceHeader}
+					{@render workspaceHeader()}
+				{:else}
+					<h2 class="app-shell__workspace-title pau-cap pau-cap--truncate">{workspaceLabel}</h2>
+				{/if}
+				{#if narrow.current}
+					<button
+						type="button"
+						class="app-shell__workspace-close pau-utility-button"
+						aria-label={`Close ${workspaceLabel.toLowerCase()}`}
+						onclick={closeOverlay}>
+						<Icon name="close" size={16} />
+					</button>
+				{/if}
+			</header>
+			<div class="app-shell__workspace-body">{@render workspace()}</div>
 		</aside>
-		<div class="app-shell__resizer app-shell__resizer--inspector">
-			<PaneResizer
-				label="Resize inspector"
-				controls="shell-inspector"
-				value={inspectorWidth}
-				min={MIN_PANE_WIDTH}
-				max={maxPaneWidth('inspector')}
-				direction={-1}
-				bind:dragging={inspectorDragging}
-				onPreview={(width) => previewWidth('inspector', width)}
-				onCommit={(width) => keepWidth('inspector', width)}
-				onCancel={() => cancelPreview('inspector')} />
-		</div>
+		{#if !narrow.current}
+			<div class="app-shell__resizer app-shell__resizer--workspace">
+				<PaneResizer
+					label={`Resize the ${workspaceLabel.toLowerCase()} column`}
+					controls="shell-workspace"
+					value={workspaceWidth}
+					min={MIN_WIDTH.inspector}
+					max={maxPaneWidth('inspector')}
+					direction={-1}
+					bind:dragging={workspaceDragging}
+					onPreview={(width) => previewWidth('inspector', width)}
+					onCommit={(width) => keepWidth('inspector', width)}
+					onCancel={() => cancelPreview('inspector')} />
+			</div>
+		{/if}
 	{/if}
 </div>
 
@@ -613,85 +572,52 @@
 	}
 
 	.app-shell {
-		--shell-bg: var(--pau-canvas);
-		--shell-surface: var(--pau-surface);
-		--shell-surface-raised: var(--pau-surface-raised);
-		--shell-border: var(--pau-border);
-		--shell-text: var(--pau-text);
-		--shell-muted: var(--pau-text-muted);
-		--shell-faint: var(--pau-text-muted);
-		--shell-accent: var(--pau-accent);
-		--shell-warning: var(--pau-warning);
-		--shell-danger: var(--pau-danger);
-		--shell-focus: var(--pau-focus);
-		--shell-context-width: var(--pau-size-rail-context);
-		--shell-inspector-width: var(--pau-size-rail-inspector);
+		--pau-shell-bay-width: var(--pau-size-bay);
+		--pau-shell-workspace-width: var(--pau-size-workspace);
 		/*
 		 * The main surface's padding. A view that runs edge to edge, such as
 		 * Files or Terminals, cancels it with this value, so the two never drift
-		 * apart at a breakpoint.
+		 * apart.
 		 */
-		--shell-main-padding: var(--pau-space-6);
+		--pau-shell-padding: var(--pau-space-5);
 		/*
-		 * Where content starts inside a rail or an edge-to-edge view: rail
-		 * headings, rail rows, view titles, and the bars under them. Sharing it
-		 * keeps every label in a column on one leading edge.
+		 * Where content starts inside the bay, the workspace column or an
+		 * edge-to-edge view: headings, rows, view titles, and the bars under
+		 * them share this leading edge.
 		 */
-		--shell-inset: var(--pau-space-4);
+		--pau-shell-inset: var(--pau-space-4);
 		display: grid;
-		grid-template-areas:
-			'command command command'
-			'product context main';
-		grid-template-columns: var(--pau-size-rail-product) var(--shell-context-width) minmax(0, 1fr);
-		grid-template-rows: 2.75rem minmax(0, 1fr);
-		min-width: 20rem;
+		grid-template-areas: 'bay main';
+		grid-template-columns: var(--pau-shell-bay-width) minmax(0, 1fr);
+		grid-template-rows: minmax(0, 1fr);
 		height: 100dvh;
 		overflow: hidden;
-		color: var(--shell-text);
-		background: var(--shell-bg);
+		color: var(--pau-text);
+		background-color: var(--pau-canvas);
 		font-family: var(--pau-font-ui);
 		font-size: var(--pau-type-md);
-		line-height: 1.4;
+		line-height: var(--pau-leading-row);
 	}
 
-	.app-shell--with-inspector {
-		grid-template-areas:
-			'command command command command'
-			'product context main inspector';
-		grid-template-columns: var(--pau-size-rail-product) var(--shell-context-width) minmax(24rem, 1fr) var(
-				--shell-inspector-width
-			);
+	.app-shell--with-workspace {
+		grid-template-areas: 'bay main workspace';
+		grid-template-columns: var(--pau-shell-bay-width) minmax(24rem, 1fr) var(--pau-shell-workspace-width);
 	}
 
-	/* Views without a contextual rail give its column to the main surface. */
-	.app-shell--without-context {
-		grid-template-areas:
-			'command command'
-			'product main';
-		grid-template-columns: var(--pau-size-rail-product) minmax(0, 1fr);
-	}
-
-	.app-shell--without-context.app-shell--with-inspector {
-		grid-template-areas:
-			'command command command'
-			'product main inspector';
-		grid-template-columns: var(--pau-size-rail-product) minmax(24rem, 1fr) var(--shell-inspector-width);
-	}
-
-	/* Resize handles sit over the pane edges. They are separate grid items so scrolling a pane never moves them. */
+	/* Resize handles sit over the column edges. They are separate grid items so scrolling a column never moves them. */
 	.app-shell__resizer {
 		display: grid;
 		align-self: stretch;
 		min-width: 0;
 	}
 
-	.app-shell__resizer--context {
-		grid-area: context;
+	.app-shell__resizer--bay {
+		grid-area: bay;
 		justify-self: end;
 	}
 
-	.app-shell__resizer--inspector {
-		grid-area: inspector;
+	.app-shell__resizer--workspace {
+		grid-area: workspace;
 		justify-self: start;
 	}
 
@@ -723,12 +649,12 @@
 
 	.app-shell__skip-link {
 		position: fixed;
-		top: 0.5rem;
-		left: 0.5rem;
+		top: var(--pau-space-2);
+		left: var(--pau-space-2);
 		z-index: 20;
 		padding: var(--pau-space-2) var(--pau-space-3);
-		color: var(--shell-bg);
-		background: var(--shell-focus);
+		color: var(--pau-canvas);
+		background-color: var(--pau-focus);
 		transform: translateY(-150%);
 	}
 
@@ -736,188 +662,60 @@
 		transform: translateY(0);
 	}
 
-	.app-shell__command-bar {
-		grid-area: command;
-		display: flex;
-		align-items: center;
-		gap: var(--pau-space-3);
-		padding-inline: var(--pau-space-3);
-		border-bottom: 1px solid var(--shell-border);
-		background: var(--shell-bg);
-	}
-
-	/*
-	 * The identity takes the free space so the status, toggles, and command field sit at the trailing edge.
-	 * It never shrinks below the mark, so a narrow bar shrinks the command field instead of drawing the
-	 * toggles over the mark.
-	 */
-	.app-shell__identity {
-		display: flex;
-		flex: 1;
-		align-items: center;
-		gap: var(--pau-space-2);
-		min-width: 1.5rem;
-		color: var(--shell-muted);
-	}
-
-	.app-shell__identity strong {
-		color: var(--shell-text);
-	}
-
-	.app-shell__mark {
-		flex: none;
-		width: 1.5rem;
-		height: 1.5rem;
-		padding: var(--pau-space-1);
-		color: var(--shell-bg);
-		background: var(--shell-accent);
-	}
-
-	/*
-	 * The icon and placeholder sit as one group in the middle of the field, and
-	 * the shortcut keeps the trailing edge. The equal outer tracks hold the group
-	 * centered whether or not the shortcut shows.
-	 */
-	.app-shell__command-input {
-		display: grid;
-		flex: 0 1 auto;
-		grid-template-columns: 1fr minmax(0, auto) 1fr;
-		align-items: center;
-		width: min(23rem, 45vw);
-		min-width: var(--pau-size-row-md);
-	}
-
-	.app-shell__command-label {
-		display: flex;
-		grid-column: 2;
-		align-items: center;
-		min-width: 0;
-	}
-
-	.app-shell__search-icon {
-		flex: none;
-		width: 0.75rem;
-		height: 0.75rem;
-		margin-right: var(--pau-space-2);
-		border: 1.5px solid var(--shell-muted);
-		border-radius: 50%;
-	}
-
-	.app-shell__search-icon::after {
-		display: block;
-		width: 0.35rem;
-		margin: var(--pau-space-2) 0 0 var(--pau-space-2);
-		border-top: 1.5px solid var(--shell-muted);
-		content: '';
-		transform: rotate(45deg);
-	}
-
-	.app-shell__command-placeholder {
-		min-width: 0;
-		overflow: hidden;
-		color: var(--shell-muted);
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.app-shell__command-input kbd {
-		grid-column: 3;
-		justify-self: end;
-		color: var(--shell-faint);
-		font: inherit;
-	}
-
-	.app-shell__product-rail {
-		grid-area: product;
+	/* The bay and its view row. The bay's own content scrolls; the view row stays at the foot. */
+	.app-shell__bay {
+		grid-area: bay;
 		display: flex;
 		flex-direction: column;
-		border-right: 1px solid var(--shell-border);
-		background: var(--shell-bg);
-	}
-
-	.app-shell__product-rail ul,
-	.app-shell__context-rail ul {
-		display: grid;
-		gap: var(--pau-space-1);
-		margin: 0;
-		padding: var(--pau-space-3) 0;
-		list-style: none;
-	}
-
-	.app-shell__product-rail a,
-	.app-shell__product-rail button {
-		position: relative;
-		display: grid;
-		place-items: center;
-		width: 2.75rem;
-		height: var(--pau-size-target-touch);
-		margin-inline: auto;
-		padding: 0;
-		border: 0;
-		text-decoration: none;
-	}
-
-	.app-shell__product-rail .active {
-		color: var(--shell-accent);
-		background-color: var(--shell-surface-raised);
-	}
-
-	.app-shell__product-rail .app-shell__unavailable {
-		cursor: not-allowed;
-	}
-
-	.app-shell__attention {
-		position: absolute;
-		top: 0.45rem;
-		right: 0.45rem;
-		width: 0.4rem;
-		height: 0.4rem;
-		background: var(--shell-warning);
-		border-radius: 50%;
-	}
-
-	.app-shell__context-rail {
-		grid-area: context;
 		min-width: 0;
-		overflow-y: auto;
-		border-right: 1px solid var(--shell-border);
-		background: var(--shell-bg);
+		min-height: 0;
+		background-color: var(--pau-surface);
+		border-right: 1px solid var(--pau-border);
+	}
+
+	.app-shell__bay > :global(:first-child) {
+		flex: 1;
+		min-height: 0;
+	}
+
+	.app-shell__context {
+		display: flex;
+		flex-direction: column;
+	}
+
+	/* A view without a bay names its left column on the same 48px line as the other column headers. */
+	.app-shell__context-heading {
+		flex: none;
+		height: var(--pau-size-header);
+		padding-top: 0;
+		border-bottom: 1px solid var(--pau-border);
 	}
 
 	.app-shell__context-content {
-		min-width: 0;
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
 	}
 
-	.app-shell__rail-heading {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		height: var(--pau-size-row-lg);
-		padding-inline: var(--shell-inset) var(--pau-space-2);
+	.app-shell__context ul {
+		display: grid;
+		gap: var(--pau-space-1);
+		margin: 0;
+		padding: var(--pau-space-2) 0;
+		list-style: none;
 	}
 
-	.app-shell__rail-heading span {
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.app-shell__rail-heading button {
-		display: none;
-	}
-
-	.app-shell__context-rail li {
+	.app-shell__context li {
 		padding-inline: var(--pau-space-2);
 	}
 
-	.app-shell__context-rail a {
+	.app-shell__context a {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
 		gap: var(--pau-space-2);
 		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
+		padding-inline: var(--pau-space-2);
 		text-decoration: none;
 	}
 
@@ -925,31 +723,160 @@
 		grid-template-columns: 0.5rem minmax(0, 1fr) auto;
 	}
 
-	.app-shell__context-rail a.active {
-		color: var(--shell-text);
-		background-color: var(--shell-surface-raised);
+	.app-shell__context a.active {
+		color: var(--pau-text);
+		background-color: var(--pau-surface-selected);
+		box-shadow: inset 0 0 0 1px var(--pau-border-control);
 	}
 
 	@media (pointer: coarse) {
-		.app-shell__context-rail a {
+		.app-shell__context a {
 			min-height: var(--pau-size-target-touch);
 		}
 	}
 
-	.app-shell__context-rail small {
-		color: var(--shell-muted);
+	.app-shell__context small {
+		color: var(--pau-text-muted);
 		font-variant-numeric: tabular-nums;
 	}
 
 	.app-shell__item-dot {
-		width: 0.4rem;
-		height: 0.4rem;
-		background: var(--shell-accent);
+		width: 0.5rem;
+		height: 0.5rem;
+		background-color: var(--pau-text-muted);
 		border-radius: 50%;
 	}
 
 	.app-shell__item-dot.attention {
-		background: var(--shell-warning);
+		background-color: var(--pau-accent);
+	}
+
+	/*
+	 * The view row: one 32px quiet icon button per view across the bay's
+	 * foot, on the 48px line of the other column edges. The current view takes
+	 * the selected treatment.
+	 */
+	.app-shell__views {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: var(--pau-space-2);
+		min-height: var(--pau-size-header);
+		padding-inline: var(--pau-space-4);
+		border-top: 1px solid var(--pau-border);
+	}
+
+	.app-shell__views ul {
+		display: flex;
+		gap: var(--pau-space-1);
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.app-shell__views li {
+		position: relative;
+	}
+
+	.app-shell__view {
+		position: relative;
+		display: grid;
+		place-items: center;
+		width: var(--pau-size-row-md);
+		height: var(--pau-size-row-md);
+		padding: 0;
+		border: 0;
+		border-radius: var(--pau-radius-control);
+		text-decoration: none;
+	}
+
+	@media (pointer: coarse) {
+		.app-shell__view {
+			width: var(--pau-size-target-touch);
+			height: var(--pau-size-target-touch);
+		}
+	}
+
+	.app-shell__view[aria-current='page'] {
+		color: var(--pau-text);
+		background-color: var(--pau-surface-selected);
+		box-shadow: inset 0 0 0 1px var(--pau-border-control);
+	}
+
+	.app-shell__view[aria-disabled='true'] {
+		cursor: not-allowed;
+	}
+
+	.app-shell__view:focus-visible {
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset);
+	}
+
+	/* An 8px accent dot on the view that holds sessions waiting on the operator. */
+	.app-shell__attention {
+		position: absolute;
+		top: var(--pau-space-1);
+		right: var(--pau-space-1);
+		width: 0.375rem;
+		height: 0.375rem;
+		background-color: var(--pau-accent);
+		border-radius: 50%;
+	}
+
+	/*
+	 * The view's name, chord and, when it cannot open, the reason. It opens
+	 * above the button on hover and keyboard focus, so the pointer and the
+	 * keyboard read the same thing. The first views anchor it at their left
+	 * edge and the last at their right, so it never leaves the bay.
+	 */
+	.app-shell__tip {
+		position: absolute;
+		bottom: calc(100% + var(--pau-space-2));
+		left: 0;
+		z-index: 10;
+		display: none;
+		gap: var(--pau-space-1);
+		width: max-content;
+		max-width: 16rem;
+		padding: var(--pau-space-2) var(--pau-space-3);
+		color: var(--pau-text);
+		background-color: var(--pau-surface-overlay);
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-overlay);
+		box-shadow: var(--pau-shadow-overlay);
+		font-size: var(--pau-type-xs);
+		line-height: var(--pau-leading-tight);
+		pointer-events: none;
+	}
+
+	.app-shell__views li:nth-child(n + 4) .app-shell__tip {
+		right: 0;
+		left: auto;
+	}
+
+	.app-shell__views li:has(> .app-shell__view:focus-visible) .app-shell__tip {
+		display: grid;
+	}
+
+	@media (hover: hover) {
+		.app-shell__views li:has(> .app-shell__view:hover) .app-shell__tip {
+			display: grid;
+		}
+	}
+
+	.app-shell__tip-line {
+		display: flex;
+		align-items: center;
+		gap: var(--pau-space-2);
+	}
+
+	.app-shell__tip-reason {
+		color: var(--pau-text-muted);
+	}
+
+	.app-shell__connection {
+		margin: 0 0 0 auto;
+		white-space: nowrap;
 	}
 
 	.app-shell__main {
@@ -958,88 +885,84 @@
 		grid-template-rows: minmax(0, 1fr);
 		min-width: 0;
 		overflow: hidden;
-		background: var(--shell-surface);
-	}
-
-	.app-shell__panel-toggles {
-		display: flex;
-		flex: none;
-		gap: var(--pau-space-1);
-	}
-
-	.app-shell__panel-toggles .app-shell__icon-button {
-		display: grid;
-		width: var(--pau-size-row-md);
-		height: var(--pau-size-row-md);
-		border-radius: var(--pau-radius-control);
-	}
-
-	/* An open pane shows as a pressed toggle, as in the design. */
-	.app-shell__panel-toggles .app-shell__icon-button[aria-expanded='true'] {
-		color: var(--shell-accent);
-		background-color: var(--shell-surface-raised);
-	}
-
-	.app-shell__icon-button,
-	.app-shell__rail-heading button {
-		place-items: center;
-		width: 2.75rem;
-		height: var(--pau-size-target-touch);
-		padding: 0;
-		border: 0;
-		cursor: pointer;
-	}
-
-	.app-shell__connection {
-		display: flex;
-		align-items: center;
-		flex: none;
-		gap: var(--pau-space-2);
-		margin: 0;
-		color: var(--shell-danger);
-		white-space: nowrap;
-		font-size: var(--pau-type-xs);
-	}
-
-	.app-shell__connection span {
-		width: 0.45rem;
-		height: 0.45rem;
-		background: currentColor;
-		border-radius: 50%;
+		background-color: var(--pau-canvas);
 	}
 
 	.app-shell__main-content {
 		grid-row: 1;
 		min-height: 0;
-		padding: var(--shell-main-padding);
+		padding: var(--pau-shell-padding);
 		overflow: auto;
 	}
 
 	/* A percentage row resolves against the main surface's height. */
 	.app-shell__main--docked {
-		grid-template-rows: minmax(0, 1fr) 0 var(--shell-dock-height, 40%);
+		grid-template-rows: minmax(0, 1fr) 0 var(--pau-shell-dock-height, 40%);
 	}
 
 	.app-shell__dock {
 		grid-row: 3;
 		min-height: 0;
-		border-top: 1px solid var(--shell-border);
-		background: var(--shell-bg);
+		border-top: 1px solid var(--pau-border);
+		background-color: var(--pau-canvas);
 	}
 
-	.app-shell__inspector {
-		grid-area: inspector;
+	.app-shell__workspace {
+		grid-area: workspace;
+		display: flex;
+		flex-direction: column;
 		min-width: 0;
-		overflow: auto;
-		border-left: 1px solid var(--shell-border);
-		background: var(--shell-bg);
+		min-height: 0;
+		background-color: var(--pau-surface);
+		border-left: 1px solid var(--pau-border);
 	}
 
-	.app-shell__inspector-content {
-		padding: var(--pau-space-2) var(--pau-space-4) var(--pau-space-4);
+	.app-shell__workspace:focus-visible {
+		outline: var(--pau-focus-width) solid var(--pau-focus);
+		outline-offset: var(--pau-focus-offset-inset);
 	}
 
-	.app-shell__backdrop {
+	.app-shell__workspace-head {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: var(--pau-space-2);
+		min-width: 0;
+		height: var(--pau-size-header);
+		padding: 0 var(--pau-space-2) 0 var(--pau-shell-inset);
+		border-bottom: 1px solid var(--pau-border);
+	}
+
+	.app-shell__workspace-head > :global(:first-child) {
+		flex: 1;
+	}
+
+	.app-shell__workspace-title {
+		margin: 0;
+		font-size: var(--pau-type-md);
+		font-weight: var(--pau-weight-semibold);
+		line-height: var(--pau-leading-tight);
+	}
+
+	.app-shell__workspace-close {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: var(--pau-size-row-md);
+		height: var(--pau-size-row-md);
+		padding: 0;
+		border: 0;
+		border-radius: var(--pau-radius-control);
+	}
+
+	.app-shell__workspace-body {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+
+	.app-shell__scrim {
 		display: none;
 	}
 
@@ -1051,86 +974,44 @@
 		outline-offset: var(--pau-focus-offset-inset);
 	}
 
-	@media (max-width: 74rem) {
-		.app-shell,
-		.app-shell--with-inspector {
-			grid-template-areas:
-				'command command command'
-				'product context main';
-			grid-template-columns: var(--pau-size-rail-product) var(--shell-context-width) minmax(0, 1fr);
+	/*
+	 * Narrow, 900 to 1199px: the bay narrows to 288px and hides the agent
+	 * name on strips, the workspace column becomes an overlay that slides in
+	 * from the right over a scrim, and an open dock takes the whole main
+	 * surface.
+	 */
+	@media (max-width: 1199.98px) {
+		.app-shell {
+			--pau-shell-bay-width: var(--pau-size-bay-narrow);
 		}
 
-		.app-shell--without-context,
-		.app-shell--without-context.app-shell--with-inspector {
-			grid-template-areas:
-				'command command'
-				'product main';
-			grid-template-columns: var(--pau-size-rail-product) minmax(0, 1fr);
+		.app-shell__bay :global(.pau-strip__agent) {
+			display: none;
 		}
 
-		.app-shell__inspector {
+		.app-shell__workspace--overlay {
 			position: fixed;
-			top: 2.75rem;
+			top: 0;
 			right: 0;
 			bottom: 0;
-			z-index: 5;
-			width: min(var(--pau-size-rail-inspector), calc(100vw - var(--pau-size-rail-product)));
-			box-shadow: -1rem 0 2rem rgb(0 0 0 / 24%);
+			z-index: 30;
+			width: min(var(--pau-size-workspace), 100vw);
+			border-left-color: var(--pau-border-control);
+			box-shadow: var(--pau-shadow-overlay);
+			animation: app-shell-overlay-in var(--pau-duration-move) var(--pau-ease-out);
 		}
 
-		.app-shell__backdrop {
+		.app-shell__scrim {
 			position: fixed;
-			inset: 2.75rem 0 0 0;
-			z-index: 4;
+			inset: 0;
+			z-index: 25;
 			display: block;
-			width: auto;
-			height: auto;
 			padding: 0;
-			background: rgb(7 8 15 / 55%);
+			background-color: rgb(6 8 14 / 56%);
 			border: 0;
+			animation: app-shell-scrim-in var(--pau-duration-move) var(--pau-ease-out);
 		}
 
-		.app-shell__inspector .app-shell__rail-heading button {
-			display: grid;
-		}
-
-		.app-shell__resizer--inspector {
-			display: none;
-		}
-
-		.app-shell {
-			--shell-main-padding: var(--pau-space-5);
-		}
-	}
-
-	@media (max-width: 48rem) {
-		.app-shell {
-			--shell-main-padding: var(--pau-space-4);
-		}
-
-		.app-shell,
-		.app-shell--with-inspector {
-			grid-template-areas:
-				'command command'
-				'product main';
-			grid-template-columns: var(--pau-size-rail-product) minmax(0, 1fr);
-		}
-
-		.app-shell__identity > span:last-child,
-		.app-shell__identity > span:nth-last-child(2),
-		.app-shell__command-input kbd {
-			display: none;
-		}
-
-		.app-shell__command-input {
-			width: min(20rem, calc(100vw - 8rem));
-		}
-
-		.app-shell__resizer--context {
-			display: none;
-		}
-
-		/* A narrow window gives an open dock the whole main surface instead of a strip. */
 		.app-shell__main--docked {
 			grid-template-rows: 0 0 minmax(0, 1fr);
 		}
@@ -1144,78 +1025,22 @@
 			border-top: 0;
 		}
 
-		.app-shell__context-rail {
-			position: fixed;
-			top: 2.75rem;
-			bottom: 0;
-			left: var(--pau-size-rail-product);
-			z-index: 6;
-			width: min(var(--pau-size-rail-context), calc(100vw - var(--pau-size-rail-product)));
-			box-shadow: 1rem 0 2rem rgb(0 0 0 / 24%);
-			transform: translateX(calc(-110% * var(--pau-motion-travel)));
-			opacity: 0;
-			visibility: hidden;
-			transition:
-				transform var(--pau-duration-move) var(--pau-ease-out),
-				opacity var(--pau-duration-move) var(--pau-ease-out),
-				visibility var(--pau-duration-move);
-		}
-
-		/* 0% matches the closed value's unit when travel is 0, so reduced motion starts no transform transition. */
-		.app-shell__context-rail.open {
-			transform: translateX(0%);
-			opacity: 1;
-			visibility: visible;
-		}
-
-		.app-shell__context-rail .app-shell__rail-heading button {
-			display: grid;
+		.app-shell__resizer--bay {
+			display: none;
 		}
 	}
 
-	@media (max-width: 30rem) {
-		.app-shell,
-		.app-shell--with-inspector,
-		.app-shell--without-context,
-		.app-shell--without-context.app-shell--with-inspector {
-			grid-template-areas:
-				'command'
-				'main'
-				'product';
-			grid-template-columns: minmax(0, 1fr);
-			grid-template-rows: 2.75rem minmax(0, 1fr) var(--pau-size-rail-product);
+	/* Under reduced motion the travel is zero, so the overlay fades in. */
+	@keyframes app-shell-overlay-in {
+		from {
+			opacity: 0;
+			transform: translateX(calc(2rem * var(--pau-motion-travel)));
 		}
+	}
 
-		.app-shell__product-rail {
-			border-top: 1px solid var(--shell-border);
-			border-right: 0;
-		}
-
-		.app-shell__product-rail ul {
-			display: flex;
-			justify-content: space-around;
-			padding: var(--pau-space-1);
-		}
-
-		.app-shell__product-rail a,
-		.app-shell__product-rail button {
-			margin: 0;
-		}
-
-		.app-shell__context-rail {
-			left: 0;
-			bottom: var(--pau-size-rail-product);
-			width: min(var(--pau-size-rail-context), 88vw);
-		}
-
-		.app-shell__inspector {
-			left: 0;
-			bottom: var(--pau-size-rail-product);
-			width: 100%;
-		}
-
-		.app-shell__identity strong {
-			display: none;
+	@keyframes app-shell-scrim-in {
+		from {
+			opacity: 0;
 		}
 	}
 </style>

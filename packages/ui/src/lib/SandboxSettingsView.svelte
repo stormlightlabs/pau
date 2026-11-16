@@ -555,7 +555,7 @@
 	.sandbox__choice,
 	.sandbox__check {
 		display: flex;
-		min-height: var(--pau-size-row-lg);
+		min-height: var(--pau-space-7);
 		font-size: var(--pau-type-md);
 	}
 
@@ -600,7 +600,7 @@
 
 	textarea {
 		width: 100%;
-		min-height: var(--pau-size-row-lg);
+		min-height: var(--pau-space-7);
 		padding: var(--pau-space-2);
 		color: var(--pau-text);
 		background: var(--pau-canvas);

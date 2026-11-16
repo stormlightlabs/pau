@@ -57,7 +57,6 @@
 <svelte:window onkeydown={(event) => keymap.handleKeydown(event)} />
 
 <ApplicationShell
-	workspaceName="pau"
 	contextLabel="Workspaces"
 	productItems={shellNavigationFixtures.productItems}
 	contextItems={shellNavigationFixtures.contextItems}

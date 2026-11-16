@@ -44,7 +44,6 @@ test('view actions share the button height and text size', async () => {
 		},
 		{
 			view: await render(ProcessesView, {
-				workspaceName: 'Pau',
 				processes,
 				actions: Object.fromEntries(processes.map((process) => [process.processId, { interrupt: true, stop: true }]))
 			}),

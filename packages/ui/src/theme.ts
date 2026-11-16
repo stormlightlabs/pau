@@ -395,7 +395,7 @@ export const THEMES = {
 			textMuted: '#a3a3a3',
 			textDisabled: '#7b7872',
 			textOnAccent: '#121212',
-			accent: '#4d9375',
+			accent: '#5aa182',
 			focus: '#5eaab5',
 			success: '#80a665',
 			warning: '#e6cc77',

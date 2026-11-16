@@ -14,10 +14,6 @@ beforeEach(() => {
 
 afterEach(() => vi.restoreAllMocks());
 
-async function openNavigation(): Promise<void> {
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-}
-
 test('opens a session menu from the keyboard and renames the session', async () => {
 	const onRenameSession = vi.fn();
 	const onCloneSession = vi.fn();
@@ -27,7 +23,6 @@ test('opens a session menu from the keyboard and renames the session', async () 
 		onRenameSession,
 		onCloneSession
 	});
-	await openNavigation();
 	const row = page.getByRole('button', { name: /Fix diff gutter/ });
 
 	await userEvent.click(row);
@@ -56,7 +51,6 @@ test('copies the session ID and explains why an ended session cannot stop', asyn
 		onStop,
 		onRenameSession: vi.fn()
 	});
-	await openNavigation();
 	const stopped = page.getByRole('button', { name: /Review fixtures/ });
 	await expect.element(stopped).toBeVisible();
 
@@ -83,10 +77,9 @@ test('offers workspace actions and leaves removal for later', async () => {
 		onOpenTerminal,
 		revealPath
 	});
-	await openNavigation();
-	const heading = page.getByRole('heading', { name: 'Pau' });
+	const heading = page.getByRole('button', { name: 'Pau actions' });
 
-	await userEvent.click(heading);
+	(heading.element() as HTMLElement).focus();
 	await userEvent.keyboard('{ContextMenu}');
 	await expect.element(page.getByRole('menu', { name: 'Pau actions' })).toBeVisible();
 	await expect

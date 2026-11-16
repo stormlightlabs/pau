@@ -45,4 +45,4 @@
 	);
 </script>
 
-<TerminalSurface workspaceName="pau" {source} {theme} {uiFont} {disconnected} {fileLinks} onMoveToDock={() => {}} />
+<TerminalSurface {source} {theme} {uiFont} {disconnected} {fileLinks} onMoveToDock={() => {}} />

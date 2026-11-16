@@ -7,7 +7,6 @@ import { sessionFixtures } from '../fixtures/sessions';
 import SessionView from '../lib/SessionView.svelte';
 import type { SessionWorkspace } from '../lib/types/session';
 
-// The rail docks beside the main surface only on a wide viewport.
 beforeEach(async () => {
 	await page.viewport(1440, 900);
 });
@@ -16,10 +15,9 @@ const longName: SessionWorkspace[] = [
 	{ id: 'ankify', name: 'ankify-spaced-repetition-sync-service', path: '/Users/me/ankify', sessions: [] }
 ];
 
-function renderRail(contextRail: number | null) {
+function renderBay() {
 	return render(SessionView, {
 		workspaces: longName,
-		paneWidths: { contextRail, inspector: null },
 		onStartSession: async () => {},
 		onLoadSavedSessions: async () => savedSessionFixtures.empty,
 		onResumeSession: async () => {},
@@ -28,129 +26,11 @@ function renderRail(contextRail: number | null) {
 }
 
 const rect = (element: Element) => element.getBoundingClientRect();
-const inset = (element: Element) =>
-	rect(element).left + Number(getComputedStyle(element).paddingLeft.replace('px', ''));
-
-test.each([
-	['minimum', 160],
-	['default', null]
-])('keeps the workspace row inside the rail at the %s width', async (_label, width) => {
-	await renderRail(width);
-
-	const rail = rect(document.querySelector('#shell-context-rail')!);
-	const start = page.getByRole('button', { name: 'New session in ankify-spaced-repetition-sync-service' });
-	const saved = page.getByRole('button', { name: 'Saved sessions in ankify-spaced-repetition-sync-service' });
-	await expect.element(start).toHaveAttribute('title', 'New session in ankify-spaced-repetition-sync-service');
-	await expect.element(saved).toHaveAttribute('title', 'Saved sessions in ankify-spaced-repetition-sync-service');
-
-	const heading = page.getByRole('heading', { name: 'ankify-spaced-repetition-sync-service' }).element();
-	const open = page.getByRole('button', { name: 'Open workspace…' }).element();
-	for (const element of [heading, start.element(), saved.element(), open]) {
-		const box = rect(element);
-		expect(box.left).toBeGreaterThanOrEqual(rail.left);
-		expect(box.right).toBeLessThanOrEqual(rail.right);
-	}
-
-	// The name truncates instead of pushing the controls out, and they share its row.
-	expect(heading.scrollWidth).toBeGreaterThan(heading.clientWidth);
-	expect(getComputedStyle(heading).textTransform).toBe('none');
-	expect(getComputedStyle(heading).textOverflow).toBe('ellipsis');
-	expect(getComputedStyle(heading).whiteSpace).toBe('nowrap');
-	expect(heading.getAttribute('title')).toContain('ankify-spaced-repetition-sync-service');
-	const nameBox = rect(heading);
-	const startBox = rect(start.element());
-	expect(startBox.left).toBeGreaterThanOrEqual(nameBox.right);
-	expect(Math.abs(startBox.top + startBox.height / 2 - (nameBox.top + nameBox.height / 2))).toBeLessThan(1);
-});
-
-test('aligns the empty session note with the workspace name', async () => {
-	await render(SessionView, { workspaces: [{ id: 'empty', name: 'Empty', sessions: [] }, ...sessionFixtures.waiting] });
-
-	const note = page.getByText('No sessions yet').element();
-	const heading = page.getByRole('heading', { name: 'Empty' }).element();
-	expect(Math.abs(inset(note) - inset(heading))).toBeLessThan(1);
-});
-
-test('stacks session rows without gaps and spans the selected row across the rail', async () => {
-	await render(SessionView, { workspaces: sessionFixtures.concurrent, activeSessionId: 'diff-gutter' });
-
-	const rail = rect(document.querySelector('.session-rail')!);
-	const rows = [...document.querySelectorAll<HTMLElement>('.session-rail li')].slice(0, 3).map((row) => rect(row));
-	for (const [index, row] of rows.entries()) {
-		expect(row.height).toBe(32);
-		if (index > 0) expect(row.top).toBe(rows[index - 1]!.bottom);
-	}
-
-	const selected = rect(page.getByRole('button', { name: /Fix diff gutter/ }).element());
-	expect(selected.left).toBe(rail.left);
-	expect(selected.right).toBe(rail.right);
-	expect(getComputedStyle(page.getByRole('button', { name: /Fix diff gutter/ }).element()).boxShadow).not.toBe('none');
-});
-
-test('gives the workspace icon buttons a resting border and a 44px hit area', async () => {
-	await renderRail(null);
-
-	const start = page.getByRole('button', { name: 'New session in ankify-spaced-repetition-sync-service' }).element();
-	expect(getComputedStyle(start).borderTopWidth).toBe('1px');
-	const after = getComputedStyle(start, '::after');
-	expect(Number(after.width.replace('px', ''))).toBeGreaterThanOrEqual(44);
-	expect(Number(after.height.replace('px', ''))).toBeGreaterThanOrEqual(44);
-	// The rail's buttons share one height, the Open workspace button's.
-	const open = page.getByRole('button', { name: 'Open workspace…' }).element();
-	expect(rect(start).height).toBe(32);
-	expect(rect(start).width).toBe(32);
-	expect(rect(open).height).toBe(32);
-});
-
-test('sets the rail status mark one spacing step from the name, as in the header', async () => {
-	await render(SessionView, { workspaces: sessionFixtures.idle, activeSessionId: 'session-idle' });
-
-	const row = page.getByRole('button', { name: /Fix diff gutter/ }).element();
-	const mark = rect(row.querySelector('.pau-mark')!);
-	const name = rect(row.querySelector('.session-rail__name')!);
-	expect(name.left - mark.right).toBe(8);
-
-	const header = document.querySelector('.session-view__status')!;
-	const headerMark = rect(header.querySelector('.pau-mark')!);
-	const headerLabel = rect(header.querySelector('span:not(.pau-mark)')!);
-	expect(headerLabel.left - headerMark.right).toBe(8);
-
-	// Names start after the 16px row inset, the 8px mark column and the 8px gap.
-	const rail = rect(document.querySelector('.session-rail')!);
-	expect(name.left - rail.left).toBe(32);
-	// The mark lines up with the workspace name above it.
-	expect(mark.left).toBe(inset(page.getByRole('heading', { name: 'Pau' }).element()));
-});
-
-test('truncates long session names on one line and keeps the full name', async () => {
-	const title = 'Reconcile the saved session registry with the running agents';
-	await render(SessionView, {
-		workspaces: [
-			{
-				id: 'ankify',
-				name: 'ankify',
-				sessions: [{ ...sessionFixtures.concurrent[0]!.sessions[0]!, id: 'long', title }]
-			}
-		],
-		paneWidths: { contextRail: 160, inspector: null }
-	});
-
-	const row = page.getByRole('button', { name: new RegExp(title) });
-	await expect.element(row).toHaveAttribute('title', title);
-	const name = document.querySelector<HTMLElement>('.session-rail__name')!;
-	const status = rect(document.querySelector('.session-rail__state')!);
-	expect(name.scrollWidth).toBeGreaterThan(name.clientWidth);
-	expect(getComputedStyle(name).textOverflow).toBe('ellipsis');
-	expect(getComputedStyle(name).whiteSpace).toBe('nowrap');
-	expect(rect(name).height).toBeLessThan(24);
-	// The status shares the name's line and stays inside the rail.
-	expect(Math.abs(status.top + status.height / 2 - (rect(name).top + rect(name).height / 2))).toBeLessThan(1);
-	expect(status.right).toBeLessThanOrEqual(rect(document.querySelector('#shell-context-rail')!).right);
-});
 
 test('lays out the saved-session picker as a top-aligned panel', async () => {
-	await renderRail(null);
-	await page.getByRole('button', { name: 'Saved sessions in ankify-spaced-repetition-sync-service' }).click();
+	await renderBay();
+	await page.getByRole('button', { name: 'More ways to start a session' }).click();
+	await page.getByRole('menuitem', { name: 'Saved sessions…' }).click();
 
 	const title = page.getByRole('heading', { name: 'Sessions in ankify-spaced-repetition-sync-service' });
 	await expect.element(title).toBeVisible();
@@ -202,9 +82,13 @@ test('keeps prose and lists at every level to 75ch inside the full-width session
 	});
 	await document.fonts.ready;
 
-	const column = rect(document.querySelector('.session-view')!);
+	// The column's content box, inside its gutters, is at most 58rem wide.
+	const content = document.querySelector('.session-view__transcript-content')!;
+	const gutter = Number(getComputedStyle(content).paddingLeft.replace('px', ''));
+	const box = rect(content);
+	const column = { left: box.left + gutter, right: box.right - gutter, width: box.width - 2 * gutter };
 	const remPx = Number(getComputedStyle(document.documentElement).fontSize.replace('px', ''));
-	expect(column.width).toBeCloseTo(58 * remPx, 0);
+	expect(column.width).toBeLessThanOrEqual(58 * remPx);
 
 	// 75 advances of the paragraph font's zero, the width of its `ch`.
 	const paragraph = document.querySelector('.session-message .markdown > p')!;
@@ -212,7 +96,7 @@ test('keeps prose and lists at every level to 75ch inside the full-width session
 	const context = document.createElement('canvas').getContext('2d')!;
 	context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
 	const measure = 75 * context.measureText('0').width;
-	expect(measure).toBeLessThan(column.width - 100);
+	expect(measure).toBeLessThanOrEqual(column.width);
 	expect(rect(paragraph).left).toBeCloseTo(column.left, 0);
 	expect(rect(paragraph).width).toBeCloseTo(measure, 0);
 
@@ -240,7 +124,7 @@ test('keeps prose and lists at every level to 75ch inside the full-width session
 
 	// Code takes the whole column, and the composer shares the column's edges.
 	const code = rect(document.querySelector('.session-message .markdown__code')!);
-	const composer = rect(document.querySelector('.session-view__composer-stack')!);
+	const composer = rect(document.querySelector('.session-composer')!);
 	expect(code.left).toBeCloseTo(column.left, 0);
 	expect(code.right).toBeCloseTo(column.right, 0);
 	expect(composer.left).toBeCloseTo(column.left, 0);

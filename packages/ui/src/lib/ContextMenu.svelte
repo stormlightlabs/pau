@@ -227,7 +227,7 @@
 	.context-menu__separator {
 		height: 0;
 		margin: var(--pau-space-1) 0;
-		border-top: var(--pau-border-thin, 1px) solid var(--pau-border);
+		border-top: 1px solid var(--pau-border);
 	}
 
 	@keyframes context-menu-enter {

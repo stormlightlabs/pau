@@ -32,11 +32,7 @@ afterEach(async () => {
 });
 
 function renderSurface(theme: ThemeName = 'eldritch') {
-	return render(TerminalSurface, {
-		workspaceName: 'integration',
-		source: createTerminalSource(location.origin, workspaceId),
-		theme
-	});
+	return render(TerminalSurface, { source: createTerminalSource(location.origin, workspaceId), theme });
 }
 
 function terminalRows(label: string): HTMLElement[] {

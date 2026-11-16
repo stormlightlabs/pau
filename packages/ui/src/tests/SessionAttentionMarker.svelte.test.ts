@@ -47,17 +47,10 @@ test('shows no marker for a seen session or for the open session', async () => {
 	expect(markers()).toHaveLength(0);
 });
 
-test('pulses the marker once and holds it still under reduced motion', async () => {
+test('holds the marker still', async () => {
 	await render(SessionView, { workspaces: rail(['waiting']), activeSessionId: 'viewed' });
-	const marker = markers()[0]!;
-
 	root.dataset.motion = 'full';
-	const style = getComputedStyle(marker);
-	expect(style.animationName).toContain('session-rail-marker-pulse');
-	expect(style.animationIterationCount).toBe('1');
-
-	root.dataset.motion = 'reduce';
-	expect(getComputedStyle(marker).animationName).toBe('none');
+	expect(getComputedStyle(markers()[0]!).animationName).toBe('none');
 });
 
 test('opening a marked session reports the selection that clears it', async () => {

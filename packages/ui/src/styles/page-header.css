@@ -1,0 +1,60 @@
+/*
+ * The page header: the 48px header of the main surface, so its rule lines up
+ * with the bay's and the workspace column's. It holds the title in the title
+ * role, an optional state label or count centered on the title's capitals,
+ * a spacer, and the view's actions. An action that removes or ends
+ * something, such as Stop, goes last as a danger button, apart from the
+ * others after `pau-page-header__rule`.
+ *
+ *   <header class="pau-page-header">
+ *     <h1 class="pau-page-header__title">…</h1>
+ *     <span class="pau-state pau-tone-info">…</span>
+ *     <span class="pau-page-header__spacer"></span>
+ *     <div class="pau-page-header__actions">
+ *       <button class="pau-button pau-button--quiet">…</button>
+ *       <span class="pau-page-header__rule" role="separator"></span>
+ *       <button class="pau-button pau-button--danger">Stop</button>
+ *     </div>
+ *   </header>
+ *
+ * A long title truncates on one line, so the state label never leaves the
+ * title line and the actions keep their place.
+ */
+.pau-page-header {
+	box-sizing: border-box;
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: var(--pau-space-3);
+	min-width: 0;
+	height: var(--pau-size-header);
+	padding-inline: var(--pau-space-5);
+	border-bottom: 1px solid var(--pau-border);
+}
+
+.pau-page-header__title {
+	margin: 0;
+	font-size: var(--pau-type-xl);
+	font-weight: var(--pau-weight-semibold);
+	line-height: var(--pau-leading-prose);
+	letter-spacing: -0.01em;
+}
+
+.pau-page-header__spacer {
+	flex: 1;
+}
+
+.pau-page-header__actions {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: var(--pau-space-1);
+}
+
+.pau-page-header__rule {
+	flex: none;
+	width: 1px;
+	height: var(--pau-space-4);
+	margin-inline: var(--pau-space-2);
+	background-color: var(--pau-border);
+}

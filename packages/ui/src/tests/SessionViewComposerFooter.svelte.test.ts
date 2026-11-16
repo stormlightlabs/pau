@@ -88,7 +88,7 @@ test('keeps keyboard control of the footer pickers and meter', async () => {
 });
 
 test('keeps a rejected thinking level message inside the main surface at the minimum window size', async () => {
-	await page.viewport(800, 560);
+	await page.viewport(900, 560);
 	const { onSelectThinkingLevel } = await setup('idle');
 	onSelectThinkingLevel.mockRejectedValue(new Error('Pi rejected the request: Level not supported'));
 
@@ -107,7 +107,7 @@ test('keeps a rejected thinking level message inside the main surface at the min
 
 test.each([
 	[900, 900],
-	[800, 560]
+	[900, 560]
 ])('opens a rejected thinking level message upward, clear of Send prompt, at %ix%i', async (width, height) => {
 	await page.viewport(width, height);
 	const { onSelectThinkingLevel } = await setup('idle');
@@ -169,8 +169,8 @@ test('keeps every footer control on one center line at 1440×900', async () => {
 	expect(rows[0]!.map((control) => control.textContent)).toContainEqual(expect.stringMatching(/Send prompt/));
 });
 
-test('puts the actions first and the options below them at 800×560', async () => {
-	await page.viewport(800, 560);
+test('puts the actions first and the options below them at 900×560', async () => {
+	await page.viewport(900, 560);
 	await setup();
 
 	const rows = footerRows();
@@ -178,6 +178,13 @@ test('puts the actions first and the options below them at 800×560', async () =
 	const first = rows[0]!.map((control) => control.textContent ?? '');
 	expect(first).toContainEqual(expect.stringMatching(/Send prompt/));
 	expect(first).toContainEqual(expect.stringMatching(/Interrupt/));
-	// The meter shortens to the share used and keeps its name.
+	await expect.element(page.getByRole('button', { name: /^Context 84k/ })).toBeVisible();
+});
+
+test('shortens the context meter to the share used in a narrow footer', async () => {
+	await page.viewport(360, 900);
+	await setup();
+
+	// The meter keeps its name, without the token totals.
 	await expect.element(page.getByRole('button', { name: 'Context 42%' })).toBeVisible();
 });

@@ -103,7 +103,7 @@
 		{#if open}
 			<div
 				id="context-meter-details"
-				class="context-meter__details"
+				class="context-meter__details pau-menu"
 				class:context-meter__details--keyboard={keyboardOpen}
 				role="group"
 				aria-label="Session usage">
@@ -159,8 +159,8 @@
 		position: relative;
 		display: flex;
 		align-items: center;
-		min-height: var(--pau-size-row-sm);
-		padding: var(--pau-space-1);
+		min-height: var(--pau-size-row-md);
+		padding: var(--pau-space-1) var(--pau-space-2);
 		text-align: start;
 		background-color: transparent;
 		/* Quiet like the other composer footer controls until usage nears the limit. */
@@ -181,8 +181,8 @@
 	}
 
 	/*
-	 * In a narrow container, such as the composer footer at the minimum window
-	 * size, the label keeps only the share used. The details still list the
+	 * In a narrow container, such as the composer footer in a phone-width
+	 * view, the label keeps only the share used. The details still list the
 	 * window and token totals, and display: none keeps the hidden form out of
 	 * the accessible name.
 	 */
@@ -257,14 +257,9 @@
 		width: 16rem;
 		max-width: calc(100vw - 1rem);
 		padding: var(--pau-space-3);
-		color: var(--pau-text);
-		background: var(--pau-surface-raised);
-		border: var(--pau-border-thin, 1px) solid var(--pau-border);
-		border-radius: var(--pau-radius-surface);
-		box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 28%);
 		font-size: var(--pau-type-sm);
 		transform-origin: bottom left;
-		animation: context-meter-enter var(--pau-duration-small) var(--pau-ease-enter);
+		animation: context-meter-enter var(--pau-duration-move) var(--pau-ease-out);
 	}
 
 	.context-meter__details--keyboard {

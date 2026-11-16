@@ -785,14 +785,6 @@
 		align-items: center;
 		width: min(23rem, 45vw);
 		min-width: var(--pau-size-row-md);
-		height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
-		border: 1px solid var(--shell-border);
-		border-radius: var(--pau-radius-control);
-		background-color: var(--shell-surface);
-		color: inherit;
-		font: inherit;
-		cursor: pointer;
 	}
 
 	.app-shell__command-label {
@@ -1164,9 +1156,9 @@
 			opacity: 0;
 			visibility: hidden;
 			transition:
-				transform var(--pau-duration-medium) var(--pau-ease-standard),
-				opacity var(--pau-duration-medium) var(--pau-ease-standard),
-				visibility var(--pau-duration-medium);
+				transform var(--pau-duration-move) var(--pau-ease-out),
+				opacity var(--pau-duration-move) var(--pau-ease-out),
+				visibility var(--pau-duration-move);
 		}
 
 		/* 0% matches the closed value's unit when travel is 0, so reduced motion starts no transform transition. */

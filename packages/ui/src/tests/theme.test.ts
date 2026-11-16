@@ -82,6 +82,44 @@ describe('bundled themes', () => {
 	});
 });
 
+describe('control borders', () => {
+	/*
+	 * The control border is what identifies a text field or a secondary
+	 * button, so it keeps 3:1 against every surface a control sits on: the
+	 * four surface steps, the overlay and the request card's accent wash. A
+	 * pressed button steps up to the strong border, which keeps 3:1 on the
+	 * pressed tint.
+	 */
+	test('keep 3:1 or better on every surface a control sits on', () => {
+		for (const { name, colors } of Object.values(THEMES)) {
+			const surfaces = {
+				canvas: colors.canvas,
+				surface: colors.surface,
+				raised: colors.surfaceRaised,
+				selected: colors.surfaceSelected,
+				overlay: colors.surfaceOverlay,
+				request: mix(colors.surfaceRaised, colors.accent, 6)
+			};
+			const pressed = mix(colors.surfaceRaised, colors.text, STATE_MIX.press);
+			expect(contrast(colors.borderStrong, pressed), `${name} strong border on pressed`).toBeGreaterThanOrEqual(3);
+			for (const [surface, color] of Object.entries(surfaces)) {
+				expect(contrast(colors.borderControl, color), `${name} control border on ${surface}`).toBeGreaterThanOrEqual(3);
+				expect(contrast(colors.borderStrong, color), `${name} strong border on ${surface}`).toBeGreaterThan(
+					contrast(colors.borderControl, color)
+				);
+			}
+		}
+	});
+
+	test('keep pane rules quieter than control borders', () => {
+		for (const { name, colors } of Object.values(THEMES)) {
+			expect(contrast(colors.border, colors.surface), name).toBeLessThan(
+				contrast(colors.borderControl, colors.surface)
+			);
+		}
+	});
+});
+
 describe('hover and press colors', () => {
 	test('keep text, muted, and danger text readable on tinted canvas and surface', () => {
 		for (const { name, colors } of Object.values(THEMES)) {
@@ -102,7 +140,7 @@ describe('hover and press colors', () => {
 		for (const { name, colors } of Object.values(THEMES)) {
 			for (const state of ['accentHover', 'accentPress'] as const) {
 				const accent = mix(colors.accent, colors.text, STATE_MIX[state]);
-				expect(contrast(colors.canvas, accent), `${name} primary label on ${state}`).toBeGreaterThanOrEqual(4.5);
+				expect(contrast(colors.textOnAccent, accent), `${name} primary label on ${state}`).toBeGreaterThanOrEqual(4.5);
 				for (const surface of ['canvas', 'surface'] as const) {
 					expect(contrast(accent, colors[surface]), `${name} ${state} link on ${surface}`).toBeGreaterThanOrEqual(4.5);
 				}
@@ -112,7 +150,7 @@ describe('hover and press colors', () => {
 
 	test('keep popover options readable under the pointer and when pressed', () => {
 		for (const { name, colors } of Object.values(THEMES)) {
-			for (const fill of ['selection', 'surface'] as const) {
+			for (const fill of ['surfaceSelected', 'surface'] as const) {
 				for (const role of ['text', 'textMuted'] as const) {
 					expect(contrast(colors[role], colors[fill]), `${name} ${role} on ${fill}`).toBeGreaterThanOrEqual(4.5);
 				}

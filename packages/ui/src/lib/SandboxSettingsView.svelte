@@ -271,6 +271,7 @@
 							<span>Source environment variable</span>
 							<small>For example, PACKAGE_TOKEN. Model provider credentials cannot be used.</small>
 							<input
+								class="pau-field"
 								type="text"
 								value={reference.source}
 								autocomplete="off"
@@ -597,26 +598,23 @@
 		justify-self: start;
 	}
 
-	textarea,
-	input[type='text'] {
+	textarea {
 		width: 100%;
 		min-height: var(--pau-size-row-lg);
 		padding: var(--pau-space-2);
 		color: var(--pau-text);
 		background: var(--pau-canvas);
-		border: 1px solid var(--pau-border);
+		border: 1px solid var(--pau-border-control);
 		border-radius: var(--pau-radius-control);
 		font: var(--pau-type-sm)/1.4 var(--pau-font-code);
 		resize: vertical;
 	}
 
 	input[type='text'] {
-		min-height: var(--pau-size-row-lg);
-		resize: none;
+		width: 100%;
 	}
 
 	textarea:focus-visible,
-	input:focus-visible,
 	button:focus-visible {
 		outline: var(--pau-focus-width) solid var(--pau-focus);
 		outline-offset: var(--pau-focus-offset);

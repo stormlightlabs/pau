@@ -434,6 +434,7 @@
 		border-right: 1px solid var(--shell-border);
 		box-shadow: inset 0 -2px 0 transparent;
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: var(--pau-type-xs);
 		white-space: nowrap;
 	}

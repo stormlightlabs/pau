@@ -20,8 +20,8 @@ const base = sessionFixtures.idle[0]!.sessions[0]!;
 
 afterEach(() => delete root.dataset.motion);
 
-function marks(): SVGElement[] {
-	return [...document.querySelectorAll<SVGElement>('.session-status-mark')];
+function marks(): HTMLElement[] {
+	return [...document.querySelectorAll<HTMLElement>('.pau-mark[data-status]')];
 }
 
 test.each(states)('marks %s as "%s" in the rail and the header', async (status, label) => {
@@ -39,7 +39,7 @@ test.each(states)('marks %s as "%s" in the rail and the header', async (status, 
 	}
 });
 
-test('gives every state a distinct glyph', async () => {
+test('gives every state a distinct shape and color', async () => {
 	await render(SessionView, {
 		workspaces: [{ id: 'pau', name: 'Pau', sessions: states.map(([status]) => ({ ...base, id: status, status })) }],
 		activeSessionId: 'idle'
@@ -47,7 +47,17 @@ test('gives every state a distinct glyph', async () => {
 
 	const glyphs = states.map(([status]) => {
 		const mark = marks().find((candidate) => candidate.dataset.status === status)!;
-		return mark.getHTML().replace(/<!--.*?-->/g, '');
+		const style = getComputedStyle(mark);
+		return [
+			style.backgroundColor,
+			style.backgroundImage,
+			style.borderTopColor,
+			style.borderTopWidth,
+			style.borderRadius,
+			style.transform,
+			style.boxShadow,
+			style.maskImage
+		].join(' ');
 	});
 	expect(new Set(glyphs).size).toBe(states.length);
 });
@@ -60,7 +70,7 @@ test('spins the running mark and holds it still under reduced motion', async () 
 	const mark = marks()[0]!;
 
 	root.dataset.motion = 'full';
-	expect(getComputedStyle(mark).animationName).toContain('session-status-spin');
+	expect(getComputedStyle(mark).animationName).toContain('pau-mark-spin');
 
 	root.dataset.motion = 'reduce';
 	expect(getComputedStyle(mark).animationName).toBe('none');

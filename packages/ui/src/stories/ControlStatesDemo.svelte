@@ -64,6 +64,16 @@
 				Coming soon
 			</button>
 		</div>
+		<div class="control-states__rail">
+			<button type="button" class="pau-strip pau-strip--row" data-control="strip"
+				><Icon name="diffModified" size={16} /><span class="pau-strip__name pau-mono">src/lib/Select.svelte</span><span
+					class="pau-strip__meta pau-mono">+12</span
+				></button>
+			<button type="button" class="pau-strip pau-strip--row" data-control="strip" aria-disabled="true"
+				><Icon name="diffRemoved" size={16} /><span class="pau-strip__name pau-mono">src/lib/legacy.ts</span><span
+					class="pau-strip__meta pau-mono">−40</span
+				></button>
+		</div>
 		<div class="control-states__tabs" role="tablist" aria-label="Terminals">
 			<button type="button" role="tab" class="control-states__tab pau-row" aria-selected="true">zsh</button>
 			<button type="button" role="tab" class="control-states__tab pau-row" aria-selected="false" data-control="tab">
@@ -84,12 +94,28 @@
 	<section aria-labelledby="control-states-fields">
 		<h2 id="control-states-fields" class="pau-section-label">Dropdowns</h2>
 		<div class="control-states__row">
-			<button type="button" class="control-states__field pau-field" data-control="field">
-				Info <Icon name="chevronDown" size={14} />
-			</button>
-			<button type="button" class="control-states__field pau-field" data-control="field" disabled>
-				Info <Icon name="chevronDown" size={14} />
-			</button>
+			<button type="button" class="pau-field" data-control="field"
+				><span>Info</span><Icon name="chevronDown" size={12} /></button>
+			<button type="button" class="pau-field" data-control="field" disabled
+				><span>Info</span><Icon name="chevronDown" size={12} /></button>
+			<button type="button" class="pau-field pau-field--quiet" data-control="quiet-field"
+				><span>High</span><Icon name="chevronDown" size={12} /></button>
+			<button type="button" class="pau-field pau-field--quiet" data-control="quiet-field" disabled
+				><span>High</span><Icon name="chevronDown" size={12} /></button>
+		</div>
+		<div class="control-states__row">
+			<input class="pau-field" aria-label="Filter" placeholder="Filter" data-control="text-field" />
+			<input class="pau-field" aria-label="Filter, disabled" placeholder="Filter" data-control="text-field" disabled />
+		</div>
+		<div class="control-states__menu pau-menu" role="menu" aria-label="File actions">
+			<button type="button" role="menuitem" class="pau-menu__item pau-option" data-control="menu-item"
+				><Icon name="copy" size={16} /><span>Copy path</span></button>
+			<button
+				type="button"
+				role="menuitem"
+				class="pau-menu__item pau-option"
+				data-control="menu-item"
+				aria-disabled="true"><Icon name="terminal" size={16} /><span>Open in editor</span></button>
 		</div>
 		<div class="control-states__list" role="listbox" aria-label="Log level">
 			<div role="option" class="control-states__option pau-option" tabindex="-1" aria-selected="true">Debug</div>
@@ -191,8 +217,8 @@
 
 	.control-states__rail-row[aria-current='page'] {
 		color: var(--pau-text);
-		background-color: var(--pau-selection);
-		box-shadow: inset 2px 0 0 var(--pau-accent);
+		background-color: var(--pau-surface-selected);
+		box-shadow: inset 0 0 0 1px var(--pau-border-control);
 	}
 
 	.control-states__tabs {
@@ -202,9 +228,10 @@
 	}
 
 	.control-states__tab {
-		min-height: var(--pau-size-row-lg);
+		min-height: var(--pau-size-row-md);
 		padding-inline: var(--pau-space-3);
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: var(--pau-type-xs);
 		border: 0;
 		border-right: 1px solid var(--pau-border);
@@ -212,29 +239,18 @@
 
 	.control-states__tab[aria-selected='true'] {
 		color: var(--pau-text);
-		background-color: var(--pau-surface);
-		box-shadow: inset 0 -2px 0 var(--pau-accent);
+		background-color: var(--pau-surface-selected);
+		box-shadow: inset 0 0 0 1px var(--pau-border-control);
 	}
 
-	.control-states__field {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--pau-space-2);
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3) var(--pau-space-2);
-		font: inherit;
-		background-color: var(--pau-canvas);
-		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-control);
-	}
-
-	.control-states__list {
+	.control-states__list,
+	.control-states__menu {
 		display: grid;
 		width: 15.5rem;
 		padding: var(--pau-space-1);
-		background: var(--pau-surface-raised);
-		border: var(--pau-border-thin) solid var(--pau-border);
-		border-radius: var(--pau-radius-surface);
+		background: var(--pau-surface-overlay);
+		border: 1px solid var(--pau-border-control);
+		border-radius: var(--pau-radius-overlay);
 	}
 
 	.control-states__option {

@@ -220,7 +220,7 @@
 		color: var(--pau-text);
 		background: var(--pau-surface);
 		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-surface);
+		border-radius: var(--pau-radius-overlay);
 		box-shadow: 0 1rem 3rem color-mix(in srgb, var(--pau-canvas) 85%, transparent);
 		font-family: var(--pau-font-ui);
 		font-size: var(--pau-type-md);
@@ -234,7 +234,7 @@
 	/* Only a pointer open fades, and only when motion is not reduced. */
 	.command-palette[data-entrance='fade'][open],
 	.command-palette[data-entrance='fade'][open]::backdrop {
-		animation: command-palette-fade var(--pau-duration-feedback) var(--pau-ease-enter);
+		animation: command-palette-fade var(--pau-duration-quick) var(--pau-ease-out);
 	}
 
 	@keyframes command-palette-fade {
@@ -249,7 +249,7 @@
 		gap: var(--pau-space-2);
 		padding-inline: var(--pau-space-3);
 		color: var(--pau-text-muted);
-		border-bottom: 1px solid var(--pau-border);
+		border-bottom: 1px solid var(--pau-border-control);
 	}
 
 	.command-palette__field input {

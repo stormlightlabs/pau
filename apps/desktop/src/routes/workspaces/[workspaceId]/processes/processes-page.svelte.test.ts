@@ -14,7 +14,7 @@ vi.mock('$lib/api', async (importOriginal) => ({
 }));
 
 test('shows processes inside the application shell without sample data', async () => {
-	await page.viewport(800, 560);
+	await page.viewport(900, 560);
 	await render(ProcessesPage);
 
 	const rail = page.getByRole('navigation', { name: 'Product' });

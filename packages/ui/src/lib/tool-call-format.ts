@@ -1,11 +1,17 @@
 import type { ReadToolCall, ToolTruncation, TranscriptTool } from './types/session';
 
 /**
- * Lines a tool output block renders before it offers "show more". Pi can
- * return thousands of lines, and the transcript re-renders while a call
- * streams, so each reveal adds this many lines rather than the whole output.
+ * Lines a tool output block shows before it offers Show all. A long result
+ * would otherwise push the agent's answer screens away from the prompt.
  */
-export const toolOutputLineStep = 200;
+export const toolOutputLineCap = 12;
+
+/**
+ * Lines per text node in an opened tool output. Pi can return thousands of
+ * lines and the transcript updates while a call streams, so an update
+ * rewrites one chunk of this size instead of the whole output.
+ */
+export const toolOutputChunkLines = 200;
 
 /** Line kinds in Pi's display diff, read from each line's first character. */
 export type DiffLineKind = 'added' | 'removed' | 'context';

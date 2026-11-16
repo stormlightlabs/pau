@@ -108,6 +108,7 @@
 		gap: var(--pau-space-3);
 		min-width: 0;
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-variant-numeric: tabular-nums;
 	}
 

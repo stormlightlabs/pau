@@ -30,18 +30,29 @@ test('marks a failed command and an edit that did not apply', async () => {
 	await expect.element(page.getByLabelText('Error')).toHaveTextContent('Could not find the exact text');
 });
 
-test('caps oversized output and reveals earlier lines on request', async () => {
+test('caps oversized output at 12 lines and shows all of it on request', async () => {
 	await render(ToolCallViewDemo, { tools: [toolCallFixtures.bashTruncated] });
 	const output = page.getByLabelText('Command output');
 
 	await expect.element(page.getByText(/Pi kept the last 1200 of 4800 lines/)).toBeVisible();
 	await expect.element(page.getByText('/tmp/pi-bash-7f3a.log')).toBeVisible();
-	expect(output.element().textContent?.split('\n')).toHaveLength(200);
+	expect(output.element().textContent?.split('\n')).toHaveLength(12);
 	await expect.element(output).toHaveTextContent('test 1200 ... ok');
+	await expect.element(page.getByText('Last 12 of 1,200 lines')).toBeVisible();
 
-	await userEvent.click(page.getByRole('button', { name: 'Show 200 earlier lines' }));
-	expect(output.element().textContent?.split('\n')).toHaveLength(400);
-	await expect.element(output).toHaveTextContent('test 801 ... ok');
+	await userEvent.click(page.getByRole('button', { name: 'Show all 1,200 lines' }));
+	await expect.element(page.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
+	expect(output.element().textContent?.split('\n')).toHaveLength(1200);
+	await expect.element(output).toHaveTextContent('test 1 ... ok');
+	expect(output.element().scrollTop + output.element().clientHeight).toBeCloseTo(output.element().scrollHeight, -1);
+
+	await userEvent.click(page.getByRole('button', { name: 'Show less' }));
+	expect(output.element().textContent?.split('\n')).toHaveLength(12);
+});
+
+test('shows short output in full without a bar', async () => {
+	await render(ToolCallViewDemo, { tools: [toolCallFixtures.read] });
+	await expect.element(page.getByRole('button', { name: /Show all/ })).not.toBeInTheDocument();
 });
 
 test('shows a read range and its file contents', async () => {

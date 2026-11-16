@@ -1,0 +1,81 @@
+/*
+ * Menus, popovers and picker lists: the overlay surface inside the control
+ * border, with the overlay radius and shadow, because they cover content.
+ * A menu is at least 240px wide and opens from the top edge of the row group
+ * that owns it, so it never covers that row. Components own placement.
+ *
+ * `pau-menu__item` lays out one 32px row: an optional 16px icon or check
+ * mark, the label in a `span`, and an optional hint or `kbd` at the end.
+ * A label with a second line, such as a description or the reason a row is
+ * disabled, goes in a `pau-menu__text` instead: the label in a `span`, then
+ * the second line in a `small`.
+ * Pair it with `pau-option` from `states.css`, which owns the hover, press,
+ * active and disabled colors. `pau-menu__divider` separates groups.
+ */
+.pau-menu {
+	min-width: 15rem;
+	margin: 0;
+	padding: var(--pau-space-1);
+	color: var(--pau-text);
+	background-color: var(--pau-surface-overlay);
+	border: 1px solid var(--pau-border-control);
+	border-radius: var(--pau-radius-overlay);
+	box-shadow: var(--pau-shadow-overlay);
+	font-size: var(--pau-type-md);
+	line-height: var(--pau-leading-row);
+}
+
+.pau-menu__item {
+	box-sizing: border-box;
+	display: grid;
+	grid-template-columns: 1rem minmax(0, 1fr) auto;
+	align-items: center;
+	column-gap: var(--pau-space-2);
+	width: 100%;
+	min-height: var(--pau-size-row-md);
+	padding: 0 var(--pau-space-2);
+	border: 0;
+	border-radius: var(--pau-radius-control);
+	font: inherit;
+	text-align: start;
+	cursor: pointer;
+}
+
+/* An item without a lead icon still starts its label on the label column. */
+.pau-menu__item > span:first-child:not(.pau-icon) {
+	grid-column: 2;
+}
+
+/*
+ * Two lines of text are not trimmed to the capitals like a one-line label,
+ * so the block pads itself and wraps long words instead of truncating.
+ */
+.pau-menu__text {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+	padding-block: var(--pau-space-1);
+	overflow-wrap: anywhere;
+}
+
+.pau-menu__text > small {
+	color: var(--pau-text-muted);
+	font-size: var(--pau-type-xs);
+}
+
+.pau-menu__item > .pau-icon {
+	color: var(--pau-text-muted);
+}
+
+.pau-menu__hint {
+	max-width: 12rem;
+	color: var(--pau-text-muted);
+	font-size: var(--pau-type-xs);
+}
+
+.pau-menu__divider {
+	height: 1px;
+	margin: var(--pau-space-1) calc(-1 * var(--pau-space-1));
+	background-color: var(--pau-border);
+	border: 0;
+}

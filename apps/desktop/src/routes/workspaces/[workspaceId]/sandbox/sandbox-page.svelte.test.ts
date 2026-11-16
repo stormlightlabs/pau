@@ -28,13 +28,13 @@ function shellColor(name: string): string {
 	return value;
 }
 
-test('draws settings fields with the theme border and fits a minimum-size window', async () => {
-	await page.viewport(800, 560);
+test('draws settings fields with the control border and fits a minimum-size window', async () => {
+	await page.viewport(900, 560);
 	await render(SandboxPage);
 	const field = page.getByRole('textbox', { name: /Network destinations/ });
 	await expect.element(field).toBeVisible();
 
-	expect(getComputedStyle(field.element()).borderTopColor).toBe(shellColor('--pau-border'));
+	expect(getComputedStyle(field.element()).borderTopColor).toBe(shellColor('--pau-border-control'));
 
 	const main = document.querySelector<HTMLElement>('#main-surface')!;
 	expect(main.scrollWidth).toBe(main.clientWidth);

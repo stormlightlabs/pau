@@ -81,12 +81,13 @@ test('stacks records and shows transport rows as metric blocks in a 600px main c
 	expect(getComputedStyle(row).gridTemplateColumns.split(' ')).toHaveLength(2);
 });
 
-test('labels the log level as normal text and shows the mode as an outlined chip', async () => {
+test('labels the log level as normal text and shows the mode as a chip', async () => {
 	applyTheme();
 	await render(DiagnosticsView, { bundle: diagnosticFixtures.active });
 
 	const label = getComputedStyle(page.getByText('Minimum log level').element());
 	expect(label.color).toBe(getComputedStyle(page.getByText('Enable diagnostics').element()).color);
 	await expect.element(page.getByText('Diagnostics mode on')).toBeVisible();
-	expect(getComputedStyle(page.getByText('Diagnostics mode on').element()).borderTopStyle).toBe('solid');
+	const chip = page.getByText('Diagnostics mode on').element().closest('.pau-chip')!;
+	expect(getComputedStyle(chip).backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
 });

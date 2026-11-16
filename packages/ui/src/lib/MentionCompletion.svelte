@@ -95,6 +95,7 @@
 		flex: none;
 		color: var(--pau-text);
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 	}
 
 	.mention-completion__folder {
@@ -104,6 +105,7 @@
 		text-align: left;
 		color: var(--pau-text-muted);
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: var(--pau-type-xs);
 		text-overflow: ellipsis;
 		white-space: nowrap;

@@ -576,7 +576,7 @@
 					void runSearch();
 				}}>
 				<label class="pau-section-label" for={`workspace-search-${workspaceId}`}>Search files</label>
-				<div>
+				<div class="pau-field">
 					<Icon name="search" size={16} />
 					<input id={`workspace-search-${workspaceId}`} type="search" bind:value={query} placeholder="Text in files" />
 				</div>
@@ -836,6 +836,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-weight: var(--pau-weight-medium);
 	}
 
@@ -845,6 +846,7 @@
 		display: flex;
 		min-width: 0;
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 	}
 
 	.workspace-files__git-dir {
@@ -984,35 +986,6 @@
 		border-bottom: 1px solid var(--shell-border);
 	}
 
-	.workspace-files__search > div {
-		display: flex;
-		align-items: center;
-		gap: var(--pau-space-2);
-		height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-2);
-		border: 1px solid var(--shell-border);
-		background: var(--shell-surface);
-	}
-
-	.workspace-files__search > div:focus-within {
-		border-color: var(--shell-focus);
-		box-shadow: 0 0 0 1px var(--shell-focus);
-	}
-
-	.workspace-files__search input {
-		min-width: 0;
-		width: 100%;
-		color: var(--shell-text);
-		background: transparent;
-		border: 0;
-		outline: 0;
-		font: inherit;
-	}
-
-	.workspace-files__search input::placeholder {
-		color: var(--shell-muted);
-	}
-
 	.workspace-files__visibility {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
@@ -1029,10 +1002,6 @@
 		min-height: 1.5rem;
 		color: var(--shell-muted);
 		white-space: nowrap;
-	}
-
-	.workspace-files__visibility input {
-		accent-color: var(--shell-accent);
 	}
 
 	.workspace-files__tree-header {
@@ -1096,6 +1065,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 	}
 
 	.workspace-files__state,
@@ -1228,6 +1198,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: var(--pau-type-xs);
 		font-weight: var(--pau-weight-medium);
 	}

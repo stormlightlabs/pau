@@ -9,14 +9,19 @@
  * may place and space buttons but must not resize or recolor them. The
  * accent stays reserved for the primary action.
  *
+ * Every button is 32px tall with 14px text, in toolbars, rows, notices,
+ * cards and banners alike. A secondary button rests on the raised surface
+ * inside the control border.
+ *
  * A disabled button of any variant drops to muted text, and a disabled
  * primary also loses the accent fill for the raised surface. Opacity is not
  * used, because a faded accent still reads as an enabled primary.
  *
- * Hover and press follow the rules in `states.css`: color only, with the
- * tint drawn as a background image so it lies over the button's own fill.
+ * Hover and press change color only, with the tint drawn as a background
+ * image so it lies over the button's own fill.
  */
 .pau-button {
+	box-sizing: border-box;
 	--pau-button-height: var(--pau-size-row-md);
 
 	display: inline-flex;
@@ -25,17 +30,19 @@
 	min-height: var(--pau-button-height);
 	padding-inline: var(--pau-space-3);
 	color: var(--pau-text);
-	background-color: transparent;
-	border: 1px solid var(--pau-border);
+	background-color: var(--pau-surface-raised);
+	border: 1px solid var(--pau-border-control);
 	border-radius: var(--pau-radius-control);
 	font: inherit;
 	font-size: var(--pau-type-md);
 	font-weight: var(--pau-weight-medium);
+	line-height: var(--pau-leading-tight);
+	white-space: nowrap;
 	cursor: pointer;
 	transition:
-		color var(--pau-duration-feedback) var(--pau-ease-standard),
-		background-color var(--pau-duration-feedback) var(--pau-ease-standard),
-		border-color var(--pau-duration-feedback) var(--pau-ease-standard);
+		color var(--pau-duration-quick) var(--pau-ease-out),
+		background-color var(--pau-duration-quick) var(--pau-ease-out),
+		border-color var(--pau-duration-quick) var(--pau-ease-out);
 }
 
 /*
@@ -55,78 +62,112 @@
 	outline-offset: var(--pau-focus-offset);
 }
 
-.pau-button:disabled {
+/*
+ * A disabled secondary fades its outline, so in a row where every action is
+ * unavailable the primary still ranks first and the secondary does not read
+ * as the heavier control.
+ */
+.pau-button:is(:disabled, [aria-disabled='true']) {
 	color: var(--pau-text-muted);
+	border-color: color-mix(in srgb, var(--pau-border-control) 50%, transparent);
 	cursor: not-allowed;
 }
 
+/* A square button for a single icon. It needs an accessible name. */
+.pau-button--icon {
+	width: var(--pau-button-height);
+	padding-inline: 0;
+}
+
 .pau-button--primary {
-	color: var(--pau-canvas);
+	color: var(--pau-text-on-accent);
 	background-color: var(--pau-accent);
 	border-color: var(--pau-accent);
 	font-weight: var(--pau-weight-semibold);
 }
 
-.pau-button--primary:disabled {
+.pau-button--primary:is(:disabled, [aria-disabled='true']) {
 	color: var(--pau-text-muted);
 	background-color: var(--pau-surface-raised);
 	border-color: var(--pau-surface-raised);
-}
-
-/*
- * A secondary button is the base outline. Disabled, its outline fades, so in
- * a row where every action is unavailable the primary's fill still ranks it
- * first and the secondary does not read as the heavier control.
- */
-.pau-button--secondary:disabled {
-	border-color: color-mix(in srgb, var(--pau-border) 50%, transparent);
+	font-weight: var(--pau-weight-medium);
 }
 
 /*
  * Quiet buttons show no border until hover, for utilities beside content.
- * They rest in muted text, so a disabled one fades that text further.
+ * They rest in muted text, so a disabled one fades that text further. A
+ * toggled quiet button, such as the terminal dock switch, takes the raised
+ * surface and text color.
  */
 .pau-button--quiet {
 	color: var(--pau-text-muted);
+	background-color: transparent;
 	border-color: transparent;
 }
 
-.pau-button--quiet:disabled {
-	color: color-mix(in srgb, var(--pau-text-muted) 55%, transparent);
+.pau-button--quiet[aria-pressed='true'] {
+	color: var(--pau-text);
+	background-color: var(--pau-surface-raised);
 }
 
+.pau-button--quiet:is(:disabled, [aria-disabled='true']) {
+	color: color-mix(in srgb, var(--pau-text-muted) 55%, transparent);
+	border-color: transparent;
+}
+
+/*
+ * Actions that remove or end something. A page header keeps the danger
+ * action apart from the others, after a rule.
+ */
 .pau-button--danger {
 	color: var(--pau-danger);
+	background-color: transparent;
+	border-color: color-mix(in srgb, var(--pau-danger) 60%, var(--pau-surface));
 }
 
+/*
+ * Hover lays a 5% text tint over the button's own fill and strengthens the
+ * border; press lays an 8% tint and keeps the strong border, so the border
+ * holds 3:1 on the pressed fill. The primary moves its accent toward the
+ * text color instead. Hover applies only where a pointer can hover, so a
+ * tap never leaves a button looking hovered.
+ */
 @media (hover: hover) {
-	.pau-button:hover:not(:disabled) {
+	.pau-button:hover:not(:disabled, [aria-disabled='true']) {
 		background-image: linear-gradient(var(--pau-hover), var(--pau-hover));
-		border-color: var(--pau-text-muted);
+		border-color: var(--pau-border-strong);
 	}
 
-	.pau-button--quiet:hover:not(:disabled) {
+	.pau-button--quiet:hover:not(:disabled, [aria-disabled='true']) {
 		color: var(--pau-text);
-		border-color: var(--pau-border);
+		border-color: var(--pau-border-control);
 	}
 
-	.pau-button--danger:hover:not(:disabled) {
+	.pau-button--danger:hover:not(:disabled, [aria-disabled='true']) {
 		border-color: var(--pau-danger);
 	}
 
-	/* The primary keeps a solid fill and moves its accent toward text. */
-	.pau-button--primary:hover:not(:disabled) {
+	.pau-button--primary:hover:not(:disabled, [aria-disabled='true']) {
 		background-color: var(--pau-accent-hover);
 		background-image: none;
 		border-color: var(--pau-accent-hover);
 	}
 }
 
-.pau-button:active:not(:disabled) {
+.pau-button:active:not(:disabled, [aria-disabled='true']) {
 	background-image: linear-gradient(var(--pau-press), var(--pau-press));
+	border-color: var(--pau-border-strong);
 }
 
-.pau-button--primary:active:not(:disabled) {
+.pau-button--quiet:active:not(:disabled, [aria-disabled='true']) {
+	color: var(--pau-text);
+}
+
+.pau-button--danger:active:not(:disabled, [aria-disabled='true']) {
+	border-color: var(--pau-danger);
+}
+
+.pau-button--primary:active:not(:disabled, [aria-disabled='true']) {
 	background-color: var(--pau-accent-press);
 	background-image: none;
 	border-color: var(--pau-accent-press);
@@ -142,7 +183,9 @@
 .pau-utility-button {
 	color: var(--pau-text-muted);
 	background-color: transparent;
-	transition: color var(--pau-duration-feedback) var(--pau-ease-standard);
+	transition:
+		color var(--pau-duration-quick) var(--pau-ease-out),
+		background-color var(--pau-duration-quick) var(--pau-ease-out);
 }
 
 @media (hover: hover) {
@@ -174,14 +217,13 @@
 }
 
 /*
- * Flex centering centers the label's line box, not its letters. Each UI font
- * puts a different amount of space above its capitals and below its baseline,
- * so Overpass labels sit about 1.5px high. Where `text-box` is supported, the
- * button lays its label out as one trimmed line, cap height to baseline, and
- * equal padding centers the letters in every font. This needs block layout,
- * because a flex container wraps its text in an anonymous box that the trim
- * cannot reach. Icons center on the capitals. Without `text-box`, as in
- * older WebKitGTK, the flex layout above stays.
+ * Where `text-box` is supported, the button lays its label out as one
+ * trimmed line, cap height to baseline, and equal padding centers the
+ * letters exactly. This needs block layout, because a flex container wraps
+ * its text in an anonymous box that the trim cannot reach. Icons center on
+ * the capitals. Without `text-box`, as in older WebKitGTK, the flex layout
+ * above stays, and the font metrics in `fonts.css` keep the capitals near
+ * center.
  */
 @supports (text-box: trim-both cap alphabetic) {
 	.pau-button {
@@ -194,4 +236,24 @@
 	.pau-button > .pau-icon {
 		vertical-align: calc(0.5cap - var(--pau-icon-size) / 2);
 	}
+
+	/*
+	 * A key cap's baseline is its trimmed character's, so raising it by half
+	 * the difference between the label's cap height and its own centers it
+	 * on the label's capitals. `--pau-button-cap` holds the label's cap
+	 * height in pixels, because `cap` inside the key cap means its own.
+	 */
+	.pau-button {
+		--pau-button-cap: 1cap;
+	}
+
+	.pau-button > kbd {
+		vertical-align: calc(var(--pau-button-cap) / 2 - 0.5cap);
+	}
+}
+
+@property --pau-button-cap {
+	syntax: '<length>';
+	inherits: true;
+	initial-value: 0px;
 }

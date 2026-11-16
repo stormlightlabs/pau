@@ -35,7 +35,7 @@
 		color: var(--pau-text);
 		background: var(--pau-surface);
 		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-surface);
+		border-radius: var(--pau-radius-control);
 	}
 
 	.capability-card__copy {

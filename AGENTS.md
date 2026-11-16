@@ -158,9 +158,9 @@ full browser tests for workflows that cross packages or transports.
   and hydration-sensitive output.
 - Generated TypeScript contracts and shared protocol fixtures run against both
   the Rust and the TypeScript consumers.
-- Keep a small set of reviewed screenshots for high-value compositions. Do
-  not snapshot every component or use a screenshot in place of a behavior
-  assertion.
+- Tests check behavior, not pixel geometry. Check alignment with screenshots
+  and measured boxes while working, as [UI work](#ui-work) describes, and do
+  not assert it in CI.
 - Desktop integration tests live in `*.integration.test.ts` files and run
   with `pnpm --filter @stormlightlabs/pau-desktop test:integration`, which
   builds `pau-server`. The default `test` script excludes them.

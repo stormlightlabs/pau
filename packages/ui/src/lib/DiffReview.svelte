@@ -51,7 +51,7 @@
 					wrapping,
 					EditorView.theme({
 						'&': { height: '100%', color: 'var(--pau-text)', backgroundColor: 'var(--pau-canvas)' },
-						'.cm-scroller': { fontFamily: 'var(--pau-font-code)' },
+						'.cm-scroller': { fontFamily: 'var(--pau-font-code)', fontVariantLigatures: 'none' },
 						'.cm-gutters': {
 							backgroundColor: 'var(--pau-surface)',
 							color: 'var(--pau-text-muted)',

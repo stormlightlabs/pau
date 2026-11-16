@@ -84,6 +84,7 @@
 	.command-completion__name {
 		color: var(--pau-text);
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 	}
 
 	.command-completion__argument {

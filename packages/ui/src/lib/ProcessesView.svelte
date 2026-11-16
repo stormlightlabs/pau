@@ -259,6 +259,7 @@
 
 	.process-tree code {
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: var(--pau-type-xs);
 	}
 

@@ -1,0 +1,193 @@
+/*
+ * The strip: the one fixed-height row for every list of live things, such as
+ * sessions, tool calls, changed files, terminals and resources. Its columns
+ * are always lead, main and meta, so fields share one baseline in every list.
+ *
+ * - `pau-strip`: 56px with two 24px lines, name and agent, then the state
+ *   line and figures, led by an 8px status mark.
+ * - `pau-strip--icon`: the same two lines led by a 16px icon.
+ * - `pau-strip--row`: 32px and one line, led by a 16px icon or a mark.
+ *
+ * Markup for the two-line strip, in grid order:
+ *
+ *   <a class="pau-strip">
+ *     <span class="pau-mark pau-mark--running" role="img" aria-label="Running"></span>
+ *     <span class="pau-strip__line"><span class="pau-strip__name">…</span><span class="pau-strip__agent">…</span></span>
+ *     <span class="pau-strip__meta">…</span>
+ *     <span></span>
+ *     <span class="pau-strip__state pau-tone-info">…</span>
+ *     <span class="pau-strip__figure">…</span>
+ *   </a>
+ *
+ * Hover moves the strip to the raised surface. Selection, set with
+ * `aria-current` or `aria-selected`, takes the selected surface and a 1px
+ * ring in the control border color, and turns muted icons to text color.
+ * Hover and press change color only, so a pressed strip never moves.
+ */
+.pau-strip {
+	box-sizing: border-box;
+	display: grid;
+	grid-template-rows: var(--pau-space-5) var(--pau-space-5);
+	grid-template-columns: 0.5rem minmax(0, 1fr) auto;
+	align-items: center;
+	column-gap: var(--pau-space-3);
+	min-width: 0;
+	height: var(--pau-size-strip);
+	padding: var(--pau-space-1) var(--pau-space-4);
+	color: var(--pau-text-muted);
+	background-color: transparent;
+	border: 0;
+	font: inherit;
+	text-align: start;
+	text-decoration: none;
+	transition: background-color var(--pau-duration-quick) var(--pau-ease-out);
+}
+
+:is(a, button).pau-strip {
+	cursor: pointer;
+}
+
+.pau-strip > .pau-mark,
+.pau-strip > .pau-icon {
+	justify-self: start;
+	color: var(--pau-text-muted);
+}
+
+.pau-strip__line {
+	display: flex;
+	align-items: center;
+	gap: var(--pau-space-2);
+	min-width: 0;
+}
+
+.pau-strip__name {
+	color: var(--pau-text);
+	font-size: var(--pau-type-md);
+	font-weight: var(--pau-weight-medium);
+	line-height: var(--pau-leading-prose);
+}
+
+.pau-strip__name.pau-mono {
+	font-size: var(--pau-type-sm);
+}
+
+.pau-strip__agent,
+.pau-strip__meta,
+.pau-strip__figure {
+	flex: none;
+	color: var(--pau-text-muted);
+	font-size: var(--pau-type-xs);
+	line-height: var(--pau-leading-tight);
+	white-space: nowrap;
+}
+
+.pau-strip__meta,
+.pau-strip__figure {
+	justify-self: end;
+	text-align: end;
+}
+
+.pau-strip__state {
+	font-size: var(--pau-type-sm);
+	line-height: var(--pau-leading-prose);
+}
+
+.pau-strip__state.pau-mono {
+	font-size: var(--pau-type-xs);
+}
+
+.pau-strip--icon {
+	grid-template-columns: 1rem minmax(0, 1fr) auto;
+}
+
+.pau-strip--row {
+	grid-template-rows: minmax(0, 1fr);
+	grid-template-columns: 1rem minmax(0, 1fr) auto;
+	column-gap: var(--pau-space-2);
+	height: var(--pau-size-row-md);
+	padding-block: 0;
+}
+
+/* A one-line row uses the row role. */
+.pau-strip--row .pau-strip__name {
+	font-weight: var(--pau-weight-regular);
+	line-height: var(--pau-leading-row);
+}
+
+.pau-strip--row .pau-strip__name.pau-mono {
+	font-size: var(--pau-type-xs);
+}
+
+/* A mark in a 16px lead column centers in it. */
+.pau-strip--row > .pau-mark {
+	justify-self: center;
+}
+
+/*
+ * A settled session recedes through color and weight, never through opacity,
+ * so its text keeps its contrast. The open session and a hovered strip return
+ * to text color.
+ */
+.pau-strip--settled .pau-strip__name {
+	color: var(--pau-text-muted);
+	font-weight: var(--pau-weight-regular);
+}
+
+@media (hover: hover) {
+	.pau-strip:hover:not([aria-disabled='true']) {
+		background-color: var(--pau-surface-raised);
+	}
+
+	.pau-strip:hover:not([aria-disabled='true']) .pau-strip__name {
+		color: var(--pau-text);
+	}
+}
+
+.pau-strip:active:not([aria-disabled='true'], [aria-current='page'], [aria-current='true'], [aria-selected='true']) {
+	background-color: var(--pau-surface-raised);
+	background-image: linear-gradient(var(--pau-press), var(--pau-press));
+}
+
+.pau-strip:is([aria-current='page'], [aria-current='true'], [aria-selected='true']) {
+	background-color: var(--pau-surface-selected);
+	box-shadow: inset 0 0 0 1px var(--pau-border-control);
+}
+
+.pau-strip:is([aria-current='page'], [aria-current='true'], [aria-selected='true']) .pau-strip__name,
+.pau-strip:is([aria-current='page'], [aria-current='true'], [aria-selected='true']) > .pau-icon {
+	color: var(--pau-text);
+}
+
+/* A disabled strip fades whole, because its rest color is already muted. */
+.pau-strip[aria-disabled='true'] {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* Strips run edge to edge inside scrolling columns, so the ring sits inside. */
+.pau-strip:focus-visible {
+	outline: var(--pau-focus-width) solid var(--pau-focus);
+	outline-offset: var(--pau-focus-offset-inset);
+}
+
+/*
+ * A bay or column heading: a section label and its count in the code face,
+ * on one line. It is 40px tall, so the label sits 16px below whatever is
+ * above it. `pau-bay-heading--attention` turns the label and count green for
+ * Needs you, the only green heading.
+ */
+.pau-bay-heading {
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--pau-space-2);
+	height: var(--pau-space-7);
+	margin: 0;
+	padding: var(--pau-space-4) var(--pau-space-4) 0;
+	font-size: inherit;
+}
+
+.pau-bay-heading--attention :is(.pau-section-label, .pau-count) {
+	color: var(--pau-accent);
+}

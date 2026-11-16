@@ -55,7 +55,7 @@ test('shows a compact session summary with a non-destructive pressure warning', 
 	expect(onStop).toHaveBeenCalledWith('registry-tests');
 });
 
-test('styles pressure actions as outlined buttons like the Processes Stop button', async () => {
+test('styles the pressure Stop like the Processes Stop button and Interrupt as a secondary button', async () => {
 	const properties = Object.entries(themeCssProperties('eldritch', 'overpass'));
 	for (const [name, value] of properties) {
 		document.documentElement.style.setProperty(name, value);
@@ -69,14 +69,13 @@ test('styles pressure actions as outlined buttons like the Processes Stop button
 	const interrupt = getComputedStyle(page.getByRole('button', { name: 'Interrupt work' }).element());
 	const stop = getComputedStyle(page.getByRole('button', { name: 'Stop session' }).element());
 
-	for (const style of [interrupt, stop]) {
-		expect(style.backgroundColor).toBe(processStop.backgroundColor);
-		expect(style.borderTopWidth).toBe(processStop.borderTopWidth);
-		expect(style.borderTopColor).toBe(processStop.borderTopColor);
-		expect(style.fontWeight).toBe(processStop.fontWeight);
-	}
+	expect(stop.backgroundColor).toBe(processStop.backgroundColor);
+	expect(stop.borderTopColor).toBe(processStop.borderTopColor);
 	expect(stop.color).toBe(processStop.color);
+	expect(interrupt.borderTopWidth).toBe(processStop.borderTopWidth);
+	expect(interrupt.fontWeight).toBe(processStop.fontWeight);
 	expect(interrupt.color).not.toBe(stop.color);
+	expect(interrupt.borderTopColor).not.toBe(stop.borderTopColor);
 });
 
 test('shows empty and completed states', async () => {
@@ -113,7 +112,7 @@ test('explains unavailable monitoring instead of claiming nothing runs', async (
 });
 
 test('recomposes rows inside the shell at the minimum window size', async () => {
-	await page.viewport(800, 560);
+	await page.viewport(900, 560);
 	await render(ProcessesViewDemo, { processes: resourceMonitoringFixtures.active, inShell: true });
 	await expect.element(page.getByRole('navigation', { name: 'Product' })).toBeVisible();
 

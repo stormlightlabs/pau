@@ -3,26 +3,18 @@
 	import type { Snippet } from 'svelte';
 
 	/**
-	 * Outlined chip for a feature's on or off state, such as sandbox, MCP, and
-	 * diagnostics. An off state uses muted text because it is neutral, not an
-	 * error.
+	 * Chip for a feature's on or off state, such as sandbox, MCP, and
+	 * diagnostics. It is a neutral fact, so it takes the shared `pau-chip`
+	 * look and never a state or accent color. On reads in text color and off
+	 * in muted text, and the label says which.
 	 */
 	let { on, children }: { on: boolean; children: Snippet } = $props();
 </script>
 
-<span class="state-chip" class:state-chip--on={on}>{@render children()}</span>
+<span class="pau-chip state-chip" class:state-chip--on={on}><span>{@render children()}</span></span>
 
 <style>
-	.state-chip {
-		flex: none;
-		padding: var(--pau-space-1) var(--pau-space-2);
-		color: var(--pau-text-muted);
-		border: 1px solid var(--pau-border);
-		font-size: var(--pau-type-xs);
-	}
-
 	.state-chip--on {
-		color: var(--pau-accent);
-		border-color: var(--pau-accent);
+		color: var(--pau-text);
 	}
 </style>

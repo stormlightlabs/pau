@@ -182,8 +182,8 @@ components:
 ## Overview
 
 This file describes the target design. Until the implementation work lands,
-the desktop app still ships the previous layout, with the product rail, the
-inspector and an 800px minimum window width.
+the desktop app still ships the previous layout, with the product rail and the
+inspector.
 
 **Creative North Star: "The Strip Bay"**
 
@@ -323,13 +323,16 @@ and key caps (11px).
 **The Cap-Centring Rule.** Every single-line label in a control or row sits
 in its own element, and that element trims its box to the cap height and the
 baseline (`text-box: trim-both cap alphabetic`). Flex centring then lines the
-capitals up with icons and marks. Where `text-box` is missing, the label
-moves down by the measured Overpass offset (0.11em). A label that truncates
-gives its descenders back as 6px block padding and takes the same space back
-as negative margin, so its centre does not move.
+capitals up with icons and marks. Each UI face is loaded with ascent and
+descent overrides that put its capitals in the middle of its line box, so
+input text, which cannot be trimmed, centers the same way. A label that
+truncates gives its descenders back as 6px block padding and takes the same
+space back as negative margin, so its centre does not move.
 
 **The Mono Means Data Rule.** Mono marks something the machine owns: a path,
-a command, a number, a duration. It is never decoration.
+a command, a number, a duration. It is never decoration. Editable fields
+are the exception: their text stays in the interface face, even for a path or
+a command.
 
 ## Layout
 

@@ -7,11 +7,11 @@ import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
-const browser = (reducedMotion?: 'reduce' | 'no-preference', engine: 'chromium' | 'webkit' = 'chromium') => ({
+const browser = (reducedMotion?: 'reduce' | 'no-preference') => ({
 	enabled: true,
 	headless: true,
 	provider: playwright(reducedMotion ? { contextOptions: { reducedMotion } } : undefined),
-	instances: [{ browser: engine }]
+	instances: [{ browser: 'chromium' as const }]
 });
 
 export default defineConfig({
@@ -27,16 +27,6 @@ export default defineConfig({
 					exclude: ['src/tests/motion-query.svelte.test.ts'],
 					setupFiles: ['vitest-browser-svelte'],
 					browser: browser()
-				}
-			},
-			// The desktop app renders in WebKit, which places text differently.
-			{
-				extends: true,
-				test: {
-					name: 'components-webkit',
-					include: ['src/tests/LabelCentering.svelte.test.ts'],
-					setupFiles: ['vitest-browser-svelte'],
-					browser: browser(undefined, 'webkit')
 				}
 			},
 			// The OS reduced-motion query, on and off, for the motion setting.

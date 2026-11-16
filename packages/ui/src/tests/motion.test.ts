@@ -17,6 +17,14 @@ describe('motion tokens', () => {
 		expect(token(`--pau-duration-${name}`)).toBe(`${ms}ms`);
 	});
 
+	test.each(Object.entries(motion.arrival))('arrival %s matches CSS', (name, ms) => {
+		expect(token(`--pau-arrival-${name}`)).toBe(`${ms}ms`);
+	});
+
+	test('mark spin matches CSS', () => {
+		expect(token('--pau-mark-spin')).toBe(`${motion.markSpin}ms`);
+	});
+
 	test.each(Object.entries(motion.ease))('easing %s matches CSS', (name, value) => {
 		expect(token(`--pau-ease-${name}`)).toBe(value);
 	});

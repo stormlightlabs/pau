@@ -1,6 +1,7 @@
 /*
- * Hover and press for rows, list options, dropdown triggers, and links.
- * Buttons, choices, and disclosures follow the same rule in their own files.
+ * Hover and press for rows, list options and links, and the tones for state
+ * lines. Buttons, fields, choices, strips and disclosures follow the same
+ * hover and press rule in their own files.
  *
  * Hover and press change color only. Nothing translates or scales, so a
  * pressed row never shifts its neighbors. Hover rules sit inside
@@ -78,12 +79,12 @@
 
 @media (hover: hover) {
 	.pau-option:hover:not(:disabled, [aria-disabled='true']) {
-		background-color: var(--pau-selection);
+		background-color: var(--pau-surface-selected);
 	}
 }
 
 .pau-option--active {
-	background-color: var(--pau-selection);
+	background-color: var(--pau-surface-selected);
 }
 
 .pau-option:active:not(:disabled, [aria-disabled='true']) {
@@ -97,37 +98,6 @@
 .pau-option:focus-visible {
 	outline: var(--pau-focus-width) solid var(--pau-focus);
 	outline-offset: var(--pau-focus-offset-inset);
-}
-
-/*
- * Dropdown triggers: the `Select` field, the model picker, and the context
- * meter. Hover draws the accent border that marks a field the operator can
- * open, and press tints it. A quiet trigger in the composer has a
- * transparent border at rest and gets the same hover border. The shared
- * rule owns the text color, so the disabled color always wins.
- */
-.pau-field {
-	color: var(--pau-text);
-	transition: border-color var(--pau-duration-feedback) var(--pau-ease-standard);
-}
-
-@media (hover: hover) {
-	.pau-field:hover:not(:disabled, [aria-disabled='true']) {
-		border-color: var(--pau-accent);
-	}
-}
-
-.pau-field:active:not(:disabled, [aria-disabled='true']) {
-	background-image: linear-gradient(var(--pau-press), var(--pau-press));
-}
-
-.pau-field:is(:disabled, [aria-disabled='true']) {
-	color: var(--pau-text-muted);
-}
-
-.pau-field:focus-visible {
-	outline: var(--pau-focus-width) solid var(--pau-focus);
-	outline-offset: var(--pau-focus-offset);
 }
 
 /* Inline links in prose. Hover and press move the accent toward text. */
@@ -150,4 +120,28 @@
 	outline: var(--pau-focus-width) solid var(--pau-focus);
 	outline-offset: var(--pau-focus-offset);
 	border-radius: var(--pau-radius-control);
+}
+
+/*
+ * State tones for state lines, state labels and state icons, the only text
+ * that takes a state color. Green marks only what waits on the operator.
+ */
+.pau-tone-waiting {
+	color: var(--pau-accent);
+}
+
+.pau-tone-danger {
+	color: var(--pau-danger);
+}
+
+.pau-tone-warning {
+	color: var(--pau-warning);
+}
+
+.pau-tone-info {
+	color: var(--pau-info);
+}
+
+.pau-tone-success {
+	color: var(--pau-success);
 }

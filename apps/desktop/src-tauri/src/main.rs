@@ -15,8 +15,9 @@ const MAIN_WINDOW: &str = "main";
 /// The preferred first-launch size in logical pixels, wide enough for the
 /// product rail, context rail, session, and inspector side by side.
 const WINDOW_SIZE: (f64, f64) = (1440.0, 900.0);
-/// The smallest size that keeps the context rail beside the session.
-const WINDOW_MIN_SIZE: (f64, f64) = (800.0, 560.0);
+/// The smallest size the window may take, and the narrowest the shared UI
+/// is laid out and tested for. It keeps the context rail beside the session.
+const WINDOW_MIN_SIZE: (f64, f64) = (900.0, 560.0);
 /// The share of the screen's work area a first-launch window may cover.
 const WINDOW_SCREEN_SHARE: f64 = 0.9;
 

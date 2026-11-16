@@ -172,6 +172,18 @@ test('highlights Markdown headings and inline code', async () => {
 	expect(Number(heading.fontWeight)).toBeGreaterThanOrEqual(600);
 });
 
+test('draws the caret in the focus color, as text fields do', async () => {
+	const properties = themeCssProperties('eldritch', 'overpass');
+	for (const [name, value] of Object.entries(properties)) document.documentElement.style.setProperty(name, value);
+	const editorSource = source();
+	await render(FileEditor, { path: editorSource.current.path, source: editorSource });
+	await userEvent.click(page.getByRole('textbox'));
+	const focus = getComputedStyle(document.documentElement).caretColor;
+	expect(focus).toBe('rgb(4, 209, 249)');
+	await expect.poll(() => document.querySelector('.cm-cursor')).not.toBeNull();
+	expect(getComputedStyle(document.querySelector('.cm-cursor')!).borderLeftColor).toBe(focus);
+});
+
 test('opens a read-only file without editable or save controls', async () => {
 	const editorSource = source(file({ writable: false }));
 	await render(FileEditor, { path: editorSource.current.path, source: editorSource });

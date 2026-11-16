@@ -257,7 +257,7 @@
 						{#if dialog.kind === 'editor'}
 							<textarea name="value" rows="7" data-initial-focus>{dialog.prefill ?? ''}</textarea>
 						{:else}
-							<input name="value" placeholder={dialog.placeholder} data-initial-focus />
+							<input class="pau-field" name="value" placeholder={dialog.placeholder} data-initial-focus />
 						{/if}
 					</label>
 					<div class="extension-ui__actions">
@@ -309,6 +309,7 @@
 		background: var(--pau-canvas);
 		border: 1px solid var(--pau-border);
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: var(--pau-type-xs);
 		line-height: 1.5;
 		white-space: pre-wrap;
@@ -322,7 +323,7 @@
 		color: var(--pau-text);
 		background: var(--pau-surface);
 		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-surface);
+		border-radius: var(--pau-radius-overlay);
 		box-shadow: 0 1rem 3rem color-mix(in srgb, var(--pau-canvas) 85%, transparent);
 		outline: 0;
 	}
@@ -441,6 +442,7 @@
 	.extension-ui__details dd {
 		margin: 0;
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: var(--pau-type-sm);
 	}
 
@@ -453,6 +455,7 @@
 		border: 1px solid var(--pau-border);
 		border-radius: var(--pau-radius-control);
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: var(--pau-type-sm);
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
@@ -469,7 +472,10 @@
 		font-size: var(--pau-type-sm);
 	}
 
-	.extension-ui__dialog input,
+	.extension-ui__dialog .pau-field {
+		width: 100%;
+	}
+
 	.extension-ui__dialog textarea {
 		box-sizing: border-box;
 		width: 100%;
@@ -477,11 +483,10 @@
 		resize: vertical;
 		color: var(--pau-text);
 		background: var(--pau-canvas);
-		border: 1px solid var(--pau-border);
+		border: 1px solid var(--pau-border-control);
 		font: inherit;
 	}
 
-	.extension-ui__dialog input:focus,
 	.extension-ui__dialog textarea:focus,
 	.extension-ui__dialog button:focus-visible {
 		outline: var(--pau-focus-width) solid var(--pau-focus);

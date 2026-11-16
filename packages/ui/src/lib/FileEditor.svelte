@@ -129,8 +129,9 @@
 		return EditorView.theme({
 			'&': { height: '100%', color: 'var(--pau-text)', backgroundColor: 'var(--pau-canvas)' },
 			'.cm-scroller': { alignItems: 'stretch', overflow: 'auto' },
-			'.cm-content': { caretColor: 'var(--pau-accent)', fontFamily: 'var(--pau-font-code)' },
-			'.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--pau-accent)' },
+			'.cm-content': { fontFamily: 'var(--pau-font-code)', fontVariantLigatures: 'none' },
+			// The editor hides the native caret and draws this cursor instead.
+			'.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--pau-focus)' },
 			'&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
 				backgroundColor: 'var(--pau-selection)'
 			},

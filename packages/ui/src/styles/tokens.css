@@ -8,26 +8,43 @@
  * Spacing and type use rem so browser zoom and default font size scale them.
  * No product text goes below `--pau-type-xs` (12px). The one exception is
  * `--pau-type-label` (11px), reserved for uppercase, letter-spaced section
- * labels whose caps and tracking keep them legible at that size.
+ * labels and key caps, whose caps and tracking keep them legible at that size.
  */
 @import './fonts.css';
+@import './cap.css';
 @import './buttons.css';
+@import './fields.css';
 @import './choices.css';
+@import './chips.css';
 @import './disclosure.css';
+@import './menu.css';
 @import './notice.css';
+@import './page-header.css';
+@import './request.css';
 @import './section-label.css';
 @import './states.css';
+@import './strip.css';
+@import './tool-output.css';
 @import './visually-hidden.css';
 @import './view-title.css';
 
 :root {
+	/* The 8px grid. 4 and 12px are half steps for control insets. */
 	--pau-space-1: 0.25rem;
 	--pau-space-2: 0.5rem;
 	--pau-space-3: 0.75rem;
 	--pau-space-4: 1rem;
 	--pau-space-5: 1.5rem;
 	--pau-space-6: 2rem;
+	--pau-space-7: 2.5rem;
+	--pau-space-8: 3rem;
+	--pau-space-9: 4rem;
 
+	/*
+	 * Type sizes for the roles in `dev/design/system.md`: label 11, meta and
+	 * code 12, state line 13, row, body and strip name 14, heading 16, and
+	 * title 18px.
+	 */
 	--pau-type-label: 0.6875rem;
 	--pau-type-xs: 0.75rem;
 	--pau-type-sm: 0.8125rem;
@@ -35,13 +52,31 @@
 	--pau-type-lg: 1rem;
 	--pau-type-xl: 1.125rem;
 
+	/*
+	 * Line heights on the 4px half grid: meta and labels 16px, rows and code
+	 * 20px, and prose, strips, headings and titles 24px. Controls and rows
+	 * trim their labels to the capitals, so their line height matters only
+	 * when a label wraps.
+	 */
+	--pau-leading-tight: 1rem;
+	--pau-leading-row: 1.25rem;
+	--pau-leading-prose: 1.5rem;
+
 	--pau-weight-regular: 400;
 	--pau-weight-medium: 500;
 	--pau-weight-semibold: 600;
 
+	/*
+	 * Rows, strips, tabs and pane edges stay square. Controls, chips, key
+	 * caps, notices and cards take the control radius. Menus, popovers,
+	 * dialogs and tooltips take the overlay radius.
+	 */
 	--pau-radius-control: 3px;
-	--pau-radius-surface: 5px;
+	--pau-radius-overlay: 5px;
 	--pau-border-thin: 0.5px;
+
+	/* A shadow means something covers other content. Resting surfaces have none. */
+	--pau-shadow-overlay: 0 12px 32px -8px rgb(4 6 12 / 72%), 0 2px 6px rgb(4 6 12 / 40%);
 
 	/*
 	 * Every focus ring uses these. The ring sits outside the control by
@@ -52,26 +87,49 @@
 	--pau-focus-offset: 2px;
 	--pau-focus-offset-inset: -2px;
 
+	/*
+	 * Fixed heights and column widths. Every button, field, picker and select
+	 * is `row-md` tall. A strip is 56px with two 24px lines and a column
+	 * header 48px. A bay heading is `space/7`.
+	 */
 	--pau-size-target-compact: 2rem;
 	--pau-size-target-touch: 2.75rem;
 	--pau-size-row-sm: 1.75rem;
 	--pau-size-row-md: 2rem;
 	--pau-size-row-lg: 2.25rem;
+	--pau-size-strip: 3.5rem;
+	--pau-size-header: 3rem;
 	--pau-size-bar-height: 1.875rem;
+	--pau-size-bay: 21.5rem;
+	--pau-size-bay-narrow: 18rem;
+	--pau-size-workspace: 19rem;
 	--pau-size-rail-product: 3rem;
 	--pau-size-rail-context: 15.5rem;
 	--pau-size-rail-inspector: 19rem;
 
-	--pau-duration-instant: 0ms;
-	--pau-duration-feedback: 100ms;
-	--pau-duration-small: 150ms;
-	--pau-duration-medium: 200ms;
-	--pau-duration-large: 250ms;
+	/*
+	 * Breakpoints. Wide is 1200px and up. Narrow is 900 to 1199px, and the
+	 * window never gets narrower. Media queries cannot read custom
+	 * properties, so a query writes the value out, as `(width < 1200px)`.
+	 * These record it for `calc()` and scripts.
+	 */
+	--pau-breakpoint-narrow: 900px;
+	--pau-breakpoint-wide: 1200px;
 
-	--pau-ease-standard: cubic-bezier(0.2, 0, 0, 1);
-	--pau-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
-	--pau-ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
-	--pau-ease-linear: linear;
+	/*
+	 * Motion. Hover, press, selection and state color take `duration-quick`.
+	 * Overlays, menus, dialogs and disclosures take `duration-move`. Every
+	 * transition eases out. The arrival, the one authored motion, lifts and
+	 * settles on `ease-settle`. `motion.ts` mirrors these values.
+	 */
+	--pau-duration-quick: 120ms;
+	--pau-duration-move: 240ms;
+	--pau-arrival-travel: 640ms;
+	--pau-arrival-displace: 480ms;
+	--pau-arrival-delay: 90ms;
+	--pau-mark-spin: 900ms;
+	--pau-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+	--pau-ease-settle: cubic-bezier(0.2, 0, 0, 1);
 
 	--pau-motion-offset-sm: 0.25rem;
 	--pau-motion-offset-md: 0.5rem;
@@ -94,6 +152,38 @@
 
 :where(small) {
 	font-size: var(--pau-type-xs);
+}
+
+/*
+ * The code face sets code, commands, paths, identifiers, counts and
+ * durations with ligatures off, so `--filter` and `ff` keep their cells, and
+ * with tabular numerals so figures line up.
+ */
+:where(code, kbd, pre, samp, .pau-mono) {
+	font-variant-ligatures: none;
+	font-feature-settings:
+		'liga' 0,
+		'calt' 0;
+	font-variant-numeric: tabular-nums;
+}
+
+.pau-mono {
+	font-family: var(--pau-font-code);
+	font-variant-ligatures: none;
+}
+
+/*
+ * Cyan is focus: the ring, the caret and the text selection wash. Every
+ * field inherits the caret color from the root, and the file editor, which
+ * draws its own cursor, uses the same token.
+ */
+:root {
+	caret-color: var(--pau-focus);
+}
+
+::selection {
+	color: var(--pau-text);
+	background-color: var(--pau-selection);
 }
 
 /*

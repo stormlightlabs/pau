@@ -1,0 +1,150 @@
+/*
+ * Chips, status marks, key caps and the state label.
+ *
+ * A chip states a neutral fact such as a branch, a sandbox, a scope or an
+ * attached file. It never carries a state color: state belongs to marks and
+ * state lines. Its label goes in a `span` so it centers on the capitals, and
+ * an icon inside it takes `size={12}`.
+ */
+.pau-chip {
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+	gap: var(--pau-space-1);
+	height: 1.25rem;
+	padding-inline: var(--pau-space-2);
+	color: var(--pau-text-muted);
+	background-color: var(--pau-surface-raised);
+	border-radius: var(--pau-radius-control);
+	font-size: var(--pau-type-xs);
+	font-weight: var(--pau-weight-regular);
+	line-height: var(--pau-leading-tight);
+	white-space: nowrap;
+	max-width: 100%;
+}
+
+/*
+ * Status marks. The shape and the color both carry the state, so a mark
+ * reads without color, and every mark sits beside a text label or carries
+ * one as its accessible name. Marks are 8px:
+ *
+ * - waiting: a filled accent dot with a halo, the only green mark
+ * - failed: a filled danger dot
+ * - not responding: a warning diamond
+ * - running: an information ring that spins, the only moving mark
+ * - starting: a dashed information ring
+ * - idle: a hollow ring in the control border color
+ * - stopping: a hollow warning square
+ * - stopped: a filled square in the control border color
+ */
+.pau-mark {
+	box-sizing: border-box;
+	display: inline-block;
+	flex: none;
+	width: 0.5rem;
+	height: 0.5rem;
+	border-radius: 50%;
+}
+
+.pau-mark--waiting {
+	background-color: var(--pau-accent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--pau-accent) 22%, transparent);
+}
+
+.pau-mark--failed {
+	background-color: var(--pau-danger);
+}
+
+.pau-mark--not_responding {
+	background-color: var(--pau-warning);
+	border-radius: 1px;
+	transform: rotate(45deg) scale(0.85);
+}
+
+.pau-mark--running {
+	border: 1.5px solid color-mix(in srgb, var(--pau-info) 35%, transparent);
+	border-top-color: var(--pau-info);
+	animation: pau-mark-spin var(--pau-mark-spin) linear infinite;
+}
+
+/* Four arcs, drawn the same way in every engine. */
+.pau-mark--starting {
+	background: repeating-conic-gradient(var(--pau-info) 0 45deg, transparent 0 90deg);
+	mask: radial-gradient(circle, transparent 2.5px, #000 2.75px);
+}
+
+.pau-mark--idle {
+	border: 1.5px solid var(--pau-border-control);
+}
+
+.pau-mark--stopping {
+	border: 1.5px solid var(--pau-warning);
+	border-radius: 1px;
+}
+
+.pau-mark--stopped {
+	background-color: var(--pau-border-control);
+	border-radius: 1px;
+}
+
+@keyframes pau-mark-spin {
+	to {
+		transform: rotate(1turn);
+	}
+}
+
+/* Under reduced motion the running mark holds still as a full ring. */
+:root[data-motion='reduce'] .pau-mark--running {
+	border-color: var(--pau-info);
+	animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root:not([data-motion]) .pau-mark--running {
+		border-color: var(--pau-info);
+		animation: none;
+	}
+}
+
+/*
+ * A state label beside a title or in a row: a mark and its state line, with
+ * no fill, in muted text unless a tone class from `states.css` colors it.
+ */
+.pau-state {
+	display: inline-flex;
+	color: var(--pau-text-muted);
+	flex: none;
+	align-items: center;
+	gap: var(--pau-space-2);
+	font-size: var(--pau-type-xs);
+	font-weight: var(--pau-weight-medium);
+	line-height: var(--pau-leading-tight);
+	white-space: nowrap;
+}
+
+/*
+ * Key caps take the color of the text around them, so they keep that text's
+ * contrast on every surface. The frame is quieter. The character goes in a
+ * `span` so it centers on the capitals.
+ */
+.pau-kbd,
+.pau-button > kbd,
+.pau-field > kbd,
+.pau-menu__item > kbd {
+	box-sizing: border-box;
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	min-width: 1.125rem;
+	height: 1.125rem;
+	padding-inline: var(--pau-space-1);
+	border: 1px solid color-mix(in srgb, currentColor 55%, transparent);
+	border-radius: var(--pau-radius-control);
+	font-family: var(--pau-font-code);
+	font-variant-ligatures: none;
+	font-size: var(--pau-type-label);
+	font-weight: var(--pau-weight-regular);
+	line-height: 1;
+}

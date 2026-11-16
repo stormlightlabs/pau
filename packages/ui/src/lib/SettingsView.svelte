@@ -407,8 +407,9 @@
 		color: var(--preview-text);
 		background: var(--preview-canvas);
 		border: 1px solid var(--preview-border);
-		border-radius: var(--pau-radius-surface);
+		border-radius: var(--pau-radius-control);
 		font-family: var(--pau-font-code);
+		font-variant-ligatures: none;
 		font-size: var(--pau-type-xs);
 		white-space: nowrap;
 		overflow: hidden;
@@ -459,12 +460,6 @@
 		display: inline-flex;
 		align-items: center;
 		min-height: var(--pau-size-row-md);
-	}
-
-	.settings-view__theme input:focus-visible,
-	.settings-view__choice input:focus-visible {
-		outline: var(--pau-focus-width) solid var(--pau-focus);
-		outline-offset: var(--pau-focus-offset);
 	}
 
 	.settings-view__error {

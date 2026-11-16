@@ -27,7 +27,7 @@ test('opens the workspace overlay below 1200px and returns focus when it closes'
 	await page.viewport(1000, 800);
 	await render(ApplicationShellDemo);
 
-	const overlay = page.getByRole('complementary', { name: 'Checks' });
+	const overlay = page.getByRole('dialog', { name: 'Checks' });
 	await expect.element(overlay).not.toBeInTheDocument();
 
 	const toggle = page.getByRole('button', { name: 'Show checks' });
@@ -51,7 +51,7 @@ test('closes the overlay from the scrim and docks the column when the window wid
 
 	await userEvent.click(page.getByRole('button', { name: 'Show checks' }));
 	document.querySelector<HTMLButtonElement>('.app-shell__scrim')?.click();
-	await expect.element(page.getByRole('complementary', { name: 'Checks' })).not.toBeInTheDocument();
+	await expect.element(page.getByRole('dialog', { name: 'Checks' })).not.toBeInTheDocument();
 
 	await page.viewport(1440, 900);
 	await expect.element(page.getByRole('complementary', { name: 'Checks' })).toBeVisible();
@@ -62,33 +62,38 @@ test('keeps a session overlay closed below 1200px until the operator opens it', 
 	await render(SessionView, { workspaces: sessionFixtures.running, activeSessionId: 'session-running' });
 
 	await expect.element(page.getByRole('region', { name: 'Transcript' })).toBeVisible();
-	await expect.element(page.getByRole('complementary', { name: 'Workspace' })).not.toBeInTheDocument();
+	await expect.element(page.getByRole('dialog', { name: 'Workspace' })).not.toBeInTheDocument();
 	expect(document.querySelector('.app-shell__scrim')).toBeNull();
 
 	await userEvent.click(page.getByRole('button', { name: 'Show workspace' }));
-	await expect.element(page.getByRole('complementary', { name: 'Workspace' })).toBeVisible();
+	await expect.element(page.getByRole('dialog', { name: 'Workspace' })).toBeVisible();
 });
 
 test('keeps Tab inside the open overlay, with the page behind its scrim inert', async () => {
 	await page.viewport(1000, 900);
 	await render(SessionView, { workspaces: sessionFixtures.running, activeSessionId: 'session-running' });
 
-	await userEvent.click(page.getByRole('button', { name: 'Show workspace' }));
-	const overlay = page.getByRole('complementary', { name: 'Workspace' }).element();
+	const toggle = page.getByRole('button', { name: 'Show workspace' });
+	await userEvent.click(toggle);
+	const overlay = page.getByRole('dialog', { name: 'Workspace' });
+	await expect.element(overlay).toHaveAttribute('aria-modal', 'true');
 	await expect.element(overlay).toHaveFocus();
 	expect(document.getElementById('shell-bay')?.inert).toBe(true);
 	expect(document.getElementById('main-surface')?.inert).toBe(true);
 
-	for (let step = 0; step < 20; step += 1) {
-		await userEvent.keyboard('{Tab}');
-		const focused = document.activeElement;
-		expect(focused === document.body || overlay.contains(focused)).toBe(true);
+	// Enough steps to pass the last control both ways.
+	for (const key of ['{Tab}', '{Shift>}{Tab}{/Shift}']) {
+		for (let step = 0; step < 20; step += 1) {
+			await userEvent.keyboard(key);
+			const focused = document.activeElement;
+			expect(focused).not.toBe(document.body);
+			expect(overlay.element().contains(focused)).toBe(true);
+		}
 	}
 
-	await userEvent.click(
-		page.getByRole('complementary', { name: 'Workspace' }).getByRole('button', { name: 'Close workspace' })
-	);
+	await userEvent.click(overlay.getByRole('button', { name: 'Close workspace' }));
 	expect(document.getElementById('main-surface')?.inert).toBe(false);
+	await expect.element(page.getByRole('button', { name: 'Show workspace' })).toHaveFocus();
 });
 
 test('keeps the bay and its state when the view changes', async () => {

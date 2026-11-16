@@ -68,10 +68,10 @@ export const Narrow: Story = {
 	parameters: { viewport: { defaultViewport: 'narrow' } },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await expect(canvas.queryByRole('complementary', { name: 'Workspace' })).toBeNull();
+		await expect(canvas.queryByRole('dialog', { name: 'Workspace' })).toBeNull();
 		const toggle = canvas.getByRole('button', { name: 'Show workspace' });
 		await userEvent.click(toggle);
-		await expect(canvas.getByRole('complementary', { name: 'Workspace' })).toHaveFocus();
+		await expect(canvas.getByRole('dialog', { name: 'Workspace' })).toHaveFocus();
 		await userEvent.keyboard('{Escape}');
 		await expect(toggle).toHaveFocus();
 	}

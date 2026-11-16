@@ -10,7 +10,9 @@
 	 * green surface on it. Each decision carries its key cap. The keys choose
 	 * while focus is outside a text field and no menu or dialog is open, so a
 	 * request that arrives while the operator types never takes their
-	 * keystrokes, and the card never takes focus on its own.
+	 * keystrokes, and the card never takes focus on its own. A card behind an
+	 * open overlay sits in an inert subtree and ignores the keys too, since
+	 * `inert` stops focus and pointer events but not a window listener.
 	 */
 	type Props = {
 		request: PermissionRequest;
@@ -23,6 +25,7 @@
 
 	let { request, agent, unavailable, onRespond }: Props = $props();
 
+	let card = $state<HTMLElement>();
 	let responding = $state(false);
 	let error = $state<string>();
 
@@ -52,13 +55,14 @@
 
 	/**
 	 * Surfaces that own single keys while open: a menu, whose items answer
-	 * to letters, and any dialog. A stray Y there must never approve a call.
+	 * to letters, and any dialog or modal panel. A stray Y there must never
+	 * approve a call.
 	 */
-	const KEY_OWNERS = '[role="menu"], dialog[open], [role="dialog"], [role="alertdialog"]';
+	const KEY_OWNERS = '[role="menu"], dialog[open], [role="dialog"], [role="alertdialog"], [aria-modal="true"]';
 
 	function handleKeydown(event: KeyboardEvent): void {
 		const modified = event.defaultPrevented || event.repeat || event.metaKey || event.ctrlKey || event.altKey;
-		if (modified || isTextField(event.target) || document.querySelector(KEY_OWNERS)) return;
+		if (modified || isTextField(event.target) || card?.closest('[inert]') || document.querySelector(KEY_OWNERS)) return;
 		const decision = decisions.find((candidate) => candidate.key === event.key.toLowerCase());
 		if (!decision) return;
 		event.preventDefault();
@@ -68,7 +72,7 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<section class="pau-request request-card" aria-labelledby={titleId} data-request={request.id}>
+<section class="pau-request request-card" aria-labelledby={titleId} data-request={request.id} bind:this={card}>
 	<div class="pau-request__head">
 		<span class="pau-mark pau-mark--waiting" aria-hidden="true"></span>
 		<h2 class="pau-request__title" id={titleId}>

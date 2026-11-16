@@ -4,6 +4,7 @@
 	import { onDestroy, tick, untrack, type Snippet } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { fade } from 'svelte/transition';
+	import { shellViews } from '../fixtures/application-shell';
 	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
 	import type { PaletteEntry } from './command-palette';
 	import type { ThemeName, UiFontName } from '../theme';
@@ -333,14 +334,7 @@
 		following?: boolean;
 	};
 
-	const defaultProductItems: ShellNavItem[] = [
-		{ id: 'sessions', label: 'Sessions', icon: 'sessions', active: true },
-		{ id: 'files', label: 'Files', icon: 'file' },
-		{ id: 'review', label: 'Review', icon: 'review' },
-		{ id: 'terminal', label: 'Terminal', icon: 'terminal' },
-		{ id: 'resources', label: 'Pi resources', icon: 'resources' },
-		{ id: 'settings', label: 'Settings', icon: 'settings', action: 'app.settings' }
-	];
+	const defaultProductItems = shellViews('sessions');
 	let {
 		workspaces,
 		activeSessionId,

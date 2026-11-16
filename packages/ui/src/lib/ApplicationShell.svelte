@@ -207,6 +207,40 @@
 		workspaceFocus.restore();
 	}
 
+	/** Elements Tab can reach, in document order. */
+	const TAB_STOPS =
+		'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
+
+	/**
+	 * Closes the overlay on Escape and keeps Tab inside it. The page behind is
+	 * inert, so without the wrap Tab past the last control leaves focus on the
+	 * document body, outside the modal panel.
+	 */
+	function handleOverlayKeydown(event: KeyboardEvent): void {
+		if (!workspacePanel || event.defaultPrevented || !narrow.current) return;
+		if (event.key === 'Escape') {
+			event.stopPropagation();
+			closeOverlay();
+			return;
+		}
+		if (event.key !== 'Tab') return;
+		const stops = [...workspacePanel.querySelectorAll<HTMLElement>(TAB_STOPS)].filter((stop) => stop.checkVisibility());
+		const first = stops[0];
+		const last = stops.at(-1);
+		if (!first || !last) {
+			event.preventDefault();
+			return;
+		}
+		const active = document.activeElement;
+		if (event.shiftKey && (active === first || active === workspacePanel)) {
+			event.preventDefault();
+			last.focus();
+		} else if (active === last && !event.shiftKey) {
+			event.preventDefault();
+			first.focus();
+		}
+	}
+
 	// The overlay takes focus as it opens, so the keyboard lands inside it.
 	$effect(() => {
 		if (!workspacePanel || !overlayOpen || !narrow.current) return;
@@ -543,21 +577,18 @@
 				aria-label={`Close ${workspaceLabel.toLowerCase()}`}
 				onclick={closeOverlay}></button>
 		{/if}
-		<!-- Escape bubbles from the controls inside the overlay. -->
-		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+		<!-- Escape and Tab bubble from the controls inside the overlay. -->
 		<aside
 			id="shell-workspace"
 			class="app-shell__workspace"
 			class:app-shell__workspace--overlay={narrow.current}
+			role={narrow.current ? 'dialog' : undefined}
+			aria-modal={narrow.current ? 'true' : undefined}
 			aria-label={workspaceLabel}
 			tabindex="-1"
 			bind:this={workspacePanel}
 			bind:offsetWidth={workspaceWidth}
-			onkeydown={(event) => {
-				if (!narrow.current || event.key !== 'Escape' || event.defaultPrevented) return;
-				event.stopPropagation();
-				closeOverlay();
-			}}>
+			onkeydown={handleOverlayKeydown}>
 			<header class="app-shell__workspace-head">
 				{#if workspaceHeader}
 					{@render workspaceHeader()}

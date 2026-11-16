@@ -8,6 +8,7 @@ import type {
 } from '@stormlightlabs/pau-protocol';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import type {
+	AgentReadinessProblem,
 	ExtensionUiResponse,
 	CommandOption,
 	MessageQueue,
@@ -33,6 +34,7 @@ import {
 	cancelSessionRetry,
 	cloneSession,
 	exportSessionTranscript,
+	getAgentReadiness,
 	compactSession,
 	clearSessionQueue,
 	getSessionExtensionUi,
@@ -326,6 +328,9 @@ export class LiveSessions {
 	#viewed = $state<string>();
 	/** Sessions that waited, failed, or finished a turn out of view and have not been opened since. */
 	readonly #unseen = new SvelteSet<string>();
+	#claudeReadiness = $state<AgentReadinessProblem>();
+	/** Ended sessions the operator started again. Their failure is history, so they leave Needs you. */
+	readonly #restarted = new SvelteSet<string>();
 	/** Sessions whose usage an event updated while its read was in flight, so the read is stale. */
 	readonly #usageUpdated = new SvelteSet<string>();
 	/** Extension events received while the session's extension UI read is in flight. */
@@ -680,6 +685,7 @@ export class LiveSessions {
 			status: session.status,
 			error: failureMessage(session),
 			unseen: this.#unseen.has(session.id),
+			restarted: this.#restarted.has(session.id) || undefined,
 			attention: extensionUi.dialogs.length > 0 ? 'An extension is waiting for your answer.' : undefined,
 			capabilities: {
 				prompt: session.capabilities.prompt,
@@ -734,6 +740,30 @@ export class LiveSessions {
 	/** Clears every attention marker. */
 	clearUnseen(): void {
 		this.#unseen.clear();
+	}
+
+	/**
+	 * Why Claude Code cannot start a session, from the backend's readiness
+	 * report. Launch checks only Pi, so the store reads the report when a
+	 * view asks, after a Claude Code start fails, and when the operator asks
+	 * to check again. Unset while the report is unread or could not be read,
+	 * which leaves Claude Code available. Every bay and the session view
+	 * read this one answer.
+	 */
+	get claudeReadiness(): AgentReadinessProblem | undefined {
+		return this.#claudeReadiness;
+	}
+
+	/** Reads the readiness report again. `refresh` asks the backend to check the agent anew. */
+	async checkClaude(refresh = false): Promise<void> {
+		try {
+			const report = await getAgentReadiness(refresh, this.#fetcher);
+			const claude = report.agents.find((agent) => agent.agent === 'claude');
+			this.#claudeReadiness =
+				claude && !claude.ready && claude.reason ? { agent: 'claude', reason: claude.reason } : undefined;
+		} catch {
+			this.#claudeReadiness = undefined;
+		}
 	}
 
 	/** Whether the backend is unreachable. The first connection attempt counts as loading. */
@@ -804,6 +834,7 @@ export class LiveSessions {
 			void this.#readHistory(session.id);
 			return session.id;
 		} catch (cause) {
+			if (agent === 'claude') void this.checkClaude(true);
 			throw new Error(sessionErrorMessage(cause, 'start'), { cause });
 		}
 	}
@@ -854,9 +885,11 @@ export class LiveSessions {
 		const session = this.#sessions[sessionId];
 		if (!session) throw new Error('Pau no longer has this session. Start a new one from the session rail.');
 		const agent = this.#agent(sessionId);
-		return session.native_session_id
-			? this.resume(session.workspace_id, session.native_session_id, agent)
-			: this.start(session.workspace_id, agent);
+		const restarted = session.native_session_id
+			? await this.resume(session.workspace_id, session.native_session_id, agent)
+			: await this.start(session.workspace_id, agent);
+		if (restarted !== sessionId) this.#restarted.add(sessionId);
+		return restarted;
 	}
 
 	/** Lists the models a session can select. Rejects with operator-facing copy. */

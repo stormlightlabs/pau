@@ -2,6 +2,7 @@
 	import '../styles/tokens.css';
 
 	import type { ThemeName, UiFontName } from '../theme';
+	import { shellViews } from '../fixtures/application-shell';
 	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
 	import TerminalPanel, { terminalFailed, terminalStatus, type TerminalTabState } from './TerminalPanel.svelte';
 	import type { TerminalFileLinks, TerminalSource } from './types/terminal';
@@ -23,13 +24,7 @@
 		onPaneResize?: (widths: ShellPaneWidths) => void;
 	};
 
-	const defaultProductItems: ShellNavItem[] = [
-		{ id: 'sessions', label: 'Sessions', icon: 'agents' },
-		{ id: 'files', label: 'Files', icon: 'files' },
-		{ id: 'terminal', label: 'Terminal', icon: 'terminal', active: true },
-		{ id: 'resources', label: 'Resources', icon: 'resources' },
-		{ id: 'settings', label: 'Settings', icon: 'settings' }
-	];
+	const defaultProductItems = shellViews('terminal');
 
 	let {
 		source,

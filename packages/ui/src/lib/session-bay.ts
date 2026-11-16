@@ -6,8 +6,8 @@ import type { SessionStatus, SessionViewModel } from './types/session';
  * The three racks of the bay, in attention order. Needs you holds every
  * session that needs the operator: one with a pending dialog or permission
  * request, a failed one and one that stopped responding. Running holds
- * sessions at work, and Settled holds idle and stopped sessions with the
- * saved ones.
+ * sessions at work, and Settled holds idle and stopped sessions, failed
+ * sessions the operator started again, and the saved ones.
  */
 export type BaySection = 'needs' | 'running' | 'settled';
 
@@ -22,18 +22,23 @@ const SECTION_BY_STATUS: Record<SessionStatus, BaySection> = {
 	stopped: 'settled'
 };
 
+type RackedSession = Pick<SessionViewModel, 'status' | 'attention' | 'restarted'>;
+
 /**
  * Whether a session needs the operator. A pending dialog sets `attention`
  * while the agent's status stays `running` or `idle`, so the status alone
- * misses a permission request.
+ * misses a permission request. A session the operator started again needs
+ * nothing more: its restart carries on the work.
  */
-export function needsOperator(session: Pick<SessionViewModel, 'status' | 'attention'>): boolean {
+export function needsOperator(session: RackedSession): boolean {
+	if (session.restarted) return false;
 	return Boolean(session.attention) || SECTION_BY_STATUS[session.status] === 'needs';
 }
 
-/** The rack a session belongs in. */
-export function baySection(session: Pick<SessionViewModel, 'status' | 'attention'>): BaySection {
-	return needsOperator(session) ? 'needs' : SECTION_BY_STATUS[session.status];
+/** The rack a session belongs in. A restarted session stays as history in Settled. */
+export function baySection(session: RackedSession): BaySection {
+	if (needsOperator(session)) return 'needs';
+	return session.restarted ? 'settled' : SECTION_BY_STATUS[session.status];
 }
 
 /**

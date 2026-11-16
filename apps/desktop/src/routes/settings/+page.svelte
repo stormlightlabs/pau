@@ -6,16 +6,12 @@
 		SettingsView,
 		type SettingsChoices
 	} from '@stormlightlabs/pau-ui';
-	import { getContext, onMount } from 'svelte';
+	import { getContext } from 'svelte';
 	import { page } from '$app/state';
 
-	import { listWorkspaces } from '$lib/api';
 	import { productNavigation } from '$lib/app-navigation';
 	import { interfacePreferences } from '$lib/interface-preferences.svelte';
 	import { liveSessionsContext, type LiveSessions } from '$lib/live-sessions.svelte';
-
-	/** The workspace that the rail's workspace views open. Settings has none of its own, so it uses the first. */
-	let workspaceId = $state<string>();
 
 	const sectionItems = SETTINGS_SECTIONS.map((section) => ({
 		id: section.id,
@@ -25,9 +21,11 @@
 
 	const keymap = getKeymap();
 	const choices = $derived(interfacePreferences.choices);
-	const views = $derived(productNavigation(page.route.id, workspaceId));
 	/** The layout's sessions, whose workspaces carry each one's sandbox summary. */
 	const sessions = getContext<LiveSessions | undefined>(liveSessionsContext);
+	/** The workspace that the rail's workspace views open. Settings has none of its own, so it uses the first. */
+	const workspaceId = $derived(sessions?.workspaces[0]?.id);
+	const views = $derived(productNavigation(page.route.id, workspaceId));
 	/** The Sandbox section's summary of the workspace that the workspace views open, and its Agent sandbox link. */
 	const sandbox = $derived.by(() => {
 		const href = views.find((view) => view.id === 'sandbox')?.href;
@@ -41,12 +39,6 @@
 		const { uiFont, ...rest }: Partial<SettingsChoices> = { [key]: value };
 		return interfacePreferences.choose(uiFont ? { ...rest, ui_font: uiFont } : rest);
 	}
-
-	onMount(() => {
-		void listWorkspaces()
-			.then((workspaces) => (workspaceId = workspaces[0]?.id))
-			.catch(() => {});
-	});
 </script>
 
 <svelte:head><title>Settings · Pau</title></svelte:head>

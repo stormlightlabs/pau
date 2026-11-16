@@ -400,3 +400,32 @@ test('names the agent of a failed session', async () => {
 		'Claude Code exited with code 2. Start a new session to continue.'
 	);
 });
+
+test('marks a failed session restarted once the operator starts it again under a new session', async () => {
+	const socket = new FakeEventSocket('ws://test');
+	const failed = { ...session, status: 'failed', exit_code: 1 };
+	const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+		const url = String(input);
+		if (url.endsWith('/api/sessions') && init?.method === 'POST')
+			return Response.json({ ...session, id: 'session-2', status: 'running' });
+		if (url.endsWith('/api/sessions')) return Response.json([failed]);
+		return Response.json([]);
+	});
+	const sessions = new LiveSessions({
+		browserOrigin: 'http://localhost',
+		fetcher: fetcher as unknown as typeof fetch,
+		socketFactory: () => socket,
+		scheduleFrame: () => {}
+	});
+	sessions.connect();
+	socket.open();
+	await vi.waitFor(() => expect(sessions.workspaces[0]?.sessions).toHaveLength(1));
+	const find = (id: string) => sessions.workspaces[0]?.sessions.find((candidate) => candidate.id === id);
+	expect(find('session-1')?.restarted).toBeUndefined();
+
+	await expect(sessions.restart('session-1')).resolves.toBe('session-2');
+
+	// The failed session stays listed with its error, as history.
+	expect(find('session-1')).toMatchObject({ status: 'failed', restarted: true, error: expect.any(String) });
+	expect(find('session-2')?.restarted).toBeUndefined();
+});

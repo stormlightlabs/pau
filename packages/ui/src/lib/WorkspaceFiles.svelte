@@ -17,6 +17,7 @@
 		WorkspaceSearchMatch,
 		WorkspaceTraversalOptions
 	} from './types/workspace-files';
+	import { shellViews } from '../fixtures/application-shell';
 	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
 	import ContextMenu from './ContextMenu.svelte';
 	import {
@@ -67,12 +68,7 @@
 		onPaneResize?: (widths: ShellPaneWidths) => void;
 	};
 
-	const defaultProductItems: ShellNavItem[] = [
-		{ id: 'sessions', label: 'Sessions', icon: 'agents' },
-		{ id: 'files', label: 'Files', icon: 'files', active: true },
-		{ id: 'resources', label: 'Resources', icon: 'resources' },
-		{ id: 'settings', label: 'Settings', icon: 'settings' }
-	];
+	const defaultProductItems = shellViews('files');
 
 	let {
 		workspaceId,

@@ -364,6 +364,12 @@ export type SessionViewModel = {
 	 */
 	unseen?: boolean;
 	error?: string;
+	/**
+	 * Whether the operator started this ended session again, which runs as a
+	 * new session. It keeps its status and error as history and racks in
+	 * Settled instead of Needs you.
+	 */
+	restarted?: boolean;
 	capabilities: SessionCapabilities;
 	transcript: TranscriptEntry[];
 	extensionUi?: ExtensionUiState;

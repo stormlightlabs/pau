@@ -47,6 +47,19 @@ test('leaves keys typed into an editable element alone', async () => {
 	expect(onRespond).not.toHaveBeenCalled();
 });
 
+test('ignores the keys while the card sits in an inert subtree', async () => {
+	const onRespond = vi.fn();
+	await render(RequestCard, { request, agent: 'Pi', onRespond });
+	const card = document.querySelector<HTMLElement>('.request-card')!.parentElement!;
+	card.inert = true;
+	onTestFinished(() => {
+		card.inert = false;
+	});
+
+	await userEvent.keyboard('yan');
+	expect(onRespond).not.toHaveBeenCalled();
+});
+
 test('makes Allow once the one primary, with key caps on every decision', async () => {
 	await render(RequestCard, { request, agent: 'Pi', onRespond: () => {} });
 

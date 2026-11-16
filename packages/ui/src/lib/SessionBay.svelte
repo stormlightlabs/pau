@@ -172,8 +172,11 @@
 		| { kind: 'restored'; key: string; workspace: SessionWorkspace; saved: SavedSession }
 		| { kind: 'saved'; key: string; workspace: SessionWorkspace; saved: SavedSession };
 
+	/** Every session in Needs you, whether or not the filter shows it. */
+	const needsIds = $derived(sessions.filter((session) => needsOperator(session)).map((session) => session.id));
+
 	$effect(() => {
-		const present = sessions.filter((session) => needsOperator(session)).map((session) => session.id);
+		const present = needsIds;
 		untrack(() => memory.trackNeeds(present));
 	});
 
@@ -217,11 +220,13 @@
 
 	// The arrival: a session that starts needing the operator travels into
 	// Needs you. A bay that mounts with sessions already there plays nothing.
+	// It compares every session, not the filtered strips, so clearing the
+	// filter reveals strips without replaying their arrival.
 	let before: BayPositions | undefined;
 	let arrived: ReadonlySet<string> = new SvelteSet<string>();
 	let needsKnown: string[] | undefined;
 	$effect.pre(() => {
-		const needs = strips.needs.map((strip) => strip.key);
+		const needs = needsIds;
 		untrack(() => {
 			const fresh = needsKnown ? needs.filter((key) => !needsKnown?.includes(key)) : [];
 			needsKnown = needs;

@@ -14,6 +14,7 @@ import { DESKTOP_CONNECTION_GLOBAL } from './api';
 import { productNavigation } from './app-navigation';
 import { desktopNativeCapabilitiesContext } from './native-capabilities';
 import { FakeEventSocket } from './fake-event-socket';
+import { LiveSessions, liveSessionsContext } from './live-sessions.svelte';
 import { SessionAttention, sessionAttentionContext } from './session-attention';
 import SessionRoute from './SessionRoute.svelte';
 
@@ -1289,6 +1290,34 @@ test('reports the session on screen so its notifications use the rail title and 
 	attentionSockets[0]?.receive({ type: 'event', event: changed('failed') });
 	expect(notifier.notify).toHaveBeenLastCalledWith({ title: 'Pi session', body: 'Pi exited unexpectedly.' });
 	attention.close();
+});
+
+test("uses the layout's shared store without connecting or closing it, and leaves no session in view", async () => {
+	const { props, fetcher, sockets } = setup({ 'GET /api/sessions': () => json([idleSession]) });
+	// The layout owns the store: it connects it once and closes it with the window.
+	const shared = new LiveSessions({ browserOrigin: 'http://localhost', ...props });
+	shared.connect();
+	sockets[0]?.open();
+	await vi.waitFor(() => expect(shared.workspaces[0]?.sessions).toHaveLength(1));
+	const connect = vi.spyOn(shared, 'connect');
+	const close = vi.spyOn(shared, 'close');
+	const unseen = () => shared.workspaces[0]?.sessions[0]?.unseen;
+
+	const view = await render(SessionRoute, { props: { fetcher }, context: new Map([[liveSessionsContext, shared]]) });
+	await expect.element(page.getByRole('heading', { name: 'Pi session', level: 1 })).toBeVisible();
+	expect(sockets).toHaveLength(1);
+	// The session in view raises no marker.
+	sockets[0]?.receive(sessionChanged({ ...idleSession, status: 'waiting' }));
+	expect(unseen()).toBe(false);
+
+	await view.unmount();
+	expect(connect).not.toHaveBeenCalled();
+	expect(close).not.toHaveBeenCalled();
+	expect(sockets[0]?.closed).toBe(false);
+	// Once the route leaves, nothing is in view, so the same change marks the session.
+	sockets[0]?.receive(sessionChanged({ ...idleSession, status: 'failed' }));
+	expect(unseen()).toBe(true);
+	shared.close();
 });
 
 /** Preferences that saved `lastRoute` as the view to restore. */

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
 import { bayFixtures } from '../fixtures/bay';
-import { baySection, bayStateLine, displayStatus, matchesBayFilter } from '../lib/session-bay';
+import { baySection, bayStateLine, displayStatus, matchesBayFilter, needsOperator } from '../lib/session-bay';
 import type { SessionStatus } from '../lib/types/session';
 
 const sessions = bayFixtures.busy.flatMap((workspace) => workspace.sessions);
@@ -29,6 +29,13 @@ describe('baySection', () => {
 			expect(displayStatus({ status, attention: 'An extension is waiting for your answer.' })).toBe('waiting');
 		}
 	);
+
+	test('racks a failed session the operator restarted in settled, still shown as failed', () => {
+		const restarted = { status: 'failed' as const, restarted: true };
+		expect(baySection(restarted)).toBe('settled');
+		expect(needsOperator(restarted)).toBe(false);
+		expect(displayStatus(restarted)).toBe('failed');
+	});
 
 	test('keeps a failure as the shown state over a pending dialog', () => {
 		expect(displayStatus({ status: 'failed', attention: 'An extension is waiting for your answer.' })).toBe('failed');

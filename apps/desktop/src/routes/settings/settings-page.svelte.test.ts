@@ -4,6 +4,7 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { PauApiError } from '$lib/api';
+import { liveSessionsContext } from '$lib/live-sessions.svelte';
 import SettingsPage from './+page.svelte';
 
 /** Saves fail at once unless a test holds one back. */
@@ -13,13 +14,10 @@ const updateUiPreferences = vi.hoisted(() =>
 	})
 );
 
-const listWorkspaces = vi.hoisted(() => vi.fn(async (): Promise<{ id: string }[]> => []));
-
 vi.mock('$app/state', () => ({ page: { params: {}, route: { id: '/settings' } } }));
 
 vi.mock('$lib/api', async (importOriginal) => ({
 	...(await importOriginal<object>()),
-	listWorkspaces,
 	getUiPreferences: async () => ({
 		version: 1,
 		theme: 'eldritch',
@@ -48,8 +46,9 @@ test('marks Settings in the rail and links each section', async () => {
 });
 
 test('links Agent sandbox for the first workspace and Diagnostics from About', async () => {
-	listWorkspaces.mockResolvedValueOnce([{ id: 'workspace-1' }]);
-	await render(SettingsPage);
+	// The layout's store, whose first workspace the workspace views open.
+	const sessions = { workspaces: [{ id: 'workspace-1', name: 'pau', sessions: [] }] };
+	await render(SettingsPage, { context: new Map([[liveSessionsContext, sessions]]) });
 
 	await expect
 		.element(page.getByRole('link', { name: 'Edit grants in Agent sandbox' }))

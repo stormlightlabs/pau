@@ -61,7 +61,7 @@ test('toggles the workspace column, docked or as the narrow overlay', async () =
 	await page.viewport(1000, 800);
 	await expect.element(column).not.toBeInTheDocument();
 	press({ key: '∫', code: 'KeyB', metaKey: true, altKey: true }, document.body);
-	await expect.element(column).toHaveFocus();
+	await expect.element(page.getByRole('dialog', { name: 'Workspace', exact: true })).toHaveFocus();
 });
 
 test('gives a chord to a conflicting Pi binding', async () => {

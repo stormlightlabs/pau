@@ -26,3 +26,20 @@ export const shellNavigationFixtures = {
 		{ id: 'release', label: 'release-notes', href: '#release', status: 'queued' }
 	]
 } satisfies { productItems: ShellNavItem[]; contextItems: ShellNavItem[] };
+
+/**
+ * The six views with `active` on the one a surface shows, without the demo
+ * attention and unavailable states. Views default to these, so their stories
+ * show the same view row as the app.
+ */
+export function shellViews(active: string): ShellNavItem[] {
+	return shellNavigationFixtures.productItems.map(({ id, label, icon, href, action, paletteOnly }) => ({
+		id,
+		label,
+		icon,
+		href,
+		action,
+		paletteOnly,
+		active: id === active
+	}));
+}

@@ -192,7 +192,7 @@ test.each([
 	await expect.element(toggle).toHaveAttribute('aria-expanded', 'true');
 	await close();
 
-	await expect.element(page.getByRole('complementary', { name: 'Checks' })).not.toBeInTheDocument();
+	await expect.element(page.getByRole('dialog', { name: 'Checks' })).not.toBeInTheDocument();
 	await expect.element(toggle).toHaveFocus();
 });
 
@@ -203,7 +203,7 @@ test('returns focus from the workspace overlay to the composer when its toggle i
 	const toggle = page.getByRole('button', { name: 'Show checks' });
 
 	await userEvent.click(toggle);
-	await expect.element(page.getByRole('complementary', { name: 'Checks' })).toHaveFocus();
+	await expect.element(page.getByRole('dialog', { name: 'Checks' })).toHaveFocus();
 	toggle.element().remove();
 	await userEvent.keyboard('{Escape}');
 

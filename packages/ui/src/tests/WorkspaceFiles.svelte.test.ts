@@ -31,6 +31,15 @@ async function renderFiles(fileSource: WorkspaceFileSource = source()): Promise<
 	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: fileSource });
 }
 
+test('shows the six views of the app, with Files current, when the app passes none', async () => {
+	await renderFiles();
+
+	const views = page.getByRole('navigation', { name: 'Views' });
+	expect(views.getByRole('listitem').elements()).toHaveLength(6);
+	await expect.element(views.getByRole('link', { name: 'Files' })).toHaveAttribute('aria-current', 'page');
+	await expect.element(views.getByRole('link', { name: 'Pi resources' })).toBeVisible();
+});
+
 test('shows loading, empty, and permission-error states', async () => {
 	const pending = new Promise<never>(() => {});
 	const view = await render(WorkspaceFiles, {

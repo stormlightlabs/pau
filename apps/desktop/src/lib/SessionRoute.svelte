@@ -3,14 +3,13 @@
 	import {
 		SessionView,
 		TerminalPanel,
-		type AgentReadinessProblem,
 		type SavedSession,
 		type SessionAgent,
 		type ShellNavItem
 	} from '@stormlightlabs/pau-ui';
 	import { getContext, onMount, untrack } from 'svelte';
 
-	import { getAgentReadiness, getUiPreferences } from './api';
+	import { getUiPreferences } from './api';
 
 	import type { EventSocketFactory } from './event-stream';
 	import { searchFileMentions } from './file-mentions';
@@ -117,26 +116,6 @@
 	const agentReadiness = getContext<AgentReadinessSource | undefined>(agentReadinessContext);
 
 	/**
-	 * Why Claude Code cannot start a session, from the backend's readiness
-	 * report. Launch checks only Pi, so the route reads the report itself on
-	 * mount, after a Claude Code start fails, and when the operator asks the
-	 * notice to check again. Unset while the report
-	 * is unread or could not be read, which leaves Claude Code available.
-	 */
-	let claudeReadiness = $state<AgentReadinessProblem>();
-
-	async function checkClaude(refresh = false): Promise<void> {
-		try {
-			const report = await getAgentReadiness(refresh, fetcher);
-			const claude = report.agents.find((agent) => agent.agent === 'claude');
-			claudeReadiness =
-				claude && !claude.ready && claude.reason ? { agent: 'claude', reason: claude.reason } : undefined;
-		} catch {
-			claudeReadiness = undefined;
-		}
-	}
-
-	/**
 	 * Asks where to save a session's transcript with the system save dialog,
 	 * then saves it there. Resolves to the chosen path, or `undefined` when
 	 * the operator cancels. The suggested name is the session title without
@@ -211,7 +190,7 @@
 
 	onMount(() => {
 		if (!shared) sessions.connect();
-		void checkClaude();
+		void sessions.checkClaude();
 		if (restoreLastRoute) void readSavedRoute();
 		return () => {
 			if (!shared) sessions.close();
@@ -273,13 +252,7 @@
 	}
 
 	async function startSession(workspaceId: string, agent: SessionAgent): Promise<void> {
-		let sessionId: string;
-		try {
-			sessionId = await sessions.start(workspaceId, agent);
-		} catch (cause) {
-			if (agent === 'claude') void checkClaude(true);
-			throw cause;
-		}
+		const sessionId = await sessions.start(workspaceId, agent);
 		restoredOpen = false;
 		selectedSessionId = sessionId;
 		openedWorkspaceId = undefined;
@@ -356,8 +329,8 @@
 	{onOpenTerminal}
 	onOpenFile={onOpenFile && ((workspaceId, path) => onOpenFile(workspaceId, path))}
 	agentReadiness={agentReadiness?.()}
-	{claudeReadiness}
-	onCheckClaude={() => checkClaude(true)}
+	claudeReadiness={sessions.claudeReadiness}
+	onCheckClaude={() => sessions.checkClaude(true)}
 	onOpenWorkspace={openWorkspace}
 	onSelectSession={selectSession}
 	onClearAttention={() => sessions.clearUnseen()}

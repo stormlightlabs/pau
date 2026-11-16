@@ -177,6 +177,22 @@ test('leaves Y, A and N to an open context menu instead of answering the request
 	expect(onExtensionUiResponse).not.toHaveBeenCalled();
 });
 
+test('leaves Y to the open workspace overlay instead of answering the request behind it', async () => {
+	await page.viewport(1000, 900);
+	onTestFinished(() => page.viewport(1440, 900));
+	const onExtensionUiResponse = vi.fn(async () => {});
+	await render(SessionView, { workspaces: bayFixtures.busy, activeSessionId: 'sandbox-pi', onExtensionUiResponse });
+
+	await userEvent.click(page.getByRole('button', { name: 'Show workspace' }));
+	const overlay = page.getByRole('dialog', { name: 'Workspace' });
+	const row = overlay.getByTitle('Open in Terminal');
+	await expect.element(row).toBeVisible();
+	(row.element() as HTMLElement).focus();
+	await expect.element(row).toHaveFocus();
+	await userEvent.keyboard('y');
+	expect(onExtensionUiResponse).not.toHaveBeenCalled();
+});
+
 test('lists the workspace changes, branch, sandbox and terminals in the workspace column', async () => {
 	const onOpenFile = vi.fn();
 	await render(SessionView, { workspaces: bayFixtures.busy, activeSessionId: 'sandbox-pi', onOpenFile });
@@ -189,6 +205,20 @@ test('lists the workspace changes, branch, sandbox and terminals in the workspac
 
 	await userEvent.click(column.getByRole('button', { name: /sandbox\.rs/ }));
 	expect(onOpenFile).toHaveBeenCalledWith('pau-sandbox', 'crates/server/src/sandbox.rs');
+});
+
+test('reveals Needs you strips without replaying their arrival when the filter clears', async () => {
+	document.documentElement.dataset.motion = 'full';
+	await render(SessionViewDemo, { workspaces: bayFixtures.busy, initialSessionId: 'sandbox-pi' });
+	const filter = page.getByRole('searchbox', { name: 'Filter sessions' });
+	await userEvent.fill(filter, 'audit');
+	await expect.element(page.getByRole('heading', { name: 'Needs you 1' })).toBeVisible();
+
+	const animate = vi.spyOn(Element.prototype, 'animate');
+	await userEvent.fill(filter, '');
+	await expect.element(page.getByRole('heading', { name: 'Needs you 4' })).toBeVisible();
+	const bayAnimations = animate.mock.contexts.filter((element) => (element as HTMLElement).dataset?.bayKey);
+	expect(bayAnimations).toEqual([]);
 });
 
 test('plays the arrival with the strip travelling, and only a fade under reduced motion', async () => {

@@ -67,13 +67,13 @@ export const NarrowOverlay: Story = {
 	parameters: { viewport: { defaultViewport: 'narrow' } },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await expect(canvas.queryByRole('complementary', { name: 'Checks' })).toBeNull();
+		await expect(canvas.queryByRole('dialog', { name: 'Checks' })).toBeNull();
 		const toggle = canvas.getByRole('button', { name: 'Show checks' });
 		await userEvent.click(toggle);
-		const overlay = canvas.getByRole('complementary', { name: 'Checks' });
+		const overlay = canvas.getByRole('dialog', { name: 'Checks' });
 		await expect(overlay).toHaveFocus();
 		await userEvent.keyboard('{Escape}');
-		await expect(canvas.queryByRole('complementary', { name: 'Checks' })).toBeNull();
+		await expect(canvas.queryByRole('dialog', { name: 'Checks' })).toBeNull();
 		await expect(toggle).toHaveFocus();
 	}
 };

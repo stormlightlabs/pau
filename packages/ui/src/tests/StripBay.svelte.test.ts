@@ -1,8 +1,9 @@
 import { page, userEvent } from 'vitest/browser';
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, expect, onTestFinished, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { bayFixtures } from '../fixtures/bay';
+import { Keymap, keymapContext } from '../lib/keymap.svelte';
 import SessionView from '../lib/SessionView.svelte';
 import BayArrivalDemo from '../stories/BayArrivalDemo.svelte';
 import SessionViewDemo from '../stories/SessionViewDemo.svelte';
@@ -71,6 +72,20 @@ test('puts the newest arrival at the top of Needs you', async () => {
 	await expect.element(page.getByRole('heading', { name: 'Running 3' })).toBeVisible();
 });
 
+test('moves a running session that receives a permission request into Needs you', async () => {
+	const { rerender } = await render(SessionView, { workspaces: bayFixtures.busy, activeSessionId: 'audit-drain' });
+	await expect.element(page.getByRole('heading', { name: 'Needs you 4' })).toBeVisible();
+	expect(strips('running')).toContain('Diff gutter numbers');
+
+	await rerender({ workspaces: bayFixtures.arrived });
+	await expect.element(page.getByRole('heading', { name: 'Needs you 5' })).toBeVisible();
+	expect(strips('needs')).toContain('Diff gutter numbers');
+	expect(strips('running')).not.toContain('Diff gutter numbers');
+	await expect
+		.element(page.getByRole('button', { name: /Diff gutter numbers/ }))
+		.toHaveTextContent(/Allow write to crates\/server\/src\/sessions\.rs\?/);
+});
+
 test('filters every rack by name, agent or workspace, and Escape clears the filter', async () => {
 	await render(SessionViewDemo, { workspaces: bayFixtures.busy, initialSessionId: 'sandbox-pi' });
 
@@ -87,8 +102,20 @@ test('filters every rack by name, agent or workspace, and Escape clears the filt
 	await expect.element(filter).toHaveValue('');
 });
 
-test('jumps to the filter with / and steps through strips with the arrow keys', async () => {
-	await render(SessionViewDemo, { workspaces: bayFixtures.busy, initialSessionId: 'sandbox-pi' });
+test('jumps to the filter with / through the key map and steps through strips with the arrow keys', async () => {
+	const keymap = new Keymap({ platform: 'mac' });
+	const listen = (event: KeyboardEvent) => keymap.handleKeydown(event);
+	addEventListener('keydown', listen);
+	onTestFinished(() => removeEventListener('keydown', listen));
+	await render(SessionViewDemo, {
+		props: { workspaces: bayFixtures.busy, initialSessionId: 'sandbox-pi' },
+		context: new Map([[keymapContext, keymap]])
+	});
+	expect(keymap.actions.find((action) => action.id === 'bay.filter')?.keys).toEqual(['/']);
+
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.type(prompt, '/');
+	await expect.element(prompt).toHaveFocus();
 
 	page.getByRole('region', { name: 'Transcript' }).element().focus();
 	await userEvent.keyboard('/');
@@ -138,6 +165,16 @@ test('renders a permission request as the request card at the end of the transcr
 
 	await userEvent.keyboard('y');
 	expect(onExtensionUiResponse).toHaveBeenCalledWith('sandbox-pi', { id: 'dialog-permission', value: 'allow_once' });
+});
+
+test('leaves Y, A and N to an open context menu instead of answering the request', async () => {
+	const onExtensionUiResponse = vi.fn(async () => {});
+	await render(SessionView, { workspaces: bayFixtures.busy, activeSessionId: 'sandbox-pi', onExtensionUiResponse });
+
+	await userEvent.click(page.getByRole('button', { name: /Design audit/ }), { button: 'right' });
+	await expect.element(page.getByRole('menu', { name: 'Design audit actions' })).toBeVisible();
+	await userEvent.keyboard('yan');
+	expect(onExtensionUiResponse).not.toHaveBeenCalled();
 });
 
 test('lists the workspace changes, branch, sandbox and terminals in the workspace column', async () => {

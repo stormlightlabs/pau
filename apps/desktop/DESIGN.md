@@ -181,8 +181,9 @@ components:
 
 ## Overview
 
-The shell, the bay and the session view ship this design. The other views
-keep their previous composition inside the shell until each moves over.
+The shell, the bay and the session view ship this design, and every view
+shows the bay. The other views keep their previous content in the main
+surface until each moves over.
 
 **Creative North Star: "The Strip Bay"**
 

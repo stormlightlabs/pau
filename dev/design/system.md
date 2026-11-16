@@ -13,9 +13,10 @@ values, and `apps/desktop/.impeccable/wireframes/` holds a static wireframe of
 each surface. Where either disagrees with this document, this document wins.
 
 The shell, the bay, the view row and the session view follow this document.
-Files, Review, Terminal, Resources and Settings keep their previous
-composition inside the shell until each moves to the Strip Bay. Code that
-disagrees with a rule here may predate it.
+Every view shows the bay and the view row. Inside the main surface, Files,
+Review, Terminal, Resources and Settings keep their previous content until
+each moves to the Strip Bay. Code that disagrees with a rule here may predate
+it.
 
 ## Surface mode
 
@@ -62,7 +63,9 @@ The wide shell has three columns:
   second navigation column.
 
 A view without workspace detail, such as Settings, gives the workspace column
-to the main surface. The terminal dock is the only surface that splits the main
+to the main surface. A view with its own sections, such as the Settings
+sections, the Files tree or the terminal list, lists them in a 224px column
+at the start of the main surface, beside the bay. The terminal dock is the only surface that splits the main
 column.
 
 Every column starts with a 48px header, so the three header rules form one
@@ -327,10 +330,12 @@ is lead, main and meta.
 The bay racks session strips by what they need, in three sections, each under
 a label and a mono count:
 
-- Needs you: sessions waiting on the operator, failed or not responding. The
-  label and count turn green. Its strips sit on the raised surface, separated
-  by 1px rules in the bay color, and carry the only full-contrast names in the
-  bay. State lines take their state color.
+- Needs you: sessions with a pending dialog or permission request, failed
+  sessions and sessions that stopped responding. A pending request racks a
+  session here whatever status the agent reports. The label and count turn
+  green. Its strips sit on the raised surface, separated by 1px rules in the
+  bay color, and carry the only full-contrast names in the bay. State lines
+  take their state color.
 - Running: names step back to muted text at weight 500. The spinning mark and
   the mono state line keep the section ahead of Settled.
 - Settled: idle and stopped sessions, with muted names at weight 400.

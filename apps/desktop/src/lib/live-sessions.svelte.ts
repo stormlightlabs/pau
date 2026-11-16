@@ -726,7 +726,7 @@ export class LiveSessions {
 	}
 
 	/** Records which session the operator is looking at and clears its marker. */
-	view(sessionId: string | undefined): void {
+	view(sessionId?: string): void {
 		this.#viewed = sessionId;
 		if (sessionId) this.#unseen.delete(sessionId);
 	}
@@ -1190,3 +1190,9 @@ function workspaceTerminal(terminal: TerminalInfo): WorkspaceTerminal {
 	const code = terminal.status.exit_code;
 	return { id: terminal.id, label: program, status: `Exited ${code}`, failed: code !== 0 };
 }
+
+/**
+ * Context key under which the app layout shares its one {@link LiveSessions},
+ * so the bay in every view and the session view read the same sessions.
+ */
+export const liveSessionsContext = Symbol('pau.liveSessions');

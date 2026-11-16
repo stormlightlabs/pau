@@ -13,11 +13,13 @@ const updateUiPreferences = vi.hoisted(() =>
 	})
 );
 
+const listWorkspaces = vi.hoisted(() => vi.fn(async (): Promise<{ id: string }[]> => []));
+
 vi.mock('$app/state', () => ({ page: { params: {}, route: { id: '/settings' } } }));
 
 vi.mock('$lib/api', async (importOriginal) => ({
 	...(await importOriginal<object>()),
-	listWorkspaces: async () => [],
+	listWorkspaces,
 	getUiPreferences: async () => ({
 		version: 1,
 		theme: 'eldritch',
@@ -43,6 +45,16 @@ test('marks Settings in the rail and links each section', async () => {
 	await expect.element(page.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
 	const sections = page.getByRole('complementary', { name: 'Sections' });
 	await expect.element(sections.getByRole('link', { name: 'Keyboard' })).toHaveAttribute('href', '#settings-keyboard');
+});
+
+test('links Agent sandbox for the first workspace and Diagnostics from About', async () => {
+	listWorkspaces.mockResolvedValueOnce([{ id: 'workspace-1' }]);
+	await render(SettingsPage);
+
+	await expect
+		.element(page.getByRole('link', { name: 'Edit grants in Agent sandbox' }))
+		.toHaveAttribute('href', '/workspaces/workspace-1/sandbox');
+	await expect.element(page.getByRole('link', { name: 'Open Diagnostics' })).toHaveAttribute('href', '/diagnostics');
 });
 
 test('shows a failed save and keeps the saved motion setting', async () => {

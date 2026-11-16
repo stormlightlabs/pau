@@ -1,15 +1,16 @@
 <script lang="ts">
 	import '../styles/tokens.css';
 
+	import { isTextField } from './keymap.svelte';
 	import { permissionDecision, permissionQuestion, type PermissionRequest } from './permission-request';
 	import type { ExtensionUiResponse } from './types/session';
 
 	/**
 	 * A permission request as the focal point of the session view: the one
 	 * green surface on it. Each decision carries its key cap. The keys choose
-	 * while focus is outside a text field, so a request that arrives while
-	 * the operator types never takes their keystrokes, and the card never
-	 * takes focus on its own.
+	 * while focus is outside a text field and no menu or dialog is open, so a
+	 * request that arrives while the operator types never takes their
+	 * keystrokes, and the card never takes focus on its own.
 	 */
 	type Props = {
 		request: PermissionRequest;
@@ -49,15 +50,15 @@
 		}
 	}
 
-	function editable(target: EventTarget | null): boolean {
-		return (
-			target instanceof HTMLElement && (target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName))
-		);
-	}
+	/**
+	 * Surfaces that own single keys while open: a menu, whose items answer
+	 * to letters, and any dialog. A stray Y there must never approve a call.
+	 */
+	const KEY_OWNERS = '[role="menu"], dialog[open], [role="dialog"], [role="alertdialog"]';
 
 	function handleKeydown(event: KeyboardEvent): void {
 		const modified = event.defaultPrevented || event.repeat || event.metaKey || event.ctrlKey || event.altKey;
-		if (modified || editable(event.target) || document.querySelector('dialog[open]')) return;
+		if (modified || isTextField(event.target) || document.querySelector(KEY_OWNERS)) return;
 		const decision = decisions.find((candidate) => candidate.key === event.key.toLowerCase());
 		if (!decision) return;
 		event.preventDefault();

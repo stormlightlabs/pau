@@ -2,9 +2,10 @@ import type { SessionStatus, SessionViewModel, SessionWorkspace, TranscriptEntry
 import type { WorkspaceGitStatus } from '../lib/types/workspace-files';
 
 /**
- * A working day in the bay: fourteen sessions across four worktrees, with a
- * permission request, a failure, a session that stopped responding, live
- * tool calls and a long transcript. Stories and tests use it to check the
+ * A working day in the bay: fourteen sessions across four worktrees, with
+ * pending requests on running sessions as the store reports them, a
+ * failure, a session that stopped responding, live tool calls and a long
+ * transcript. Stories and tests use it to check the
  * bay, the session view and the workspace column at real volumes.
  */
 
@@ -217,7 +218,7 @@ const busy: SessionWorkspace[] = [
 				...session('pau-sandbox', {
 					id: 'sandbox-pi',
 					title: 'Sandbox Pi sessions',
-					status: 'waiting',
+					status: 'running',
 					attention: 'Allow write to crates/server/src/sessions.rs?',
 					transcript: sandboxTranscript()
 				}),
@@ -251,7 +252,7 @@ const busy: SessionWorkspace[] = [
 			session('pau-audit', {
 				id: 'audit-scope',
 				title: 'Resource scope picker',
-				status: 'waiting',
+				status: 'running',
 				claude: true,
 				attention: 'Run pnpm install in packages/ui?'
 			}),
@@ -327,8 +328,14 @@ function withStatus(
 
 export const bayFixtures = {
 	busy,
-	/** The same bay after Diff gutter numbers starts waiting, for the arrival. */
-	arrived: withStatus(busy, 'pau-diff', { status: 'waiting', attention: 'Run pnpm --filter pau-ui test diff?' }),
+	/**
+	 * The same bay after Diff gutter numbers asks for a permission, for the
+	 * arrival. Like the store, it keeps the agent's status and sets the dialog.
+	 */
+	arrived: withStatus(busy, 'pau-diff', {
+		attention: 'An extension is waiting for your answer.',
+		extensionUi: { notifications: [], statuses: [], widgets: [], dialog: { ...permissionDialog, id: 'dialog-diff' } }
+	}),
 	/** The open session failed. */
 	failed: withStatus(busy, 'sandbox-pi', {
 		status: 'failed',

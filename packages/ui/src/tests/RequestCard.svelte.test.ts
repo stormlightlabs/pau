@@ -1,5 +1,5 @@
 import { page, userEvent } from 'vitest/browser';
-import { expect, test, vi } from 'vitest';
+import { expect, onTestFinished, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { permissionTitle } from '../fixtures/bay';
@@ -32,6 +32,19 @@ test('leaves keys typed into a field alone and never takes focus', async () => {
 	expect(onRespond).not.toHaveBeenCalled();
 	expect(document.activeElement).toBe(field);
 	field.remove();
+});
+
+test('leaves keys typed into an editable element alone', async () => {
+	const onRespond = vi.fn();
+	const editor = document.createElement('div');
+	editor.contentEditable = 'true';
+	document.body.append(editor);
+	onTestFinished(() => editor.remove());
+	editor.focus();
+	await render(RequestCard, { request, agent: 'Pi', onRespond });
+
+	await userEvent.keyboard('yan');
+	expect(onRespond).not.toHaveBeenCalled();
 });
 
 test('makes Allow once the one primary, with key caps on every decision', async () => {

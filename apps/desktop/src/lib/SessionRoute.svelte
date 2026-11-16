@@ -14,7 +14,7 @@
 
 	import type { EventSocketFactory } from './event-stream';
 	import { searchFileMentions } from './file-mentions';
-	import { LiveSessions } from './live-sessions.svelte';
+	import { LiveSessions, liveSessionsContext } from './live-sessions.svelte';
 	import { interfacePreferences } from './interface-preferences.svelte';
 	import { desktopNativeCapabilitiesContext, type DesktopNativeCapabilities } from './native-capabilities';
 	import { sessionAttentionContext, type SessionAttention } from './session-attention';
@@ -58,10 +58,12 @@
 		socketFactory?: EventSocketFactory;
 	} = $props();
 
+	/** The app layout's store, which the bay in every view shares. Tests mount the route without one. */
+	const shared = getContext<LiveSessions | undefined>(liveSessionsContext);
 	// The route mounts once per navigation, so the transport options are fixed
-	// for the life of the store.
+	// for the life of a store it owns.
 	// svelte-ignore state_referenced_locally
-	const sessions = new LiveSessions({ browserOrigin: location.origin, fetcher, socketFactory });
+	const sessions = shared ?? new LiveSessions({ browserOrigin: location.origin, fetcher, socketFactory });
 	// svelte-ignore state_referenced_locally
 	let selectedSessionId = $state(initialSessionId);
 
@@ -158,7 +160,11 @@
 	/** Absent in the browser development server, which has no native notifications. */
 	const attention = getContext<SessionAttention | undefined>(sessionAttentionContext);
 
-	$effect(() => sessions.view(activeSessionId));
+	// Leaving the view leaves no session in view, so the shared store marks changes again.
+	$effect(() => {
+		sessions.view(activeSessionId);
+		return () => sessions.view();
+	});
 	$effect(() => {
 		const sessionId = activeSessionId;
 		attention?.view(sessionId);
@@ -204,10 +210,12 @@
 	});
 
 	onMount(() => {
-		sessions.connect();
+		if (!shared) sessions.connect();
 		void checkClaude();
 		if (restoreLastRoute) void readSavedRoute();
-		return () => sessions.close();
+		return () => {
+			if (!shared) sessions.close();
+		};
 	});
 
 	async function readSavedRoute(): Promise<void> {

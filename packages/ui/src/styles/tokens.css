@@ -99,6 +99,8 @@
 	--pau-size-bay: 21.5rem;
 	--pau-size-bay-narrow: 18rem;
 	--pau-size-workspace: 19rem;
+	/* A view's section column inside the main surface, such as Settings sections. */
+	--pau-size-section-nav: 14rem;
 
 	/*
 	 * Breakpoints. Wide is 1200px and up. Narrow is 900 to 1199px, and the

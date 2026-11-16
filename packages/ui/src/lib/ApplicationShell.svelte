@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { flushSync, type Snippet } from 'svelte';
 	import { MediaQuery } from 'svelte/reactivity';
 
 	import type { IconKind } from '../icons';
@@ -11,11 +11,12 @@
 	import Icon from './Icon.svelte';
 	import { getKeymap, useKeyActions } from './keymap.svelte';
 	import PaneResizer from './PaneResizer.svelte';
+	import { getShellBay } from './shell-bay';
 	import { setWorkspaceColumn } from './workspace-column';
 
 	/**
-	 * One view in the view row, or one row in the left column of a view that
-	 * has no bay yet.
+	 * One view in the view row, or one row in a view's section column, such
+	 * as a Settings section.
 	 *
 	 * An item without `href` cannot be opened. The view row shows it disabled
 	 * and explains why with `unavailable`, so a view that does not work yet
@@ -52,11 +53,11 @@
 	export type ShellPaneWidths = { contextRail: number | null; inspector: number | null };
 
 	type Props = {
-		/** Names the left column of a view that has no bay. */
+		/** Names the view's section column, such as Sections in Settings. */
 		contextLabel: string;
 		/** The views in the view row at the foot of the left column. */
 		productItems: ShellNavItem[];
-		/** Rows of the left column in a view without a bay or `context`, such as Settings sections. */
+		/** Rows of the section column when there is no `context`, such as Settings sections. */
 		contextItems?: ShellNavItem[];
 		disconnected?: boolean;
 		theme?: ThemeName;
@@ -73,12 +74,22 @@
 		children?: Snippet;
 		/**
 		 * The strip bay: the whole left column above the view row, from its
-		 * 48px top bar to its scrolling strips. It takes the place of the
-		 * `context` column.
+		 * 48px top bar to its scrolling strips. Without it, the shell uses the
+		 * bay an ancestor shares through `setShellBay`.
 		 */
 		bay?: Snippet;
-		/** Left column content of a view without a bay, under a heading that names it. */
+		/**
+		 * The view's section column, under a heading that names it, such as
+		 * the Files tree. With a bay it opens the main surface. Without one it
+		 * fills the left column in the bay's place.
+		 */
 		context?: Snippet;
+		/**
+		 * Floating content that opens from anywhere in the shell, such as a
+		 * context menu. It renders outside the regions an open overlay makes
+		 * inert, so a menu opened from the overlay still takes the keyboard.
+		 */
+		layer?: Snippet;
 		/**
 		 * Detail for the open item, such as a session's changes and branch. It
 		 * docks beside the main surface from 1200px and opens as an overlay below.
@@ -115,8 +126,9 @@
 		onResize,
 		paletteEntries = [],
 		children,
-		bay,
+		bay: ownBay,
 		context,
+		layer,
 		workspace,
 		workspaceLabel = 'Workspace',
 		workspaceHeader,
@@ -127,6 +139,10 @@
 		onDockResize
 	}: Props = $props();
 
+	const sharedBay = getShellBay();
+	const bay = $derived(ownBay ?? sharedBay);
+	/** Whether the view has a section column. With a bay, it opens the main surface. */
+	const sectioned = $derived(Boolean(context) || contextItems.length > 0);
 	const keymap = getKeymap();
 	let paletteOpen = $state(false);
 	/** Actions that the palette lists. A range action is reached through its own entries, such as sessions. */
@@ -164,6 +180,8 @@
 	/** Whether the overlay is open. It never opens on its own, so new detail never covers the main surface. */
 	let overlayOpen = $state(false);
 	let workspaceVisible = $derived(Boolean(workspace) && (narrow.current ? overlayOpen : !workspaceHidden));
+	/** Whether the overlay covers the page, which then leaves the keyboard and pointer to it. */
+	let overlayShown = $derived(workspaceVisible && narrow.current);
 
 	const workspaceFocus = createFocusReturn();
 	const dockFocus = createFocusReturn();
@@ -184,6 +202,8 @@
 
 	function closeOverlay(): void {
 		overlayOpen = false;
+		// The page behind leaves `inert` only once the update applies, and an inert control cannot take focus.
+		flushSync();
 		workspaceFocus.restore();
 	}
 
@@ -350,7 +370,45 @@
 	);
 </script>
 
-<a class="app-shell__skip-link" href="#main-surface">Skip to main surface</a>
+{#snippet sectionColumn()}
+	<aside class="app-shell__context" aria-label={contextLabel}>
+		<!-- The aside already carries the name, so the label is not a second heading. -->
+		<div class="app-shell__context-heading pau-bay-heading" aria-hidden="true">
+			<span class="pau-section-label">{contextLabel}</span>
+		</div>
+		<div class="app-shell__context-content">
+			{#if context}
+				{@render context()}
+			{:else}
+				<ul class:app-shell__context-list--marked={contextMarked}>
+					{#each contextItems as item (item.id)}
+						<li>
+							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the app owner resolves destinations -->
+							<a
+								href={item.href}
+								class="pau-row"
+								class:active={item.active}
+								aria-current={item.active ? 'page' : undefined}>
+								<!-- The dot marks an item's state. An item without one gets an empty cell in a list that shows dots. -->
+								{#if contextMarked}
+									<span
+										class:app-shell__item-dot={item.status !== undefined || item.attention}
+										class:attention={item.attention}></span>
+								{/if}
+								<span class="pau-cap pau-cap--truncate">{item.label}</span>
+								{#if item.status}<small class="pau-cap">{item.status}</small>{:else if item.count !== undefined}<small
+										class="pau-count">{item.count}</small
+									>{/if}
+							</a>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</div>
+	</aside>
+{/snippet}
+
+<a class="app-shell__skip-link" href="#main-surface" inert={overlayShown}>Skip to main surface</a>
 <div
 	class:app-shell--with-workspace={workspaceDocked}
 	class:app-shell--resizing={bayDragging || workspaceDragging}
@@ -367,44 +425,11 @@
 		entrance="keyboard"
 		toggleKeys={paletteKeys} />
 
-	<div id="shell-bay" class="app-shell__bay" bind:offsetWidth={bayWidth}>
+	<div id="shell-bay" class="app-shell__bay" inert={overlayShown} bind:offsetWidth={bayWidth}>
 		{#if bay}
 			{@render bay()}
 		{:else}
-			<aside class="app-shell__context" aria-label={contextLabel}>
-				<!-- The aside already carries the name, so the label is not a second heading. -->
-				<div class="app-shell__context-heading pau-bay-heading" aria-hidden="true">
-					<span class="pau-section-label">{contextLabel}</span>
-				</div>
-				<div class="app-shell__context-content">
-					{#if context}
-						{@render context()}
-					{:else}
-						<ul class:app-shell__context-list--marked={contextMarked}>
-							{#each contextItems as item (item.id)}
-								<li>
-									<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the app owner resolves destinations -->
-									<a
-										href={item.href}
-										class="pau-row"
-										class:active={item.active}
-										aria-current={item.active ? 'page' : undefined}>
-										<!-- The dot marks an item's state. An item without one gets an empty cell in a list that shows dots. -->
-										{#if contextMarked}
-											<span
-												class:app-shell__item-dot={item.status !== undefined || item.attention}
-												class:attention={item.attention}></span>
-										{/if}
-										<span class="pau-cap pau-cap--truncate">{item.label}</span>
-										{#if item.status}<small class="pau-cap">{item.status}</small
-											>{:else if item.count !== undefined}<small class="pau-count">{item.count}</small>{/if}
-									</a>
-								</li>
-							{/each}
-						</ul>
-					{/if}
-				</div>
-			</aside>
+			{@render sectionColumn()}
 		{/if}
 
 		<nav class="app-shell__views" aria-label="Views">
@@ -454,7 +479,7 @@
 			{/if}
 		</nav>
 	</div>
-	<div class="app-shell__resizer app-shell__resizer--bay">
+	<div class="app-shell__resizer app-shell__resizer--bay" inert={overlayShown}>
 		<PaneResizer
 			label="Resize the session bay"
 			controls="shell-bay"
@@ -472,12 +497,15 @@
 		id="main-surface"
 		class="app-shell__main"
 		class:app-shell__main--docked={dock && dockOpen}
+		class:app-shell__main--sectioned={bay && sectioned}
+		inert={overlayShown}
 		tabindex="-1"
 		style:--pau-shell-dock-height={dock && dockOpen && appliedDockHeight !== null
 			? `${appliedDockHeight}px`
 			: undefined}
 		bind:this={mainElement}
 		bind:clientHeight={mainHeight}>
+		{#if bay && sectioned}{@render sectionColumn()}{/if}
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<div class="app-shell__main-content" role="region" aria-label="Main surface content" tabindex="0">
 			{#if children}{@render children()}{/if}
@@ -564,6 +592,7 @@
 			</div>
 		{/if}
 	{/if}
+	{#if layer}{@render layer()}{/if}
 </div>
 
 <style>
@@ -888,6 +917,25 @@
 		background-color: var(--pau-canvas);
 	}
 
+	/*
+	 * A view's section column opens the main surface when the bay holds the
+	 * left column, as Settings sections and the Files tree do.
+	 */
+	.app-shell__main--sectioned {
+		grid-template-columns: var(--pau-size-section-nav) minmax(0, 1fr);
+	}
+
+	.app-shell__main--sectioned > .app-shell__context {
+		grid-row: 1;
+		min-height: 0;
+		background-color: var(--pau-surface);
+		border-right: 1px solid var(--pau-border);
+	}
+
+	.app-shell__main--sectioned > :is(.app-shell__resizer--dock, .app-shell__dock) {
+		grid-column: 1 / -1;
+	}
+
 	.app-shell__main-content {
 		grid-row: 1;
 		min-height: 0;
@@ -1016,7 +1064,7 @@
 			grid-template-rows: 0 0 minmax(0, 1fr);
 		}
 
-		.app-shell__main--docked > .app-shell__main-content,
+		.app-shell__main--docked > :is(.app-shell__main-content, .app-shell__context),
 		.app-shell__resizer--dock {
 			display: none;
 		}

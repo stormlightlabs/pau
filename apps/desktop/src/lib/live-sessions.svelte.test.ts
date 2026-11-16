@@ -236,6 +236,132 @@ test('reads the workspace branch on load and again after a run settles', async (
 	await vi.waitFor(() => expect(sessions.workspaces[0]?.branch).toBeUndefined());
 });
 
+/**
+ * A store on one workspace, `pau`, whose API answers from `routes` by path
+ * suffix. A route that throws fails that read. Other paths answer `[]`.
+ */
+async function workspaceStore(routes: Record<string, () => unknown>) {
+	const socket = new FakeEventSocket('ws://test');
+	const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+		const url = String(input);
+		if (url.endsWith('/api/sessions')) return Response.json([session]);
+		if (url.endsWith('/api/workspaces')) return Response.json([{ id: 'pau', name: 'Pau', path: '/work/pau' }]);
+		const route = Object.entries(routes).find(([suffix]) => url.endsWith(suffix));
+		if (!route) return Response.json([]);
+		try {
+			return Response.json(route[1]());
+		} catch {
+			return Response.json({ code: 'internal', message: 'Read failed.' }, { status: 500 });
+		}
+	});
+	const sessions = new LiveSessions({
+		browserOrigin: 'http://localhost',
+		fetcher: fetcher as unknown as typeof fetch,
+		socketFactory: () => socket,
+		scheduleFrame: () => {}
+	});
+	sessions.connect();
+	socket.open();
+	await vi.waitFor(() => expect(sessions.workspaces[0]?.sessions).toHaveLength(1));
+	const event = (kind: ServerEvent['kind'], sequence: number, payload: unknown = {}) =>
+		socket.receive({
+			type: 'event',
+			event: {
+				sequence,
+				timestamp: '2026-04-01T12:00:02Z',
+				workspace_id: 'pau',
+				session_id: kind === 'session_changed' ? 'session-1' : null,
+				kind,
+				payload: JSON.stringify(payload)
+			}
+		});
+	return { sessions, event, workspace: () => sessions.workspaces[0] };
+}
+
+const sandboxed = (profile: string, domains: string[]) => ({
+	mode: 'sandboxed',
+	settings: { profile, grants: { domains, writable_roots: [], unix_sockets: false }, home_read_deny: false }
+});
+
+test('summarizes the workspace sandbox from the API and follows sandbox changes', async () => {
+	let read: () => unknown = () => ({
+		selection: sandboxed('workspace-write', []),
+		unavailable: null,
+		terminal_unavailable: null
+	});
+	const { event, workspace } = await workspaceStore({ '/api/workspaces/pau/sandbox': () => read() });
+	await vi.waitFor(() => expect(workspace()?.sandbox).toEqual({ sandboxed: true, label: 'Sandbox on, network off' }));
+
+	event('sandbox_changed', 1, sandboxed('read-only', ['api.anthropic.com']));
+	expect(workspace()?.sandbox).toEqual({ sandboxed: true, label: 'Read-only sandbox, 1 domain allowed' });
+	event('sandbox_changed', 2, sandboxed('workspace-write', ['a.example', 'b.example']));
+	expect(workspace()?.sandbox?.label).toBe('Sandbox on, 2 domains allowed');
+	event('sandbox_changed', 3, { mode: 'unsandboxed' });
+	expect(workspace()?.sandbox).toEqual({ sandboxed: false, label: 'No sandbox' });
+
+	read = () => {
+		throw new Error('unreadable');
+	};
+	// A sandbox that cannot be read stays unknown, which the workspace column says.
+	const failed = await workspaceStore({ '/api/workspaces/pau/sandbox': () => read() });
+	await new Promise((settle) => setTimeout(settle, 0));
+	expect(failed.workspace()?.sandbox).toBeUndefined();
+});
+
+test("lists each workspace's terminals and reads them again when one changes", async () => {
+	let terminals = [
+		{ id: 'terminal-1', workspace_id: 'pau', command: ['/bin/zsh', '-l'], status: { state: 'running' } },
+		{ id: 'terminal-2', workspace_id: 'other', command: ['/bin/bash'], status: { state: 'running' } }
+	];
+	const { event, workspace } = await workspaceStore({ '/api/terminals': () => terminals });
+	await vi.waitFor(() =>
+		expect(workspace()?.terminals).toEqual([{ id: 'terminal-1', label: 'zsh', status: 'Running' }])
+	);
+
+	terminals = [
+		{
+			id: 'terminal-1',
+			workspace_id: 'pau',
+			command: ['/bin/zsh', '-l'],
+			status: { state: 'exited', exit_code: 1, signal: null }
+		} as never,
+		{
+			id: 'terminal-3',
+			workspace_id: 'pau',
+			command: [],
+			status: { state: 'exited', exit_code: 0, signal: null }
+		} as never
+	];
+	event('terminal_changed', 1);
+	await vi.waitFor(() =>
+		expect(workspace()?.terminals).toEqual([
+			{ id: 'terminal-1', label: 'zsh', status: 'Exited 1', failed: true },
+			{ id: 'terminal-3', label: 'Shell', status: 'Exited 0', failed: false }
+		])
+	);
+});
+
+test('shows the Git status of a workspace and keeps the last one when a read fails', async () => {
+	const status = {
+		repository: true,
+		branch: 'main',
+		head: '3f9c2a7',
+		detached: false,
+		files: [{ path: 'src/lib.rs', previous_path: null, staged: null, worktree: 'modified', conflicted: false }]
+	};
+	let read: () => unknown = () => status;
+	const { event, workspace } = await workspaceStore({ '/api/workspaces/pau/git/status': () => read() });
+	await vi.waitFor(() => expect(workspace()?.git).toEqual(status));
+
+	read = () => {
+		throw new Error('unreadable');
+	};
+	event('session_changed', 1, { ...session, status: 'running' });
+	event('session_changed', 2, { ...session, status: 'idle' });
+	await new Promise((settle) => setTimeout(settle, 0));
+	expect(workspace()?.git).toEqual(status);
+});
+
 test('titles a session by its agent until the first prompt', async () => {
 	const { sessions, socket } = await setup();
 	const title = () => sessions.workspaces[0]?.sessions[0]?.title;

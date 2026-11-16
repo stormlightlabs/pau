@@ -129,7 +129,8 @@
 
 	let activeSessionId = $state<string>();
 	let restoredDismissed = $state(false);
-	let lastAction = $state('No action sent');
+	/** The last action the view sent, shown in a corner once there is one. */
+	let lastAction = $state('');
 
 	$effect.pre(() => {
 		activeSessionId ??= initialSessionId;
@@ -282,7 +283,7 @@
 		lastAction = `${sessionId}: open Pi terminal`;
 	}} />
 
-<p class="action" aria-live="polite">{lastAction}</p>
+<p class="action" aria-live="polite" hidden={!lastAction}>{lastAction}</p>
 
 <style>
 	.action {

@@ -550,7 +550,7 @@ test('closes the list with Escape without interrupting the run', async () => {
 
 	await expect.element(page.getByRole('listbox').getByRole('option')).not.toBeInTheDocument();
 	await expect.element(prompt).toHaveValue('/re');
-	await expect.element(page.getByText('No action sent')).toBeVisible();
+	expect(document.querySelector('.action')?.textContent).toBe('');
 });
 
 test('keeps history navigation when no list is open', async () => {
@@ -949,7 +949,7 @@ test('shows when nothing matches, and Escape closes the list without interruptin
 	await expect.element(page.getByRole('listbox', { name: 'Files' })).toBeVisible();
 	await userEvent.keyboard('{Escape}');
 	await expect.element(page.getByRole('listbox')).not.toBeInTheDocument();
-	await expect.element(page.getByText('No action sent')).toBeVisible();
+	expect(document.querySelector('.action')?.textContent).toBe('');
 });
 
 test('closes file and command completion on a press outside the composer', async () => {

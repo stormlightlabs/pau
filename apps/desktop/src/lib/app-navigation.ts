@@ -21,8 +21,9 @@ const SECTION_ROUTES: Record<string, string> = {
 
 /**
  * Builds the view row for the desktop app: Sessions, Files, Review,
- * Terminal, Pi resources and Settings. Agent sandbox and Diagnostics are
- * listed in the command palette only, since Settings links to them.
+ * Terminal, Pi resources and Settings. Agent sandbox and Diagnostics stay
+ * out of the row: Settings links to them from its Sandbox and About
+ * sections, and the command palette lists them.
  *
  * Workspace views link to `workspaceId`, the workspace the operator is working
  * in, and are disabled while there is none. Views that do not yet read live

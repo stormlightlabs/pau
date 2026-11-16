@@ -6,6 +6,7 @@ import { sessionFixtures } from '../fixtures/sessions';
 import ApplicationShell from '../lib/ApplicationShell.svelte';
 import SessionView from '../lib/SessionView.svelte';
 import ApplicationShellDemo from '../stories/ApplicationShellDemo.svelte';
+import ShellBayDemo from '../stories/ShellBayDemo.svelte';
 import { THEMES, UI_FONTS, type ThemeName, type UiFontName } from '../theme';
 
 const views = () => page.getByRole('navigation', { name: 'Views' });
@@ -66,6 +67,49 @@ test('keeps a session overlay closed below 1200px until the operator opens it', 
 
 	await userEvent.click(page.getByRole('button', { name: 'Show workspace' }));
 	await expect.element(page.getByRole('complementary', { name: 'Workspace' })).toBeVisible();
+});
+
+test('keeps Tab inside the open overlay, with the page behind its scrim inert', async () => {
+	await page.viewport(1000, 900);
+	await render(SessionView, { workspaces: sessionFixtures.running, activeSessionId: 'session-running' });
+
+	await userEvent.click(page.getByRole('button', { name: 'Show workspace' }));
+	const overlay = page.getByRole('complementary', { name: 'Workspace' }).element();
+	await expect.element(overlay).toHaveFocus();
+	expect(document.getElementById('shell-bay')?.inert).toBe(true);
+	expect(document.getElementById('main-surface')?.inert).toBe(true);
+
+	for (let step = 0; step < 20; step += 1) {
+		await userEvent.keyboard('{Tab}');
+		const focused = document.activeElement;
+		expect(focused === document.body || overlay.contains(focused)).toBe(true);
+	}
+
+	await userEvent.click(
+		page.getByRole('complementary', { name: 'Workspace' }).getByRole('button', { name: 'Close workspace' })
+	);
+	expect(document.getElementById('main-surface')?.inert).toBe(false);
+});
+
+test('keeps the bay and its state when the view changes', async () => {
+	await page.viewport(1440, 900);
+	const { rerender } = await render(ShellBayDemo, { view: 'files' });
+
+	const bay = page.getByRole('navigation', { name: 'Sessions' });
+	await expect.element(page.getByRole('tree', { name: 'pau files' })).toBeVisible();
+	await expect.element(bay.getByRole('heading', { name: 'Needs you 4' })).toBeVisible();
+	await userEvent.fill(bay.getByRole('searchbox', { name: 'Filter sessions' }), 'audit');
+	await expect.element(bay.getByRole('heading', { name: 'Needs you 1' })).toBeVisible();
+	const filesBay = bay.element();
+
+	await rerender({ view: 'settings' });
+	await expect.element(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+	expect(filesBay.isConnected).toBe(false);
+	await expect.element(bay.getByRole('searchbox', { name: 'Filter sessions' })).toHaveValue('audit');
+	await expect.element(bay.getByRole('heading', { name: 'Needs you 1' })).toBeVisible();
+	// The view's own section column moves beside the bay, into the main surface.
+	const main = page.getByRole('main');
+	await expect.element(main.getByRole('complementary', { name: 'Sections' })).toBeVisible();
 });
 
 test('starts every label in a left column on one edge when only some items have a status', async () => {

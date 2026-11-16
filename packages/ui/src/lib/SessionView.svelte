@@ -39,7 +39,6 @@
 		contextMenuRequest,
 		isContextMenuKey,
 		revealLabel,
-		keyboardAnchor,
 		type ContextMenuItem,
 		type ContextMenuRequest
 	} from './context-menu';
@@ -53,7 +52,7 @@
 	import { COMPOSER_ATTRIBUTE, createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
 	import { composerKeyAction, resolveComposerKeys, type ComposerKeyAction } from './composer-keys';
-	import { detectPlatform, eventChord, formatChord, getKeymap, useKeyActions } from './keymap.svelte';
+	import { detectPlatform, eventChord, formatChord, getKeymap, isTextField, useKeyActions } from './keymap.svelte';
 	import Markdown from './Markdown.svelte';
 	import { isReducedMotion, motion } from '../motion';
 	import { BusyIndicator } from './busy-indicator.svelte';
@@ -64,9 +63,9 @@
 	import Select from './Select.svelte';
 	import PageHeader from './PageHeader.svelte';
 	import RequestCard from './RequestCard.svelte';
-	import { captureBay, playArrival, type BayPositions } from './bay-arrival';
 	import { permissionRequest } from './permission-request';
-	import { baySection, bayStateLine, matchesBayFilter, type BaySection } from './session-bay';
+	import SessionBay from './SessionBay.svelte';
+	import { displayStatus, needsOperator, sessionMenuItems, sessionStatusLabel } from './session-bay';
 	import SessionTree from './SessionTree.svelte';
 	import { groupToolCalls, openByDefault, type TranscriptToolGroup } from './transcript-disclosure';
 	import { followTranscript, scrollToLatest as scrollTranscriptToLatest, scrollToPrompt } from './transcript-follow';
@@ -404,19 +403,6 @@
 	/** Times the session-list loading state so a fast first load shows nothing. */
 	const sessionsLoading = new BusyIndicator(() => loading);
 
-	/**
-	 * How many saved sessions the bay lists under each workspace's live
-	 * sessions. The picker behind the history button lists the rest.
-	 */
-	const recentSessionLimit = 3;
-	/** A workspace's saved sessions for the bay: loading, loaded, or failed. */
-	type RecentSessions = { status: 'loading' } | { status: 'ready'; sessions: SavedSession[] } | { status: 'failed' };
-	/** Each workspace's saved sessions for the bay, by workspace ID. Absent until the first load starts. */
-	let recentSessions = $state<Record<string, RecentSessions>>({});
-	/** Times the recent saved-session loads, which run together when the bay first shows. */
-	const recentLoading = new BusyIndicator(() =>
-		Object.values(recentSessions).some((recent) => recent.status === 'loading')
-	);
 	let transcriptElement = $state<HTMLElement>();
 
 	/** Scrolls the transcript to its newest content and resumes following. */
@@ -551,10 +537,7 @@
 	let treeShown = $state(false);
 	/** Most changed files the workspace column lists. Review shows the rest. */
 	const CHANGE_LIMIT = 50;
-	/** Narrows the bay to strips whose name, agent or workspace match. */
-	let bayFilter = $state('');
-	let bayFilterField = $state<HTMLInputElement>();
-	let bayElement = $state<HTMLElement>();
+	let sessionBay = $state<SessionBay>();
 	const keymap = getKeymap();
 	const keyPlatform = keymap?.platform ?? detectPlatform();
 	/** Pi's composer keys, with the operator's bindings once the app loads them. */
@@ -600,11 +583,6 @@
 	let resumeError = $state<string>();
 	/** The open context menu, if any. */
 	let contextMenu = $state<ContextMenuRequest>();
-	/** Why the last bay action from a context menu failed. */
-	let bayError = $state<string>();
-	/** The session whose name is being edited in the bay. */
-	let renamingSessionId = $state<string>();
-	let renameDraft = $state('');
 	let pickerWorkspaceId = $state<string>();
 	let retryingSessionId = $state<string>();
 	let retryError = $state<string>();
@@ -623,13 +601,6 @@
 	let openedWorkspaceId = $state<string>();
 
 	const pickerWorkspace = $derived(workspaces.find((workspace) => workspace.id === pickerWorkspaceId));
-	// Each workspace loads its recent saved sessions once, when the bay first lists it.
-	$effect(() => {
-		if (!onLoadSavedSessions || !onResumeSession || sessionsLoading.active) return;
-		for (const workspace of workspaces) {
-			if (!untrack(() => recentSessions[workspace.id])) void loadRecent(workspace.id);
-		}
-	});
 	const openedWorkspace = $derived(workspaces.find((workspace) => workspace.id === openedWorkspaceId));
 	const sessions = $derived(workspaces.flatMap((workspace) => workspace.sessions));
 	const activeSession = $derived(sessions.find((session) => session.id === activeSessionId));
@@ -764,136 +735,12 @@
 	]);
 	const productItems = $derived(
 		appProductItems.map((item) =>
-			item.id === 'sessions' ? { ...item, attention: sessions.some((session) => hasAttention(session)) } : item
+			item.id === 'sessions' ? { ...item, attention: sessions.some((session) => needsOperator(session)) } : item
 		)
 	);
 
-	/** One strip in the bay: a live session, the restored session, or a saved one. */
-	type BayStrip =
-		| { kind: 'live'; key: string; workspace: SessionWorkspace; session: SessionViewModel }
-		| { kind: 'restored'; key: string; workspace: SessionWorkspace; saved: SavedSession }
-		| { kind: 'saved'; key: string; workspace: SessionWorkspace; saved: SavedSession };
-
-	/**
-	 * When each session in Needs you arrived there, in arrival order. The
-	 * newest arrival leads the rack, so the session that just started waiting
-	 * is the one the eye finds first.
-	 */
-	const needsSince = new SvelteMap<string, number>();
-	let needsSequence = 0;
-	$effect(() => {
-		const present = sessions.filter((session) => baySection(session.status) === 'needs').map((session) => session.id);
-		for (const id of present) {
-			if (!untrack(() => needsSince.has(id))) needsSince.set(id, ++needsSequence);
-		}
-		const known = untrack(() => needsSince.keys().toArray());
-		for (const id of known) if (!present.includes(id)) needsSince.delete(id);
-	});
-
-	const bayStrips = $derived.by(() => {
-		const racks: Record<BaySection, BayStrip[]> = { needs: [], running: [], settled: [] };
-		for (const workspace of workspaces) {
-			for (const session of workspace.sessions) {
-				const strip: BayStrip = { kind: 'live', key: session.id, workspace, session };
-				if (bayFilterMatches(strip)) racks[baySection(session.status)].push(strip);
-			}
-			const restored = restoredSession?.workspaceId === workspace.id ? restoredSession : undefined;
-			const settled: BayStrip[] = [
-				...(restored ? [{ kind: 'restored' as const, key: 'restored', workspace, saved: restored }] : []),
-				...recentRows(workspace).map((saved) => ({
-					kind: 'saved' as const,
-					key: `saved:${workspace.id}:${saved.id}`,
-					workspace,
-					saved
-				}))
-			];
-			racks.settled.push(...settled.filter((strip) => bayFilterMatches(strip)));
-		}
-		racks.needs.sort((left, right) => (needsSince.get(right.key) ?? 0) - (needsSince.get(left.key) ?? 0));
-		return racks;
-	});
-
-	function bayFilterMatches(strip: BayStrip): boolean {
-		const title = strip.kind === 'live' ? strip.session.title : strip.saved.title;
-		const agent = strip.kind === 'live' ? strip.session.agent : 'Pi';
-		return matchesBayFilter(bayFilter, [title, agent, strip.workspace.name]);
-	}
-
-	/** Every strip in rack order, for arrow-key movement through the bay. */
-	const bayOrder = $derived([...bayStrips.needs, ...bayStrips.running, ...bayStrips.settled]);
-
-	/** Moves focus from one strip to the next or previous one in the bay. */
-	function moveBayFocus(from: HTMLElement, offset: number): void {
-		const strips = [...(bayElement?.querySelectorAll<HTMLElement>('.session-bay__strip') ?? [])];
-		const next = strips[strips.indexOf(from) + offset];
-		next?.focus();
-	}
-
-	// The arrival: a session that starts needing the operator travels into Needs you.
-	let bayBefore: BayPositions | undefined;
-	let bayArrived: ReadonlySet<string> = new SvelteSet<string>();
-	let needsKnown: string[] | undefined;
-	$effect.pre(() => {
-		const needs = bayStrips.needs.map((strip) => strip.key);
-		untrack(() => {
-			const arrived = needsKnown ? needs.filter((key) => !needsKnown?.includes(key)) : [];
-			needsKnown = needs;
-			if (!bayElement || arrived.length === 0) return;
-			bayArrived = new SvelteSet(arrived);
-			bayBefore = captureBay(bayElement);
-		});
-	});
-	$effect(() => {
-		void bayStrips;
-		untrack(() => {
-			if (!bayBefore || !bayElement) return;
-			playArrival(bayElement, bayBefore, bayArrived);
-			bayBefore = undefined;
-		});
-	});
-
 	/** The workspace that New session starts in: the open session's, or the first. */
 	const newSessionWorkspace = $derived(activeWorkspace ?? openedWorkspace ?? workspaces[0]);
-	const newSessionUnavailable = $derived(
-		disconnected
-			? 'Pau is reconnecting to the backend.'
-			: startingWorkspaceId !== undefined
-				? 'A session is already starting.'
-				: undefined
-	);
-
-	/** Opens the New session menu: the agents to start, saved sessions, and another workspace. */
-	function openNewMenu(event: MouseEvent): void {
-		const workspace = newSessionWorkspace;
-		const invoker = event.currentTarget as HTMLElement;
-		const items: ContextMenuItem[] = [];
-		if (workspace) {
-			items.push(...workspaceMenuItems(workspace).filter((item) => item.id.startsWith('new-')));
-			if (onLoadSavedSessions && onResumeSession) {
-				items.push({
-					id: 'saved',
-					label: 'Saved sessions…',
-					disabled: disconnected,
-					reason: disconnected ? 'Pau is reconnecting to the backend.' : undefined
-				});
-			}
-		}
-		if (onOpenWorkspace)
-			items.push({ id: 'open-workspace', label: 'Open workspace…', separatorBefore: items.length > 0 });
-		contextMenu = {
-			label: 'New session',
-			items,
-			...keyboardAnchor(invoker),
-			keyboard: event.detail === 0,
-			invoker,
-			onSelect: (id) => {
-				if (id === 'saved' && workspace) pickerWorkspaceId = workspace.id;
-				else if (id === 'open-workspace') void chooseWorkspace();
-				else if (workspace) runWorkspaceAction(workspace, id);
-			}
-		};
-	}
-
 	/** The open session's permission request, which renders as the request card. */
 	const activeRequest = $derived(permissionRequest(activeSession?.extensionUi?.dialog));
 
@@ -995,24 +842,10 @@
 		compactInstructions = '';
 	});
 
-	function hasAttention(session: SessionViewModel): boolean {
-		return session.status === 'waiting' || Boolean(session.attention) || session.status === 'failed';
-	}
-
-	const markerLabel = {
-		waiting: 'Waiting for your input',
-		failed: 'Failed while out of view',
-		unread: 'Finished while out of view'
-	} as const;
-
-	function markerKind(status: SessionViewModel['status']): keyof typeof markerLabel {
-		return status === 'waiting' ? 'waiting' : status === 'failed' ? 'failed' : 'unread';
-	}
-
 	/** The header reports compaction as the state, so it never reads Ready while Compact is busy. */
 	const headerCompacting = $derived(compacting && ['idle', 'running'].includes(activeSession?.status ?? ''));
-	const headerStatus = $derived(headerCompacting ? 'running' : (activeSession?.status ?? 'idle'));
-	const headerStatusLabel = $derived(headerCompacting ? 'Compacting…' : statusLabel(activeSession?.status ?? 'idle'));
+	const headerStatus = $derived(headerCompacting ? 'running' : activeSession ? displayStatus(activeSession) : 'idle');
+	const headerStatusLabel = $derived(headerCompacting ? 'Compacting…' : sessionStatusLabel(headerStatus));
 
 	/** The tone class for the header's state chip. Only states that need the operator take one. */
 	function headerTone(status: SessionViewModel['status']): string | undefined {
@@ -1024,19 +857,6 @@
 	}
 
 	const dockShortcut = $derived(keymap?.shortcut('panel.dock'));
-
-	function statusLabel(status: SessionViewModel['status']): string {
-		return {
-			starting: 'Starting',
-			idle: 'Ready',
-			running: 'Running',
-			waiting: 'Needs you',
-			not_responding: 'Not responding',
-			stopping: 'Stopping',
-			stopped: 'Stopped',
-			failed: 'Failed'
-		}[status];
-	}
 
 	/** Explains why the composer is disabled, or returns `undefined` when it accepts text. */
 	function composerUnavailableReason(
@@ -1354,38 +1174,14 @@
 		resumeError = await resumeSaved(restored.workspaceId, restored.id);
 	}
 
-	/** Resumes a recent saved session from its bay strip, as the picker does. */
+	/** Resumes a recent saved session from its bay strip, as the picker does. The bay shows a failure. */
 	async function resumeRecent(workspaceId: string, savedSessionId: string): Promise<void> {
 		pickerWorkspaceId = undefined;
 		openedWorkspaceId = undefined;
 		closeOpenForm();
 		startFailure = undefined;
-		bayError = undefined;
-		bayError = await resumeSaved(workspaceId, savedSessionId);
-	}
-
-	/** Loads a workspace's saved sessions for the bay. A failure offers Try again. */
-	async function loadRecent(workspaceId: string): Promise<void> {
-		if (!onLoadSavedSessions) return;
-		recentSessions[workspaceId] = { status: 'loading' };
-		try {
-			const list = await onLoadSavedSessions(workspaceId);
-			recentSessions[workspaceId] = { status: 'ready', sessions: list.sessions };
-		} catch {
-			recentSessions[workspaceId] = { status: 'failed' };
-		}
-	}
-
-	/**
-	 * The workspace's newest saved sessions that the bay does not already
-	 * list as a live, stopped, or restored session.
-	 */
-	function recentRows(workspace: SessionWorkspace): SavedSession[] {
-		const recent = recentSessions[workspace.id];
-		if (recent?.status !== 'ready') return [];
-		const listed = workspace.sessions.map((session) => session.savedSessionId);
-		if (restoredSession?.workspaceId === workspace.id) listed.push(restoredSession.id);
-		return recent.sessions.filter((saved) => !saved.live && !listed.includes(saved.id)).slice(0, recentSessionLimit);
+		const failure = await resumeSaved(workspaceId, savedSessionId);
+		if (failure) throw new Error(failure);
 	}
 
 	/** Starts the ended session again. The draft stays in the composer for the new run. */
@@ -1434,98 +1230,14 @@
 		if (next) selectSession(next.id);
 	}
 
-	/** Reports the failure of a context menu action in the bay. */
-	async function bayAction(action: () => unknown, fallback: string): Promise<void> {
-		bayError = undefined;
+	/** Reports the failure of a workspace menu action in the notices. */
+	async function workspaceAction(action: () => unknown, fallback: string): Promise<void> {
+		controlError = undefined;
 		try {
 			await action();
 		} catch (cause) {
-			bayError = cause instanceof Error ? cause.message : fallback;
+			controlError = cause instanceof Error ? cause.message : fallback;
 		}
-	}
-
-	function sessionMenuItems(session: SessionViewModel): ContextMenuItem[] {
-		const live = ['starting', 'idle', 'running', 'waiting'].includes(session.status);
-		const offline = 'Pau is reconnecting to the backend.';
-		const ended = 'This session has ended.';
-		const items: ContextMenuItem[] = [{ id: 'open', label: 'Open' }];
-		if (onRenameSession && session.capabilities.rename) {
-			const reason = disconnected ? offline : live ? undefined : ended;
-			items.push({ id: 'rename', label: 'Rename…', disabled: reason !== undefined, reason });
-		}
-		if (onCloneSession && session.capabilities.cloneSession) {
-			const reason = disconnected
-				? offline
-				: !live
-					? ended
-					: session.status === 'idle'
-						? undefined
-						: `Wait for ${session.agent} to finish before cloning.`;
-			items.push({ id: 'clone', label: 'Clone', disabled: reason !== undefined, reason });
-		}
-		items.push({ id: 'copy-id', label: 'Copy session ID', separatorBefore: true });
-		if (session.capabilities.stop) {
-			const stoppable = live || session.status === 'not_responding';
-			const reason = disconnected ? offline : stoppable ? undefined : ended;
-			items.push({ id: 'stop', label: 'Stop', separatorBefore: true, disabled: reason !== undefined, reason });
-		}
-		items.push({
-			id: 'archive',
-			label: 'Archive',
-			separatorBefore: !session.capabilities.stop,
-			disabled: true,
-			reason: 'Coming soon'
-		});
-		return items;
-	}
-
-	function runSessionAction(session: SessionViewModel, id: string): void {
-		switch (id) {
-			case 'open': {
-				selectSession(session.id);
-				break;
-			}
-			case 'rename': {
-				bayError = undefined;
-				renameDraft = session.title;
-				renamingSessionId = session.id;
-				break;
-			}
-			case 'clone': {
-				void bayAction(() => onCloneSession?.(session.id), 'Pau could not clone the session. Try again.');
-				break;
-			}
-			case 'copy-id': {
-				void bayAction(() => navigator.clipboard.writeText(session.id), 'Pau could not copy the session ID.');
-				break;
-			}
-			case 'stop': {
-				void bayAction(() => onStop(session.id), 'The session could not be stopped. Try again.');
-				break;
-			}
-		}
-	}
-
-	function openSessionMenu(event: MouseEvent | KeyboardEvent, session: SessionViewModel): void {
-		contextMenu = contextMenuRequest(event, `${session.title} actions`, sessionMenuItems(session), (id) =>
-			runSessionAction(session, id)
-		);
-	}
-
-	/** Saves the edited session name, or drops the edit when the name is blank or unchanged. */
-	async function commitRename(session: SessionViewModel): Promise<void> {
-		if (renamingSessionId !== session.id) return;
-		renamingSessionId = undefined;
-		const name = renameDraft.trim();
-		await tick();
-		document.getElementById(`session-row-${session.id}`)?.focus();
-		if (!onRenameSession || !name || name === session.title) return;
-		await bayAction(() => onRenameSession(session.id, name), 'Pau could not rename the session. Try again.');
-	}
-
-	function cancelRename(session: SessionViewModel): void {
-		renamingSessionId = undefined;
-		void tick().then(() => document.getElementById(`session-row-${session.id}`)?.focus());
 	}
 
 	function workspaceMenuItems(workspace: SessionWorkspace): ContextMenuItem[] {
@@ -1576,11 +1288,11 @@
 				break;
 			}
 			case 'reveal': {
-				void bayAction(() => revealPath?.(path), 'Pau could not show the folder.');
+				void workspaceAction(() => revealPath?.(path), 'Pau could not show the folder.');
 				break;
 			}
 			case 'copy-path': {
-				void bayAction(() => navigator.clipboard.writeText(path), 'Pau could not copy the path.');
+				void workspaceAction(() => navigator.clipboard.writeText(path), 'Pau could not copy the path.');
 				break;
 			}
 		}
@@ -1940,11 +1652,18 @@
 	 * Throws the reason when it cannot, before the draft clears.
 	 */
 	function builtinAction(session: SessionViewModel, action: BuiltinAction, argument: string): () => Promise<unknown> {
-		const menuAction = (id: string, unsupported: string): (() => Promise<void>) => {
-			const item = sessionMenuItems(session).find((candidate) => candidate.id === id);
+		const menuAction = (id: 'rename' | 'clone' | 'stop', unsupported: string): (() => Promise<unknown>) => {
+			const items = sessionMenuItems(session, {
+				disconnected,
+				rename: onRenameSession !== undefined,
+				clone: onCloneSession !== undefined,
+				stop: true
+			});
+			const item = items.find((candidate) => candidate.id === id);
 			if (!item) refuse(unsupported);
 			if (item.disabled) refuse(item.reason);
-			return async () => runSessionAction(session, id);
+			if (id === 'rename') return async () => sessionBay?.rename(session.id);
+			return async () => (id === 'clone' ? onCloneSession?.(session.id) : onStop(session.id));
 		};
 		const workspace = activeWorkspace;
 		switch (action) {
@@ -2319,24 +2038,8 @@
 	 * lands, then both belong there.
 	 */
 	function handleWindowKeydown(event: KeyboardEvent): void {
-		// `/` jumps to the bay's filter from anywhere outside a text field.
-		if (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey) {
-			const target = event.target;
-			const typing =
-				target instanceof HTMLElement &&
-				(target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName));
-			if (!typing && bayFilterField && !document.querySelector('dialog[open]')) {
-				event.preventDefault();
-				bayFilterField.focus();
-				return;
-			}
-		}
 		if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key === 'End') {
-			const target = event.target;
-			const editable =
-				target instanceof HTMLElement &&
-				(target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName));
-			if (arrived && !editable) {
+			if (arrived && !isTextField(event.target)) {
 				event.preventDefault();
 				scrollToLatest();
 			}
@@ -2371,115 +2074,6 @@
 		}[denial.reason];
 	}
 </script>
-
-{#snippet stripLine(title: string, agent: string, workspace: string)}
-	<span class="pau-strip__line"
-		><span class="pau-strip__name">{title}</span><span class="pau-strip__agent">{agent}</span></span>
-	<span class="pau-strip__meta pau-mono">{workspace}</span>
-	<span></span>
-{/snippet}
-
-{#snippet rack(section: BaySection, label: string, strips: BayStrip[])}
-	<section class="session-bay__rack" aria-labelledby={`bay-${section}`}>
-		<h2
-			class="pau-bay-heading"
-			class:pau-bay-heading--attention={section === 'needs'}
-			data-bay-key={`heading:${section}`}>
-			<span class="pau-section-label" id={`bay-${section}`}>{label}</span><span class="pau-count">{strips.length}</span>
-		</h2>
-		<ul class="session-bay__list" class:session-bay__list--attention={section === 'needs'}>
-			{#each strips as strip (strip.key)}
-				<li>
-					{#if strip.kind === 'live'}
-						{@const session = strip.session}
-						{#if renamingSessionId === session.id}
-							<!-- svelte-ignore a11y_autofocus -->
-							<input
-								class="session-bay__rename pau-field"
-								aria-label="Session name"
-								autofocus
-								bind:value={renameDraft}
-								onblur={() => void commitRename(session)}
-								onkeydown={(event) => {
-									if (event.key === 'Enter') {
-										event.preventDefault();
-										void commitRename(session);
-									} else if (event.key === 'Escape') {
-										event.preventDefault();
-										event.stopPropagation();
-										cancelRename(session);
-									}
-								}} />
-						{:else}
-							{@const line = bayStateLine(session)}
-							<button
-								type="button"
-								id={`session-row-${session.id}`}
-								class="pau-strip session-bay__strip"
-								class:pau-strip--settled={section === 'settled'}
-								data-bay-key={strip.key}
-								title={session.title}
-								aria-current={session.id === activeSessionId ? 'page' : undefined}
-								onclick={() => selectSession(session.id)}
-								oncontextmenu={(event) => openSessionMenu(event, session)}
-								onkeydown={(event) => {
-									if (isContextMenuKey(event)) {
-										openSessionMenu(event, session);
-										return;
-									}
-									if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-									event.preventDefault();
-									moveBayFocus(event.currentTarget, event.key === 'ArrowDown' ? 1 : -1);
-								}}>
-								<SessionStatusMark status={session.status} label={statusLabel(session.status)} />
-								{@render stripLine(session.title, session.agent, strip.workspace.name)}
-								<span class={['pau-strip__state', line.tone && `pau-tone-${line.tone}`]} class:pau-mono={line.mono}
-									>{line.text}</span>
-								<span class="pau-strip__figure">
-									{#if session.unseen && session.id !== activeSessionId}
-										{@const kind = markerKind(session.status)}
-										<span class={`session-bay__marker session-bay__marker--${kind}`} data-marker={kind}></span>
-										<span class="pau-visually-hidden">{markerLabel[kind]}</span>
-									{:else if hasAttention(session)}
-										<span class="pau-visually-hidden">Attention required</span>
-									{/if}
-								</span>
-							</button>
-						{/if}
-					{:else}
-						{@const saved = strip.saved}
-						{@const resuming = resumingSavedId === saved.id}
-						<button
-							type="button"
-							id={strip.kind === 'restored' ? 'session-row-restored' : undefined}
-							class="pau-strip pau-strip--settled session-bay__strip"
-							data-bay-key={strip.key}
-							title={saved.title}
-							aria-current={restoredOpen && strip.kind === 'restored' ? 'page' : undefined}
-							aria-disabled={strip.kind === 'saved' && (disconnected || resumingSavedId !== undefined)
-								? 'true'
-								: undefined}
-							onclick={() => {
-								if (strip.kind === 'restored') openRestored();
-								else if (!disconnected && resumingSavedId === undefined)
-									void resumeRecent(strip.workspace.id, saved.id);
-							}}
-							onkeydown={(event) => {
-								if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-								event.preventDefault();
-								moveBayFocus(event.currentTarget, event.key === 'ArrowDown' ? 1 : -1);
-							}}>
-							<SessionStatusMark status="stopped" label="Stopped" />
-							{@render stripLine(saved.title, 'Pi', strip.workspace.name)}
-							<span class="pau-strip__state">{resuming ? 'Resuming…' : 'Stopped'}</span>
-							<span class="pau-strip__figure"></span>
-						</button>
-					{/if}
-				</li>
-			{/each}
-		</ul>
-	</section>
-{/snippet}
 
 {#snippet readinessNotice(workspaceId?: string, agent: SessionAgent = 'pi')}
 	{@const problem = agent === 'claude' ? claudeReadiness : agentReadiness}
@@ -2671,94 +2265,43 @@
 	workspaceHeader={activeWorkspace ? workspaceHeader : undefined}
 	onResize={onPaneResize}>
 	{#snippet bay()}
-		<nav class="session-bay" aria-label="Sessions" bind:this={bayElement}>
-			<div class="session-bay__top">
-				<label class="pau-field session-bay__filter">
-					<Icon name="search" size={16} />
-					<input
-						bind:this={bayFilterField}
-						bind:value={bayFilter}
-						type="search"
-						placeholder="Filter sessions"
-						aria-label="Filter sessions"
-						onkeydown={(event) => {
-							if (bayFilter && event.key === 'Escape') {
-								event.preventDefault();
-								event.stopPropagation();
-								bayFilter = '';
-							} else if (event.key === 'ArrowDown') {
-								event.preventDefault();
-								bayElement?.querySelector<HTMLElement>('.session-bay__strip')?.focus();
-							}
-						}} />
-					<kbd class="pau-kbd"><span>/</span></kbd>
-				</label>
-				{#if onStartSession || onOpenWorkspace || (onLoadSavedSessions && onResumeSession)}
-					<div class="session-bay__new">
-						{#if onStartSession}
-							<button
-								type="button"
-								class="pau-button pau-button--secondary"
-								disabled={!newSessionWorkspace || newSessionUnavailable !== undefined}
-								title={newSessionWorkspace
-									? (newSessionUnavailable ?? `New Pi session in ${newSessionWorkspace.name}`)
-									: 'Open a workspace first'}
-								onclick={() => newSessionWorkspace && void startSession(newSessionWorkspace)}>
-								<Icon name="plus" size={16} /><span class="session-bay__new-label">New</span>
-							</button>
-						{/if}
-						<button
-							type="button"
-							class="pau-button pau-button--secondary pau-button--icon"
-							aria-label="More ways to start a session"
-							aria-haspopup="menu"
-							onclick={openNewMenu}>
-							<Icon name="chevronDown" size={16} />
-						</button>
-					</div>
-				{/if}
-			</div>
-			<div class="session-bay__scroll">
-				{#if sessionsLoading.active}
-					{#if sessionsLoading.visible}<p class="session-bay__empty" role="status">Loading sessions…</p>{/if}
-				{:else if workspaces.length === 0}
-					<p class="session-bay__empty">No workspaces yet</p>
-				{:else if bayOrder.length === 0 && bayFilter.trim()}
-					<p class="session-bay__empty">No sessions match “{bayFilter.trim()}”</p>
-				{:else}
-					{#if bayOrder.length === 0 && Object.values(recentSessions).every((recent) => recent.status === 'ready')}
-						<p class="session-bay__empty">
-							{startingWorkspaceId ? 'Starting a session…' : 'No sessions yet'}
-						</p>
-					{/if}
-					{@render rack('needs', 'Needs you', bayStrips.needs)}
-					{@render rack('running', 'Running', bayStrips.running)}
-					{@render rack('settled', 'Settled', bayStrips.settled)}
-					{#if recentLoading.visible}
-						<p class="session-bay__empty" role="status">Loading saved sessions…</p>
-					{/if}
-					{#each workspaces.filter((workspace) => recentSessions[workspace.id]?.status === 'failed') as workspace (workspace.id)}
-						<div class="session-bay__failure">
-							<p>Saved sessions in {workspace.name} did not load.</p>
-							<button
-								type="button"
-								class="pau-button pau-button--secondary"
-								disabled={disconnected}
-								onclick={() => void loadRecent(workspace.id)}>Try again</button>
-						</div>
-					{/each}
-				{/if}
-				{#if bayError}<p class="session-bay__error" role="alert">{bayError}</p>{/if}
-			</div>
-		</nav>
+		<SessionBay
+			bind:this={sessionBay}
+			{workspaces}
+			{activeSessionId}
+			{restoredSession}
+			{restoredOpen}
+			{disconnected}
+			{loading}
+			{newSessionWorkspace}
+			{claudeReadiness}
+			starting={startingWorkspaceId !== undefined}
+			onSelectSession={selectSession}
+			onOpenRestoredSession={openRestored}
+			onStartSession={onStartSession &&
+				((workspaceId, agent) => {
+					const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
+					return workspace && startSession(workspace, agent);
+				})}
+			{onLoadSavedSessions}
+			onResumeSession={onResumeSession && resumeRecent}
+			onShowSavedSessions={onLoadSavedSessions && onResumeSession
+				? (workspaceId) => (pickerWorkspaceId = workspaceId)
+				: undefined}
+			onOpenWorkspace={onOpenWorkspace && (() => void chooseWorkspace())}
+			{onRenameSession}
+			{onCloneSession}
+			onStopSession={onStop} />
 	{/snippet}
 
-	<!-- The menu renders in the main surface, which stays visible when the workspace overlay closes. -->
-	{#if contextMenu}
-		{#key contextMenu}
-			<ContextMenu request={contextMenu} onClose={() => (contextMenu = undefined)} />
-		{/key}
-	{/if}
+	<!-- Menus open from the transcript and from the workspace overlay, so they render outside both. -->
+	{#snippet layer()}
+		{#if contextMenu}
+			{#key contextMenu}
+				<ContextMenu request={contextMenu} onClose={() => (contextMenu = undefined)} />
+			{/key}
+		{/if}
+	{/snippet}
 
 	{#if pickerWorkspace && onLoadSavedSessions && onResumeSession}
 		{#key pickerWorkspace.id}
@@ -4311,134 +3854,6 @@
 		}
 	}
 
-	/*
-	 * The strip bay: a filter and New on its 48px top bar, then the racks.
-	 * Needs you sits one step lifted on the raised surface and holds the only
-	 * full-contrast names. Running and Settled recede through color and
-	 * weight, never opacity, so their text keeps its contrast on the bay.
-	 */
-	.session-bay {
-		display: flex;
-		flex-direction: column;
-		min-height: 0;
-	}
-
-	.session-bay__top {
-		display: flex;
-		flex: none;
-		align-items: center;
-		gap: var(--pau-space-2);
-		height: var(--pau-size-header);
-		padding-inline: var(--pau-shell-inset, var(--pau-space-4));
-		border-bottom: 1px solid var(--pau-border);
-	}
-
-	.session-bay__filter {
-		flex: 1;
-	}
-
-	.session-bay__new {
-		display: flex;
-		flex: none;
-	}
-
-	.session-bay__new > :first-child:not(:last-child) {
-		border-start-end-radius: 0;
-		border-end-end-radius: 0;
-	}
-
-	.session-bay__new > :last-child:not(:first-child) {
-		margin-inline-start: -1px;
-		border-start-start-radius: 0;
-		border-end-start-radius: 0;
-	}
-
-	.session-bay__scroll {
-		flex: 1;
-		min-height: 0;
-		padding-bottom: var(--pau-space-4);
-		overflow-y: auto;
-		overscroll-behavior: contain;
-	}
-
-	.session-bay__list {
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	.session-bay__strip {
-		width: 100%;
-	}
-
-	.session-bay__list:not(.session-bay__list--attention) :global(.pau-strip__name) {
-		color: var(--pau-text-muted);
-	}
-
-	.session-bay__list :global(.pau-strip:is(:hover, [aria-current='page'])) :global(.pau-strip__name) {
-		color: var(--pau-text);
-	}
-
-	.session-bay__list--attention > li + li {
-		border-top: 1px solid var(--pau-surface);
-	}
-
-	.session-bay__list--attention .session-bay__strip:not([aria-current='page']) {
-		background-color: var(--pau-surface-raised);
-	}
-
-	@media (hover: hover) {
-		.session-bay__list--attention .session-bay__strip:not([aria-current='page']):hover {
-			background-color: var(--pau-surface-selected);
-		}
-	}
-
-	/* Unseen work in a session out of view: a dot in the figure column. */
-	.session-bay__marker {
-		display: inline-block;
-		width: 0.5rem;
-		height: 0.5rem;
-		background-color: var(--pau-text-muted);
-		border-radius: 50%;
-	}
-
-	.session-bay__marker--waiting {
-		background-color: var(--pau-accent);
-	}
-
-	.session-bay__marker--failed {
-		background-color: var(--pau-danger);
-	}
-
-	.session-bay__empty,
-	.session-bay__error {
-		margin: 0;
-		padding: var(--pau-space-4) var(--pau-space-4) 0;
-		color: var(--pau-text-muted);
-		line-height: var(--pau-leading-prose);
-	}
-
-	.session-bay__error {
-		color: var(--pau-danger);
-	}
-
-	.session-bay__failure {
-		display: grid;
-		justify-items: start;
-		gap: var(--pau-space-2);
-		padding: var(--pau-space-4) var(--pau-space-4) 0;
-	}
-
-	.session-bay__failure p {
-		margin: 0;
-		color: var(--pau-text-muted);
-	}
-
-	.session-bay__rename {
-		width: calc(100% - 2 * var(--pau-space-4));
-		margin: var(--pau-space-3) var(--pau-space-4);
-	}
-
 	/* The workspace column: changes, branch and sandbox, terminals, and the conversation tree. */
 	.session-workspace__head {
 		display: flex;
@@ -4517,19 +3932,13 @@
 		padding: var(--pau-space-2) var(--pau-space-4) var(--pau-space-4);
 	}
 
-	/* Header actions marked collapsible, and New in the narrow bay, drop to their icon below 1200px. */
+	/* Header actions marked collapsible drop to their icon below 1200px. */
 	@media (max-width: 1199.98px) {
-		.session-bay__new > :first-child {
-			width: var(--pau-size-row-md);
-			padding: 0;
-		}
-
 		.session-view__collapse {
 			width: var(--pau-size-row-md);
 			padding: 0;
 		}
 
-		.session-bay__new-label,
 		.session-view__collapse > span {
 			position: absolute;
 			width: 1px;

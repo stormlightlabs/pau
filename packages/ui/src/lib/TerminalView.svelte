@@ -336,7 +336,7 @@
 		<!-- Escape is handled on the bar so it closes from the buttons too. -->
 		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<div class="terminal-view__search" role="search" aria-label="Find in terminal" onkeydown={handleSearchKeydown}>
-			<div class="terminal-view__field">
+			<div class="terminal-view__field pau-field">
 				<Icon name="search" size={16} />
 				<input
 					bind:this={searchInput}
@@ -423,39 +423,9 @@
 	}
 
 	.terminal-view__field {
-		display: flex;
 		flex: 0 1 auto;
-		align-items: center;
 		/* A fixed width keeps the buttons still while the count changes. */
 		width: 20rem;
-		gap: var(--pau-space-2);
-		min-width: 0;
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-2);
-		color: var(--pau-text-muted);
-		background: var(--pau-canvas);
-		border: 1px solid var(--pau-border-control);
-		border-radius: var(--pau-radius-control);
-	}
-
-	.terminal-view__field:focus-within {
-		border-color: var(--pau-focus);
-		box-shadow: 0 0 0 1px var(--pau-focus);
-	}
-
-	.terminal-view__field input {
-		flex: 1;
-		min-width: 0;
-		color: var(--pau-text);
-		background: transparent;
-		border: 0;
-		outline: 0;
-		font: inherit;
-		font-size: var(--pau-type-md);
-	}
-
-	.terminal-view__field input::placeholder {
-		color: var(--pau-text-muted);
 	}
 
 	.terminal-view__count {
@@ -467,11 +437,5 @@
 
 	.terminal-view__count.empty {
 		color: var(--pau-danger);
-	}
-
-	@media (pointer: coarse) {
-		.terminal-view__field {
-			min-height: var(--pau-size-target-touch);
-		}
 	}
 </style>

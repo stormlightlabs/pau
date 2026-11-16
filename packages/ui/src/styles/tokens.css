@@ -62,20 +62,6 @@
 	--pau-leading-row: 1.25rem;
 	--pau-leading-prose: 1.5rem;
 
-	/*
-	 * How far an untrimmed Overpass label moves down to center its capitals,
-	 * for engines without `text-box`. See `cap.css`.
-	 */
-	--pau-cap-shift: 0.11em;
-
-	/*
-	 * How far a text field moves its input text down, in WebKit and in
-	 * Chromium. `themeCssProperties` sets both for the chosen UI font; these
-	 * defaults are Overpass's. See `fields.css`.
-	 */
-	--pau-input-shift: 0.11em;
-	--pau-input-shift-chromium: 0.14em;
-
 	--pau-weight-regular: 400;
 	--pau-weight-medium: 500;
 	--pau-weight-semibold: 600;
@@ -152,8 +138,6 @@
 	--pau-motion-travel: 1;
 
 	--pau-font-code: 'Overpass Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
-
-	caret-color: var(--pau-focus);
 }
 
 /*
@@ -188,7 +172,15 @@
 	font-variant-ligatures: none;
 }
 
-/* Cyan is focus: the ring, the caret and the text selection wash. */
+/*
+ * Cyan is focus: the ring, the caret and the text selection wash. Every
+ * field inherits the caret color from the root, and the file editor, which
+ * draws its own cursor, uses the same token.
+ */
+:root {
+	caret-color: var(--pau-focus);
+}
+
 ::selection {
 	color: var(--pau-text);
 	background-color: var(--pau-selection);

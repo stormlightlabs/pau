@@ -25,7 +25,7 @@ export const Rest: Story = {
 /** Focus on the input inside a wrapper draws the ring around the whole field. */
 export const Focus: Story = {
 	play: async ({ canvasElement }) => {
-		const input = within(canvasElement).getByRole('textbox', { name: 'Filter sessions' });
+		const input = within(canvasElement).getByRole('searchbox', { name: 'Filter sessions' });
 		await userEvent.click(input);
 		await userEvent.keyboard('audit');
 		await expect(getComputedStyle(input.closest('.pau-field')!).outlineWidth).toBe('2px');

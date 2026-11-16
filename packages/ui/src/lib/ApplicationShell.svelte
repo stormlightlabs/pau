@@ -785,14 +785,6 @@
 		align-items: center;
 		width: min(23rem, 45vw);
 		min-width: var(--pau-size-row-md);
-		height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
-		border: 1px solid var(--shell-border);
-		border-radius: var(--pau-radius-control);
-		background-color: var(--shell-surface);
-		color: inherit;
-		font: inherit;
-		cursor: pointer;
 	}
 
 	.app-shell__command-label {

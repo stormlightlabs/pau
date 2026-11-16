@@ -326,11 +326,11 @@
 
 				{#if counts[kind] > 0}
 					<div class="resources__filters" role="search" aria-label={`Filter ${noun}`}>
-						<label class="resources__query">
-							<span class="pau-visually-hidden">Filter by name</span>
+						<label class="resources__query pau-field">
 							<Icon name="search" size={16} />
 							<input
 								type="search"
+								aria-label="Filter by name"
 								placeholder="Filter by name"
 								bind:value={filter.query}
 								bind:this={queryInput}
@@ -474,36 +474,6 @@
 		gap: var(--pau-space-2);
 		margin-bottom: var(--pau-space-4);
 		padding-inline: var(--pau-space-3);
-	}
-
-	.resources__query {
-		display: flex;
-		align-items: center;
-		gap: var(--pau-space-2);
-		height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-2);
-		color: var(--pau-text-muted);
-		border: 1px solid var(--pau-border-control);
-		border-radius: var(--pau-radius-control, 3px);
-	}
-
-	.resources__query:focus-within {
-		border-color: var(--pau-focus);
-		box-shadow: 0 0 0 1px var(--pau-focus);
-	}
-
-	.resources__query input {
-		width: 100%;
-		min-width: 0;
-		color: var(--pau-text);
-		background: transparent;
-		border: 0;
-		outline: 0;
-		font: inherit;
-	}
-
-	.resources__query input::placeholder {
-		color: var(--pau-text-muted);
 	}
 
 	.resources__columns,

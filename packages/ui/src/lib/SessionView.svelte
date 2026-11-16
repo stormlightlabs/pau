@@ -2291,7 +2291,7 @@
 									{#if renamingSessionId === session.id}
 										<!-- svelte-ignore a11y_autofocus -->
 										<input
-											class="session-rail__rename"
+											class="session-rail__rename pau-field"
 											aria-label="Session name"
 											autofocus
 											bind:value={renameDraft}
@@ -2473,6 +2473,7 @@
 						<label>
 							<span>Folder path</span>
 							<input
+								class="pau-field"
 								type="text"
 								bind:value={openPath}
 								placeholder="/Users/you/projects/app"
@@ -3363,18 +3364,6 @@
 		font-size: var(--pau-type-sm);
 	}
 
-	.session-open input {
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-3);
-		color: var(--pau-text);
-		background: var(--pau-surface);
-		border: 1px solid var(--pau-border-control);
-		border-radius: var(--pau-radius-control);
-		font: inherit;
-		font-family: var(--pau-font-code);
-		font-variant-ligatures: none;
-	}
-
 	.session-open__actions {
 		display: flex;
 		gap: var(--pau-space-2);
@@ -3415,15 +3404,10 @@
 		color: var(--pau-danger);
 	}
 
+	/* The name stays at the inset of the session names around it. */
 	.session-rail__rename {
 		width: 100%;
-		min-height: var(--pau-size-row-md);
-		padding: 0 var(--pau-space-3) 0 var(--pau-space-4);
-		color: var(--pau-text);
-		font: inherit;
-		background: var(--pau-canvas);
-		border: 1px solid var(--pau-focus);
-		border-radius: 0;
+		padding-inline-start: var(--pau-space-4);
 	}
 
 	.session-rail__error {

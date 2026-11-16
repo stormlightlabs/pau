@@ -29,7 +29,7 @@
 		<div class="fields-demo__row" data-row="field">
 			<label class="pau-field fields-demo__grow">
 				<Icon name="search" size={16} />
-				<input aria-label="Filter sessions" placeholder="Filter sessions" />
+				<input type="search" aria-label="Filter sessions" placeholder="Filter sessions" />
 				<kbd><span>/</span></kbd>
 			</label>
 			<button type="button" class="pau-button pau-button--secondary">Search</button>
@@ -38,6 +38,7 @@
 		<input class="pau-field" aria-label="Custom editor command" aria-invalid="true" value="zed --wait {'{line}'}" />
 		<input class="pau-field" aria-label="Workspace path, disabled" disabled value="/Users/operator/projects/pau" />
 		<input class="pau-field" aria-label="Branch name" value={longText.chip} />
+		<input class="pau-field" type="search" aria-label="Search transcript" placeholder="Search this conversation" />
 	</section>
 
 	<section aria-labelledby={`${id}-select`}>

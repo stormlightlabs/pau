@@ -34,18 +34,26 @@ export default defineConfig({
 					browser: browser()
 				}
 			},
-			// Text centering, measured at the Retina scale the desktop app draws
-			// at, in Chromium and in WebKit, the desktop app's engine, which
-			// places text differently.
-			...(['chromium', 'webkit'] as const).map((engine) => ({
-				extends: true as const,
-				test: {
-					name: `centering-${engine}`,
-					include: ['src/tests/LabelCentering.svelte.test.ts'],
-					setupFiles: ['vitest-browser-svelte'],
-					browser: browser({ engine, deviceScaleFactor: 2 })
-				}
-			})),
+			// Text centering in Chromium and in WebKit, the desktop app's engine,
+			// on a standard display, on a Retina display, and on a Retina display
+			// at 125% browser zoom, which raises the device scale. WebKit on the
+			// Retina display also measures input text at 125% page zoom, which is
+			// how the desktop app zooms. Each project runs alone after the others,
+			// because its full-page screenshots time out when other browsers
+			// compete for the machine.
+			...(['chromium', 'webkit'] as const).flatMap((engine, engineIndex) =>
+				[1, 2, 2.5].map((deviceScaleFactor, scaleIndex) => ({
+					extends: true as const,
+					test: {
+						name: `centering-${engine}-${deviceScaleFactor}x`,
+						include: ['src/tests/LabelCentering.svelte.test.ts'],
+						setupFiles: ['vitest-browser-svelte'],
+						provide: { pageZooms: engine === 'webkit' && deviceScaleFactor === 2 ? [1, 1.25] : [1] },
+						sequence: { groupOrder: 1 + engineIndex * 3 + scaleIndex },
+						browser: browser({ engine, deviceScaleFactor })
+					}
+				}))
+			),
 			// The OS reduced-motion query, on and off, for the motion setting.
 			...(['reduce', 'no-preference'] as const).map((reducedMotion) => ({
 				extends: true as const,

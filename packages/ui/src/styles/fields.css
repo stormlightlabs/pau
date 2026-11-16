@@ -14,6 +14,9 @@
  * toolbars: muted text that lifts to the raised surface on hover and while
  * its list is open.
  *
+ * Input text centers on its capitals through the font metrics in
+ * `fonts.css`, so a field adds no offset of its own.
+ *
  * Components place fields and set their width, but do not change their
  * height, border, fill or text.
  */
@@ -42,6 +45,12 @@
 		border-color var(--pau-duration-quick) var(--pau-ease-out);
 }
 
+/* A search input drops the engine's own search field look. */
+input.pau-field,
+.pau-field > input {
+	appearance: none;
+}
+
 input.pau-field {
 	padding-inline: var(--pau-space-3);
 }
@@ -61,36 +70,6 @@ button.pau-field {
 	border: 0;
 	font: inherit;
 	outline: none;
-}
-
-/*
- * Input text centers on its capitals, as labels do, but no engine can trim
- * it: WebKit ignores `text-box` on inputs and Chromium ignores it on
- * placeholders. So the field centers the untrimmed line box, and block
- * padding moves it by the face's measured `--pau-input-shift`, the same for
- * a value and a placeholder.
- *
- * Inputs never take `text-box`, so the shift cannot stack with a trim once
- * an engine starts honoring one there. The engines place the line box up to
- * a pixel apart in some faces and snap the text to different pixel grids,
- * so each has its own measured shift. WebKit, the desktop app's engine,
- * uses `--pau-input-shift`. Chromium, and any other engine without
- * `hanging-punctuation`, which only WebKit supports, uses
- * `--pau-input-shift-chromium`. The centering test measures the drawn
- * glyphs in both engines and fails when either value drifts.
- */
-input.pau-field,
-.pau-field > input {
-	--pau-field-input-shift: var(--pau-input-shift);
-
-	padding-block: max(0px, 2 * var(--pau-field-input-shift)) max(0px, -2 * var(--pau-field-input-shift));
-}
-
-@supports not (hanging-punctuation: first) {
-	input.pau-field,
-	.pau-field > input {
-		--pau-field-input-shift: var(--pau-input-shift-chromium);
-	}
 }
 
 .pau-field > .pau-icon {

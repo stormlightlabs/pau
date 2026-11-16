@@ -257,7 +257,7 @@
 						{#if dialog.kind === 'editor'}
 							<textarea name="value" rows="7" data-initial-focus>{dialog.prefill ?? ''}</textarea>
 						{:else}
-							<input name="value" placeholder={dialog.placeholder} data-initial-focus />
+							<input class="pau-field" name="value" placeholder={dialog.placeholder} data-initial-focus />
 						{/if}
 					</label>
 					<div class="extension-ui__actions">
@@ -472,7 +472,10 @@
 		font-size: var(--pau-type-sm);
 	}
 
-	.extension-ui__dialog input,
+	.extension-ui__dialog .pau-field {
+		width: 100%;
+	}
+
 	.extension-ui__dialog textarea {
 		box-sizing: border-box;
 		width: 100%;
@@ -484,7 +487,6 @@
 		font: inherit;
 	}
 
-	.extension-ui__dialog input:focus,
 	.extension-ui__dialog textarea:focus,
 	.extension-ui__dialog button:focus-visible {
 		outline: var(--pau-focus-width) solid var(--pau-focus);

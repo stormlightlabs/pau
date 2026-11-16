@@ -217,14 +217,13 @@
 }
 
 /*
- * Flex centering centers the label's line box, not its letters. Each UI font
- * puts a different amount of space above its capitals and below its baseline,
- * so Overpass labels sit about 1.5px high. Where `text-box` is supported, the
- * button lays its label out as one trimmed line, cap height to baseline, and
- * equal padding centers the letters in every font. This needs block layout,
- * because a flex container wraps its text in an anonymous box that the trim
- * cannot reach. Icons center on the capitals. Without `text-box`, as in
- * older WebKitGTK, the flex layout above stays.
+ * Where `text-box` is supported, the button lays its label out as one
+ * trimmed line, cap height to baseline, and equal padding centers the
+ * letters exactly. This needs block layout, because a flex container wraps
+ * its text in an anonymous box that the trim cannot reach. Icons center on
+ * the capitals. Without `text-box`, as in older WebKitGTK, the flex layout
+ * above stays, and the font metrics in `fonts.css` keep the capitals within
+ * a pixel of center.
  */
 @supports (text-box: trim-both cap alphabetic) {
 	.pau-button {

@@ -125,6 +125,7 @@
 		<input
 			bind:this={input}
 			bind:value={query}
+			class="pau-field"
 			type="search"
 			placeholder="Search this conversation"
 			aria-label="Search transcript"
@@ -211,18 +212,8 @@
 
 	input {
 		flex: 1;
-		min-width: 0;
-		min-height: var(--pau-size-row-md);
-		padding-inline: var(--pau-space-2);
-		color: var(--pau-text);
-		background: var(--pau-canvas);
-		border: 1px solid var(--pau-border-control);
-		border-radius: var(--pau-radius-control);
-		font: inherit;
-		font-size: var(--pau-type-md);
 	}
 
-	input:focus-visible,
 	button:focus-visible {
 		outline: var(--pau-focus-width) solid var(--pau-focus);
 		outline-offset: var(--pau-focus-offset);

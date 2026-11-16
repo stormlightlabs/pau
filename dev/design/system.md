@@ -194,11 +194,13 @@ muted text unless a state recolors them.
 Every single-line label in a control or row sits in its own element, and that
 element trims its box to the cap height and the baseline
 (`text-box: trim-both cap alphabetic`). Flex centring then lines the capitals
-up with icons, marks and checkboxes in every UI font. Where `text-box` is
-missing, the label moves down by the measured offset of the face, 0.11em for
-Overpass. A label that truncates gives its descenders back as 6px block
-padding and takes the same space back as negative margin, so its centre does
-not move.
+up with icons, marks and checkboxes in every UI font. Input text cannot be
+trimmed, so each UI face is loaded with ascent and descent overrides that put
+its capitals in the middle of its line box. A field's text then centers on its
+capitals in WebKit and Chromium, on standard and Retina displays and at 125%
+zoom, and a label still centers within a pixel where `text-box` is missing. A
+label that truncates gives its descenders back as 6px block padding and takes
+the same space back as negative margin, so its centre does not move.
 
 - Set transcript prose, the composer, dialog and settings body text, and the
   primary text of list rows at 14px. The session header, transcript,

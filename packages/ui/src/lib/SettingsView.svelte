@@ -462,12 +462,6 @@
 		min-height: var(--pau-size-row-md);
 	}
 
-	.settings-view__theme input:focus-visible,
-	.settings-view__choice input:focus-visible {
-		outline: var(--pau-focus-width) solid var(--pau-focus);
-		outline-offset: var(--pau-focus-offset);
-	}
-
 	.settings-view__error {
 		margin-top: var(--pau-space-2);
 		color: var(--pau-danger);

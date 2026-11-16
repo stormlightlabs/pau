@@ -146,7 +146,7 @@
 	onclick={(event) => {
 		if (event.target === dialog) close();
 	}}>
-	<div class="command-palette__field">
+	<div class="command-palette__field pau-field">
 		<Icon name="search" size={16} />
 		<input
 			bind:this={input}
@@ -245,27 +245,7 @@
 
 	.command-palette__field {
 		display: flex;
-		align-items: center;
-		gap: var(--pau-space-2);
-		padding-inline: var(--pau-space-3);
-		color: var(--pau-text-muted);
-		border-bottom: 1px solid var(--pau-border-control);
-	}
-
-	.command-palette__field input {
-		flex: 1;
-		min-width: 0;
-		height: var(--pau-size-row-lg);
-		padding: 0;
-		color: var(--pau-text);
-		background: transparent;
-		border: 0;
-		outline: 0;
-		font: inherit;
-	}
-
-	.command-palette__field input::placeholder {
-		color: var(--pau-text-muted);
+		margin: var(--pau-space-2);
 	}
 
 	.command-palette__list {

@@ -191,7 +191,10 @@
 				</div>
 			</div>
 			<label
-				><span>Destination</span><input bind:value={destination} aria-label="Diagnostic bundle destination" /></label>
+				><span>Destination</span><input
+					class="pau-field"
+					bind:value={destination}
+					aria-label="Diagnostic bundle destination" /></label>
 			<div class="diagnostics-view__export-actions">
 				<button class="pau-button pau-button--secondary" type="button" onclick={() => (reviewOpen = !reviewOpen)}>
 					{reviewOpen ? 'Close review' : 'Review bundle'}
@@ -281,20 +284,6 @@
 		align-items: center;
 		gap: var(--pau-space-2);
 		font-size: var(--pau-type-sm);
-	}
-
-	.diagnostics-view__export input {
-		min-height: var(--pau-size-row-lg);
-		padding-inline: var(--pau-space-2);
-		color: var(--pau-text);
-		background: var(--pau-canvas);
-		border: 1px solid var(--pau-border-control);
-		font: inherit;
-	}
-
-	.diagnostics-view input:focus-visible {
-		outline: var(--pau-focus-width) solid var(--pau-focus);
-		outline-offset: var(--pau-focus-offset);
 	}
 
 	.diagnostics-view__versions {

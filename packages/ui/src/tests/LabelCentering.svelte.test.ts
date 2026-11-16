@@ -1,5 +1,5 @@
 import { page } from 'vitest/browser';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, inject, test } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { diagnosticFixtures } from '../fixtures/diagnostics';
@@ -8,6 +8,7 @@ import DiagnosticsView from '../lib/DiagnosticsView.svelte';
 import SandboxSettingsView from '../lib/SandboxSettingsView.svelte';
 import { longCommandOutput } from '../fixtures/foundation';
 import ToolOutput from '../lib/ToolOutput.svelte';
+import TranscriptSearch from '../lib/TranscriptSearch.svelte';
 import ButtonsDemo from '../stories/ButtonsDemo.svelte';
 import ChipsDemo from '../stories/ChipsDemo.svelte';
 import ControlStatesDemo from '../stories/ControlStatesDemo.svelte';
@@ -18,6 +19,13 @@ import PageHeaderDemo from '../stories/PageHeaderDemo.svelte';
 import RequestCardDemo from '../stories/RequestCardDemo.svelte';
 import StripsDemo from '../stories/StripsDemo.svelte';
 import { themeCssProperties, UI_FONTS, type UiFontName } from '../theme';
+
+declare module 'vitest' {
+	/** Page zoom levels at which a centering project measures input text, from `vitest.config.ts`. */
+	export interface ProvidedContext {
+		pageZooms: number[];
+	}
+}
 
 function firstText(element: Element): Text {
 	const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
@@ -135,9 +143,8 @@ function itemSpacing() {
 
 /*
  * Every centered label, mark and input text lands within half a CSS pixel of
- * its center line, in both engines. The centering projects run at a device
- * scale of 2, as on the Retina displays the desktop app draws on, so a
- * snapped box or glyph in WebKit is off by at most a quarter pixel.
+ * its center line, in both engines, on standard and Retina displays and at
+ * 125% zoom.
  */
 const precision = 0.5;
 
@@ -159,13 +166,13 @@ test.each(Object.keys(UI_FONTS) as UiFontName[])(
 );
 
 /*
- * Without `text-box`, centering places the line box, not the letters, so a
- * label sits off center by half the gap between its font's ascent and
- * descent. The bound is the largest such offset among the UI fonts. The
- * space between a button's items does not change.
+ * Without `text-box`, centering places the line box, not the letters. The
+ * font metric overrides in `fonts.css` put the capitals in the middle of the
+ * line box, so a label is off only by how the engine rounds the line box to
+ * whole pixels. The space between a button's items does not change.
  */
 test.each(Object.keys(UI_FONTS) as UiFontName[])(
-	'keeps labels within 2px of center without text-box in %s',
+	'keeps labels within 1px of center without text-box in %s',
 	async (font) => {
 		const { buttons, choices } = await renderControls(font);
 		const trimmed = itemSpacing();
@@ -173,7 +180,7 @@ test.each(Object.keys(UI_FONTS) as UiFontName[])(
 		expect(removed.length).toBeGreaterThanOrEqual(2);
 
 		for (const { name, offset } of offsets(buttons, choices)) {
-			expect(Math.abs(offset), name).toBeLessThanOrEqual(2);
+			expect(Math.abs(offset), name).toBeLessThanOrEqual(1);
 		}
 		const fallback = itemSpacing();
 		expect(fallback.icon).toBeCloseTo(trimmed.icon, 0);
@@ -319,6 +326,18 @@ test('makes every button, field and select 32px tall', async () => {
 	}
 });
 
+test('puts every text input in the views on the shared 32px field', async () => {
+	await renderControls('overpass');
+	await render(TranscriptSearch, { search: () => new Promise(() => {}), onSelect: () => true, onClose: () => {} });
+	const inputs = [...document.querySelectorAll('input')].filter((input) => !['checkbox', 'radio'].includes(input.type));
+	expect(inputs.length).toBeGreaterThanOrEqual(3);
+	for (const input of inputs) {
+		const field = input.closest('.pau-field');
+		expect(field, input.ariaLabel ?? '').not.toBeNull();
+		expect(field!.getBoundingClientRect().height, input.ariaLabel ?? '').toBe(32);
+	}
+});
+
 /** A capture of the test frame, with how many image pixels make one CSS pixel. */
 async function captureFrame() {
 	const base64 = (await page.screenshot({ save: false })) as string;
@@ -397,11 +416,14 @@ for (const mode of ['value', 'placeholder'] as const) {
 				input.value = mode === 'value' ? CAPITALS : '';
 				input.placeholder = CAPITALS;
 			}
-			const frame = await captureFrame();
-			expect(frame.scale).toBe(2);
-			for (const input of inputs) {
-				const offset = inkOffset(frame, input);
-				expect.soft(Math.abs(offset), input.ariaLabel!).toBeLessThanOrEqual(precision);
+			for (const zoom of inject('pageZooms')) {
+				document.documentElement.style.zoom = String(zoom);
+				const frame = await captureFrame();
+				expect(frame.scale).toBe(devicePixelRatio);
+				for (const input of inputs) {
+					const offset = inkOffset(frame, input);
+					expect.soft(Math.abs(offset), `${input.ariaLabel} at ${zoom * 100}%`).toBeLessThanOrEqual(precision);
+				}
 			}
 		}
 	);

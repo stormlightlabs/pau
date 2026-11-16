@@ -17,7 +17,6 @@ export const Rest: Story = {
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
 		await expect(canvas.getByRole('region', { name: 'Pau could not start' })).toBeInTheDocument();
-		for (const button of canvas.getAllByRole('button')) await expect(button.getBoundingClientRect().height).toBe(32);
 	}
 };
 

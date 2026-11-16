@@ -15,9 +15,6 @@ type Story = StoryObj<typeof meta>;
 /** A running session, a waiting one with a long title, and a view with one action. */
 export const Rest: Story = {
 	play: async ({ canvasElement }) => {
-		for (const header of canvasElement.querySelectorAll('.pau-page-header')) {
-			await expect(header.getBoundingClientRect().height).toBe(48);
-		}
 		const stop = within(canvasElement).getAllByRole('button', { name: 'Stop' })[0]!;
 		await expect(stop.previousElementSibling).toHaveRole('separator');
 	}

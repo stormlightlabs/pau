@@ -222,8 +222,8 @@
  * letters exactly. This needs block layout, because a flex container wraps
  * its text in an anonymous box that the trim cannot reach. Icons center on
  * the capitals. Without `text-box`, as in older WebKitGTK, the flex layout
- * above stays, and the font metrics in `fonts.css` keep the capitals within
- * a pixel of center.
+ * above stays, and the font metrics in `fonts.css` keep the capitals near
+ * center.
  */
 @supports (text-box: trim-both cap alphabetic) {
 	.pau-button {

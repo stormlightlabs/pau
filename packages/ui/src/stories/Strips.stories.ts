@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/svelte-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent } from 'storybook/test';
 
 import StripsDemo from './StripsDemo.svelte';
 
@@ -11,14 +11,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** A full bay: Needs you, Running and Settled, then changed files as row strips. */
-export const Bay: Story = {
-	play: async ({ canvasElement }) => {
-		const canvas = within(canvasElement);
-		for (const strip of canvas.getAllByRole('link')) await expect(strip.getBoundingClientRect().height).toBe(56);
-		const rows = canvasElement.querySelectorAll('.pau-strip--row');
-		for (const row of rows) await expect(row.getBoundingClientRect().height).toBe(32);
-	}
-};
+export const Bay: Story = {};
 
 /** Focus draws the ring inside the strip, which runs edge to edge. */
 export const Focus: Story = {

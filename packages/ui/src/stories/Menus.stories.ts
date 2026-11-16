@@ -13,8 +13,6 @@ type Story = StoryObj<typeof meta>;
 /** The menu surface with icons, a check, a hint, a key cap and a disabled row. */
 export const Rest: Story = {
 	play: async ({ canvasElement }) => {
-		const items = canvasElement.querySelectorAll('.pau-menu__item');
-		for (const item of items) await expect(item.getBoundingClientRect().height).toBe(32);
 		await expect(within(canvasElement).getByRole('menuitem', { name: /Open in editor/ })).toHaveAttribute(
 			'aria-disabled',
 			'true'

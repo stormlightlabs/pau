@@ -10,8 +10,8 @@
  * `choices.css`.
  *
  * Where `text-box` is missing, as in older WebKitGTK, the untrimmed label
- * still centers on its capitals, within a pixel, because `fonts.css` puts
- * them in the middle of each face's line box.
+ * still centers on its capitals, because `fonts.css` puts them in the middle
+ * of each face's line box.
  */
 .pau-cap,
 .pau-chip > span:not(.pau-icon),

@@ -330,7 +330,9 @@ truncates gives its descenders back as 6px block padding and takes the same
 space back as negative margin, so its centre does not move.
 
 **The Mono Means Data Rule.** Mono marks something the machine owns: a path,
-a command, a number, a duration. It is never decoration.
+a command, a number, a duration. It is never decoration. Editable fields
+are the exception: their text stays in the interface face, even for a path or
+a command.
 
 ## Layout
 

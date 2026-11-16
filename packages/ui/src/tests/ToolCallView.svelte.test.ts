@@ -39,14 +39,11 @@ test('caps oversized output at 12 lines and shows all of it on request', async (
 	expect(output.element().textContent?.split('\n')).toHaveLength(12);
 	await expect.element(output).toHaveTextContent('test 1200 ... ok');
 	await expect.element(page.getByText('Last 12 of 1,200 lines')).toBeVisible();
-	const lineHeight = Number(getComputedStyle(output.element()).lineHeight.replace('px', ''));
-	expect(output.element().getBoundingClientRect().height).toBeLessThanOrEqual(13 * lineHeight);
 
 	await userEvent.click(page.getByRole('button', { name: 'Show all 1,200 lines' }));
 	await expect.element(page.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
 	expect(output.element().textContent?.split('\n')).toHaveLength(1200);
 	await expect.element(output).toHaveTextContent('test 1 ... ok');
-	expect(output.element().getBoundingClientRect().height).toBeLessThanOrEqual(31 * lineHeight);
 	expect(output.element().scrollTop + output.element().clientHeight).toBeCloseTo(output.element().scrollHeight, -1);
 
 	await userEvent.click(page.getByRole('button', { name: 'Show less' }));

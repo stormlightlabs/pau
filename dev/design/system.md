@@ -170,7 +170,9 @@ Plex Sans Variable, Inter Variable, Atkinson Hyperlegible Next Variable, or
 Atkinson Hyperlegible Soft. Overpass Mono Variable is the default code face,
 and operators may select JetBrains Mono or IBM Plex Mono instead. The code
 face sets code, commands, paths, identifiers, counts and durations, with
-ligatures off. A font choice never changes a role's size, weight or line
+ligatures off. Editable fields are the exception: a path or command typed
+into a field stays in the interface face, so field text centers like every
+other control. A font choice never changes a role's size, weight or line
 height.
 
 Every piece of text takes one of these roles. A surface never sets a size of
@@ -197,10 +199,10 @@ element trims its box to the cap height and the baseline
 up with icons, marks and checkboxes in every UI font. Input text cannot be
 trimmed, so each UI face is loaded with ascent and descent overrides that put
 its capitals in the middle of its line box. A field's text then centers on its
-capitals in WebKit and Chromium, on standard and Retina displays and at 125%
-zoom, and a label still centers within a pixel where `text-box` is missing. A
-label that truncates gives its descenders back as 6px block padding and takes
-the same space back as negative margin, so its centre does not move.
+capitals with no per-font offset, and so does a label where `text-box` is
+missing. A label that truncates gives its descenders back as 6px block
+padding and takes the same space back as negative margin, so its centre does
+not move.
 
 - Set transcript prose, the composer, dialog and settings body text, and the
   primary text of list rows at 14px. The session header, transcript,

@@ -71,9 +71,7 @@ The unit of work in this repository is a parent issue or an issue with no
 parent. A sub-issue is never dispatched on its own. Each project belongs to
 exactly one release initiative: Pau I: Dogfood, Pau II: Public release, Pau
 III: Multi-agent or Pau IV: Web. A parent's release is its project's
-initiative, and its sub-issues share it. Work for a later release goes in a
-separate focused project under that release's initiative. Linear milestones
-are not used.
+initiative, and its sub-issues share it. Linear milestones are not used.
 
 A defect the owner reports becomes a PAU issue handed to an implementer. The
 driver does not debug it in its own session.
@@ -204,7 +202,10 @@ step:
 4. Read `gh pr checks <n>` once for the result.
 
 A resync of a PR already out of draft needs only a passing Check for the new
-head. It needs no second review and no `/storm:ready`.
+head. It needs no second review and no `/storm:ready`. This replaces the
+`fab-storm` skill's step that asks the driver, after a resolved conflict,
+whether to run the review stages again or to have the owner use
+`/storm:ready`.
 
 ## Dogfood Pau
 

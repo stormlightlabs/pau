@@ -12,7 +12,13 @@
  * Pair it with `pau-option` from `states.css`, which owns the hover, press,
  * active and disabled colors. `pau-menu__divider` separates groups.
  */
+/*
+ * `height: auto` replaces the `fit-content` height a popover gets from the
+ * browser. WebKit, the macOS app's webview, resolves `fit-content` on a
+ * fixed grid to the viewport height, which stretches every row of a menu.
+ */
 .pau-menu {
+	height: auto;
 	min-width: 15rem;
 	margin: 0;
 	padding: var(--pau-space-1);

@@ -7,7 +7,8 @@ order: 4
 # Diagnostics
 
 Pau ships release diagnostics, but keeps them off until you enable them. Open
-**Diagnostics** and select **Enable diagnostics**, or start the desktop app with:
+**Diagnostics** from **Settings** › **About** or the command palette, and select
+**Enable diagnostics**, or start the desktop app with:
 
 ```sh
 pau --diagnostics

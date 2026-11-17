@@ -106,8 +106,8 @@ test('opens from the rail and closes after a resume', async () => {
 		onResumeSession
 	});
 
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await userEvent.click(page.getByRole('button', { name: 'Saved sessions in Pau' }));
+	await userEvent.click(page.getByRole('button', { name: 'More ways to start a session' }));
+	await userEvent.click(page.getByRole('menuitem', { name: 'Saved sessions…' }));
 	await userEvent.click(page.getByRole('button', { name: 'Resume Review the sandbox policy' }));
 
 	expect(onResumeSession).toHaveBeenCalledWith('pau', 'native-3');

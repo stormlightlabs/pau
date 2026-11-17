@@ -130,10 +130,15 @@ test('puts the branched prompt in the session composer', async () => {
 		workspaces: sessionFixtures.idle,
 		activeSessionId: 'session-idle',
 		onLoadSessionTree: async () => sessionTreeFixtures.small,
-		onBranchSession
+		onBranchSession,
+		onLoadCommands: async () => []
 	});
 
-	await userEvent.click(page.getByRole('button', { name: 'Show inspector' }));
+	// The column shows the tree once `/tree` asks for it.
+	expect(tree().elements()).toHaveLength(0);
+	await userEvent.fill(page.getByRole('textbox', { name: 'Prompt' }), '/tree');
+	// Escape closes the completion list, so Enter runs the command as typed.
+	await userEvent.keyboard('{Escape}{Enter}');
 	await userEvent.click(tree().getByText('Run the terminal tests again'));
 	await userEvent.click(page.getByRole('button', { name: 'Branch from here' }));
 

@@ -31,7 +31,6 @@ test('offers an idle Claude Code session only the controls it supports', async (
 	await expect.element(page.getByRole('button', { name: /^Model/ })).not.toBeInTheDocument();
 	await expect.element(page.getByRole('combobox', { name: 'Thinking level' })).not.toBeInTheDocument();
 
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 	await userEvent.click(page.getByRole('button', { name: /Review the adapter/ }), { button: 'right' });
 	await expect.element(page.getByRole('menu')).toBeVisible();
 	await expect.element(page.getByRole('menuitem', { name: 'Rename' })).not.toBeInTheDocument();
@@ -54,17 +53,15 @@ test('lets a running Claude Code session be interrupted but not steered', async 
 	expect(onInterrupt).toHaveBeenCalledWith('session-no-queue');
 });
 
-test('starts a Claude Code session from the workspace menu', async () => {
+test('starts a Claude Code session from the New session menu', async () => {
 	const onStartSession = vi.fn();
 	await render(SessionView, {
 		workspaces: sessionFixtures.idleWithPath,
 		activeSessionId: 'session-idle',
 		onStartSession
 	});
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 
-	await userEvent.click(page.getByRole('heading', { name: 'Pau' }));
-	await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+	await userEvent.click(page.getByRole('button', { name: 'More ways to start a session' }));
 	await userEvent.click(page.getByRole('menuitem', { name: 'New Claude Code session' }));
 	expect(onStartSession).toHaveBeenCalledWith('pau', 'claude');
 });
@@ -80,10 +77,8 @@ test.each(['missing', 'unsupported', 'missingBridge'] as const)(
 			onStartSession,
 			claudeReadiness: problem
 		});
-		await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
 
-		await userEvent.click(page.getByRole('heading', { name: 'Pau' }));
-		await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+		await userEvent.click(page.getByRole('button', { name: 'More ways to start a session' }));
 		const item = page.getByRole('menuitem', { name: 'New Claude Code session' });
 		await expect.element(item).toBeDisabled();
 		await expect.element(item).toHaveAccessibleDescription(problem.reason.replaceAll('`', ''));
@@ -99,9 +94,8 @@ test('explains a missing Claude Code where an opened workspace starts sessions',
 		onOpenWorkspace: vi.fn().mockResolvedValue('pau'),
 		claudeReadiness: claudeReadinessFixtures.missing
 	});
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await userEvent.click(page.getByRole('button', { name: 'Open workspace…' }));
-	await userEvent.click(page.getByRole('button', { name: 'Close navigation' }));
+	await userEvent.click(page.getByRole('button', { name: 'More ways to start a session' }));
+	await userEvent.click(page.getByRole('menuitem', { name: 'Open workspace…' }));
 	await userEvent.fill(page.getByRole('textbox', { name: 'Folder path' }), '/Users/operator/projects/pau');
 	await userEvent.click(page.getByRole('button', { name: 'Open', exact: true }));
 
@@ -125,13 +119,10 @@ test('retries a failed Claude Code start with Claude Code', async () => {
 		activeSessionId: 'session-idle',
 		onStartSession
 	});
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-	await userEvent.click(page.getByRole('heading', { name: 'Pau' }));
-	await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+	await userEvent.click(page.getByRole('button', { name: 'More ways to start a session' }));
 	await userEvent.click(page.getByRole('menuitem', { name: 'New Claude Code session' }));
 
 	await expect.element(page.getByRole('alert')).toHaveTextContent('Claude Code was not found.');
-	await userEvent.click(page.getByRole('button', { name: 'Close navigation' }));
 	await userEvent.click(page.getByRole('button', { name: 'Try again' }));
 	expect(onStartSession).toHaveBeenNthCalledWith(2, 'pau', 'claude');
 });

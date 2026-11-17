@@ -408,9 +408,9 @@
 	.terminal-panel__bar {
 		display: flex;
 		align-items: stretch;
-		min-height: var(--pau-size-row-lg);
-		border-bottom: 1px solid var(--shell-border);
-		background: var(--shell-bg);
+		min-height: var(--pau-space-7);
+		border-bottom: 1px solid var(--pau-border);
+		background: var(--pau-canvas);
 	}
 
 	.terminal-panel__tabs {
@@ -431,7 +431,7 @@
 		align-items: center;
 		gap: var(--pau-space-2);
 		padding: 0 var(--pau-space-3);
-		border-right: 1px solid var(--shell-border);
+		border-right: 1px solid var(--pau-border);
 		box-shadow: inset 0 -2px 0 transparent;
 		font-family: var(--pau-font-code);
 		font-variant-ligatures: none;
@@ -440,18 +440,18 @@
 	}
 
 	.terminal-panel__tab.active {
-		color: var(--shell-text);
-		background-color: var(--shell-surface);
-		box-shadow: inset 0 -2px 0 var(--shell-accent);
+		color: var(--pau-text);
+		background-color: var(--pau-surface);
+		box-shadow: inset 0 -2px 0 var(--pau-accent);
 	}
 
 	.terminal-panel__badge {
-		color: var(--shell-muted);
+		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
 	}
 
 	.terminal-panel__badge.failed {
-		color: var(--shell-danger);
+		color: var(--pau-danger);
 	}
 
 	/* The dot sits where an exit badge would, so a tab never carries both. */
@@ -459,19 +459,19 @@
 		width: 0.45rem;
 		height: 0.45rem;
 		border-radius: 50%;
-		background: var(--shell-accent);
+		background: var(--pau-accent);
 	}
 
 	.terminal-panel__icon-button {
 		display: grid;
 		place-items: center;
-		width: var(--pau-size-row-lg);
+		width: var(--pau-size-row-md);
 	}
 
 	.terminal-panel__actions {
 		display: flex;
 		margin-left: auto;
-		border-left: 1px solid var(--shell-border);
+		border-left: 1px solid var(--pau-border);
 	}
 
 	.terminal-panel__icon-button:disabled {
@@ -487,17 +487,17 @@
 	.terminal-panel__exit {
 		margin: 0;
 		padding: var(--pau-space-2) var(--pau-space-3);
-		border-bottom: 1px solid var(--shell-border);
+		border-bottom: 1px solid var(--pau-border);
 		font-size: var(--pau-type-xs);
 	}
 
 	.terminal-panel__error {
-		color: var(--shell-danger);
+		color: var(--pau-danger);
 	}
 
 	.terminal-panel__exit {
-		color: var(--shell-muted);
-		background: var(--shell-bg);
+		color: var(--pau-text-muted);
+		background: var(--pau-canvas);
 	}
 
 	.terminal-panel__panel {

@@ -2,12 +2,12 @@
 	import '../styles/tokens.css';
 
 	import type { ThemeName, UiFontName } from '../theme';
+	import { shellViews } from '../fixtures/application-shell';
 	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
 	import TerminalPanel, { terminalFailed, terminalStatus, type TerminalTabState } from './TerminalPanel.svelte';
 	import type { TerminalFileLinks, TerminalSource } from './types/terminal';
 
 	type Props = {
-		workspaceName: string;
 		source: TerminalSource;
 		theme?: ThemeName;
 		uiFont?: UiFontName;
@@ -24,16 +24,9 @@
 		onPaneResize?: (widths: ShellPaneWidths) => void;
 	};
 
-	const defaultProductItems: ShellNavItem[] = [
-		{ id: 'sessions', label: 'Sessions', icon: 'agents' },
-		{ id: 'files', label: 'Files', icon: 'files' },
-		{ id: 'terminal', label: 'Terminal', icon: 'terminal', active: true },
-		{ id: 'resources', label: 'Resources', icon: 'resources' },
-		{ id: 'settings', label: 'Settings', icon: 'settings' }
-	];
+	const defaultProductItems = shellViews('terminal');
 
 	let {
-		workspaceName,
 		source,
 		theme = 'eldritch',
 		uiFont = 'overpass',
@@ -52,14 +45,12 @@
 </script>
 
 <ApplicationShell
-	{workspaceName}
 	contextLabel="Terminals"
 	{productItems}
 	contextItems={[]}
 	{disconnected}
 	{theme}
 	{uiFont}
-	inspectorOpen={false}
 	{paneWidths}
 	onResize={onPaneResize}>
 	{#snippet context()}
@@ -102,8 +93,8 @@
 
 <style>
 	.terminal-surface {
-		height: calc(100% + 2 * var(--shell-main-padding));
-		margin: calc(-1 * var(--shell-main-padding));
+		height: calc(100% + 2 * var(--pau-shell-padding));
+		margin: calc(-1 * var(--pau-shell-padding));
 	}
 
 	.terminal-surface__list button {
@@ -120,7 +111,7 @@
 	.terminal-surface__rail-empty {
 		margin: 0;
 		padding: var(--pau-space-3) var(--pau-space-4);
-		color: var(--shell-muted);
+		color: var(--pau-text-muted);
 	}
 
 	.terminal-surface__list {
@@ -135,16 +126,16 @@
 		align-items: center;
 		gap: var(--pau-space-2);
 		width: 100%;
-		min-height: var(--pau-size-row-lg);
+		min-height: var(--pau-space-7);
 		padding: var(--pau-space-1) var(--pau-space-3);
 		text-align: left;
 		box-shadow: inset 2px 0 0 transparent;
 	}
 
 	.terminal-surface__list button.active {
-		color: var(--shell-text);
-		background-color: var(--shell-surface);
-		box-shadow: inset 2px 0 0 var(--shell-accent);
+		color: var(--pau-text);
+		background-color: var(--pau-surface);
+		box-shadow: inset 2px 0 0 var(--pau-accent);
 	}
 
 	.terminal-surface__title {
@@ -168,19 +159,19 @@
 
 	/* A ring sets new output apart from a running dot in themes whose accent and success colors match. */
 	.terminal-surface__dot.activity {
-		background: var(--shell-accent);
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--shell-accent) 35%, transparent);
+		background: var(--pau-accent);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--pau-accent) 35%, transparent);
 	}
 
 	.terminal-surface__list small.activity {
-		color: var(--shell-accent);
+		color: var(--pau-accent);
 	}
 
 	.terminal-surface__dot.exited {
-		background: var(--shell-muted);
+		background: var(--pau-text-muted);
 	}
 
 	.terminal-surface__dot.failed {
-		background: var(--shell-danger);
+		background: var(--pau-danger);
 	}
 </style>

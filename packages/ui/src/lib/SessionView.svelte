@@ -4,6 +4,7 @@
 	import { onDestroy, tick, untrack, type Snippet } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { fade } from 'svelte/transition';
+	import { shellViews } from '../fixtures/application-shell';
 	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
 	import type { PaletteEntry } from './command-palette';
 	import type { ThemeName, UiFontName } from '../theme';
@@ -52,7 +53,7 @@
 	import { COMPOSER_ATTRIBUTE, createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
 	import { composerKeyAction, resolveComposerKeys, type ComposerKeyAction } from './composer-keys';
-	import { detectPlatform, eventChord, formatChord, getKeymap, useKeyActions } from './keymap.svelte';
+	import { detectPlatform, eventChord, formatChord, getKeymap, isTextField, useKeyActions } from './keymap.svelte';
 	import Markdown from './Markdown.svelte';
 	import { isReducedMotion, motion } from '../motion';
 	import { BusyIndicator } from './busy-indicator.svelte';
@@ -61,14 +62,17 @@
 	import ThinkingLevelPicker from './ThinkingLevelPicker.svelte';
 	import SessionPicker from './SessionPicker.svelte';
 	import Select from './Select.svelte';
-	import SessionResourceSummary from './SessionResourceSummary.svelte';
+	import PageHeader from './PageHeader.svelte';
+	import RequestCard from './RequestCard.svelte';
+	import { permissionRequest } from './permission-request';
+	import SessionBay from './SessionBay.svelte';
+	import { displayStatus, needsOperator, sessionMenuItems, sessionStatusLabel } from './session-bay';
 	import SessionTree from './SessionTree.svelte';
 	import { groupToolCalls, openByDefault, type TranscriptToolGroup } from './transcript-disclosure';
 	import { followTranscript, scrollToLatest as scrollTranscriptToLatest, scrollToPrompt } from './transcript-follow';
 	import ToolCallGroup from './ToolCallGroup.svelte';
 	import ToolCallView from './ToolCallView.svelte';
 	import TranscriptSearch from './TranscriptSearch.svelte';
-	import type { ProcessResourceSnapshot } from './types/resource-monitoring';
 	import type {
 		CommandOption,
 		CompactionReason,
@@ -96,6 +100,7 @@
 		TranscriptTool
 	} from './types/session';
 	import { thinkingLevels } from './types/session';
+	import type { WorkspaceGitFileStatus } from './types/workspace-files';
 
 	type Props = {
 		workspaces: SessionWorkspace[];
@@ -179,7 +184,7 @@
 		 */
 		onClearQueue?: (sessionId: string) => Promise<MessageQueue>;
 		/**
-		 * Starts a session of an agent in a workspace. When set, the rail offers
+		 * Starts a session of an agent in a workspace. When set, the bay offers
 		 * a start control for each workspace, which starts Pi, and the
 		 * workspace menu and an opened workspace also offer Claude Code. A
 		 * rejected promise shows its message as a failed start.
@@ -187,26 +192,26 @@
 		onStartSession?: (workspaceId: string, agent: SessionAgent) => void | Promise<void>;
 		/**
 		 * Lists a workspace's saved sessions, newest first. With
-		 * `onResumeSession`, the rail lists each workspace's newest saved
+		 * `onResumeSession`, the bay lists each workspace's newest saved
 		 * sessions under its live ones and offers a picker for the rest.
 		 */
 		onLoadSavedSessions?: (workspaceId: string) => Promise<SavedSessionList>;
 		/**
 		 * Resumes a saved session. A rejected promise shows its message in the
-		 * picker, under the rail for a recent saved session, or beside Resume
+		 * picker, under the bay for a recent saved session, or beside Resume
 		 * for `restoredSession`.
 		 */
 		onResumeSession?: (workspaceId: string, savedSessionId: string) => void | Promise<void>;
 		/**
 		 * A stopped session that has no live session behind it, such as the
-		 * session that was open when Pau last closed. The rail lists it under its
+		 * session that was open when Pau last closed. The bay lists it under its
 		 * workspace like other stopped sessions. It is open while no
 		 * `activeSessionId` is passed, and the view then names it and offers
 		 * Resume through `onResumeSession`. It never starts the agent on its
 		 * own, because resuming starts a process.
 		 */
 		restoredSession?: SavedSession & { workspaceId: string };
-		/** Opens `restoredSession` when the operator picks its rail row. */
+		/** Opens `restoredSession` when the operator picks its bay strip. */
 		onOpenRestoredSession?: () => void;
 		/**
 		 * Starts a stopped or failed session again, from its saved conversation
@@ -215,7 +220,7 @@
 		 */
 		onRestartSession?: (sessionId: string) => void | Promise<void>;
 		/**
-		 * Reads a session's entry tree. With `onBranchSession`, the inspector
+		 * Reads a session's entry tree. With `onBranchSession`, the workspace column
 		 * shows the tree of the active session.
 		 */
 		onLoadSessionTree?: (sessionId: string) => Promise<SessionTreeSnapshot>;
@@ -239,13 +244,13 @@
 		onBranchFromMessage?: (sessionId: string, entryId: string) => Promise<SessionBranchOutcome>;
 		/**
 		 * Renames a session. With it and the `rename` capability, the session's
-		 * context menu offers Rename. A rejection shows its message in the rail.
+		 * context menu offers Rename. A rejection shows its message in the bay.
 		 */
 		onRenameSession?: (sessionId: string, name: string) => void | Promise<void>;
 		/**
 		 * Clones a session into a new saved session that the live session then
 		 * continues. With it and the `cloneSession` capability, the session's
-		 * context menu offers Clone. A rejection shows its message in the rail.
+		 * context menu offers Clone. A rejection shows its message in the bay.
 		 */
 		onCloneSession?: (sessionId: string) => void | Promise<void>;
 		/**
@@ -257,6 +262,8 @@
 		onExportTranscript?: (sessionId: string) => Promise<string | undefined>;
 		/** Opens a terminal in a workspace. With it, the workspace's context menu offers Open terminal. */
 		onOpenTerminal?: (workspaceId: string) => void;
+		/** Opens a workspace file, such as a changed file in the workspace column. */
+		onOpenFile?: (workspaceId: string, path: string) => void;
 		/**
 		 * Why Pi cannot start a session, as launch found it. The empty views,
 		 * where the operator starts sessions, show it with the fixing command.
@@ -290,14 +297,13 @@
 		 * footer offers a level control. A rejected promise shows its message beside it.
 		 */
 		onSelectThinkingLevel?: (sessionId: string, level: ThinkingLevel) => void | Promise<void>;
-		resourceSnapshot?: ProcessResourceSnapshot;
 		onExtensionUiResponse?: (sessionId: string, response: ExtensionUiResponse) => void | Promise<void>;
 		onExtensionUiTimeout?: (sessionId: string, requestId: string) => void;
 		onOpenPiTerminal?: (sessionId: string) => void;
 		/**
 		 * Opens a folder as a workspace and resolves to its ID. Opening a folder
 		 * that is already open resolves to the existing workspace. When set, the
-		 * rail and the first-run screen offer an Open workspace control. A
+		 * bay and the first-run screen offer an Open workspace control. A
 		 * rejected promise shows its message beside the control.
 		 */
 		onOpenWorkspace?: (path: string) => Promise<string>;
@@ -308,7 +314,7 @@
 		 */
 		pickFolder?: () => Promise<string | undefined>;
 		/**
-		 * Product rail destinations, supplied by the app that owns the routes. The
+		 * Views for the view row, supplied by the app that owns the routes. The
 		 * view marks the Sessions item when a session needs attention.
 		 */
 		productItems?: ShellNavItem[];
@@ -328,14 +334,7 @@
 		following?: boolean;
 	};
 
-	const defaultProductItems: ShellNavItem[] = [
-		{ id: 'sessions', label: 'Sessions', icon: 'agents', active: true },
-		{ id: 'files', label: 'Files', icon: 'files' },
-		{ id: 'processes', label: 'Processes', icon: 'processes' },
-		{ id: 'resources', label: 'Resources', icon: 'resources' },
-		{ id: 'settings', label: 'Settings', icon: 'settings' }
-	];
-
+	const defaultProductItems = shellViews('sessions');
 	let {
 		workspaces,
 		activeSessionId,
@@ -374,6 +373,7 @@
 		onCloneSession,
 		onExportTranscript,
 		onOpenTerminal,
+		onOpenFile,
 		agentReadiness,
 		claudeReadiness,
 		onCheckClaude,
@@ -381,7 +381,6 @@
 		onLoadModels,
 		onSelectModel,
 		onSelectThinkingLevel,
-		resourceSnapshot,
 		onExtensionUiResponse = () => {},
 		onExtensionUiTimeout = () => {},
 		onOpenPiTerminal,
@@ -398,19 +397,6 @@
 	/** Times the session-list loading state so a fast first load shows nothing. */
 	const sessionsLoading = new BusyIndicator(() => loading);
 
-	/**
-	 * How many saved sessions the rail lists under each workspace's live
-	 * sessions. The picker behind the history button lists the rest.
-	 */
-	const recentSessionLimit = 3;
-	/** A workspace's saved sessions for the rail: loading, loaded, or failed. */
-	type RecentSessions = { status: 'loading' } | { status: 'ready'; sessions: SavedSession[] } | { status: 'failed' };
-	/** Each workspace's saved sessions for the rail, by workspace ID. Absent until the first load starts. */
-	let recentSessions = $state<Record<string, RecentSessions>>({});
-	/** Times the recent saved-session loads, which run together when the rail first shows. */
-	const recentLoading = new BusyIndicator(() =>
-		Object.values(recentSessions).some((recent) => recent.status === 'loading')
-	);
 	let transcriptElement = $state<HTMLElement>();
 
 	/** Scrolls the transcript to its newest content and resumes following. */
@@ -541,6 +527,11 @@
 	let modelPicker = $state<ModelPicker>();
 	let thinkingPicker = $state<ThinkingLevelPicker>();
 	let sessionTree = $state<SessionTree>();
+	/** Whether the workspace column shows the conversation tree, after `/tree` and its kin asked for it. */
+	let treeShown = $state(false);
+	/** Most changed files the workspace column lists. Review shows the rest. */
+	const CHANGE_LIMIT = 50;
+	let sessionBay = $state<SessionBay>();
 	const keymap = getKeymap();
 	const keyPlatform = keymap?.platform ?? detectPlatform();
 	/** Pi's composer keys, with the operator's bindings once the app loads them. */
@@ -579,18 +570,13 @@
 	let restartingSessionId = $state<string>();
 	let restartError = $state<string>();
 	/**
-	 * The saved session whose resume is in flight, from the rail or the
+	 * The saved session whose resume is in flight, from the bay or the
 	 * restored session's Resume, so no click can start a second one.
 	 */
 	let resumingSavedId = $state<string>();
 	let resumeError = $state<string>();
 	/** The open context menu, if any. */
 	let contextMenu = $state<ContextMenuRequest>();
-	/** Why the last rail action from a context menu failed. */
-	let railError = $state<string>();
-	/** The session whose name is being edited in the rail. */
-	let renamingSessionId = $state<string>();
-	let renameDraft = $state('');
 	let pickerWorkspaceId = $state<string>();
 	let retryingSessionId = $state<string>();
 	let retryError = $state<string>();
@@ -609,13 +595,6 @@
 	let openedWorkspaceId = $state<string>();
 
 	const pickerWorkspace = $derived(workspaces.find((workspace) => workspace.id === pickerWorkspaceId));
-	// Each workspace loads its recent saved sessions once, when the rail first lists it.
-	$effect(() => {
-		if (!onLoadSavedSessions || !onResumeSession || sessionsLoading.active) return;
-		for (const workspace of workspaces) {
-			if (!untrack(() => recentSessions[workspace.id])) void loadRecent(workspace.id);
-		}
-	});
 	const openedWorkspace = $derived(workspaces.find((workspace) => workspace.id === openedWorkspaceId));
 	const sessions = $derived(workspaces.flatMap((workspace) => workspace.sessions));
 	const activeSession = $derived(sessions.find((session) => session.id === activeSessionId));
@@ -750,9 +729,43 @@
 	]);
 	const productItems = $derived(
 		appProductItems.map((item) =>
-			item.id === 'sessions' ? { ...item, attention: sessions.some((session) => hasAttention(session)) } : item
+			item.id === 'sessions' ? { ...item, attention: sessions.some((session) => needsOperator(session)) } : item
 		)
 	);
+
+	/** The workspace that New session starts in: the open session's, or the first. */
+	const newSessionWorkspace = $derived(activeWorkspace ?? openedWorkspace ?? workspaces[0]);
+	/** The open session's permission request, which renders as the request card. */
+	const activeRequest = $derived(permissionRequest(activeSession?.extensionUi?.dialog));
+
+	/** Workspace column copy for the open session's workspace. */
+	function changeLabel(file: WorkspaceGitFileStatus): string {
+		if (file.conflicted) return 'Conflict';
+		const state = file.worktree ?? file.staged;
+		const label = {
+			modified: 'Modified',
+			added: 'Added',
+			deleted: 'Deleted',
+			renamed: 'Renamed',
+			copied: 'Copied',
+			type_changed: 'Type changed',
+			untracked: 'New file'
+		}[state ?? 'modified'];
+		if (file.staged && file.worktree) return `${label}, partly staged`;
+		return file.staged ? `${label}, staged` : label;
+	}
+
+	/** Splits a workspace path into its file name and folder. */
+	function splitPath(path: string): { name: string; folder: string } {
+		const slash = path.lastIndexOf('/');
+		return slash === -1 ? { name: path, folder: '' } : { name: path.slice(slash + 1), folder: path.slice(0, slash) };
+	}
+
+	/** The last two segments of a workspace folder, enough to tell worktrees apart. */
+	function shortPath(path: string | undefined, fallback: string): string {
+		if (!path) return fallback;
+		return path.split(/[\\/]/).filter(Boolean).slice(-2).join('/');
+	}
 
 	/** Runs one file search and keeps the result only while it is the latest. */
 	async function searchMentions(
@@ -809,6 +822,12 @@
 		return () => clearInterval(timer);
 	});
 
+	// Another session starts without the conversation tree in its column.
+	$effect(() => {
+		void activeSessionId;
+		treeShown = false;
+	});
+
 	$effect(() => {
 		void activeSession?.id;
 		retryError = undefined;
@@ -817,37 +836,21 @@
 		compactInstructions = '';
 	});
 
-	function hasAttention(session: SessionViewModel): boolean {
-		return session.status === 'waiting' || Boolean(session.attention) || session.status === 'failed';
-	}
-
-	const markerLabel = {
-		waiting: 'Waiting for your input',
-		failed: 'Failed while out of view',
-		unread: 'Finished while out of view'
-	} as const;
-
-	function markerKind(status: SessionViewModel['status']): keyof typeof markerLabel {
-		return status === 'waiting' ? 'waiting' : status === 'failed' ? 'failed' : 'unread';
-	}
-
 	/** The header reports compaction as the state, so it never reads Ready while Compact is busy. */
 	const headerCompacting = $derived(compacting && ['idle', 'running'].includes(activeSession?.status ?? ''));
-	const headerStatus = $derived(headerCompacting ? 'running' : (activeSession?.status ?? 'idle'));
-	const headerStatusLabel = $derived(headerCompacting ? 'Compacting…' : statusLabel(activeSession?.status ?? 'idle'));
+	const headerStatus = $derived(headerCompacting ? 'running' : activeSession ? displayStatus(activeSession) : 'idle');
+	const headerStatusLabel = $derived(headerCompacting ? 'Compacting…' : sessionStatusLabel(headerStatus));
 
-	function statusLabel(status: SessionViewModel['status']): string {
-		return {
-			starting: 'Starting',
-			idle: 'Ready',
-			running: 'Running',
-			waiting: 'Needs you',
-			not_responding: 'Not responding',
-			stopping: 'Stopping',
-			stopped: 'Stopped',
-			failed: 'Failed'
-		}[status];
+	/** The tone class for the header's state chip. Only states that need the operator take one. */
+	function headerTone(status: SessionViewModel['status']): string | undefined {
+		if (status === 'waiting') return 'pau-tone-waiting';
+		if (status === 'failed') return 'pau-tone-danger';
+		if (status === 'not_responding' || status === 'stopping') return 'pau-tone-warning';
+		if (status === 'running' || status === 'starting') return 'pau-tone-info';
+		return undefined;
 	}
+
+	const dockShortcut = $derived(keymap?.shortcut('panel.dock'));
 
 	/** Explains why the composer is disabled, or returns `undefined` when it accepts text. */
 	function composerUnavailableReason(
@@ -1165,38 +1168,14 @@
 		resumeError = await resumeSaved(restored.workspaceId, restored.id);
 	}
 
-	/** Resumes a recent saved session from its rail row, as the picker does. */
+	/** Resumes a recent saved session from its bay strip, as the picker does. The bay shows a failure. */
 	async function resumeRecent(workspaceId: string, savedSessionId: string): Promise<void> {
 		pickerWorkspaceId = undefined;
 		openedWorkspaceId = undefined;
 		closeOpenForm();
 		startFailure = undefined;
-		railError = undefined;
-		railError = await resumeSaved(workspaceId, savedSessionId);
-	}
-
-	/** Loads a workspace's saved sessions for the rail. A failure offers Try again. */
-	async function loadRecent(workspaceId: string): Promise<void> {
-		if (!onLoadSavedSessions) return;
-		recentSessions[workspaceId] = { status: 'loading' };
-		try {
-			const list = await onLoadSavedSessions(workspaceId);
-			recentSessions[workspaceId] = { status: 'ready', sessions: list.sessions };
-		} catch {
-			recentSessions[workspaceId] = { status: 'failed' };
-		}
-	}
-
-	/**
-	 * The workspace's newest saved sessions that the rail does not already
-	 * list as a live, stopped, or restored session.
-	 */
-	function recentRows(workspace: SessionWorkspace): SavedSession[] {
-		const recent = recentSessions[workspace.id];
-		if (recent?.status !== 'ready') return [];
-		const listed = workspace.sessions.map((session) => session.savedSessionId);
-		if (restoredSession?.workspaceId === workspace.id) listed.push(restoredSession.id);
-		return recent.sessions.filter((saved) => !saved.live && !listed.includes(saved.id)).slice(0, recentSessionLimit);
+		const failure = await resumeSaved(workspaceId, savedSessionId);
+		if (failure) throw new Error(failure);
 	}
 
 	/** Starts the ended session again. The draft stays in the composer for the new run. */
@@ -1229,7 +1208,7 @@
 		onSelectSession(sessionId);
 	}
 
-	/** Opens the restored session from its rail row. */
+	/** Opens the restored session from its bay strip. */
 	function openRestored(): void {
 		pickerWorkspaceId = undefined;
 		openedWorkspaceId = undefined;
@@ -1245,98 +1224,14 @@
 		if (next) selectSession(next.id);
 	}
 
-	/** Reports the failure of a context menu action in the rail. */
-	async function railAction(action: () => unknown, fallback: string): Promise<void> {
-		railError = undefined;
+	/** Reports the failure of a workspace menu action in the notices. */
+	async function workspaceAction(action: () => unknown, fallback: string): Promise<void> {
+		controlError = undefined;
 		try {
 			await action();
 		} catch (cause) {
-			railError = cause instanceof Error ? cause.message : fallback;
+			controlError = cause instanceof Error ? cause.message : fallback;
 		}
-	}
-
-	function sessionMenuItems(session: SessionViewModel): ContextMenuItem[] {
-		const live = ['starting', 'idle', 'running', 'waiting'].includes(session.status);
-		const offline = 'Pau is reconnecting to the backend.';
-		const ended = 'This session has ended.';
-		const items: ContextMenuItem[] = [{ id: 'open', label: 'Open' }];
-		if (onRenameSession && session.capabilities.rename) {
-			const reason = disconnected ? offline : live ? undefined : ended;
-			items.push({ id: 'rename', label: 'Rename…', disabled: reason !== undefined, reason });
-		}
-		if (onCloneSession && session.capabilities.cloneSession) {
-			const reason = disconnected
-				? offline
-				: !live
-					? ended
-					: session.status === 'idle'
-						? undefined
-						: `Wait for ${session.agent} to finish before cloning.`;
-			items.push({ id: 'clone', label: 'Clone', disabled: reason !== undefined, reason });
-		}
-		items.push({ id: 'copy-id', label: 'Copy session ID', separatorBefore: true });
-		if (session.capabilities.stop) {
-			const stoppable = live || session.status === 'not_responding';
-			const reason = disconnected ? offline : stoppable ? undefined : ended;
-			items.push({ id: 'stop', label: 'Stop', separatorBefore: true, disabled: reason !== undefined, reason });
-		}
-		items.push({
-			id: 'archive',
-			label: 'Archive',
-			separatorBefore: !session.capabilities.stop,
-			disabled: true,
-			reason: 'Coming soon'
-		});
-		return items;
-	}
-
-	function runSessionAction(session: SessionViewModel, id: string): void {
-		switch (id) {
-			case 'open': {
-				selectSession(session.id);
-				break;
-			}
-			case 'rename': {
-				railError = undefined;
-				renameDraft = session.title;
-				renamingSessionId = session.id;
-				break;
-			}
-			case 'clone': {
-				void railAction(() => onCloneSession?.(session.id), 'Pau could not clone the session. Try again.');
-				break;
-			}
-			case 'copy-id': {
-				void railAction(() => navigator.clipboard.writeText(session.id), 'Pau could not copy the session ID.');
-				break;
-			}
-			case 'stop': {
-				void railAction(() => onStop(session.id), 'The session could not be stopped. Try again.');
-				break;
-			}
-		}
-	}
-
-	function openSessionMenu(event: MouseEvent | KeyboardEvent, session: SessionViewModel): void {
-		contextMenu = contextMenuRequest(event, `${session.title} actions`, sessionMenuItems(session), (id) =>
-			runSessionAction(session, id)
-		);
-	}
-
-	/** Saves the edited session name, or drops the edit when the name is blank or unchanged. */
-	async function commitRename(session: SessionViewModel): Promise<void> {
-		if (renamingSessionId !== session.id) return;
-		renamingSessionId = undefined;
-		const name = renameDraft.trim();
-		await tick();
-		document.getElementById(`session-row-${session.id}`)?.focus();
-		if (!onRenameSession || !name || name === session.title) return;
-		await railAction(() => onRenameSession(session.id, name), 'Pau could not rename the session. Try again.');
-	}
-
-	function cancelRename(session: SessionViewModel): void {
-		renamingSessionId = undefined;
-		void tick().then(() => document.getElementById(`session-row-${session.id}`)?.focus());
 	}
 
 	function workspaceMenuItems(workspace: SessionWorkspace): ContextMenuItem[] {
@@ -1387,11 +1282,11 @@
 				break;
 			}
 			case 'reveal': {
-				void railAction(() => revealPath?.(path), 'Pau could not show the folder.');
+				void workspaceAction(() => revealPath?.(path), 'Pau could not show the folder.');
 				break;
 			}
 			case 'copy-path': {
-				void railAction(() => navigator.clipboard.writeText(path), 'Pau could not copy the path.');
+				void workspaceAction(() => navigator.clipboard.writeText(path), 'Pau could not copy the path.');
 				break;
 			}
 		}
@@ -1731,10 +1626,17 @@
 		throw new Error(reason ?? 'This session cannot run that command right now.');
 	}
 
-	/** Shows the inspector when it is hidden, for `/session`, `/tree`, and `/fork`. */
+	/** Shows the workspace column when it is hidden, for `/session`, `/tree`, and `/fork`. */
+	/**
+	 * Shows the conversation tree in the workspace column, opening the column
+	 * when it is hidden, for `/session`, `/tree`, and `/fork`. The tree stays
+	 * out of the column until one of them asks, so the column keeps to the
+	 * workspace and reads no tree it does not show.
+	 */
 	async function showInspector(): Promise<void> {
-		if (!document.getElementById('shell-inspector') && !keymap?.run('panel.inspector')) {
-			throw new Error('Pau cannot show the inspector here.');
+		treeShown = true;
+		if (!document.getElementById('shell-workspace') && !keymap?.run('panel.inspector')) {
+			throw new Error('Pau cannot show the workspace column here.');
 		}
 		await tick();
 	}
@@ -1744,11 +1646,18 @@
 	 * Throws the reason when it cannot, before the draft clears.
 	 */
 	function builtinAction(session: SessionViewModel, action: BuiltinAction, argument: string): () => Promise<unknown> {
-		const menuAction = (id: string, unsupported: string): (() => Promise<void>) => {
-			const item = sessionMenuItems(session).find((candidate) => candidate.id === id);
+		const menuAction = (id: 'rename' | 'clone' | 'stop', unsupported: string): (() => Promise<unknown>) => {
+			const items = sessionMenuItems(session, {
+				disconnected,
+				rename: onRenameSession !== undefined,
+				clone: onCloneSession !== undefined,
+				stop: true
+			});
+			const item = items.find((candidate) => candidate.id === id);
 			if (!item) refuse(unsupported);
 			if (item.disabled) refuse(item.reason);
-			return async () => runSessionAction(session, id);
+			if (id === 'rename') return async () => sessionBay?.rename(session.id);
+			return async () => (id === 'clone' ? onCloneSession?.(session.id) : onStop(session.id));
 		};
 		const workspace = activeWorkspace;
 		switch (action) {
@@ -2124,11 +2033,7 @@
 	 */
 	function handleWindowKeydown(event: KeyboardEvent): void {
 		if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key === 'End') {
-			const target = event.target;
-			const editable =
-				target instanceof HTMLElement &&
-				(target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName));
-			if (arrived && !editable) {
+			if (arrived && !isTextField(event.target)) {
 				event.preventDefault();
 				scrollToLatest();
 			}
@@ -2164,13 +2069,6 @@
 	}
 </script>
 
-<!-- A saved session without a live session behind it reads as stopped in the rail. -->
-{#snippet savedRowContent(title: string, state: string)}
-	<SessionStatusMark status="stopped" label="Stopped" />
-	<span class="session-rail__name">{title}</span>
-	<span class="session-rail__state"><small aria-hidden="true">{state}</small></span>
-{/snippet}
-
 {#snippet readinessNotice(workspaceId?: string, agent: SessionAgent = 'pi')}
 	{@const problem = agent === 'claude' ? claudeReadiness : agentReadiness}
 	{#if problem}
@@ -2182,6 +2080,162 @@
 	{/if}
 {/snippet}
 
+{#snippet stopAction()}
+	{#if activeSession}
+		<button
+			type="button"
+			class="pau-button pau-button--danger"
+			disabled={disconnected}
+			title={disconnected ? 'Pau is reconnecting to the backend.' : `Stop ${activeSession.agent}`}
+			onclick={() => void stop()}>
+			<Icon name="stop" size={16} /><span>Stop</span>
+		</button>
+	{/if}
+{/snippet}
+
+{#snippet workspaceHeader()}
+	{#if activeWorkspace}
+		{@const workspace = activeWorkspace}
+		<!-- The header hosts the workspace menu for its title and its button. -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="session-workspace__head"
+			oncontextmenu={(event) => openWorkspaceMenu(event, workspace)}
+			onkeydown={(event) => {
+				if (isContextMenuKey(event)) openWorkspaceMenu(event, workspace);
+			}}>
+			<h2 class="session-workspace__title pau-mono pau-cap pau-cap--truncate" title={workspace.path ?? workspace.name}>
+				{shortPath(workspace.path, workspace.name)}
+			</h2>
+			<button
+				type="button"
+				class="session-workspace__menu pau-utility-button"
+				aria-label={`${workspace.name} actions`}
+				aria-haspopup="menu"
+				onclick={(event) => openWorkspaceMenu(event, workspace)}>
+				<Icon name="chevronDown" size={16} />
+			</button>
+		</div>
+	{/if}
+{/snippet}
+
+{#snippet workspaceColumn()}
+	{#if activeWorkspace}
+		{@const workspace = activeWorkspace}
+		{@const git = workspace.git}
+		{@const shownChanges = git?.files.slice(0, CHANGE_LIMIT) ?? []}
+		<section class="session-workspace__section" aria-labelledby="workspace-changes">
+			<h3 class="pau-bay-heading">
+				<span class="pau-section-label" id="workspace-changes">Changes</span>
+				{#if git?.repository}<span class="pau-count"
+						>{git.files.length} {git.files.length === 1 ? 'file' : 'files'}</span
+					>{/if}
+			</h3>
+			{#if !git}
+				<p class="session-workspace__note">Reading Git status…</p>
+			{:else if !git.repository}
+				<p class="session-workspace__note">This folder is not a Git repository.</p>
+			{:else if git.files.length === 0}
+				<p class="session-workspace__note">No changes</p>
+			{:else}
+				<ul class="session-workspace__list">
+					{#each shownChanges as file (file.path)}
+						{@const parts = splitPath(file.path)}
+						{@const state = changeLabel(file)}
+						<li>
+							{#snippet change()}
+								<Icon name="file" size={16} />
+								<span class="pau-strip__line"><span class="pau-strip__name pau-mono">{parts.name}</span></span>
+								<span class="pau-strip__figure" class:pau-tone-danger={file.conflicted}>{state}</span>
+								<span></span>
+								<span class="pau-strip__state pau-mono">{parts.folder || '.'}</span>
+								<span></span>
+							{/snippet}
+							{#if onOpenFile}
+								<button
+									type="button"
+									class="pau-strip pau-strip--icon"
+									title={file.path}
+									onclick={() => onOpenFile(workspace.id, file.path)}>{@render change()}</button>
+							{:else}
+								<div class="pau-strip pau-strip--icon" title={file.path}>{@render change()}</div>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+				{#if git.files.length > shownChanges.length}
+					<p class="session-workspace__note">And {git.files.length - shownChanges.length} more</p>
+				{/if}
+			{/if}
+		</section>
+		<section class="session-workspace__section" aria-labelledby="workspace-branch">
+			<h3 class="pau-bay-heading">
+				<span class="pau-section-label" id="workspace-branch">Branch</span>
+			</h3>
+			<ul class="session-workspace__list">
+				{#if git?.repository}
+					<li class="pau-strip pau-strip--row">
+						<Icon name="gitBranch" size={16} />
+						<span class="pau-strip__name pau-mono"
+							>{git.detached ? 'Detached HEAD' : (git.branch ?? workspace.branch ?? 'No commits yet')}</span>
+						<span class="pau-strip__figure pau-mono">{git.head?.slice(0, 7) ?? ''}</span>
+					</li>
+				{/if}
+				<li class="pau-strip pau-strip--row">
+					<Icon name="sandbox" size={16} />
+					<span class="pau-strip__name">{workspace.sandbox?.label ?? 'Sandbox state unknown'}</span>
+					<span class="pau-strip__figure"></span>
+				</li>
+			</ul>
+		</section>
+		<section class="session-workspace__section" aria-labelledby="workspace-terminals">
+			<h3 class="pau-bay-heading">
+				<span class="pau-section-label" id="workspace-terminals">Terminals</span>
+				{#if workspace.terminals?.length}<span class="pau-count">{workspace.terminals.length} open</span>{/if}
+			</h3>
+			<div class="session-workspace__peek">
+				{#each workspace.terminals ?? [] as terminal (terminal.id)}
+					<button
+						type="button"
+						class="pau-strip pau-strip--row"
+						title={dock ? 'Show in the terminal dock' : 'Open in Terminal'}
+						onclick={() => (dock ? onDockToggle?.(true) : onOpenTerminal?.(workspace.id))}>
+						<Icon name="terminal" size={16} />
+						<span class="pau-strip__name pau-mono">{terminal.label}</span>
+						<span class="pau-strip__figure pau-mono" class:pau-tone-danger={terminal.failed}>{terminal.status}</span>
+					</button>
+				{:else}
+					<p class="session-workspace__note">No terminals open</p>
+					{#if dock || onOpenTerminal}
+						<button
+							type="button"
+							class="pau-button pau-button--quiet session-workspace__open-terminal"
+							onclick={() => (dock ? onDockToggle?.(true) : onOpenTerminal?.(workspace.id))}>
+							<Icon name="terminal" size={16} /><span>Open a terminal</span>
+						</button>
+					{/if}
+				{/each}
+			</div>
+		</section>
+		{#if treeShown && activeSession && onLoadSessionTree && onBranchSession}
+			{@const session = activeSession}
+			<section class="session-workspace__section session-workspace__tree" aria-label="Conversation tree">
+				{#key session.id}
+					<SessionTree
+						bind:this={sessionTree}
+						agent={session.agent}
+						supported={session.capabilities.branching === true}
+						load={() => onLoadSessionTree(session.id)}
+						onBranch={(entryId) => onBranchSession(session.id, entryId)}
+						onBranched={branched}
+						branchUnavailable={branchUnavailableReason(session, disconnected)}
+						revision={session.status === 'idle' ? session.transcript.length : null} />
+				{/key}
+			</section>
+		{/if}
+	{/if}
+{/snippet}
+
 <svelte:window
 	onkeydown={(event) => {
 		handleSearchShortcut(event);
@@ -2189,12 +2243,9 @@
 	}} />
 
 <ApplicationShell
-	workspaceName={activeWorkspace?.name ?? 'Workspaces'}
-	contextLabel="Workspaces and sessions"
+	contextLabel="Sessions"
 	{productItems}
-	contextItems={[]}
 	{disconnected}
-	inspectorOpen={Boolean(resourceSnapshot)}
 	{theme}
 	{uiFont}
 	{paneWidths}
@@ -2204,206 +2255,47 @@
 	{onDockToggle}
 	{dockHeight}
 	{onDockResize}
+	workspace={activeWorkspace && (activeSession || restoredOpen) ? workspaceColumn : undefined}
+	workspaceHeader={activeWorkspace ? workspaceHeader : undefined}
 	onResize={onPaneResize}>
-	{#snippet context()}
-		<nav class="session-rail" aria-label="Workspaces and sessions">
-			{#if onOpenWorkspace}
-				<button
-					type="button"
-					class="session-rail__open"
-					disabled={disconnected || opening}
-					onclick={() => void chooseWorkspace()}>
-					<Icon name="folderPlus" size={16} />
-					<span>{opening ? 'Opening…' : 'Open workspace…'}</span>
-				</button>
-			{/if}
-			{#if sessionsLoading.active}
-				{#if sessionsLoading.visible}<p class="session-rail__empty">Loading…</p>{/if}
-			{:else if workspaces.length === 0}
-				<p class="session-rail__empty">No workspaces yet</p>
-			{:else}
-				{#each workspaces as workspace (workspace.id)}
-					{@const restored = restoredSession?.workspaceId === workspace.id ? restoredSession : undefined}
-					{@const recentStatus = recentSessions[workspace.id]?.status}
-					{@const recent = recentRows(workspace)}
-					<section aria-labelledby={`workspace-${workspace.id}`}>
-						<!-- The heading row hosts the workspace menu for the heading and its controls. -->
-						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div
-							class="session-rail__heading"
-							oncontextmenu={(event) => openWorkspaceMenu(event, workspace)}
-							onkeydown={(event) => {
-								if (isContextMenuKey(event)) openWorkspaceMenu(event, workspace);
-							}}>
-							<!-- The heading takes focus so the keyboard can open the workspace menu. -->
-							<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-							<h2
-								id={`workspace-${workspace.id}`}
-								tabindex="0"
-								title={workspace.path ? `${workspace.name}\n${workspace.path}` : workspace.name}>
-								{workspace.name}
-							</h2>
-							{#if onStartSession}
-								<button
-									type="button"
-									class="session-rail__icon-button pau-utility-button"
-									aria-label={`New session in ${workspace.name}`}
-									title={`New session in ${workspace.name}`}
-									disabled={disconnected || startingWorkspaceId !== undefined}
-									onclick={() => void startSession(workspace)}>
-									<Icon name="plus" size={14} />
-								</button>
-							{/if}
-							{#if onLoadSavedSessions && onResumeSession}
-								<button
-									type="button"
-									class="session-rail__icon-button pau-utility-button"
-									aria-label={`Saved sessions in ${workspace.name}`}
-									aria-pressed={pickerWorkspaceId === workspace.id}
-									title={`Saved sessions in ${workspace.name}`}
-									disabled={disconnected}
-									onclick={() => (pickerWorkspaceId = workspace.id)}>
-									<Icon name="history" size={14} />
-								</button>
-							{/if}
-						</div>
-						{#if workspace.sessions.length === 0 && startingWorkspaceId === workspace.id}
-							<p class="session-rail__empty">Starting a session…</p>
-						{:else if workspace.sessions.length === 0 && !restored && recent.length === 0 && (!recentStatus || recentStatus === 'ready')}
-							<p class="session-rail__empty">No sessions yet</p>
-						{/if}
-						<ul>
-							{#if restored}
-								<li>
-									<button
-										type="button"
-										id="session-row-restored"
-										class:active={restoredOpen}
-										title={restored.title}
-										aria-current={restoredOpen ? 'page' : undefined}
-										onclick={openRestored}>
-										{@render savedRowContent(restored.title, 'Stopped')}
-									</button>
-								</li>
-							{/if}
-							{#each workspace.sessions as session (session.id)}
-								<li>
-									{#if renamingSessionId === session.id}
-										<!-- svelte-ignore a11y_autofocus -->
-										<input
-											class="session-rail__rename pau-field"
-											aria-label="Session name"
-											autofocus
-											bind:value={renameDraft}
-											onblur={() => void commitRename(session)}
-											onkeydown={(event) => {
-												if (event.key === 'Enter') {
-													event.preventDefault();
-													void commitRename(session);
-												} else if (event.key === 'Escape') {
-													event.preventDefault();
-													event.stopPropagation();
-													cancelRename(session);
-												}
-											}} />
-									{:else}
-										<button
-											type="button"
-											id={`session-row-${session.id}`}
-											class="pau-row"
-											class:active={session.id === activeSessionId}
-											title={session.title}
-											aria-current={session.id === activeSessionId ? 'page' : undefined}
-											onclick={() => selectSession(session.id)}
-											oncontextmenu={(event) => openSessionMenu(event, session)}
-											onkeydown={(event) => {
-												if (isContextMenuKey(event)) {
-													openSessionMenu(event, session);
-													return;
-												}
-												if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-												event.preventDefault();
-												moveSession(session.id, event.key === 'ArrowDown' ? 1 : -1);
-											}}>
-											<SessionStatusMark status={session.status} label={statusLabel(session.status)} />
-											<span class="session-rail__name">{session.title}</span>
-											<span class="session-rail__state">
-												<small aria-hidden="true">{statusLabel(session.status)}</small>
-												{#if session.unseen && session.id !== activeSessionId}
-													{@const kind = markerKind(session.status)}
-													<span class={`session-rail__marker session-rail__marker--${kind}`} data-marker={kind}></span>
-													<span class="pau-visually-hidden">{markerLabel[kind]}</span>
-												{:else if hasAttention(session)}
-													<span class="pau-visually-hidden">Attention required</span>
-												{/if}
-											</span>
-										</button>
-									{/if}
-								</li>
-							{/each}
-							{#each recent as saved (saved.id)}
-								<li>
-									<button
-										type="button"
-										class="session-rail__saved"
-										title={saved.title}
-										disabled={disconnected || resumingSavedId !== undefined}
-										onclick={() => void resumeRecent(workspace.id, saved.id)}>
-										{@render savedRowContent(saved.title, resumingSavedId === saved.id ? 'Resuming…' : 'Stopped')}
-									</button>
-								</li>
-							{/each}
-						</ul>
-						{#if recentStatus === 'loading' && recentLoading.visible}
-							<p class="session-rail__empty" role="status">Loading saved sessions…</p>
-						{:else if recentStatus === 'failed'}
-							<div class="session-rail__recent-failure">
-								<p>Saved sessions did not load.</p>
-								<button
-									type="button"
-									class="pau-button pau-button--secondary"
-									disabled={disconnected}
-									onclick={() => void loadRecent(workspace.id)}>Try again</button>
-							</div>
-						{/if}
-					</section>
-				{/each}
-			{/if}
-			{#if railError}<p class="session-rail__error" role="alert">{railError}</p>{/if}
-		</nav>
+	{#snippet bay()}
+		<SessionBay
+			bind:this={sessionBay}
+			{workspaces}
+			{activeSessionId}
+			{restoredSession}
+			{restoredOpen}
+			{disconnected}
+			{loading}
+			{newSessionWorkspace}
+			{claudeReadiness}
+			starting={startingWorkspaceId !== undefined}
+			onSelectSession={selectSession}
+			onOpenRestoredSession={openRestored}
+			onStartSession={onStartSession &&
+				((workspaceId, agent) => {
+					const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
+					return workspace && startSession(workspace, agent);
+				})}
+			{onLoadSavedSessions}
+			onResumeSession={onResumeSession && resumeRecent}
+			onShowSavedSessions={onLoadSavedSessions && onResumeSession
+				? (workspaceId) => (pickerWorkspaceId = workspaceId)
+				: undefined}
+			onOpenWorkspace={onOpenWorkspace && (() => void chooseWorkspace())}
+			{onRenameSession}
+			{onCloneSession}
+			onStopSession={onStop} />
 	{/snippet}
 
-	{#snippet inspector()}
-		<SessionResourceSummary
-			snapshot={resourceSnapshot}
-			actions={{
-				interrupt: activeSession?.capabilities.interrupt ?? false,
-				stop: activeSession?.capabilities.stop ?? false
-			}}
-			onInterrupt={(sessionId) => onInterrupt(sessionId)}
-			onStop={(sessionId) => onStop(sessionId)} />
-		{#if activeSession && onLoadSessionTree && onBranchSession}
-			{@const session = activeSession}
-			{#key session.id}
-				<SessionTree
-					bind:this={sessionTree}
-					agent={session.agent}
-					supported={session.capabilities.branching === true}
-					load={() => onLoadSessionTree(session.id)}
-					onBranch={(entryId) => onBranchSession(session.id, entryId)}
-					onBranched={branched}
-					branchUnavailable={branchUnavailableReason(session, disconnected)}
-					revision={session.status === 'idle' ? session.transcript.length : null} />
+	<!-- Menus open from the transcript and from the workspace overlay, so they render outside both. -->
+	{#snippet layer()}
+		{#if contextMenu}
+			{#key contextMenu}
+				<ContextMenu request={contextMenu} onClose={() => (contextMenu = undefined)} />
 			{/key}
 		{/if}
 	{/snippet}
-
-	<!-- The menu renders in the main surface, which stays visible when the rails collapse. -->
-	{#if contextMenu}
-		{#key contextMenu}
-			<ContextMenu request={contextMenu} onClose={() => (contextMenu = undefined)} />
-		{/key}
-	{/if}
 
 	{#if pickerWorkspace && onLoadSavedSessions && onResumeSession}
 		{#key pickerWorkspace.id}
@@ -2455,7 +2347,7 @@
 				level={1}
 				titleId="open-workspace-title"
 				title={firstRun ? 'Open a folder to start working' : 'Open a workspace'}>
-				<p>Pau runs each session inside a workspace folder. Open a project folder to add it to the rail.</p>
+				<p>Pau runs each session inside a workspace folder. Open a project folder to add it to the bay.</p>
 				{#if pickFolder}
 					<button
 						type="button"
@@ -2526,19 +2418,14 @@
 		{/if}
 	{:else if restoredSession && restoredOpen}
 		<section class="session-view" aria-labelledby="restored-session-title">
-			<header class="session-view__header">
-				<div>
-					<p>Pi</p>
-					<h1 class="pau-view-title" id="restored-session-title">{restoredSession.title}</h1>
-				</div>
-				<div class="session-view__header-actions">
-					<div class="session-view__status session-view__status--stopped">
-						<SessionStatusMark status="stopped" label="Stopped" />
-						<span aria-hidden="true">Stopped</span>
-					</div>
-				</div>
-			</header>
-			<div class="session-view__notices">
+			<PageHeader title={restoredSession.title} titleId="restored-session-title" flush={false}>
+				{#snippet meta()}
+					<span class="pau-state">
+						<SessionStatusMark status="stopped" label="Stopped" /><span aria-hidden="true">Stopped</span>
+					</span>
+				{/snippet}
+			</PageHeader>
+			<div class="session-view__notices session-view__column">
 				{#if disconnected}
 					<p class="session-view__notice session-view__notice--attention" role="status">
 						<strong>Disconnected.</strong>
@@ -2566,21 +2453,32 @@
 		</section>
 	{:else if activeSession}
 		<section class="session-view" aria-labelledby="session-title">
-			<header class="session-view__header">
-				<div>
-					<p>
-						<MetaText
-							text={activeSession.model && !(onLoadModels && onSelectModel)
-								? `${activeSession.agent} · ${activeSession.model}`
-								: activeSession.agent} />
-					</p>
-					<h1 class="pau-view-title" id="session-title">{activeSession.title}</h1>
-				</div>
-				<div class="session-view__header-actions">
-					<div class={`session-view__status session-view__status--${activeSession.status}`}>
-						<SessionStatusMark status={headerStatus} label={headerStatusLabel} />
-						<span aria-hidden="true">{headerStatusLabel}</span>
-					</div>
+			<PageHeader
+				title={activeSession.title}
+				titleId="session-title"
+				flush={false}
+				danger={activeSession.capabilities.stop &&
+				(liveStatuses.has(activeSession.status) || activeSession.status === 'not_responding')
+					? stopAction
+					: undefined}>
+				{#snippet meta()}
+					<span class={['pau-state', headerTone(headerStatus)]}>
+						<SessionStatusMark status={headerStatus} label={headerStatusLabel} /><span aria-hidden="true"
+							>{headerStatusLabel}</span>
+					</span>
+				{/snippet}
+				{#snippet actions()}
+					{#if dock}
+						<button
+							type="button"
+							class="pau-button pau-button--quiet session-view__collapse"
+							aria-label={dockOpen ? 'Hide terminal dock' : 'Show terminal dock'}
+							aria-pressed={dockOpen}
+							title={dockShortcut ? `Terminal dock (${dockShortcut})` : 'Terminal dock'}
+							onclick={() => keymap?.run('panel.dock') || onDockToggle?.(!dockOpen)}>
+							<Icon name="terminal" size={16} /><span>Terminal</span>
+						</button>
+					{/if}
 					{#if canCompact && liveStatuses.has(activeSession.status)}
 						{@const compactReason = compactUnavailableReason(activeSession, disconnected, compacting)}
 						<div class="session-compact">
@@ -2607,8 +2505,11 @@
 									<p>Replace older messages with a summary to free up context.</p>
 									<label>
 										<span>Instructions (optional)</span>
-										<textarea bind:value={compactInstructions} rows="3" placeholder="What the summary should keep"
-										></textarea>
+										<textarea
+											class="pau-field"
+											bind:value={compactInstructions}
+											rows="3"
+											placeholder="What the summary should keep"></textarea>
 									</label>
 									<div>
 										<button
@@ -2627,27 +2528,19 @@
 						{@const exporting = exportingSessionIds.has(activeSession.id)}
 						<button
 							type="button"
-							class="pau-button pau-button--quiet"
+							class="pau-button pau-button--quiet session-view__collapse"
+							aria-label="Export"
 							aria-busy={exporting}
 							disabled={disconnected || exporting}
 							title={disconnected ? 'Pau is reconnecting to the backend.' : 'Save the conversation as a web page'}
 							onclick={() => void exportTranscript(activeSession)}>
-							Export
+							<Icon name="export" size={16} /><span>Export</span>
 						</button>
 					{/if}
-					{#if activeSession.capabilities.stop && (liveStatuses.has(activeSession.status) || activeSession.status === 'not_responding')}
-						<button
-							type="button"
-							class="pau-button pau-button--quiet"
-							disabled={disconnected}
-							onclick={() => void stop()}>
-							Stop
-						</button>
-					{/if}
-				</div>
-			</header>
+				{/snippet}
+			</PageHeader>
 
-			<div class="session-view__notices">
+			<div class="session-view__notices session-view__column">
 				{#if searchOpen && onSearchSession}
 					{#key activeSession.id}
 						<TranscriptSearch
@@ -2673,7 +2566,7 @@
 
 				{#if activeSession.status === 'starting'}
 					<p class="session-view__notice" role="status">Starting the agent process…</p>
-				{:else if activeSession.status === 'waiting'}
+				{:else if activeSession.status === 'waiting' && !activeRequest}
 					<p class="session-view__notice session-view__notice--attention" role="alert">
 						<strong>Attention required.</strong>
 						{activeSession.attention ?? 'The agent is waiting for your response.'}
@@ -2726,7 +2619,7 @@
 				data-following={following}
 				bind:this={transcriptElement}
 				use:followTranscript={{ key: activeSessionId, onChange: (next) => (following = next) }}>
-				<div class="session-view__transcript-content">
+				<div class="session-view__transcript-content session-view__column">
 					{#if activeSession.transcript.length === 0 && pendingTranscript.length === 0}
 						<EmptyState title="Start with a prompt">
 							<p>Describe the task, relevant files, and any limits the agent should follow.</p>
@@ -2873,6 +2766,17 @@
 							</article>
 						{/each}
 					{/if}
+					{#if activeRequest}
+						{#key activeRequest.id}
+							<RequestCard
+								request={activeRequest}
+								agent={activeSession.agent}
+								unavailable={disconnected
+									? 'Pau is reconnecting to the backend. You can answer once it reconnects.'
+									: undefined}
+								onRespond={(response) => onExtensionUiResponse(activeSession.id, response)} />
+						{/key}
+					{/if}
 				</div>
 			</div>
 
@@ -2892,7 +2796,7 @@
 				</button>
 			{/if}
 
-			<div class="session-view__composer-stack">
+			<div class="session-view__composer-stack session-view__column">
 				{#if queuedCount > 0 || pendingQueue.length > 0}
 					<section class="session-queue" aria-label="Queued messages">
 						<header>
@@ -3184,9 +3088,7 @@
 		<section class="session-view session-view--empty" aria-labelledby="empty-title">
 			<EmptyState level={1} titleId="empty-title" title="No session selected">
 				<p>
-					{onStartSession
-						? 'Select a session from the rail, or start one with the + button next to a workspace.'
-						: 'Select a session from the rail, or start one in this workspace.'}
+					{onStartSession ? 'Select a session in the bay, or start one with New.' : 'Select a session in the bay.'}
 				</p>
 				{@render readinessNotice(workspaces[0]?.id)}
 			</EmptyState>
@@ -3195,162 +3097,6 @@
 </ApplicationShell>
 
 <style>
-	/* Rows run edge to edge so the selected surface spans the rail. */
-	.session-rail {
-		padding: 0 0 var(--pau-space-4);
-	}
-
-	/* The workspace name gives way to its controls, which never shrink or clip. */
-	.session-rail__heading {
-		display: flex;
-		align-items: center;
-		gap: var(--pau-space-1);
-		min-width: 0;
-		padding-inline: var(--pau-space-2);
-	}
-
-	/* The quiet button rests with a border; the pseudo-element widens its hit area to 44px. */
-	.session-rail .session-rail__icon-button {
-		position: relative;
-		display: inline-flex;
-		flex: none;
-		align-items: center;
-		justify-content: center;
-		width: var(--pau-size-row-md);
-		min-height: 0;
-		height: var(--pau-size-row-md);
-		padding: 0;
-		color: var(--pau-text);
-		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-control);
-	}
-
-	.session-rail .session-rail__icon-button::after {
-		content: '';
-		position: absolute;
-		inset: calc((var(--pau-size-row-md) - var(--pau-size-target-touch)) / 2 - 1px);
-	}
-
-	.session-rail .session-rail__icon-button[aria-pressed='true'] {
-		color: var(--pau-accent);
-		background-color: var(--pau-surface-raised);
-	}
-
-	.session-rail .session-rail__icon-button:disabled {
-		cursor: not-allowed;
-	}
-
-	.session-rail section + section {
-		margin-top: var(--pau-space-4);
-	}
-
-	.session-rail h2 {
-		flex: 1;
-		min-width: 0;
-		margin: 0;
-		padding: var(--pau-space-2);
-		overflow: hidden;
-		color: var(--pau-text-muted);
-		font-size: var(--pau-type-sm);
-		font-weight: var(--pau-weight-medium);
-		text-overflow: ellipsis;
-		text-transform: none;
-		white-space: nowrap;
-	}
-
-	.session-rail ul {
-		display: grid;
-		gap: 0;
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	/*
-	 * The status mark gets a column as wide as the mark and sits one spacing step
-	 * from the name, as it does beside the status in the session header. The
-	 * mark lines up with the workspace name above it, and the session name
-	 * starts where the shell's context rail starts its labels. A shared
-	 * `pau-button` in the rail, such as Try again, keeps the shared style.
-	 * `:where` keeps this rule's weight, so rail classes still override it.
-	 */
-	.session-rail button:where(:not(.pau-button)) {
-		display: grid;
-		grid-template-columns: 0.5rem minmax(0, 1fr) auto;
-		align-items: center;
-		gap: var(--pau-space-2);
-		width: 100%;
-		min-height: var(--pau-size-row-md);
-		padding: 0 var(--pau-space-3) 0 var(--pau-space-4);
-		background-color: transparent;
-		border: 0;
-		font: inherit;
-		text-align: left;
-		cursor: pointer;
-	}
-
-	.session-rail button.active {
-		color: var(--pau-text);
-		background-color: var(--pau-surface-selected);
-		box-shadow: inset 2px 0 0 var(--pau-accent);
-	}
-
-	.session-rail__name {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.session-rail__state {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--pau-space-2);
-	}
-
-	.session-rail__marker {
-		flex: none;
-		width: 0.5rem;
-		height: 0.5rem;
-		border-radius: 50%;
-		background: var(--pau-info);
-	}
-
-	.session-rail__marker--waiting {
-		background: var(--pau-warning);
-	}
-
-	.session-rail__marker--failed {
-		background: var(--pau-danger);
-	}
-
-	.session-rail small {
-		color: inherit;
-		font-size: var(--pau-type-xs);
-	}
-
-	.session-rail .session-rail__open {
-		grid-template-columns: auto minmax(0, 1fr);
-		min-height: var(--pau-size-row-md);
-		width: calc(100% - 2 * var(--pau-space-2));
-		margin: 0 var(--pau-space-2) var(--pau-space-3);
-		padding-block: 0;
-		font-size: var(--pau-type-sm);
-		color: var(--pau-text);
-		border: 1px solid var(--pau-border);
-		border-radius: var(--pau-radius-control);
-	}
-
-	.session-rail .session-rail__open span {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.session-rail .session-rail__open:disabled {
-		color: var(--pau-text-muted);
-		cursor: not-allowed;
-	}
-
 	.session-open {
 		display: grid;
 		gap: var(--pau-space-3);
@@ -3374,55 +3120,16 @@
 		color: var(--pau-danger);
 	}
 
-	/* The inset matches the workspace name: heading inset plus the name's own padding. */
-	.session-rail__empty {
-		margin: 0;
-		padding: var(--pau-space-2) var(--pau-space-3) var(--pau-space-2) var(--pau-space-4);
-		color: var(--pau-text-muted);
-	}
-
-	.session-rail .session-rail__saved:disabled {
-		cursor: not-allowed;
-	}
-
-	.session-rail .session-rail__saved:disabled:hover {
-		color: var(--pau-text-muted);
-		background: transparent;
-	}
-
-	/* The message and its retry start at the workspace name's inset, like the empty note. */
-	.session-rail__recent-failure {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: var(--pau-space-2);
-		padding: var(--pau-space-2) var(--pau-space-3) var(--pau-space-2) var(--pau-space-4);
-	}
-
-	.session-rail__recent-failure p {
-		margin: 0;
-		color: var(--pau-danger);
-	}
-
-	/* The name stays at the inset of the session names around it. */
-	.session-rail__rename {
-		width: 100%;
-		padding-inline-start: var(--pau-space-4);
-	}
-
-	.session-rail__error {
-		margin: var(--pau-space-2) 0 0;
-		padding: var(--pau-space-2) var(--pau-space-4);
-		color: var(--pau-danger);
-		font-size: var(--pau-type-sm);
-	}
-
-	.session-rail h2:focus-visible,
 	.session-message:focus-visible {
 		outline: 2px solid var(--pau-focus);
 		outline-offset: 2px;
 	}
 
+	/*
+	 * The session runs edge to edge in the main surface: the page header
+	 * spans it, the transcript scrolls across it so its scrollbar sits at the
+	 * surface's edge, and the composer docks at its foot.
+	 */
 	.session-view {
 		display: grid;
 		grid-template-areas:
@@ -3431,24 +3138,42 @@
 			'transcript'
 			'composer';
 		grid-template-rows: auto auto minmax(0, 1fr) auto;
-		height: 100%;
+		height: calc(100% + 2 * var(--pau-shell-padding, 0px));
 		min-height: 0;
-		/*
-		 * The header, transcript, composer, and status line share one column,
-		 * so all four start and end on the same edges. Only transcript prose
-		 * keeps a narrower reading measure inside it.
-		 */
-		max-width: 58rem;
+		margin: calc(-1 * var(--pau-shell-padding, 0px));
+	}
+
+	.session-view > :global(.page-header) {
+		grid-area: header;
+	}
+
+	/*
+	 * The transcript, notices and composer share one column, at most 58rem
+	 * with 24px gutters, so they start and end on the same edges. Only
+	 * transcript prose keeps a narrower reading measure inside it.
+	 */
+	.session-view__column {
+		width: 100%;
+		max-width: calc(58rem + 2 * var(--pau-space-5));
 		margin-inline: auto;
+		padding-inline: var(--pau-space-5);
 	}
 
 	/*
 	 * Empty states and the saved-session picker read as a top-aligned panel.
 	 * Centering them vertically left a lone heading floating in a tall pane,
-	 * far from the rail and the actions it describes.
+	 * far from the bay and the actions it describes.
+	 */
+	/*
+	 * Empty states start on the transcript column's leading edge, where the
+	 * session title and prose would start, instead of centering in a pane
+	 * that has no workspace column beside it.
 	 */
 	.session-view--empty {
 		align-items: start;
+		max-width: 58rem;
+		height: 100%;
+		margin: 0;
 	}
 
 	/* Stand-alone empty states share the transcript column, so their text starts at its left edge. */
@@ -3456,41 +3181,16 @@
 		grid-area: transcript;
 	}
 
-	.session-view__header {
-		grid-area: header;
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: var(--pau-space-4);
-		padding-bottom: var(--pau-space-4);
-		border-bottom: 1px solid var(--pau-border);
-	}
-
-	.session-view__header p,
-	.session-view__header h1,
 	.session-message h2,
 	.session-message p,
 	.session-view__notice {
 		margin: 0;
 	}
 
-	.session-view__header p,
 	.session-message h2 {
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
 		font-weight: var(--pau-weight-medium);
-	}
-
-	.session-view__header h1 {
-		margin-top: var(--pau-space-1);
-		text-wrap: balance;
-	}
-
-	.session-view__header-actions {
-		display: flex;
-		align-items: center;
-		gap: var(--pau-space-3);
-		flex: none;
 	}
 
 	.session-view__retry {
@@ -3527,23 +3227,6 @@
 
 	.session-view__auto-retry button {
 		flex: none;
-	}
-
-	.session-view__status {
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		gap: var(--pau-space-2);
-		flex: none;
-		/*
-		 * Fits the longest label so the actions beside it never move. The label
-		 * sits at the trailing edge, beside the actions, instead of leaving the
-		 * spare width as a gap before them.
-		 */
-		width: 7.5rem;
-		color: var(--pau-text-muted);
-		font-size: var(--pau-type-xs);
-		white-space: nowrap;
 	}
 
 	.session-view__notices {
@@ -3594,9 +3277,8 @@
 	 */
 	.session-view__transcript {
 		grid-area: transcript;
-		margin-right: calc(var(--pau-space-4) * -1);
-		padding-right: var(--pau-space-4);
 		overflow: auto;
+		overscroll-behavior: contain;
 	}
 
 	.session-view__transcript-content {
@@ -3821,11 +3503,10 @@
 	}
 
 	.session-view__composer-stack {
-		position: sticky;
 		grid-area: composer;
-		bottom: 0;
 		display: grid;
 		gap: var(--pau-space-2);
+		padding-bottom: var(--pau-space-4);
 	}
 
 	.session-queue {
@@ -4120,7 +3801,6 @@
 		gap: var(--pau-space-2);
 		padding: var(--pau-space-2);
 		border-top: 1px solid var(--pau-border);
-		font-size: var(--pau-type-xs);
 	}
 
 	.session-composer__options {
@@ -4130,16 +3810,6 @@
 		align-items: center;
 		gap: var(--pau-space-2);
 		min-width: 0;
-	}
-
-	/*
-	 * The footer pickers keep the footer's meta size and a 4px inset, so the
-	 * options still share one row with the actions in today's composer
-	 * column. They keep the shared 32px height.
-	 */
-	.session-composer__options :global(.pau-field--quiet) {
-		padding-inline: var(--pau-space-1);
-		font-size: inherit;
 	}
 
 	/* Svelte leaves whitespace and anchors behind, so :empty never matches. */
@@ -4157,13 +3827,6 @@
 		font-size: var(--pau-type-md);
 	}
 
-	.session-composer kbd {
-		color: inherit;
-		font: inherit;
-		font-size: var(--pau-type-xs);
-		opacity: 0.75;
-	}
-
 	.session-composer__hint {
 		margin: 0;
 		padding: var(--pau-space-2) var(--pau-space-3);
@@ -4179,15 +3842,104 @@
 		border-top: 1px solid var(--pau-border);
 	}
 
-	@media (max-width: 40rem) {
-		.session-view__header {
-			align-items: start;
-		}
-	}
-
 	@media (pointer: coarse) {
 		.session-thinking summary {
 			min-height: var(--pau-size-target-touch);
+		}
+	}
+
+	/* The workspace column: changes, branch and sandbox, terminals, and the conversation tree. */
+	.session-workspace__head {
+		display: flex;
+		align-items: center;
+		gap: var(--pau-space-2);
+		min-width: 0;
+	}
+
+	.session-workspace__title {
+		flex: 1;
+		margin: 0;
+		font-size: var(--pau-type-sm);
+		font-weight: var(--pau-weight-medium);
+		line-height: var(--pau-leading-tight);
+	}
+
+	.session-workspace__menu {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: var(--pau-size-row-md);
+		height: var(--pau-size-row-md);
+		padding: 0;
+		border: 0;
+		border-radius: var(--pau-radius-control);
+	}
+
+	.session-workspace__section {
+		padding-bottom: var(--pau-space-2);
+	}
+
+	.session-workspace__list {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.session-workspace__list :global(.pau-strip) {
+		width: 100%;
+	}
+
+	.session-workspace__note {
+		margin: 0;
+		padding: var(--pau-space-2) var(--pau-space-4) 0;
+		color: var(--pau-text-muted);
+		font-size: var(--pau-type-sm);
+		line-height: var(--pau-leading-prose);
+	}
+
+	.session-workspace__peek {
+		margin: var(--pau-space-2) var(--pau-space-4) 0;
+		overflow: hidden;
+		background-color: var(--pau-canvas);
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-control);
+	}
+
+	.session-workspace__peek > :global(.pau-strip) {
+		width: 100%;
+		padding-inline: var(--pau-space-3);
+	}
+
+	.session-workspace__peek > :global(.pau-strip + .pau-strip) {
+		border-top: 1px solid var(--pau-border);
+	}
+
+	.session-workspace__peek > .session-workspace__note {
+		padding: var(--pau-space-2) var(--pau-space-3);
+	}
+
+	.session-workspace__open-terminal {
+		margin: 0 var(--pau-space-1) var(--pau-space-1);
+	}
+
+	.session-workspace__tree {
+		padding: var(--pau-space-2) var(--pau-space-4) var(--pau-space-4);
+	}
+
+	/* Header actions marked collapsible drop to their icon below 1200px. */
+	@media (max-width: 1199.98px) {
+		.session-view__collapse {
+			width: var(--pau-size-row-md);
+			padding: 0;
+		}
+
+		.session-view__collapse > span {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+			white-space: nowrap;
 		}
 	}
 </style>

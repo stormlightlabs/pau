@@ -4,6 +4,7 @@
 
 	import { createFocusReturn } from './focus-return';
 	import Icon from './Icon.svelte';
+	import { permissionRequest } from './permission-request';
 	import type { ExtensionUiResponse, ExtensionUiState } from './types/session';
 
 	type Props = {
@@ -23,7 +24,12 @@
 	let selectedOption = $state(0);
 	const focusReturn = createFocusReturn();
 
-	const dialog = $derived(extensionState.dialog?.id === expiredDialogId ? undefined : extensionState.dialog);
+	/** The dialog to show. A permission request renders as the session's request card instead. */
+	const dialog = $derived(
+		extensionState.dialog?.id === expiredDialogId || permissionRequest(extensionState.dialog)
+			? undefined
+			: extensionState.dialog
+	);
 	const aboveWidgets = $derived(extensionState.widgets.filter((widget) => widget.placement === 'above-editor'));
 	const belowWidgets = $derived(extensionState.widgets.filter((widget) => widget.placement === 'below-editor'));
 
@@ -37,22 +43,15 @@
 		return () => clearTimeout(timer);
 	});
 
-	/** Parsed form of a structured title: Pau's permission payload, or any other JSON the extension sent. */
-	type TitleDetail =
-		{ kind: 'permission'; rows: { label: string; value: string }[] } | { kind: 'structured'; text: string };
+	/** Parsed form of a structured title: any JSON the extension sent. */
+	type TitleDetail = { kind: 'structured'; text: string };
 
 	const MAX_STRUCTURED_TITLE = 600;
-	const PERMISSION_ROWS = [
-		['tool', 'Tool'],
-		['command', 'Command'],
-		['cwd', 'Working directory']
-	] as const;
 
 	/**
-	 * Reads a title that is a JSON object or array. Pau's permission extension sends
-	 * `{"pau":"permission","tool","command","cwd"}`; showing that as the dialog title would
-	 * expose raw JSON, so it becomes labelled rows. Other structured titles become a trimmed
-	 * code block. Plain text titles return nothing.
+	 * Reads a title that is a JSON object or array. Showing it as the dialog
+	 * title would expose raw JSON, so it becomes a trimmed code block. Plain
+	 * text titles return nothing.
 	 */
 	function titleDetail(title: string): TitleDetail | undefined {
 		const text = title.trim();
@@ -64,14 +63,6 @@
 			return undefined;
 		}
 		if (typeof parsed !== 'object' || parsed === null) return undefined;
-		const fields = parsed as Record<string, unknown>;
-		if (fields.pau === 'permission') {
-			const rows = PERMISSION_ROWS.flatMap(([key, label]) => {
-				const value = fields[key];
-				return typeof value === 'string' && value ? [{ label, value }] : [];
-			});
-			if (rows.length > 0) return { kind: 'permission', rows };
-		}
 		const pretty = JSON.stringify(parsed, null, 2);
 		return {
 			kind: 'structured',
@@ -80,8 +71,7 @@
 	}
 
 	function headingFor(title: string, detail: TitleDetail | undefined): string {
-		if (!detail) return title;
-		return detail.kind === 'permission' ? 'Permission request' : 'Extension request';
+		return detail ? 'Extension request' : title;
 	}
 
 	function openDialog(): void {
@@ -102,8 +92,7 @@
 	$effect(() => {
 		if (!dialog?.id) return;
 		responseError = undefined;
-		// A permission request starts with nothing chosen so Enter cannot approve a tool call by accident.
-		selectedOption = titleDetail(dialog.kind === 'select' ? dialog.title : '')?.kind === 'permission' ? -1 : 0;
+		selectedOption = 0;
 		queueMicrotask(openDialog);
 		return closeDialog;
 	});
@@ -191,16 +180,7 @@
 		{:else}
 			{@const detail = titleDetail(dialog.title)}
 			<h2 id={`extension-dialog-${dialog.id}`}>{headingFor(dialog.title, detail)}</h2>
-			{#if detail?.kind === 'permission'}
-				<dl class="extension-ui__details">
-					{#each detail.rows as row (row.label)}
-						<div>
-							<dt>{row.label}</dt>
-							<dd>{row.value}</dd>
-						</div>
-					{/each}
-				</dl>
-			{:else if detail}
+			{#if detail}
 				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 				<pre class="extension-ui__code" tabindex="0"><code>{detail.text}</code></pre>
 			{/if}
@@ -344,7 +324,6 @@
 	/* Extensions control these strings, and some send long unbroken text such as JSON. */
 	.extension-ui__dialog h2,
 	.extension-ui__dialog p,
-	.extension-ui__details dd,
 	.extension-ui__option span,
 	.extension-ui__notification {
 		overflow-wrap: anywhere;
@@ -421,29 +400,6 @@
 	.extension-ui__option:has(input:focus-visible) {
 		outline: var(--pau-focus-width) solid var(--pau-focus);
 		outline-offset: calc(var(--pau-focus-width) * -1);
-	}
-
-	.extension-ui__details {
-		display: grid;
-		gap: var(--pau-space-2);
-		margin: var(--pau-space-3) 0 0;
-	}
-
-	.extension-ui__details div {
-		display: grid;
-		gap: var(--pau-space-1);
-	}
-
-	.extension-ui__details dt {
-		color: var(--pau-text-muted);
-		font-size: var(--pau-type-sm);
-	}
-
-	.extension-ui__details dd {
-		margin: 0;
-		font-family: var(--pau-font-code);
-		font-variant-ligatures: none;
-		font-size: var(--pau-type-sm);
 	}
 
 	.extension-ui__code {

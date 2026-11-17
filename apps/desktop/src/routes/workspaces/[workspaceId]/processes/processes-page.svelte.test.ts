@@ -8,19 +8,12 @@ vi.mock('$app/state', () => ({
 	page: { params: { workspaceId: 'pau' }, route: { id: '/workspaces/[workspaceId]/processes' } }
 }));
 
-vi.mock('$lib/api', async (importOriginal) => ({
-	...(await importOriginal<object>()),
-	listWorkspaces: async () => [{ id: 'pau', name: 'Pau', path: '/src/pau' }]
-}));
-
 test('shows processes inside the application shell without sample data', async () => {
 	await page.viewport(900, 560);
 	await render(ProcessesPage);
 
-	const rail = page.getByRole('navigation', { name: 'Product' });
-	await expect.element(rail).toBeVisible();
-	await expect.element(page.getByRole('banner')).toBeVisible();
-	await expect.element(rail.getByLabelText('Processes', { exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect.element(page.getByRole('navigation', { name: 'Views' })).toBeVisible();
+	await expect.element(page.getByRole('heading', { name: 'Processes', level: 1 })).toBeVisible();
 
 	await expect.element(page.getByRole('heading', { name: "Process monitoring isn't available" })).toBeVisible();
 	expect(page.getByRole('table').elements()).toHaveLength(0);

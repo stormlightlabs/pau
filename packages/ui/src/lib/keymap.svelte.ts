@@ -154,6 +154,7 @@ export const APP_KEY_ACTIONS: readonly KeyAction[] = [
 		whileTyping: true,
 		unavailable: SESSIONS_ONLY
 	},
+	{ id: 'bay.filter', label: 'Filter sessions', group: 'Navigation', keys: ['/'], palette: false },
 	{
 		id: 'composer.focus',
 		label: 'Focus the composer',
@@ -179,8 +180,13 @@ export const APP_KEY_ACTIONS: readonly KeyAction[] = [
 	},
 	{ id: 'navigate.back', label: 'Go back', group: 'Navigation', keys: ['mod+['] },
 	{ id: 'navigate.forward', label: 'Go forward', group: 'Navigation', keys: ['mod+]'] },
-	{ id: 'panel.context', label: 'Toggle the session rail', group: 'Panels', keys: ['mod+b'], whileTyping: true },
-	{ id: 'panel.inspector', label: 'Toggle the inspector', group: 'Panels', keys: ['mod+alt+b'], whileTyping: true },
+	{
+		id: 'panel.inspector',
+		label: 'Toggle the workspace column',
+		group: 'Panels',
+		keys: ['mod+alt+b'],
+		whileTyping: true
+	},
 	{
 		id: 'panel.dock',
 		label: 'Toggle the terminal dock',
@@ -412,11 +418,17 @@ const KEYMAP_OFF = [
 	'[data-keymap="off"]'
 ].join(', ');
 
-function isTextField(element: Element): boolean {
+/**
+ * Whether a key press lands where it types text: an input, text area,
+ * select or editable element. Single-key shortcuts, such as `/` or a
+ * request card's Y, give way there.
+ */
+export function isTextField(target: EventTarget | null): boolean {
 	return (
-		element instanceof HTMLInputElement ||
-		element instanceof HTMLTextAreaElement ||
-		element instanceof HTMLSelectElement
+		target instanceof HTMLInputElement ||
+		target instanceof HTMLTextAreaElement ||
+		target instanceof HTMLSelectElement ||
+		(target instanceof HTMLElement && target.isContentEditable)
 	);
 }
 
@@ -539,7 +551,7 @@ export class Keymap {
 		if (chord === undefined) return undefined;
 		const target = event.target instanceof Element ? event.target : undefined;
 		if (target?.closest(KEYMAP_OFF)) return undefined;
-		const typing = target !== undefined && isTextField(target);
+		const typing = isTextField(target ?? null);
 		for (const action of this.actions) {
 			const index = action.keys.indexOf(chord);
 			if (index === -1 || !this.canRun(action.id)) continue;

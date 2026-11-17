@@ -45,12 +45,6 @@
 	}
 </script>
 
-<ApplicationShell
-	workspaceName="Settings"
-	contextLabel="Sections"
-	{productItems}
-	{contextItems}
-	theme={choices.theme}
-	uiFont={choices.uiFont}>
+<ApplicationShell contextLabel="Sections" {productItems} {contextItems} theme={choices.theme} uiFont={choices.uiFont}>
 	<SettingsView {...choices} onChange={save} shortcuts={keymap.actions} platform={keymap.platform} />
 </ApplicationShell>

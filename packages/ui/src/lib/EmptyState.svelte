@@ -5,7 +5,7 @@
 	/**
 	 * Shared empty, loading, and not-yet-started state for a task surface. It
 	 * starts at the surface's content column and stays top-aligned, so the
-	 * heading sits next to the rail and actions it describes instead of floating
+	 * heading sits next to the bay and actions it describes instead of floating
 	 * in the middle of a tall pane. The surface sets `--empty-state-inset` to
 	 * the left inset of its own content (for example a view header's padding)
 	 * and passes the body and actions as children. Body copy goes in `<p>`.

@@ -80,7 +80,6 @@ export const Narrow: Story = {
 	parameters: { viewport: { defaultViewport: 'narrow' } },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		await userEvent.click(canvas.getByRole('button', { name: 'Open navigation' }));
 		await expect(await canvas.findByRole('tree', { name: 'pau files' })).toBeInTheDocument();
 	}
 };

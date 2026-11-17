@@ -1,3 +1,4 @@
+import type { WorkspaceGitStatus } from './workspace-files';
 import type { PromptImage } from '../composer-images';
 
 /** An agent Pau can start a session of, by the backend's identifier. */
@@ -363,6 +364,12 @@ export type SessionViewModel = {
 	 */
 	unseen?: boolean;
 	error?: string;
+	/**
+	 * Whether the operator started this ended session again, which runs as a
+	 * new session. It keeps its status and error as history and racks in
+	 * Settled instead of Needs you.
+	 */
+	restarted?: boolean;
 	capabilities: SessionCapabilities;
 	transcript: TranscriptEntry[];
 	extensionUi?: ExtensionUiState;
@@ -380,7 +387,24 @@ export type SessionWorkspace = {
 	path?: string;
 	/** The current Git branch. Absent outside a repository, on a detached HEAD, or until it is read. */
 	branch?: string;
+	/** Changed files and HEAD from Git, once read. The workspace column lists the changes. */
+	git?: WorkspaceGitStatus;
+	/** Whether new agent sessions start sandboxed, with a one-line summary such as "Sandbox on, network off". */
+	sandbox?: { sandboxed: boolean; label: string };
+	/** Terminals open in the workspace, newest last. */
+	terminals?: WorkspaceTerminal[];
 	sessions: SessionViewModel[];
+};
+
+/** A terminal open in a workspace, as the workspace column lists it. */
+export type WorkspaceTerminal = {
+	id: string;
+	/** The program it runs, such as `zsh`. */
+	label: string;
+	/** Its state in words, such as "Running" or "Exited 1". */
+	status: string;
+	/** Whether it has exited with a failure. */
+	failed?: boolean;
 };
 
 /** Queue used when the operator sends text during an active run. */

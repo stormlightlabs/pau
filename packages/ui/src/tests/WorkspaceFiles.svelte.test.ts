@@ -27,14 +27,18 @@ function source(overrides: Partial<WorkspaceFileSource> = {}): WorkspaceFileSour
 	};
 }
 
-async function openNavigation(): Promise<void> {
-	await userEvent.click(page.getByRole('button', { name: 'Open navigation' }));
-}
-
 async function renderFiles(fileSource: WorkspaceFileSource = source()): Promise<void> {
 	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: fileSource });
-	await openNavigation();
 }
+
+test('shows the six views of the app, with Files current, when the app passes none', async () => {
+	await renderFiles();
+
+	const views = page.getByRole('navigation', { name: 'Views' });
+	expect(views.getByRole('listitem').elements()).toHaveLength(6);
+	await expect.element(views.getByRole('link', { name: 'Files' })).toHaveAttribute('aria-current', 'page');
+	await expect.element(views.getByRole('link', { name: 'Pi resources' })).toBeVisible();
+});
 
 test('shows loading, empty, and permission-error states', async () => {
 	const pending = new Promise<never>(() => {});
@@ -43,7 +47,6 @@ test('shows loading, empty, and permission-error states', async () => {
 		workspaceName: 'pau',
 		source: source({ listDirectory: async () => pending })
 	});
-	await openNavigation();
 	await expect.element(page.getByRole('status')).toHaveTextContent('Loading workspace files');
 	view.unmount();
 
@@ -52,7 +55,6 @@ test('shows loading, empty, and permission-error states', async () => {
 		workspaceName: 'pau',
 		source: source({ listDirectory: async () => [] })
 	});
-	await openNavigation();
 	await expect.element(page.getByText('No visible files in this workspace.')).toBeInTheDocument();
 	emptyView.unmount();
 
@@ -70,7 +72,6 @@ test('shows loading, empty, and permission-error states', async () => {
 
 test('shows branch and changed-file states with text labels', async () => {
 	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source() });
-	await openNavigation();
 
 	await expect.element(page.getByText('feature/git-status')).toBeInTheDocument();
 	const changes = page.getByRole('list', { name: 'Changed files' });
@@ -88,7 +89,6 @@ test('shows branch and changed-file states with text labels', async () => {
 
 test('keeps the file name visible when a long changed path truncates', async () => {
 	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source() });
-	await openNavigation();
 
 	const row = page.getByRole('list', { name: 'Changed files' }).getByRole('button').first();
 	await expect.element(row).toBeInTheDocument();
@@ -108,7 +108,6 @@ test('keeps the file name visible when a long changed path truncates', async () 
 
 test('sets changed-file rows in the same weight as tree rows', async () => {
 	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source() });
-	await openNavigation();
 
 	const changeRow = page.getByRole('list', { name: 'Changed files' }).getByRole('button').first();
 	const treeItem = page.getByRole('treeitem').first();
@@ -123,7 +122,6 @@ test('sets changed-file rows in the same weight as tree rows', async () => {
 
 test('labels file search as a section label', async () => {
 	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source() });
-	await openNavigation();
 
 	const label = page.getByText('Search files').element();
 	expect(getComputedStyle(label).textTransform).toBe('uppercase');
@@ -131,7 +129,6 @@ test('labels file search as a section label', async () => {
 
 test('navigates changed files with pointer and keyboard', async () => {
 	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source() });
-	await userEvent.click(page.getByRole('button', { name: 'Show inspector' }));
 	const files = page.getByRole('list', { name: 'Files to review' });
 	const first = files.getByRole('button').first();
 	await userEvent.click(first);
@@ -156,7 +153,6 @@ test('shows detached HEAD and non-repository states', async () => {
 		workspaceName: 'pau',
 		source: source({ gitStatus: async () => detached })
 	});
-	await openNavigation();
 	await expect.element(page.getByText('Detached at 1234567')).toBeInTheDocument();
 	view.unmount();
 
@@ -221,14 +217,12 @@ test('renders and opens a large search result set', async () => {
 		source: source({ search: async () => matches }),
 		onOpenFile
 	});
-	await openNavigation();
 
 	await userEvent.type(page.getByRole('searchbox', { name: 'Search files' }), 'needle');
 	await userEvent.keyboard('{Enter}');
 	await expect.element(page.getByText('250 matches')).toBeInTheDocument();
 	const results = page.getByRole('list', { name: 'File search results' });
 	await expect.element(results.getByRole('button')).toHaveLength(250);
-	await userEvent.click(page.getByRole('button', { name: 'Close navigation' }));
 	await userEvent.click(results.getByRole('button').first());
 	expect(onOpenFile).toHaveBeenCalledWith('packages/example-0/src/file-with-a-long-name-0.ts', 1);
 });
@@ -245,7 +239,6 @@ test('opens a file menu from the keyboard and runs its path actions', async () =
 		revealPath,
 		onOpenFile
 	});
-	await openNavigation();
 	const readme = page.getByRole('treeitem', { name: /README\.md/ });
 	await expect.element(readme).toBeVisible();
 	const openMenu = async () => {
@@ -275,42 +268,8 @@ test('opens a file menu from the keyboard and runs its path actions', async () =
 	writeText.mockRestore();
 });
 
-test('opens a keyboard menu beside its row when the narrow rail is still sliding in', async () => {
-	const [initialWidth, initialHeight] = [window.innerWidth, window.innerHeight];
-	onTestFinished(() => page.viewport(initialWidth, initialHeight));
-	await page.viewport(640, 900);
-	// A long slide keeps the rail moving while the menu opens, however slow the run.
-	const slow = document.createElement('style');
-	slow.textContent = '.app-shell__context-rail { transition-duration: 60s !important; }';
-	document.head.append(slow);
-	onTestFinished(() => slow.remove());
-	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source() });
-	await expect.element(page.getByText('README.md')).toBeInTheDocument();
-
-	await openNavigation();
-	const row = page.getByRole('treeitem', { name: /README\.md/ });
-	await expect.element(row).toBeInTheDocument();
-	const readme = row.element() as HTMLElement;
-	readme.focus();
-	await userEvent.keyboard('{Shift>}{F10}{/Shift}');
-	const menu = page.getByRole('menu', { name: 'README.md actions' });
-	await expect.element(menu).toBeInViewport({ ratio: 1 });
-
-	const rail = readme.closest('.app-shell__context-rail')!;
-	for (const animation of rail.getAnimations()) animation.finish();
-	await expect
-		.poll(() => {
-			const box = menu.element().getBoundingClientRect();
-			const bounds = readme.getBoundingClientRect();
-			return [box.left - Math.round(bounds.left), box.top - Math.round(bounds.bottom)];
-		})
-		.toEqual([8, 0]);
-	await expect.element(menu).toBeInViewport({ ratio: 1 });
-});
-
 test('offers only path actions for a folder and reports a failed action', async () => {
 	await render(WorkspaceFiles, { workspaceId: 'pau', workspaceName: 'pau', source: source(), revealPath: vi.fn() });
-	await openNavigation();
 	const writeText = vi
 		.spyOn(navigator.clipboard, 'writeText')
 		.mockRejectedValue(new Error('Clipboard is unavailable.'));
@@ -358,7 +317,7 @@ for (const width of [1440, 900]) {
 		const one = (selector: string): Element => container.querySelector(selector)!;
 
 		const railEdges = [
-			textLeft(one('.app-shell__context-rail .app-shell__rail-heading span')),
+			textLeft(one('.app-shell__context-heading .pau-section-label')),
 			one('.workspace-files__git-branch > :first-child').getBoundingClientRect().left,
 			one('.workspace-files__git li button > :first-child').getBoundingClientRect().left,
 			textLeft(one('.workspace-files__search label')),
@@ -407,7 +366,6 @@ test('follows changes on disk in the tree, branch, and open file, and stops when
 		}),
 		editorSource: { read: async () => structuredClone(readme), write: async () => structuredClone(readme) }
 	});
-	await openNavigation();
 	await userEvent.click(page.getByRole('treeitem', { name: 'dev', exact: true }));
 	await expect.element(page.getByRole('treeitem', { name: 'ROADMAP.md' })).toBeInTheDocument();
 	await userEvent.click(page.getByRole('treeitem', { name: 'README.md' }));

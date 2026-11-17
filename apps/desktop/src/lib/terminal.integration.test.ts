@@ -25,18 +25,16 @@ const { connection, workspaceId, editors } = inject('pauApi');
 Object.defineProperty(globalThis, DESKTOP_CONNECTION_GLOBAL, { value: Object.freeze(connection) });
 
 // Terminals outlive the surface, so close each test's terminals before the
-// next test mounts a surface that would reattach them.
+// next test mounts a surface that would reattach them. The viewport also
+// outlives a test, and a narrow one wraps the prompt that later tests match.
 afterEach(async () => {
 	const terminals = await listTerminals();
 	for (const terminal of terminals) await closeTerminal(terminal.id);
+	await page.viewport(1440, 900);
 });
 
 function renderSurface(theme: ThemeName = 'eldritch') {
-	return render(TerminalSurface, {
-		workspaceName: 'integration',
-		source: createTerminalSource(location.origin, workspaceId),
-		theme
-	});
+	return render(TerminalSurface, { source: createTerminalSource(location.origin, workspaceId), theme });
 }
 
 function terminalRows(label: string): HTMLElement[] {

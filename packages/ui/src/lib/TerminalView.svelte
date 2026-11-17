@@ -387,10 +387,18 @@
 		overflow: hidden;
 	}
 
-	/* Fit subtracts the terminal element's padding, not the container's. */
+	/*
+	 * Fit subtracts the terminal element's padding, not the container's.
+	 * xterm draws rows as text, so the font would join `->` and `!=` into
+	 * ligatures that break the character grid. The code face keeps them off.
+	 */
 	.terminal-view__screen :global(.xterm) {
 		height: 100%;
 		padding: var(--pau-space-2);
+		font-variant-ligatures: none;
+		font-feature-settings:
+			'liga' 0,
+			'calt' 0;
 	}
 
 	/*

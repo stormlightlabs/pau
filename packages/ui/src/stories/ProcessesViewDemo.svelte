@@ -24,7 +24,6 @@
 
 {#snippet view()}
 	<ProcessesView
-		workspaceName="Pau"
 		{processes}
 		{unavailable}
 		actions={Object.fromEntries(processes.map((process) => [process.processId, { interrupt: true, stop: true }]))}
@@ -33,7 +32,7 @@
 {/snippet}
 
 {#if inShell}
-	<ApplicationShell workspaceName="Pau" contextLabel="Processes" {productItems} contextItems={[]}>
+	<ApplicationShell contextLabel="Processes" {productItems}>
 		{@render view()}
 	</ApplicationShell>
 {:else}

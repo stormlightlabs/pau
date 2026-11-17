@@ -17,6 +17,7 @@
 		WorkspaceSearchMatch,
 		WorkspaceTraversalOptions
 	} from './types/workspace-files';
+	import { shellViews } from '../fixtures/application-shell';
 	import ApplicationShell, { type ShellNavItem, type ShellPaneWidths } from './ApplicationShell.svelte';
 	import ContextMenu from './ContextMenu.svelte';
 	import {
@@ -67,12 +68,7 @@
 		onPaneResize?: (widths: ShellPaneWidths) => void;
 	};
 
-	const defaultProductItems: ShellNavItem[] = [
-		{ id: 'sessions', label: 'Sessions', icon: 'agents' },
-		{ id: 'files', label: 'Files', icon: 'files', active: true },
-		{ id: 'resources', label: 'Resources', icon: 'resources' },
-		{ id: 'settings', label: 'Settings', icon: 'settings' }
-	];
+	const defaultProductItems = shellViews('files');
 
 	let {
 		workspaceId,
@@ -520,12 +516,11 @@
 </script>
 
 <ApplicationShell
-	{workspaceName}
 	contextLabel="Files"
+	workspaceLabel="Review changes"
 	{productItems}
 	contextItems={[]}
 	{disconnected}
-	inspectorOpen={false}
 	{theme}
 	{uiFont}
 	{paneWidths}
@@ -664,7 +659,7 @@
 		</section>
 	{/snippet}
 
-	{#snippet inspector()}
+	{#snippet workspace()}
 		<section class="workspace-files__review" aria-label="Review changes">
 			<header>
 				<div>
@@ -807,8 +802,8 @@
 	.workspace-files__git {
 		display: grid;
 		gap: var(--pau-space-1);
-		padding: 0 var(--shell-inset) var(--pau-space-3);
-		border-bottom: 1px solid var(--shell-border);
+		padding: 0 var(--pau-shell-inset) var(--pau-space-3);
+		border-bottom: 1px solid var(--pau-border);
 	}
 
 	.workspace-files__git p {
@@ -816,11 +811,11 @@
 		align-items: center;
 		gap: var(--pau-space-2);
 		margin: 0;
-		color: var(--shell-muted);
+		color: var(--pau-text-muted);
 	}
 
 	.workspace-files__git-error {
-		color: var(--shell-danger) !important;
+		color: var(--pau-danger) !important;
 	}
 
 	.workspace-files__git-branch {
@@ -828,7 +823,7 @@
 		grid-template-columns: 0.875rem minmax(0, 1fr) auto;
 		align-items: center;
 		gap: var(--pau-space-2);
-		min-height: var(--pau-size-row-sm);
+		min-height: var(--pau-size-row-md);
 	}
 
 	.workspace-files__git-branch strong {
@@ -853,7 +848,7 @@
 		flex: 0 1 auto;
 		min-width: 0;
 		overflow: hidden;
-		color: var(--shell-muted);
+		color: var(--pau-text-muted);
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		direction: rtl;
@@ -869,7 +864,7 @@
 
 	.workspace-files__git-branch small,
 	.workspace-files__git li small {
-		color: var(--shell-muted);
+		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
 		white-space: nowrap;
 	}
@@ -877,7 +872,7 @@
 	.workspace-files__git ul {
 		display: grid;
 		max-height: 10rem;
-		margin: 0 calc(-1 * var(--shell-inset));
+		margin: 0 calc(-1 * var(--pau-shell-inset));
 		padding: 0;
 		overflow: auto;
 		list-style: none;
@@ -889,9 +884,9 @@
 		align-items: center;
 		gap: var(--pau-space-2);
 		width: 100%;
-		min-height: var(--pau-size-row-sm);
-		padding: var(--pau-space-1) var(--shell-inset);
-		color: var(--shell-text);
+		min-height: var(--pau-size-row-md);
+		padding: var(--pau-space-1) var(--pau-shell-inset);
+		color: var(--pau-text);
 		border: 0;
 		text-align: start;
 		font: inherit;
@@ -925,15 +920,15 @@
 	.workspace-files__review header small,
 	.workspace-files__review > p,
 	.workspace-files__review li small {
-		color: var(--shell-muted);
+		color: var(--pau-text-muted);
 	}
 
 	.workspace-files__review header button {
 		width: 1.75rem;
-		height: var(--pau-size-row-sm);
-		color: var(--shell-text);
-		background-color: var(--shell-surface-raised);
-		border: 1px solid var(--shell-border);
+		height: var(--pau-size-row-md);
+		color: var(--pau-text);
+		background-color: var(--pau-surface-raised);
+		border: 1px solid var(--pau-border);
 		cursor: pointer;
 	}
 
@@ -949,9 +944,9 @@
 		grid-template-columns: 0.875rem minmax(0, 1fr);
 		gap: 0 var(--pau-space-2);
 		width: 100%;
-		min-height: var(--pau-size-row-lg);
+		min-height: var(--pau-space-7);
 		padding: var(--pau-space-1) var(--pau-space-4);
-		color: var(--shell-text);
+		color: var(--pau-text);
 		border: 0;
 		border-left: 2px solid transparent;
 		text-align: start;
@@ -959,8 +954,8 @@
 	}
 
 	.workspace-files__review li button[aria-pressed='true'] {
-		border-left-color: var(--shell-accent);
-		background-color: var(--shell-surface-raised);
+		border-left-color: var(--pau-accent);
+		background-color: var(--pau-surface-raised);
 	}
 
 	.workspace-files__review li span,
@@ -976,14 +971,14 @@
 	}
 
 	.workspace-files__review-error {
-		color: var(--shell-danger) !important;
+		color: var(--pau-danger) !important;
 	}
 
 	.workspace-files__search {
 		display: grid;
 		gap: var(--pau-space-1);
-		padding: var(--pau-space-3) var(--shell-inset);
-		border-bottom: 1px solid var(--shell-border);
+		padding: var(--pau-space-3) var(--pau-shell-inset);
+		border-bottom: 1px solid var(--pau-border);
 	}
 
 	.workspace-files__visibility {
@@ -991,16 +986,16 @@
 		grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
 		gap: var(--pau-space-1) var(--pau-space-3);
 		margin: 0;
-		padding: var(--pau-space-3) var(--shell-inset);
+		padding: var(--pau-space-3) var(--pau-shell-inset);
 		border: 0;
-		border-bottom: 1px solid var(--shell-border);
+		border-bottom: 1px solid var(--pau-border);
 	}
 
 	.workspace-files__visibility label {
 		display: flex;
 		align-items: center;
 		min-height: 1.5rem;
-		color: var(--shell-muted);
+		color: var(--pau-text-muted);
 		white-space: nowrap;
 	}
 
@@ -1009,7 +1004,7 @@
 		align-items: center;
 		justify-content: space-between;
 		min-height: var(--pau-size-row-md);
-		padding: var(--pau-space-3) var(--shell-inset) var(--pau-space-1);
+		padding: var(--pau-space-3) var(--pau-shell-inset) var(--pau-space-1);
 	}
 
 	.workspace-files__tree-header small {
@@ -1032,8 +1027,8 @@
 		gap: var(--pau-space-1);
 		min-width: 0;
 		min-height: var(--pau-size-row-md);
-		padding: var(--pau-space-1) var(--shell-inset) var(--pau-space-1)
-			calc(var(--shell-inset) + min(var(--tree-depth), 3) * var(--tree-indent));
+		padding: var(--pau-space-1) var(--pau-shell-inset) var(--pau-space-1)
+			calc(var(--pau-shell-inset) + min(var(--tree-depth), 3) * var(--tree-indent));
 		border: 0;
 		text-align: start;
 		font: inherit;
@@ -1041,8 +1036,8 @@
 	}
 
 	.workspace-files__tree-row--selected {
-		color: var(--shell-text);
-		background-color: var(--shell-surface-raised);
+		color: var(--pau-text);
+		background-color: var(--pau-surface-raised);
 	}
 
 	.workspace-files__tree-row:focus-visible {
@@ -1051,7 +1046,7 @@
 	}
 
 	.workspace-files__tree-row--selected {
-		box-shadow: inset 2px 0 0 var(--shell-accent);
+		box-shadow: inset 2px 0 0 var(--pau-accent);
 	}
 
 	.workspace-files__disclosure {
@@ -1071,13 +1066,13 @@
 	.workspace-files__state,
 	.workspace-files__branch-state {
 		margin: 0;
-		padding: var(--pau-space-3) var(--shell-inset);
-		color: var(--shell-muted);
+		padding: var(--pau-space-3) var(--pau-shell-inset);
+		color: var(--pau-text-muted);
 	}
 
 	.workspace-files__state--error,
 	.workspace-files__branch-state--error {
-		color: var(--shell-danger);
+		color: var(--pau-danger);
 	}
 
 	.workspace-files__state p {
@@ -1093,19 +1088,19 @@
 		display: grid;
 		grid-template-rows: auto minmax(0, 1fr);
 		min-height: 100%;
-		margin: calc(-1 * var(--shell-main-padding));
+		margin: calc(-1 * var(--pau-shell-padding));
 	}
 
 	/* The editor scrolls inside itself, so the surface takes the pane height instead of the content height. */
 	.workspace-files__surface--editing {
-		height: calc(100% + 2 * var(--shell-main-padding));
+		height: calc(100% + 2 * var(--pau-shell-padding));
 		min-height: 0;
 		overflow: hidden;
 	}
 
 	/* Line the empty state up with the header's title. */
 	.workspace-files__surface {
-		--empty-state-inset: var(--shell-inset);
+		--empty-state-inset: var(--pau-shell-inset);
 	}
 
 	/* The match count centers on the title line, as in the shared view header. */
@@ -1115,8 +1110,8 @@
 		align-items: center;
 		column-gap: var(--pau-space-4);
 		min-height: 3.5rem;
-		padding: var(--pau-space-3) var(--shell-inset);
-		border-bottom: 1px solid var(--shell-border);
+		padding: var(--pau-space-3) var(--pau-shell-inset);
+		border-bottom: 1px solid var(--pau-border);
 	}
 
 	.workspace-files__surface header p,
@@ -1126,7 +1121,7 @@
 
 	.workspace-files__surface header p,
 	.workspace-files__surface header span {
-		color: var(--shell-muted);
+		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
 	}
 
@@ -1143,17 +1138,17 @@
 		justify-self: center;
 		max-width: 34rem;
 		padding: var(--pau-space-6);
-		color: var(--shell-muted);
+		color: var(--pau-text-muted);
 		text-align: center;
 	}
 
 	.workspace-files__surface-state p {
 		margin: var(--pau-space-3) 0 var(--pau-space-1);
-		color: var(--shell-text);
+		color: var(--pau-text);
 	}
 
 	.workspace-files__surface-state--error {
-		color: var(--shell-danger);
+		color: var(--pau-danger);
 	}
 
 	.workspace-files__results {
@@ -1165,7 +1160,7 @@
 	}
 
 	.workspace-files__results li {
-		border-bottom: 1px solid var(--shell-border);
+		border-bottom: 1px solid var(--pau-border);
 	}
 
 	.workspace-files__results button {
@@ -1173,8 +1168,8 @@
 		gap: var(--pau-space-2);
 		width: 100%;
 		min-width: 0;
-		padding: var(--pau-space-3) var(--shell-inset);
-		color: var(--shell-text);
+		padding: var(--pau-space-3) var(--pau-shell-inset);
+		color: var(--pau-text);
 		border: 0;
 		text-align: start;
 		cursor: pointer;
@@ -1204,12 +1199,12 @@
 	}
 
 	.workspace-files__result-location small {
-		color: var(--shell-muted);
+		color: var(--pau-text-muted);
 	}
 
 	.workspace-files__results code {
 		overflow: hidden;
-		color: var(--shell-muted);
+		color: var(--pau-text-muted);
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-size: var(--pau-type-xs);

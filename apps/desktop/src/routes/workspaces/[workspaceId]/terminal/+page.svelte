@@ -16,7 +16,6 @@
 	const source = createTerminalSource(location.origin, workspaceId);
 	const fileLinks = createTerminalFileLinks(workspaceId, (path, line) => openFileInEditor(workspaceId, path, line));
 
-	let workspaceName = $state(workspaceId);
 	let disconnected = $state(false);
 
 	/** Opens the dock under the session last shown in this workspace, or under the session list. */
@@ -31,14 +30,10 @@
 	}
 
 	onMount(() => {
-		void listWorkspaces()
-			.then((workspaces) => {
-				const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
-				workspaceName = workspace?.name || workspace?.path.split(/[\\/]/).at(-1) || workspaceId;
-			})
-			.catch(() => {
-				disconnected = true;
-			});
+		// The list tells a running backend from one that cannot be reached.
+		void listWorkspaces().catch(() => {
+			disconnected = true;
+		});
 	});
 </script>
 
@@ -47,7 +42,6 @@
 <TerminalSurface
 	theme={interfacePreferences.choices.theme}
 	uiFont={interfacePreferences.choices.ui_font}
-	{workspaceName}
 	{source}
 	{disconnected}
 	{fileLinks}

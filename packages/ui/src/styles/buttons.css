@@ -38,6 +38,8 @@
 	font-weight: var(--pau-weight-medium);
 	line-height: var(--pau-leading-tight);
 	white-space: nowrap;
+	/* A link that acts as a button, such as one to another view, reads as a button. */
+	text-decoration: none;
 	cursor: pointer;
 	transition:
 		color var(--pau-duration-quick) var(--pau-ease-out),

@@ -59,9 +59,11 @@
 	data-entry-id={tool.id}
 	data-found={found || undefined}>
 	<summary>
-		<Icon name="chevronRight" class="pau-disclosure__chevron" size={14} /><span class="tool-call__name"
+		<Icon name="chevronRight" class="pau-disclosure__chevron" size={14} /><span class="tool-call__name pau-cap"
 			>{tool.name}</span
-		><code><MetaText text={summary} /></code><small title={outcome}><MetaText text={outcome} /></small>
+		><code class="pau-cap pau-cap--truncate"><MetaText text={summary} /></code><small
+			class="pau-cap pau-cap--truncate"
+			title={outcome}><MetaText text={outcome} /></small>
 	</summary>
 	{#if open}
 		<div class="tool-call__body">
@@ -124,29 +126,50 @@
 </details>
 
 <style>
+	/*
+	 * A tool call is a 32px row strip: the chevron, the tool's name, its target
+	 * and its outcome on one line. Consecutive calls stack into one rack on
+	 * the bay surface, separated by rules, so a run of calls reads as one
+	 * block beside the prose.
+	 */
 	.tool-call {
+		/* The left border counts toward the inset, so text lands on the transcript's shared edge. */
 		--disclosure-rule: 1px;
-		border-left: var(--disclosure-rule) solid var(--pau-border);
+		background-color: var(--pau-surface);
+		border: 1px solid var(--pau-border);
+		border-radius: var(--pau-radius-control);
 	}
 
 	/*
-	 * Consecutive tool calls read as one compact block under a shared rule.
 	 * The previous row is another component instance, or a group of finished
 	 * calls, so it is matched globally.
 	 */
-	:global(.tool-call) + .tool-call,
-	:global(.tool-group) + .tool-call {
-		margin-top: calc(-1 * var(--pau-space-5));
+	:global(:is(.tool-call, .tool-group)) + .tool-call {
+		margin-top: calc(-1 * var(--pau-space-5) - 1px);
+		border-top-left-radius: 0;
+		border-top-right-radius: 0;
+	}
+
+	.tool-call:has(+ :global(:is(.tool-call, .tool-group))) {
+		border-bottom-right-radius: 0;
+		border-bottom-left-radius: 0;
 	}
 
 	.tool-call summary {
 		display: grid;
-		grid-template-columns: 4rem minmax(0, 1fr) auto;
+		grid-template-columns: 3.5rem minmax(0, 1fr) auto;
 		align-items: center;
-		gap: var(--pau-space-3);
+		column-gap: var(--pau-space-3);
 		min-height: var(--pau-size-row-md);
-		padding-block: var(--pau-space-1);
 		padding-right: var(--pau-space-3);
+		font-family: var(--pau-font-code);
+		font-size: var(--pau-type-xs);
+		font-variant-ligatures: none;
+		line-height: var(--pau-leading-tight);
+	}
+
+	.tool-call__name {
+		white-space: nowrap;
 	}
 
 	.tool-call--failed :global(.pau-disclosure__chevron),
@@ -162,26 +185,23 @@
 		font-variant-ligatures: none;
 	}
 
-	.tool-call summary code {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
 	.tool-call small {
 		max-inline-size: 20rem;
-		overflow: hidden;
 		font-size: var(--pau-type-xs);
 		font-variant-numeric: tabular-nums;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		text-align: end;
+	}
+
+	.tool-call[open] > summary {
+		border-bottom: 1px solid var(--pau-border);
 	}
 
 	.tool-call__body {
 		display: grid;
 		gap: var(--pau-space-2);
-		/* The body text starts on the summary's inset, after the rule and the chevron gutter. */
-		padding: var(--pau-space-1) var(--pau-space-4) var(--pau-space-3) calc(var(--pau-space-5) - var(--disclosure-rule));
+		/* The body text starts on the summary's inset, after the chevron gutter. */
+		padding: var(--pau-space-2) var(--pau-space-3) var(--pau-space-3) calc(var(--pau-space-5) - var(--disclosure-rule));
+		background-color: var(--pau-canvas);
 	}
 
 	.tool-call__command {
@@ -209,16 +229,6 @@
 
 	.tool-call__exit--failed {
 		color: var(--pau-danger);
-	}
-
-	@media (max-width: 40rem) {
-		.tool-call summary {
-			grid-template-columns: 3.5rem minmax(0, 1fr);
-		}
-
-		.tool-call small {
-			grid-column: 2;
-		}
 	}
 
 	@media (pointer: coarse) {

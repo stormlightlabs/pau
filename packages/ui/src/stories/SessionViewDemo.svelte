@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { PromptImage } from '../lib/composer-images';
 	import type { AgentReadinessProblem } from '../lib/types/launch';
-	import type { ProcessResourceSnapshot } from '../lib/types/resource-monitoring';
 	import type {
 		CommandOption,
 		ExtensionUiResponse,
@@ -22,7 +21,6 @@
 	let {
 		workspaces,
 		initialSessionId,
-		resourceSnapshot,
 		loading = false,
 		disconnected = false,
 		startFailure,
@@ -53,7 +51,6 @@
 	}: {
 		workspaces: SessionWorkspace[];
 		initialSessionId?: string;
-		resourceSnapshot?: ProcessResourceSnapshot;
 		loading?: boolean;
 		disconnected?: boolean;
 		/** When set, starting a session fails with this message. */
@@ -132,7 +129,8 @@
 
 	let activeSessionId = $state<string>();
 	let restoredDismissed = $state(false);
-	let lastAction = $state('No action sent');
+	/** The last action the view sent, shown in a corner once there is one. */
+	let lastAction = $state('');
 
 	$effect.pre(() => {
 		activeSessionId ??= initialSessionId;
@@ -201,7 +199,6 @@
 	onOpenWorkspace={openable ? async (path) => openWorkspace(path) : undefined}
 	pickFolder={pickedFolder === undefined ? undefined : async () => pickedFolder ?? undefined}
 	{activeSessionId}
-	{resourceSnapshot}
 	{loading}
 	{disconnected}
 	onLoadSavedSessions={savedSessions ? async () => savedSessions : undefined}
@@ -286,7 +283,7 @@
 		lastAction = `${sessionId}: open Pi terminal`;
 	}} />
 
-<p class="action" aria-live="polite">{lastAction}</p>
+<p class="action" aria-live="polite" hidden={!lastAction}>{lastAction}</p>
 
 <style>
 	.action {

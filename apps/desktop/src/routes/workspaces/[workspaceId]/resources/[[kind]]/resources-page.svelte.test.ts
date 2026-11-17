@@ -46,8 +46,8 @@ test('loads the prompts view from the resource index API inside the shell', asyn
 	await page.viewport(1440, 900);
 	await render(ResourcesPage);
 
-	const rail = page.getByRole('navigation', { name: 'Product' });
-	await expect.element(rail.getByLabelText('Resources', { exact: true })).toHaveAttribute('aria-current', 'page');
+	const views = page.getByRole('navigation', { name: 'Views' });
+	await expect.element(views.getByRole('link', { name: 'Pi resources' })).toHaveAttribute('aria-current', 'page');
 	await expect.element(page.getByRole('heading', { name: 'Prompts', level: 1 })).toBeVisible();
 	await expect.element(page.getByRole('option', { name: /^review/ })).toBeVisible();
 	await expect

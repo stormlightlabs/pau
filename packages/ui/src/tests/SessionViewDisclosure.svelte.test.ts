@@ -68,12 +68,13 @@ test('leaves blocks the operator opened or closed as they left them', async () =
 		workspaces: workspaces(running, 'running'),
 		activeSessionId: baseSession.id
 	});
+	const transcript = page.getByRole('region', { name: 'Transcript' });
 
-	await userEvent.click(page.getByText('old', { exact: true }));
-	await userEvent.click(page.getByText('kept', { exact: true }));
-	await userEvent.click(page.getByText('kept', { exact: true }));
-	await userEvent.click(page.getByText('closed', { exact: true }));
-	await userEvent.click(page.getByText('Thinking…'));
+	await userEvent.click(transcript.getByText('old', { exact: true }));
+	await userEvent.click(transcript.getByText('kept', { exact: true }));
+	await userEvent.click(transcript.getByText('kept', { exact: true }));
+	await userEvent.click(transcript.getByText('closed', { exact: true }));
+	await userEvent.click(transcript.getByText('Thinking…'));
 	await expect.poll(() => details('closed').open).toBe(false);
 	await expect.poll(() => details('think').open).toBe(false);
 
@@ -102,7 +103,7 @@ test('leaves blocks the operator opened or closed as they left them', async () =
 	expect(details('closed').open).toBe(false);
 	expect(details('think').open).toBe(false);
 
-	await userEvent.click(page.getByText('Thinking', { exact: true }));
+	await userEvent.click(transcript.getByText('Thinking', { exact: true }));
 	await expect.poll(() => details('think').open).toBe(true);
 	await screen.rerender({
 		workspaces: workspaces([...finished, prompt('p3')], 'running'),

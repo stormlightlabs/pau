@@ -13,7 +13,7 @@ const actions = Object.fromEntries(
 );
 
 test('shows aggregate metrics and expands the process breakdown', async () => {
-	await render(ProcessesView, { workspaceName: 'Pau', processes: resourceMonitoringFixtures.active, actions });
+	await render(ProcessesView, { processes: resourceMonitoringFixtures.active, actions });
 
 	await expect.element(page.getByText('486 MiB')).toBeVisible();
 	await expect.element(page.getByText('Unavailable')).toBeVisible();
@@ -24,13 +24,7 @@ test('shows aggregate metrics and expands the process breakdown', async () => {
 test('offers explicit interrupt and stop actions without acting automatically', async () => {
 	const onInterrupt = vi.fn();
 	const onStop = vi.fn();
-	await render(ProcessesView, {
-		workspaceName: 'Pau',
-		processes: [resourceMonitoringFixtures.active[2]!],
-		actions,
-		onInterrupt,
-		onStop
-	});
+	await render(ProcessesView, { processes: [resourceMonitoringFixtures.active[2]!], actions, onInterrupt, onStop });
 
 	await expect.element(page.getByText('cpu pressure')).toBeVisible();
 	expect(onInterrupt).not.toHaveBeenCalled();
@@ -60,7 +54,7 @@ test('styles the pressure Stop like the Processes Stop button and Interrupt as a
 	for (const [name, value] of properties) {
 		document.documentElement.style.setProperty(name, value);
 	}
-	await render(ProcessesView, { workspaceName: 'Pau', processes: [resourceMonitoringFixtures.active[2]!], actions });
+	await render(ProcessesView, { processes: [resourceMonitoringFixtures.active[2]!], actions });
 	const processStop = getComputedStyle(page.getByRole('button', { name: 'Stop', exact: true }).element());
 	await render(SessionResourceSummary, {
 		snapshot: resourceMonitoringFixtures.active[2]!,
@@ -79,21 +73,17 @@ test('styles the pressure Stop like the Processes Stop button and Interrupt as a
 });
 
 test('shows empty and completed states', async () => {
-	const empty = await render(ProcessesView, { workspaceName: 'Pau', processes: [] });
+	const empty = await render(ProcessesView, { processes: [] });
 	await expect.element(page.getByRole('heading', { name: 'No managed processes' })).toBeVisible();
 	await empty.unmount();
 
-	await render(ProcessesView, { workspaceName: 'Pau', processes: [resourceMonitoringFixtures.completed] });
+	await render(ProcessesView, { processes: [resourceMonitoringFixtures.completed] });
 	await userEvent.click(page.getByRole('button', { name: 'Expand Update protocol types process tree' }));
 	await expect.element(page.getByText(/Only its final summary remains/)).toBeVisible();
 });
 
 test('insets the header by the same padding as the process rows', async () => {
-	const { container } = await render(ProcessesView, {
-		workspaceName: 'Pau',
-		processes: resourceMonitoringFixtures.active,
-		actions
-	});
+	const { container } = await render(ProcessesView, { processes: resourceMonitoringFixtures.active, actions });
 
 	const header = container.querySelector('header')!;
 	const heading = container.querySelector('.processes-view__table-heading')!;
@@ -103,7 +93,7 @@ test('insets the header by the same padding as the process rows', async () => {
 });
 
 test('explains unavailable monitoring instead of claiming nothing runs', async () => {
-	await render(ProcessesView, { workspaceName: 'Pau', processes: [], unavailable: 'Not collected yet.' });
+	await render(ProcessesView, { processes: [], unavailable: 'Not collected yet.' });
 
 	await expect.element(page.getByRole('heading', { name: "Process monitoring isn't available" })).toBeVisible();
 	await expect.element(page.getByText('Not collected yet.')).toBeVisible();
@@ -114,7 +104,7 @@ test('explains unavailable monitoring instead of claiming nothing runs', async (
 test('recomposes rows inside the shell at the minimum window size', async () => {
 	await page.viewport(900, 560);
 	await render(ProcessesViewDemo, { processes: resourceMonitoringFixtures.active, inShell: true });
-	await expect.element(page.getByRole('navigation', { name: 'Product' })).toBeVisible();
+	await expect.element(page.getByRole('navigation', { name: 'Views' })).toBeVisible();
 
 	const main = document.querySelector<HTMLElement>('#main-surface')!;
 	const surface = main.getBoundingClientRect();

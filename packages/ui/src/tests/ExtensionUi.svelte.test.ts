@@ -220,22 +220,6 @@ test('lists select options with one selected row and reserves the accent for the
 	expect(onRespond).toHaveBeenCalledWith({ id: 'pick', value: 'Ship' });
 });
 
-test('shows a permission request as tool, command, and directory rows', async () => {
-	await render(ExtensionUi, {
-		state: state({ id: 'perm', kind: 'select', title: permissionTitle, options: ['Allow once', 'Deny'] })
-	});
-
-	const surface = page.getByRole('dialog', { name: 'Permission request' });
-	await expect.element(surface).toBeVisible();
-	await expect.element(surface.getByText('Tool', { exact: true })).toBeVisible();
-	await expect.element(surface.getByText('bash', { exact: true })).toBeVisible();
-	await expect.element(surface.getByText('Command', { exact: true })).toBeVisible();
-	await expect.element(surface.getByText('pnpm test', { exact: true })).toBeVisible();
-	await expect.element(surface.getByText('Working directory', { exact: true })).toBeVisible();
-	await expect.element(surface.getByText('/home/me/pau', { exact: true })).toBeVisible();
-	await expect.element(surface.getByText('"pau"')).not.toBeInTheDocument();
-});
-
 test('trims other structured titles into a code block', async () => {
 	const long = JSON.stringify({ note: 'x'.repeat(2000) });
 	await render(ExtensionUi, { state: state({ id: 'json', kind: 'select', title: long, options: ['Ok'] }) });
@@ -246,35 +230,10 @@ test('trims other structured titles into a code block', async () => {
 	await expect.element(page.getByRole('dialog').getByText(/^Choose/)).not.toBeInTheDocument();
 });
 
-test('starts a permission request with no option chosen and approves only after a choice', async () => {
-	const onRespond = vi.fn();
+test('leaves a permission request to the session request card', async () => {
 	await render(ExtensionUi, {
-		state: state({ id: 'perm', kind: 'select', title: permissionTitle, options: ['Allow once', 'Deny'] }),
-		onRespond
+		state: state({ id: 'perm', kind: 'select', title: permissionTitle, options: ['allow_once', 'deny'] })
 	});
 
-	await expect.element(page.getByRole('radio', { name: 'Allow once' })).not.toBeChecked();
-	await expect.element(page.getByRole('radio', { name: 'Deny' })).not.toBeChecked();
-	await expect.element(page.getByRole('button', { name: 'Select' })).toBeDisabled();
-	await vi.waitFor(() =>
-		expect(document.activeElement).toBe(page.getByRole('radio', { name: 'Allow once' }).element())
-	);
-
-	await userEvent.keyboard('{Enter}');
-	expect(onRespond).not.toHaveBeenCalled();
-
-	await userEvent.click(page.getByRole('radio', { name: 'Deny' }));
-	await expect.element(page.getByRole('button', { name: 'Select' })).toBeEnabled();
-	await userEvent.click(page.getByRole('button', { name: 'Select' }));
-	expect(onRespond).toHaveBeenCalledWith({ id: 'perm', value: 'Deny' });
-});
-
-test('cancels a permission request with Escape without approving', async () => {
-	const onRespond = vi.fn();
-	await render(ExtensionUi, {
-		state: state({ id: 'perm', kind: 'select', title: permissionTitle, options: ['Allow once', 'Deny'] }),
-		onRespond
-	});
-	await userEvent.keyboard('{Escape}');
-	expect(onRespond).toHaveBeenCalledWith({ id: 'perm', cancelled: true });
+	expect(page.getByRole('dialog').elements()).toHaveLength(0);
 });

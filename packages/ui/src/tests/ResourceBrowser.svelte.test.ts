@@ -19,12 +19,12 @@ async function renderBrowser(
 	kind: ResourceKind,
 	props: { index?: ResourceIndex; error?: string; onRetry?: () => void }
 ) {
-	return render(ResourceBrowser, { workspaceName: 'pau', kind, kindHref, ...props });
+	return render(ResourceBrowser, { kind, kindHref, ...props });
 }
 
 const list = (kind: ResourceKind) => page.getByRole('listbox', { name: RESOURCE_KIND_LABELS[kind] });
 const row = (name: string | RegExp) => page.getByRole('option', { name });
-const inspector = () => page.getByRole('complementary', { name: 'Inspector' });
+const inspector = () => page.getByRole('complementary', { name: 'Details' });
 
 /** A resource of each kind from the fixture, made invalid. */
 function withInvalid(kind: ResourceKind): ResourceIndex {

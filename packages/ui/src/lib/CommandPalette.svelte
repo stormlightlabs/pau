@@ -255,7 +255,7 @@
 	.command-palette__field input {
 		flex: 1;
 		min-width: 0;
-		height: var(--pau-size-row-lg);
+		height: var(--pau-space-7);
 		padding: 0;
 		color: var(--pau-text);
 		background: transparent;
@@ -281,7 +281,7 @@
 	.command-palette__heading {
 		display: flex;
 		align-items: center;
-		height: var(--pau-size-row-sm);
+		height: var(--pau-size-row-md);
 		padding-inline: var(--pau-space-3);
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);

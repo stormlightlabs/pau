@@ -3,18 +3,16 @@
 	import MetaText from './MetaText.svelte';
 	import '../styles/tokens.css';
 	import { formatBytes, formatCpu, formatElapsed } from './resource-format';
-	import ViewHeader from './ViewHeader.svelte';
+	import PageHeader from './PageHeader.svelte';
 	import type { ProcessResourceActions, ProcessResourceSnapshot } from './types/resource-monitoring';
 
 	let {
-		workspaceName,
 		processes,
 		actions = {},
 		unavailable,
 		onInterrupt,
 		onStop
 	}: {
-		workspaceName: string;
 		processes: ProcessResourceSnapshot[];
 		actions?: Record<string, ProcessResourceActions>;
 		/**
@@ -34,7 +32,7 @@
 </script>
 
 <section class="processes-view" aria-labelledby="processes-title">
-	<ViewHeader eyebrow={workspaceName} title="Processes" titleId="processes-title">
+	<PageHeader title="Processes" titleId="processes-title">
 		{#snippet meta()}
 			{#if !unavailable}
 				<span class="processes-view__count" aria-live="polite">
@@ -42,7 +40,7 @@
 				</span>
 			{/if}
 		{/snippet}
-	</ViewHeader>
+	</PageHeader>
 
 	{#if unavailable}
 		<EmptyState title="Process monitoring isn't available">
@@ -134,6 +132,8 @@
 
 <style>
 	.processes-view {
+		/* The page header's title starts where the sections' text starts. */
+		--pau-page-header-inset: var(--pau-space-3);
 		container-type: inline-size;
 		min-width: 0;
 		color: var(--pau-text);
@@ -169,7 +169,7 @@
 	}
 
 	.processes-view__table-heading {
-		min-height: var(--pau-size-row-lg);
+		min-height: var(--pau-space-7);
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-xs);
 		font-weight: var(--pau-weight-semibold);

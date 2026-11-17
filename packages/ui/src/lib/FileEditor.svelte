@@ -365,7 +365,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--pau-space-3);
-		min-height: var(--pau-size-row-lg);
+		min-height: var(--pau-space-7);
 		padding: var(--pau-space-1) var(--file-editor-inset);
 		border-bottom: 1px solid var(--pau-border);
 		background: var(--pau-surface);
@@ -442,7 +442,7 @@
 	 * and blocked states sit at the top like every other empty state.
 	 */
 	.file-editor {
-		--file-editor-inset: var(--shell-inset, var(--pau-space-4));
+		--file-editor-inset: var(--pau-shell-inset, var(--pau-space-4));
 		--empty-state-inset: var(--file-editor-inset);
 	}
 

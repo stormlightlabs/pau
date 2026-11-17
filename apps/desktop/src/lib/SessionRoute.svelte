@@ -3,18 +3,17 @@
 	import {
 		SessionView,
 		TerminalPanel,
-		type AgentReadinessProblem,
 		type SavedSession,
 		type SessionAgent,
 		type ShellNavItem
 	} from '@stormlightlabs/pau-ui';
 	import { getContext, onMount, untrack } from 'svelte';
 
-	import { getAgentReadiness, getUiPreferences } from './api';
+	import { getUiPreferences } from './api';
 
 	import type { EventSocketFactory } from './event-stream';
 	import { searchFileMentions } from './file-mentions';
-	import { LiveSessions } from './live-sessions.svelte';
+	import { LiveSessions, liveSessionsContext } from './live-sessions.svelte';
 	import { interfacePreferences } from './interface-preferences.svelte';
 	import { desktopNativeCapabilitiesContext, type DesktopNativeCapabilities } from './native-capabilities';
 	import { sessionAttentionContext, type SessionAttention } from './session-attention';
@@ -58,10 +57,12 @@
 		socketFactory?: EventSocketFactory;
 	} = $props();
 
+	/** The app layout's store, which the bay in every view shares. Tests mount the route without one. */
+	const shared = getContext<LiveSessions | undefined>(liveSessionsContext);
 	// The route mounts once per navigation, so the transport options are fixed
-	// for the life of the store.
+	// for the life of a store it owns.
 	// svelte-ignore state_referenced_locally
-	const sessions = new LiveSessions({ browserOrigin: location.origin, fetcher, socketFactory });
+	const sessions = shared ?? new LiveSessions({ browserOrigin: location.origin, fetcher, socketFactory });
 	// svelte-ignore state_referenced_locally
 	let selectedSessionId = $state(initialSessionId);
 
@@ -115,26 +116,6 @@
 	const agentReadiness = getContext<AgentReadinessSource | undefined>(agentReadinessContext);
 
 	/**
-	 * Why Claude Code cannot start a session, from the backend's readiness
-	 * report. Launch checks only Pi, so the route reads the report itself on
-	 * mount, after a Claude Code start fails, and when the operator asks the
-	 * notice to check again. Unset while the report
-	 * is unread or could not be read, which leaves Claude Code available.
-	 */
-	let claudeReadiness = $state<AgentReadinessProblem>();
-
-	async function checkClaude(refresh = false): Promise<void> {
-		try {
-			const report = await getAgentReadiness(refresh, fetcher);
-			const claude = report.agents.find((agent) => agent.agent === 'claude');
-			claudeReadiness =
-				claude && !claude.ready && claude.reason ? { agent: 'claude', reason: claude.reason } : undefined;
-		} catch {
-			claudeReadiness = undefined;
-		}
-	}
-
-	/**
 	 * Asks where to save a session's transcript with the system save dialog,
 	 * then saves it there. Resolves to the chosen path, or `undefined` when
 	 * the operator cancels. The suggested name is the session title without
@@ -158,7 +139,11 @@
 	/** Absent in the browser development server, which has no native notifications. */
 	const attention = getContext<SessionAttention | undefined>(sessionAttentionContext);
 
-	$effect(() => sessions.view(activeSessionId));
+	// Leaving the view leaves no session in view, so the shared store marks changes again.
+	$effect(() => {
+		sessions.view(activeSessionId);
+		return () => sessions.view();
+	});
 	$effect(() => {
 		const sessionId = activeSessionId;
 		attention?.view(sessionId);
@@ -204,10 +189,12 @@
 	});
 
 	onMount(() => {
-		sessions.connect();
-		void checkClaude();
+		if (!shared) sessions.connect();
+		void sessions.checkClaude();
 		if (restoreLastRoute) void readSavedRoute();
-		return () => sessions.close();
+		return () => {
+			if (!shared) sessions.close();
+		};
 	});
 
 	async function readSavedRoute(): Promise<void> {
@@ -265,13 +252,7 @@
 	}
 
 	async function startSession(workspaceId: string, agent: SessionAgent): Promise<void> {
-		let sessionId: string;
-		try {
-			sessionId = await sessions.start(workspaceId, agent);
-		} catch (cause) {
-			if (agent === 'claude') void checkClaude(true);
-			throw cause;
-		}
+		const sessionId = await sessions.start(workspaceId, agent);
 		restoredOpen = false;
 		selectedSessionId = sessionId;
 		openedWorkspaceId = undefined;
@@ -346,9 +327,10 @@
 	pickFolder={native?.pickFolder}
 	revealPath={native?.revealPath}
 	{onOpenTerminal}
+	onOpenFile={onOpenFile && ((workspaceId, path) => onOpenFile(workspaceId, path))}
 	agentReadiness={agentReadiness?.()}
-	{claudeReadiness}
-	onCheckClaude={() => checkClaude(true)}
+	claudeReadiness={sessions.claudeReadiness}
+	onCheckClaude={() => sessions.checkClaude(true)}
 	onOpenWorkspace={openWorkspace}
 	onSelectSession={selectSession}
 	onClearAttention={() => sessions.clearUnseen()}

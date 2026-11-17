@@ -28,10 +28,31 @@ const failing = () =>
 		throw new Error('The Pau backend returned HTTP 500.');
 	});
 
+test('links Agent sandbox from the Sandbox summary and Diagnostics from About', async () => {
+	await render(SettingsView, {
+		...props(),
+		sandbox: { workspace: 'pau', summary: 'Sandbox on, network off', href: '/workspaces/pau/sandbox' },
+		diagnosticsHref: '/diagnostics'
+	});
+
+	await expect.element(page.getByText('Sandbox on, network off.', { exact: false })).toBeVisible();
+	await expect
+		.element(page.getByRole('link', { name: 'Edit grants in Agent sandbox' }))
+		.toHaveAttribute('href', '/workspaces/pau/sandbox');
+	await expect.element(page.getByRole('link', { name: 'Open Diagnostics' })).toHaveAttribute('href', '/diagnostics');
+});
+
+test('asks for a workspace before it summarizes a sandbox', async () => {
+	await render(SettingsView, props());
+
+	await expect.element(page.getByText('Open a workspace to see and edit its sandbox.')).toBeVisible();
+	expect(page.getByRole('link', { name: 'Edit grants in Agent sandbox' }).elements()).toHaveLength(0);
+});
+
 test('lists every section and names the scope of each setting', async () => {
 	await render(SettingsView, props());
 
-	for (const name of ['Appearance', 'Notifications', 'Keyboard', 'Editor', 'Shell']) {
+	for (const name of ['Appearance', 'Sandbox', 'Notifications', 'Keyboard', 'Editor', 'Shell', 'About']) {
 		await expect.element(page.getByRole('heading', { name, level: 2 })).toBeVisible();
 	}
 	for (const name of ['Theme', 'Font', 'Motion', 'Session notifications']) {
@@ -171,14 +192,10 @@ test.each([1440, 900])('starts the title, section headings, and setting names on
 	expect(left(page.getByText('No settings yet.').first().element())).toBe(title);
 });
 
-test('closes the narrow section menu and moves focus to the chosen section', async () => {
-	await page.viewport(360, 800);
+test('moves focus to the chosen section from the section list in a narrow window', async () => {
+	await page.viewport(1000, 800);
 	await render(SettingsViewDemo);
-	const toggle = page.getByRole('button', { name: 'Open navigation' });
 
-	await userEvent.click(toggle);
 	await userEvent.click(page.getByRole('complementary', { name: 'Sections' }).getByRole('link', { name: 'Shell' }));
-
-	await expect.element(toggle).toHaveAttribute('aria-expanded', 'false');
 	await expect.element(page.getByRole('region', { name: 'Shell' })).toHaveFocus();
 });

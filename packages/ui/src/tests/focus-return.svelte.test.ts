@@ -5,7 +5,7 @@ import { render } from 'vitest-browser-svelte';
 import { modelFixtures } from '../fixtures/models';
 import { sessionFixtures } from '../fixtures/sessions';
 import { transcriptSearchFixtures } from '../fixtures/transcript-search';
-import ApplicationShell from '../lib/ApplicationShell.svelte';
+import ApplicationShellDemo from '../stories/ApplicationShellDemo.svelte';
 import ExtensionUi from '../lib/ExtensionUi.svelte';
 import { COMPOSER_ATTRIBUTE, createFocusReturn } from '../lib/focus-return';
 import ModelPicker from '../lib/ModelPicker.svelte';
@@ -39,13 +39,6 @@ function addComposer(): HTMLTextAreaElement {
 function press(target: Element, init: KeyboardEventInit): void {
 	target.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
 }
-
-const shellProps = {
-	workspaceName: 'fix-diff-gutter',
-	contextLabel: 'Workspaces',
-	productItems: [],
-	contextItems: [{ id: 'one', label: 'One', href: '#one' }]
-};
 
 const unsupportedDialog: ExtensionDialog = { id: 'later', kind: 'unsupported', method: 'custom' };
 const extensionState = (dialog?: ExtensionDialog): ExtensionUiState => ({
@@ -189,34 +182,30 @@ test('returns focus from the find bar to its opener, or to the composer when the
 
 test.each([
 	['Escape', async () => userEvent.keyboard('{Escape}')],
-	['the close control', async () => userEvent.click(page.getByRole('button', { name: 'Close navigation' }))]
-])('returns focus from the overlay rail to its toggle with %s', async (_name, close) => {
-	await page.viewport(600, 800);
-	await render(ApplicationShell, shellProps);
-	const toggle = page.getByRole('button', { name: 'Open navigation' });
+	['the close control', async () => userEvent.click(page.getByRole('button', { name: 'Close checks' }).last())]
+])('returns focus from the workspace overlay to its toggle with %s', async (_name, close) => {
+	await page.viewport(1000, 800);
+	await render(ApplicationShellDemo);
+	const toggle = page.getByRole('button', { name: 'Show checks' });
 
 	await userEvent.click(toggle);
 	await expect.element(toggle).toHaveAttribute('aria-expanded', 'true');
-	// Focus moves into the rail without following the link, which would close the rail itself.
-	const link = page.getByRole('link', { name: 'One' });
-	await expect.element(link).toBeVisible();
-	link.element().focus();
 	await close();
 
-	await expect.element(toggle).toHaveAttribute('aria-expanded', 'false');
+	await expect.element(page.getByRole('dialog', { name: 'Checks' })).not.toBeInTheDocument();
 	await expect.element(toggle).toHaveFocus();
 });
 
-test('returns focus from the overlay rail to the composer when its toggle is gone', async () => {
-	await page.viewport(600, 800);
-	await render(ApplicationShell, shellProps);
+test('returns focus from the workspace overlay to the composer when its toggle is gone', async () => {
+	await page.viewport(1000, 800);
+	await render(ApplicationShellDemo);
 	const composer = addComposer();
-	const toggle = page.getByRole('button', { name: 'Open navigation' });
+	const toggle = page.getByRole('button', { name: 'Show checks' });
 
 	await userEvent.click(toggle);
-	await expect.element(toggle).toHaveAttribute('aria-expanded', 'true');
+	await expect.element(page.getByRole('dialog', { name: 'Checks' })).toHaveFocus();
 	toggle.element().remove();
-	await userEvent.click(page.getByRole('button', { name: 'Close navigation' }));
+	await userEvent.keyboard('{Escape}');
 
 	expect(document.activeElement).toBe(composer);
 });

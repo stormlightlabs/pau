@@ -15,13 +15,26 @@ test('links working views for the current workspace and leaves the rest coming s
 	expect(destinations('/workspaces/[workspaceId]/terminal', 'a b')).toEqual({
 		sessions: { href: '/', unavailable: undefined, active: false },
 		files: { href: '/workspaces/a%20b/editor', unavailable: undefined, active: false },
+		review: { href: undefined, unavailable: undefined, active: false },
 		terminal: { href: '/workspaces/a%20b/terminal', unavailable: undefined, active: true },
-		processes: { href: undefined, unavailable: undefined, active: false },
-		sandbox: { href: '/workspaces/a%20b/sandbox', unavailable: undefined, active: false },
 		resources: { href: '/workspaces/a%20b/resources', unavailable: undefined, active: false },
 		settings: { href: '/settings', unavailable: undefined, active: false },
+		sandbox: { href: '/workspaces/a%20b/sandbox', unavailable: undefined, active: false },
 		diagnostics: { href: '/diagnostics', unavailable: undefined, active: false }
 	});
+});
+
+test('puts six views in the view row and the linked destinations in the palette only', () => {
+	const items = productNavigation('/', 'pau');
+	expect(items.filter((item) => !item.paletteOnly).map((item) => item.label)).toEqual([
+		'Sessions',
+		'Files',
+		'Review',
+		'Terminal',
+		'Pi resources',
+		'Settings'
+	]);
+	expect(items.find((item) => item.id === 'settings')?.action).toBe('app.settings');
 });
 
 test('disables workspace views until a workspace is open', () => {

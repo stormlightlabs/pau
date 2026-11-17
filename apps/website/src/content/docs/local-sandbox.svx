@@ -7,7 +7,8 @@ order: 5
 # Local sandbox
 
 Agent tools run with your normal access unless you choose a sandbox. Open a
-workspace's **Agent sandbox** view to set the default for new agent sessions. A
+workspace's **Agent sandbox** view, from **Settings** › **Sandbox** or the
+command palette, to set the default for new agent sessions. A
 session can override that default. The sandbox applies to tools the agent calls
 and to their child processes. Terminals and editors that Pau opens stay
 unsandboxed unless you open a sandboxed terminal, as **Terminals** below

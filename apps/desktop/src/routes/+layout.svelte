@@ -1,15 +1,23 @@
 <script lang="ts">
 	import type { StartupProgress } from '@stormlightlabs/pau-protocol';
-	import { externalLinkContext, LaunchSplash } from '@stormlightlabs/pau-ui';
+	import {
+		externalLinkContext,
+		LaunchSplash,
+		SessionBayState,
+		setSessionBayState,
+		setShellBay
+	} from '@stormlightlabs/pau-ui';
 	import { onMount, setContext, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 
+	import AppBay from '$lib/AppBay.svelte';
 	import AppKeymap from '$lib/AppKeymap.svelte';
 	import { claimLaunchRoute, workspaceViewRoute } from '$lib/app-navigation';
 	import { createDesktopNativeCapabilities, desktopNativeCapabilitiesContext } from '$lib/native-capabilities';
 	import { interfacePreferences } from '$lib/interface-preferences.svelte';
+	import { LiveSessions, liveSessionsContext } from '$lib/live-sessions.svelte';
 	import { SessionAttention, sessionAttentionContext } from '$lib/session-attention';
 	import {
 		agentReadinessContext,
@@ -39,6 +47,12 @@
 				})
 			: undefined
 	);
+
+	// One store and one bay state for the whole window, so the bay in every
+	// view shows the same sessions and keeps its filter between views.
+	const sessions = setContext(liveSessionsContext, new LiveSessions({ browserOrigin: location.origin }));
+	setSessionBayState(new SessionBayState());
+	setShellBay(appBay);
 
 	// The browser development server has no startup to follow: its backend is
 	// already running behind the Vite proxy.
@@ -72,10 +86,20 @@
 		interfacePreferences.stop();
 	}
 
+	function closeSessions() {
+		sessions.close();
+	}
+
 	$effect(() => {
 		if (!ready) return;
 		untrack(() => interfacePreferences.connect());
 		return stopPreferences;
+	});
+
+	$effect(() => {
+		if (!ready) return;
+		untrack(() => sessions.connect());
+		return closeSessions;
 	});
 
 	$effect(() => {
@@ -94,6 +118,10 @@
 		if (ready && route) untrack(() => interfacePreferences.rememberRoute(route));
 	});
 </script>
+
+{#snippet appBay()}
+	<AppBay {sessions} />
+{/snippet}
 
 {#snippet app()}
 	<AppKeymap

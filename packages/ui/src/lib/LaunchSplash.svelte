@@ -239,7 +239,7 @@ the splash fades out over it, or disappears instantly under reduced motion.
 		margin: var(--pau-space-5) 0 0;
 		padding: var(--pau-space-4) 0 0;
 		list-style: none;
-		border-block-start: var(--pau-border-thin) solid var(--pau-border);
+		border-block-start: 1px solid var(--pau-border);
 	}
 
 	.launch-splash__step {

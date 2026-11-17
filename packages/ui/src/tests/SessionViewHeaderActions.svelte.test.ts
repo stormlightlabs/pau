@@ -29,7 +29,6 @@ const box = (element: Element) => element.getBoundingClientRect();
 async function measure(fixture: SessionWorkspace[]) {
 	const { unmount } = await render(SessionView, open(fixture));
 	const result = {
-		status: box(document.querySelector('.session-view__status')!),
 		compact: box(page.getByRole('button', { name: 'Compact' }).element()),
 		stop: box(page.getByRole('button', { name: 'Stop' }).element())
 	};
@@ -40,19 +39,20 @@ async function measure(fixture: SessionWorkspace[]) {
 test.each(states)('keeps the %s header actions where the idle header puts them', async (_name, workspaces) => {
 	const idle = await measure(sessionFixtures.idle);
 	const other = await measure(workspaces);
-	for (const key of ['status', 'compact', 'stop'] as const) {
+	for (const key of ['compact', 'stop'] as const) {
 		expect(other[key].left).toBe(idle[key].left);
 		expect(other[key].width).toBe(idle[key].width);
 	}
-	// Status leads, then Compact, then Stop.
-	expect(other.status.right).toBeLessThanOrEqual(other.compact.left);
+	// Stop goes last, apart from the other actions after a rule.
 	expect(other.compact.right).toBeLessThanOrEqual(other.stop.left);
 });
 
-test.each(states)('reports the %s state in the header status', async (_name, workspaces, label) => {
+test.each(states)('reports the %s state beside the title', async (_name, workspaces, label) => {
 	await render(SessionView, open(workspaces));
-	expect(document.querySelector('.session-view__status .pau-mark')?.getAttribute('aria-label')).toBe(label);
-	expect(document.querySelector('.session-view__status')?.textContent?.trim()).toBe(label);
+	const state = document.querySelector('.pau-page-header .pau-state');
+	expect(state?.querySelector('.pau-mark')?.getAttribute('aria-label')).toBe(label);
+	expect(state?.textContent?.trim()).toBe(label);
+	expect(state?.previousElementSibling).toBe(page.getByRole('heading', { level: 1 }).element());
 	await expect
 		.element(page.getByRole('button', { name: 'Compact' }))
 		.toHaveAttribute('aria-busy', label === 'Compacting…' ? 'true' : 'false');

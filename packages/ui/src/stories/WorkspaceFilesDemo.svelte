@@ -7,7 +7,8 @@
 	type State = 'default' | 'detached' | 'empty' | 'loading' | 'non-repository' | 'permission-error' | 'large-results';
 
 	let { state: view = 'default', theme, uiFont }: { state?: State; theme?: ThemeName; uiFont?: UiFontName } = $props();
-	let lastAction = $state('No action sent');
+	/** The last action the view sent, shown in a corner once there is one. */
+	let lastAction = $state('');
 
 	const pending = new Promise<never>(() => {});
 	const permissionError = Object.assign(new Error('Permission denied'), { code: 'permission_denied' });
@@ -58,7 +59,7 @@
 		lastAction = `reveal ${path}`;
 	}} />
 
-<p class="action" aria-live="polite">{lastAction}</p>
+<p class="action" aria-live="polite" hidden={!lastAction}>{lastAction}</p>
 
 <style>
 	.action {

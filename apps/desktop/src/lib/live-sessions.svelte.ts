@@ -1,6 +1,14 @@
-import type { AgentSession, ServerEvent, Workspace } from '@stormlightlabs/pau-protocol';
+import type {
+	AgentSession,
+	GitStatus,
+	SandboxSelection,
+	ServerEvent,
+	TerminalInfo,
+	Workspace
+} from '@stormlightlabs/pau-protocol';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import type {
+	AgentReadinessProblem,
 	ExtensionUiResponse,
 	CommandOption,
 	MessageQueue,
@@ -15,7 +23,8 @@ import type {
 	SessionUsage,
 	SessionViewModel,
 	SessionWorkspace,
-	ThinkingLevel
+	ThinkingLevel,
+	WorkspaceTerminal
 } from '@stormlightlabs/pau-ui';
 import { agentLabel } from '@stormlightlabs/pau-ui';
 
@@ -25,6 +34,7 @@ import {
 	cancelSessionRetry,
 	cloneSession,
 	exportSessionTranscript,
+	getAgentReadiness,
 	compactSession,
 	clearSessionQueue,
 	getSessionExtensionUi,
@@ -35,11 +45,13 @@ import {
 	getSessionQueue,
 	getSessionUsage,
 	getWorkspaceGitStatus,
+	getWorkspaceSandbox,
 	interruptSession,
 	listNativeSessions,
 	listSessionCommands,
 	listSessionModels,
 	listSessions,
+	listTerminals,
 	listWorkspaces,
 	openWorkspace,
 	promptSession,
@@ -300,17 +312,25 @@ export class LiveSessions {
 	#compactionEstimates = $state<Record<string, Record<string, number>>>({});
 	#usages = $state<Record<string, SessionUsage>>({});
 	/**
-	 * Current branch by workspace, for the session status line. The store reads
-	 * it on load and reconnect, and after each run settles, since the agent may
-	 * have switched branches during the run.
+	 * Git status by workspace, for the status line's branch and the workspace
+	 * column's changes. The store reads it on load and reconnect, and after
+	 * each run settles, since the agent may have changed files or switched
+	 * branches during the run.
 	 */
-	#branches = $state<Record<string, string>>({});
+	#git = $state<Record<string, GitStatus>>({});
+	/** Each workspace's default sandbox for new sessions, from the API and `sandbox_changed` events. */
+	#sandboxes = $state<Record<string, SandboxSelection>>({});
+	/** Terminals the backend keeps open, read again whenever one opens, exits or closes. */
+	#terminals = $state<TerminalInfo[]>([]);
 	/** Names sent to Pi that it has not confirmed yet, by session. The rail shows them meanwhile. */
 	#pendingNames = $state<Record<string, string>>({});
 	/** The session the operator is looking at. Changes to it never raise a marker. */
 	#viewed = $state<string>();
 	/** Sessions that waited, failed, or finished a turn out of view and have not been opened since. */
 	readonly #unseen = new SvelteSet<string>();
+	#claudeReadiness = $state<AgentReadinessProblem>();
+	/** Ended sessions the operator started again. Their failure is history, so they leave Needs you. */
+	readonly #restarted = new SvelteSet<string>();
 	/** Sessions whose usage an event updated while its read was in flight, so the read is stale. */
 	readonly #usageUpdated = new SvelteSet<string>();
 	/** Extension events received while the session's extension UI read is in flight. */
@@ -388,7 +408,8 @@ export class LiveSessions {
 
 	/** Reads the messages, extension UI, and message queue of every live session. */
 	#refresh(): void {
-		for (const workspace of this.#workspaces) void this.#readBranch(workspace.id);
+		for (const workspace of this.#workspaces) this.#readWorkspace(workspace.id);
+		void this.#readTerminals();
 		for (const session of Object.values(this.#sessions)) {
 			if (!isLive(session)) continue;
 			void this.#readHistory(session.id);
@@ -398,14 +419,35 @@ export class LiveSessions {
 		}
 	}
 
-	/** Reads a workspace's branch. A detached HEAD or a folder outside a repository has none. */
-	async #readBranch(workspaceId: string): Promise<void> {
+	/** Reads what the workspace column shows about a workspace: its Git status and its sandbox. */
+	#readWorkspace(workspaceId: string): void {
+		void this.#readGit(workspaceId);
+		void this.#readSandbox(workspaceId);
+	}
+
+	/** Reads a workspace's Git status. A detached HEAD or a folder outside a repository has no branch. */
+	async #readGit(workspaceId: string): Promise<void> {
 		try {
-			const { branch } = await getWorkspaceGitStatus(workspaceId, this.#fetcher);
-			if (branch) this.#branches[workspaceId] = branch;
-			else delete this.#branches[workspaceId];
+			this.#git[workspaceId] = await getWorkspaceGitStatus(workspaceId, this.#fetcher);
 		} catch {
-			// The status line leaves the branch out until a later read succeeds.
+			// The status line and the workspace column keep the last read until a later one succeeds.
+		}
+	}
+
+	async #readSandbox(workspaceId: string): Promise<void> {
+		try {
+			const sandbox = await getWorkspaceSandbox(workspaceId, this.#fetcher);
+			this.#sandboxes[workspaceId] = sandbox.selection;
+		} catch {
+			// The workspace column says the sandbox state is unknown until a later read succeeds.
+		}
+	}
+
+	async #readTerminals(): Promise<void> {
+		try {
+			this.#terminals = await listTerminals(this.#fetcher);
+		} catch {
+			// The workspace column keeps the last list until a later read succeeds.
 		}
 	}
 
@@ -559,15 +601,23 @@ export class LiveSessions {
 		for (const changed of state.events) {
 			if (changed.kind === 'workspace_changed') {
 				const workspace = JSON.parse(changed.payload) as Workspace;
-				if (this.#workspaces.every((known) => known.id !== workspace.id)) void this.#readBranch(workspace.id);
+				if (this.#workspaces.every((known) => known.id !== workspace.id)) this.#readWorkspace(workspace.id);
 				this.#rememberWorkspace(workspace);
+				continue;
+			}
+			if (changed.kind === 'terminal_changed') {
+				void this.#readTerminals();
+				continue;
+			}
+			if (changed.kind === 'sandbox_changed' && changed.workspace_id) {
+				this.#sandboxes[changed.workspace_id] = JSON.parse(changed.payload) as SandboxSelection;
 				continue;
 			}
 			if (changed.kind !== 'session_changed') continue;
 			const session = JSON.parse(changed.payload) as AgentSession;
 			const known = Object.hasOwn(this.#sessions, session.id);
 			const previous = this.#sessions[session.id];
-			if (previous?.status === 'running' && session.status !== 'running') void this.#readBranch(session.workspace_id);
+			if (previous?.status === 'running' && session.status !== 'running') void this.#readGit(session.workspace_id);
 			this.#markUnseen(previous, session);
 			this.#sessions[session.id] = session;
 			if (!known && !this.loading && isLive(session)) void this.#readHistory(session.id);
@@ -635,6 +685,7 @@ export class LiveSessions {
 			status: session.status,
 			error: failureMessage(session),
 			unseen: this.#unseen.has(session.id),
+			restarted: this.#restarted.has(session.id) || undefined,
 			attention: extensionUi.dialogs.length > 0 ? 'An extension is waiting for your answer.' : undefined,
 			capabilities: {
 				prompt: session.capabilities.prompt,
@@ -681,7 +732,7 @@ export class LiveSessions {
 	}
 
 	/** Records which session the operator is looking at and clears its marker. */
-	view(sessionId: string | undefined): void {
+	view(sessionId?: string): void {
 		this.#viewed = sessionId;
 		if (sessionId) this.#unseen.delete(sessionId);
 	}
@@ -689,6 +740,30 @@ export class LiveSessions {
 	/** Clears every attention marker. */
 	clearUnseen(): void {
 		this.#unseen.clear();
+	}
+
+	/**
+	 * Why Claude Code cannot start a session, from the backend's readiness
+	 * report. Launch checks only Pi, so the store reads the report when a
+	 * view asks, after a Claude Code start fails, and when the operator asks
+	 * to check again. Unset while the report is unread or could not be read,
+	 * which leaves Claude Code available. Every bay and the session view
+	 * read this one answer.
+	 */
+	get claudeReadiness(): AgentReadinessProblem | undefined {
+		return this.#claudeReadiness;
+	}
+
+	/** Reads the readiness report again. `refresh` asks the backend to check the agent anew. */
+	async checkClaude(refresh = false): Promise<void> {
+		try {
+			const report = await getAgentReadiness(refresh, this.#fetcher);
+			const claude = report.agents.find((agent) => agent.agent === 'claude');
+			this.#claudeReadiness =
+				claude && !claude.ready && claude.reason ? { agent: 'claude', reason: claude.reason } : undefined;
+		} catch {
+			this.#claudeReadiness = undefined;
+		}
 	}
 
 	/** Whether the backend is unreachable. The first connection attempt counts as loading. */
@@ -705,7 +780,12 @@ export class LiveSessions {
 			id: workspace.id,
 			name: workspaceName(workspace),
 			path: workspace.path,
-			branch: this.#branches[workspace.id]
+			branch: this.#git[workspace.id]?.branch ?? undefined,
+			git: this.#git[workspace.id],
+			sandbox: sandboxSummary(this.#sandboxes[workspace.id]),
+			terminals: this.#terminals
+				.filter((terminal) => terminal.workspace_id === workspace.id)
+				.map((terminal) => workspaceTerminal(terminal))
 		}));
 		const unknown = sessions
 			.map((session) => session.workspace_id)
@@ -754,6 +834,7 @@ export class LiveSessions {
 			void this.#readHistory(session.id);
 			return session.id;
 		} catch (cause) {
+			if (agent === 'claude') void this.checkClaude(true);
 			throw new Error(sessionErrorMessage(cause, 'start'), { cause });
 		}
 	}
@@ -804,9 +885,11 @@ export class LiveSessions {
 		const session = this.#sessions[sessionId];
 		if (!session) throw new Error('Pau no longer has this session. Start a new one from the session rail.');
 		const agent = this.#agent(sessionId);
-		return session.native_session_id
-			? this.resume(session.workspace_id, session.native_session_id, agent)
-			: this.start(session.workspace_id, agent);
+		const restarted = session.native_session_id
+			? await this.resume(session.workspace_id, session.native_session_id, agent)
+			: await this.start(session.workspace_id, agent);
+		if (restarted !== sessionId) this.#restarted.add(sessionId);
+		return restarted;
 	}
 
 	/** Lists the models a session can select. Rejects with operator-facing copy. */
@@ -1121,3 +1204,28 @@ export class LiveSessions {
 		this.#updateExtensionUi(sessionId, (state) => resolveDialog(state, requestId, 'timed_out'));
 	}
 }
+
+/** One line about the sandbox new sessions start in, such as "Sandbox on, network off". */
+function sandboxSummary(selection: SandboxSelection | undefined): SessionWorkspace['sandbox'] {
+	if (!selection) return undefined;
+	if (selection.mode === 'unsandboxed') return { sandboxed: false, label: 'No sandbox' };
+	const { profile, grants } = selection.settings;
+	const access = profile === 'read-only' ? 'Read-only sandbox' : 'Sandbox on';
+	const domains = grants.domains.length;
+	const network = domains === 0 ? 'network off' : `${domains} ${domains === 1 ? 'domain' : 'domains'} allowed`;
+	return { sandboxed: true, label: `${access}, ${network}` };
+}
+
+/** A terminal as the workspace column lists it: its program and its state. */
+function workspaceTerminal(terminal: TerminalInfo): WorkspaceTerminal {
+	const program = terminal.command[0]?.split('/').at(-1) ?? 'Shell';
+	if (terminal.status.state === 'running') return { id: terminal.id, label: program, status: 'Running' };
+	const code = terminal.status.exit_code;
+	return { id: terminal.id, label: program, status: `Exited ${code}`, failed: code !== 0 };
+}
+
+/**
+ * Context key under which the app layout shares its one {@link LiveSessions},
+ * so the bay in every view and the session view read the same sessions.
+ */
+export const liveSessionsContext = Symbol('pau.liveSessions');

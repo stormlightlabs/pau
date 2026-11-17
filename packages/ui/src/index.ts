@@ -1,5 +1,6 @@
 export { default as ApplicationShell } from './lib/ApplicationShell.svelte';
 export type { ShellNavItem, ShellPaneWidths } from './lib/ApplicationShell.svelte';
+export { setShellBay } from './lib/shell-bay';
 export type { PaletteEntry, PaletteGroup } from './lib/command-palette';
 export { default as AgentReadinessNotice } from './lib/AgentReadinessNotice.svelte';
 export { default as CapabilityCard } from './lib/CapabilityCard.svelte';
@@ -13,6 +14,8 @@ export { COMPOSER_ATTRIBUTE, createFocusReturn, returnFocus, type FocusReturn } 
 export { isImageType, maxImageBytes, maxRequestImageBytes, type PromptImage } from './lib/composer-images';
 export type { EditorFileContent, FileEditorSource } from './lib/types/file-editor';
 export { default as Icon, type IconProps } from './lib/Icon.svelte';
+export { default as PageHeader } from './lib/PageHeader.svelte';
+export { default as RequestCard } from './lib/RequestCard.svelte';
 export { default as KeyboardShortcuts } from './lib/KeyboardShortcuts.svelte';
 export { default as LaunchSplash } from './lib/LaunchSplash.svelte';
 export type {
@@ -68,6 +71,8 @@ export { default as TranscriptSearch } from './lib/TranscriptSearch.svelte';
 export { default as SessionPicker } from './lib/SessionPicker.svelte';
 export { default as SessionTree } from './lib/SessionTree.svelte';
 export { default as SessionView } from './lib/SessionView.svelte';
+export { default as SessionBay } from './lib/SessionBay.svelte';
+export { SessionBayState, setSessionBayState } from './lib/session-bay-state.svelte';
 export { default as TerminalPanel, type TerminalTabState } from './lib/TerminalPanel.svelte';
 export { default as TerminalSurface } from './lib/TerminalSurface.svelte';
 export { default as TerminalView } from './lib/TerminalView.svelte';
@@ -155,6 +160,7 @@ export type {
 	SessionSearchOutcome,
 	SessionTreeSnapshot,
 	SessionWorkspace,
+	WorkspaceTerminal,
 	TranscriptCompaction,
 	TranscriptEntry,
 	HiddenImages,

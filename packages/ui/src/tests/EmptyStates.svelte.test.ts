@@ -36,7 +36,8 @@ describe.each([1440, 900])('at %ipx', (width) => {
 			workspaces: sessionFixtures.running,
 			activeSessionId: sessionFixtures.running[0]!.sessions[0]!.id
 		});
-		const edge = left(page.getByRole('region', { name: 'Transcript' }).element());
+		const column = document.querySelector('.session-view__transcript-content')!;
+		const edge = left(column) + Number(getComputedStyle(column).paddingLeft.replace('px', ''));
 		unmount();
 		return edge;
 	}
@@ -74,10 +75,8 @@ describe.each([1440, 900])('at %ipx', (width) => {
 			onLoadSavedSessions: async () => savedSessionFixtures.populated,
 			onResumeSession: async () => {}
 		});
-		// The context rail is a drawer only in a narrow window.
-		const drawer = page.getByRole('button', { name: 'Open navigation' });
-		if (drawer.query()) await userEvent.click(drawer);
-		await userEvent.click(page.getByRole('button', { name: 'Saved sessions in Pau' }));
+		await userEvent.click(page.getByRole('button', { name: 'More ways to start a session' }));
+		await userEvent.click(page.getByRole('menuitem', { name: 'Saved sessions…' }));
 
 		const heading = page.getByRole('heading', { name: 'Sessions in Pau' }).element();
 		expect(left(heading)).toBe(edge);
@@ -103,7 +102,7 @@ describe.each([1440, 900])('at %ipx', (width) => {
 	});
 
 	test('aligns the Processes empty state with the header title, top-aligned', async () => {
-		await render(ProcessesView, { workspaceName: 'Pau', processes: [] });
+		await render(ProcessesView, { processes: [] });
 
 		const heading = page.getByRole('heading', { name: 'No managed processes' }).element();
 		expect(left(heading)).toBe(left(page.getByRole('heading', { name: 'Processes', exact: true }).element()));

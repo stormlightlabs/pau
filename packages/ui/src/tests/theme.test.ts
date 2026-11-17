@@ -71,6 +71,10 @@ describe('bundled themes', () => {
 					4.5
 				);
 				expect(contrast(theme.colors.focus, theme.colors[surface]), `${theme.name} focus`).toBeGreaterThanOrEqual(3);
+				// The waiting state line and the Needs you count sit on the bay and on raised strips.
+				expect(contrast(theme.colors.accent, theme.colors[surface]), `${theme.name} accent`).toBeGreaterThanOrEqual(
+					4.5
+				);
 				for (const status of ['success', 'warning', 'danger', 'info'] as const) {
 					expect(
 						contrast(theme.colors[status], theme.colors[surface]),

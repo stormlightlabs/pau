@@ -11,7 +11,9 @@ const browser = (reducedMotion?: 'reduce' | 'no-preference') => ({
 	enabled: true,
 	headless: true,
 	provider: playwright(reducedMotion ? { contextOptions: { reducedMotion } } : undefined),
-	instances: [{ browser: 'chromium' as const }]
+	// The desktop window opens at 1440×900 and never narrows below 900px, so
+	// tests start there and set a narrower viewport only to test it.
+	instances: [{ browser: 'chromium' as const, viewport: { width: 1440, height: 900 } }]
 });
 
 export default defineConfig({

@@ -47,7 +47,6 @@
 <svelte:window onkeydown={(event) => keymap.handleKeydown(event)} />
 
 <ApplicationShell
-	workspaceName="fix-diff-gutter"
 	contextLabel="Workspaces"
 	productItems={shellNavigationFixtures.productItems}
 	contextItems={shellNavigationFixtures.contextItems}
@@ -60,7 +59,7 @@
 		<div class="xterm" role="textbox" tabindex="0" aria-label="Terminal">$ pi</div>
 		<div contenteditable="true" role="textbox" tabindex="0" aria-label="Code editor">const answer = 42;</div>
 	</section>
-	{#snippet inspector()}<p>Session details</p>{/snippet}
+	{#snippet workspace()}<p>Session details</p>{/snippet}
 </ApplicationShell>
 
 <KeyboardShortcuts bind:open={shortcutsOpen} actions={keymap.actions} {platform} />

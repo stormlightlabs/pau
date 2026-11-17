@@ -8,10 +8,12 @@
 	 */
 	export const SETTINGS_SECTIONS = [
 		{ id: 'appearance', label: 'Appearance' },
+		{ id: 'sandbox', label: 'Sandbox' },
 		{ id: 'notifications', label: 'Notifications' },
 		{ id: 'keyboard', label: 'Keyboard' },
 		{ id: 'editor', label: 'Editor' },
-		{ id: 'shell', label: 'Shell' }
+		{ id: 'shell', label: 'Shell' },
+		{ id: 'about', label: 'About' }
 	] as const;
 
 	export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id'];
@@ -33,9 +35,10 @@
 	import type { Snippet } from 'svelte';
 
 	import { THEMES, UI_FONTS } from '../theme';
+	import Icon from './Icon.svelte';
 	import KeyboardShortcutList from './KeyboardShortcutList.svelte';
 	import type { KeyPlatform, ResolvedKeyAction } from './keymap.svelte';
-	import ViewHeader from './ViewHeader.svelte';
+	import PageHeader from './PageHeader.svelte';
 
 	type Props = {
 		/** The saved theme. */
@@ -56,9 +59,18 @@
 		/** Shortcuts the Keyboard section lists, with their chords resolved. */
 		shortcuts: readonly ResolvedKeyAction[];
 		platform: KeyPlatform;
+		/**
+		 * The sandbox new sessions get in the workspace the operator works in,
+		 * which the Sandbox section summarizes and links to Agent sandbox to
+		 * edit. Without it, the section asks for a workspace first.
+		 */
+		sandbox?: { workspace: string; summary?: string; href: string };
+		/** Where About links to Diagnostics. */
+		diagnosticsHref?: string;
 	};
 
-	let { theme, uiFont, notifications, motion, onChange, shortcuts, platform }: Props = $props();
+	let { theme, uiFont, notifications, motion, onChange, shortcuts, platform, sandbox, diagnosticsHref }: Props =
+		$props();
 
 	const motionChoices: { value: MotionSetting; label: string }[] = [
 		{ value: 'system', label: 'System' },
@@ -75,7 +87,10 @@
 
 	const saved = $derived<SettingsChoices>({ theme, uiFont, notifications, motion });
 
-	let errors = $state<Partial<Record<keyof SettingsChoices, string>>>({});
+	/** Names a setting for its element IDs. Only the saved choices can fail. */
+	type SettingSlug = keyof SettingsChoices | 'sandbox' | 'diagnostics';
+
+	let errors = $state<Partial<Record<SettingSlug, string>>>({});
 	/**
 	 * The operator's latest pick for each setting. A rejection is reported
 	 * only while its pick is still the latest, because a later pick's own
@@ -130,7 +145,7 @@
 	name. The scope chip names where the choice applies, so a workspace setting
 	never reads as a global one.
 -->
-{#snippet setting(name: string, slug: keyof SettingsChoices, description: string, scope: string, control: Snippet)}
+{#snippet setting(name: string, slug: SettingSlug, description: string, scope: string, control: Snippet)}
 	<div class="settings-view__setting">
 		<div class="settings-view__heading">
 			<span class="settings-view__name" id="{id}-{slug}-name">{name}</span>
@@ -220,8 +235,20 @@
 	{@render radioGroup('motion', motionChoices, 'row')}
 {/snippet}
 
+{#snippet sandboxControl()}
+	{#if sandbox}
+		<a class="pau-button pau-button--secondary" href={sandbox.href}
+			><Icon name="sandbox" size={16} /><span>Edit grants in Agent sandbox</span></a>
+	{/if}
+{/snippet}
+
+{#snippet diagnosticsControl()}
+	<a class="pau-button pau-button--secondary" href={diagnosticsHref}
+		><Icon name="diagnostics" size={16} /><span>Open Diagnostics</span></a>
+{/snippet}
+
 <section class="settings-view" aria-labelledby="{id}-title">
-	<ViewHeader eyebrow="Preferences" title="Settings" titleId="{id}-title" />
+	<PageHeader title="Settings" titleId="{id}-title" />
 
 	{#each SETTINGS_SECTIONS as section (section.id)}
 		<!-- Focusable so a section link moves focus here, and Tab continues from the chosen section. -->
@@ -253,6 +280,26 @@
 					'All workspaces',
 					motionControl
 				)}
+			{:else if section.id === 'sandbox'}
+				{#if sandbox}
+					{@render setting(
+						'Agent sandbox',
+						'sandbox',
+						`${sandbox.summary ?? 'Sandbox state unknown'}. New sessions in this workspace start with these grants.`,
+						sandbox.workspace,
+						sandboxControl
+					)}
+				{:else}
+					<p class="settings-view__empty">Open a workspace to see and edit its sandbox.</p>
+				{/if}
+			{:else if section.id === 'about' && diagnosticsHref}
+				{@render setting(
+					'Diagnostics',
+					'diagnostics',
+					'Redacted build versions, agent handshakes and recent logs, for a bug report.',
+					'This computer',
+					diagnosticsControl
+				)}
 			{:else if section.id === 'notifications'}
 				{@render setting(
 					'Session notifications',
@@ -275,6 +322,8 @@
 
 <style>
 	.settings-view {
+		/* The page header's title starts where the sections' text starts. */
+		--pau-page-header-inset: var(--pau-space-3);
 		container-type: inline-size;
 		min-width: 0;
 		max-width: 56rem;

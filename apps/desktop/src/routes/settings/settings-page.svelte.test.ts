@@ -4,6 +4,7 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { PauApiError } from '$lib/api';
+import { liveSessionsContext } from '$lib/live-sessions.svelte';
 import SettingsPage from './+page.svelte';
 
 /** Saves fail at once unless a test holds one back. */
@@ -17,7 +18,6 @@ vi.mock('$app/state', () => ({ page: { params: {}, route: { id: '/settings' } } 
 
 vi.mock('$lib/api', async (importOriginal) => ({
 	...(await importOriginal<object>()),
-	listWorkspaces: async () => [],
 	getUiPreferences: async () => ({
 		version: 1,
 		theme: 'eldritch',
@@ -43,6 +43,17 @@ test('marks Settings in the rail and links each section', async () => {
 	await expect.element(page.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
 	const sections = page.getByRole('complementary', { name: 'Sections' });
 	await expect.element(sections.getByRole('link', { name: 'Keyboard' })).toHaveAttribute('href', '#settings-keyboard');
+});
+
+test('links Agent sandbox for the first workspace and Diagnostics from About', async () => {
+	// The layout's store, whose first workspace the workspace views open.
+	const sessions = { workspaces: [{ id: 'workspace-1', name: 'pau', sessions: [] }] };
+	await render(SettingsPage, { context: new Map([[liveSessionsContext, sessions]]) });
+
+	await expect
+		.element(page.getByRole('link', { name: 'Edit grants in Agent sandbox' }))
+		.toHaveAttribute('href', '/workspaces/workspace-1/sandbox');
+	await expect.element(page.getByRole('link', { name: 'Open Diagnostics' })).toHaveAttribute('href', '/diagnostics');
 });
 
 test('shows a failed save and keeps the saved motion setting', async () => {

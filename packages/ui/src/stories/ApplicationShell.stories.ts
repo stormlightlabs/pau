@@ -16,7 +16,7 @@ const meta = {
 	},
 	args: {
 		disconnected: false,
-		inspectorOpen: true,
+		withWorkspace: true,
 		longContent: false,
 		paneWidths: { contextRail: null, inspector: null }
 	}
@@ -25,39 +25,19 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const RailsAndInspector: Story = {
+export const ViewRow: Story = {
 	play: async ({ canvasElement }) => {
-		const canvas = within(canvasElement);
-		const inspectorToggle = canvas.getByRole('button', { name: 'Hide inspector' });
-
-		await userEvent.click(inspectorToggle);
-		await expect(canvas.queryByRole('complementary', { name: 'Inspector' })).not.toBeInTheDocument();
-		await expect(canvas.getByRole('button', { name: 'Show inspector' })).toHaveAttribute('aria-expanded', 'false');
-	}
-};
-
-export const RailNavigation: Story = {
-	play: async ({ canvasElement }) => {
-		const canvas = within(canvasElement);
-		const sessions = canvas.getByRole('link', { name: 'Sessions' });
+		const views = within(canvasElement.querySelector<HTMLElement>('nav[aria-label="Views"]')!);
+		const sessions = views.getByRole('link', { name: 'Sessions' });
 
 		await expect(sessions).toHaveAttribute('href', '#sessions');
 		await expect(sessions).toHaveAttribute('aria-current', 'page');
-		await expect(canvas.getByRole('link', { name: 'Files' })).toHaveAttribute('href', '#files');
-		await expect(canvas.getByRole('button', { name: 'Terminal' })).toHaveAccessibleDescription(
-			'Open a workspace first'
+		await expect(views.getAllByRole('listitem')).toHaveLength(6);
+		await expect(views.getByRole('button', { name: 'Terminal' })).toHaveAccessibleDescription(
+			'Terminal Open a workspace first'
 		);
-	}
-};
-
-export const ComingSoon: Story = {
-	play: async ({ canvasElement }) => {
-		const canvas = within(canvasElement);
-		const settings = canvas.getByRole('button', { name: 'Settings' });
-
-		await expect(settings).toHaveAttribute('aria-disabled', 'true');
-		await expect(settings).toHaveAccessibleDescription('Coming soon');
-		await expect(canvas.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
+		await expect(views.getByRole('button', { name: 'Review' })).toHaveAccessibleDescription('Review Coming soon');
+		await expect(views.getByRole('link', { name: 'Settings' })).toHaveAccessibleDescription('Settings ⌘,');
 	}
 };
 
@@ -71,86 +51,40 @@ export const VitesseDark: Story = { args: { theme: 'vitesse-dark' } };
 
 export const AtkinsonHyperlegibleSoft: Story = { args: { uiFont: 'atkinson-hyperlegible-soft' } };
 
-export const InspectorClosed: Story = { args: { inspectorOpen: false } };
+export const WithoutWorkspaceColumn: Story = { args: { withWorkspace: false } };
 
 export const LongContent: Story = { args: { longContent: true } };
 
 export const Disconnected: Story = {
 	args: { disconnected: true },
 	play: async ({ canvasElement }) => {
-		const topBar = within(canvasElement.querySelector<HTMLElement>('.app-shell__command-bar')!);
-		await expect(topBar.getByRole('status')).toHaveTextContent('Disconnected');
+		const views = within(canvasElement.querySelector<HTMLElement>('nav[aria-label="Views"]')!);
+		await expect(views.getByRole('status')).toHaveTextContent('Disconnected');
 	}
 };
 
-export const NarrowLayout: Story = {
+export const NarrowOverlay: Story = {
 	parameters: { viewport: { defaultViewport: 'narrow' } },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		const navigationToggle = canvas.getByRole('button', { name: 'Open navigation' });
-
-		await expect(canvas.queryByRole('complementary', { name: 'Inspector' })).toBeNull();
-		await userEvent.click(canvas.getByRole('button', { name: 'Show inspector' }));
-		const inspector = canvas.getByRole('complementary', { name: 'Inspector' });
-		await userEvent.click(within(inspector).getByRole('button', { name: 'Close inspector' }));
-		await userEvent.click(navigationToggle);
-		await expect(navigationToggle).toHaveAttribute('aria-expanded', 'true');
-	}
-};
-
-/** Counts the running transform transitions on an element. */
-function transformTransitions(element: Element): number {
-	return element
-		.getAnimations()
-		.filter((animation) => animation instanceof CSSTransition && animation.transitionProperty === 'transform').length;
-}
-
-export const NarrowRailWithReducedMotion: Story = {
-	globals: { reducedMotion: 'on' },
-	parameters: { viewport: { defaultViewport: 'narrow' } },
-	play: async ({ canvasElement }) => {
-		await expect(document.documentElement.dataset.motion).toBe('reduce');
-		const rail = canvasElement.querySelector('#shell-context-rail')!;
-		// The decorator switches the attribute after first render; let that settle before opening.
-		await Promise.all(rail.getAnimations().map((animation) => animation.finished));
-		const closed = getComputedStyle(rail).transform;
-		await userEvent.click(within(canvasElement).getByRole('button', { name: 'Open navigation' }));
-		await expect(rail).toHaveClass('open');
-		await expect(getComputedStyle(rail).transform).toBe(closed);
-		await expect(transformTransitions(rail)).toBe(0);
-	}
-};
-
-export const NarrowRailWithFullMotion: Story = {
-	globals: { reducedMotion: 'off' },
-	parameters: { viewport: { defaultViewport: 'narrow' } },
-	play: async ({ canvasElement }) => {
-		await expect(document.documentElement.dataset.motion).toBe('full');
-		const rail = canvasElement.querySelector('#shell-context-rail')!;
-		await userEvent.click(within(canvasElement).getByRole('button', { name: 'Open navigation' }));
-		await waitFor(() => expect(transformTransitions(rail)).toBeGreaterThan(0));
+		await expect(canvas.queryByRole('dialog', { name: 'Checks' })).toBeNull();
+		const toggle = canvas.getByRole('button', { name: 'Show checks' });
+		await userEvent.click(toggle);
+		const overlay = canvas.getByRole('dialog', { name: 'Checks' });
+		await expect(overlay).toHaveFocus();
+		await userEvent.keyboard('{Escape}');
+		await expect(canvas.queryByRole('dialog', { name: 'Checks' })).toBeNull();
+		await expect(toggle).toHaveFocus();
 	}
 };
 
 const wide = { viewport: { defaultViewport: 'wide' } };
 
-export const RailToggleInTopBar: Story = {
-	parameters: wide,
-	play: async ({ canvasElement }) => {
-		const topBar = within(canvasElement.querySelector<HTMLElement>('.app-shell__command-bar')!);
-
-		await userEvent.click(topBar.getByRole('button', { name: 'Hide navigation' }));
-		await expect(within(canvasElement).queryByRole('complementary', { name: 'Workspaces' })).not.toBeInTheDocument();
-		await userEvent.click(topBar.getByRole('button', { name: 'Show navigation' }));
-		await expect(within(canvasElement).getByRole('complementary', { name: 'Workspaces' })).toBeVisible();
-	}
-};
-
 export const ResizeByKeyboard: Story = {
 	parameters: wide,
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		const separator = canvas.getByRole('separator', { name: 'Resize workspaces' });
+		const separator = canvas.getByRole('separator', { name: 'Resize the session bay' });
 		const before = Number(separator.getAttribute('aria-valuenow'));
 
 		separator.focus();
@@ -165,7 +99,7 @@ export const DragToResize: Story = {
 	parameters: wide,
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		const separator = canvas.getByRole('separator', { name: 'Resize inspector' });
+		const separator = canvas.getByRole('separator', { name: 'Resize the checks column' });
 		const before = Number(separator.getAttribute('aria-valuenow'));
 		const { x, y, width, height } = separator.getBoundingClientRect();
 		const start = { clientX: x + width / 2, clientY: y + height / 2 };
@@ -176,7 +110,7 @@ export const DragToResize: Story = {
 			{ keys: '[/MouseLeft]' }
 		]);
 		await waitFor(() =>
-			expect(canvas.getByRole('separator', { name: 'Resize inspector' })).toHaveAttribute(
+			expect(canvas.getByRole('separator', { name: 'Resize the checks column' })).toHaveAttribute(
 				'aria-valuenow',
 				String(before + 40)
 			)
@@ -186,14 +120,14 @@ export const DragToResize: Story = {
 
 export const ResetToDefaultWidth: Story = {
 	parameters: wide,
-	args: { paneWidths: { contextRail: 320, inspector: 400 } },
+	args: { paneWidths: { contextRail: 400, inspector: 400 } },
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		const separator = canvas.getByRole('separator', { name: 'Resize workspaces' });
+		const separator = canvas.getByRole('separator', { name: 'Resize the session bay' });
 
-		await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', '320'));
+		await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', '400'));
 		await userEvent.dblClick(separator);
-		await waitFor(() => expect(separator).not.toHaveAttribute('aria-valuenow', '320'));
+		await waitFor(() => expect(separator).not.toHaveAttribute('aria-valuenow', '400'));
 		await expect(canvas.getByLabelText('Saved pane widths')).toHaveTextContent('"contextRail":null');
 	}
 };
@@ -202,11 +136,11 @@ export const MinimumWidth: Story = {
 	parameters: wide,
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		const separator = canvas.getByRole('separator', { name: 'Resize workspaces' });
+		const separator = canvas.getByRole('separator', { name: 'Resize the session bay' });
 
 		separator.focus();
 		for (let press = 0; press < 8; press += 1) await userEvent.keyboard('{Shift>}{ArrowLeft}{/Shift}');
-		await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', '160'));
+		await waitFor(() => expect(separator).toHaveAttribute('aria-valuenow', '288'));
 	}
 };
 

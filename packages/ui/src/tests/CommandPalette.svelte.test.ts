@@ -6,7 +6,14 @@ import CommandPaletteDemo from '../stories/CommandPaletteDemo.svelte';
 
 const palette = () => page.getByRole('dialog', { name: 'Command palette' });
 const search = () => page.getByRole('combobox', { name: 'Search or run a command' });
-const commandBar = () => page.getByRole('button', { name: /Search or run a command/ });
+/** Opens the palette with its shortcut from outside any field. */
+async function openPalette(): Promise<void> {
+	(document.activeElement as HTMLElement | null)?.blur();
+	document.body.dispatchEvent(
+		new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'k', code: 'KeyK', metaKey: true })
+	);
+	await expect.element(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible();
+}
 const lastAction = () => page.getByLabelText('Last action');
 
 /** Dispatches a key press at the focused element, as the browser does. */
@@ -37,23 +44,9 @@ test('opens instantly from the keyboard and closes on Escape, returning focus', 
 	await expect.element(prompt).toHaveFocus();
 });
 
-test('fades in from a pointer open unless motion is reduced', async () => {
-	await render(CommandPaletteDemo);
-
-	await userEvent.click(commandBar());
-	await expect.element(palette()).toHaveAttribute('data-entrance', 'fade');
-	await userEvent.keyboard('{Escape}');
-	await expect.element(commandBar()).toHaveFocus();
-
-	document.documentElement.dataset.motion = 'reduce';
-	await userEvent.click(commandBar());
-	await expect.element(palette()).toBeVisible();
-	expect((palette().element() as HTMLElement).dataset.entrance).toBeUndefined();
-});
-
 test('filters with fuzzy matching and shows each shortcut', async () => {
 	await render(CommandPaletteDemo);
-	await userEvent.click(commandBar());
+	await openPalette();
 
 	await userEvent.type(search(), 'nxs');
 
@@ -69,7 +62,7 @@ test('filters with fuzzy matching and shows each shortcut', async () => {
 
 test('shows unavailable actions disabled with their reasons', async () => {
 	await render(CommandPaletteDemo);
-	await userEvent.click(commandBar());
+	await openPalette();
 
 	const shortcuts = page.getByRole('option', { name: /Show keyboard shortcuts/ });
 	await expect.element(shortcuts).toHaveAttribute('aria-disabled', 'true');
@@ -88,7 +81,7 @@ test('shows unavailable actions disabled with their reasons', async () => {
 
 test('shows an empty result', async () => {
 	await render(CommandPaletteDemo);
-	await userEvent.click(commandBar());
+	await openPalette();
 
 	await userEvent.type(search(), 'qqqq');
 
@@ -99,7 +92,7 @@ test('shows an empty result', async () => {
 
 test('runs the active entry with Enter and closes', async () => {
 	await render(CommandPaletteDemo);
-	await userEvent.click(commandBar());
+	await openPalette();
 
 	await userEvent.type(search(), 'session');
 	await userEvent.keyboard('{ArrowDown}');
@@ -112,12 +105,12 @@ test('runs the active entry with Enter and closes', async () => {
 
 test('runs a clicked session and lets an action move focus after closing', async () => {
 	await render(CommandPaletteDemo);
-	await userEvent.click(commandBar());
+	await openPalette();
 	await userEvent.click(page.getByRole('option', { name: /Rename theme tokens/ }));
 	await expect.element(palette()).not.toBeInTheDocument();
 	await expect.element(lastAction()).toHaveTextContent('Opened Rename theme tokens');
 
-	await userEvent.click(commandBar());
+	await openPalette();
 	await userEvent.type(search(), 'focus composer');
 	await userEvent.keyboard('{Enter}');
 	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toHaveFocus();
@@ -146,7 +139,6 @@ function pressAt(element: Element, init: KeyboardEventInit): boolean {
 test('leaves Ctrl+K to the composer and opens the palette with it elsewhere on Linux', async () => {
 	await render(CommandPaletteDemo, { platform: 'other', piBindings: PI_LINUX_DEFAULTS });
 	const prompt = page.getByRole('textbox', { name: 'Prompt' }).element();
-	await expect.element(commandBar()).toHaveTextContent('Ctrl+K');
 
 	expect(pressAt(prompt, { key: 'k', code: 'KeyK', ctrlKey: true })).toBe(false);
 	await expect.element(palette()).not.toBeInTheDocument();
@@ -181,7 +173,7 @@ test('opens the palette with Ctrl+K in the composer once Pi deletes to the line 
 
 test('opens on the first available action and runs it with Enter', async () => {
 	await render(CommandPaletteDemo);
-	await userEvent.click(commandBar());
+	await openPalette();
 
 	const options = page.getByRole('option');
 	await expect.element(options.first()).toHaveAttribute('aria-selected', 'true');

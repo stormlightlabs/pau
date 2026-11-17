@@ -21,8 +21,8 @@ also under **Help > Keyboard Shortcuts**. On Linux, read `⌘` as `Ctrl` and
 | `⌘L`                               | Focus the composer                  |
 | `Ctrl+Shift+Up`, `Ctrl+Shift+Down` | Previous or next prompt             |
 | `⌘[`, `⌘]`                         | Go back or forward                  |
-| `⌘B`                               | Show or hide the session rail       |
-| `⌥⌘B`                              | Show or hide the inspector          |
+| `/`                                | Filter the sessions in the bay      |
+| `⌥⌘B`                              | Show or hide the workspace column   |
 | `` Ctrl+` ``                       | Show or hide the terminal dock      |
 | `⌘=`, `⌘-`, `⌘0`                   | Zoom in, zoom out, or reset to 100% |
 
@@ -87,8 +87,8 @@ commands. Pau runs a built-in itself instead of sending it to the agent:
 | `/thinking [level]`       | Sets the thinking level, or focuses the level list     |
 | `/new`                    | Starts a session in this workspace                     |
 | `/resume`                 | Lists the workspace's saved sessions                   |
-| `/name [name]`            | Renames the session, or edits its name in the rail     |
-| `/session`                | Shows the inspector                                    |
+| `/name [name]`            | Renames the session, or edits its name in the bay      |
+| `/session`                | Shows the workspace column                             |
 | `/tree`                   | Shows the session tree                                 |
 | `/fork`                   | Selects your latest prompt in the session tree         |
 | `/clone`                  | Duplicates the session at its current position         |

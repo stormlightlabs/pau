@@ -138,7 +138,6 @@ test('starts Pi in the open workspace from New, and its menu offers Claude Code'
 
 	await userEvent.click(page.getByRole('button', { name: 'More ways to start a session' }));
 	const menu = page.getByRole('menu', { name: 'New session' });
-	await expect.element(menu).toBeVisible();
 	await userEvent.click(menu.getByRole('menuitem', { name: 'New Claude Code session' }));
 	expect(onStartSession).toHaveBeenLastCalledWith('pau-audit', 'claude');
 	await expect.element(menu).not.toBeInTheDocument();

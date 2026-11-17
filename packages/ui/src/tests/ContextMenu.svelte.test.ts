@@ -1,5 +1,5 @@
 import { page, userEvent } from 'vitest/browser';
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, expect, onTestFinished, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { contextMenuRequest, isContextMenuKey, revealLabel, type ContextMenuItem } from '../lib/context-menu';
@@ -69,6 +69,34 @@ test('keeps the menu on screen when its anchor starts past the right and bottom 
 	const bounds = menu.element().getBoundingClientRect();
 	expect(bounds.right).toBe(innerWidth - 8);
 	expect(bounds.bottom).toBe(innerHeight - 8);
+});
+
+async function resize(width: number, height: number): Promise<void> {
+	const resized = new Promise((resolve) => addEventListener('resize', resolve, { once: true }));
+	await page.viewport(width, height);
+	await resized;
+}
+
+test('scrolls to the last item in a window shorter than the menu', async () => {
+	const [width, height] = [innerWidth, innerHeight];
+	// A resize closes the menu, so each one lands before a menu opens.
+	onTestFinished(() => resize(width, height));
+	await resize(900, 200);
+	const invoker = document.createElement('button');
+	invokers.push(invoker);
+	document.body.append(invoker);
+	const long = Array.from({ length: 12 }, (_, index) => ({ id: `item-${index}`, label: `Item ${index + 1}` }));
+	await render(ContextMenu, {
+		request: { label: 'Long menu', items: long, x: 40, y: 40, keyboard: true, invoker, onSelect: vi.fn() },
+		onClose: vi.fn()
+	});
+
+	await expect.element(page.getByRole('menuitem', { name: 'Item 1', exact: true })).toHaveFocus();
+	await userEvent.keyboard('{End}');
+	const last = page.getByRole('menuitem', { name: 'Item 12' });
+	await expect.element(last).toHaveFocus();
+	await expect.element(last).toBeInViewport({ ratio: 1 });
+	await expect.element(page.getByRole('menu', { name: 'Long menu' })).toBeInViewport({ ratio: 1 });
 });
 
 test('explains a disabled item and refuses it', async () => {

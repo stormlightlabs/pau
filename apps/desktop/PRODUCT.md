@@ -2,6 +2,9 @@
 
 <!-- impeccable:product-schema 1 -->
 
+The [product specification](../../dev/product/README.md) holds the full
+requirements. This file summarizes them for design tools.
+
 ## Platform
 
 web

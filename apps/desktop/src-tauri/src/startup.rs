@@ -346,10 +346,8 @@ pub struct PauLauncher {
     /// The login shell, from `SHELL` or `/bin/zsh`.
     #[cfg(target_os = "macos")]
     shell: OsString,
-    /// Whether the app was started from a terminal, whose `PATH` it already
-    /// has, so the login shell is not asked for one.
-    #[cfg(target_os = "macos")]
-    started_from_terminal: bool,
+    /// The `PATH` the app was opened with.
+    inherited_path: OsString,
     server: Mutex<Option<ServerHandle>>,
 }
 
@@ -362,20 +360,17 @@ impl PauLauncher {
             options,
             #[cfg(target_os = "macos")]
             shell: env::var_os("SHELL").unwrap_or_else(|| OsString::from("/bin/zsh")),
-            #[cfg(target_os = "macos")]
-            started_from_terminal: crate::login_path::started_from_terminal(
-                env::var_os("TERM").as_deref(),
-            ),
+            inherited_path: env::var_os("PATH").unwrap_or_default(),
             server: Mutex::new(None),
         }
     }
 
-    /// Replaces the login shell and how the app was started, so tests can run
-    /// a fake shell whatever started the test.
+    /// Replaces the login shell and the inherited `PATH`, so tests can run a
+    /// fake shell whatever environment started the test.
     #[cfg(all(test, target_os = "macos"))]
-    fn with_shell(mut self, shell: OsString, started_from_terminal: bool) -> Self {
+    fn with_shell(mut self, shell: OsString, inherited_path: &str) -> Self {
         self.shell = shell;
-        self.started_from_terminal = started_from_terminal;
+        self.inherited_path = inherited_path.into();
         self
     }
 
@@ -403,16 +398,18 @@ impl Launcher for PauLauncher {
     type Database = ServerDatabase;
 
     /// Asks the login shell for its `PATH` on macOS, off the async runtime,
-    /// and puts it ahead of the inherited one. An app started from a terminal
-    /// and other platforms keep the inherited `PATH`.
+    /// and puts it ahead of the inherited one. An inherited `PATH` that a shell
+    /// already built, and other platforms, keep the inherited `PATH`.
     async fn read_path(&self) -> ProcessPath {
-        let inherited = env::var_os("PATH").unwrap_or_default();
+        let inherited = self.inherited_path.clone();
         #[cfg(target_os = "macos")]
         {
-            use crate::login_path::{LoginPathError, TIMEOUT, merge_paths, shell_path};
+            use crate::login_path::{
+                LoginPathError, TIMEOUT, inherits_shell_path, merge_paths, shell_path,
+            };
 
-            if self.started_from_terminal {
-                tracing::debug!("started from a terminal; keeping its PATH");
+            if inherits_shell_path(&inherited) {
+                tracing::debug!("the inherited PATH comes from a shell; keeping it");
                 return ProcessPath {
                     path: inherited,
                     failure: None,

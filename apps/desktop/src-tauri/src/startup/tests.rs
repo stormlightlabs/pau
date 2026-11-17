@@ -294,6 +294,10 @@ async fn a_slow_login_shell_fails_its_step_without_stopping_startup() {
     );
 }
 
+/// The `PATH` launchd gives an app opened from Finder.
+#[cfg(target_os = "macos")]
+const BARE_PATH: &str = "/usr/bin:/bin:/usr/sbin:/sbin";
+
 /// Writes an executable script that stands in for the login shell.
 #[cfg(target_os = "macos")]
 fn fake_shell(directory: &std::path::Path, body: &str) -> OsString {
@@ -315,7 +319,7 @@ async fn reads_a_slow_login_shell_off_the_runtime() {
         directory.path(),
         "sleep 1; printf '__PAU_LOGIN_PATH__/login/bin__PAU_LOGIN_PATH__'",
     );
-    let launcher = PauLauncher::new(None, ServerOptions::default()).with_shell(shell, false);
+    let launcher = PauLauncher::new(None, ServerOptions::default()).with_shell(shell, BARE_PATH);
     // The test runtime has one thread, so the ticks advance only while the
     // shell runs elsewhere.
     let ticks = std::cell::Cell::new(0);
@@ -340,21 +344,40 @@ async fn reads_a_slow_login_shell_off_the_runtime() {
     );
 }
 
-/// Started from a terminal, the app keeps the terminal's `PATH` and never
-/// runs the login shell.
+/// An inherited `PATH` that a shell built, as a terminal start gives, is kept
+/// and the login shell never runs.
 #[cfg(target_os = "macos")]
 #[tokio::test]
-async fn keeps_a_terminal_path_without_running_the_login_shell() {
+async fn keeps_a_shell_built_path_without_running_the_login_shell() {
     let directory = tempfile::tempdir().unwrap();
     let record = directory.path().join("ran");
     let shell = fake_shell(directory.path(), &format!("touch '{}'", record.display()));
-    let launcher = PauLauncher::new(None, ServerOptions::default()).with_shell(shell, true);
+    let inherited = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+    let launcher = PauLauncher::new(None, ServerOptions::default()).with_shell(shell, inherited);
 
     let path = launcher.read_path().await;
 
-    assert_eq!(path.path, std::env::var_os("PATH").unwrap_or_default());
+    assert_eq!(path.path, inherited);
     assert_eq!(path.failure, None);
     assert!(!record.exists());
+}
+
+/// A bare launchd `PATH` always runs the login shell, whatever else the
+/// environment holds, such as a `TERM` from `open` in a scrubbed script.
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn runs_the_login_shell_for_a_bare_inherited_path() {
+    let directory = tempfile::tempdir().unwrap();
+    let shell = fake_shell(
+        directory.path(),
+        "printf '__PAU_LOGIN_PATH__/opt/homebrew/bin__PAU_LOGIN_PATH__'",
+    );
+    let launcher = PauLauncher::new(None, ServerOptions::default()).with_shell(shell, BARE_PATH);
+
+    let path = launcher.read_path().await;
+
+    assert_eq!(path.path, "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin");
+    assert_eq!(path.failure, None);
 }
 
 #[cfg(target_os = "macos")]
@@ -362,11 +385,11 @@ async fn keeps_a_terminal_path_without_running_the_login_shell() {
 async fn keeps_the_inherited_path_when_the_login_shell_reports_none() {
     let directory = tempfile::tempdir().unwrap();
     let shell = fake_shell(directory.path(), "exit 0");
-    let launcher = PauLauncher::new(None, ServerOptions::default()).with_shell(shell, false);
+    let launcher = PauLauncher::new(None, ServerOptions::default()).with_shell(shell, BARE_PATH);
 
     let path = launcher.read_path().await;
 
-    assert_eq!(path.path, std::env::var_os("PATH").unwrap_or_default());
+    assert_eq!(path.path, BARE_PATH);
     let failure = path.failure.unwrap();
     assert!(
         failure
@@ -389,7 +412,7 @@ async fn reports_a_database_from_a_newer_version_and_stops() {
     let launcher = PauLauncher::new(Some(path), ServerOptions::default());
     // Keep the developer's own login shell out of the test.
     #[cfg(target_os = "macos")]
-    let launcher = launcher.with_shell(fake_shell(directory.path(), "exit 0"), false);
+    let launcher = launcher.with_shell(fake_shell(directory.path(), "exit 0"), BARE_PATH);
 
     let (result, snapshots) = run_recorded(&launcher, &state).await;
 

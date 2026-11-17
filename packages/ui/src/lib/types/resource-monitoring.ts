@@ -1,7 +1,11 @@
+import type { SessionStatus } from './session';
+
 /** Per-process metrics shown when a monitored tree is expanded. */
 export type ProcessResourceNode = {
 	pid: number;
 	parentPid?: number;
+	/** Executable name, such as `node`, without its arguments. */
+	name?: string;
 	cpuPercent: number;
 	residentMemoryBytes: number;
 	diskReadBytes?: number;
@@ -15,7 +19,8 @@ export type ProcessResourceSnapshot = {
 	sessionId?: string;
 	label: string;
 	kind: string;
-	status: 'running' | 'waiting' | 'stopped' | 'failed';
+	/** State of the session that owns the tree. */
+	status: SessionStatus;
 	sampledAtMillis: number;
 	elapsedMillis: number;
 	cpuPercent: number;
@@ -32,3 +37,9 @@ export type ProcessResourceSnapshot = {
 
 /** Explicit controls available for a monitored agent session. */
 export type ProcessResourceActions = { interrupt: boolean; stop: boolean };
+
+/**
+ * One resource sample: Pau's totals, for Pau and every process it started,
+ * and the agent process tree of each running session.
+ */
+export type ProcessUsage = { pau: ProcessResourceSnapshot; sessions: ProcessResourceSnapshot[] };

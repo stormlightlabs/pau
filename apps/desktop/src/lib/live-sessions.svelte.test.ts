@@ -429,3 +429,103 @@ test('marks a failed session restarted once the operator starts it again under a
 	expect(find('session-1')).toMatchObject({ status: 'failed', restarted: true, error: expect.any(String) });
 	expect(find('session-2')?.restarted).toBeUndefined();
 });
+
+/** A sampled process tree as the server sends it. */
+const tree = (process_id: string, kind: string, session_id: string | null, workspace_id: string | null) => ({
+	process_id,
+	workspace_id,
+	session_id,
+	kind,
+	sampled_at_millis: 1,
+	elapsed_millis: 1,
+	cpu_percent: 12.5,
+	cpu_time_millis: 1,
+	resident_memory_bytes: 2048,
+	peak_resident_memory_bytes: 4096,
+	process_count: 2,
+	peak_process_count: 2,
+	disk_read_bytes: null,
+	disk_write_bytes: null,
+	processes: [
+		{
+			identity: { pid: 10, started_at_seconds: 1 },
+			parent_pid: null,
+			name: 'pi',
+			cpu_percent: 12.5,
+			resident_memory_bytes: 2048,
+			disk_read_bytes: null,
+			disk_write_bytes: null
+		}
+	]
+});
+
+test('follows resource samples and names each session tree by its session', async () => {
+	const { sessions, socket } = await setup();
+	expect(sessions.processUsage).toBeUndefined();
+	const sample = (sequence: number, cpu: number) =>
+		socket.receive({
+			type: 'event',
+			event: {
+				sequence,
+				timestamp: '2026-04-01T12:00:03Z',
+				workspace_id: null,
+				session_id: null,
+				kind: 'process_usage_sampled',
+				payload: JSON.stringify([
+					{ ...tree('pau', 'pau', null, null), processes: [] },
+					{ ...tree('session-1', 'pi', 'session-1', 'pau'), cpu_percent: cpu },
+					// A tree for a session the store does not know yet is left out.
+					tree('session-9', 'pi', 'session-9', 'pau')
+				])
+			}
+		});
+
+	sample(10, 12.5);
+	flushSync();
+	expect(sessions.processUsage?.pau).toMatchObject({ label: 'Pau', processCount: 2, residentMemoryBytes: 2048 });
+	expect(sessions.processUsage?.sessions).toEqual([
+		expect.objectContaining({
+			sessionId: 'session-1',
+			label: 'New Pi session',
+			kind: 'Pi',
+			status: 'idle',
+			cpuPercent: 12.5,
+			processes: [{ pid: 10, parentPid: undefined, name: 'pi', cpuPercent: 12.5, residentMemoryBytes: 2048 }]
+		})
+	]);
+
+	sample(11, 80);
+	flushSync();
+	expect(sessions.processUsage?.sessions[0]?.cpuPercent).toBe(80);
+});
+
+test("reads Pau's version and each session's agent version", async () => {
+	const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+		const url = String(input);
+		const body = url.endsWith('/api/version')
+			? { version: '0.6.0' }
+			: url.startsWith('/api/agents/readiness')
+				? {
+						agents: [
+							{ agent: 'pi', version: '0.70.2' },
+							{ agent: 'claude', version: null }
+						]
+					}
+				: url === '/api/sessions'
+					? [session]
+					: [];
+		return Response.json(body);
+	});
+	const socket = new FakeEventSocket('ws://test');
+	const sessions = new LiveSessions({
+		browserOrigin: 'http://localhost',
+		fetcher: fetcher as unknown as typeof fetch,
+		socketFactory: () => socket
+	});
+	sessions.connect();
+	await sessions.checkClaude();
+
+	await vi.waitFor(() => expect(sessions.version).toBe('0.6.0'));
+	expect(sessions.agentVersion('session-1')).toBe('0.70.2');
+	expect(sessions.agentVersion('unknown')).toBeUndefined();
+});

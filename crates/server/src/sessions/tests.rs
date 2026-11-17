@@ -887,6 +887,33 @@ async fn starts_pi_with_the_discovery_path() {
 }
 
 #[tokio::test]
+async fn lists_the_agent_process_of_each_live_session_for_sampling() {
+    let fixture = Fixture::new(None).await;
+    assert!(fixture.sessions.usage_roots().await.is_empty());
+
+    let (status, session) = fixture.start(None).await;
+    assert_eq!(status, StatusCode::CREATED, "{session}");
+    let id = session["id"].as_str().unwrap();
+    let pid = fixture
+        .sessions
+        .registry
+        .get(id)
+        .await
+        .unwrap()
+        .process_id();
+
+    assert_eq!(
+        fixture.sessions.usage_roots().await,
+        [crate::process_usage::UsageRoot {
+            session_id: id.to_owned(),
+            workspace_id: fixture.workspace_id.clone(),
+            agent: "pi".to_owned(),
+            pid,
+        }]
+    );
+}
+
+#[tokio::test]
 async fn renames_and_clones_a_session() {
     let fixture = Fixture::new(None).await;
     let mut stream = fixture.events.subscribe(None);
@@ -2713,6 +2740,7 @@ async fn shutdown_kills_sessions_and_terminals_that_ignore_signals() {
         starts: fixture.starts.clone(),
         shutdown: None,
         task: Some(tokio::spawn(async { Ok(()) })),
+        process_usage: tokio::spawn(async {}),
     };
     let started = std::time::Instant::now();
     server.shutdown().await.unwrap();
@@ -2773,6 +2801,7 @@ async fn shutdown_refuses_new_starts_and_stops_the_ones_in_flight() {
         starts: fixture.starts.clone(),
         shutdown: None,
         task: Some(tokio::spawn(async { Ok(()) })),
+        process_usage: tokio::spawn(async {}),
     };
     server.request_shutdown();
     let (status, body) = fixture
@@ -2853,6 +2882,7 @@ async fn shutdown_waits_for_a_sandboxed_start_whose_client_left() {
         starts: fixture.starts.clone(),
         shutdown: None,
         task: Some(tokio::spawn(async { Ok(()) })),
+        process_usage: tokio::spawn(async {}),
     };
     server.request_shutdown();
     let stopping = tokio::spawn(server.shutdown());

@@ -15,6 +15,7 @@ durable interaction changes.
 | Editor and review     | default                                               | Edit a file and review changes                     |
 | Embedded editor study | default                                               | Record a deferred deep-integration direction       |
 | Terminal              | default                                               | Use persistent PTY sessions                        |
+| Status bar            | idle, busy, many processes, no session, narrow        | See what open work costs the machine               |
 | Processes             | default                                               | Inspect workspace and session machine resource use |
 | Diagnostics           | default                                               | Inspect and export redacted support data           |
 | Resources             | default                                               | Inspect scope, trust, and capability               |
@@ -262,6 +263,40 @@ Plain-text web addresses and workspace file paths in the output open on
 click, as OSC 8 links do. A file path becomes a link only when the workspace
 confirms it names a file, and it opens in Files at the line the output gave.
 Absolute paths, parent-directory paths, and version-like text stay plain.
+
+## Status bar
+
+The status bar sits at the foot of every view. It keeps the workspace, the
+open session and Pau's own resource use in sight without opening a view.
+Resource use leads the bar's purpose: the operator should see a runaway
+session or a heavy MCP server before the machine slows.
+
+Priority order, kept as space runs out:
+
+1. Pau's CPU and memory, in the trailing button.
+2. The open session's CPU and memory.
+3. The branch, changed-file count and sandbox state.
+4. The session's agent and context use.
+5. Versions, the token total, cost and process counts.
+
+From 1200px the bar shows everything. Between 900 and 1199px it keeps every
+item but drops words:
+
+- The CPU and Context labels and the sandbox wording leave the screen and
+  stay in each item's accessible name, so the sandbox shows only its icon.
+- Pau's version, the agent's version, the token total, cost and process
+  counts drop. The overlay still lists versions and process counts, and the
+  composer's status line still shows tokens and cost.
+- The branch is the only item that truncates. It keeps up to 28 characters
+  and gives up width first.
+
+The overlay lists Pau first, then each running session with its agent's name
+and version, its CPU and memory, and its peak memory. Each session's agent
+process leads its child processes, which follow largest memory first and are
+named by executable, never by command line. The overlay caps its height at
+the room above the button and scrolls inside, so a session with dozens of
+processes never covers the bar. Before the first sample, the button shows
+only Pau's version and the overlay says Pau hasn't measured resource use yet.
 
 ## Processes
 

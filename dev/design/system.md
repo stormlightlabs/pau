@@ -62,6 +62,9 @@ The wide shell has three columns:
   changes, branch, checks and terminals. It holds detail and never becomes a
   second navigation column.
 
+A 32px status bar spans all three columns at the foot of the window in every
+view, as [Status bar](#status-bar) describes.
+
 A view without workspace detail, such as Settings, gives the workspace column
 to the main surface. A view with its own sections, such as the Settings
 sections, the Files tree or the terminal list, lists them in a 224px column
@@ -84,6 +87,35 @@ a workspace stays disabled until one is open, and its tooltip gives the reason.
 A view that is not ready yet stays visible and disabled with a "Coming soon"
 tooltip.
 
+### Status bar
+
+The status bar answers what the open work costs the machine and what it runs
+on. It is one 32px row on the bay surface under a 1px rule, set in the mono
+metadata role in muted text. It holds state, not navigation, and nothing in it
+is green.
+
+Its leading group starts on the bay's `space/4` inset:
+
+1. The workspace's branch, or its name outside Git, then its changed-file
+   count and its sandbox state.
+2. After a 1px rule, the open session's agent and version, context use,
+   token total and cost, then the CPU, memory and process count of its agent
+   and every process it started. Figures that are zero stay hidden. Without
+   an open session it reads "No session".
+
+At its trailing edge, a quiet button shows Pau's version and the CPU, memory
+and process count of Pau and everything Pau started. The button fills the
+bar's height with square corners, so the bar holds a 32px control without the
+40px container the control rule asks for elsewhere. It opens an overlay above
+itself that lists each running session as a strip, with its child processes
+as row strips beneath it. Outside press and Escape close the overlay, and
+focus returns to the button.
+
+The bar follows the session in view. On another view it follows the session
+last shown, and a workspace view drops a session from another workspace. The
+backend samples resource use every two seconds while a window is connected,
+and the figures change in place without motion.
+
 ### Breakpoints
 
 - Wide, 1200px and up: bay, main surface and workspace column side by side.
@@ -92,7 +124,9 @@ tooltip.
   right over a scrim. The header opens it, and the scrim or Escape closes it.
   It stays closed until the operator opens it, so new detail never covers the
   main surface. Section rails become tab rows. Buttons marked collapsible drop
-  to their icon. An open terminal dock takes the whole main surface.
+  to their icon. An open terminal dock takes the whole main surface. The
+  status bar keeps every item and drops words, as the Status bar brief in
+  [surfaces](surfaces.md#status-bar) records.
 - Below 900px is not a supported layout. The window keeps a 900px minimum
   width.
 

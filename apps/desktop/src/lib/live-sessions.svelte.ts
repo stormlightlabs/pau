@@ -1,6 +1,7 @@
 import type {
 	AgentSession,
 	GitStatus,
+	ProcessResourceSnapshot,
 	SandboxSelection,
 	ServerEvent,
 	TerminalInfo,
@@ -14,6 +15,7 @@ import type {
 	MessageQueue,
 	ModelOption,
 	PromptImage,
+	ProcessUsage,
 	PromptQueue,
 	SavedSessionList,
 	SessionAgent,
@@ -35,6 +37,7 @@ import {
 	cloneSession,
 	exportSessionTranscript,
 	getAgentReadiness,
+	getBackendVersion,
 	compactSession,
 	clearSessionQueue,
 	getSessionExtensionUi,
@@ -329,6 +332,12 @@ export class LiveSessions {
 	/** Sessions that waited, failed, or finished a turn out of view and have not been opened since. */
 	readonly #unseen = new SvelteSet<string>();
 	#claudeReadiness = $state<AgentReadinessProblem>();
+	/** The version each agent reports, by agent ID, from the readiness report. */
+	#agentVersions = $state<Record<string, string>>({});
+	/** Pau's version, from the backend. */
+	#version = $state<string>();
+	/** The latest resource sample, from `process_usage_sampled` events. */
+	#processUsage = $state<ProcessResourceSnapshot[]>();
 	/** Ended sessions the operator started again. Their failure is history, so they leave Needs you. */
 	readonly #restarted = new SvelteSet<string>();
 	/** Sessions whose usage an event updated while its read was in flight, so the read is stale. */
@@ -443,6 +452,15 @@ export class LiveSessions {
 		}
 	}
 
+	async #readVersion(): Promise<void> {
+		try {
+			const { version } = await getBackendVersion(this.#fetcher);
+			this.#version = version;
+		} catch {
+			// The status bar leaves the version out until a later load reads it.
+		}
+	}
+
 	async #readTerminals(): Promise<void> {
 		try {
 			this.#terminals = await listTerminals(this.#fetcher);
@@ -553,6 +571,7 @@ export class LiveSessions {
 			for (const session of sessions) this.#sessions[session.id] ??= session;
 			this.#loadFailed = false;
 			this.#refresh();
+			void this.#readVersion();
 		} catch {
 			this.#loadFailed = true;
 		} finally {
@@ -561,6 +580,12 @@ export class LiveSessions {
 	}
 
 	#apply(state: EventStreamState, event: ServerEvent | undefined): void {
+		// A sample arrives every few seconds and changes nothing else, so it
+		// skips the pass over every session below.
+		if (event?.kind === 'process_usage_sampled') {
+			this.#processUsage = JSON.parse(event.payload) as ProcessResourceSnapshot[];
+			return;
+		}
 		if (event?.kind === 'session_output' && event.session_id) {
 			const sessionId = event.session_id;
 			const payload: unknown = JSON.parse(event.payload);
@@ -607,6 +632,10 @@ export class LiveSessions {
 			}
 			if (changed.kind === 'terminal_changed') {
 				void this.#readTerminals();
+				continue;
+			}
+			if (changed.kind === 'process_usage_sampled') {
+				this.#processUsage = JSON.parse(changed.payload) as ProcessResourceSnapshot[];
 				continue;
 			}
 			if (changed.kind === 'sandbox_changed' && changed.workspace_id) {
@@ -672,6 +701,12 @@ export class LiveSessions {
 		else this.#workspaces[index] = workspace;
 	}
 
+	/** The name the bay shows: the operator's pending rename, Pi's name, or the first prompt. */
+	#title(session: AgentSession): string {
+		const transcript = this.#transcripts[session.id] ?? emptyPiTranscript;
+		return this.#pendingNames[session.id] ?? session.name ?? sessionTitle(transcript, agentLabel(session.agent));
+	}
+
 	#viewModel(session: AgentSession): SessionViewModel {
 		const transcript = this.#transcripts[session.id] ?? emptyPiTranscript;
 		const extensionUi = this.#extensionUi[session.id] ?? emptyExtensionUi;
@@ -680,7 +715,7 @@ export class LiveSessions {
 			id: session.id,
 			workspaceId: session.workspace_id,
 			savedSessionId: session.native_session_id ?? undefined,
-			title: this.#pendingNames[session.id] ?? session.name ?? sessionTitle(transcript, agent),
+			title: this.#title(session),
 			agent,
 			status: session.status,
 			error: failureMessage(session),
@@ -758,12 +793,50 @@ export class LiveSessions {
 	async checkClaude(refresh = false): Promise<void> {
 		try {
 			const report = await getAgentReadiness(refresh, this.#fetcher);
+			this.#agentVersions = Object.fromEntries(
+				report.agents.flatMap((agent) => (agent.version ? [[agent.agent, agent.version]] : []))
+			);
 			const claude = report.agents.find((agent) => agent.agent === 'claude');
 			this.#claudeReadiness =
 				claude && !claude.ready && claude.reason ? { agent: 'claude', reason: claude.reason } : undefined;
 		} catch {
 			this.#claudeReadiness = undefined;
 		}
+	}
+
+	/** The session the operator is looking at in the session view, if any. */
+	get viewedSessionId(): string | undefined {
+		return this.#viewed;
+	}
+
+	/** Pau's version, once the backend reports it. */
+	get version(): string | undefined {
+		return this.#version;
+	}
+
+	/** The version a session's agent reports, once the readiness report is read. */
+	agentVersion(sessionId: string): string | undefined {
+		const agent = this.#sessions[sessionId]?.agent;
+		return agent === undefined ? undefined : this.#agentVersions[agent];
+	}
+
+	/**
+	 * The latest resource sample, with each session's tree named by its title
+	 * and its agent's name and version. Absent until the backend sends one.
+	 */
+	get processUsage(): ProcessUsage | undefined {
+		const sample = this.#processUsage;
+		const pau = sample?.find((snapshot) => snapshot.kind === 'pau');
+		if (!sample || !pau) return undefined;
+		const sessions = sample.flatMap((snapshot) => {
+			const session = snapshot.session_id ? this.#sessions[snapshot.session_id] : undefined;
+			if (!session) return [];
+			const agent = agentLabel(session.agent);
+			const version = this.#agentVersions[session.agent];
+			const kind = version ? `${agent} ${version}` : agent;
+			return [viewSnapshot(snapshot, { label: this.#title(session), kind, status: session.status })];
+		});
+		return { pau: viewSnapshot(pau, { label: 'Pau', kind: 'pau', status: 'running' }), sessions };
 	}
 
 	/** Whether the backend is unreachable. The first connection attempt counts as loading. */
@@ -1214,6 +1287,36 @@ function sandboxSummary(selection: SandboxSelection | undefined): SessionWorkspa
 	const domains = grants.domains.length;
 	const network = domains === 0 ? 'network off' : `${domains} ${domains === 1 ? 'domain' : 'domains'} allowed`;
 	return { sandboxed: true, label: `${access}, ${network}` };
+}
+
+/** A sampled process tree as the status bar shows it, named by its owner. */
+function viewSnapshot(
+	snapshot: ProcessResourceSnapshot,
+	owner: Pick<ProcessUsage['pau'], 'label' | 'kind' | 'status'>
+): ProcessUsage['pau'] {
+	return {
+		...owner,
+		processId: snapshot.process_id,
+		workspaceId: snapshot.workspace_id ?? '',
+		sessionId: snapshot.session_id ?? undefined,
+		sampledAtMillis: snapshot.sampled_at_millis,
+		elapsedMillis: snapshot.elapsed_millis,
+		cpuPercent: snapshot.cpu_percent,
+		cpuTimeMillis: snapshot.cpu_time_millis,
+		residentMemoryBytes: snapshot.resident_memory_bytes,
+		peakResidentMemoryBytes: snapshot.peak_resident_memory_bytes,
+		processCount: snapshot.process_count,
+		peakProcessCount: snapshot.peak_process_count,
+		diskReadBytes: snapshot.disk_read_bytes ?? undefined,
+		diskWriteBytes: snapshot.disk_write_bytes ?? undefined,
+		processes: snapshot.processes.map((node) => ({
+			pid: node.identity.pid,
+			parentPid: node.parent_pid ?? undefined,
+			name: node.name,
+			cpuPercent: node.cpu_percent,
+			residentMemoryBytes: node.resident_memory_bytes
+		}))
+	};
 }
 
 /** A terminal as the workspace column lists it: its program and its state. */

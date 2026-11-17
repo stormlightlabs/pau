@@ -12,6 +12,7 @@
 	import { getKeymap, useKeyActions } from './keymap.svelte';
 	import PaneResizer from './PaneResizer.svelte';
 	import { getShellBay } from './shell-bay';
+	import { getShellStatusBar } from './shell-status-bar';
 	import { setWorkspaceColumn } from './workspace-column';
 
 	/**
@@ -141,6 +142,8 @@
 
 	const sharedBay = getShellBay();
 	const bay = $derived(ownBay ?? sharedBay);
+	/** The status bar an ancestor shares, which spans the foot of every view. */
+	const statusBar = getShellStatusBar();
 	/** Whether the view has a section column. With a bay, it opens the main surface. */
 	const sectioned = $derived(Boolean(context) || contextItems.length > 0);
 	const keymap = getKeymap();
@@ -623,6 +626,9 @@
 			</div>
 		{/if}
 	{/if}
+	{#if statusBar}
+		<div class="app-shell__status" inert={overlayShown}>{@render statusBar()}</div>
+	{/if}
 	{#if layer}{@render layer()}{/if}
 </div>
 
@@ -647,9 +653,11 @@
 		 */
 		--pau-shell-inset: var(--pau-space-4);
 		display: grid;
-		grid-template-areas: 'bay main';
+		grid-template-areas:
+			'bay main'
+			'status status';
 		grid-template-columns: var(--pau-shell-bay-width) minmax(0, 1fr);
-		grid-template-rows: minmax(0, 1fr);
+		grid-template-rows: minmax(0, 1fr) auto;
 		height: 100dvh;
 		overflow: hidden;
 		color: var(--pau-text);
@@ -660,7 +668,9 @@
 	}
 
 	.app-shell--with-workspace {
-		grid-template-areas: 'bay main workspace';
+		grid-template-areas:
+			'bay main workspace'
+			'status status status';
 		grid-template-columns: var(--pau-shell-bay-width) minmax(24rem, 1fr) var(--pau-shell-workspace-width);
 	}
 
@@ -984,6 +994,11 @@
 		min-height: 0;
 		border-top: 1px solid var(--pau-border);
 		background-color: var(--pau-canvas);
+	}
+
+	.app-shell__status {
+		grid-area: status;
+		min-width: 0;
 	}
 
 	.app-shell__workspace {

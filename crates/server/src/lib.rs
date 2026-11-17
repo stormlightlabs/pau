@@ -56,6 +56,7 @@ use tracing::instrument::WithSubscriber;
 
 mod audit;
 mod build_info;
+mod process_usage;
 mod sessions;
 mod starts;
 mod terminals;
@@ -318,9 +319,11 @@ impl EventHub {
                 event.clone(),
             );
         }
-        state.replay.push_back(event.clone());
-        if state.replay.len() > self.replay_capacity {
-            state.replay.pop_front();
+        if kind.is_replayed() {
+            state.replay.push_back(event.clone());
+            if state.replay.len() > self.replay_capacity {
+                state.replay.pop_front();
+            }
         }
         let receiver_count = self.live.receiver_count();
         let _ = self.live.send(event.clone());
@@ -352,6 +355,11 @@ impl EventHub {
             });
         }
         event
+    }
+
+    /// Whether any client is connected to the event stream.
+    pub fn has_subscribers(&self) -> bool {
+        self.live.receiver_count() > 0
     }
 
     /// The sequence of the last published event, or 0 before the first.
@@ -1486,6 +1494,8 @@ pub struct ServerHandle {
     starts: StartGate,
     shutdown: Option<oneshot::Sender<()>>,
     task: Option<JoinHandle<io::Result<()>>>,
+    /// Samples resource use until shutdown. See `process_usage`.
+    process_usage: JoinHandle<()>,
 }
 
 impl ServerHandle {
@@ -1523,6 +1533,7 @@ impl ServerHandle {
     /// [`StartGate`].
     pub fn request_shutdown(&mut self) {
         self.starts.close();
+        self.process_usage.abort();
         if let Some(shutdown) = self.shutdown.take() {
             self.diagnostics.record(DiagnosticRecordInput {
                 timestamp: diagnostic_timestamp(),
@@ -1860,6 +1871,17 @@ pub async fn start_with_database(
         events.clone(),
         audit.clone(),
     );
+    let usage_sessions = sessions.clone();
+    let process_usage = process_usage::spawn(process_usage::ProcessUsageSampling {
+        events: events.clone(),
+        sampler: pau_core::resource_monitor::SystemProcessSampler::default(),
+        roots: move || {
+            let sessions = usage_sessions.clone();
+            async move { sessions.usage_roots().await }
+        },
+        interval: process_usage::SAMPLE_INTERVAL,
+        pau_pid: std::process::id(),
+    });
     let terminals = terminals::TerminalRegistry::default();
     let server_sessions = sessions.clone();
     let server_events = events.clone();
@@ -1923,6 +1945,7 @@ pub async fn start_with_database(
         starts,
         shutdown: Some(shutdown),
         task: Some(task),
+        process_usage,
     })
 }
 

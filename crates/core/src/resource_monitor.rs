@@ -29,6 +29,8 @@ pub struct ObservedProcess {
     pub identity: ProcessIdentity,
     /// Parent PID reported by the operating system.
     pub parent_pid: Option<u32>,
+    /// Executable name the operating system reports, without arguments.
+    pub name: String,
     /// Current CPU use as a percentage of one logical CPU.
     pub cpu_percent: f32,
     /// Accumulated CPU time in milliseconds.
@@ -86,6 +88,7 @@ impl ProcessSampler for SystemProcessSampler {
                         started_at_seconds: process.start_time(),
                     },
                     parent_pid,
+                    name: process.name().to_string_lossy().into_owned(),
                     cpu_percent: process.cpu_usage(),
                     cpu_time_millis: process.accumulated_cpu_time(),
                     resident_memory_bytes: process.memory(),
@@ -102,8 +105,8 @@ impl ProcessSampler for SystemProcessSampler {
 pub struct MonitoredProcess {
     /// Stable Pau process identifier.
     pub id: String,
-    /// Workspace that owns the process.
-    pub workspace_id: String,
+    /// Workspace that owns the process. Absent for Pau's own process tree.
+    pub workspace_id: Option<String>,
     /// Session that owns the process, when applicable.
     pub session_id: Option<String>,
     /// Human-readable process kind, such as `pi`, `claude`, or `terminal`.
@@ -121,6 +124,9 @@ pub struct ProcessResourceNode {
     pub identity: ProcessIdentity,
     /// Parent PID reported by the operating system.
     pub parent_pid: Option<u32>,
+    /// Executable name the operating system reports, without arguments, so
+    /// the breakdown names a process without exposing its command line.
+    pub name: String,
     /// Current CPU use as a percentage of one logical CPU.
     pub cpu_percent: f32,
     /// Current resident memory in bytes.
@@ -136,8 +142,8 @@ pub struct ProcessResourceNode {
 pub struct ProcessResourceSnapshot {
     /// Stable Pau process identifier.
     pub process_id: String,
-    /// Workspace that owns the process.
-    pub workspace_id: String,
+    /// Workspace that owns the process. Absent for Pau's own process tree.
+    pub workspace_id: Option<String>,
     /// Session that owns the process, when applicable.
     pub session_id: Option<String>,
     /// Process kind shown in the UI.
@@ -311,7 +317,7 @@ impl ResourceMonitor {
         let mut snapshots: Vec<_> = self
             .registrations
             .values()
-            .filter(|process| process.workspace_id == workspace_id)
+            .filter(|process| process.workspace_id.as_deref() == Some(workspace_id))
             .filter_map(|process| self.history.get(&process.id)?.back().cloned())
             .collect();
         snapshots.sort_by(|left, right| left.process_id.cmp(&right.process_id));
@@ -396,6 +402,7 @@ impl ResourceMonitor {
                     .map(|process| ProcessResourceNode {
                         identity: process.identity,
                         parent_pid: process.parent_pid,
+                        name: process.name.clone(),
                         cpu_percent: process.cpu_percent,
                         resident_memory_bytes: process.resident_memory_bytes,
                         disk_read_bytes: process.disk_read_bytes,
@@ -543,6 +550,7 @@ mod tests {
                 started_at_seconds: start,
             },
             parent_pid: parent,
+            name: format!("process-{pid}"),
             cpu_percent: cpu,
             cpu_time_millis: (pid as u64) * 10,
             resident_memory_bytes: memory,
@@ -554,7 +562,7 @@ mod tests {
     fn registration() -> MonitoredProcess {
         MonitoredProcess {
             id: "process-1".to_owned(),
-            workspace_id: "workspace-1".to_owned(),
+            workspace_id: Some("workspace-1".to_owned()),
             session_id: Some("session-1".to_owned()),
             kind: "pi".to_owned(),
             root: ProcessIdentity {
@@ -584,6 +592,7 @@ mod tests {
         assert_eq!(snapshot.cpu_percent, 60.0);
         assert_eq!(snapshot.resident_memory_bytes, 6_000);
         assert_eq!(snapshot.disk_read_bytes, Some(3_300));
+        assert_eq!(snapshot.processes[1].name, "process-11");
 
         let reused = monitor.observe(104_000, vec![process(10, 103, None, 1.0, 10)]);
         assert_eq!(reused.completed.len(), 1);

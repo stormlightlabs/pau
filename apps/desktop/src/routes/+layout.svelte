@@ -5,7 +5,9 @@
 		LaunchSplash,
 		SessionBayState,
 		setSessionBayState,
-		setShellBay
+		setShellBay,
+		setShellStatusBar,
+		StatusBar
 	} from '@stormlightlabs/pau-ui';
 	import { onMount, setContext, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -19,6 +21,7 @@
 	import { interfacePreferences } from '$lib/interface-preferences.svelte';
 	import { LiveSessions, liveSessionsContext } from '$lib/live-sessions.svelte';
 	import { SessionAttention, sessionAttentionContext } from '$lib/session-attention';
+	import { terminalDock } from '$lib/terminal-dock.svelte';
 	import {
 		agentReadinessContext,
 		agentReadinessProblem,
@@ -53,6 +56,22 @@
 	const sessions = setContext(liveSessionsContext, new LiveSessions({ browserOrigin: location.origin }));
 	setSessionBayState(new SessionBayState());
 	setShellBay(appBay);
+	setShellStatusBar(statusBar);
+
+	/**
+	 * What the status bar describes: the session in view, or the one last
+	 * shown when another view is open, and its workspace. A workspace view
+	 * names its own workspace and drops a session from another one.
+	 */
+	const status = $derived.by(() => {
+		const workspaces = sessions.workspaces;
+		const sessionId = sessions.viewedSessionId ?? terminalDock.session?.sessionId;
+		const owner = workspaces.find((workspace) => workspace.sessions.some((session) => session.id === sessionId));
+		const workspaceId = page.params.workspaceId ?? owner?.id ?? terminalDock.session?.workspaceId;
+		const workspace = workspaces.find((candidate) => candidate.id === workspaceId) ?? workspaces[0];
+		const session = workspace?.sessions.find((candidate) => candidate.id === sessionId);
+		return { workspace, session };
+	});
 
 	// The browser development server has no startup to follow: its backend is
 	// already running behind the Vite proxy.
@@ -121,6 +140,15 @@
 
 {#snippet appBay()}
 	<AppBay {sessions} />
+{/snippet}
+
+{#snippet statusBar()}
+	<StatusBar
+		version={sessions.version}
+		workspace={status.workspace}
+		session={status.session}
+		agentVersion={status.session && sessions.agentVersion(status.session.id)}
+		usage={sessions.processUsage} />
 {/snippet}
 
 {#snippet app()}

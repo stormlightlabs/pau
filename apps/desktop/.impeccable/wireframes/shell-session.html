@@ -1011,6 +1011,90 @@ test result: <span class="ok">ok</span>. 36 passed; 0 failed
 					</div>
 				</div>
 			</aside>
+			<!-- Status bar: the open workspace and session on the left, Pau's own use in the button on the right. -->
+			<footer class="statusbar" aria-label="Status">
+				<div class="statusbar__context">
+					<span class="statusbar__item statusbar__branch" title="claude/sandbox"
+						><svg class="icon"><use href="#i-branch" /></svg><span class="visually-hidden">Branch</span
+						><span class="statusbar__truncate">claude/sandbox</span></span
+					>
+					<span class="statusbar__item">4 changed</span>
+					<span class="statusbar__item" title="Sandbox on, network off"
+						><svg class="icon"><use href="#i-shield" /></svg><span class="statusbar__collapse">Sandboxed</span></span
+					>
+					<span class="statusbar__rule" aria-hidden="true"></span>
+					<span class="statusbar__item">Pi<span class="statusbar__wide">&nbsp;0.70.2</span></span>
+					<span class="statusbar__item mono"><span class="statusbar__collapse">Context&nbsp;</span>61%</span>
+					<span class="statusbar__item mono statusbar__wide">139.1k tokens</span>
+					<span class="statusbar__item mono statusbar__wide">$1.84</span>
+					<span class="statusbar__item mono"
+						><span class="visually-hidden">Session</span><span class="statusbar__collapse">CPU&nbsp;</span>41.6% · 512
+						MiB<span class="statusbar__wide">&nbsp;· 3 processes</span></span
+					>
+				</div>
+				<details class="popover statusbar__pau">
+					<summary class="btn btn--quiet statusbar__trigger">
+						<span>Pau<span class="statusbar__wide">&nbsp;0.6.0</span></span
+						><span class="mono"
+							><span class="statusbar__collapse">CPU&nbsp;</span>48.4% · 1.4 GiB<span class="statusbar__wide"
+								>&nbsp;· 12 processes</span
+							></span
+						><svg class="icon"><use href="#i-chev" /></svg>
+					</summary>
+					<div class="menu menu--above statusbar__panel" role="group" aria-labelledby="h-usage">
+						<h2 class="bay-heading"><span class="section-label" id="h-usage">Resource use</span></h2>
+						<div class="strip">
+							<span></span>
+							<span class="strip__line"
+								><span class="strip__name">Pau</span><span class="strip__agent">0.6.0</span></span
+							>
+							<span class="strip__meta mono">12 processes</span>
+							<span></span>
+							<span class="strip__state mono">CPU 48.4% · 1.4 GiB</span>
+							<span class="strip__figure mono">peak 1.6 GiB</span>
+						</div>
+						<h3 class="bay-heading">
+							<span class="section-label">Sessions</span><span class="bay-heading__count">2</span>
+						</h3>
+						<div class="strip">
+							<span class="mark mark--running" role="img" aria-label="Running"></span>
+							<span class="strip__line"
+								><span class="strip__name">Sandbox Pi sessions</span><span class="strip__agent">Pi 0.70.2</span></span
+							>
+							<span class="strip__meta mono">3 processes</span>
+							<span></span>
+							<span class="strip__state mono">CPU 41.6% · 512 MiB</span>
+							<span class="strip__figure mono">peak 614 MiB</span>
+						</div>
+						<div class="strip strip--row statusbar__process">
+							<span></span><span class="strip__name mono">pi</span
+							><span class="strip__figure mono">18.4% · 212 MiB</span>
+						</div>
+						<div class="strip strip--row statusbar__process">
+							<span></span><span class="strip__name mono">node</span
+							><span class="strip__figure mono">21.1% · 286 MiB</span>
+						</div>
+						<div class="strip strip--row statusbar__process">
+							<span></span><span class="strip__name mono">rg</span><span class="strip__figure mono">2.1% · 14 MiB</span>
+						</div>
+						<div class="strip">
+							<span class="mark mark--idle" role="img" aria-label="Ready"></span>
+							<span class="strip__line"
+								><span class="strip__name">Website changelog feed</span
+								><span class="strip__agent">Pi 0.70.2</span></span
+							>
+							<span class="strip__meta mono">1 process</span>
+							<span></span>
+							<span class="strip__state mono">CPU 0.3% · 176 MiB</span>
+							<span class="strip__figure mono">peak 190 MiB</span>
+						</div>
+						<div class="strip strip--row statusbar__process">
+							<span></span><span class="strip__name mono">pi</span
+							><span class="strip__figure mono">0.3% · 176 MiB</span>
+						</div>
+					</div>
+				</details>
+			</footer>
 		</div>
 
 		<script>

@@ -134,6 +134,13 @@ export const statusBarFixtures = {
 	busy: { workspace, session: session('pau-diff'), usage: sample([diffGutter, designAudit, themes, crowded]) },
 	/** The open session runs a crowd of child processes. */
 	manyProcesses: { workspace, session: session('pau-models'), agentVersion: '2.1.4', usage: sample([crowded, themes]) },
+	/** The open session forked far more processes than the panel lists. */
+	runaway: {
+		workspace,
+		session: session('pau-models'),
+		agentVersion: '2.1.4',
+		usage: sample([{ ...crowded, processCount: 326, peakProcessCount: 326 }])
+	},
 	/** A sandboxed workspace with changes and no session yet. */
 	noSession: {
 		workspace: { ...(bayFixtures.busy[0] as SessionWorkspace), sessions: [] },

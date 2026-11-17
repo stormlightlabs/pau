@@ -31,6 +31,10 @@ export type ProcessResourceSnapshot = {
 	peakProcessCount: number;
 	diskReadBytes?: number;
 	diskWriteBytes?: number;
+	/**
+	 * The root, then its largest descendants. Pau lists a bounded number, so
+	 * `processCount` can exceed its length.
+	 */
 	processes: ProcessResourceNode[];
 	pressure?: 'cpu' | 'memory';
 };

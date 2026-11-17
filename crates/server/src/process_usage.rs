@@ -98,6 +98,15 @@ where
                 event = "process_usage.sampler_failed",
                 "the process sampler panicked, so resource use is no longer reported"
             );
+            // An empty sample replaces the last one in the snapshot, so
+            // clients stop showing figures that will never change again.
+            events.publish(
+                diagnostic_timestamp(),
+                None,
+                None,
+                ServerEventKind::ProcessUsageSampled,
+                "[]",
+            );
             return;
         };
         state = Some(sampler);
@@ -204,7 +213,13 @@ impl<S: ProcessSampler> Sampler<S> {
             });
             self.registered.insert(process.id.clone(), process.root.pid);
         }
-        let mut snapshots = self.monitor.observe(sampled_at_millis, observed).published;
+        let update = self.monitor.observe(sampled_at_millis, observed);
+        // The monitor finishes a tree whose root is missing from one table,
+        // so the root registers again once its row returns.
+        for finished in &update.completed {
+            self.registered.remove(&finished.process_id);
+        }
+        let mut snapshots = update.published;
         snapshots.retain(|snapshot| self.registered.contains_key(&snapshot.process_id));
         for snapshot in &mut snapshots {
             if snapshot.process_id == PAU {
@@ -383,6 +398,87 @@ mod tests {
             ..session_root()
         };
         assert_eq!(sampler.sample(vec![missing], 6_000).len(), 1);
+    }
+
+    /// Returns each table in turn, then the last one forever.
+    struct ChangingTable(Vec<Vec<ObservedProcess>>);
+
+    impl ProcessSampler for ChangingTable {
+        fn sample(&mut self) -> Vec<ObservedProcess> {
+            if self.0.len() > 1 {
+                self.0.remove(0)
+            } else {
+                self.0[0].clone()
+            }
+        }
+    }
+
+    #[test]
+    fn registers_a_root_again_after_its_row_goes_missing() {
+        let rows = table(&Arc::new(AtomicUsize::new(0))).rows;
+        let without_pau: Vec<_> = rows
+            .iter()
+            .filter(|row| row.identity.pid != 1)
+            .cloned()
+            .collect();
+        let mut sampler = Sampler::new(ChangingTable(vec![rows.clone(), without_pau, rows]), 1);
+        let ids = |snapshots: Vec<ProcessResourceSnapshot>| -> Vec<String> {
+            snapshots
+                .into_iter()
+                .map(|snapshot| snapshot.process_id)
+                .collect()
+        };
+
+        assert_eq!(
+            ids(sampler.sample(vec![session_root()], 2_000)),
+            ["pau", "session-1"]
+        );
+        assert_eq!(
+            ids(sampler.sample(vec![session_root()], 4_000)),
+            ["session-1"]
+        );
+        assert_eq!(
+            ids(sampler.sample(vec![session_root()], 6_000)),
+            ["pau", "session-1"]
+        );
+    }
+
+    struct PanickingTable;
+
+    impl ProcessSampler for PanickingTable {
+        fn sample(&mut self) -> Vec<ObservedProcess> {
+            panic!("the process table could not be read");
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn clears_the_sample_when_the_sampler_fails() {
+        let events = EventHub::default();
+        events.publish(
+            diagnostic_timestamp(),
+            None,
+            None,
+            ServerEventKind::ProcessUsageSampled,
+            r#"[{"stale":true}]"#,
+        );
+        let mut receiver = events.live.subscribe();
+        let task = spawn(ProcessUsageSampling {
+            events: events.clone(),
+            sampler: PanickingTable,
+            roots: || async { Vec::new() },
+            interval: SAMPLE_INTERVAL,
+            pau_pid: 1,
+        });
+
+        assert!(snapshots(&receiver.recv().await.unwrap()).is_empty());
+        task.await.unwrap();
+        let fresh = events.subscribe(None);
+        let [pau_core::ServerStreamMessage::Snapshot { snapshot }] = fresh.initial.as_slice()
+        else {
+            panic!("a client without a checkpoint gets a snapshot");
+        };
+        assert_eq!(snapshot.events.len(), 1);
+        assert_eq!(snapshot.events[0].payload, "[]");
     }
 
     #[tokio::test(start_paused = true)]

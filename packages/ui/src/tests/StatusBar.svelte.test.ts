@@ -42,6 +42,15 @@ test('lists each running session and its processes, and closes on Escape', async
 	await expect.element(pau()).toHaveFocus();
 });
 
+test('counts the processes a large tree leaves out of the list', async () => {
+	await render(StatusBar, { version, ...statusBarFixtures.runaway });
+
+	await userEvent.click(pau());
+	const crowd = panel().getByRole('list', { name: 'Processes of Model list filter' });
+	expect(crowd.getByRole('listitem').elements()).toHaveLength(15);
+	await expect.element(crowd.getByRole('listitem').last()).toHaveTextContent('and 312 more');
+});
+
 test('closes on an outside press', async () => {
 	await render(StatusBar, { version, ...statusBarFixtures.idle });
 
@@ -58,7 +67,7 @@ test('names a workspace without a session and a missing sample', async () => {
 	await expect.element(bar()).toHaveTextContent('4 changed');
 	await expect.element(bar()).toHaveTextContent('Sandboxed');
 	await userEvent.click(pau());
-	await expect.element(panel()).toHaveTextContent("Pau hasn't measured resource use yet.");
+	await expect.element(panel()).toHaveTextContent("Resource use isn't measured.");
 });
 
 test('says when no workspace is open', async () => {

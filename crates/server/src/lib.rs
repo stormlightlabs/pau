@@ -242,6 +242,13 @@ struct SnapshotKey {
 struct EventHubState {
     next_sequence: u64,
     replay: VecDeque<ServerEvent>,
+    /// Sequence of the newest replayed event that left `replay`, or 0 before
+    /// any did. Replay holds every replayed event after it, so a client that
+    /// applied at least this sequence can catch up from replay. Comparing with
+    /// the oldest event in `replay` instead would report a gap whenever an
+    /// event that replay never keeps, such as a resource sample, took the
+    /// sequence just before it.
+    evicted_through: u64,
     snapshot: HashMap<SnapshotKey, ServerEvent>,
     reconnects: u64,
     replay_gaps: u64,
@@ -275,6 +282,7 @@ impl EventHub {
             state: Arc::new(Mutex::new(EventHubState {
                 next_sequence: 1,
                 replay: VecDeque::with_capacity(replay_capacity),
+                evicted_through: 0,
                 snapshot: HashMap::new(),
                 reconnects: 0,
                 replay_gaps: 0,
@@ -321,8 +329,10 @@ impl EventHub {
         }
         if kind.is_replayed() {
             state.replay.push_back(event.clone());
-            if state.replay.len() > self.replay_capacity {
-                state.replay.pop_front();
+            if state.replay.len() > self.replay_capacity
+                && let Some(evicted) = state.replay.pop_front()
+            {
+                state.evicted_through = evicted.sequence;
             }
         }
         let receiver_count = self.live.receiver_count();
@@ -377,13 +387,8 @@ impl EventHub {
         let receiver = self.live.subscribe();
         let mut state = self.state.lock().expect("event hub lock poisoned");
         let boundary = state.next_sequence.saturating_sub(1);
-        let replay_available = after.is_some_and(|sequence| {
-            sequence <= boundary
-                && state
-                    .replay
-                    .front()
-                    .is_none_or(|oldest| sequence >= oldest.sequence.saturating_sub(1))
-        });
+        let replay_available =
+            after.is_some_and(|sequence| sequence <= boundary && sequence >= state.evicted_through);
 
         let initial = if replay_available {
             state
@@ -2727,6 +2732,26 @@ pub(crate) mod tests {
         let reconnected = events.subscribe(Some(1));
 
         assert_eq!(event_sequences(&reconnected.initial), vec![2, 3]);
+    }
+
+    /// Replay skips resource samples, so the first replayed event need not
+    /// follow the client's sequence directly.
+    #[test]
+    fn replays_from_the_start_after_an_unreplayed_sample() {
+        let events = EventHub::new(4);
+        events.publish(
+            diagnostic_timestamp(),
+            None,
+            None,
+            ServerEventKind::ProcessUsageSampled,
+            "[]",
+        );
+        publish_session(&events, "first");
+        publish_session(&events, "second");
+
+        let subscription = events.subscribe(Some(0));
+        assert_eq!(event_sequences(&subscription.initial), vec![2, 3]);
+        assert_eq!(events.state.lock().unwrap().replay_gaps, 0);
     }
 
     #[test]

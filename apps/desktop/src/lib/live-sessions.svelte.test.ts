@@ -497,6 +497,21 @@ test('follows resource samples and names each session tree by its session', asyn
 	sample(11, 80);
 	flushSync();
 	expect(sessions.processUsage?.sessions[0]?.cpuPercent).toBe(80);
+
+	// The server sends an empty sample once it stops measuring.
+	socket.receive({
+		type: 'event',
+		event: {
+			sequence: 12,
+			timestamp: '2026-04-01T12:00:05Z',
+			workspace_id: null,
+			session_id: null,
+			kind: 'process_usage_sampled',
+			payload: '[]'
+		}
+	});
+	flushSync();
+	expect(sessions.processUsage).toBeUndefined();
 });
 
 test("reads Pau's version and each session's agent version", async () => {

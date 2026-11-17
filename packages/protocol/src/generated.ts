@@ -587,7 +587,10 @@ disk_read_bytes: number | null,
  */
 disk_write_bytes: number | null,
 /**
- * Current per-process breakdown for the root and descendants.
+ * Current per-process breakdown: the root, then its descendants by
+ * resident memory, largest first. It lists at most
+ * [`MAX_LISTED_PROCESSES`], so `process_count` minus its length is the
+ * number of processes left out.
  */
 processes: Array<ProcessResourceNode>, };
 

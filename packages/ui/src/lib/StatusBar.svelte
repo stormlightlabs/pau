@@ -222,13 +222,20 @@
 													>{formatCpu(node.cpuPercent)} · {formatBytes(node.residentMemoryBytes)}</span>
 											</li>
 										{/each}
+										{#if tree.processCount > tree.processes.length}
+											<li class="pau-strip pau-strip--row status-bar__process">
+												<span></span>
+												<span class="pau-strip__agent">and {tree.processCount - tree.processes.length} more</span>
+												<span></span>
+											</li>
+										{/if}
 									</ul>
 								</li>
 							{/each}
 						</ul>
 					{/if}
 				{:else}
-					<p class="status-bar__note">Pau hasn't measured resource use yet.</p>
+					<p class="status-bar__note">Resource use isn't measured.</p>
 				{/if}
 			</div>
 		{/if}

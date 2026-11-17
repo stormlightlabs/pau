@@ -1,6 +1,7 @@
 import { getContext, setContext } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 
+import type { AttentionStop } from './session-bay';
 import type { SavedSession } from './types/session';
 
 /** A workspace's saved sessions for the bay: loading, loaded, or failed. */
@@ -28,11 +29,18 @@ export class SessionBayState {
 	 */
 	readonly needsSince = new SvelteMap<string, number>();
 	/**
-	 * The session whose strip takes focus once a bay shows it open. The
-	 * attention jump sets it, since opening a session from another view
-	 * mounts the session view's own bay.
+	 * Where the attention jump last landed, so the next jump moves on from
+	 * that session's place even after opening it cleared its marker.
 	 */
-	focusRequest = $state<string>();
+	landed = $state<AttentionStop>();
+	/**
+	 * The session whose strip takes focus once a bay shows it open, and the
+	 * session that was open when the jump asked. Opening a session from
+	 * another view mounts the session view's own bay, so the request waits
+	 * while a bay still shows `from` open. A bay that shows any other session
+	 * open drops it, so a click or shortcut that lands first keeps its focus.
+	 */
+	focusRequest = $state<{ session: string; from: string | undefined }>();
 
 	/** Records the sessions now in Needs you, keeping the arrival order of those already there. */
 	trackNeeds(present: readonly string[]): void {

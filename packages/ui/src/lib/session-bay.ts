@@ -74,24 +74,51 @@ export function attentionKind(session: MarkedSession): AttentionKind | undefined
 
 const ATTENTION_ORDER: readonly AttentionKind[] = ['waiting', 'failed', 'unread'];
 
+/** A session the attention jump opened, and why it stopped there. */
+export type AttentionStop = { session: string; kind: AttentionKind };
+
+/** Where the attention jump starts from. */
+export type AttentionJumpFrom = {
+	/** The open session, if any. */
+	active?: string;
+	/** Where the previous jump landed. */
+	landed?: AttentionStop;
+};
+
 /**
  * The session the attention jump opens next: waiting sessions first, then
- * failed, then unread, each group in the order the bay lists it. From a
- * marked session it moves to the one after it, wrapping past the last. From
- * any other session it opens the first. Returns `undefined` when no session
- * is marked, or when the open session is the only one.
+ * failed, then unread, each group in the order the bay lists it.
+ *
+ * The jump moves on from the open session's place in that order, wrapping
+ * past the last. A marked open session keeps its place. An open session the
+ * previous jump landed on keeps the place it had then, even after it lost
+ * its mark: opening an unread session clears its marker, and answering a
+ * waiting one moves it out of Needs you. Without that place, the next press
+ * would start over and revisit every failed or waiting session the operator
+ * left alone. From any other session, or none, the jump opens the first.
+ *
+ * Returns `undefined` when no session is marked, or when the open session
+ * is the only one.
  */
 export function nextAttentionSession(
 	sessions: readonly Pick<SessionViewModel, 'id' | 'status' | 'attention' | 'restarted' | 'unseen'>[],
-	activeSessionId: string | undefined
-): string | undefined {
-	const marked = ATTENTION_ORDER.flatMap((kind) =>
-		sessions.filter((session) => attentionKind(session) === kind).map((session) => session.id)
-	);
+	from: AttentionJumpFrom
+): AttentionStop | undefined {
+	const rank = (kind: AttentionKind, index: number) => ATTENTION_ORDER.indexOf(kind) * sessions.length + index;
+	const marked = sessions
+		.flatMap((session, index) => {
+			const kind = attentionKind(session);
+			return kind ? [{ session: session.id, kind, rank: rank(kind, index) }] : [];
+		})
+		.sort((left, right) => left.rank - right.rank);
 	if (marked.length === 0) return undefined;
-	const current = activeSessionId === undefined ? -1 : marked.indexOf(activeSessionId);
-	const next = marked[(current + 1) % marked.length];
-	return next === activeSessionId ? undefined : next;
+
+	const index = sessions.findIndex((session) => session.id === from.active);
+	const active = sessions[index];
+	const kind = active && (attentionKind(active) ?? (from.landed?.session === active.id ? from.landed.kind : undefined));
+	const place = kind ? rank(kind, index) : -1;
+	const next = marked.find((stop) => stop.rank > place) ?? marked[0]!;
+	return next.session === from.active ? undefined : { session: next.session, kind: next.kind };
 }
 
 /**

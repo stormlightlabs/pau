@@ -116,6 +116,57 @@ test('⌥⌘A opens and focuses waiting, then failed, then unread sessions, and 
 	}
 });
 
+test('⌥⌘A moves on from an unread session after opening it cleared its marker', async () => {
+	const keymap = listeningKeymap();
+	const session = (id: string, status: SessionViewModel['status']) => ({
+		...template,
+		id,
+		title: `Session ${id}`,
+		status,
+		unseen: true
+	});
+	const workspaces: SessionWorkspace[] = [
+		{
+			id: 'pau',
+			name: 'Pau',
+			sessions: [
+				{ ...template, id: 'viewed', title: 'Viewed' },
+				session('u1', 'idle'),
+				session('f', 'failed'),
+				session('u2', 'idle')
+			]
+		}
+	];
+	await render(SessionViewDemo, {
+		props: { workspaces, initialSessionId: 'viewed' },
+		context: new Map([[keymapContext, keymap]])
+	});
+	await userEvent.click(page.getByRole('textbox', { name: 'Prompt' }));
+
+	for (const title of ['Session f', 'Session u1', 'Session u2', 'Session f']) {
+		await jump();
+		const strip = page.getByRole('button', { name: new RegExp(String.raw`${title}\b`) });
+		await expect.element(strip).toHaveAttribute('aria-current', 'page');
+		await expect.element(strip).toHaveFocus();
+	}
+});
+
+test('⌥⌘A clears a filter that hides the session it opens, and focuses its strip', async () => {
+	const keymap = listeningKeymap();
+	await render(SessionViewDemo, {
+		props: { workspaces: rail(['failed']), initialSessionId: 'viewed' },
+		context: new Map([[keymapContext, keymap]])
+	});
+	const filter = page.getByLabelText('Filter sessions');
+	await userEvent.fill(filter, 'Viewed');
+	await expect.element(page.getByRole('button', { name: /Session failed/ })).not.toBeInTheDocument();
+	await userEvent.click(page.getByRole('textbox', { name: 'Prompt' }));
+
+	await jump();
+	await expect.element(filter).toHaveValue('');
+	await expect.element(page.getByRole('button', { name: /Session failed/ })).toHaveFocus();
+});
+
 test('⌥⌘A does nothing when no session needs attention', async () => {
 	const keymap = listeningKeymap();
 	await render(SessionViewDemo, {
@@ -147,6 +198,52 @@ test('a jump from a view without the session open focuses the strip once the ses
 
 	await render(SessionView, { props: { workspaces: rail(['failed']), activeSessionId: 's-failed' }, context });
 	await expect.element(page.getByRole('button', { name: /Session failed/ })).toHaveFocus();
+});
+
+test('a jump from another view clears a filter that hides the session, and focuses its strip', async () => {
+	const keymap = listeningKeymap();
+	const memory = new SessionBayState();
+	memory.filter = 'Viewed';
+	const context = new Map<unknown, unknown>([
+		[keymapContext, keymap],
+		[sessionBayStateContext, memory]
+	]);
+	const elsewhere = await render(SessionBay, {
+		props: { workspaces: rail(['failed']), onSelectSession: vi.fn() },
+		context
+	});
+
+	await jump();
+	elsewhere.unmount();
+
+	await render(SessionView, { props: { workspaces: rail(['failed']), activeSessionId: 's-failed' }, context });
+	await expect.element(page.getByRole('button', { name: /Session failed/ })).toHaveFocus();
+});
+
+test("a session opened before the jump lands drops the jump's focus request", async () => {
+	const keymap = listeningKeymap();
+	const memory = new SessionBayState();
+	const context = new Map<unknown, unknown>([
+		[keymapContext, keymap],
+		[sessionBayStateContext, memory]
+	]);
+	const elsewhere = await render(SessionBay, {
+		props: { workspaces: rail(['failed']), onSelectSession: vi.fn() },
+		context
+	});
+	await jump();
+	elsewhere.unmount();
+
+	const view = await render(SessionView, {
+		props: { workspaces: rail(['failed']), activeSessionId: 'viewed' },
+		context
+	});
+	await userEvent.click(page.getByRole('textbox', { name: 'Prompt' }));
+	await view.rerender({ workspaces: rail(['failed']), activeSessionId: 's-failed' });
+
+	const strip = page.getByRole('button', { name: /Session failed/ });
+	await expect.element(strip).toHaveAttribute('aria-current', 'page');
+	expect(document.activeElement).not.toBe(strip.element());
 });
 
 test('a failed session started again keeps its failed marker, and ⌥⌘A skips it', async () => {

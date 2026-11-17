@@ -30,6 +30,8 @@ also under **Help > Keyboard Shortcuts**. On Linux, read `⌘` as `Ctrl` and
 Each press of `⌥⌘A` opens the next session that needs attention, in every
 view. It visits sessions that wait for you or stopped responding first, then
 failed sessions, then sessions that finished a turn while you were elsewhere.
+A session you leave alone is not visited again until the jump wraps around.
+If the bay's filter hides the next session, the jump clears the filter.
 
 The **File** menu has **New Session** and **Open Workspace**, and the **View**
 menu has the zoom commands.

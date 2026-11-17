@@ -250,26 +250,38 @@
 		});
 	});
 
-	/** Opens the next session that needs a look, from every session whether or not the filter shows it. */
+	/**
+	 * Opens the next session that needs a look, from every session whether or
+	 * not the filter shows it. The jump means "show me what needs me", so when
+	 * the filter hides that session's strip, it clears the filter rather than
+	 * skip the session or open it with no strip to focus.
+	 */
 	function jumpToAttention(): void {
-		const ordered = [...racked.needs, ...racked.running, ...racked.settled]
-			.filter((strip) => strip.kind === 'live')
-			.map((strip) => strip.session);
-		const next = nextAttentionSession(ordered, activeSessionId);
+		const ordered = [...racked.needs, ...racked.running, ...racked.settled].filter((strip) => strip.kind === 'live');
+		const next = nextAttentionSession(
+			ordered.map((strip) => strip.session),
+			{ active: activeSessionId, landed: memory.landed }
+		);
 		if (!next) return;
-		memory.focusRequest = next;
-		onSelectSession(next);
+		const strip = ordered.find((candidate) => candidate.session.id === next.session);
+		if (strip && !filterMatches(strip)) memory.filter = '';
+		memory.landed = next;
+		memory.focusRequest = { session: next.session, from: activeSessionId };
+		onSelectSession(next.session);
 	}
 
-	// The jump's strip takes focus once this bay shows its session open. A bay
-	// that does not mark the open session, as in views other than Sessions,
-	// leaves the request to the session view's bay.
+	// The jump's strip takes focus once this bay shows its session open. The
+	// request waits while the bay still shows the session the jump left, as
+	// in views other than Sessions, which mark no open session, and ends
+	// unused once the bay shows any other session open.
 	$effect(() => {
-		const id = memory.focusRequest;
-		if (!id || id !== activeSessionId) return;
+		const request = memory.focusRequest;
+		const active = activeSessionId;
+		if (!request || active === request.from) return;
 		untrack(() => {
 			memory.focusRequest = undefined;
-			bayElement?.querySelector<HTMLElement>(`#session-row-${CSS.escape(id)}`)?.focus();
+			if (active !== request.session) return;
+			bayElement?.querySelector<HTMLElement>(`#session-row-${CSS.escape(active)}`)?.focus();
 		});
 	});
 

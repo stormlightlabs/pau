@@ -58,10 +58,24 @@ pub struct SystemProcessSampler {
     system: System,
 }
 
+/// What each sample reads for every process on the machine.
+///
+/// `sysinfo` always reads the name, parent and start time. Everything else is
+/// opt-in, and this asks only for the counters Pau reports. Never add the
+/// command line, environment, working directory or executable path: the
+/// sampler walks every user's processes, and `sysinfo` keeps what it reads, so
+/// those would put other programs' arguments and secrets in Pau's memory.
+fn process_refresh_kind() -> ProcessRefreshKind {
+    ProcessRefreshKind::nothing()
+        .with_cpu()
+        .with_memory()
+        .with_disk_usage()
+        .without_tasks()
+}
+
 impl Default for SystemProcessSampler {
     fn default() -> Self {
-        let refresh =
-            RefreshKind::nothing().with_processes(ProcessRefreshKind::everything().without_tasks());
+        let refresh = RefreshKind::nothing().with_processes(process_refresh_kind());
         Self {
             system: System::new_with_specifics(refresh),
         }
@@ -73,7 +87,7 @@ impl ProcessSampler for SystemProcessSampler {
         self.system.refresh_processes_specifics(
             ProcessesToUpdate::All,
             true,
-            ProcessRefreshKind::everything().without_tasks(),
+            process_refresh_kind(),
         );
         self.system
             .processes()
@@ -307,6 +321,14 @@ impl ResourceMonitor {
         self.registrations.insert(process.id.clone(), process);
     }
 
+    /// Stops sampling one process tree and drops its history, for an owner
+    /// that no longer tracks it. Unlike an exit, this yields no summary.
+    pub fn unregister(&mut self, process_id: &str) {
+        self.registrations.remove(process_id);
+        self.history.remove(process_id);
+        self.pressure_state.remove(process_id);
+    }
+
     /// Returns bounded raw history for one stable process identifier.
     pub fn history(&self, process_id: &str) -> Option<&VecDeque<ProcessResourceSnapshot>> {
         self.history.get(process_id)
@@ -482,10 +504,8 @@ impl ResourceMonitor {
     fn finish(&mut self, process_id: &str, ended_at_millis: u64) -> Option<ProcessResourceSummary> {
         let registration = self.registrations.remove(process_id)?;
         self.pressure_state.remove(process_id);
-        let latest = self
-            .history
-            .get(process_id)
-            .and_then(|history| history.back());
+        let history = self.history.remove(process_id);
+        let latest = history.as_ref().and_then(|history| history.back());
         Some(ProcessResourceSummary {
             process_id: process_id.to_owned(),
             ended_at_millis,
@@ -678,6 +698,20 @@ mod tests {
                 disk_write_bytes: Some(2_000),
             }]
         );
+        assert!(monitor.history("process-1").is_none());
+    }
+
+    #[test]
+    fn unregister_stops_sampling_and_drops_history() {
+        let mut monitor = ResourceMonitor::new(4, 0, ResourcePressureConfig::default());
+        monitor.register(registration());
+        monitor.observe(102_000, vec![process(10, 100, None, 12.0, 4_096)]);
+        assert!(monitor.history("process-1").is_some());
+
+        monitor.unregister("process-1");
+        assert!(monitor.history("process-1").is_none());
+        let update = monitor.observe(104_000, vec![process(10, 100, None, 12.0, 4_096)]);
+        assert_eq!(update, ResourceMonitorUpdate::default());
     }
 
     #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -692,5 +726,17 @@ mod tests {
             .expect("current process is sampled");
         assert!(sample.identity.started_at_seconds > 0);
         assert!(sample.resident_memory_bytes > 0);
+        assert!(!sample.name.is_empty());
+
+        // The test process has arguments and an environment, so this fails if
+        // the refresh kind starts reading them again.
+        let this = sampler
+            .system
+            .process(sysinfo::Pid::from_u32(current))
+            .expect("current process is kept");
+        assert!(this.cmd().is_empty());
+        assert!(this.environ().is_empty());
+        assert!(this.cwd().is_none());
+        assert!(this.exe().is_none());
     }
 }

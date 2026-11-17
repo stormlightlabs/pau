@@ -2778,6 +2778,23 @@ pub(crate) mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn shutdown_stops_the_resource_sampler() {
+        let server = start((Ipv4Addr::LOCALHOST, 0).into()).await.unwrap();
+        let sampler = server.process_usage.abort_handle();
+        assert!(!sampler.is_finished());
+
+        server.shutdown().await.unwrap();
+
+        timeout(Duration::from_secs(1), async {
+            while !sampler.is_finished() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("the sampler outlived shutdown");
+    }
+
     /// A client that stops halfway through a request must not keep the
     /// listener open long enough to cost the stops that follow it.
     #[tokio::test]

@@ -177,8 +177,14 @@ impl<S: ProcessSampler> Sampler<S> {
                 started_at_millis: 0,
             }))
             .collect();
-        self.registered
-            .retain(|id, _| listed.iter().any(|process| &process.id == id));
+        let monitor = &mut self.monitor;
+        self.registered.retain(|id, _| {
+            let listed = listed.iter().any(|process| &process.id == id);
+            if !listed {
+                monitor.unregister(id);
+            }
+            listed
+        });
         for process in &listed {
             if self.registered.get(&process.id) == Some(&process.root.pid) {
                 continue;
@@ -368,6 +374,9 @@ mod tests {
         let after = sampler.sample(Vec::new(), 4_000);
         assert_eq!(after.len(), 1);
         assert_eq!(after[0].process_id, "pau");
+        // The monitor no longer walks the session's tree or keeps its sample.
+        assert!(sampler.monitor.history("session-1").is_none());
+        assert!(sampler.monitor.history("pau").is_some());
         // A root whose process is not in the table is left out.
         let missing = UsageRoot {
             pid: 404,

@@ -1,7 +1,15 @@
 import { describe, expect, test } from 'vitest';
 
 import { bayFixtures } from '../fixtures/bay';
-import { baySection, bayStateLine, displayStatus, matchesBayFilter, needsOperator } from '../lib/session-bay';
+import {
+	attentionKind,
+	baySection,
+	bayStateLine,
+	displayStatus,
+	matchesBayFilter,
+	needsOperator,
+	nextAttentionSession
+} from '../lib/session-bay';
 import type { SessionStatus } from '../lib/types/session';
 
 const sessions = bayFixtures.busy.flatMap((workspace) => workspace.sessions);
@@ -92,5 +100,56 @@ describe('matchesBayFilter', () => {
 
 	test('matches everything while the filter is blank', () => {
 		expect(matchesBayFilter(' '.repeat(3), ['anything'])).toBe(true);
+	});
+});
+
+describe('attentionKind', () => {
+	test.each<[Parameters<typeof attentionKind>[0], ReturnType<typeof attentionKind>]>([
+		[{ status: 'waiting' }, 'waiting'],
+		[{ status: 'not_responding' }, 'waiting'],
+		[{ status: 'running', attention: 'An extension is waiting for your answer.' }, 'waiting'],
+		[{ status: 'failed' }, 'failed'],
+		[{ status: 'failed', attention: 'An extension is waiting for your answer.' }, 'failed'],
+		[{ status: 'idle', unseen: true }, 'unread'],
+		[{ status: 'failed', restarted: true, unseen: true }, 'unread'],
+		[{ status: 'idle' }, undefined],
+		[{ status: 'running' }, undefined],
+		[{ status: 'failed', restarted: true }, undefined]
+	])('marks %o as %s', (session, kind) => {
+		expect(attentionKind(session)).toBe(kind);
+	});
+});
+
+describe('nextAttentionSession', () => {
+	const rack = [
+		{ id: 'unread', status: 'idle', unseen: true },
+		{ id: 'quiet', status: 'running' },
+		{ id: 'failed', status: 'failed' },
+		{ id: 'asking', status: 'running', attention: 'An extension is waiting for your answer.' },
+		{ id: 'waiting', status: 'waiting' }
+	] as const;
+
+	test('visits waiting sessions first, then failed, then unread, in bay order', () => {
+		const visited: (string | undefined)[] = [];
+		let active: string | undefined = 'quiet';
+		for (let step = 0; step < 4; step += 1) {
+			active = nextAttentionSession(rack, active);
+			visited.push(active);
+		}
+		expect(visited).toEqual(['asking', 'waiting', 'failed', 'unread']);
+	});
+
+	test('wraps past the last marked session to the first', () => {
+		expect(nextAttentionSession(rack, 'unread')).toBe('asking');
+	});
+
+	test('opens the first marked session when no session is open', () => {
+		expect(nextAttentionSession(rack, undefined)).toBe('asking');
+	});
+
+	test('finds nothing when no other session is marked', () => {
+		expect(nextAttentionSession([{ id: 'quiet', status: 'idle' }], 'quiet')).toBeUndefined();
+		expect(nextAttentionSession([], undefined)).toBeUndefined();
+		expect(nextAttentionSession([{ id: 'waiting', status: 'waiting' }], 'waiting')).toBeUndefined();
 	});
 });

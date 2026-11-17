@@ -10,21 +10,26 @@ Press `⌘/` on macOS or `Ctrl+/` on Linux to see every shortcut. The list is
 also under **Help > Keyboard Shortcuts**. On Linux, read `⌘` as `Ctrl` and
 `⌥` as `Alt` in the table below.
 
-| Shortcut                           | Action                              |
-| ---------------------------------- | ----------------------------------- |
-| `⌘K`, `⌘⇧P`, `F1`                  | Open the command palette            |
-| `⌘O`                               | Open a workspace                    |
-| `⌘N`                               | Start a session in this workspace   |
-| `Ctrl+Tab`, `Ctrl+Shift+Tab`       | Next or previous session            |
-| `⌘1` to `⌘9`                       | Go to the session at that position  |
-| `Shift+Esc`                        | Clear attention markers             |
-| `⌘L`                               | Focus the composer                  |
-| `Ctrl+Shift+Up`, `Ctrl+Shift+Down` | Previous or next prompt             |
-| `⌘[`, `⌘]`                         | Go back or forward                  |
-| `/`                                | Filter the sessions in the bay      |
-| `⌥⌘B`                              | Show or hide the workspace column   |
-| `` Ctrl+` ``                       | Show or hide the terminal dock      |
-| `⌘=`, `⌘-`, `⌘0`                   | Zoom in, zoom out, or reset to 100% |
+| Shortcut                           | Action                                 |
+| ---------------------------------- | -------------------------------------- |
+| `⌘K`, `⌘⇧P`, `F1`                  | Open the command palette               |
+| `⌘O`                               | Open a workspace                       |
+| `⌘N`                               | Start a session in this workspace      |
+| `Ctrl+Tab`, `Ctrl+Shift+Tab`       | Next or previous session               |
+| `⌘1` to `⌘9`                       | Go to the session at that position     |
+| `⌥⌘A`                              | Jump to a session that needs attention |
+| `Shift+Esc`                        | Clear attention markers                |
+| `⌘L`                               | Focus the composer                     |
+| `Ctrl+Shift+Up`, `Ctrl+Shift+Down` | Previous or next prompt                |
+| `⌘[`, `⌘]`                         | Go back or forward                     |
+| `/`                                | Filter the sessions in the bay         |
+| `⌥⌘B`                              | Show or hide the workspace column      |
+| `` Ctrl+` ``                       | Show or hide the terminal dock         |
+| `⌘=`, `⌘-`, `⌘0`                   | Zoom in, zoom out, or reset to 100%    |
+
+Each press of `⌥⌘A` opens the next session that needs attention, in every
+view. It visits sessions that wait for you or stopped responding first, then
+failed sessions, then sessions that finished a turn while you were elsewhere.
 
 The **File** menu has **New Session** and **Open Workspace**, and the **View**
 menu has the zoom commands.

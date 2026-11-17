@@ -17,11 +17,13 @@
 	import Icon from './Icon.svelte';
 	import { useKeyActions } from './keymap.svelte';
 	import {
+		attentionKind,
 		baySection,
 		bayStateLine,
 		displayStatus,
 		matchesBayFilter,
 		needsOperator,
+		nextAttentionSession,
 		sessionMenuItems,
 		sessionStatusLabel,
 		type BaySection
@@ -244,7 +246,33 @@
 		});
 	});
 
-	useKeyActions({ 'bay.filter': () => filterField?.focus() });
+	/**
+	 * Opens the next session that needs a look, from every session whether
+	 * or not the filter shows it. Needs you lists the newest arrival first,
+	 * so the jump visits its sessions in that order too.
+	 */
+	function jumpToAttention(): void {
+		const rank = (id: string) => memory.needsSince.get(id) ?? 0;
+		const ordered = sessions.toSorted((left, right) => rank(right.id) - rank(left.id));
+		const next = nextAttentionSession(ordered, activeSessionId);
+		if (!next) return;
+		memory.focusRequest = next;
+		onSelectSession(next);
+	}
+
+	// The jump's strip takes focus once this bay shows its session open. A bay
+	// that does not mark the open session, as in views other than Sessions,
+	// leaves the request to the session view's bay.
+	$effect(() => {
+		const id = memory.focusRequest;
+		if (!id || id !== activeSessionId) return;
+		untrack(() => {
+			memory.focusRequest = undefined;
+			bayElement?.querySelector<HTMLElement>(`#session-row-${CSS.escape(id)}`)?.focus();
+		});
+	});
+
+	useKeyActions({ 'bay.filter': () => filterField?.focus(), 'session.nextAttention': jumpToAttention });
 
 	const newUnavailable = $derived(
 		disconnected ? 'Pau is reconnecting to the backend.' : startBusy ? 'A session is already starting.' : undefined
@@ -381,11 +409,6 @@
 		failed: 'Failed while out of view',
 		unread: 'Finished while out of view'
 	} as const;
-
-	function markerKind(session: SessionViewModel): keyof typeof markerLabel {
-		const status = displayStatus(session);
-		return status === 'failed' ? 'failed' : needsOperator(session) ? 'waiting' : 'unread';
-	}
 </script>
 
 {#snippet stripLine(title: string, agent: string, workspace: string)}
@@ -455,7 +478,7 @@
 									>{line.text}</span>
 								<span class="pau-strip__figure">
 									{#if session.unseen && session.id !== activeSessionId}
-										{@const kind = markerKind(session)}
+										{@const kind = attentionKind(session) ?? 'unread'}
 										<span class={`session-bay__marker session-bay__marker--${kind}`} data-marker={kind}></span>
 										<span class="pau-visually-hidden">{markerLabel[kind]}</span>
 									{:else if needsOperator(session)}

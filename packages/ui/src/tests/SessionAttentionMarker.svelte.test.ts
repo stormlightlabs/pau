@@ -1,11 +1,14 @@
 import { page, userEvent } from 'vitest/browser';
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, expect, onTestFinished, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { sessionFixtures } from '../fixtures/sessions';
 import { Keymap, keymapContext } from '../lib/keymap.svelte';
+import { SessionBayState, sessionBayStateContext } from '../lib/session-bay-state.svelte';
+import SessionBay from '../lib/SessionBay.svelte';
 import SessionView from '../lib/SessionView.svelte';
 import type { SessionViewModel, SessionWorkspace } from '../lib/types/session';
+import SessionViewDemo from '../stories/SessionViewDemo.svelte';
 
 const root = document.documentElement;
 const template = sessionFixtures.idle[0]!.sessions[0]!;
@@ -84,4 +87,64 @@ test('Shift+Esc clears all markers without interrupting a running session', asyn
 
 	expect(onClearAttention).toHaveBeenCalledOnce();
 	expect(onInterrupt).not.toHaveBeenCalled();
+});
+
+/** A key map listening on the window, as the app's key map owner does. */
+function listeningKeymap(): Keymap {
+	const keymap = new Keymap({ platform: 'mac' });
+	const listen = (event: KeyboardEvent) => keymap.handleKeydown(event);
+	addEventListener('keydown', listen);
+	onTestFinished(() => removeEventListener('keydown', listen));
+	return keymap;
+}
+
+const jump = () => userEvent.keyboard('{Meta>}{Alt>}a{/Alt}{/Meta}');
+
+test('⌥⌘A opens and focuses waiting, then failed, then unread sessions, and wraps', async () => {
+	const keymap = listeningKeymap();
+	await render(SessionViewDemo, {
+		props: { workspaces: rail(['idle', 'failed', 'waiting']), initialSessionId: 'viewed' },
+		context: new Map([[keymapContext, keymap]])
+	});
+	await userEvent.click(page.getByRole('textbox', { name: 'Prompt' }));
+
+	for (const title of ['Session waiting', 'Session failed', 'Session idle', 'Session waiting']) {
+		await jump();
+		const strip = page.getByRole('button', { name: new RegExp(title) });
+		await expect.element(strip).toHaveAttribute('aria-current', 'page');
+		await expect.element(strip).toHaveFocus();
+	}
+});
+
+test('⌥⌘A does nothing when no session needs attention', async () => {
+	const keymap = listeningKeymap();
+	await render(SessionViewDemo, {
+		props: { workspaces: rail(['idle', 'running'], false), initialSessionId: 'viewed' },
+		context: new Map([[keymapContext, keymap]])
+	});
+	const prompt = page.getByRole('textbox', { name: 'Prompt' });
+	await userEvent.click(prompt);
+
+	await jump();
+	await expect.element(page.getByRole('button', { name: /Viewed/ })).toHaveAttribute('aria-current', 'page');
+	await expect.element(prompt).toHaveFocus();
+});
+
+test('a jump from a view without the session open focuses the strip once the session view shows it', async () => {
+	const keymap = listeningKeymap();
+	const memory = new SessionBayState();
+	const context = new Map<unknown, unknown>([
+		[keymapContext, keymap],
+		[sessionBayStateContext, memory]
+	]);
+	const onSelectSession = vi.fn();
+	const elsewhere = await render(SessionBay, { props: { workspaces: rail(['failed']), onSelectSession }, context });
+
+	await jump();
+	expect(onSelectSession).toHaveBeenCalledWith('s-failed');
+	expect(document.activeElement).toBe(document.body);
+	elsewhere.unmount();
+
+	await render(SessionView, { props: { workspaces: rail(['failed']), activeSessionId: 's-failed' }, context });
+	await expect.element(page.getByRole('button', { name: /Session failed/ })).toHaveFocus();
 });

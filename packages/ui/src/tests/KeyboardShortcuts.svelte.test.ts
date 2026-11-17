@@ -19,6 +19,7 @@ test.each([
 	[{ key: 'Tab', ctrlKey: true }, 'Next session'],
 	[{ key: 'Tab', ctrlKey: true, shiftKey: true }, 'Previous session'],
 	[{ key: '4', code: 'Digit4', metaKey: true }, 'Go to session 1 to 9 (4)'],
+	[{ key: 'å', code: 'KeyA', metaKey: true, altKey: true }, 'Jump to a session that needs attention'],
 	[{ key: 'Escape', shiftKey: true }, 'Clear attention markers'],
 	[{ key: 'l', code: 'KeyL', metaKey: true }, 'Focus the composer'],
 	[{ key: '[', code: 'BracketLeft', metaKey: true }, 'Go back'],

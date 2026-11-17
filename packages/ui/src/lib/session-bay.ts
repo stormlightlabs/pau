@@ -42,6 +42,45 @@ export function baySection(session: RackedSession): BaySection {
 }
 
 /**
+ * Why a session is marked for the operator, in the order the attention jump
+ * visits them: `waiting` for a session in Needs you that asks for something
+ * or stopped responding, `failed` for one in Needs you that failed, and
+ * `unread` for any other session that finished a turn out of view and has
+ * not been opened since. `undefined` means nothing to look at.
+ */
+export type AttentionKind = 'waiting' | 'failed' | 'unread';
+
+/** How a session is marked, or `undefined` when it needs no look. */
+export function attentionKind(
+	session: Pick<SessionViewModel, 'status' | 'attention' | 'restarted' | 'unseen'>
+): AttentionKind | undefined {
+	if (needsOperator(session)) return displayStatus(session) === 'failed' ? 'failed' : 'waiting';
+	return session.unseen ? 'unread' : undefined;
+}
+
+const ATTENTION_ORDER: readonly AttentionKind[] = ['waiting', 'failed', 'unread'];
+
+/**
+ * The session the attention jump opens next: waiting sessions first, then
+ * failed, then unread, each group in the order the bay lists it. From a
+ * marked session it moves to the one after it, wrapping past the last. From
+ * any other session it opens the first. Returns `undefined` when no session
+ * is marked, or when the open session is the only one.
+ */
+export function nextAttentionSession(
+	sessions: readonly Pick<SessionViewModel, 'id' | 'status' | 'attention' | 'restarted' | 'unseen'>[],
+	activeSessionId: string | undefined
+): string | undefined {
+	const marked = ATTENTION_ORDER.flatMap((kind) =>
+		sessions.filter((session) => attentionKind(session) === kind).map((session) => session.id)
+	);
+	if (marked.length === 0) return undefined;
+	const current = activeSessionId === undefined ? -1 : marked.indexOf(activeSessionId);
+	const next = marked[(current + 1) % marked.length];
+	return next === activeSessionId ? undefined : next;
+}
+
+/**
  * The state a session shows in its mark and header: `waiting` while a
  * dialog waits on the operator, whatever the agent reports, unless the
  * session failed or stopped responding, which say more.

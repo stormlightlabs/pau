@@ -6,6 +6,10 @@
 //! missing even though they work in a terminal. The first startup step asks
 //! the login shell for its `PATH` once and puts it ahead of the inherited
 //! entries, and the backend gives the result to every child process.
+//!
+//! An app started from a terminal already has the shell's `PATH`, so startup
+//! skips the lookup there; [`started_from_terminal`] decides which case
+//! applies.
 
 use std::{
     env,
@@ -24,7 +28,11 @@ use pau_agent::signal_process_group;
 const MARKER: &str = "__PAU_LOGIN_PATH__";
 /// An interactive shell can stall on prompts or slow plugins. Startup gives up
 /// after this long and keeps the inherited `PATH`.
-pub const TIMEOUT: Duration = Duration::from_secs(3);
+///
+/// A shell that starts in under a second can take several times that on a
+/// cold start or while the machine is busy, so the limit leaves room for that
+/// and costs time only when the shell is slow.
+pub const TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Why the login shell `PATH` could not be read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,6 +41,20 @@ pub enum LoginPathError {
     TimedOut,
     /// The shell could not start, or printed no marked value.
     Unavailable,
+}
+
+/// Reports whether the app was started from a terminal, given the inherited
+/// `TERM`.
+///
+/// Terminals set `TERM`, and launchd does not. An app opened from Finder, the
+/// Dock or Spotlight has no `TERM` and launchd's minimal `PATH`. Started from a
+/// terminal, directly or with `open`, it inherits the terminal's environment:
+/// LaunchServices passes `open`'s environment to the app it launches, `TERM`
+/// and the shell's `PATH` included. The parent process does not tell the cases
+/// apart, since an app that `open` launches is also a child of launchd, and
+/// neither does `SHELL`, which launchd sets as well.
+pub fn started_from_terminal(term: Option<&OsStr>) -> bool {
+    term.is_some_and(|term| !term.is_empty())
 }
 
 /// Runs `shell` and returns its `PATH`, giving up after `timeout`.
@@ -136,7 +158,9 @@ mod tests {
         time::{Duration, Instant},
     };
 
-    use super::{LoginPathError, MARKER, marked_path, merge_paths, shell_path};
+    use super::{
+        LoginPathError, MARKER, marked_path, merge_paths, shell_path, started_from_terminal,
+    };
 
     /// Writes an executable script that stands in for the login shell.
     fn fake_shell(directory: &Path, name: &str, body: &str) -> PathBuf {
@@ -239,6 +263,13 @@ mod tests {
             shell_path(silent.as_os_str(), Duration::from_secs(5)),
             Err(LoginPathError::Unavailable)
         );
+    }
+
+    #[test]
+    fn treats_an_inherited_term_as_a_terminal_start() {
+        assert!(started_from_terminal(Some(OsStr::new("xterm-256color"))));
+        assert!(!started_from_terminal(Some(OsStr::new(""))));
+        assert!(!started_from_terminal(None));
     }
 
     #[test]

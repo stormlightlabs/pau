@@ -6,6 +6,7 @@ import {
 	baySection,
 	bayStateLine,
 	displayStatus,
+	markerKind,
 	matchesBayFilter,
 	needsOperator,
 	nextAttentionSession
@@ -111,12 +112,25 @@ describe('attentionKind', () => {
 		[{ status: 'failed' }, 'failed'],
 		[{ status: 'failed', attention: 'An extension is waiting for your answer.' }, 'failed'],
 		[{ status: 'idle', unseen: true }, 'unread'],
-		[{ status: 'failed', restarted: true, unseen: true }, 'unread'],
+		[{ status: 'failed', restarted: true, unseen: true }, undefined],
+		[{ status: 'idle', restarted: true, unseen: true }, undefined],
 		[{ status: 'idle' }, undefined],
 		[{ status: 'running' }, undefined],
 		[{ status: 'failed', restarted: true }, undefined]
 	])('marks %o as %s', (session, kind) => {
 		expect(attentionKind(session)).toBe(kind);
+	});
+});
+
+describe('markerKind', () => {
+	test.each<[Parameters<typeof markerKind>[0], ReturnType<typeof markerKind>]>([
+		[{ status: 'waiting', unseen: true }, 'waiting'],
+		[{ status: 'failed', unseen: true }, 'failed'],
+		[{ status: 'failed', restarted: true, unseen: true }, 'failed'],
+		[{ status: 'idle', unseen: true }, 'unread'],
+		[{ status: 'idle', restarted: true, unseen: true }, 'unread']
+	])('marks unseen %o as %s', (session, kind) => {
+		expect(markerKind(session)).toBe(kind);
 	});
 });
 

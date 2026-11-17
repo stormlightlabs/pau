@@ -17,10 +17,10 @@
 	import Icon from './Icon.svelte';
 	import { useKeyActions } from './keymap.svelte';
 	import {
-		attentionKind,
 		baySection,
 		bayStateLine,
 		displayStatus,
+		markerKind,
 		matchesBayFilter,
 		needsOperator,
 		nextAttentionSession,
@@ -182,27 +182,31 @@
 		untrack(() => memory.trackNeeds(present));
 	});
 
-	const strips = $derived.by(() => {
+	/**
+	 * Every strip in its rack, whether or not the filter shows it. The racks
+	 * and the attention jump both read this order, so the jump visits sessions
+	 * in the order the bay lists them.
+	 */
+	const racked = $derived.by(() => {
 		const racks: Record<BaySection, BayStrip[]> = { needs: [], running: [], settled: [] };
 		for (const workspace of workspaces) {
 			for (const session of workspace.sessions) {
-				const strip: BayStrip = { kind: 'live', key: session.id, workspace, session };
-				if (filterMatches(strip)) racks[baySection(session)].push(strip);
+				racks[baySection(session)].push({ kind: 'live', key: session.id, workspace, session });
 			}
 			const restored = restoredSession?.workspaceId === workspace.id ? restoredSession : undefined;
-			const settled: BayStrip[] = [
-				...(restored ? [{ kind: 'restored' as const, key: 'restored', workspace, saved: restored }] : []),
-				...recentRows(workspace).map((saved) => ({
-					kind: 'saved' as const,
-					key: `saved:${workspace.id}:${saved.id}`,
-					workspace,
-					saved
-				}))
-			];
-			racks.settled.push(...settled.filter((strip) => filterMatches(strip)));
+			if (restored) racks.settled.push({ kind: 'restored', key: 'restored', workspace, saved: restored });
+			for (const saved of recentRows(workspace)) {
+				racks.settled.push({ kind: 'saved', key: `saved:${workspace.id}:${saved.id}`, workspace, saved });
+			}
 		}
 		racks.needs.sort((left, right) => (memory.needsSince.get(right.key) ?? 0) - (memory.needsSince.get(left.key) ?? 0));
 		return racks;
+	});
+
+	const strips = $derived({
+		needs: racked.needs.filter((strip) => filterMatches(strip)),
+		running: racked.running.filter((strip) => filterMatches(strip)),
+		settled: racked.settled.filter((strip) => filterMatches(strip))
 	});
 
 	function filterMatches(strip: BayStrip): boolean {
@@ -246,14 +250,11 @@
 		});
 	});
 
-	/**
-	 * Opens the next session that needs a look, from every session whether
-	 * or not the filter shows it. Needs you lists the newest arrival first,
-	 * so the jump visits its sessions in that order too.
-	 */
+	/** Opens the next session that needs a look, from every session whether or not the filter shows it. */
 	function jumpToAttention(): void {
-		const rank = (id: string) => memory.needsSince.get(id) ?? 0;
-		const ordered = sessions.toSorted((left, right) => rank(right.id) - rank(left.id));
+		const ordered = [...racked.needs, ...racked.running, ...racked.settled]
+			.filter((strip) => strip.kind === 'live')
+			.map((strip) => strip.session);
 		const next = nextAttentionSession(ordered, activeSessionId);
 		if (!next) return;
 		memory.focusRequest = next;
@@ -478,7 +479,7 @@
 									>{line.text}</span>
 								<span class="pau-strip__figure">
 									{#if session.unseen && session.id !== activeSessionId}
-										{@const kind = attentionKind(session) ?? 'unread'}
+										{@const kind = markerKind(session)}
 										<span class={`session-bay__marker session-bay__marker--${kind}`} data-marker={kind}></span>
 										<span class="pau-visually-hidden">{markerLabel[kind]}</span>
 									{:else if needsOperator(session)}

@@ -9,10 +9,11 @@ export type RecentSessions =
 
 /**
  * What the bay remembers while the operator moves between views: the filter
- * text, each workspace's recent saved sessions, the order in which
- * sessions arrived in Needs you, and a strip waiting for focus. Every view mounts its own bay, so an app
- * that shows the bay in more than one view provides one instance with
- * {@link setSessionBayState}. Without one, each bay keeps its own.
+ * text, each workspace's recent saved sessions, the order in which sessions
+ * arrived in Needs you, and a strip waiting for focus. Every view mounts its
+ * own bay, so an app that shows the bay in more than one view provides one
+ * instance with {@link setSessionBayState}. Without one, each bay keeps its
+ * own.
  */
 export class SessionBayState {
 	#sequence = 0;

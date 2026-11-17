@@ -44,18 +44,32 @@ export function baySection(session: RackedSession): BaySection {
 /**
  * Why a session is marked for the operator, in the order the attention jump
  * visits them: `waiting` for a session in Needs you that asks for something
- * or stopped responding, `failed` for one in Needs you that failed, and
- * `unread` for any other session that finished a turn out of view and has
- * not been opened since. `undefined` means nothing to look at.
+ * or stopped responding, `failed` for a failed one, and `unread` for any
+ * other session that finished a turn out of view and has not been opened
+ * since.
  */
 export type AttentionKind = 'waiting' | 'failed' | 'unread';
 
-/** How a session is marked, or `undefined` when it needs no look. */
-export function attentionKind(
-	session: Pick<SessionViewModel, 'status' | 'attention' | 'restarted' | 'unseen'>
-): AttentionKind | undefined {
-	if (needsOperator(session)) return displayStatus(session) === 'failed' ? 'failed' : 'waiting';
-	return session.unseen ? 'unread' : undefined;
+type MarkedSession = Pick<SessionViewModel, 'status' | 'attention' | 'restarted' | 'unseen'>;
+
+/**
+ * The marker a strip shows while its session is unseen. A failed session
+ * the operator started again keeps `failed`, since the marker says how the
+ * session ended, even though the session left Needs you.
+ */
+export function markerKind(session: MarkedSession): AttentionKind {
+	if (displayStatus(session) === 'failed') return 'failed';
+	return needsOperator(session) ? 'waiting' : 'unread';
+}
+
+/**
+ * Why the attention jump stops on a session, or `undefined` when it skips
+ * it. It skips a restarted session: that strip is history in Settled, and
+ * the new session the restart opened carries on the work.
+ */
+export function attentionKind(session: MarkedSession): AttentionKind | undefined {
+	if (session.restarted || !(needsOperator(session) || session.unseen)) return undefined;
+	return markerKind(session);
 }
 
 const ATTENTION_ORDER: readonly AttentionKind[] = ['waiting', 'failed', 'unread'];

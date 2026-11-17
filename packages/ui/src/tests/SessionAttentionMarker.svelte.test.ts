@@ -148,3 +148,51 @@ test('a jump from a view without the session open focuses the strip once the ses
 	await render(SessionView, { props: { workspaces: rail(['failed']), activeSessionId: 's-failed' }, context });
 	await expect.element(page.getByRole('button', { name: /Session failed/ })).toHaveFocus();
 });
+
+test('a failed session started again keeps its failed marker, and ⌥⌘A skips it', async () => {
+	const keymap = listeningKeymap();
+	const workspaces = rail([]);
+	workspaces[0]!.sessions.push({
+		...template,
+		id: 'retried',
+		title: 'Retried',
+		status: 'failed',
+		restarted: true,
+		unseen: true
+	});
+	await render(SessionViewDemo, {
+		props: { workspaces, initialSessionId: 'viewed' },
+		context: new Map([[keymapContext, keymap]])
+	});
+	expect(markers().map((marker) => marker.dataset.marker)).toEqual(['failed']);
+	await expect.element(page.getByText('Failed while out of view')).toBeInTheDocument();
+
+	await userEvent.click(page.getByRole('textbox', { name: 'Prompt' }));
+	await jump();
+	await expect.element(page.getByRole('button', { name: /Viewed/ })).toHaveAttribute('aria-current', 'page');
+});
+
+test('⌥⌘A visits unread sessions in the order the bay racks them, across workspaces', async () => {
+	const keymap = listeningKeymap();
+	const unread = (id: string, status: SessionViewModel['status']) => ({
+		...template,
+		id,
+		title: `Session ${id}`,
+		status,
+		unseen: true
+	});
+	const workspaces: SessionWorkspace[] = [
+		{ id: 'a', name: 'Alpha', sessions: [{ ...template, id: 'viewed', title: 'Viewed' }, unread('idle-a', 'idle')] },
+		{ id: 'b', name: 'Beta', sessions: [unread('running-b', 'running')] }
+	];
+	await render(SessionViewDemo, {
+		props: { workspaces, initialSessionId: 'viewed' },
+		context: new Map([[keymapContext, keymap]])
+	});
+	await userEvent.click(page.getByRole('textbox', { name: 'Prompt' }));
+
+	for (const title of ['Session running-b', 'Session idle-a']) {
+		await jump();
+		await expect.element(page.getByRole('button', { name: new RegExp(title) })).toHaveAttribute('aria-current', 'page');
+	}
+});

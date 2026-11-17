@@ -53,9 +53,6 @@ resource indexes. Raw resource samples and routine diagnostic logs and traces
 stay in bounded memory. A diagnostic bundle is written to disk only when the
 operator exports it.
 
-`tokio-rusqlite` provides the initial asynchronous access layer through one
-serialized connection. Pooling needs measured contention first.
-
 Native Pi and third-party session files stay authoritative. The database may
 cache transcript projections for search, but deleting the cache must not delete
 agent history.

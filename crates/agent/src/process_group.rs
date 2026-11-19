@@ -20,8 +20,11 @@ pub fn lead_process_group(command: &mut Command) -> &mut Command {
 
 /// Sends `signal` to every process in the group that `process_id` leads.
 ///
-/// A group that no longer exists is not an error. The caller must still own
-/// the unreaped leader, or the ID may name another group.
+/// A group that no longer exists is not an error. Neither is a group whose
+/// leader has exited and that has no member left to signal: macOS answers
+/// `EPERM` when the only member is the unreaped leader. Any other `EPERM`,
+/// such as a running leader, is returned. The caller must still own the
+/// unreaped leader, or the ID may name another group.
 #[cfg(unix)]
 pub fn signal_process_group(process_id: u32, signal: i32) -> io::Result<()> {
     let group = libc::pid_t::try_from(process_id)
@@ -31,11 +34,29 @@ pub fn signal_process_group(process_id: u32, signal: i32) -> io::Result<()> {
         return Ok(());
     }
     let error = io::Error::last_os_error();
-    if error.raw_os_error() == Some(libc::ESRCH) {
-        Ok(())
-    } else {
-        Err(error)
+    match error.raw_os_error() {
+        Some(libc::ESRCH) => Ok(()),
+        Some(libc::EPERM) if group_leader_exited(process_id) => Ok(()),
+        _ => Err(error),
     }
+}
+
+/// Whether the group leader `process_id` has exited, reaped or not.
+///
+/// It peeks with `WNOWAIT`, so a zombie leader stays for its owner to reap.
+/// The caller must own the leader: once it is reaped, any ID reads as exited.
+#[cfg(unix)]
+pub fn group_leader_exited(process_id: u32) -> bool {
+    // SAFETY: `siginfo_t` is plain data, and all zeros means no child.
+    let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+    let flags = libc::WEXITED | libc::WNOHANG | libc::WNOWAIT;
+    // SAFETY: `info` is a valid, writable `siginfo_t`.
+    if unsafe { libc::waitid(libc::P_PID, process_id, &mut info, flags) } == 0 {
+        // SAFETY: `waitid` succeeded, so `info` holds a child's status or
+        // stays zeroed while the child runs.
+        return unsafe { info.si_pid() } != 0;
+    }
+    io::Error::last_os_error().raw_os_error() == Some(libc::ECHILD)
 }
 
 /// Owns a child spawned after [`lead_process_group`] and kills its whole
@@ -140,6 +161,64 @@ pub(crate) mod tests {
         let (mut group, grandchild) = spawn_host(directory.path()).await;
         group.kill().await.unwrap();
         assert_gone(grandchild).await;
+    }
+
+    /// Spawns a group leader that runs `script` and waits until it exits,
+    /// leaving it unreaped.
+    fn zombie_leader(directory: &Path, script: &str) -> std::process::Child {
+        use std::os::unix::process::CommandExt;
+        let mut leader = std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg(script)
+            .current_dir(directory)
+            .process_group(0)
+            .spawn()
+            .unwrap();
+        for _ in 0..250 {
+            if group_leader_exited(leader.id()) {
+                return leader;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let _ = leader.kill();
+        let _ = leader.wait();
+        panic!("the leader did not exit");
+    }
+
+    #[test]
+    fn signals_a_group_left_with_only_its_exited_leader() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut leader = zombie_leader(directory.path(), "exit 0");
+
+        signal_process_group(leader.id(), libc::SIGTERM).unwrap();
+
+        assert!(leader.wait().unwrap().success());
+    }
+
+    #[tokio::test]
+    async fn signals_the_members_an_exited_leader_left_behind() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut leader =
+            zombie_leader(directory.path(), "sleep 600 & echo $! > grandchild; exit 0");
+        let grandchild = grandchild(directory.path()).await;
+
+        signal_process_group(leader.id(), libc::SIGKILL).unwrap();
+
+        assert_gone(grandchild).await;
+        leader.wait().unwrap();
+    }
+
+    #[test]
+    fn a_running_leader_has_not_exited() {
+        let mut leader = std::process::Command::new("sleep")
+            .arg("600")
+            .spawn()
+            .unwrap();
+
+        assert!(!group_leader_exited(leader.id()));
+
+        leader.kill().unwrap();
+        leader.wait().unwrap();
     }
 
     #[tokio::test]

@@ -1034,7 +1034,7 @@ mod tests {
         fs::write(
             &executable,
             format!(
-                "#!/bin/sh\nprintf '%s ' \"$@\" >> {0}\nprintf '\\n' >> {0}\nprintf 'TOKEN=should-not-escape' >&2\ncase \"$*\" in *failed*) exit 7;; *hang*) exec sleep 1;; esac\n",
+                "#!/bin/sh\nprintf '%s ' \"$@\" >> {0}\nprintf '\\n' >> {0}\nprintf 'TOKEN=should-not-escape' >&2\ncase \"$*\" in *failed*) exit 7;; *hang*) exec sleep 30;; esac\n",
                 arguments.display()
             ),
         )
@@ -1087,7 +1087,8 @@ mod tests {
         .unwrap();
         let timed_out = run_claude_mcp_operation(
             &ClaudeMcpOptions {
-                timeout: Duration::from_millis(20),
+                // Long enough for the fake to log its arguments under load.
+                timeout: Duration::from_millis(500),
                 ..options
             },
             ClaudeMcpOperation::Test {

@@ -35,9 +35,9 @@ pub use mcp::{
     McpServerSource, claude_mcp_capabilities, discover_claude_mcp, edit_mcp_server,
     merge_mcp_layers, redact_mcp_value, run_claude_mcp_operation, set_claude_server_enabled,
 };
-#[cfg(unix)]
-pub use process_group::signal_process_group;
 pub use process_group::{ProcessGroup, lead_process_group};
+#[cfg(unix)]
+pub use process_group::{group_leader_exited, signal_process_group};
 
 /// Identifies the agent subsystem in diagnostics.
 pub const CRATE_NAME: &str = "pau-agent";

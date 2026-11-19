@@ -56,7 +56,6 @@ const session = (status: SessionViewModel['status'], overrides: Partial<SessionV
 	workspaceId: 'pau',
 	title: `${status}-session`,
 	agent: 'Pi',
-	model: 'Sonnet',
 	status,
 	capabilities: fullCapabilities,
 	transcript,

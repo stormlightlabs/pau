@@ -62,6 +62,16 @@ pub enum ServerEventKind {
     /// Like output, changes are transient: snapshots omit them, and clients
     /// reload what they show after reconnecting.
     WorkspaceFilesChanged,
+    /// The server sampled CPU and memory use. The payload is a list of
+    /// [`resource_monitor::ProcessResourceSnapshot`] sorted by process ID:
+    /// Pau's own process tree, with kind `pau`, no workspace and no
+    /// per-process breakdown, and one tree per live agent session, rooted at
+    /// its agent process and named by the session's ID.
+    ///
+    /// Samples arrive at most once per sampling interval, and only while a
+    /// client is connected. A snapshot holds the latest sample, but replay
+    /// holds none, so samples never push session output out of replay.
+    ProcessUsageSampled,
 }
 
 impl ServerEventKind {
@@ -69,6 +79,13 @@ impl ServerEventKind {
     /// belongs in a snapshot.
     pub fn is_state(self) -> bool {
         !matches!(self, Self::SessionOutput | Self::WorkspaceFilesChanged)
+    }
+
+    /// Whether reconnect replay keeps events of this kind. A sample is stale
+    /// by the time a client reconnects, and the next one follows within the
+    /// sampling interval.
+    pub fn is_replayed(self) -> bool {
+        !matches!(self, Self::ProcessUsageSampled)
     }
 }
 

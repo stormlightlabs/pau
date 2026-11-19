@@ -175,6 +175,12 @@ components:
     width: '304px'
   header:
     height: '48px'
+  status-bar:
+    backgroundColor: '{colors.bay}'
+    textColor: '{colors.text-muted}'
+    typography: '{typography.code}'
+    padding: '0 0 0 16px'
+    height: '32px'
 ---
 
 # Design System: Pau
@@ -193,7 +199,9 @@ long stretches at a desk. The window answers one question before any other:
 which sessions need me? A 344px bay on the left holds every session as a
 fixed-height strip, sorted into Needs you, Running and Settled. The open
 session fills the centre. A 304px workspace column on the right shows its
-changes, branch and terminal.
+changes, branch and terminal. A 32px status bar runs across the foot of the
+window with the open workspace, the open session and what Pau's processes
+use.
 
 The system is Eldritch at shell scale: a blue-slate ground, the bay one tonal
 step above it, and green spent only where it means something. The surfaces
@@ -341,7 +349,8 @@ workspace column (304px). Every column header is 48px tall, so the three
 header rules form one line across the window. The bay stacks a filter field
 and New session on top, the racked strips in the middle, and a row of view
 buttons at its foot. Views without workspace detail give that column to the
-main surface.
+main surface. A 32px status bar spans all three columns at the foot of the
+window, in every view.
 
 In the main surface, header, transcript and composer share one leading edge
 inside a column of at most 58rem plus 24px gutters. Prose holds to 75ch. The
@@ -359,7 +368,8 @@ apart. Distinct blocks in the transcript sit 24px apart.
   name on strips. The workspace column becomes an overlay that slides in from
   the right over a scrim, opened from the header and closed by the scrim or
   Escape. Section rails become tab rows. Buttons marked collapsible drop to
-  their icon. An open terminal dock takes the whole main surface.
+  their icon. An open terminal dock takes the whole main surface. The status
+  bar keeps every item and drops words, as its component describes.
 - **Below 900px:** not a supported layout. The shell holds a 900px minimum.
 
 ### Named Rules
@@ -538,6 +548,28 @@ and About.
 - **About:** the build, its details and the theme and font credits.
 - **Narrow:** the section rail becomes a row of tabs above the column.
 
+### Status bar
+
+The window's foot: one 32px row on the bay surface under a `line` rule, in
+the code face at 12px, Mist on bay. Nothing in it is green.
+
+- **Leading group:** from the bay's 16px inset, the workspace's branch (or
+  its name outside Git), its changed-file count and its sandbox state. After
+  a 1px rule come the open session's agent and version, context use, token
+  total, cost, and the CPU, memory and process count of its agent and every
+  process it started. A workspace without an open session reads "No
+  session".
+- **Pau button:** a quiet button at the trailing edge that fills the bar's
+  height, square, with Pau's version and the CPU, memory and process count
+  of Pau and everything it started. It opens an overlay above itself, 360px
+  wide, that lists each running session as a strip with its child processes
+  as row strips under it. Outside press and Escape close it, and focus
+  returns to the button.
+- **Narrow:** labels such as CPU and Context leave the screen and stay in
+  the accessible name. Versions, the token total, cost and process counts
+  drop from the bar. The overlay still lists versions and process counts.
+- **Updates:** figures change in place every two seconds without motion.
+
 ### Notices and menus
 
 - **Notice:** in the flow, never sticky over content. Raised surface, `line`
@@ -573,4 +605,4 @@ and About.
   terminal canvas.
 - **Don't** draw the agent as a person or the transcript as chat bubbles.
 - **Don't** add editor boilerplate such as encoding, line endings or indent
-  to the status bar. It shows only the cursor position and the save state.
+  to the status bar.

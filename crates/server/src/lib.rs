@@ -56,6 +56,7 @@ use tracing::instrument::WithSubscriber;
 
 mod audit;
 mod build_info;
+mod process_usage;
 mod sessions;
 mod starts;
 mod terminals;
@@ -241,6 +242,13 @@ struct SnapshotKey {
 struct EventHubState {
     next_sequence: u64,
     replay: VecDeque<ServerEvent>,
+    /// Sequence of the newest replayed event that left `replay`, or 0 before
+    /// any did. Replay holds every replayed event after it, so a client that
+    /// applied at least this sequence can catch up from replay. Comparing with
+    /// the oldest event in `replay` instead would report a gap whenever an
+    /// event that replay never keeps, such as a resource sample, took the
+    /// sequence just before it.
+    evicted_through: u64,
     snapshot: HashMap<SnapshotKey, ServerEvent>,
     reconnects: u64,
     replay_gaps: u64,
@@ -274,6 +282,7 @@ impl EventHub {
             state: Arc::new(Mutex::new(EventHubState {
                 next_sequence: 1,
                 replay: VecDeque::with_capacity(replay_capacity),
+                evicted_through: 0,
                 snapshot: HashMap::new(),
                 reconnects: 0,
                 replay_gaps: 0,
@@ -318,9 +327,13 @@ impl EventHub {
                 event.clone(),
             );
         }
-        state.replay.push_back(event.clone());
-        if state.replay.len() > self.replay_capacity {
-            state.replay.pop_front();
+        if kind.is_replayed() {
+            state.replay.push_back(event.clone());
+            if state.replay.len() > self.replay_capacity
+                && let Some(evicted) = state.replay.pop_front()
+            {
+                state.evicted_through = evicted.sequence;
+            }
         }
         let receiver_count = self.live.receiver_count();
         let _ = self.live.send(event.clone());
@@ -354,6 +367,11 @@ impl EventHub {
         event
     }
 
+    /// Whether any client is connected to the event stream.
+    pub fn has_subscribers(&self) -> bool {
+        self.live.receiver_count() > 0
+    }
+
     /// The sequence of the last published event, or 0 before the first.
     pub fn last_sequence(&self) -> u64 {
         self.state
@@ -369,13 +387,8 @@ impl EventHub {
         let receiver = self.live.subscribe();
         let mut state = self.state.lock().expect("event hub lock poisoned");
         let boundary = state.next_sequence.saturating_sub(1);
-        let replay_available = after.is_some_and(|sequence| {
-            sequence <= boundary
-                && state
-                    .replay
-                    .front()
-                    .is_none_or(|oldest| sequence >= oldest.sequence.saturating_sub(1))
-        });
+        let replay_available =
+            after.is_some_and(|sequence| sequence <= boundary && sequence >= state.evicted_through);
 
         let initial = if replay_available {
             state
@@ -1486,6 +1499,8 @@ pub struct ServerHandle {
     starts: StartGate,
     shutdown: Option<oneshot::Sender<()>>,
     task: Option<JoinHandle<io::Result<()>>>,
+    /// Samples resource use until shutdown. See `process_usage`.
+    process_usage: JoinHandle<()>,
 }
 
 impl ServerHandle {
@@ -1523,6 +1538,7 @@ impl ServerHandle {
     /// [`StartGate`].
     pub fn request_shutdown(&mut self) {
         self.starts.close();
+        self.process_usage.abort();
         if let Some(shutdown) = self.shutdown.take() {
             self.diagnostics.record(DiagnosticRecordInput {
                 timestamp: diagnostic_timestamp(),
@@ -1860,6 +1876,17 @@ pub async fn start_with_database(
         events.clone(),
         audit.clone(),
     );
+    let usage_sessions = sessions.clone();
+    let process_usage = process_usage::spawn(process_usage::ProcessUsageSampling {
+        events: events.clone(),
+        sampler: pau_core::resource_monitor::SystemProcessSampler::default(),
+        roots: move || {
+            let sessions = usage_sessions.clone();
+            async move { sessions.usage_roots().await }
+        },
+        interval: process_usage::SAMPLE_INTERVAL,
+        pau_pid: std::process::id(),
+    });
     let terminals = terminals::TerminalRegistry::default();
     let server_sessions = sessions.clone();
     let server_events = events.clone();
@@ -1923,6 +1950,7 @@ pub async fn start_with_database(
         starts,
         shutdown: Some(shutdown),
         task: Some(task),
+        process_usage,
     })
 }
 
@@ -2706,6 +2734,26 @@ pub(crate) mod tests {
         assert_eq!(event_sequences(&reconnected.initial), vec![2, 3]);
     }
 
+    /// Replay skips resource samples, so the first replayed event need not
+    /// follow the client's sequence directly.
+    #[test]
+    fn replays_from_the_start_after_an_unreplayed_sample() {
+        let events = EventHub::new(4);
+        events.publish(
+            diagnostic_timestamp(),
+            None,
+            None,
+            ServerEventKind::ProcessUsageSampled,
+            "[]",
+        );
+        publish_session(&events, "first");
+        publish_session(&events, "second");
+
+        let subscription = events.subscribe(Some(0));
+        assert_eq!(event_sequences(&subscription.initial), vec![2, 3]);
+        assert_eq!(events.state.lock().unwrap().replay_gaps, 0);
+    }
+
     #[test]
     fn sends_a_snapshot_when_the_replay_window_expired() {
         let events = EventHub::new(2);
@@ -2753,6 +2801,23 @@ pub(crate) mod tests {
             let peer = stream.peer_addr().unwrap();
             assert_eq!(local, peer, "the listener still accepts connections");
         }
+    }
+
+    #[tokio::test]
+    async fn shutdown_stops_the_resource_sampler() {
+        let server = start((Ipv4Addr::LOCALHOST, 0).into()).await.unwrap();
+        let sampler = server.process_usage.abort_handle();
+        assert!(!sampler.is_finished());
+
+        server.shutdown().await.unwrap();
+
+        timeout(Duration::from_secs(1), async {
+            while !sampler.is_finished() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("the sampler outlived shutdown");
     }
 
     /// A client that stops halfway through a request must not keep the

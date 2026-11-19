@@ -1,11 +1,13 @@
 export { default as ApplicationShell } from './lib/ApplicationShell.svelte';
 export type { ShellNavItem, ShellPaneWidths } from './lib/ApplicationShell.svelte';
 export { setShellBay } from './lib/shell-bay';
+export { setShellStatusBar } from './lib/shell-status-bar';
 export type { PaletteEntry, PaletteGroup } from './lib/command-palette';
 export { default as AgentReadinessNotice } from './lib/AgentReadinessNotice.svelte';
 export { default as CapabilityCard } from './lib/CapabilityCard.svelte';
 export { default as ExtensionUi } from './lib/ExtensionUi.svelte';
 export { default as SessionStatusLine } from './lib/SessionStatusLine.svelte';
+export { default as StatusBar } from './lib/StatusBar.svelte';
 export { default as DiagnosticsView } from './lib/DiagnosticsView.svelte';
 export { default as DiffReview } from './lib/DiffReview.svelte';
 export { default as FileEditor } from './lib/FileEditor.svelte';
@@ -127,7 +129,8 @@ export type {
 export type {
 	ProcessResourceActions,
 	ProcessResourceNode,
-	ProcessResourceSnapshot
+	ProcessResourceSnapshot,
+	ProcessUsage
 } from './lib/types/resource-monitoring';
 export type {
 	AutoRetry,

@@ -359,6 +359,33 @@ impl SessionApi {
         stopping.join_all().await;
     }
 
+    /// The agent process of each live session, for resource sampling.
+    pub(crate) async fn usage_roots(&self) -> Vec<crate::process_usage::UsageRoot> {
+        let root = |id: String, pid: u32| {
+            self.record(&id)
+                .map(|record| crate::process_usage::UsageRoot {
+                    workspace_id: record.workspace_id,
+                    agent: record.agent.id().to_owned(),
+                    session_id: id,
+                    pid,
+                })
+        };
+        let mut roots: Vec<_> = self
+            .claude_ids()
+            .into_iter()
+            .filter_map(|id| {
+                let pid = self.claude_session(&id)?.process_id();
+                root(id, pid)
+            })
+            .collect();
+        for id in self.registry.active_ids().await {
+            if let Some(session) = self.registry.get(&id).await {
+                roots.extend(root(id, session.process_id()));
+            }
+        }
+        roots
+    }
+
     async fn stop_pi_at_shutdown(self, id: String, kill_at: tokio::time::Instant) {
         let Some(session) = self.registry.get(&id).await else {
             return;

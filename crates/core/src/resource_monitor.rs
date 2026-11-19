@@ -12,6 +12,10 @@ pub const SAMPLE_INTERVAL_MILLIS: u64 = 2_000;
 pub const DEFAULT_HISTORY_CAPACITY: usize = 900;
 /// Default minimum interval between client snapshots.
 pub const DEFAULT_PUBLISH_INTERVAL_MILLIS: u64 = 2_000;
+/// Most processes a snapshot lists in its breakdown. A tree that forks without
+/// limit would otherwise grow every sample, and every copy of it a client
+/// queues, by one node per process. The totals still count every process.
+pub const MAX_LISTED_PROCESSES: usize = 50;
 
 /// A process identity that remains valid when an operating-system PID is reused.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -29,6 +33,8 @@ pub struct ObservedProcess {
     pub identity: ProcessIdentity,
     /// Parent PID reported by the operating system.
     pub parent_pid: Option<u32>,
+    /// Executable name the operating system reports, without arguments.
+    pub name: String,
     /// Current CPU use as a percentage of one logical CPU.
     pub cpu_percent: f32,
     /// Accumulated CPU time in milliseconds.
@@ -56,10 +62,26 @@ pub struct SystemProcessSampler {
     system: System,
 }
 
+/// What each sample reads for every process on the machine.
+///
+/// `sysinfo` always reads the name, parent and start time. On macOS it reads a
+/// new process's arguments once to find its name, then drops them. Everything
+/// else is opt-in, and this asks only for the counters Pau reports. Never add
+/// the command line, environment, working directory or executable path: the
+/// sampler walks every user's processes, and `sysinfo` keeps what it is asked
+/// for, so those would hold other programs' arguments and secrets in Pau's
+/// memory.
+fn process_refresh_kind() -> ProcessRefreshKind {
+    ProcessRefreshKind::nothing()
+        .with_cpu()
+        .with_memory()
+        .with_disk_usage()
+        .without_tasks()
+}
+
 impl Default for SystemProcessSampler {
     fn default() -> Self {
-        let refresh =
-            RefreshKind::nothing().with_processes(ProcessRefreshKind::everything().without_tasks());
+        let refresh = RefreshKind::nothing().with_processes(process_refresh_kind());
         Self {
             system: System::new_with_specifics(refresh),
         }
@@ -71,7 +93,7 @@ impl ProcessSampler for SystemProcessSampler {
         self.system.refresh_processes_specifics(
             ProcessesToUpdate::All,
             true,
-            ProcessRefreshKind::everything().without_tasks(),
+            process_refresh_kind(),
         );
         self.system
             .processes()
@@ -86,6 +108,7 @@ impl ProcessSampler for SystemProcessSampler {
                         started_at_seconds: process.start_time(),
                     },
                     parent_pid,
+                    name: process.name().to_string_lossy().into_owned(),
                     cpu_percent: process.cpu_usage(),
                     cpu_time_millis: process.accumulated_cpu_time(),
                     resident_memory_bytes: process.memory(),
@@ -102,8 +125,8 @@ impl ProcessSampler for SystemProcessSampler {
 pub struct MonitoredProcess {
     /// Stable Pau process identifier.
     pub id: String,
-    /// Workspace that owns the process.
-    pub workspace_id: String,
+    /// Workspace that owns the process. Absent for Pau's own process tree.
+    pub workspace_id: Option<String>,
     /// Session that owns the process, when applicable.
     pub session_id: Option<String>,
     /// Human-readable process kind, such as `pi`, `claude`, or `terminal`.
@@ -121,6 +144,9 @@ pub struct ProcessResourceNode {
     pub identity: ProcessIdentity,
     /// Parent PID reported by the operating system.
     pub parent_pid: Option<u32>,
+    /// Executable name the operating system reports, without arguments, so
+    /// the breakdown names a process without exposing its command line.
+    pub name: String,
     /// Current CPU use as a percentage of one logical CPU.
     pub cpu_percent: f32,
     /// Current resident memory in bytes.
@@ -136,8 +162,8 @@ pub struct ProcessResourceNode {
 pub struct ProcessResourceSnapshot {
     /// Stable Pau process identifier.
     pub process_id: String,
-    /// Workspace that owns the process.
-    pub workspace_id: String,
+    /// Workspace that owns the process. Absent for Pau's own process tree.
+    pub workspace_id: Option<String>,
     /// Session that owns the process, when applicable.
     pub session_id: Option<String>,
     /// Process kind shown in the UI.
@@ -162,7 +188,10 @@ pub struct ProcessResourceSnapshot {
     pub disk_read_bytes: Option<u64>,
     /// Total disk bytes written across the tree, when reliable.
     pub disk_write_bytes: Option<u64>,
-    /// Current per-process breakdown for the root and descendants.
+    /// Current per-process breakdown: the root, then its descendants by
+    /// resident memory, largest first. It lists at most
+    /// [`MAX_LISTED_PROCESSES`], so `process_count` minus its length is the
+    /// number of processes left out.
     pub processes: Vec<ProcessResourceNode>,
 }
 
@@ -301,6 +330,14 @@ impl ResourceMonitor {
         self.registrations.insert(process.id.clone(), process);
     }
 
+    /// Stops sampling one process tree and drops its history, for an owner
+    /// that no longer tracks it. Unlike an exit, this yields no summary.
+    pub fn unregister(&mut self, process_id: &str) {
+        self.registrations.remove(process_id);
+        self.history.remove(process_id);
+        self.pressure_state.remove(process_id);
+    }
+
     /// Returns bounded raw history for one stable process identifier.
     pub fn history(&self, process_id: &str) -> Option<&VecDeque<ProcessResourceSnapshot>> {
         self.history.get(process_id)
@@ -311,7 +348,7 @@ impl ResourceMonitor {
         let mut snapshots: Vec<_> = self
             .registrations
             .values()
-            .filter(|process| process.workspace_id == workspace_id)
+            .filter(|process| process.workspace_id.as_deref() == Some(workspace_id))
             .filter_map(|process| self.history.get(&process.id)?.back().cloned())
             .collect();
         snapshots.sort_by(|left, right| left.process_id.cmp(&right.process_id));
@@ -337,6 +374,13 @@ impl ResourceMonitor {
             .iter()
             .map(|process| (process.identity.pid, process))
             .collect();
+        // Built once and shared, so each tree walks only its own processes.
+        let mut children: HashMap<u32, Vec<&ObservedProcess>> = HashMap::new();
+        for process in &observed {
+            if let Some(parent_pid) = process.parent_pid {
+                children.entry(parent_pid).or_default().push(process);
+            }
+        }
         let should_publish = self.last_published_at.is_none_or(|last| {
             sampled_at_millis.saturating_sub(last) >= self.publish_interval_millis
         });
@@ -348,17 +392,20 @@ impl ResourceMonitor {
                 .registrations
                 .get(&id)
                 .expect("ID came from registrations");
-            let root_alive = by_pid
+            let Some(root) = by_pid
                 .get(&registration.root.pid)
-                .is_some_and(|root| root.identity == registration.root);
-            if !root_alive {
+                .filter(|root| root.identity == registration.root)
+            else {
                 if let Some(summary) = self.finish(&id, sampled_at_millis) {
                     update.completed.push(summary);
                 }
                 continue;
-            }
+            };
 
-            let tree = collect_tree(registration.root, &observed, &by_pid);
+            let tree = collect_tree(root, &children);
+            let mut listed = tree.clone();
+            listed[1..].sort_by_key(|process| std::cmp::Reverse(process.resident_memory_bytes));
+            listed.truncate(MAX_LISTED_PROCESSES);
             let previous = self.history.get(&id).and_then(|history| history.back());
             let peak_memory = previous.map_or(0, |snapshot| snapshot.peak_resident_memory_bytes);
             let peak_count = previous.map_or(0, |snapshot| snapshot.peak_process_count);
@@ -391,11 +438,12 @@ impl ResourceMonitor {
                         .filter_map(|process| process.disk_write_bytes)
                         .sum()
                 }),
-                processes: tree
+                processes: listed
                     .iter()
                     .map(|process| ProcessResourceNode {
                         identity: process.identity,
                         parent_pid: process.parent_pid,
+                        name: process.name.clone(),
                         cpu_percent: process.cpu_percent,
                         resident_memory_bytes: process.resident_memory_bytes,
                         disk_read_bytes: process.disk_read_bytes,
@@ -475,10 +523,8 @@ impl ResourceMonitor {
     fn finish(&mut self, process_id: &str, ended_at_millis: u64) -> Option<ProcessResourceSummary> {
         let registration = self.registrations.remove(process_id)?;
         self.pressure_state.remove(process_id);
-        let latest = self
-            .history
-            .get(process_id)
-            .and_then(|history| history.back());
+        let history = self.history.remove(process_id);
+        let latest = history.as_ref().and_then(|history| history.back());
         Some(ProcessResourceSummary {
             process_id: process_id.to_owned(),
             ended_at_millis,
@@ -493,34 +539,24 @@ impl ResourceMonitor {
     }
 }
 
+/// The root and every process descended from it, root first.
 fn collect_tree<'a>(
-    root: ProcessIdentity,
-    observed: &'a [ObservedProcess],
-    by_pid: &HashMap<u32, &'a ObservedProcess>,
+    root: &'a ObservedProcess,
+    children: &HashMap<u32, Vec<&'a ObservedProcess>>,
 ) -> Vec<&'a ObservedProcess> {
-    let mut tree = Vec::new();
-    for process in observed {
-        let mut current = process;
-        let mut visited = HashSet::new();
-        loop {
-            if current.identity == root {
-                tree.push(process);
-                break;
+    let mut tree = vec![root];
+    let mut visited = HashSet::from([root.identity.pid]);
+    let mut next = 0;
+    while let Some(&parent) = tree.get(next) {
+        next += 1;
+        for &child in children.get(&parent.identity.pid).into_iter().flatten() {
+            // A process cannot be a descendant of a parent created after it,
+            // so a reused parent PID adopts nothing.
+            if child.identity.started_at_seconds >= parent.identity.started_at_seconds
+                && visited.insert(child.identity.pid)
+            {
+                tree.push(child);
             }
-            if !visited.insert(current.identity.pid) {
-                break;
-            }
-            let Some(parent_pid) = current.parent_pid else {
-                break;
-            };
-            let Some(parent) = by_pid.get(&parent_pid) else {
-                break;
-            };
-            // A process cannot be a descendant of a parent created after it.
-            if parent.identity.started_at_seconds > current.identity.started_at_seconds {
-                break;
-            }
-            current = parent;
         }
     }
     tree
@@ -543,6 +579,7 @@ mod tests {
                 started_at_seconds: start,
             },
             parent_pid: parent,
+            name: format!("process-{pid}"),
             cpu_percent: cpu,
             cpu_time_millis: (pid as u64) * 10,
             resident_memory_bytes: memory,
@@ -554,7 +591,7 @@ mod tests {
     fn registration() -> MonitoredProcess {
         MonitoredProcess {
             id: "process-1".to_owned(),
-            workspace_id: "workspace-1".to_owned(),
+            workspace_id: Some("workspace-1".to_owned()),
             session_id: Some("session-1".to_owned()),
             kind: "pi".to_owned(),
             root: ProcessIdentity {
@@ -584,6 +621,9 @@ mod tests {
         assert_eq!(snapshot.cpu_percent, 60.0);
         assert_eq!(snapshot.resident_memory_bytes, 6_000);
         assert_eq!(snapshot.disk_read_bytes, Some(3_300));
+        // The root comes first, then descendants by memory.
+        let names: Vec<_> = snapshot.processes.iter().map(|node| &node.name).collect();
+        assert_eq!(names, ["process-10", "process-12", "process-11"]);
 
         let reused = monitor.observe(104_000, vec![process(10, 103, None, 1.0, 10)]);
         assert_eq!(reused.completed.len(), 1);
@@ -669,6 +709,47 @@ mod tests {
                 disk_write_bytes: Some(2_000),
             }]
         );
+        assert!(monitor.history("process-1").is_none());
+    }
+
+    #[test]
+    fn lists_the_root_and_the_largest_descendants_of_a_huge_tree() {
+        let mut monitor = ResourceMonitor::new(4, 0, ResourcePressureConfig::default());
+        monitor.register(registration());
+        // The root is the smallest process, and 500 descendants form a chain,
+        // so the walk must reach the deepest ones.
+        let mut observed = vec![process(10, 100, None, 1.0, 1)];
+        for pid in 11..511 {
+            observed.push(process(pid, 100, Some(pid - 1), 0.1, u64::from(pid)));
+        }
+        let update = monitor.observe(102_000, observed);
+        let snapshot = &update.published[0];
+
+        assert_eq!(snapshot.process_count, 501);
+        assert_eq!(snapshot.processes.len(), MAX_LISTED_PROCESSES);
+        assert_eq!(snapshot.processes[0].identity.pid, 10);
+        let largest: Vec<_> = snapshot.processes[1..]
+            .iter()
+            .map(|node| node.identity.pid)
+            .collect();
+        assert_eq!(largest, (461..511).rev().take(49).collect::<Vec<_>>());
+        assert_eq!(
+            snapshot.resident_memory_bytes,
+            1 + (11_u32..511).map(u64::from).sum::<u64>()
+        );
+    }
+
+    #[test]
+    fn unregister_stops_sampling_and_drops_history() {
+        let mut monitor = ResourceMonitor::new(4, 0, ResourcePressureConfig::default());
+        monitor.register(registration());
+        monitor.observe(102_000, vec![process(10, 100, None, 12.0, 4_096)]);
+        assert!(monitor.history("process-1").is_some());
+
+        monitor.unregister("process-1");
+        assert!(monitor.history("process-1").is_none());
+        let update = monitor.observe(104_000, vec![process(10, 100, None, 12.0, 4_096)]);
+        assert_eq!(update, ResourceMonitorUpdate::default());
     }
 
     #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -683,5 +764,17 @@ mod tests {
             .expect("current process is sampled");
         assert!(sample.identity.started_at_seconds > 0);
         assert!(sample.resident_memory_bytes > 0);
+        assert!(!sample.name.is_empty());
+
+        // The test process has arguments and an environment, so this fails if
+        // the refresh kind starts reading them again.
+        let this = sampler
+            .system
+            .process(sysinfo::Pid::from_u32(current))
+            .expect("current process is kept");
+        assert!(this.cmd().is_empty());
+        assert!(this.environ().is_empty());
+        assert!(this.cwd().is_none());
+        assert!(this.exe().is_none());
     }
 }

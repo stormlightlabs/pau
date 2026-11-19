@@ -508,6 +508,11 @@ identity: ProcessIdentity,
  */
 parent_pid: number | null,
 /**
+ * Executable name the operating system reports, without arguments, so
+ * the breakdown names a process without exposing its command line.
+ */
+name: string,
+/**
  * Current CPU use as a percentage of one logical CPU.
  */
 cpu_percent: number,
@@ -530,9 +535,9 @@ export type ProcessResourceSnapshot = {
  */
 process_id: string,
 /**
- * Workspace that owns the process.
+ * Workspace that owns the process. Absent for Pau's own process tree.
  */
-workspace_id: string,
+workspace_id: string | null,
 /**
  * Session that owns the process, when applicable.
  */
@@ -582,7 +587,10 @@ disk_read_bytes: number | null,
  */
 disk_write_bytes: number | null,
 /**
- * Current per-process breakdown for the root and descendants.
+ * Current per-process breakdown: the root, then its descendants by
+ * resident memory, largest first. It lists at most
+ * [`MAX_LISTED_PROCESSES`], so `process_count` minus its length is the
+ * number of processes left out.
  */
 processes: Array<ProcessResourceNode>, };
 
@@ -640,7 +648,7 @@ disk_read_bytes: number | null,
  */
 disk_write_bytes: number | null, };
 
-export type ServerEventKind = "workspace_changed" | "session_changed" | "session_output" | "terminal_changed" | "preferences_changed" | "sandbox_changed" | "workspace_files_changed";
+export type ServerEventKind = "workspace_changed" | "session_changed" | "session_output" | "terminal_changed" | "preferences_changed" | "sandbox_changed" | "workspace_files_changed" | "process_usage_sampled";
 
 export type ServerEvent = {
 /**

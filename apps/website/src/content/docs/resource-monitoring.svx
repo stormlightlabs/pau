@@ -13,6 +13,19 @@ external editors, and supported stdio MCP servers. Open a workspace's
 The views keep model context, token counts, and cost separate from machine
 resources.
 
+## The status bar
+
+The bar at the bottom of the window follows the open session. On the left it
+shows the workspace's branch, changed files and sandbox, then the session's
+agent version, context use, tokens, cost, and the CPU and memory of the agent
+and every process it started. On the right, the **Pau** button shows the CPU
+and memory of Pau and everything it started, and in a wide window the process
+count too.
+
+Click **Pau** to list each running session with its processes, such as MCP
+servers and the tools the agent runs, and the CPU and memory of each. The
+figures update every two seconds while a Pau window is open.
+
 ## Read the measurements
 
 Each active tree reports:

@@ -42,6 +42,8 @@ export type {
 	MotionPreference,
 	NotificationPolicy,
 	PaneWidths,
+	ProcessResourceNode,
+	ProcessResourceSnapshot,
 	ThemePreference,
 	UiFontPreference,
 	UiPreferences,

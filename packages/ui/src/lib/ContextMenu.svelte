@@ -200,8 +200,15 @@
 		position: fixed;
 		inset: auto;
 		display: grid;
+		/*
+		 * Both caps cover the border box and leave the 8px edge gap that
+		 * place() keeps on each side. A window shorter than the menu scrolls
+		 * it, and focus() scrolls the focused item into view.
+		 */
+		box-sizing: border-box;
 		max-width: min(20rem, calc(100vw - 1rem));
-		overflow: visible;
+		max-height: calc(100dvh - 1rem);
+		overflow-y: auto;
 		font-family: inherit;
 		animation: context-menu-enter var(--pau-duration-move) var(--pau-ease-out);
 	}

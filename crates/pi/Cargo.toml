@@ -22,4 +22,5 @@ tempfile = "3.27.0"
 tokio.workspace = true
 
 [dev-dependencies]
+pau-agent = { path = "../agent", features = ["test-support"] }
 tokio = { workspace = true, features = ["test-util"] }

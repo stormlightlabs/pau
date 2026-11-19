@@ -1034,7 +1034,7 @@ mod tests {
         fs::write(
             &executable,
             format!(
-                "#!/bin/sh\nprintf '%s ' \"$@\" >> {0}\nprintf '\\n' >> {0}\nprintf 'TOKEN=should-not-escape' >&2\ncase \"$*\" in *failed*) exit 7;; *hang*) exec sleep 1;; esac\n",
+                "#!/bin/sh\nprintf '%s ' \"$@\" >> {0}\nprintf '\\n' >> {0}\nprintf 'TOKEN=should-not-escape' >&2\ncase \"$*\" in *failed*) exit 7;; esac\n",
                 arguments.display()
             ),
         )
@@ -1085,18 +1085,6 @@ mod tests {
         )
         .await
         .unwrap();
-        let timed_out = run_claude_mcp_operation(
-            &ClaudeMcpOptions {
-                timeout: Duration::from_millis(20),
-                ..options
-            },
-            ClaudeMcpOperation::Test {
-                name: "hang".to_owned(),
-            },
-        )
-        .await
-        .unwrap();
-
         for result in [&test, &authenticate, &status, &remove] {
             assert!(result.success);
             assert!(!result.diagnostic.message.contains("should-not-escape"));
@@ -1106,11 +1094,69 @@ mod tests {
             "Claude connected to MCP server \"docs\"."
         );
         assert!(!failed.success);
-        assert!(!timed_out.success);
-        assert!(timed_out.diagnostic.message.contains("timed out"));
         assert_eq!(
             fs::read_to_string(arguments).unwrap(),
-            "mcp get docs \nmcp login oauth \nmcp list \nmcp remove --scope project old \nmcp get failed \nmcp get hang \n"
+            "mcp get docs \nmcp login oauth \nmcp list \nmcp remove --scope project old \nmcp get failed \n"
         );
+    }
+
+    /// The paused clock cannot pass the timeout while the blocking task waits
+    /// for the fake to start, so the fake always starts before it is stopped.
+    #[cfg(unix)]
+    #[tokio::test(start_paused = true)]
+    async fn stops_claude_when_an_operation_times_out() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = tempdir().unwrap();
+        let executable = directory.path().join("claude-fixture");
+        let sleeper = directory.path().join("sleeper");
+        fs::write(
+            &executable,
+            "#!/bin/sh\nsleep 600 &\necho $! > sleeper.tmp\nmv sleeper.tmp sleeper\nwait\n",
+        )
+        .unwrap();
+        let mut permissions = fs::metadata(&executable).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&executable, permissions).unwrap();
+        let options = ClaudeMcpOptions {
+            executable_path: executable,
+            working_directory: directory.path().to_path_buf(),
+            path: std::env::var_os("PATH").unwrap_or_default(),
+            timeout: Duration::from_secs(1),
+        };
+        let started = tokio::task::spawn_blocking(move || {
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            while std::time::Instant::now() < deadline {
+                if let Ok(text) = fs::read_to_string(&sleeper) {
+                    return text.trim().parse::<i32>().ok();
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            None
+        });
+
+        let (timed_out, started) = tokio::join!(
+            run_claude_mcp_operation(
+                &options,
+                ClaudeMcpOperation::Test {
+                    name: "hang".to_owned(),
+                },
+            ),
+            started
+        );
+
+        let timed_out = timed_out.unwrap();
+        assert!(!timed_out.success);
+        assert!(timed_out.diagnostic.message.contains("timed out"));
+        let sleeper = started.unwrap().expect("the fake did not start");
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        // SAFETY: signal 0 only checks that the process exists.
+        while unsafe { libc::kill(sleeper, 0) } == 0 {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the fake's child is still running"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 }

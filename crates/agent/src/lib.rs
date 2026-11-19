@@ -35,6 +35,8 @@ pub use mcp::{
     McpServerSource, claude_mcp_capabilities, discover_claude_mcp, edit_mcp_server,
     merge_mcp_layers, redact_mcp_value, run_claude_mcp_operation, set_claude_server_enabled,
 };
+#[cfg(all(unix, feature = "test-support"))]
+pub use process_group::child_exited;
 #[cfg(unix)]
 pub use process_group::signal_process_group;
 pub use process_group::{ProcessGroup, lead_process_group};

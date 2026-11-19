@@ -1005,8 +1005,8 @@ cat >/dev/null
     /// keeps Pi's stdout open, where `exec cat` would close it.
     const SILENT_PI: &str = "while read -r line; do :; done\n";
 
-    // These tests drop the process rather than shut it down, because a
-    // paused clock can pass a shutdown stage before the reaper sees Pi exit.
+    // These tests resume the clock before shutting Pi down. A paused clock
+    // would run through every shutdown stage before the reaper sees Pi exit.
     #[tokio::test(start_paused = true)]
     async fn fails_a_command_that_pi_reads_but_never_answers() {
         let fixture = FakePi::new(SILENT_PI);
@@ -1034,6 +1034,9 @@ cat >/dev/null
         assert_eq!(record.await.unwrap_err().to_string(), message);
         assert_eq!(later.elapsed(), Duration::ZERO);
         assert!(output.try_recv().is_err());
+
+        tokio::time::resume();
+        assert!(process.shutdown().await.unwrap().requested);
     }
 
     #[tokio::test(start_paused = true)]
@@ -1062,6 +1065,9 @@ cat >/dev/null
         // `bash` took the first ID and the check the second.
         assert_eq!(process.next_command_id(), "pau-3");
         assert!(process.pending.lock().await.is_empty());
+
+        tokio::time::resume();
+        assert!(process.shutdown().await.unwrap().requested);
     }
 
     /// Answers `id` while holding the pending lock, as the stdout reader
@@ -1353,6 +1359,34 @@ while :; do :; done
             fs::read_to_string(signal_log).unwrap(),
             "interrupt\nterminate\n"
         );
+    }
+
+    /// Pi exits just as the protocol stage runs out, so the interrupt reaches
+    /// a group whose only member is Pi's unreaped leader. macOS refuses that
+    /// signal with `EPERM`. The leader becomes a zombie before shutdown
+    /// starts, and the paused clock ends the zero-length protocol stage
+    /// before the reaper task runs.
+    #[tokio::test(start_paused = true)]
+    async fn shutdown_succeeds_when_pi_exits_as_the_protocol_stage_ends() {
+        let fixture = FakePi::new("exit 3\n");
+        let process = fixture.start(PiShutdownTimeouts {
+            protocol: Duration::ZERO,
+            ..PiShutdownTimeouts::default()
+        });
+        // Block the runtime thread, so that the reaper cannot run first.
+        let started = std::time::Instant::now();
+        while !pau_agent::child_exited(process.process_id()) {
+            assert!(
+                started.elapsed() < Duration::from_secs(5),
+                "Pi did not exit"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        let exit = process.shutdown().await.unwrap();
+
+        assert_eq!(exit.code, Some(3));
+        assert!(exit.requested);
     }
 
     #[tokio::test]

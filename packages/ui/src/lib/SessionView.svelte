@@ -2985,6 +2985,11 @@
 											{/if}
 										{/key}
 									{/if}
+									{#if activeSession.model && !activeSession.capabilities.modelSelection}
+										<!-- An agent that cannot switch models, such as Claude Code, still names the one it runs. The space after the hidden name starts the line, so CSS drops it from view but the accessible name keeps it. -->
+										<span class="pau-chip" title={activeSession.model}
+											><span><span class="pau-visually-hidden">Model:</span> {activeSession.model}</span></span>
+									{/if}
 									<ContextMeter usage={activeSession.usage} supported={activeSession.capabilities.usage ?? false} />
 								</div>
 								<div class="session-composer__actions">

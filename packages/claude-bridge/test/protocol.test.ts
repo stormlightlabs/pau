@@ -75,8 +75,18 @@ describe('bridge framing', () => {
 		const protocolResults = protocol.push(protocolFixture);
 		const diagnosticResults = diagnostics.push(diagnosticFixture);
 
-		expect(protocolResults).toHaveLength(5);
+		expect(protocolResults).toHaveLength(6);
 		expect(protocolResults.every((result) => result.ok)).toBe(true);
+		expect(protocolResults.at(-1)).toEqual({
+			ok: true,
+			frame: {
+				version: 1,
+				type: 'event',
+				sequence: 2,
+				event: 'session.model',
+				payload: { model: 'claude-sonnet-4-5-20250929' }
+			}
+		});
 		expect(protocol.end()).toEqual([]);
 		expect(diagnosticResults).toHaveLength(2);
 		expect(diagnosticResults.every((result) => result.ok)).toBe(true);

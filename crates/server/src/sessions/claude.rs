@@ -6,15 +6,17 @@
 //! publishes the session as idle and records the Claude session ID it
 //! carries. A failed turn leaves the session idle too, because a failed API
 //! call ends the turn and not the session. Its error reaches clients in that
-//! event and the server log. Bridge diagnostics stay out of the event stream,
-//! as Pi's stderr does.
+//! event and the server log. A `session.model` event records the model
+//! Claude names when a turn starts and publishes the session with it. Bridge
+//! diagnostics stay out of the event stream, as Pi's stderr does.
 
 use std::sync::Arc;
 
 use axum::http::StatusCode;
 use pau_agent::{
     AgentControl, AgentControlError, AgentKind, CLAUDE_BRIDGE_CAPABILITIES, ClaudeBridgeOutput,
-    ClaudeBridgeProcessError, ClaudeSession, ClaudeSessionError, discover_claude,
+    ClaudeBridgeProcessError, ClaudeEventPayload, ClaudeSession, ClaudeSessionError,
+    discover_claude, project_claude_event,
 };
 use pau_core::{
     ServerEventKind,
@@ -196,6 +198,22 @@ impl SessionApi {
                         })
                         .to_string(),
                     );
+                    if let ClaudeEventPayload::SessionModel { model } =
+                        project_claude_event(&event).payload
+                    {
+                        // Claude names the model on every turn. Publish only a
+                        // change, so clients do not see a repeat each turn.
+                        let changed = {
+                            let mut native =
+                                record.native.lock().expect("native state lock poisoned");
+                            let changed = native.model.as_deref() != Some(model.as_str());
+                            native.model = Some(model);
+                            changed
+                        };
+                        if changed && let Some(summary) = self.claude_summary(&id).await {
+                            self.publish(&summary);
+                        }
+                    }
                     if event.event == "turn.completed" {
                         let payload = event.payload.as_ref();
                         if let Some(native_id) = payload

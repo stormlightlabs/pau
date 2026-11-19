@@ -345,6 +345,10 @@ export type SessionViewModel = {
 	savedSessionId?: string;
 	title: string;
 	agent: string;
+	/**
+	 * The model the agent reports running. An agent that cannot switch
+	 * models shows it read-only in the composer. Absent until reported.
+	 */
 	model?: string;
 	/** Level last selected in this session, when known. */
 	thinkingLevel?: ThinkingLevel;

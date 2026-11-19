@@ -243,11 +243,12 @@ struct SessionRecord {
     pending: bool,
 }
 
-/// The session state Pi owns, refreshed from `get_state`.
+/// The session state the agent owns.
 ///
 /// Pi reports it only on request, so the API reads it when the session starts
 /// and after the controls that change it (model, thinking level, branch,
-/// rename) instead of on every event.
+/// rename) instead of on every event. Claude reports its session ID and model
+/// in bridge events instead.
 #[derive(Clone, Default, PartialEq)]
 struct NativeState {
     session_id: Option<String>,
@@ -255,6 +256,8 @@ struct NativeState {
     /// Levels the current model supports, from `get_available_thinking_levels`.
     thinking_levels: Vec<SessionThinkingLevel>,
     name: Option<String>,
+    /// The model Claude's bridge last reported. Pi never sets it.
+    model: Option<String>,
 }
 
 /// Starts agent sessions and publishes their lifecycle and output events.
@@ -683,6 +686,7 @@ impl SessionApi {
             thinking_level: state.thinking_level.map(session_thinking_level),
             thinking_levels: native.thinking_levels.clone(),
             name: state.name,
+            model: native.model.clone(),
         };
         let changed = *native != fresh;
         *native = fresh;
@@ -919,6 +923,7 @@ fn describe(id: &str, record: &SessionRecord, status: SessionStatus) -> AgentSes
         thinking_level: native.thinking_level,
         thinking_levels: native.thinking_levels,
         name: native.name,
+        model: native.model,
         capabilities: session_capabilities(record.capabilities),
     }
 }

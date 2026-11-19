@@ -597,6 +597,8 @@ pub enum ClaudeEventPayload {
         content: Value,
         is_error: bool,
     },
+    /// The model Claude reports at the start of a turn.
+    SessionModel { model: String },
     /// The authoritative turn result and resulting session state.
     TurnCompleted {
         status: AgentSessionStatus,
@@ -654,6 +656,22 @@ pub fn project_claude_event(event: &ClaudeBridgeEvent) -> AgentEvent<ClaudeEvent
                     .unwrap_or(false),
             },
         ),
+        "session.model" => match payload.get("model").and_then(Value::as_str) {
+            Some(model) => AgentEvent::new(
+                AgentEventKind::Lifecycle,
+                ClaudeEventPayload::SessionModel {
+                    model: model.to_owned(),
+                },
+            ),
+            // An event without a model name carries nothing to apply.
+            None => AgentEvent::new(
+                AgentEventKind::Lifecycle,
+                ClaudeEventPayload::Unknown {
+                    event: event.event.clone(),
+                    payload: event.payload.clone(),
+                },
+            ),
+        },
         "turn.completed" => {
             let status = if payload.get("status").and_then(Value::as_str) == Some("failed") {
                 AgentSessionStatus::Failed

@@ -114,6 +114,11 @@ pub struct AgentSession {
     /// is named or while Pi has not reported it.
     #[serde(default)]
     pub name: Option<String>,
+    /// Model the agent reports running, as the agent names it. Claude
+    /// reports it when a turn starts, so it is absent until the first turn.
+    /// Always absent for Pi, whose current model the models route reports.
+    #[serde(default)]
+    pub model: Option<String>,
     /// Controls this session accepts.
     pub capabilities: SessionCapabilities,
 }

@@ -64,10 +64,12 @@ an unexpected exit and retain the exit code or signal. Exited processes are
 removed from the registry.
 
 Call `process.prompt(task, handlers)` to send one task. The `onEvent` handler
-receives ordered `text.delta`, `tool.started`, `tool.completed`, and
-`turn.completed` events while Claude runs. The returned promise settles when
-Claude emits its `result` record; that record determines whether the turn
-completed or failed. A process accepts one active prompt at a time.
+receives ordered `session.model`, `text.delta`, `tool.started`,
+`tool.completed`, and `turn.completed` events while Claude runs.
+`session.model` carries the `model` Claude names when the turn starts, and is
+absent when Claude names none. The returned promise settles when Claude emits
+its `result` record; that record determines whether the turn completed or
+failed. A process accepts one active prompt at a time.
 
 Call `process.interrupt()` to stop the active turn without stopping Claude. The
 promise resolves after Claude acknowledges the interrupt and emits the turn's

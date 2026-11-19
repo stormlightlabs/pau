@@ -186,6 +186,19 @@ export const ClaudeSession: Story = {
 		await expect(canvas.queryByRole('button', { name: /^Model/ })).toBeNull();
 		await expect(canvas.queryByRole('combobox', { name: 'Thinking level' })).toBeNull();
 		await expect(canvas.queryByRole('button', { name: 'Compact' })).toBeNull();
+		await expect(canvas.queryByText(/^Model:/)).toBeNull();
+	}
+};
+export const ClaudeSessionWithModel: Story = {
+	args: {
+		workspaces: sessionFixtures.claudeWithModel,
+		initialSessionId: 'claude-idle',
+		models: modelFixtures.populated
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		await expect(canvas.getByText('claude-sonnet-4-5-20250929')).toHaveTextContent('Model: claude-sonnet-4-5-20250929');
+		await expect(canvas.queryByRole('button', { name: /^Model/ })).toBeNull();
 	}
 };
 export const ClaudeNotReady: Story = {

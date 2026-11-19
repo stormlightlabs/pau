@@ -19,6 +19,7 @@ const claude = {
 	native_session_id: null,
 	thinking_level: null,
 	thinking_levels: [],
+	model: null,
 	name: null,
 	capabilities: { prompt: true, interrupt: true, stop: true }
 } as unknown as AgentSession;
@@ -92,12 +93,14 @@ test('starts, streams, interrupts, and resumes a Claude session', async () => {
 	expect(requests.at(-1)).toMatchObject({ method: 'POST', body: { agent: 'claude', native_session_id: null } });
 	socket.receive(event(id, 'session_changed', { ...claude, id }));
 	expect(find(id)).toMatchObject({ agent: 'Claude Code', capabilities: { prompt: true, steer: undefined } });
+	expect(find(id)?.model).toBeUndefined();
 
 	// The reply starts streaming before the prompt request returns.
 	const sending = sessions.send(id, 'Inspect the change');
 	socket.receive(event(id, 'session_output', bridge('text.delta', { text: 'Reading ' })));
 	await sending;
-	socket.receive(event(id, 'session_changed', { ...claude, id, status: 'running' }));
+	socket.receive(event(id, 'session_changed', { ...claude, id, status: 'running', model: 'claude-sonnet-4-5' }));
+	expect(find(id)?.model).toBe('claude-sonnet-4-5');
 	socket.receive(event(id, 'session_output', bridge('text.delta', { text: 'the diff.' })));
 	socket.receive(
 		event(id, 'session_output', bridge('tool.started', { id: 't1', name: 'Read', input: { file_path: 'src/a.ts' } }))

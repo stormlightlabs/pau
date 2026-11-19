@@ -145,6 +145,9 @@ thinking, permission, context) and the actions. They share one row when both
 fit. When they no longer fit, the actions keep the first row under the field
 and the options wrap below them. In a narrow footer, the context meter shows
 only the share used, and its details still list the window and token totals.
+An agent that cannot switch models, such as Claude Code, shows the model it
+reports as a chip in place of the model picker, and shows nothing until it
+reports one.
 Completion lists open as a popover above the composer, so the composer keeps
 its height and the transcript does not move.
 

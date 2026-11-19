@@ -23,6 +23,7 @@ const session: AgentSession = {
 	ended_at: null,
 	exit_code: null,
 	native_session_id: null,
+	model: null,
 	thinking_level: null,
 	thinking_levels: [],
 	name: null,

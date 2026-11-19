@@ -3,3 +3,4 @@
 {"version":1,"type":"response","id":"cmd-2","ok":false,"error":{"code":"busy","message":"A turn is already running","recoverable":true}}
 {"version":1,"type":"event","sequence":0,"event":"session.started","payload":{"sessionId":"session-1"}}
 {"version":1,"type":"event","sequence":1,"event":"text.delta","payload":{"text":"Done"}}
+{"version":1,"type":"event","sequence":2,"event":"session.model","payload":{"model":"claude-sonnet-4-5-20250929"}}

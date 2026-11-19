@@ -37,6 +37,16 @@ fn consumes_the_bridge_package_protocol_fixtures() {
             text: "Done".to_owned()
         }
     );
+    let event = match &decoded[5] {
+        Ok(ClaudeBridgeFrame::Event(event)) => event,
+        other => panic!("expected model event, got {other:?}"),
+    };
+    assert_eq!(
+        project_claude_event(event).payload,
+        ClaudeEventPayload::SessionModel {
+            model: "claude-sonnet-4-5-20250929".to_owned()
+        }
+    );
 
     let recovery = fs::read_to_string(fixtures.join("recovery.jsonl")).unwrap();
     let mut records = recovery.lines().map(decode_claude_bridge_frame);

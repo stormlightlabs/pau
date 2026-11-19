@@ -1,8 +1,9 @@
 # Design references
 
 This directory records Pau's durable interface decisions and early sketches.
-The Product specification and the Technical plan, which live in the project's issue
-tracker, define product behavior and implementation policy.
+The [product specification](../product/README.md) defines product behavior, and
+the Technical plan in the project's issue tracker defines implementation
+policy.
 
 - [`system.md`](system.md) defines the visual and interaction system.
 - [`surfaces.md`](surfaces.md) states each product surface's purpose,

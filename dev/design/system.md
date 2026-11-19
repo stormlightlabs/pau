@@ -6,8 +6,9 @@ precise. It should not resemble an analytics dashboard or hide process state
 behind decorative summaries.
 
 This document owns durable visual and interaction decisions. Product behavior
-comes from the Product specification, and architecture and implementation
-policy from the Technical plan. Both live in the project's issue tracker.
+comes from the [product specification](../product/README.md), and architecture
+and implementation policy from the Technical plan in the project's issue
+tracker.
 [`apps/desktop/DESIGN.md`](../../apps/desktop/DESIGN.md) lists the token
 values, and `apps/desktop/.impeccable/wireframes/` holds a static wireframe of
 each surface. Where either disagrees with this document, this document wins.

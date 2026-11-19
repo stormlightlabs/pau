@@ -69,14 +69,28 @@ export const BUILTIN_COMMANDS: readonly BuiltinCommand[] = [
 	runs('quit', 'stop', 'Stop the session')
 ];
 
+/** What the host offers to the built-ins that need it. */
+export type BuiltinOptions = {
+	/** Whether the host has a save dialog for transcripts. Without one, `/export` needs Pi's terminal. */
+	canExport: boolean;
+};
+
+const TERMINAL_EXPORT = terminalOnly('export', 'Export the session as HTML or JSONL');
+
+/** Pi's built-ins as this host handles them. */
+function builtinCommands({ canExport }: BuiltinOptions): readonly BuiltinCommand[] {
+	if (canExport) return BUILTIN_COMMANDS;
+	return BUILTIN_COMMANDS.map((command) => (command.name === 'export' ? TERMINAL_EXPORT : command));
+}
+
 /**
  * Joins the session's commands with Pi's built-ins. A session command keeps
  * its name over a built-in, because Pi runs the session command when it
  * receives that name over RPC.
  */
-export function withBuiltins(commands: readonly CommandOption[]): CommandOption[] {
+export function withBuiltins(commands: readonly CommandOption[], options: BuiltinOptions): CommandOption[] {
 	const taken = new Set(commands.map((command) => command.name));
-	return [...commands, ...BUILTIN_COMMANDS.filter((command) => !taken.has(command.name))];
+	return [...commands, ...builtinCommands(options).filter((command) => !taken.has(command.name))];
 }
 
 /** A built-in typed in the draft, with the text after its name. */
@@ -88,10 +102,11 @@ export type BuiltinInvocation = { command: BuiltinCommand; argument: string };
  */
 export function builtinInvocation(
 	draft: string,
-	sessionCommands: readonly CommandOption[]
+	sessionCommands: readonly CommandOption[],
+	options: BuiltinOptions
 ): BuiltinInvocation | undefined {
 	const match = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(draft.trim());
 	if (!match || sessionCommands.some((command) => command.name === match[1])) return undefined;
-	const command = BUILTIN_COMMANDS.find((candidate) => candidate.name === match[1]);
+	const command = builtinCommands(options).find((candidate) => candidate.name === match[1]);
 	return command ? { command, argument: match[2]?.trim() ?? '' } : undefined;
 }

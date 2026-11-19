@@ -39,7 +39,8 @@ function workspaces(): SessionWorkspace[] {
 	];
 }
 
-async function setup() {
+/** Renders the session with every handler, or with `overrides` replacing some, such as a host without a save dialog. */
+async function setup(overrides: { onExportTranscript?: undefined } = {}) {
 	const handlers = {
 		onSend: vi.fn(),
 		onSelectThinkingLevel: vi.fn(),
@@ -52,7 +53,7 @@ async function setup() {
 		onLoadCommands: vi.fn().mockResolvedValue(commandFixtures.populated)
 	};
 	await render(SessionView, {
-		props: { workspaces: workspaces(), activeSessionId: 'session-idle', ...handlers },
+		props: { workspaces: workspaces(), activeSessionId: 'session-idle', ...handlers, ...overrides },
 		context: new Map([[keymapContext, new Keymap({ platform: 'other' })]])
 	});
 	const prompt = page.getByRole('textbox', { name: 'Prompt' });
@@ -180,6 +181,20 @@ test('refuses a second /export while one is in flight and keeps the draft', asyn
 	await expect.element(page.getByRole('alert')).toHaveTextContent('The transcript is already being exported.');
 	await expect.element(prompt).toHaveValue('/export');
 	expect(onExportTranscript).toHaveBeenCalledTimes(1);
+});
+
+test('keeps /export terminal-only where the host has no save dialog', async () => {
+	const { prompt, onExportTranscript, onSend } = await setup({ onExportTranscript: undefined });
+	await userEvent.type(prompt, '/export');
+
+	const option = page.getByRole('option', { name: /\/export/ });
+	await expect.element(option).toHaveAttribute('aria-disabled', 'true');
+	await expect.element(option).toHaveTextContent(TERMINAL_ONLY_REASON);
+	await userEvent.keyboard('{Escape}{Enter}');
+	await expect.element(page.getByRole('alert')).toHaveTextContent(TERMINAL_ONLY_REASON);
+	await expect.element(prompt).toHaveValue('/export');
+	expect(onExportTranscript).not.toHaveBeenCalled();
+	expect(onSend).not.toHaveBeenCalled();
 });
 
 test('lists a terminal-only built-in as unavailable with its reason', async () => {

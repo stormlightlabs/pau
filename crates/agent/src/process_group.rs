@@ -20,11 +20,11 @@ pub fn lead_process_group(command: &mut Command) -> &mut Command {
 
 /// Sends `signal` to every process in the group that `process_id` leads.
 ///
-/// A group that no longer exists is not an error. Neither is a group whose
-/// leader has exited and that has no member left to signal: macOS answers
-/// `EPERM` when the only member is the unreaped leader. Any other `EPERM`,
-/// such as a running leader, is returned. The caller must still own the
-/// unreaped leader, or the ID may name another group.
+/// A group that no longer exists is not an error. Neither is a group left
+/// with only its exited, unreaped leader, which macOS refuses with `EPERM`.
+/// Any other `EPERM` is returned: a running leader, a member owned by another
+/// user, or an ID that is not this process's child. The caller must still own
+/// the unreaped leader, or the ID may name another group.
 #[cfg(unix)]
 pub fn signal_process_group(process_id: u32, signal: i32) -> io::Result<()> {
     let group = libc::pid_t::try_from(process_id)
@@ -34,29 +34,106 @@ pub fn signal_process_group(process_id: u32, signal: i32) -> io::Result<()> {
         return Ok(());
     }
     let error = io::Error::last_os_error();
-    match error.raw_os_error() {
-        Some(libc::ESRCH) => Ok(()),
-        Some(libc::EPERM) if group_leader_exited(process_id) => Ok(()),
-        _ => Err(error),
+    if refusal_leaves_nothing_running(error.raw_os_error(), || leader_state(group)) {
+        Ok(())
+    } else {
+        Err(error)
     }
 }
 
-/// Whether the group leader `process_id` has exited, reaped or not.
+/// What this process knows of a group's leader after `killpg` fails.
+#[cfg(unix)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Leader {
+    /// The ID is not an unreaped child of this process.
+    NotOurs,
+    /// The leader still runs.
+    Running,
+    /// The leader exited, and the group holds no other process.
+    ExitedAlone,
+    /// The leader exited, and other members remain or cannot be ruled out.
+    ExitedWithMembers,
+}
+
+/// Whether a `killpg` failure with `errno` means no member of the group is
+/// left running.
+///
+/// Only `EPERM` reads the leader, so the `waitid` and process listing run
+/// just on that path.
+#[cfg(unix)]
+fn refusal_leaves_nothing_running(errno: Option<i32>, leader: impl FnOnce() -> Leader) -> bool {
+    match errno {
+        Some(libc::ESRCH) => true,
+        Some(libc::EPERM) => leader() == Leader::ExitedAlone,
+        _ => false,
+    }
+}
+
+/// Reads the state of the group leader `group` without reaping it.
 ///
 /// It peeks with `WNOWAIT`, so a zombie leader stays for its owner to reap.
-/// The caller must own the leader: once it is reaped, any ID reads as exited.
+/// `waitid` fails with `ECHILD` for an ID that is not this process's child,
+/// which reads as [`Leader::NotOurs`].
 #[cfg(unix)]
-pub fn group_leader_exited(process_id: u32) -> bool {
+fn leader_state(group: libc::pid_t) -> Leader {
     // SAFETY: `siginfo_t` is plain data, and all zeros means no child.
     let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
     let flags = libc::WEXITED | libc::WNOHANG | libc::WNOWAIT;
     // SAFETY: `info` is a valid, writable `siginfo_t`.
-    if unsafe { libc::waitid(libc::P_PID, process_id, &mut info, flags) } == 0 {
-        // SAFETY: `waitid` succeeded, so `info` holds a child's status or
-        // stays zeroed while the child runs.
-        return unsafe { info.si_pid() } != 0;
+    if unsafe { libc::waitid(libc::P_PID, group as libc::id_t, &mut info, flags) } != 0 {
+        return Leader::NotOurs;
     }
-    io::Error::last_os_error().raw_os_error() == Some(libc::ECHILD)
+    // SAFETY: `waitid` succeeded, so `info` holds the child's status, or
+    // stays zeroed while the child runs.
+    if unsafe { info.si_pid() } == 0 {
+        Leader::Running
+    } else if group_has_other_members(group) {
+        Leader::ExitedWithMembers
+    } else {
+        Leader::ExitedAlone
+    }
+}
+
+/// Whether the group `group` holds a process other than its leader.
+///
+/// Members owned by another user count, since they are the ones `killpg`
+/// cannot signal.
+#[cfg(target_os = "macos")]
+fn group_has_other_members(group: libc::pid_t) -> bool {
+    let mut members = [0 as libc::pid_t; 2];
+    let size = std::mem::size_of_val(&members) as libc::c_int;
+    // SAFETY: `members` is a writable buffer of `size` bytes.
+    let count = unsafe { libc::proc_listpgrppids(group, members.as_mut_ptr().cast(), size) };
+    match usize::try_from(count) {
+        Ok(count) => members[..count.min(members.len())]
+            .iter()
+            .any(|&member| member != group),
+        Err(_) => true,
+    }
+}
+
+/// Whether the group `group` holds a process other than its leader.
+///
+/// Other Unix systems signal a zombie leader without error, so `killpg`
+/// answers `EPERM` only when a member refused it. There is no portable way
+/// to list a group, so this assumes a member remains.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn group_has_other_members(_group: libc::pid_t) -> bool {
+    true
+}
+
+/// Whether `process_id`, an unreaped child of this process, has exited.
+///
+/// Tests use it to wait for a zombie leader. Any other ID reads as not
+/// exited.
+#[cfg(all(unix, any(test, feature = "test-support")))]
+pub fn child_exited(process_id: u32) -> bool {
+    libc::pid_t::try_from(process_id).is_ok_and(|group| {
+        matches!(
+            leader_state(group),
+            Leader::ExitedAlone | Leader::ExitedWithMembers
+        )
+    })
 }
 
 /// Owns a child spawned after [`lead_process_group`] and kills its whole
@@ -175,7 +252,7 @@ pub(crate) mod tests {
             .spawn()
             .unwrap();
         for _ in 0..250 {
-            if group_leader_exited(leader.id()) {
+            if child_exited(leader.id()) {
                 return leader;
             }
             std::thread::sleep(Duration::from_millis(20));
@@ -209,13 +286,66 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn treats_a_refused_signal_as_done_only_for_a_lone_exited_leader() {
+        use Leader::*;
+        let cases = [
+            (Some(libc::ESRCH), NotOurs, true),
+            (Some(libc::EPERM), ExitedAlone, true),
+            (Some(libc::EPERM), ExitedWithMembers, false),
+            (Some(libc::EPERM), Running, false),
+            (Some(libc::EPERM), NotOurs, false),
+            (Some(libc::EINVAL), ExitedAlone, false),
+            (None, ExitedAlone, false),
+        ];
+        for (errno, leader, done) in cases {
+            assert_eq!(
+                refusal_leaves_nothing_running(errno, || leader),
+                done,
+                "{errno:?} with {leader:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn reads_only_its_own_children_as_leaders() {
+        assert_eq!(leader_state(1), Leader::NotOurs);
+        assert!(!child_exited(1));
+        // Root may signal init's group, so only another user sees the refusal.
+        // SAFETY: `geteuid` has no requirements.
+        if unsafe { libc::geteuid() } != 0 {
+            assert!(signal_process_group(1, 0).is_err());
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn tells_a_lone_exited_leader_from_one_with_members() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut alone = zombie_leader(directory.path(), "exit 0");
+        let mut with_member =
+            zombie_leader(directory.path(), "sleep 600 & echo $! > grandchild; exit 0");
+        let grandchild = grandchild(directory.path()).await;
+
+        assert_eq!(leader_state(alone.id() as i32), Leader::ExitedAlone);
+        assert_eq!(
+            leader_state(with_member.id() as i32),
+            Leader::ExitedWithMembers
+        );
+
+        signal_process_group(with_member.id(), libc::SIGKILL).unwrap();
+        assert_gone(grandchild).await;
+        alone.wait().unwrap();
+        with_member.wait().unwrap();
+    }
+
+    #[test]
     fn a_running_leader_has_not_exited() {
         let mut leader = std::process::Command::new("sleep")
             .arg("600")
             .spawn()
             .unwrap();
 
-        assert!(!group_leader_exited(leader.id()));
+        assert!(!child_exited(leader.id()));
 
         leader.kill().unwrap();
         leader.wait().unwrap();

@@ -1375,7 +1375,7 @@ while :; do :; done
         });
         // Block the runtime thread, so that the reaper cannot run first.
         let started = std::time::Instant::now();
-        while !pau_agent::group_leader_exited(process.process_id()) {
+        while !pau_agent::child_exited(process.process_id()) {
             assert!(
                 started.elapsed() < Duration::from_secs(5),
                 "Pi did not exit"

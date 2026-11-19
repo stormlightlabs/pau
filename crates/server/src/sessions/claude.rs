@@ -15,7 +15,8 @@ use std::sync::Arc;
 use axum::http::StatusCode;
 use pau_agent::{
     AgentControl, AgentControlError, AgentKind, CLAUDE_BRIDGE_CAPABILITIES, ClaudeBridgeOutput,
-    ClaudeBridgeProcessError, ClaudeSession, ClaudeSessionError, discover_claude,
+    ClaudeBridgeProcessError, ClaudeEventPayload, ClaudeSession, ClaudeSessionError,
+    discover_claude, project_claude_event,
 };
 use pau_core::{
     ServerEventKind,
@@ -197,19 +198,19 @@ impl SessionApi {
                         })
                         .to_string(),
                     );
-                    if event.event == "session.model"
-                        && let Some(model) = event
-                            .payload
-                            .as_ref()
-                            .and_then(|payload| payload.get("model"))
-                            .and_then(serde_json::Value::as_str)
+                    if let ClaudeEventPayload::SessionModel { model } =
+                        project_claude_event(&event).payload
                     {
-                        record
-                            .native
-                            .lock()
-                            .expect("native state lock poisoned")
-                            .model = Some(model.to_owned());
-                        if let Some(summary) = self.claude_summary(&id).await {
+                        // Claude names the model on every turn. Publish only a
+                        // change, so clients do not see a repeat each turn.
+                        let changed = {
+                            let mut native =
+                                record.native.lock().expect("native state lock poisoned");
+                            let changed = native.model.as_deref() != Some(model.as_str());
+                            native.model = Some(model);
+                            changed
+                        };
+                        if changed && let Some(summary) = self.claude_summary(&id).await {
                             self.publish(&summary);
                         }
                     }

@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,7 +48,18 @@ describe('Claude prompt streaming', () => {
 			{ sequence: 4, event: 'tool.completed' },
 			{ sequence: 5, event: 'turn.completed' }
 		]);
-		expect(events[0]?.payload).toEqual({ model: 'claude-sonnet-4-5-20250929' });
+		// The model event matches the frame in the protocol fixture the Rust
+		// adapter also reads, so a rename on either side fails a test.
+		const protocolFixture = await readFile(join(fixtures, 'protocol.jsonl'), 'utf8');
+		const modelFrame = protocolFixture
+			.split('\n')
+			.filter(Boolean)
+			.map((line) => JSON.parse(line) as Partial<EventFrame>)
+			.find((frame) => frame.event === 'session.model');
+		expect({ event: events[0]?.event, payload: events[0]?.payload }).toEqual({
+			event: modelFrame?.event,
+			payload: modelFrame?.payload
+		});
 		expect(events[1]?.payload).toEqual({ text: 'Checking ' });
 		expect(events[3]?.payload).toEqual({ id: 'tool-1', name: 'Read', input: { path: 'README.md' } });
 		expect(events[4]?.payload).toEqual({ id: 'tool-1', content: 'file contents', isError: false });

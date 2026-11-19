@@ -195,8 +195,26 @@ test('reports mouse clicks to a program that asks for them', async () => {
 	await expect.poll(() => screenText('sh terminal'), { timeout: 10_000 }).toMatch(/pau\$\s*$/);
 });
 
-/** Opens `command` on a three-line file, edits its last line with a click and keys, and saves. */
-async function editWithMouse(command: string, file: string, keys: string): Promise<void> {
+/** How {@link editWithMouse} drives one terminal editor. */
+type EditorRun = {
+	/** The editor command line, without the file. */
+	command: string;
+	/** The file it edits, relative to the workspace. */
+	file: string;
+	/** Text the editor shows only in insert mode. */
+	insertMode: string;
+};
+
+/**
+ * Opens an editor on a three-line file, inserts `X` at the start of the last
+ * line after a click on it, and saves.
+ *
+ * Each step waits for the screen to show that the editor read the keys before
+ * it sends more. Escape followed at once by `:` reaches the editor as one read
+ * when the editor is busy, and editors that parse input with crossterm, such
+ * as Helix, take that pair as Alt+: and stay in insert mode.
+ */
+async function editWithMouse({ command, file, insertMode }: EditorRun): Promise<void> {
 	await renderSurface();
 	await openShell('sh terminal');
 	await run('sh terminal', String.raw`printf 'one\ntwo\nthree\n' > ${file}`, /^pau\$$/m);
@@ -208,7 +226,14 @@ async function editWithMouse(command: string, file: string, keys: string): Promi
 		.toSatisfy((text: string) => /three/.test(text) && !text.includes('pau$'));
 	const row = terminalRows('sh terminal').find((candidate) => candidate.textContent?.includes('three'))!;
 	await clickRow(row, row.offsetWidth - 24);
-	await userEvent.keyboard(keys);
+
+	await userEvent.keyboard('IX');
+	await expect
+		.poll(() => screenText('sh terminal'), { timeout: 10_000 })
+		.toSatisfy((text: string) => /\bXthree$/m.test(text) && text.includes(insertMode));
+	await userEvent.keyboard('{Escape}');
+	await expect.poll(() => screenText('sh terminal'), { timeout: 10_000 }).not.toContain(insertMode);
+	await userEvent.keyboard(':wq{Enter}');
 
 	// Leaving the editor brings back the shell screen as it was.
 	await expect.poll(() => screenText('sh terminal'), { timeout: 15_000 }).toContain(`pau$ ${command} ${file}`);
@@ -216,13 +241,13 @@ async function editWithMouse(command: string, file: string, keys: string): Promi
 }
 
 test.skipIf(!editors.vim)('edits a file in Vim with the mouse (skipped when vim is not on the PATH)', async () => {
-	await editWithMouse(`vim -u NONE -N -c 'set mouse=a'`, 'vim.txt', 'IX{Escape}:wq{Enter}');
+	await editWithMouse({ command: `vim -u NONE -N -c 'set mouse=a'`, file: 'vim.txt', insertMode: '-- INSERT --' });
 });
 
 test.skipIf(!editors.nvim)('edits a file in Neovim with the mouse (skipped when nvim is not on the PATH)', async () => {
-	await editWithMouse('nvim --clean', 'nvim.txt', 'IX{Escape}:wq{Enter}');
+	await editWithMouse({ command: 'nvim --clean', file: 'nvim.txt', insertMode: '-- INSERT --' });
 });
 
 test.skipIf(!editors.hx)('edits a file in Helix with the mouse (skipped when hx is not on the PATH)', async () => {
-	await editWithMouse('hx -c /dev/null', 'hx.txt', 'IX{Escape}:wq{Enter}');
+	await editWithMouse({ command: 'hx -c /dev/null', file: 'hx.txt', insertMode: 'INS' });
 });

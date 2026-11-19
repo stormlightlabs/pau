@@ -72,8 +72,8 @@ parent. A sub-issue is never dispatched on its own. Each project belongs to
 at most one release initiative: Pau I: Dogfood, Pau II: Public release, Pau
 III: Multi-agent or Pau IV: Web. A parent's release is its project's
 initiative, and its sub-issues share it. An issue in a project outside every
-initiative, such as Backlog, or in no project, carries no release. Linear
-milestones are not used.
+release initiative, such as Backlog, or in no project, carries no release.
+Linear milestones are not used.
 
 A defect the owner reports outside an open PR's change becomes a PAU issue
 handed to an implementer. The driver does not debug it in its own session. The

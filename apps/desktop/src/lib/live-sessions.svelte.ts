@@ -733,6 +733,7 @@ export class LiveSessions {
 			savedSessionId: session.native_session_id ?? undefined,
 			title: this.#title(session),
 			agent,
+			model: session.model ?? undefined,
 			error: failureMessage(session),
 			unseen: this.#unseen.has(session.id),
 			...this.#rackState(session),

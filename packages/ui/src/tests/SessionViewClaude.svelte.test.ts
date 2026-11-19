@@ -38,6 +38,26 @@ test('offers an idle Claude Code session only the controls it supports', async (
 	await expect.element(page.getByRole('menuitem', { name: 'Stop' })).toBeVisible();
 });
 
+test('shows the model a Claude Code session reports, read-only', async () => {
+	await render(SessionView, {
+		workspaces: sessionFixtures.claudeWithModel,
+		activeSessionId: 'claude-idle',
+		...handlers()
+	});
+
+	const model = page.getByText('claude-sonnet-4-5-20250929');
+	await expect.element(model).toBeVisible();
+	await expect.element(model).toHaveTextContent('Model: claude-sonnet-4-5-20250929');
+	await expect.element(page.getByRole('button', { name: /^Model/ })).not.toBeInTheDocument();
+});
+
+test('shows no model for a Claude Code session that has not reported one', async () => {
+	await render(SessionView, { workspaces: sessionFixtures.claude, activeSessionId: 'claude-idle', ...handlers() });
+
+	await expect.element(page.getByRole('textbox', { name: 'Prompt' })).toBeEnabled();
+	await expect.element(page.getByText(/^Model:/)).not.toBeInTheDocument();
+});
+
 test('lets a running Claude Code session be interrupted but not steered', async () => {
 	const onInterrupt = vi.fn();
 	await render(SessionView, {

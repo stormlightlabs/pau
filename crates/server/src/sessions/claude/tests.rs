@@ -31,10 +31,11 @@ const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 const NATIVE_ID: &str = "0b5e8a3c-6f1d-4c2a-9e7b-3d4f5a6b7c8d";
 
 /// A Claude bridge host stand-in. It records its arguments in the working
-/// directory, answers `status`, `prompt`, and `interrupt`, streams one text
-/// delta and a completed turn for each prompt, and exits when its input
-/// closes. The prompt `fail` gets a failed turn instead, and the prompt
-/// `wait` streams its delta and runs until `interrupt` ends the turn.
+/// directory, answers `status`, `prompt`, and `interrupt`, streams the model,
+/// one text delta and a completed turn for each prompt, and exits when its
+/// input closes. The prompt `fail` gets a failed turn without a model
+/// instead, and the prompt `wait` streams its delta and runs until
+/// `interrupt` ends the turn.
 const FAKE_BRIDGE: &str = r#"#!/bin/sh
 printf '%s\n' "$*" > "$PWD/bridge-args.txt"
 while IFS= read -r line; do
@@ -57,8 +58,9 @@ while IFS= read -r line; do
             ;;
         *'"command":"prompt"'*)
             printf '{"version":1,"type":"response","id":"%s","ok":true,"result":{"accepted":true}}\n' "$id"
-            printf '{"version":1,"type":"event","sequence":0,"event":"text.delta","payload":{"text":"fixture output"}}\n'
-            printf '{"version":1,"type":"event","sequence":1,"event":"turn.completed","payload":{"status":"completed","sessionId":"0b5e8a3c-6f1d-4c2a-9e7b-3d4f5a6b7c8d"}}\n'
+            printf '{"version":1,"type":"event","sequence":0,"event":"session.model","payload":{"model":"claude-sonnet-4-5"}}\n'
+            printf '{"version":1,"type":"event","sequence":1,"event":"text.delta","payload":{"text":"fixture output"}}\n'
+            printf '{"version":1,"type":"event","sequence":2,"event":"turn.completed","payload":{"status":"completed","sessionId":"0b5e8a3c-6f1d-4c2a-9e7b-3d4f5a6b7c8d"}}\n'
             ;;
         *)
             printf '{"version":1,"type":"response","id":"%s","ok":true,"result":{}}\n' "$id"
@@ -198,6 +200,7 @@ async fn starts_prompts_streams_and_stops_a_claude_session() {
     assert_eq!(status, StatusCode::CREATED, "{session}");
     assert_eq!(session["agent"], "claude");
     assert_eq!(session["status"], "idle");
+    assert!(session["model"].is_null(), "{session}");
     assert_eq!(session["workspace_id"], fixture.workspace_id);
     let capabilities = &session["capabilities"];
     assert_eq!(capabilities["prompt"], true);
@@ -230,11 +233,13 @@ async fn starts_prompts_streams_and_stops_a_claude_session() {
     })
     .await;
     assert_eq!(settled["native_session_id"], NATIVE_ID);
+    assert_eq!(settled["model"], "claude-sonnet-4-5");
 
     let (status, listed) = fixture.call("GET", "/api/sessions", None).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(listed[0]["id"], id.as_str());
     assert_eq!(listed[0]["agent"], "claude");
+    assert_eq!(listed[0]["model"], "claude-sonnet-4-5");
 
     // Controls the bridge does not offer are refused, not misrouted to Pi.
     let (status, error) = fixture.call("GET", &format!("{base}/queue"), None).await;
@@ -440,6 +445,8 @@ async fn a_failed_turn_leaves_the_session_ready_for_the_next_prompt() {
     })
     .await;
     assert_eq!(settled["status"], "idle");
+    // That turn named no model, so the session reports none.
+    assert!(settled["model"].is_null(), "{settled}");
 
     // The session's own observer applies the same turn, so wait for it.
     tokio::time::timeout(Duration::from_secs(5), async {

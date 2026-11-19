@@ -1154,6 +1154,12 @@ thinking_levels: Array<SessionThinkingLevel>,
  */
 name: string | null,
 /**
+ * Model the agent reports running, as the agent names it. Claude
+ * reports it when a turn starts, so it is absent until the first turn.
+ * Always absent for Pi, whose current model the models route reports.
+ */
+model: string | null,
+/**
  * Controls this session accepts.
  */
 capabilities: SessionCapabilities, };

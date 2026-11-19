@@ -16,6 +16,7 @@ const session = {
 	native_session_id: null,
 	thinking_level: null,
 	thinking_levels: [],
+	model: null,
 	name: null,
 	capabilities: {}
 } as unknown as AgentSession;

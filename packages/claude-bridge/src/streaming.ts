@@ -247,6 +247,13 @@ function translateRecord(
 ): void {
 	if (!isRecord(value) || typeof value.type !== 'string') return;
 
+	// Claude opens each turn with an init record that names the model it runs.
+	if (value.type === 'system' && value.subtype === 'init') {
+		if (typeof value.model === 'string' && value.model)
+			emitEvent(state, handlers, 'session.model', { model: value.model });
+		return;
+	}
+
 	if (value.type === 'stream_event' && isRecord(value.event)) {
 		translateStreamEvent(value.event, state, handlers);
 		return;

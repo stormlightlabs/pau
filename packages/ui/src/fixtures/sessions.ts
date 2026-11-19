@@ -230,6 +230,46 @@ const extensionUi = {
 	]
 };
 
+/**
+ * An idle Claude Code session that streamed a reply and a tool call, with the
+ * model Claude reported, if any.
+ */
+function claudeWorkspaces(model?: string): SessionWorkspace[] {
+	return [
+		{
+			id: 'pau',
+			name: 'Pau',
+			path: '/Users/operator/projects/pau',
+			sessions: [
+				session('idle', {
+					id: 'claude-idle',
+					title: 'Review the adapter fixtures',
+					agent: 'Claude Code',
+					model,
+					capabilities: claudeCapabilities,
+					transcript: [
+						{ id: 'claude-0', kind: 'message', role: 'user', body: 'Check the bridge fixtures against the protocol.' },
+						{
+							id: 'tool:t1',
+							kind: 'tool',
+							name: 'Read',
+							detail: 'packages/claude-bridge/test/fixtures/protocol.jsonl',
+							result: '5 lines',
+							status: 'complete'
+						},
+						{
+							id: 'claude-1',
+							kind: 'message',
+							role: 'assistant',
+							body: 'The fixtures match protocol version 1. Every event carries a sequence number.'
+						}
+					]
+				})
+			]
+		}
+	];
+}
+
 /** Session fixtures shared by stories and deterministic browser tests. */
 export const sessionFixtures = {
 	empty: [] as SessionWorkspace[],
@@ -350,40 +390,10 @@ export const sessionFixtures = {
 			sessions: [session('idle', { title: 'Fix diff gutter', compaction: { status: 'aborted', reason: 'threshold' } })]
 		}
 	],
-	/** An idle Claude Code session that streamed a reply and a tool call. */
-	claude: [
-		{
-			id: 'pau',
-			name: 'Pau',
-			path: '/Users/operator/projects/pau',
-			sessions: [
-				session('idle', {
-					id: 'claude-idle',
-					title: 'Review the adapter fixtures',
-					agent: 'Claude Code',
-					model: undefined,
-					capabilities: claudeCapabilities,
-					transcript: [
-						{ id: 'claude-0', kind: 'message', role: 'user', body: 'Check the bridge fixtures against the protocol.' },
-						{
-							id: 'tool:t1',
-							kind: 'tool',
-							name: 'Read',
-							detail: 'packages/claude-bridge/test/fixtures/protocol.jsonl',
-							result: '5 lines',
-							status: 'complete'
-						},
-						{
-							id: 'claude-1',
-							kind: 'message',
-							role: 'assistant',
-							body: 'The fixtures match protocol version 1. Every event carries a sequence number.'
-						}
-					]
-				})
-			]
-		}
-	],
+	/** An idle Claude Code session that has not reported its model. */
+	claude: claudeWorkspaces(),
+	/** An idle Claude Code session that reported the model it runs. */
+	claudeWithModel: claudeWorkspaces('claude-sonnet-4-5-20250929'),
 	compactionUnsupported: [
 		{
 			id: 'pau',

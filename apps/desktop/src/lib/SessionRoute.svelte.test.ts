@@ -37,6 +37,7 @@ const idleSession: AgentSession = {
 	native_session_id: null,
 	thinking_level: null,
 	thinking_levels: [],
+	model: null,
 	name: null,
 	capabilities: {
 		prompt: true,

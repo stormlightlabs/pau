@@ -41,15 +41,17 @@ describe('Claude prompt streaming', () => {
 		});
 
 		expect(events.map(({ sequence, event }) => ({ sequence, event }))).toEqual([
-			{ sequence: 0, event: 'text.delta' },
+			{ sequence: 0, event: 'session.model' },
 			{ sequence: 1, event: 'text.delta' },
-			{ sequence: 2, event: 'tool.started' },
-			{ sequence: 3, event: 'tool.completed' },
-			{ sequence: 4, event: 'turn.completed' }
+			{ sequence: 2, event: 'text.delta' },
+			{ sequence: 3, event: 'tool.started' },
+			{ sequence: 4, event: 'tool.completed' },
+			{ sequence: 5, event: 'turn.completed' }
 		]);
-		expect(events[0]?.payload).toEqual({ text: 'Checking ' });
-		expect(events[2]?.payload).toEqual({ id: 'tool-1', name: 'Read', input: { path: 'README.md' } });
-		expect(events[3]?.payload).toEqual({ id: 'tool-1', content: 'file contents', isError: false });
+		expect(events[0]?.payload).toEqual({ model: 'claude-sonnet-4-5-20250929' });
+		expect(events[1]?.payload).toEqual({ text: 'Checking ' });
+		expect(events[3]?.payload).toEqual({ id: 'tool-1', name: 'Read', input: { path: 'README.md' } });
+		expect(events[4]?.payload).toEqual({ id: 'tool-1', content: 'file contents', isError: false });
 		expect(completion).toEqual({
 			status: 'completed',
 			result: 'Done',
@@ -84,6 +86,7 @@ describe('Claude prompt streaming', () => {
 		const completion = await process.prompt('Fail this fixture', { onEvent: (event) => events.push(event) });
 
 		expect(completion).toEqual({ status: 'failed', error: 'fixture failure', sessionId: 'session-failed' });
+		// The fixture's init record names no model, so no model event is sent.
 		expect(events.map((event) => event.event)).toEqual(['text.delta', 'turn.completed']);
 		expect(events.at(-1)?.payload).toEqual(completion);
 	});

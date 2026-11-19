@@ -6,8 +6,9 @@
 //! publishes the session as idle and records the Claude session ID it
 //! carries. A failed turn leaves the session idle too, because a failed API
 //! call ends the turn and not the session. Its error reaches clients in that
-//! event and the server log. Bridge diagnostics stay out of the event stream,
-//! as Pi's stderr does.
+//! event and the server log. A `session.model` event records the model
+//! Claude names when a turn starts and publishes the session with it. Bridge
+//! diagnostics stay out of the event stream, as Pi's stderr does.
 
 use std::sync::Arc;
 
@@ -196,6 +197,22 @@ impl SessionApi {
                         })
                         .to_string(),
                     );
+                    if event.event == "session.model"
+                        && let Some(model) = event
+                            .payload
+                            .as_ref()
+                            .and_then(|payload| payload.get("model"))
+                            .and_then(serde_json::Value::as_str)
+                    {
+                        record
+                            .native
+                            .lock()
+                            .expect("native state lock poisoned")
+                            .model = Some(model.to_owned());
+                        if let Some(summary) = self.claude_summary(&id).await {
+                            self.publish(&summary);
+                        }
+                    }
                     if event.event == "turn.completed" {
                         let payload = event.payload.as_ref();
                         if let Some(native_id) = payload

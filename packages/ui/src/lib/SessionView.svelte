@@ -864,6 +864,17 @@
 		sessionErrors.set(sessionId, { ...sessionErrors.get(sessionId), [slot]: message });
 	}
 
+	/**
+	 * Records the failure of an action on a session's running agent in that
+	 * session's notices. A failure that lands once the session has ended or
+	 * left the list is dropped: the agent it acted on is gone, and the ended
+	 * session's notices describe its last run.
+	 */
+	function failLiveAction(sessionId: string, cause: unknown, fallback: string): void {
+		if (hasEnded(sessions.find((session) => session.id === sessionId)?.status ?? 'stopped')) return;
+		setSessionError(sessionId, 'control', cause instanceof Error ? cause.message : fallback);
+	}
+
 	$effect(() => {
 		void activeSession?.id;
 		compactOpen = false;
@@ -1165,11 +1176,7 @@
 		try {
 			await onStop(sessionId);
 		} catch (cause) {
-			setSessionError(
-				sessionId,
-				'control',
-				cause instanceof Error ? cause.message : 'The session could not be stopped. Try again.'
-			);
+			failLiveAction(sessionId, cause, 'The session could not be stopped. Try again.');
 		}
 	}
 
@@ -1668,13 +1675,11 @@
 	async function stopShellCommands(): Promise<void> {
 		if (disconnected || !activeSession || !onStopShellCommands) return;
 		const sessionId = activeSession.id;
-		error = undefined;
+		setSessionError(sessionId, 'control', undefined);
 		try {
 			await onStopShellCommands(sessionId);
 		} catch (cause) {
-			if (activeSessionId === sessionId) {
-				error = cause instanceof Error ? cause.message : 'The command could not be stopped. Try again.';
-			}
+			failLiveAction(sessionId, cause, 'The command could not be stopped. Try again.');
 		}
 	}
 
@@ -1810,14 +1815,12 @@
 	async function interrupt(): Promise<void> {
 		if (disconnected || !activeSession || !activeSession.capabilities.interrupt) return;
 		const sessionId = activeSession.id;
-		error = undefined;
+		setSessionError(sessionId, 'control', undefined);
 		try {
 			const cleared = await onInterrupt(sessionId);
 			if (cleared && activeSessionId === sessionId) restoreQueue(cleared);
 		} catch (cause) {
-			if (activeSessionId === sessionId) {
-				error = cause instanceof Error ? cause.message : 'The session could not be interrupted. Try again.';
-			}
+			failLiveAction(sessionId, cause, 'The session could not be interrupted. Try again.');
 		}
 	}
 
@@ -1971,13 +1974,11 @@
 		const levels = session.thinkingLevels ?? thinkingLevels;
 		const index = session.thinkingLevel ? levels.indexOf(session.thinkingLevel) : -1;
 		const next = levels[(index + 1) % levels.length] ?? 'off';
-		error = undefined;
+		setSessionError(session.id, 'control', undefined);
 		try {
 			await onSelectThinkingLevel(session.id, next);
 		} catch (cause) {
-			if (activeSessionId === session.id) {
-				error = cause instanceof Error ? cause.message : 'The thinking level could not be changed. Try again.';
-			}
+			failLiveAction(session.id, cause, 'The thinking level could not be changed. Try again.');
 		}
 	}
 

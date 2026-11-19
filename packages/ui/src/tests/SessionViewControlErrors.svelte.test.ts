@@ -62,3 +62,39 @@ test("drops a session's failed action when the session ends", async () => {
 	await expect.element(page.getByRole('status').filter({ hasText: 'Session stopped.' })).toBeVisible();
 	await expect.element(page.getByText('The agent did not stop.')).not.toBeInTheDocument();
 });
+
+test('shows a failed interrupt when the operator returns to its session', async () => {
+	const failed = Promise.withResolvers<undefined>();
+	const view = await render(SessionView, {
+		workspaces: workspaces(),
+		activeSessionId: running.id,
+		onStop: async () => {},
+		onInterrupt: () => failed.promise
+	});
+
+	await userEvent.click(page.getByRole('button', { name: /Interrupt/ }));
+	await view.rerender({ activeSessionId: idle.id });
+	failed.reject(new Error('The agent did not take the interrupt.'));
+	// Let the view handle the failure before checking that nothing shows.
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	await expect.element(page.getByRole('alert')).not.toBeInTheDocument();
+
+	await view.rerender({ activeSessionId: running.id });
+	await expect.element(page.getByRole('alert')).toHaveTextContent('The agent did not take the interrupt.');
+});
+
+test('drops a stop that fails after the session has already stopped', async () => {
+	const failed = Promise.withResolvers<void>();
+	const view = await render(SessionView, {
+		workspaces: workspaces(),
+		activeSessionId: idle.id,
+		onStop: () => failed.promise
+	});
+
+	await userEvent.click(page.getByRole('button', { name: 'Stop' }));
+	await view.rerender({ workspaces: workspaces('stopped') });
+	await expect.element(page.getByRole('status').filter({ hasText: 'Session stopped.' })).toBeVisible();
+	failed.reject(new Error('The stop request timed out.'));
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	await expect.element(page.getByText('The stop request timed out.')).not.toBeInTheDocument();
+});

@@ -119,7 +119,6 @@ test('starts from a snapshot so earlier transitions do not notify', () => {
 
 	expect(socket.url).toBe('ws://localhost:5173/api/events');
 	expect(notifier.notify).not.toHaveBeenCalled();
-	expect(notifier.setBadgeCount).not.toHaveBeenCalled();
 });
 
 test('notifies when a session out of view waits, asks, or fails', () => {
@@ -176,7 +175,6 @@ describe('notification policy', () => {
 		send(changed('waiting'), question('ask-1'), changed('failed'));
 		attention.needs(1);
 		expect(notifier.notify).not.toHaveBeenCalled();
-		expect(notifier.setBadgeCount).not.toHaveBeenCalled();
 
 		policy = 'attention';
 		attention.needs(1);

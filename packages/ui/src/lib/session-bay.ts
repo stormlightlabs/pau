@@ -42,6 +42,86 @@ export function baySection(session: RackedSession): BaySection {
 }
 
 /**
+ * Why a session is marked for the operator, in the order the attention jump
+ * visits them: `waiting` for a session in Needs you that asks for something
+ * or stopped responding, `failed` for a failed one, and `unread` for any
+ * other session that finished a turn out of view and has not been opened
+ * since.
+ */
+export type AttentionKind = 'waiting' | 'failed' | 'unread';
+
+type MarkedSession = Pick<SessionViewModel, 'status' | 'attention' | 'restarted' | 'unseen'>;
+
+/**
+ * The marker a strip shows while its session is unseen. A failed session
+ * the operator started again keeps `failed`, since the marker says how the
+ * session ended, even though the session left Needs you.
+ */
+export function markerKind(session: MarkedSession): AttentionKind {
+	if (displayStatus(session) === 'failed') return 'failed';
+	return needsOperator(session) ? 'waiting' : 'unread';
+}
+
+/**
+ * Why the attention jump stops on a session, or `undefined` when it skips
+ * it. It skips a restarted session: that strip is history in Settled, and
+ * the new session the restart opened carries on the work.
+ */
+export function attentionKind(session: MarkedSession): AttentionKind | undefined {
+	if (session.restarted || !(needsOperator(session) || session.unseen)) return undefined;
+	return markerKind(session);
+}
+
+const ATTENTION_ORDER: readonly AttentionKind[] = ['waiting', 'failed', 'unread'];
+
+/** A session the attention jump opened, and why it stopped there. */
+export type AttentionStop = { session: string; kind: AttentionKind };
+
+/** Where the attention jump starts from. */
+export type AttentionJumpFrom = {
+	/** The open session, if any. */
+	active?: string;
+	/** Where the previous jump landed. */
+	landed?: AttentionStop;
+};
+
+/**
+ * The session the attention jump opens next: waiting sessions first, then
+ * failed, then unread, each group in the order the bay lists it.
+ *
+ * The jump moves on from the open session's place in that order, wrapping
+ * past the last. A marked open session keeps its place. An open session the
+ * previous jump landed on keeps the place it had then, even after it lost
+ * its mark: opening an unread session clears its marker, and answering a
+ * waiting one moves it out of Needs you. Without that place, the next press
+ * would start over and revisit every failed or waiting session the operator
+ * left alone. From any other session, or none, the jump opens the first.
+ *
+ * Returns `undefined` when no session is marked, or when the open session
+ * is the only one.
+ */
+export function nextAttentionSession(
+	sessions: readonly Pick<SessionViewModel, 'id' | 'status' | 'attention' | 'restarted' | 'unseen'>[],
+	from: AttentionJumpFrom
+): AttentionStop | undefined {
+	const rank = (kind: AttentionKind, index: number) => ATTENTION_ORDER.indexOf(kind) * sessions.length + index;
+	const marked = sessions
+		.flatMap((session, index) => {
+			const kind = attentionKind(session);
+			return kind ? [{ session: session.id, kind, rank: rank(kind, index) }] : [];
+		})
+		.sort((left, right) => left.rank - right.rank);
+	if (marked.length === 0) return undefined;
+
+	const index = sessions.findIndex((session) => session.id === from.active);
+	const active = sessions[index];
+	const kind = active && (attentionKind(active) ?? (from.landed?.session === active.id ? from.landed.kind : undefined));
+	const place = kind ? rank(kind, index) : -1;
+	const next = marked.find((stop) => stop.rank > place) ?? marked[0]!;
+	return next.session === from.active ? undefined : { session: next.session, kind: next.kind };
+}
+
+/**
  * The state a session shows in its mark and header: `waiting` while a
  * dialog waits on the operator, whatever the agent reports, unless the
  * session failed or stopped responding, which say more.

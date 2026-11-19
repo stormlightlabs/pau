@@ -28,7 +28,7 @@ import type {
 	ThinkingLevel,
 	WorkspaceTerminal
 } from '@stormlightlabs/pau-ui';
-import { agentLabel } from '@stormlightlabs/pau-ui';
+import { agentLabel, needsOperator } from '@stormlightlabs/pau-ui';
 
 import {
 	PauApiError,
@@ -542,6 +542,10 @@ export class LiveSessions {
 		this.#extensionReplay.set(sessionId, []);
 		try {
 			const server = await getSessionExtensionUi(sessionId, this.#fetcher);
+			// The session may have ended while the read was in flight. Its
+			// dialogs closed on exit, and a late response must not reopen them.
+			const session = this.#sessions[sessionId];
+			if (session && !isLive(session)) return;
 			const replay = this.#extensionReplay.get(sessionId) ?? [];
 			this.#updateExtensionUi(sessionId, (state) => {
 				let next = withServerExtensionUi(state, server);
@@ -707,6 +711,18 @@ export class LiveSessions {
 		return this.#pendingNames[session.id] ?? session.name ?? sessionTitle(transcript, agentLabel(session.agent));
 	}
 
+	/**
+	 * The fields that decide a session's rack. `needsCount` reads only these,
+	 * so the badge does not rebuild every view model on each transcript update.
+	 */
+	#rackState(session: AgentSession): Pick<SessionViewModel, 'status' | 'restarted' | 'attention'> {
+		return {
+			status: session.status,
+			restarted: this.#restarted.has(session.id) || undefined,
+			attention: this.#extensionUi[session.id]?.dialogs.length ? 'An extension is waiting for your answer.' : undefined
+		};
+	}
+
 	#viewModel(session: AgentSession): SessionViewModel {
 		const transcript = this.#transcripts[session.id] ?? emptyPiTranscript;
 		const extensionUi = this.#extensionUi[session.id] ?? emptyExtensionUi;
@@ -717,11 +733,9 @@ export class LiveSessions {
 			savedSessionId: session.native_session_id ?? undefined,
 			title: this.#title(session),
 			agent,
-			status: session.status,
 			error: failureMessage(session),
 			unseen: this.#unseen.has(session.id),
-			restarted: this.#restarted.has(session.id) || undefined,
-			attention: extensionUi.dialogs.length > 0 ? 'An extension is waiting for your answer.' : undefined,
+			...this.#rackState(session),
 			capabilities: {
 				prompt: session.capabilities.prompt,
 				followUp: session.capabilities.follow_up,
@@ -871,6 +885,11 @@ export class LiveSessions {
 				.filter((session) => session.workspace_id === workspace.id)
 				.map((session) => this.#viewModel(session))
 		}));
+	}
+
+	/** How many sessions sit in the bay's Needs you rack, across every workspace. */
+	get needsCount(): number {
+		return Object.values(this.#sessions).filter((session) => needsOperator(this.#rackState(session))).length;
 	}
 
 	/** Loads the initial lists and opens the event stream. */

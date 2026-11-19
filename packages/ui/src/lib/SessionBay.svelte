@@ -20,8 +20,10 @@
 		baySection,
 		bayStateLine,
 		displayStatus,
+		markerKind,
 		matchesBayFilter,
 		needsOperator,
+		nextAttentionSession,
 		sessionMenuItems,
 		sessionStatusLabel,
 		type BaySection
@@ -180,27 +182,31 @@
 		untrack(() => memory.trackNeeds(present));
 	});
 
-	const strips = $derived.by(() => {
+	/**
+	 * Every strip in its rack, whether or not the filter shows it. The racks
+	 * and the attention jump both read this order, so the jump visits sessions
+	 * in the order the bay lists them.
+	 */
+	const racked = $derived.by(() => {
 		const racks: Record<BaySection, BayStrip[]> = { needs: [], running: [], settled: [] };
 		for (const workspace of workspaces) {
 			for (const session of workspace.sessions) {
-				const strip: BayStrip = { kind: 'live', key: session.id, workspace, session };
-				if (filterMatches(strip)) racks[baySection(session)].push(strip);
+				racks[baySection(session)].push({ kind: 'live', key: session.id, workspace, session });
 			}
 			const restored = restoredSession?.workspaceId === workspace.id ? restoredSession : undefined;
-			const settled: BayStrip[] = [
-				...(restored ? [{ kind: 'restored' as const, key: 'restored', workspace, saved: restored }] : []),
-				...recentRows(workspace).map((saved) => ({
-					kind: 'saved' as const,
-					key: `saved:${workspace.id}:${saved.id}`,
-					workspace,
-					saved
-				}))
-			];
-			racks.settled.push(...settled.filter((strip) => filterMatches(strip)));
+			if (restored) racks.settled.push({ kind: 'restored', key: 'restored', workspace, saved: restored });
+			for (const saved of recentRows(workspace)) {
+				racks.settled.push({ kind: 'saved', key: `saved:${workspace.id}:${saved.id}`, workspace, saved });
+			}
 		}
 		racks.needs.sort((left, right) => (memory.needsSince.get(right.key) ?? 0) - (memory.needsSince.get(left.key) ?? 0));
 		return racks;
+	});
+
+	const strips = $derived({
+		needs: racked.needs.filter((strip) => filterMatches(strip)),
+		running: racked.running.filter((strip) => filterMatches(strip)),
+		settled: racked.settled.filter((strip) => filterMatches(strip))
 	});
 
 	function filterMatches(strip: BayStrip): boolean {
@@ -244,7 +250,42 @@
 		});
 	});
 
-	useKeyActions({ 'bay.filter': () => filterField?.focus() });
+	/**
+	 * Opens the next session that needs a look, from every session whether or
+	 * not the filter shows it. The jump means "show me what needs me", so when
+	 * the filter hides that session's strip, it clears the filter rather than
+	 * skip the session or open it with no strip to focus.
+	 */
+	function jumpToAttention(): void {
+		const ordered = [...racked.needs, ...racked.running, ...racked.settled].filter((strip) => strip.kind === 'live');
+		const next = nextAttentionSession(
+			ordered.map((strip) => strip.session),
+			{ active: activeSessionId, landed: memory.landed }
+		);
+		if (!next) return;
+		const strip = ordered.find((candidate) => candidate.session.id === next.session);
+		if (strip && !filterMatches(strip)) memory.filter = '';
+		memory.landed = next;
+		memory.focusRequest = { session: next.session, from: activeSessionId };
+		onSelectSession(next.session);
+	}
+
+	// The jump's strip takes focus once this bay shows its session open. The
+	// request waits while the bay still shows the session the jump left, as
+	// in views other than Sessions, which mark no open session, and ends
+	// unused once the bay shows any other session open.
+	$effect(() => {
+		const request = memory.focusRequest;
+		const active = activeSessionId;
+		if (!request || active === request.from) return;
+		untrack(() => {
+			memory.focusRequest = undefined;
+			if (active !== request.session) return;
+			bayElement?.querySelector<HTMLElement>(`#session-row-${CSS.escape(active)}`)?.focus();
+		});
+	});
+
+	useKeyActions({ 'bay.filter': () => filterField?.focus(), 'session.nextAttention': jumpToAttention });
 
 	const newUnavailable = $derived(
 		disconnected ? 'Pau is reconnecting to the backend.' : startBusy ? 'A session is already starting.' : undefined
@@ -381,11 +422,6 @@
 		failed: 'Failed while out of view',
 		unread: 'Finished while out of view'
 	} as const;
-
-	function markerKind(session: SessionViewModel): keyof typeof markerLabel {
-		const status = displayStatus(session);
-		return status === 'failed' ? 'failed' : needsOperator(session) ? 'waiting' : 'unread';
-	}
 </script>
 
 {#snippet stripLine(title: string, agent: string, workspace: string)}

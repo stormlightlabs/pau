@@ -40,14 +40,16 @@ const delta = (text: string) => ({
 });
 
 /** A store whose frames only run when the test flushes them. */
-async function setup() {
+async function setup(routes: Record<string, () => Promise<Response>> = {}) {
 	const frames: Array<() => void> = [];
 	const socket = new FakeEventSocket('ws://test');
-	const fetcher = vi.fn(async (input: RequestInfo | URL) =>
-		Response.json(String(input) === '/api/sessions' ? [session] : [], {
+	const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+		const route = routes[String(input)];
+		if (route) return route();
+		return Response.json(String(input) === '/api/sessions' ? [session] : [], {
 			headers: { 'Content-Type': 'application/json' }
-		})
-	);
+		});
+	});
 	const sessions = new LiveSessions({
 		browserOrigin: 'http://localhost',
 		fetcher: fetcher as unknown as typeof fetch,
@@ -162,6 +164,61 @@ test('clears a marker when the session is viewed and all markers on request', as
 	expect(unseen()).toBe(true);
 	sessions.clearUnseen();
 	expect(unseen()).toBe(false);
+});
+
+test.each([
+	['in view', 'session-1'],
+	['out of view', 'other']
+])('counts a session %s while it is in Needs you', async (_name, viewed) => {
+	const { sessions, change } = await setup();
+	sessions.view(viewed);
+	expect(sessions.needsCount).toBe(0);
+
+	change('waiting', 1);
+	expect(sessions.needsCount).toBe(1);
+	change('running', 2);
+	expect(sessions.needsCount).toBe(0);
+	change('failed', 3);
+	expect(sessions.needsCount).toBe(1);
+	change('starting', 4);
+	expect(sessions.needsCount).toBe(0);
+});
+
+test('counts the sessions in Needs you across workspaces', async () => {
+	const { sessions, socket, change } = await setup();
+	change('not_responding', 1);
+	socket.receive({
+		type: 'event',
+		event: {
+			sequence: 2,
+			timestamp: '2026-04-01T12:00:02Z',
+			workspace_id: 'docs',
+			session_id: 'session-2',
+			kind: 'session_changed',
+			payload: JSON.stringify({ ...session, id: 'session-2', workspace_id: 'docs', status: 'waiting' })
+		}
+	});
+
+	expect(sessions.workspaces.map((workspace) => workspace.id)).toEqual(['pau', 'docs']);
+	expect(sessions.needsCount).toBe(2);
+});
+
+test('drops an extension dialog read that returns after the session ended', async () => {
+	const { promise, resolve } = Promise.withResolvers<Response>();
+	const read = vi.fn(() => promise);
+	const { sessions, change } = await setup({ '/api/sessions/session-1/extension-ui': read });
+	expect(read).toHaveBeenCalled();
+	change('stopped', 1);
+
+	const dialog = { kind: 'confirm', id: 'ask', title: 'Allow update?', message: 'Edit the index.', timeout_ms: null };
+	const body = vi.fn(async () => ({ dialogs: [dialog], statuses: [], widgets: [] }));
+	resolve({ ok: true, json: body } as unknown as Response);
+	await vi.waitFor(() => expect(body).toHaveBeenCalled());
+	// Let the read's continuation run before checking that it changed nothing.
+	await new Promise((settle) => setTimeout(settle, 0));
+
+	expect(sessions.workspaces[0]?.sessions[0]?.attention).toBeUndefined();
+	expect(sessions.needsCount).toBe(0);
 });
 
 test('offers the thinking levels Pi reports for the current model', async () => {

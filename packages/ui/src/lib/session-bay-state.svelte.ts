@@ -1,6 +1,7 @@
 import { getContext, setContext } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 
+import type { AttentionStop } from './session-bay';
 import type { SavedSession } from './types/session';
 
 /** A workspace's saved sessions for the bay: loading, loaded, or failed. */
@@ -9,10 +10,11 @@ export type RecentSessions =
 
 /**
  * What the bay remembers while the operator moves between views: the filter
- * text, each workspace's recent saved sessions, and the order in which
- * sessions arrived in Needs you. Every view mounts its own bay, so an app
- * that shows the bay in more than one view provides one instance with
- * {@link setSessionBayState}. Without one, each bay keeps its own.
+ * text, each workspace's recent saved sessions, the order in which sessions
+ * arrived in Needs you, and a strip waiting for focus. Every view mounts its
+ * own bay, so an app that shows the bay in more than one view provides one
+ * instance with {@link setSessionBayState}. Without one, each bay keeps its
+ * own.
  */
 export class SessionBayState {
 	#sequence = 0;
@@ -26,6 +28,19 @@ export class SessionBayState {
 	 * is the one the eye finds first.
 	 */
 	readonly needsSince = new SvelteMap<string, number>();
+	/**
+	 * Where the attention jump last landed, so the next jump moves on from
+	 * that session's place even after opening it cleared its marker.
+	 */
+	landed = $state<AttentionStop>();
+	/**
+	 * The session whose strip takes focus once a bay shows it open, and the
+	 * session that was open when the jump asked. Opening a session from
+	 * another view mounts the session view's own bay, so the request waits
+	 * while a bay still shows `from` open. A bay that shows any other session
+	 * open drops it, so a click or shortcut that lands first keeps its focus.
+	 */
+	focusRequest = $state<{ session: string; from: string | undefined }>();
 
 	/** Records the sessions now in Needs you, keeping the arrival order of those already there. */
 	trackNeeds(present: readonly string[]): void {
@@ -34,7 +49,8 @@ export class SessionBayState {
 	}
 }
 
-const sessionBayStateContext = Symbol('pau.sessionBayState');
+/** Context key of the shared bay state. Tests pass it to `render` in place of {@link setSessionBayState}. */
+export const sessionBayStateContext = Symbol('pau.sessionBayState');
 
 /** Shares one bay state with every bay mounted below the caller. Call it during component initialization. */
 export function setSessionBayState(state: SessionBayState): SessionBayState {

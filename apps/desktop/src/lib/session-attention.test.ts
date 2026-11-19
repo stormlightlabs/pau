@@ -119,10 +119,9 @@ test('starts from a snapshot so earlier transitions do not notify', () => {
 
 	expect(socket.url).toBe('ws://localhost:5173/api/events');
 	expect(notifier.notify).not.toHaveBeenCalled();
-	expect(notifier.setBadgeCount).not.toHaveBeenCalled();
 });
 
-test('notifies when a session out of view waits, asks, or fails, and badges the icon', () => {
+test('notifies when a session out of view waits, asks, or fails', () => {
 	const { attention, notifier, send } = setup([changed('idle'), changed('idle', null, 'session-2')]);
 	attention.view('session-3');
 
@@ -133,11 +132,9 @@ test('notifies when a session out of view waits, asks, or fails, and badges the 
 		[{ title: 'Fix the login bug', body: 'Pi is waiting for your input.' }],
 		[{ title: 'Pi session', body: 'Pi needs your answer to continue.' }]
 	]);
-	expect(notifier.setBadgeCount.mock.calls).toEqual([[1], [2]]);
 
 	send(changed('failed'));
 	expect(notifier.notify).toHaveBeenLastCalledWith({ title: 'Fix the login bug', body: 'Pi exited unexpectedly.' });
-	expect(notifier.setBadgeCount).toHaveBeenCalledTimes(2);
 });
 
 test('notifies when a session out of view stops responding', () => {
@@ -147,7 +144,6 @@ test('notifies when a session out of view stops responding', () => {
 	send(changed('not_responding'));
 
 	expect(notifier.notify).toHaveBeenCalledWith({ title: 'Fix the login bug', body: 'Pi stopped responding.' });
-	expect(notifier.setBadgeCount).toHaveBeenCalledWith(1);
 });
 
 describe('notification policy', () => {
@@ -161,7 +157,6 @@ describe('notification policy', () => {
 		policy = 'all';
 		send(changed('running'), changed('idle'));
 		expect(notifier.notify).toHaveBeenCalledWith({ title: 'Fix the login bug', body: 'Pi finished its turn.' });
-		expect(notifier.setBadgeCount).toHaveBeenCalledWith(1);
 	});
 
 	test('does not report an interrupted run as a finished turn', () => {
@@ -173,13 +168,19 @@ describe('notification policy', () => {
 		expect(notifier.notify).toHaveBeenCalledWith({ title: 'Fix the login bug', body: 'Pi finished its turn.' });
 	});
 
-	test('notifies nothing and leaves the badge alone when the policy is off', () => {
-		const { notifier, send } = setup([changed('running')], () => 'off');
+	test('notifies nothing and shows no badge while the policy is off', () => {
+		let policy: NotificationPolicy = 'off';
+		const { attention, notifier, send } = setup([changed('running')], () => policy);
 
 		send(changed('waiting'), question('ask-1'), changed('failed'));
-
+		attention.needs(1);
 		expect(notifier.notify).not.toHaveBeenCalled();
-		expect(notifier.setBadgeCount).not.toHaveBeenCalled();
+
+		policy = 'attention';
+		attention.needs(1);
+		policy = 'off';
+		attention.needs(1);
+		expect(notifier.setBadgeCount.mock.calls).toEqual([[1], [undefined]]);
 	});
 });
 
@@ -210,7 +211,6 @@ test('notifies a session shown in an unfocused window', () => {
 	send(changed('waiting'));
 
 	expect(notifier.notify).toHaveBeenCalledOnce();
-	expect(notifier.setBadgeCount).toHaveBeenCalledWith(1);
 });
 
 test('does not notify for the session the operator is looking at', () => {
@@ -220,7 +220,6 @@ test('does not notify for the session the operator is looking at', () => {
 	send(changed('waiting'), question('ask-1'), changed('failed'));
 
 	expect(notifier.notify).not.toHaveBeenCalled();
-	expect(notifier.setBadgeCount).not.toHaveBeenCalled();
 });
 
 test('does not notify when the operator stops a session', () => {
@@ -238,7 +237,6 @@ test('notifies once per transition, not once per event', () => {
 	socket.receive({ type: 'event', event: question('ask-1') });
 
 	expect(notifier.notify).toHaveBeenCalledTimes(2);
-	expect(notifier.setBadgeCount.mock.calls).toEqual([[1]]);
 
 	send(changed('running'), changed('waiting'));
 	expect(notifier.notify).toHaveBeenCalledTimes(3);
@@ -254,22 +252,31 @@ test('ignores session output other than extension questions', () => {
 	expect(notifier.notify).not.toHaveBeenCalled();
 });
 
-test('clears the badge when the operator views the session in a focused window', () => {
-	const { attention, notifier, send } = setup([changed('idle'), changed('idle', null, 'session-2')]);
-	attention.focus(false);
-	send(changed('waiting'), changed('failed', null, 'session-2'));
-	expect(notifier.setBadgeCount).toHaveBeenLastCalledWith(2);
-
+test('badges the icon with the sessions in Needs you, whether or not they are in view', () => {
+	const { attention, notifier } = setup();
 	attention.view('session-1');
-	expect(notifier.setBadgeCount).toHaveBeenCalledTimes(2);
 
-	attention.focus(true);
-	expect(notifier.setBadgeCount).toHaveBeenLastCalledWith(1);
+	attention.needs(1);
+	attention.needs(1);
+	attention.focus(false);
+	attention.needs(2);
+	attention.view(undefined);
+	attention.needs(0);
 
-	attention.leave('session-1');
-	attention.view('session-2');
-	expect(notifier.setBadgeCount).toHaveBeenLastCalledWith(undefined);
-	expect(notifier.setBadgeCount).toHaveBeenCalledTimes(4);
+	expect(notifier.setBadgeCount.mock.calls).toEqual([[1], [2], [undefined]]);
+});
+
+test('sends the badge again after a failed send', async () => {
+	const { attention, notifier } = setup();
+	notifier.setBadgeCount.mockRejectedValueOnce(new Error('No badge'));
+
+	attention.needs(1);
+	// The store's own handler was attached first, so it has run once this settles.
+	await expect(notifier.setBadgeCount.mock.results[0]?.value).rejects.toThrow('No badge');
+	attention.needs(1);
+	attention.needs(1);
+
+	expect(notifier.setBadgeCount.mock.calls).toEqual([[1], [1]]);
 });
 
 test('a session that leaves the view notifies again', () => {

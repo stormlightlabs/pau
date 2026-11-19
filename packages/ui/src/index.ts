@@ -75,6 +75,7 @@ export { default as SessionTree } from './lib/SessionTree.svelte';
 export { default as SessionView } from './lib/SessionView.svelte';
 export { default as SessionBay } from './lib/SessionBay.svelte';
 export { SessionBayState, setSessionBayState } from './lib/session-bay-state.svelte';
+export { needsOperator } from './lib/session-bay';
 export { default as TerminalPanel, type TerminalTabState } from './lib/TerminalPanel.svelte';
 export { default as TerminalSurface } from './lib/TerminalSurface.svelte';
 export { default as TerminalView } from './lib/TerminalView.svelte';

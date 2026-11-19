@@ -46,7 +46,9 @@
 			? new SessionAttention({
 					browserOrigin: location.origin,
 					notifier: { notify, setBadgeCount },
-					policy: () => interfacePreferences.choices.notifications
+					// The default policy is not the operator's until their
+					// preferences load, so nothing notifies or badges before then.
+					policy: () => (interfacePreferences.loaded ? interfacePreferences.choices.notifications : 'off')
 				})
 			: undefined
 	);
@@ -129,6 +131,13 @@
 			stopFocus?.();
 			attention.close();
 		};
+	});
+
+	// The app icon badge counts the sessions in Needs you, whether or not they
+	// notified. `needs` also reads the notification policy, so turning
+	// notifications off clears the badge.
+	$effect(() => {
+		attention?.needs(sessions.needsCount);
 	});
 
 	// Sessions save their own route, since the URL does not name the saved Pi session.

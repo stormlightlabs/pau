@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { SvelteSet } from 'svelte/reactivity';
+
 	import type { PromptImage } from '../lib/composer-images';
 	import type { AgentReadinessProblem } from '../lib/types/launch';
 	import type {
@@ -105,13 +107,16 @@
 	} = $props();
 
 	let opened = $state<SessionWorkspace[]>([]);
+	/** Sessions opened here, whose attention markers clear as the app clears them on view. */
+	const viewed = new SvelteSet<string>();
 	let replies = $state<TranscriptEntry[]>([]);
 	const allWorkspaces = $derived(
 		[...workspaces, ...opened].map((workspace) => ({
 			...workspace,
-			sessions: workspace.sessions.map((session) =>
-				session.id === activeSessionId ? { ...session, transcript: [...session.transcript, ...replies] } : session
-			)
+			sessions: workspace.sessions.map((session) => {
+				const seen = viewed.has(session.id) ? { ...session, unseen: false } : session;
+				return session.id === activeSessionId ? { ...seen, transcript: [...seen.transcript, ...replies] } : seen;
+			})
 		}))
 	);
 
@@ -213,7 +218,10 @@
 	onRestartSession={(sessionId) => {
 		lastAction = `${sessionId}: start again`;
 	}}
-	onSelectSession={(sessionId) => (activeSessionId = sessionId)}
+	onSelectSession={(sessionId) => {
+		activeSessionId = sessionId;
+		viewed.add(sessionId);
+	}}
 	onOpenRestoredSession={() => (activeSessionId = undefined)}
 	onSend={send}
 	onLoadModels={models ? async () => models : undefined}

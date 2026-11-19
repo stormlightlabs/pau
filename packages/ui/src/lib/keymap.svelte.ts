@@ -146,6 +146,14 @@ export const APP_KEY_ACTIONS: readonly KeyAction[] = [
 		whileTyping: true,
 		range: true
 	},
+	// The bay registers it, so it runs in every view.
+	{
+		id: 'session.nextAttention',
+		label: 'Jump to a session that needs attention',
+		group: 'Sessions',
+		keys: ['mod+alt+a'],
+		whileTyping: true
+	},
 	{
 		id: 'session.clearAttention',
 		label: 'Clear attention markers',

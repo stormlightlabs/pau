@@ -46,7 +46,9 @@
 			? new SessionAttention({
 					browserOrigin: location.origin,
 					notifier: { notify, setBadgeCount },
-					policy: () => interfacePreferences.choices.notifications
+					// The default policy is not the operator's until their
+					// preferences load, so nothing notifies or badges before then.
+					policy: () => (interfacePreferences.loaded ? interfacePreferences.choices.notifications : 'off')
 				})
 			: undefined
 	);

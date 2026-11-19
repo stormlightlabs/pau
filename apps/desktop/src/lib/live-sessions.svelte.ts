@@ -542,6 +542,10 @@ export class LiveSessions {
 		this.#extensionReplay.set(sessionId, []);
 		try {
 			const server = await getSessionExtensionUi(sessionId, this.#fetcher);
+			// The session may have ended while the read was in flight. Its
+			// dialogs closed on exit, and a late response must not reopen them.
+			const session = this.#sessions[sessionId];
+			if (session && !isLive(session)) return;
 			const replay = this.#extensionReplay.get(sessionId) ?? [];
 			this.#updateExtensionUi(sessionId, (state) => {
 				let next = withServerExtensionUi(state, server);

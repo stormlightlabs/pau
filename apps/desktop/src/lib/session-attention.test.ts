@@ -266,6 +266,19 @@ test('badges the icon with the sessions in Needs you, whether or not they are in
 	expect(notifier.setBadgeCount.mock.calls).toEqual([[1], [2], [undefined]]);
 });
 
+test('sends the badge again after a failed send', async () => {
+	const { attention, notifier } = setup();
+	notifier.setBadgeCount.mockRejectedValueOnce(new Error('No badge'));
+
+	attention.needs(1);
+	// The store's own handler was attached first, so it has run once this settles.
+	await expect(notifier.setBadgeCount.mock.results[0]?.value).rejects.toThrow('No badge');
+	attention.needs(1);
+	attention.needs(1);
+
+	expect(notifier.setBadgeCount.mock.calls).toEqual([[1], [1]]);
+});
+
 test('a session that leaves the view notifies again', () => {
 	const { attention, notifier, send } = setup();
 	attention.view('session-1');

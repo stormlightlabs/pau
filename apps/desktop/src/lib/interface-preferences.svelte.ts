@@ -114,6 +114,12 @@ export class InterfacePreferences {
 		motion: 'system'
 	});
 
+	/**
+	 * Whether a saved copy has loaded. Until it does, `choices` holds
+	 * defaults that may not match what the operator chose.
+	 */
+	loaded = $state(false);
+
 	/** Widths to hand to the shell. `null` keeps a pane at its default width. */
 	widths = $state<ShellPaneWidths>({ contextRail: null, inspector: null });
 
@@ -240,6 +246,7 @@ export class InterfacePreferences {
 		this.#saved = preferences;
 		rememberChoices(preferences);
 		if (this.#pending === 0) this.#applyChoices(pickChoices(preferences));
+		this.loaded = true;
 		if (this.#timer !== undefined || this.#pending > 0) return;
 		this.widths = { contextRail: preferences.pane_widths.context_rail, inspector: preferences.pane_widths.inspector };
 	}

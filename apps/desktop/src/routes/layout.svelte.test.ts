@@ -1,6 +1,6 @@
 import type { AgentSession, ServerEvent, Workspace } from '@stormlightlabs/pau-protocol';
 import { createRawSnippet } from 'svelte';
-import { expect, test, vi } from 'vitest';
+import { beforeEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 
 import { FakeEventSocket } from '$lib/fake-event-socket';
@@ -51,7 +51,9 @@ const session: AgentSession = {
 const harness = vi.hoisted(() => ({
 	storeSockets: [] as { open(): void }[],
 	setBadgeCount: vi.fn<(count?: number) => Promise<void>>().mockResolvedValue(undefined),
-	sessions: undefined as { view(sessionId?: string): void } | undefined
+	/** The saved notification policy, sent once the test settles `preferences`. */
+	preferences: Promise.resolve('attention') as Promise<string>,
+	sessions: undefined as { view(sessionId?: string): void; needsCount: number } | undefined
 }));
 
 vi.mock('$app/state', () => ({ page: { params: {}, route: { id: '/' } } }));
@@ -62,7 +64,7 @@ vi.mock('$lib/api', async (importOriginal) => ({
 		version: 1,
 		theme: 'eldritch',
 		ui_font: 'overpass',
-		notifications: 'attention',
+		notifications: await harness.preferences,
 		motion: 'system',
 		pane_widths: { context_rail: null, inspector: null },
 		last_route: null
@@ -124,6 +126,34 @@ function changed(id: string, status: AgentSession['status']): { type: 'event'; e
 		}
 	};
 }
+
+beforeEach(() => {
+	harness.storeSockets.length = 0;
+	harness.setBadgeCount.mockClear();
+});
+
+// The preferences store is one per window, so this test runs first, before
+// another test loads the preferences.
+test('shows no badge until the preferences load, and none when they turn notifications off', async () => {
+	const { promise, resolve } = Promise.withResolvers<string>();
+	harness.preferences = promise;
+	const children = createRawSnippet(() => ({ render: () => '<p>Session view</p>' }));
+	await render(Layout, { children });
+	const stream = () => harness.storeSockets[0] as FakeEventSocket;
+	await expect.poll(() => stream()).toBeTruthy();
+	stream().open();
+
+	stream().receive(changed('session-1', 'waiting'));
+	await expect.poll(() => harness.sessions?.needsCount).toBe(1);
+	resolve('off');
+	await promise;
+	await new Promise((settle) => setTimeout(settle, 0));
+	stream().receive(changed('session-2', 'failed'));
+	await expect.poll(() => harness.sessions?.needsCount).toBe(2);
+
+	expect(harness.setBadgeCount).not.toHaveBeenCalled();
+	harness.preferences = Promise.resolve('attention');
+});
 
 test('badges the app icon with the sessions in Needs you, in view or not', async () => {
 	const children = createRawSnippet(() => ({ render: () => '<p>Session view</p>' }));

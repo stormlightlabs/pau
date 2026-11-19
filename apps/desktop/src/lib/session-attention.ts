@@ -133,7 +133,11 @@ export class SessionAttention {
 	readonly #interrupted = new Set<string>();
 	/** Sessions in Needs you, as the bay counts them. */
 	#needs = 0;
-	#badge = 0;
+	/**
+	 * The count last sent to the app icon, so an unchanged count sends
+	 * nothing. Unset after a failed send, so the next count sends again.
+	 */
+	#badge: number | undefined = 0;
 	#view: AttentionView = { windowFocused: true, viewedSessionId: undefined };
 	#titleOf: ((sessionId: string) => string | undefined) | undefined;
 
@@ -210,7 +214,8 @@ export class SessionAttention {
 		if (count === this.#badge) return;
 		this.#badge = count;
 		void this.#notifier.setBadgeCount(count === 0 ? undefined : count).catch(() => {
-			// The platform may not support badges.
+			// The platform may not support badges. Keep a newer count's record.
+			if (this.#badge === count) this.#badge = undefined;
 		});
 	}
 

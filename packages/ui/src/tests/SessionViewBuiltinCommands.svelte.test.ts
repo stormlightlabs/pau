@@ -48,6 +48,7 @@ async function setup() {
 		onCompact: vi.fn(),
 		onRenameSession: vi.fn(),
 		onOpenPiTerminal: vi.fn(),
+		onExportTranscript: vi.fn<(sessionId: string) => Promise<string | undefined>>(),
 		onLoadCommands: vi.fn().mockResolvedValue(commandFixtures.populated)
 	};
 	await render(SessionView, {
@@ -114,6 +115,47 @@ test('compacts with /compact and passes its instructions', async () => {
 
 	expect(onCompact).toHaveBeenCalledWith('session-idle', 'Keep the API notes');
 	expect(onSend).not.toHaveBeenCalled();
+});
+
+test('exports the transcript with /export through the save dialog', async () => {
+	const { prompt, onExportTranscript, onSend } = await setup();
+	onExportTranscript.mockResolvedValueOnce('/Users/operator/Fix diff gutter.html');
+
+	await userEvent.type(prompt, '/expo');
+	const option = page.getByRole('option', { name: /\/export/ });
+	await expect.element(option).not.toHaveAttribute('aria-disabled', 'true');
+	await userEvent.keyboard('{Tab}');
+	await expect.element(prompt).toHaveValue('/export ');
+	await userEvent.keyboard('{Escape}{Enter}');
+
+	expect(onExportTranscript).toHaveBeenCalledWith('session-idle');
+	expect(onSend).not.toHaveBeenCalled();
+	await expect.element(prompt).toHaveValue('');
+	await expect
+		.element(page.getByRole('status').filter({ hasText: 'Transcript saved' }))
+		.toHaveTextContent('Transcript saved to /Users/operator/Fix diff gutter.html');
+});
+
+test('says nothing when the save dialog for /export is cancelled', async () => {
+	const { prompt, onExportTranscript } = await setup();
+	onExportTranscript.mockResolvedValueOnce(undefined);
+	await run(prompt, '/export');
+
+	expect(onExportTranscript).toHaveBeenCalledWith('session-idle');
+	await expect.element(prompt).toHaveValue('');
+	await expect.element(page.getByText('Transcript saved')).not.toBeInTheDocument();
+	await expect.element(page.getByRole('alert')).not.toBeInTheDocument();
+});
+
+test('reports a failed /export in the notices', async () => {
+	const { prompt, onExportTranscript } = await setup();
+	onExportTranscript.mockRejectedValueOnce(new Error('Pi could not export this session: Nothing to export'));
+	await run(prompt, '/export');
+
+	await expect
+		.element(page.getByRole('alert'))
+		.toHaveTextContent('Pi could not export this session: Nothing to export');
+	await expect.element(page.getByText('Transcript saved')).not.toBeInTheDocument();
 });
 
 test('lists a terminal-only built-in as unavailable with its reason', async () => {

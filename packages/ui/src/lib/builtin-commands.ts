@@ -17,6 +17,7 @@ export type BuiltinAction =
 	| 'clone'
 	| 'compact'
 	| 'copy'
+	| 'export'
 	| 'shortcuts'
 	| 'stop';
 
@@ -58,7 +59,7 @@ export const BUILTIN_COMMANDS: readonly BuiltinCommand[] = [
 	runs('compact', 'compact', 'Compact the context, optionally with instructions', '[instructions]'),
 	terminalOnly('import', 'Import and resume a JSONL session'),
 	runs('copy', 'copy', 'Copy the last reply'),
-	terminalOnly('export', 'Export the session as HTML or JSONL'),
+	runs('export', 'export', 'Save the conversation as a web page'),
 	terminalOnly('share', 'Upload the session and return a viewer link'),
 	terminalOnly('bug', 'Prepare a private bug report for the Pi developers'),
 	terminalOnly('trust', 'Save a project trust decision'),

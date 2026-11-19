@@ -101,13 +101,14 @@ commands. Pau runs a built-in itself instead of sending it to the agent:
 | `/clone`                  | Duplicates the session at its current position         |
 | `/compact [instructions]` | Compacts the context, with your instructions if given  |
 | `/copy`                   | Copies the last reply                                  |
+| `/export`                 | Saves the conversation as a web page, like **Export**  |
 | `/hotkeys`                | Shows the keyboard shortcuts                           |
 | `/quit`                   | Stops the session                                      |
 
 From the session tree, choose **Branch from here** to continue from an earlier
 prompt, as `/fork` does in Pi.
 
-The other built-ins, such as `/login`, `/settings`, and `/export`, need Pi's
+The other built-ins, such as `/login`, `/settings`, and `/share`, need Pi's
 terminal interface. The list shows them as unavailable. To use one, choose
 **Open terminal** under the composer, start `pi` in the workspace terminal, and
 run the command there. If an extension adds a command with a built-in's name,

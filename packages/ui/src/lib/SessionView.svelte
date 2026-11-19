@@ -1727,6 +1727,16 @@
 					if (!result.ok) throw new Error(result.error);
 				};
 			}
+			case 'export': {
+				if (!onExportTranscript || !session.capabilities.exportTranscript) {
+					refuse('This session cannot export its transcript.');
+				}
+				if (disconnected) refuse('Pau is reconnecting to the backend.');
+				if (!liveStatuses.has(session.status)) refuse('This session cannot be exported right now.');
+				if (exportingSessionIds.has(session.id)) refuse('The transcript is already being exported.');
+				// The save dialog decides where the file goes, and a failed export reports itself in the notices.
+				return () => exportTranscript(session);
+			}
 			case 'shortcuts': {
 				return async () => {
 					if (!keymap?.run('app.shortcuts')) throw new Error('Pau cannot show the keyboard shortcuts here.');

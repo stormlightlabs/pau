@@ -98,3 +98,119 @@ test('drops a stop that fails after the session has already stopped', async () =
 	await new Promise((resolve) => setTimeout(resolve, 0));
 	await expect.element(page.getByText('The stop request timed out.')).not.toBeInTheDocument();
 });
+
+test('keeps a failure when an unrelated action starts and clears it on its own retry', async () => {
+	const onExportTranscript = vi.fn((): Promise<string | undefined> =>
+		Promise.reject(new Error('The transcript could not be written.'))
+	);
+	await render(SessionView, {
+		workspaces: workspaces(),
+		activeSessionId: idle.id,
+		onStop: async () => {},
+		onExportTranscript
+	});
+
+	await userEvent.click(exportButton());
+	await expect.element(page.getByRole('alert')).toHaveTextContent('The transcript could not be written.');
+
+	await userEvent.click(page.getByRole('button', { name: 'Stop' }));
+	await expect.element(page.getByRole('alert')).toHaveTextContent('The transcript could not be written.');
+
+	onExportTranscript.mockResolvedValueOnce('/Users/operator/fixed.html');
+	await userEvent.click(exportButton());
+	await expect.element(page.getByRole('alert')).not.toBeInTheDocument();
+});
+
+test("drops a session's failures when it starts a new run", async () => {
+	vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValueOnce(new Error('denied'));
+	const pau = sessionFixtures.idleWithPath[0]!;
+	const withStatus = (status: SessionStatus) => [{ ...pau, sessions: [{ ...pau.sessions[0]!, status }] }];
+	const view = await render(SessionView, {
+		workspaces: withStatus('stopped'),
+		activeSessionId: pau.sessions[0]!.id,
+		onStop: async () => {}
+	});
+
+	(page.getByRole('article', { name: 'assistant message' }).element() as HTMLElement).focus();
+	await userEvent.keyboard('{Shift>}{F10}{/Shift}');
+	await userEvent.click(page.getByRole('menuitem', { name: 'Copy message' }));
+	await expect.element(page.getByRole('alert')).toHaveTextContent('Pau could not copy the message.');
+
+	await view.rerender({ workspaces: withStatus('idle') });
+	await expect.element(page.getByText('Pau could not copy the message.')).not.toBeInTheDocument();
+});
+
+test('drops a stop that fails after the session stopped and started again', async () => {
+	const failed = Promise.withResolvers<void>();
+	const view = await render(SessionView, {
+		workspaces: workspaces(),
+		activeSessionId: idle.id,
+		onStop: () => failed.promise
+	});
+
+	await userEvent.click(page.getByRole('button', { name: 'Stop' }));
+	await view.rerender({ workspaces: workspaces('stopped') });
+	await expect.element(page.getByRole('status').filter({ hasText: 'Session stopped.' })).toBeVisible();
+	await view.rerender({ workspaces: workspaces('idle') });
+	await expect.element(page.getByRole('button', { name: 'Stop' })).toBeVisible();
+	failed.reject(new Error('The stop request timed out.'));
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	await expect.element(page.getByText('The stop request timed out.')).not.toBeInTheDocument();
+});
+
+test('drops a failed retry once a new prompt is sent', async () => {
+	await render(SessionView, {
+		workspaces: sessionFixtures.failedTurn,
+		activeSessionId: 'session-idle',
+		onRetry: () => Promise.reject(new Error('The provider is still overloaded.')),
+		onSend: async () => {}
+	});
+
+	await userEvent.click(page.getByRole('button', { name: 'Send message again' }));
+	await expect.element(page.getByRole('alert')).toHaveTextContent('The provider is still overloaded.');
+
+	await userEvent.fill(page.getByRole('textbox', { name: 'Prompt' }), 'Try a smaller diff instead.');
+	await userEvent.keyboard('{Enter}');
+	await expect.element(page.getByText('The provider is still overloaded.')).not.toBeInTheDocument();
+});
+
+test('drops a failed retry once its failed message is no longer last', async () => {
+	const workspace = sessionFixtures.failedTurn[0]!;
+	const failedSession = workspace.sessions[0]!;
+	const view = await render(SessionView, {
+		workspaces: sessionFixtures.failedTurn,
+		activeSessionId: failedSession.id,
+		onRetry: () => Promise.reject(new Error('The provider is still overloaded.'))
+	});
+
+	await userEvent.click(page.getByRole('button', { name: 'Send message again' }));
+	await expect.element(page.getByRole('alert')).toHaveTextContent('The provider is still overloaded.');
+
+	const reply = { id: 'reply-2', kind: 'message' as const, role: 'assistant' as const, label: 'Pi', body: 'Done.' };
+	await view.rerender({
+		workspaces: [{ ...workspace, sessions: [{ ...failedSession, transcript: [...failedSession.transcript, reply] }] }]
+	});
+	await expect.element(page.getByText('The provider is still overloaded.')).not.toBeInTheDocument();
+});
+
+test("shows a failed workspace action in that workspace's column", async () => {
+	const fixture = sessionFixtures.idleWithPath[0]!;
+	const pau = { ...fixture, sessions: [fixture.sessions[0]!, running] };
+	const other = { id: 'other', name: 'Other', sessions: [{ ...running, id: 'session-other' }] };
+	const view = await render(SessionView, {
+		workspaces: [pau, other],
+		activeSessionId: fixture.sessions[0]!.id,
+		revealPath: () => Promise.reject(new Error('The folder no longer exists.'))
+	});
+	const column = page.getByRole('complementary', { name: 'Workspace' });
+
+	await userEvent.click(page.getByRole('button', { name: 'Pau actions' }));
+	await userEvent.click(page.getByRole('menuitem', { name: /Reveal in Finder|Show in folder/ }));
+	await expect.element(column.getByRole('alert')).toHaveTextContent('The folder no longer exists.');
+
+	// It belongs to the workspace, so every session there shows it and others do not.
+	await view.rerender({ activeSessionId: running.id });
+	await expect.element(column.getByRole('alert')).toHaveTextContent('The folder no longer exists.');
+	await view.rerender({ activeSessionId: 'session-other' });
+	await expect.element(page.getByText('The folder no longer exists.')).not.toBeInTheDocument();
+});

@@ -28,7 +28,7 @@ import type {
 	ThinkingLevel,
 	WorkspaceTerminal
 } from '@stormlightlabs/pau-ui';
-import { agentLabel } from '@stormlightlabs/pau-ui';
+import { agentLabel, needsOperator } from '@stormlightlabs/pau-ui';
 
 import {
 	PauApiError,
@@ -871,6 +871,12 @@ export class LiveSessions {
 				.filter((session) => session.workspace_id === workspace.id)
 				.map((session) => this.#viewModel(session))
 		}));
+	}
+
+	/** How many sessions sit in the bay's Needs you rack, across every workspace. */
+	get needsCount(): number {
+		return this.workspaces.flatMap((workspace) => workspace.sessions).filter((session) => needsOperator(session))
+			.length;
 	}
 
 	/** Loads the initial lists and opens the event stream. */

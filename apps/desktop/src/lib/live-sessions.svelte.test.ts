@@ -164,6 +164,43 @@ test('clears a marker when the session is viewed and all markers on request', as
 	expect(unseen()).toBe(false);
 });
 
+test.each([
+	['in view', 'session-1'],
+	['out of view', 'other']
+])('counts a session %s while it is in Needs you', async (_name, viewed) => {
+	const { sessions, change } = await setup();
+	sessions.view(viewed);
+	expect(sessions.needsCount).toBe(0);
+
+	change('waiting', 1);
+	expect(sessions.needsCount).toBe(1);
+	change('running', 2);
+	expect(sessions.needsCount).toBe(0);
+	change('failed', 3);
+	expect(sessions.needsCount).toBe(1);
+	change('starting', 4);
+	expect(sessions.needsCount).toBe(0);
+});
+
+test('counts the sessions in Needs you across workspaces', async () => {
+	const { sessions, socket, change } = await setup();
+	change('not_responding', 1);
+	socket.receive({
+		type: 'event',
+		event: {
+			sequence: 2,
+			timestamp: '2026-04-01T12:00:02Z',
+			workspace_id: 'docs',
+			session_id: 'session-2',
+			kind: 'session_changed',
+			payload: JSON.stringify({ ...session, id: 'session-2', workspace_id: 'docs', status: 'waiting' })
+		}
+	});
+
+	expect(sessions.workspaces.map((workspace) => workspace.id)).toEqual(['pau', 'docs']);
+	expect(sessions.needsCount).toBe(2);
+});
+
 test('offers the thinking levels Pi reports for the current model', async () => {
 	const { sessions, socket } = await setup();
 	const levels = () => sessions.workspaces[0]?.sessions[0]?.thinkingLevels;

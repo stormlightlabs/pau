@@ -131,6 +131,13 @@
 		};
 	});
 
+	// The app icon badge counts the sessions in Needs you, whether or not they
+	// notified. `needs` also reads the notification policy, so turning
+	// notifications off clears the badge.
+	$effect(() => {
+		attention?.needs(sessions.needsCount);
+	});
+
 	// Sessions save their own route, since the URL does not name the saved Pi session.
 	$effect(() => {
 		const route = workspaceViewRoute(page.route.id, page.params.workspaceId);

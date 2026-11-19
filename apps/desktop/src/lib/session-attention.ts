@@ -103,18 +103,19 @@ export type SessionAttentionOptions = {
 };
 
 /**
- * Sends a native notification and badges the app icon when a session out of
- * the operator's view starts waiting, asks a question, fails, or stops
- * responding. Under the
- * `all` policy a finished turn notifies too, and under `off` nothing notifies
- * or adds to the badge.
+ * Sends a native notification when a session out of the operator's view
+ * starts waiting, asks a question, fails, or stops responding, and badges the
+ * app icon with the number of sessions in Needs you. Under the `all` policy a
+ * finished turn notifies too, and under `off` nothing notifies and the icon
+ * carries no badge.
  *
  * The app layout owns one instance for the life of the window, so sessions
  * notify while any view is open. It follows its own event stream from a
  * snapshot, which keeps transitions that happened before the window opened
  * from notifying. Each status transition and each extension question notifies
- * once, however often the stream delivers it. The badge counts sessions that
- * notified and that the operator has not looked at since.
+ * once, however often the stream delivers it. The badge comes from
+ * {@link SessionAttention.needs}, so it counts every session in Needs you,
+ * including one that never notified because it was in view.
  */
 export class SessionAttention {
 	readonly #notifier: AttentionNotifier;
@@ -130,8 +131,8 @@ export class SessionAttention {
 	 * interrupt caused.
 	 */
 	readonly #interrupted = new Set<string>();
-	/** Sessions that notified and have not been viewed since. */
-	readonly #pending = new Set<string>();
+	/** Sessions in Needs you, as the bay counts them. */
+	#needs = 0;
 	#badge = 0;
 	#view: AttentionView = { windowFocused: true, viewedSessionId: undefined };
 	#titleOf: ((sessionId: string) => string | undefined) | undefined;
@@ -190,12 +191,10 @@ export class SessionAttention {
 
 	#raise(sessionId: string, reason: AttentionReason): void {
 		if (inView(sessionId, this.#view) || !policyAllows(this.#policy(), reason)) return;
-		this.#pending.add(sessionId);
 		const agent = agentLabel(this.#sessions.get(sessionId)?.agent ?? 'pi');
 		void this.#notifier.notify(attentionNotification(this.#title(sessionId, agent), agent, reason)).catch(() => {
 			// Notifications are best effort. The badge and rail marker still show.
 		});
-		this.#publishBadge();
 	}
 
 	#title(sessionId: string, agent: string): string {
@@ -206,14 +205,8 @@ export class SessionAttention {
 		return workspace ? `${agent} session in ${workspace}` : `${agent} session`;
 	}
 
-	#clearViewed(): void {
-		const { viewedSessionId } = this.#view;
-		if (viewedSessionId === undefined || !inView(viewedSessionId, this.#view)) return;
-		if (this.#pending.delete(viewedSessionId)) this.#publishBadge();
-	}
-
 	#publishBadge(): void {
-		const count = this.#pending.size;
+		const count = this.#policy() === 'off' ? 0 : this.#needs;
 		if (count === this.#badge) return;
 		this.#badge = count;
 		void this.#notifier.setBadgeCount(count === 0 ? undefined : count).catch(() => {
@@ -231,10 +224,19 @@ export class SessionAttention {
 		this.#stream.stop();
 	}
 
+	/**
+	 * Records how many sessions sit in Needs you across every workspace, and
+	 * shows that count on the app icon. It reads the notification policy, so a
+	 * caller that runs it in a Svelte effect also follows policy changes.
+	 */
+	needs(count: number): void {
+		this.#needs = count;
+		this.#publishBadge();
+	}
+
 	/** Records the session on screen, or `undefined` when another view shows. */
 	view(sessionId: string | undefined): void {
 		this.#view = { ...this.#view, viewedSessionId: sessionId };
-		this.#clearViewed();
 	}
 
 	/**
@@ -248,7 +250,6 @@ export class SessionAttention {
 	/** Records whether the window has focus. */
 	focus(windowFocused: boolean): void {
 		this.#view = { ...this.#view, windowFocused };
-		this.#clearViewed();
 	}
 
 	/**

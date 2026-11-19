@@ -1255,7 +1255,7 @@ function changed(status: AgentSession['status']): ServerEvent {
 	return sessionChanged({ ...idleSession, status }).event;
 }
 
-test('reports the session on screen so its notifications use the rail title and its badge clears', async () => {
+test('reports the session on screen so its notifications use the rail title', async () => {
 	const notifier = {
 		notify: vi.fn().mockResolvedValue(undefined),
 		setBadgeCount: vi.fn().mockResolvedValue(undefined)
@@ -1281,10 +1281,11 @@ test('reports the session on screen so its notifications use the rail title and 
 	attention.focus(false);
 	attentionSockets[0]?.receive({ type: 'event', event: changed('waiting') });
 	expect(notifier.notify).toHaveBeenCalledWith({ title: 'Fix the gutter', body: 'Pi is waiting for your input.' });
-	expect(notifier.setBadgeCount).toHaveBeenLastCalledWith(1);
 
 	attention.focus(true);
-	expect(notifier.setBadgeCount).toHaveBeenLastCalledWith(undefined);
+	attentionSockets[0]?.receive({ type: 'event', event: changed('running') });
+	attentionSockets[0]?.receive({ type: 'event', event: changed('waiting') });
+	expect(notifier.notify).toHaveBeenCalledOnce();
 
 	await view.unmount();
 	attentionSockets[0]?.receive({ type: 'event', event: changed('failed') });

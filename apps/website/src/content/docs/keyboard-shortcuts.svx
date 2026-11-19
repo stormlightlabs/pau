@@ -101,7 +101,7 @@ commands. Pau runs a built-in itself instead of sending it to the agent:
 | `/clone`                  | Duplicates the session at its current position         |
 | `/compact [instructions]` | Compacts the context, with your instructions if given  |
 | `/copy`                   | Copies the last reply                                  |
-| `/export`                 | Saves the conversation as a web page, like **Export**. The save dialog picks the file, not a path |
+| `/export`                 | Saves a web page like **Export**. It takes no path     |
 | `/hotkeys`                | Shows the keyboard shortcuts                           |
 | `/quit`                   | Stops the session                                      |
 

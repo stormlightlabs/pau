@@ -34,7 +34,7 @@ test('shows a step that failed without stopping launch', async () => {
 	await render(LaunchSplash, { phase: 'running', steps: launchFixtures.slowPath });
 
 	await expect.element(step('Loading your shell PATH')).toHaveTextContent('Needs attention');
-	await expect.element(page.getByText(/took longer than 5 seconds/)).toBeVisible();
+	await expect.element(page.getByText(/took longer than 10 seconds/)).toBeVisible();
 	await expect.element(page.getByRole('heading', { level: 1 })).toHaveTextContent('Starting the local service');
 	expect(page.getByRole('alert').query()).toBeNull();
 });

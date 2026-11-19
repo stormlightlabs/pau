@@ -6,13 +6,17 @@
 //! missing even though they work in a terminal. The first startup step asks
 //! the login shell for its `PATH` once and puts it ahead of the inherited
 //! entries, and the backend gives the result to every child process.
+//!
+//! An app that already inherits a shell-built `PATH`, as one started from a
+//! terminal does, skips the lookup; [`inherits_shell_path`] decides which case
+//! applies.
 
 use std::{
     env,
     ffi::{OsStr, OsString},
     io::Read,
     os::unix::process::CommandExt,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::mpsc::{self, RecvTimeoutError},
     thread,
@@ -24,7 +28,11 @@ use pau_agent::signal_process_group;
 const MARKER: &str = "__PAU_LOGIN_PATH__";
 /// An interactive shell can stall on prompts or slow plugins. Startup gives up
 /// after this long and keeps the inherited `PATH`.
-pub const TIMEOUT: Duration = Duration::from_secs(3);
+///
+/// A shell that starts in under a second can take several times that on a
+/// cold start or while the machine is busy, so the limit leaves room for that
+/// and costs time only when the shell is slow.
+pub const TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Why the login shell `PATH` could not be read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,6 +41,24 @@ pub enum LoginPathError {
     TimedOut,
     /// The shell could not start, or printed no marked value.
     Unavailable,
+}
+
+/// The `PATH` launchd gives an app opened from Finder, the Dock or Spotlight.
+const LAUNCHD_PATH: [&str; 4] = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+
+/// Reports whether the inherited `PATH` already holds more than launchd's
+/// default entries, so asking the login shell would add nothing.
+///
+/// The `PATH` itself is the signal, not how the app was started. A shell
+/// always adds entries, such as `/usr/local/bin` from `path_helper`, so an app
+/// opened from a terminal, directly or with `open`, skips the lookup. A bare
+/// `PATH` always gets the lookup, even with `TERM` set: `open` from a script
+/// with a scrubbed environment, from `ssh`, or after `launchctl setenv TERM`
+/// passes on a `TERM` without the shell's `PATH`.
+pub fn inherits_shell_path(path: &OsStr) -> bool {
+    env::split_paths(path).any(|entry| {
+        !entry.as_os_str().is_empty() && !LAUNCHD_PATH.iter().any(|known| entry == Path::new(known))
+    })
 }
 
 /// Runs `shell` and returns its `PATH`, giving up after `timeout`.
@@ -136,7 +162,9 @@ mod tests {
         time::{Duration, Instant},
     };
 
-    use super::{LoginPathError, MARKER, marked_path, merge_paths, shell_path};
+    use super::{
+        LoginPathError, MARKER, inherits_shell_path, marked_path, merge_paths, shell_path,
+    };
 
     /// Writes an executable script that stands in for the login shell.
     fn fake_shell(directory: &Path, name: &str, body: &str) -> PathBuf {
@@ -239,6 +267,21 @@ mod tests {
             shell_path(silent.as_os_str(), Duration::from_secs(5)),
             Err(LoginPathError::Unavailable)
         );
+    }
+
+    #[test]
+    fn looks_up_the_login_path_only_for_launchd_defaults() {
+        let cases = [
+            ("", false),
+            ("/usr/bin:/bin", false),
+            ("/usr/bin:/bin:/usr/sbin:/sbin", false),
+            ("/sbin::/usr/bin/", false),
+            ("/opt/homebrew/bin:/usr/bin:/bin", true),
+            ("/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin", true),
+        ];
+        for (path, inherited) in cases {
+            assert_eq!(inherits_shell_path(OsStr::new(path)), inherited, "{path:?}");
+        }
     }
 
     #[test]

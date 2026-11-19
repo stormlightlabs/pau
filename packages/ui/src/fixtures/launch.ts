@@ -24,7 +24,7 @@ export const launchFixtures = {
 	ready: steps('done', 'done', 'done', 'done'),
 	slowPath: failing(steps('failed', 'done', 'running'), 'login_shell_path', {
 		reason:
-			'Your login shell took longer than 5 seconds to report its PATH, so Pau kept the PATH it was opened with. Pi and other tools may not be found.'
+			'Your login shell took longer than 10 seconds to report its PATH, so Pau kept the PATH it was opened with. Pi and other tools may not be found.'
 	}),
 	newerDatabase: failing(steps('done', 'failed'), 'database', {
 		reason: 'The database was created by a newer version of Pau (schema 9, this version reads up to 7).',

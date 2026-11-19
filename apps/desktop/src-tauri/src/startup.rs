@@ -346,6 +346,8 @@ pub struct PauLauncher {
     /// The login shell, from `SHELL` or `/bin/zsh`.
     #[cfg(target_os = "macos")]
     shell: OsString,
+    /// The `PATH` the app was opened with.
+    inherited_path: OsString,
     server: Mutex<Option<ServerHandle>>,
 }
 
@@ -358,14 +360,17 @@ impl PauLauncher {
             options,
             #[cfg(target_os = "macos")]
             shell: env::var_os("SHELL").unwrap_or_else(|| OsString::from("/bin/zsh")),
+            inherited_path: env::var_os("PATH").unwrap_or_default(),
             server: Mutex::new(None),
         }
     }
 
-    /// Replaces the login shell, so tests can run a fake one.
+    /// Replaces the login shell and the inherited `PATH`, so tests can run a
+    /// fake shell whatever environment started the test.
     #[cfg(all(test, target_os = "macos"))]
-    fn with_shell(mut self, shell: OsString) -> Self {
+    fn with_shell(mut self, shell: OsString, inherited_path: &str) -> Self {
         self.shell = shell;
+        self.inherited_path = inherited_path.into();
         self
     }
 
@@ -393,14 +398,23 @@ impl Launcher for PauLauncher {
     type Database = ServerDatabase;
 
     /// Asks the login shell for its `PATH` on macOS, off the async runtime,
-    /// and puts it ahead of the inherited one. Other platforms keep the
-    /// inherited `PATH`.
+    /// and puts it ahead of the inherited one. An inherited `PATH` that a shell
+    /// already built, and other platforms, keep the inherited `PATH`.
     async fn read_path(&self) -> ProcessPath {
-        let inherited = env::var_os("PATH").unwrap_or_default();
+        let inherited = self.inherited_path.clone();
         #[cfg(target_os = "macos")]
         {
-            use crate::login_path::{LoginPathError, TIMEOUT, merge_paths, shell_path};
+            use crate::login_path::{
+                LoginPathError, TIMEOUT, inherits_shell_path, merge_paths, shell_path,
+            };
 
+            if inherits_shell_path(&inherited) {
+                tracing::debug!("the inherited PATH comes from a shell; keeping it");
+                return ProcessPath {
+                    path: inherited,
+                    failure: None,
+                };
+            }
             let shell = self.shell.clone();
             let login = tokio::task::spawn_blocking(move || shell_path(&shell, TIMEOUT))
                 .await

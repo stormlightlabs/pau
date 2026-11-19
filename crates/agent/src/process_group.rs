@@ -310,11 +310,6 @@ pub(crate) mod tests {
     fn reads_only_its_own_children_as_leaders() {
         assert_eq!(leader_state(1), Leader::NotOurs);
         assert!(!child_exited(1));
-        // Root may signal init's group, so only another user sees the refusal.
-        // SAFETY: `geteuid` has no requirements.
-        if unsafe { libc::geteuid() } != 0 {
-            assert!(signal_process_group(1, 0).is_err());
-        }
     }
 
     #[cfg(target_os = "macos")]

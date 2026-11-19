@@ -158,6 +158,30 @@ test('reports a failed /export in the notices', async () => {
 	await expect.element(page.getByText('Transcript saved')).not.toBeInTheDocument();
 });
 
+test('refuses /export with a path and keeps the draft', async () => {
+	const { prompt, onExportTranscript, onSend } = await setup();
+	await run(prompt, '/export ~/notes.jsonl');
+
+	await expect
+		.element(page.getByRole('alert'))
+		.toHaveTextContent('The save dialog picks where the transcript goes. Run /export without a path.');
+	await expect.element(prompt).toHaveValue('/export ~/notes.jsonl');
+	expect(onExportTranscript).not.toHaveBeenCalled();
+	expect(onSend).not.toHaveBeenCalled();
+});
+
+test('refuses a second /export while one is in flight and keeps the draft', async () => {
+	const { prompt, onExportTranscript } = await setup();
+	onExportTranscript.mockReturnValueOnce(new Promise(() => {}));
+	await run(prompt, '/export');
+	await expect.element(prompt).toHaveValue('');
+
+	await run(prompt, '/export');
+	await expect.element(page.getByRole('alert')).toHaveTextContent('The transcript is already being exported.');
+	await expect.element(prompt).toHaveValue('/export');
+	expect(onExportTranscript).toHaveBeenCalledTimes(1);
+});
+
 test('lists a terminal-only built-in as unavailable with its reason', async () => {
 	const { prompt, onSend, onOpenPiTerminal } = await setup();
 	await userEvent.type(prompt, '/login');

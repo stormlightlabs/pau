@@ -968,6 +968,14 @@
 		return undefined;
 	}
 
+	/** Explains why Export cannot run, or returns `undefined` when it can. */
+	function exportUnavailableReason(session: SessionViewModel, offline: boolean): string | undefined {
+		if (offline) return 'Pau is reconnecting to the backend. You can export once it reconnects.';
+		if (exportingSessionIds.has(session.id)) return 'The transcript is already being exported.';
+		if (!liveStatuses.has(session.status)) return 'This session cannot be exported right now.';
+		return undefined;
+	}
+
 	function compactingLabel(reason: CompactionReason): string {
 		return {
 			manual: 'Compacting the conversation…',
@@ -1731,10 +1739,11 @@
 				if (!onExportTranscript || !session.capabilities.exportTranscript) {
 					refuse('This session cannot export its transcript.');
 				}
-				if (disconnected) refuse('Pau is reconnecting to the backend.');
-				if (!liveStatuses.has(session.status)) refuse('This session cannot be exported right now.');
-				if (exportingSessionIds.has(session.id)) refuse('The transcript is already being exported.');
-				// The save dialog decides where the file goes, and a failed export reports itself in the notices.
+				// Pi's `/export <path>` writes to the path; Pau's save dialog picks the file instead.
+				if (argument) refuse('The save dialog picks where the transcript goes. Run /export without a path.');
+				const reason = exportUnavailableReason(session, disconnected);
+				if (reason) refuse(reason);
+				// A failed export reports itself in the notices.
 				return () => exportTranscript(session);
 			}
 			case 'shortcuts': {
@@ -2535,14 +2544,14 @@
 						</div>
 					{/if}
 					{#if onExportTranscript && activeSession.capabilities.exportTranscript && liveStatuses.has(activeSession.status)}
-						{@const exporting = exportingSessionIds.has(activeSession.id)}
+						{@const exportReason = exportUnavailableReason(activeSession, disconnected)}
 						<button
 							type="button"
 							class="pau-button pau-button--quiet session-view__collapse"
 							aria-label="Export"
-							aria-busy={exporting}
-							disabled={disconnected || exporting}
-							title={disconnected ? 'Pau is reconnecting to the backend.' : 'Save the conversation as a web page'}
+							aria-busy={exportingSessionIds.has(activeSession.id)}
+							disabled={exportReason !== undefined}
+							title={exportReason ?? 'Save the conversation as a web page'}
 							onclick={() => void exportTranscript(activeSession)}>
 							<Icon name="export" size={16} /><span>Export</span>
 						</button>

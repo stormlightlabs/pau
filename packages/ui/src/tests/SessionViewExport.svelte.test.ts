@@ -99,7 +99,9 @@ test('reports a failed export in the notices', async () => {
 test('offers Export only where the session and the app can export', async () => {
 	const offline = await render(SessionView, { ...open(sessionFixtures.idle, cancelled), disconnected: true });
 	await expect.element(exportButton()).toBeDisabled();
-	await expect.element(exportButton()).toHaveAttribute('title', 'Pau is reconnecting to the backend.');
+	await expect
+		.element(exportButton())
+		.toHaveAttribute('title', 'Pau is reconnecting to the backend. You can export once it reconnects.');
 	offline.unmount();
 
 	// Without a save dialog, as in a browser, there is nowhere to save to.

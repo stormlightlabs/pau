@@ -519,6 +519,11 @@
 	let dismissedMention = $state<string>();
 	let mentionRun = 0;
 	let sending = $state(false);
+	/**
+	 * Why the composer's last action failed. It belongs with the draft, which
+	 * resets on a session switch, so a failure that lands after the operator
+	 * leaves its session is dropped rather than shown in another one.
+	 */
 	let error = $state<string>();
 	/** Prompts drawn before their session shows them, in submission order. */
 	let pendingPrompts = $state<PendingPrompt[]>([]);
@@ -558,7 +563,55 @@
 	let dropRejectionTimer: ReturnType<typeof setTimeout> | undefined;
 	let startingWorkspaceId = $state<string>();
 	let startFailure = $state<{ workspaceId: string; workspaceName: string; agent: SessionAgent; message: string }>();
-	let controlError = $state<string>();
+	/**
+	 * A session action whose failure the view reports. Each action has its own
+	 * slot, so starting one never clears another's failure. `queue` reports
+	 * under the queue, `restart` in the ended panel, and the rest in the
+	 * notices above the transcript.
+	 */
+	type SessionAction =
+		| 'stop'
+		| 'interrupt'
+		| 'stopCommand'
+		| 'thinkingLevel'
+		| 'export'
+		| 'branch'
+		| 'copy'
+		| 'compact'
+		| 'retry'
+		| 'cancelRetry'
+		| 'queue'
+		| 'restart';
+	/** Actions whose failures show first in the notices above the transcript, in this order. */
+	const noticeActions: SessionAction[] = [
+		'stop',
+		'interrupt',
+		'stopCommand',
+		'thinkingLevel',
+		'export',
+		'branch',
+		'copy'
+	];
+	/**
+	 * Failed session actions, keyed by the session each ran in, so a failure
+	 * that lands after the operator moves to another session shows only in its
+	 * own. A slot clears when the same action starts again in that session, so
+	 * it stays empty when that action succeeds. Errors survive switching away
+	 * and back, and drop when the session ends, starts a new run or leaves the
+	 * list. A retry failure also drops once the failed message is no longer
+	 * the last entry, since its Retry button is gone.
+	 */
+	const sessionErrors = new SvelteMap<string, Partial<Record<SessionAction, string>>>();
+	/** Each listed session's status when the view last saw it, to notice when it ends or starts again. */
+	let seenStatuses: Partial<Record<string, SessionStatus>> = {};
+	/**
+	 * How many times each session has ended or started again, so a failure
+	 * that lands from an earlier run is dropped instead of shown in the
+	 * current one.
+	 */
+	const sessionRuns: Record<string, number> = {};
+	/** The failure of a workspace menu action, shown in that workspace's column. */
+	let workspaceError = $state<{ workspaceId: string; message: string }>();
 	/**
 	 * Sessions whose transcript export is in flight, so Export cannot run twice
 	 * for one session while another session's export finishes on its own.
@@ -568,7 +621,6 @@
 	let exportedTranscript = $state<{ sessionId: string; path: string }>();
 	/** The ended session whose restart is in flight, so its button cannot start it twice. */
 	let restartingSessionId = $state<string>();
-	let restartError = $state<string>();
 	/**
 	 * The saved session whose resume is in flight, from the bay or the
 	 * restored session's Resume, so no click can start a second one.
@@ -579,12 +631,9 @@
 	let contextMenu = $state<ContextMenuRequest>();
 	let pickerWorkspaceId = $state<string>();
 	let retryingSessionId = $state<string>();
-	let retryError = $state<string>();
-	let queueError = $state<string>();
 	let compactOpen = $state(false);
 	let compactInstructions = $state('');
 	let compactingSessionId = $state<string>();
-	let compactError = $state<string>();
 	let now = $state(Date.now());
 	/** Whether the folder path form is showing. Only used without `pickFolder`. */
 	let openFormVisible = $state(false);
@@ -598,6 +647,7 @@
 	const openedWorkspace = $derived(workspaces.find((workspace) => workspace.id === openedWorkspaceId));
 	const sessions = $derived(workspaces.flatMap((workspace) => workspace.sessions));
 	const activeSession = $derived(sessions.find((session) => session.id === activeSessionId));
+	const activeErrors = $derived((activeSession && sessionErrors.get(activeSession.id)) ?? {});
 	$effect(() => {
 		const settled = settlePendingPrompts(pendingPrompts, sessions);
 		if (settled !== pendingPrompts) pendingPrompts = settled;
@@ -687,11 +737,12 @@
 	const canRetry = $derived(
 		Boolean(activeSession?.capabilities.retry) && activeSession?.status === 'idle' && !disconnected
 	);
-	/** Only the failure that ended the transcript offers to send its prompt again. */
-	const retryableEntryId = $derived.by(() => {
-		const last = activeSession?.transcript.at(-1);
+	/** The message whose failure ended the transcript, the only one that offers to send its prompt again. */
+	function failedLastEntryId(session: SessionViewModel): string | undefined {
+		const last = session.transcript.at(-1);
 		return last?.kind === 'message' && last.failed ? last.id : undefined;
-	});
+	}
+	const retryableEntryId = $derived(activeSession && failedLastEntryId(activeSession));
 	const queuedCount = $derived(
 		onClearQueue && activeSession?.capabilities.messageQueue
 			? (activeSession.messageQueue?.steering.length ?? 0) + (activeSession.messageQueue?.followUp.length ?? 0)
@@ -708,7 +759,8 @@
 	/** Statuses with a running agent process. Compact and Stop show only in these. */
 	const liveStatuses = new Set<SessionStatus>(['idle', 'running', 'waiting']);
 	/** Whether the session's agent process has ended, which replaces the composer with a notice. */
-	const ended = $derived(activeSession?.status === 'stopped' || activeSession?.status === 'failed');
+	const hasEnded = (status: SessionStatus | undefined) => status === 'stopped' || status === 'failed';
+	const ended = $derived(hasEnded(activeSession?.status));
 	const canCompact = $derived(Boolean(activeSession?.capabilities.compaction) && onCompact !== undefined);
 	const compactionState = $derived(activeSession?.compaction);
 	const compacting = $derived(
@@ -834,10 +886,52 @@
 		treeShown = false;
 	});
 
+	// Starts a new run for each session that ended or started again, and drops
+	// the errors of the run it left and of sessions that left the list.
+	$effect(() => {
+		for (const session of sessions) {
+			const seen = seenStatuses[session.id];
+			if (!seen || hasEnded(seen) === hasEnded(session.status)) continue;
+			sessionRuns[session.id] = (sessionRuns[session.id] ?? 0) + 1;
+			sessionErrors.delete(session.id);
+		}
+		for (const id of Object.keys(seenStatuses)) {
+			if (sessions.every((session) => session.id !== id)) sessionErrors.delete(id);
+		}
+		seenStatuses = Object.fromEntries(sessions.map((session) => [session.id, session.status]));
+	});
+
+	// Drops a retry failure once its failed message is no longer last.
+	$effect(() => {
+		for (const session of sessions) {
+			if (sessionErrors.get(session.id)?.retry && failedLastEntryId(session) === undefined) {
+				setSessionError(session.id, 'retry', undefined);
+			}
+		}
+	});
+
+	/** Records or clears the error a session action reports in its slot. */
+	function setSessionError(sessionId: string, action: SessionAction, message: string | undefined): void {
+		sessionErrors.set(sessionId, { ...sessionErrors.get(sessionId), [action]: message });
+	}
+
+	/**
+	 * Clears an action's failure in a session as the action starts, and
+	 * returns the function that records its failure. A failure that lands
+	 * after the session left the list, ended or started again is dropped: it
+	 * describes a run the operator no longer sees.
+	 */
+	function beginAction(sessionId: string, action: SessionAction): (cause: unknown, fallback: string) => void {
+		setSessionError(sessionId, action, undefined);
+		const run = sessionRuns[sessionId] ?? 0;
+		return (cause, fallback) => {
+			if ((sessionRuns[sessionId] ?? 0) !== run || sessions.every((session) => session.id !== sessionId)) return;
+			setSessionError(sessionId, action, cause instanceof Error ? cause.message : fallback);
+		};
+	}
+
 	$effect(() => {
 		void activeSession?.id;
-		retryError = undefined;
-		compactError = undefined;
 		compactOpen = false;
 		compactInstructions = '';
 	});
@@ -1020,14 +1114,14 @@
 		if (!onCompact || !activeSession || compacting) return;
 		const sessionId = activeSession.id;
 		const instructions = compactInstructions.trim();
-		compactError = undefined;
+		const fail = beginAction(sessionId, 'compact');
 		compactingSessionId = sessionId;
 		compactOpen = false;
 		try {
 			await onCompact(sessionId, instructions || undefined);
 			if (activeSessionId === sessionId) compactInstructions = '';
 		} catch (cause) {
-			compactError = cause instanceof Error ? cause.message : 'The conversation could not be compacted. Try again.';
+			fail(cause, 'The conversation could not be compacted. Try again.');
 		} finally {
 			if (compactingSessionId === sessionId) compactingSessionId = undefined;
 		}
@@ -1147,25 +1241,26 @@
 
 	async function stop(): Promise<void> {
 		if (!activeSession) return;
-		controlError = undefined;
+		const sessionId = activeSession.id;
+		const fail = beginAction(sessionId, 'stop');
 		try {
-			await onStop(activeSession.id);
+			await onStop(sessionId);
 		} catch (cause) {
-			controlError = cause instanceof Error ? cause.message : 'The session could not be stopped. Try again.';
+			fail(cause, 'The session could not be stopped. Try again.');
 		}
 	}
 
 	/** Asks the app where to save the active session's transcript and reports the outcome. */
 	async function exportTranscript(session: SessionViewModel): Promise<void> {
 		if (!onExportTranscript) return;
-		controlError = undefined;
+		const fail = beginAction(session.id, 'export');
 		exportedTranscript = undefined;
 		exportingSessionIds.add(session.id);
 		try {
 			const path = await onExportTranscript(session.id);
 			if (path) exportedTranscript = { sessionId: session.id, path };
 		} catch (cause) {
-			controlError = cause instanceof Error ? cause.message : 'Pau could not export the transcript. Try again.';
+			fail(cause, 'Pau could not export the transcript. Try again.');
 		} finally {
 			exportingSessionIds.delete(session.id);
 		}
@@ -1207,11 +1302,15 @@
 	async function restart(sessionId: string): Promise<void> {
 		if (!onRestartSession || restartingSessionId) return;
 		restartingSessionId = sessionId;
-		restartError = undefined;
+		setSessionError(sessionId, 'restart', undefined);
 		try {
 			await onRestartSession(sessionId);
 		} catch (cause) {
-			restartError = cause instanceof Error ? cause.message : 'The session could not start again. Try again.';
+			setSessionError(
+				sessionId,
+				'restart',
+				cause instanceof Error ? cause.message : 'The session could not start again. Try again.'
+			);
 		} finally {
 			restartingSessionId = undefined;
 		}
@@ -1222,10 +1321,7 @@
 		openedWorkspaceId = undefined;
 		closeOpenForm();
 		startFailure = undefined;
-		controlError = undefined;
 		exportedTranscript = undefined;
-		restartError = undefined;
-		queueError = undefined;
 		error = undefined;
 		draft = '';
 		draftTyped = false;
@@ -1249,13 +1345,13 @@
 		if (next) selectSession(next.id);
 	}
 
-	/** Reports the failure of a workspace menu action in the notices. */
-	async function workspaceAction(action: () => unknown, fallback: string): Promise<void> {
-		controlError = undefined;
+	/** Reports the failure of a workspace menu action in that workspace's column. */
+	async function workspaceAction(workspaceId: string, action: () => unknown, fallback: string): Promise<void> {
+		workspaceError = undefined;
 		try {
 			await action();
 		} catch (cause) {
-			controlError = cause instanceof Error ? cause.message : fallback;
+			workspaceError = { workspaceId, message: cause instanceof Error ? cause.message : fallback };
 		}
 	}
 
@@ -1307,11 +1403,11 @@
 				break;
 			}
 			case 'reveal': {
-				void workspaceAction(() => revealPath?.(path), 'Pau could not show the folder.');
+				void workspaceAction(workspace.id, () => revealPath?.(path), 'Pau could not show the folder.');
 				break;
 			}
 			case 'copy-path': {
-				void workspaceAction(() => navigator.clipboard.writeText(path), 'Pau could not copy the path.');
+				void workspaceAction(workspace.id, () => navigator.clipboard.writeText(path), 'Pau could not copy the path.');
 				break;
 			}
 		}
@@ -1364,21 +1460,20 @@
 				return;
 			}
 			const text = id === 'copy' ? renderedMessageText(article) : entry.body;
-			void navigator.clipboard.writeText(text).catch(() => {
-				controlError = 'Pau could not copy the message.';
-			});
+			const fail = beginAction(session.id, 'copy');
+			void navigator.clipboard.writeText(text).catch(() => fail(undefined, 'Pau could not copy the message.'));
 		});
 	}
 
 	async function branchFromMessage(sessionId: string, entryId: string): Promise<void> {
 		if (!onBranchFromMessage) return;
-		controlError = undefined;
+		const fail = beginAction(sessionId, 'branch');
 		try {
 			const outcome = await onBranchFromMessage(sessionId, entryId);
-			if (outcome.cancelled) controlError = 'An extension cancelled the branch. The session is unchanged.';
+			if (outcome.cancelled) fail(undefined, 'An extension cancelled the branch. The session is unchanged.');
 			else branched(outcome.text ?? '');
 		} catch (cause) {
-			controlError = cause instanceof Error ? cause.message : 'Pau could not branch the session. Try again.';
+			fail(cause, 'Pau could not branch the session. Try again.');
 		}
 	}
 
@@ -1536,6 +1631,8 @@
 		const attached = images;
 		sending = true;
 		error = undefined;
+		// A new prompt replaces the failed one that Retry would send again.
+		setSessionError(session.id, 'retry', undefined);
 		try {
 			const encoded = await Promise.all(attached.map((image) => encodeImage(image.file)));
 			const pending: PendingPrompt = {
@@ -1638,11 +1735,12 @@
 
 	async function stopShellCommands(): Promise<void> {
 		if (disconnected || !activeSession || !onStopShellCommands) return;
-		error = undefined;
+		const sessionId = activeSession.id;
+		const fail = beginAction(sessionId, 'stopCommand');
 		try {
-			await onStopShellCommands(activeSession.id);
+			await onStopShellCommands(sessionId);
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : 'The command could not be stopped. Try again.';
+			fail(cause, 'The command could not be stopped. Try again.');
 		}
 	}
 
@@ -1787,12 +1885,12 @@
 	async function interrupt(): Promise<void> {
 		if (disconnected || !activeSession || !activeSession.capabilities.interrupt) return;
 		const sessionId = activeSession.id;
-		error = undefined;
+		const fail = beginAction(sessionId, 'interrupt');
 		try {
 			const cleared = await onInterrupt(sessionId);
 			if (cleared && activeSessionId === sessionId) restoreQueue(cleared);
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : 'The session could not be interrupted. Try again.';
+			fail(cause, 'The session could not be interrupted. Try again.');
 		}
 	}
 
@@ -1860,23 +1958,25 @@
 
 	async function retry(): Promise<void> {
 		if (!canRetry || !activeSession || retrying) return;
-		retryError = undefined;
-		retryingSessionId = activeSession.id;
+		const sessionId = activeSession.id;
+		const fail = beginAction(sessionId, 'retry');
+		retryingSessionId = sessionId;
 		try {
-			await onRetry(activeSession.id);
+			await onRetry(sessionId);
 		} catch (cause) {
 			retryingSessionId = undefined;
-			retryError = cause instanceof Error ? cause.message : 'Your message could not be sent again. Try again.';
+			fail(cause, 'Your message could not be sent again. Try again.');
 		}
 	}
 
 	async function cancelRetry(): Promise<void> {
 		if (disconnected || !activeSession) return;
-		retryError = undefined;
+		const sessionId = activeSession.id;
+		const fail = beginAction(sessionId, 'cancelRetry');
 		try {
-			await onCancelRetry(activeSession.id);
+			await onCancelRetry(sessionId);
 		} catch (cause) {
-			retryError = cause instanceof Error ? cause.message : 'The automatic retry could not be cancelled. Try again.';
+			fail(cause, 'The automatic retry could not be cancelled. Try again.');
 		}
 	}
 
@@ -1884,12 +1984,12 @@
 	async function clearQueue(): Promise<void> {
 		if (!activeSession || !onClearQueue || disconnected) return;
 		const sessionId = activeSession.id;
-		queueError = undefined;
+		const fail = beginAction(sessionId, 'queue');
 		try {
 			const cleared = await onClearQueue(sessionId);
 			if (activeSessionId === sessionId) restoreQueue(cleared);
 		} catch (cause) {
-			queueError = cause instanceof Error ? cause.message : 'The queue could not be cleared. Try again.';
+			fail(cause, 'The queue could not be cleared. Try again.');
 		}
 	}
 
@@ -1932,11 +2032,11 @@
 		const levels = session.thinkingLevels ?? thinkingLevels;
 		const index = session.thinkingLevel ? levels.indexOf(session.thinkingLevel) : -1;
 		const next = levels[(index + 1) % levels.length] ?? 'off';
-		error = undefined;
+		const fail = beginAction(session.id, 'thinkingLevel');
 		try {
 			await onSelectThinkingLevel(session.id, next);
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : 'The thinking level could not be changed. Try again.';
+			fail(cause, 'The thinking level could not be changed. Try again.');
 		}
 	}
 
@@ -2158,6 +2258,9 @@
 		{@const workspace = activeWorkspace}
 		{@const git = workspace.git}
 		{@const shownChanges = git?.files.slice(0, CHANGE_LIMIT) ?? []}
+		{#if workspaceError?.workspaceId === workspace.id}
+			<p class="session-workspace__note session-workspace__note--failed" role="alert">{workspaceError.message}</p>
+		{/if}
 		<section class="session-workspace__section" aria-labelledby="workspace-changes">
 			<h3 class="pau-bay-heading">
 				<span class="pau-section-label" id="workspace-changes">Changes</span>
@@ -2591,9 +2694,11 @@
 						Pau lost its connection to the backend and is reconnecting. The agent keeps running.
 					</p>
 				{/if}
-				{#if controlError}<p class="session-view__notice session-view__notice--failed" role="alert">
-						{controlError}
-					</p>{/if}
+				{#each noticeActions as action (action)}
+					{#if activeErrors[action]}<p class="session-view__notice session-view__notice--failed" role="alert">
+							{activeErrors[action]}
+						</p>{/if}
+				{/each}
 				{#if exportedTranscript?.sessionId === activeSession.id}
 					<p class="session-view__notice" role="status">Transcript saved to {exportedTranscript.path}</p>
 				{/if}
@@ -2637,10 +2742,14 @@
 				{:else if compactingSessionId === activeSession.id}
 					<p class="session-view__notice" role="status">{compactingLabel('manual')}</p>
 				{/if}
-				{#if compactError && compactionState?.status !== 'failed'}
-					<p class="session-view__notice session-view__notice--failed" role="alert">{compactError}</p>
+				{#if activeErrors.compact && compactionState?.status !== 'failed'}
+					<p class="session-view__notice session-view__notice--failed" role="alert">{activeErrors.compact}</p>
 				{/if}
-				{#if retryError}<p class="session-view__notice session-view__notice--failed" role="alert">{retryError}</p>{/if}
+				{#each ['retry', 'cancelRetry'] as const as action (action)}
+					{#if activeErrors[action]}<p class="session-view__notice session-view__notice--failed" role="alert">
+							{activeErrors[action]}
+						</p>{/if}
+				{/each}
 			</div>
 
 			<!-- A scrollable region needs keyboard access. -->
@@ -2862,7 +2971,7 @@
 								</li>
 							{/each}
 						</ul>
-						{#if queueError}<p class="session-composer__error" role="alert">{queueError}</p>{/if}
+						{#if activeErrors.queue}<p class="session-composer__error" role="alert">{activeErrors.queue}</p>{/if}
 					</section>
 				{/if}
 				<ExtensionUi
@@ -2886,7 +2995,7 @@
 								{#if draft.trim()}
 									<p>Your unsent draft returns to the composer when the session starts again.</p>
 								{/if}
-								{#if restartError}<p class="session-ended__error" role="alert">{restartError}</p>{/if}
+								{#if activeErrors.restart}<p class="session-ended__error" role="alert">{activeErrors.restart}</p>{/if}
 							</div>
 							{#if onRestartSession}
 								<button
@@ -3934,6 +4043,10 @@
 		color: var(--pau-text-muted);
 		font-size: var(--pau-type-sm);
 		line-height: var(--pau-leading-prose);
+	}
+
+	.session-workspace__note--failed {
+		color: var(--pau-danger);
 	}
 
 	.session-workspace__peek {

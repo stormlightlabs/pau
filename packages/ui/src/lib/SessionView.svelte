@@ -625,7 +625,9 @@
 		activeSession?.capabilities.commandDiscovery ? commands[activeSession.id] : undefined
 	);
 	/** The session's commands followed by Pi's built-ins, which Pau runs itself. */
-	const composerCommands = $derived(sessionCommands ? withBuiltins(sessionCommands) : undefined);
+	const composerCommands = $derived(
+		sessionCommands ? withBuiltins(sessionCommands, { canExport: onExportTranscript !== undefined }) : undefined
+	);
 	const commandMatches = $derived.by(() => {
 		const query = commandQuery(draft);
 		return composerCommands && draftTyped && query !== undefined && dismissedDraft !== draft
@@ -633,7 +635,11 @@
 			: undefined;
 	});
 	/** The built-in the draft runs on submit instead of sending it. */
-	const draftBuiltin = $derived(sessionCommands ? builtinInvocation(draft, sessionCommands) : undefined);
+	const draftBuiltin = $derived(
+		sessionCommands
+			? builtinInvocation(draft, sessionCommands, { canExport: onExportTranscript !== undefined })
+			: undefined
+	);
 	/**
 	 * The shell command the draft runs on submit, parsed as Pi's editor does:
 	 * `!!` keeps the command out of the model context, and a `!` or `!!` with
@@ -966,6 +972,25 @@
 		if (session.status === 'running') return 'Wait for this run to finish before compacting.';
 		if (session.status !== 'idle') return 'This session cannot be compacted right now.';
 		return undefined;
+	}
+
+	/**
+	 * Decides whether the session can export its transcript, for both the
+	 * Export button and `/export`. `shown` is false when export does not apply
+	 * to the session at all, so the button is hidden; `reason` says why export
+	 * cannot run now, and is absent when it can.
+	 */
+	function exportAvailability(session: SessionViewModel, offline: boolean): { shown: boolean; reason?: string } {
+		if (!onExportTranscript || !session.capabilities.exportTranscript) {
+			return { shown: false, reason: 'This session cannot export its transcript.' };
+		}
+		if (!liveStatuses.has(session.status))
+			return { shown: false, reason: 'This session cannot be exported right now.' };
+		if (offline)
+			return { shown: true, reason: 'Pau is reconnecting to the backend. You can export once it reconnects.' };
+		if (exportingSessionIds.has(session.id))
+			return { shown: true, reason: 'The transcript is already being exported.' };
+		return { shown: true };
 	}
 
 	function compactingLabel(reason: CompactionReason): string {
@@ -1726,6 +1751,15 @@
 					if (!result) throw new Error('There is no reply to copy yet.');
 					if (!result.ok) throw new Error(result.error);
 				};
+			}
+			case 'export': {
+				const { shown, reason } = exportAvailability(session, disconnected);
+				if (!shown) refuse(reason);
+				// Pi's `/export <path>` writes to the path; Pau's save dialog picks the file instead.
+				if (argument) refuse('The save dialog picks where the transcript goes. Run /export without a path.');
+				if (reason) refuse(reason);
+				// A failed export reports itself in the notices.
+				return () => exportTranscript(session);
 			}
 			case 'shortcuts': {
 				return async () => {
@@ -2524,15 +2558,15 @@
 							{/if}
 						</div>
 					{/if}
-					{#if onExportTranscript && activeSession.capabilities.exportTranscript && liveStatuses.has(activeSession.status)}
-						{@const exporting = exportingSessionIds.has(activeSession.id)}
+					{@const exportState = exportAvailability(activeSession, disconnected)}
+					{#if exportState.shown}
 						<button
 							type="button"
 							class="pau-button pau-button--quiet session-view__collapse"
 							aria-label="Export"
-							aria-busy={exporting}
-							disabled={disconnected || exporting}
-							title={disconnected ? 'Pau is reconnecting to the backend.' : 'Save the conversation as a web page'}
+							aria-busy={exportingSessionIds.has(activeSession.id)}
+							disabled={exportState.reason !== undefined}
+							title={exportState.reason ?? 'Save the conversation as a web page'}
 							onclick={() => void exportTranscript(activeSession)}>
 							<Icon name="export" size={16} /><span>Export</span>
 						</button>
